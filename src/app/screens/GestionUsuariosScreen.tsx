@@ -1,0 +1,539 @@
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
+
+const SERIF = "'DM Serif Display', serif";
+
+export interface Usuario {
+  id: string;
+  nombre: string;
+  iniciales: string;
+  avatarColor: string;
+  correo: string;
+  telefono: string;
+  documento: string;
+  rolId: string;
+  rolInternoId?: string;
+  activo: boolean;
+}
+
+export const INIT_USUARIOS: Usuario[] = [
+  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", documento:"12345678", rolId:"ROL-001", activo:true  },
+  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", documento:"87654321", rolId:"ROL-003", activo:true  },
+  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", documento:"11223344", rolId:"ROL-002", activo:true  },
+  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", documento:"22334455", rolId:"ROL-003", activo:true  },
+  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", documento:"33445566", rolId:"ROL-002", activo:true  },
+  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", documento:"44556677", rolId:"ROL-002", activo:false },
+  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", documento:"55667788", rolId:"ROL-002", activo:true  },
+  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", documento:"66778899", rolId:"ROL-003", activo:true  },
+  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", documento:"77889900", rolId:"ROL-003", activo:false },
+  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", documento:"88990011", rolId:"ROL-002", activo:true  },
+  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", documento:"99001122", rolId:"ROL-002", activo:true  },
+  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", documento:"10111213", rolId:"ROL-003", activo:true  },
+];
+
+// Paleta de colores para roles (por índice de ROL-XXX)
+const ROL_PALETTE = [
+  "bg-red-100 text-red-800",
+  "bg-gray-100 text-gray-700",
+  "bg-blue-100 text-blue-800",
+  "bg-emerald-100 text-emerald-800",
+  "bg-amber-100 text-amber-800",
+  "bg-purple-100 text-purple-800",
+  "bg-pink-100 text-pink-800",
+  "bg-teal-100 text-teal-800",
+];
+
+function rolColor(rolId: string) {
+  const idx = parseInt(rolId.replace("ROL-",""), 10) - 1;
+  return ROL_PALETTE[idx >= 0 ? idx % ROL_PALETTE.length : 0];
+}
+
+const PER_PAGE = 5;
+
+
+const SPECIAL_ROLES = ["ROL-001", "ROL-002", "ROL-003"];
+
+function rolLabel(u: Usuario, roles: Rol[]): string {
+  const rol = roles.find(r => r.id === u.rolId);
+  const nombre = rol?.nombre ?? u.rolId;
+  if (!SPECIAL_ROLES.includes(u.rolId)) return `Cliente/${nombre}`;
+  return nombre;
+}
+
+export function GestionUsuariosScreen({
+  userRole,
+  roles,
+  usuarios,
+  setUsuarios,
+}: {
+  userRole: string;
+  roles: Rol[];
+  usuarios: Usuario[];
+  setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
+}) {
+  const [search,     setSearch]    = useState("");
+  const [filterRol,  setFiltroR]   = useState("todos");
+  const [filterEst,  setFiltroE]   = useState("todos");
+  const [page,       setPage]      = useState(1);
+  const [detail,     setDetail]    = useState<Usuario | null>(null);
+  const [editItem,   setEditItem]  = useState<Usuario | null>(null);
+  const [deleteId,   setDeleteId]  = useState<string | null>(null);
+
+  const rolInfo = (rolId: string): Rol | null =>
+    roles.find(r => r.id === rolId) ?? null;
+
+  // Métricas
+  const total = usuarios.length;
+  const nCli  = usuarios.filter(u => u.rolId === "ROL-002").length;
+  const nAdm  = usuarios.filter(u => u.rolId === "ROL-001").length;
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return usuarios.filter(u => {
+      const rol = rolInfo(u.rolId);
+      const rolNombre = rol?.nombre ?? u.rolId;
+      const matchQ = !q || u.nombre.toLowerCase().includes(q) || u.correo.toLowerCase().includes(q) || rolNombre.toLowerCase().includes(q);
+      const matchR = filterRol === "todos" || u.rolId === filterRol;
+      const matchE = filterEst === "todos" || (filterEst === "activo" ? u.activo : !u.activo);
+      return matchQ && matchR && matchE;
+    });
+  }, [usuarios, search, filterRol, filterEst, roles]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const updateUsuario = (id: string, patch: Partial<Usuario>) => {
+    setUsuarios(p => p.map(u => u.id === id ? { ...u, ...patch } : u));
+    setDetail(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
+  };
+
+  const cambiarEstado = () => {
+    if (!detail) return;
+    const nuevoEstado = !detail.activo;
+    updateUsuario(detail.id, { activo: nuevoEstado });
+    toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+  };
+
+  const handleEdit = () => {
+    if (!editItem) return;
+    setUsuarios(p => p.map(u => u.id === editItem.id ? editItem : u));
+    setEditItem(null);
+    toast.success("Usuario actualizado correctamente");
+  };
+
+  const handleDelete = (id: string) => {
+    setUsuarios(p => p.filter(u => u.id !== id));
+    setDeleteId(null);
+    toast.success("Usuario eliminado correctamente");
+  };
+
+  const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
+
+  if (userRole !== "Administrador") {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
+        <div className="text-6xl mb-4">🔒</div>
+        <h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2>
+        <p className="text-muted-foreground">Solo el Administrador puede acceder a Gestión Usuarios.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
+      </div>
+
+      {/* Métricas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {[
+          { label: "Total usuarios",  value: total, cls: "text-foreground", bg: "bg-card"      },
+          { label: "Clientes",        value: nCli,  cls: "text-gray-600",   bg: "bg-gray-50"   },
+          { label: "Administradores", value: nAdm,  cls: "text-primary",    bg: "bg-primary/5" },
+        ].map(({ label, value, cls, bg }) => (
+          <div key={label} className={`${bg} border border-border rounded-2xl p-4`}>
+            <p className={`text-3xl font-bold ${cls}`}>{value}</p>
+            <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <div className="relative flex-1 min-w-52">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Buscar por nombre, correo o rol..."
+            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <select value={filterRol} onChange={e => { setFiltroR(e.target.value); setPage(1); }} className={iCls}>
+          <option value="todos">Todos los roles</option>
+          {roles.filter(r => r.activo).map(r => (
+            <option key={r.id} value={r.id}>{r.nombre}</option>
+          ))}
+        </select>
+        <select value={filterEst} onChange={e => { setFiltroE(e.target.value); setPage(1); }} className={iCls}>
+          <option value="todos">Todos los estados</option>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
+      </div>
+
+      {/* Tabla */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+              <tr>
+                {["Usuario","Correo","Rol actual","Estado","Acciones"].map(h => (
+                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {paged.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
+                  <p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p>
+                </td></tr>
+              ) : paged.map(u => {
+                const rol = rolInfo(u.rolId);
+                const rolInactivo = rol && !rol.activo;
+                return (
+                  <tr key={u.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {u.iniciales}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{u.nombre}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{u.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{u.correo}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId)} ${rolInactivo ? "opacity-50" : ""}`}>
+                         {rolLabel(u, roles)}
+                       </span>
+                        {rolInactivo && (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Rol inactivo" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
+                        {u.activo ? "Activo" : "Inactivo"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setDetail(u)} title="Ver detalle"
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setEditItem({ ...u })} title="Editar"
+                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setDeleteId(u.id)} title="Eliminar"
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Paginación */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-center">
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
+                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+                <ChevronLeft className="w-4 h-4"/>
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
+                <button key={n} onClick={() => setPage(n)}
+                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
+                  {n}
+                </button>
+              ))}
+              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}
+                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+                <ChevronRight className="w-4 h-4"/>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Modal: Ver detalle ── */}
+      <AnimatePresence>
+        {detail && (() => {
+          const rol = rolInfo(detail.rolId);
+          const rolInactivo = rol && !rol.activo;
+          return (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
+                exit={{scale:.95,opacity:0}} transition={{duration:.15}}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+
+                <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+                  <span className="text-base font-bold text-foreground" style={{fontFamily:SERIF}}>Detalle Usuario</span>
+                  <button onClick={() => setDetail(null)}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    <X className="w-4 h-4"/>
+                  </button>
+                </div>
+
+                <div className="px-5 py-5 space-y-5">
+                  {/* Avatar */}
+                  <div className="flex flex-col items-center text-center gap-3">
+                    <div className={`w-20 h-20 rounded-full ${detail.avatarColor} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
+                      {detail.iniciales}
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
+                      <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId)} ${rolInactivo ? "opacity-60" : ""}`}>
+                         {rolLabel(detail, roles)}
+                       </span>
+                        {rolInactivo && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                            <AlertTriangle className="w-3 h-3" /> Rol inactivo
+                          </span>
+                        )}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${detail.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
+                          {detail.activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info */}
+                  <div className="border border-border rounded-xl overflow-hidden">
+                    <div className="px-4 py-2 bg-muted/50 border-b border-border">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Información del usuario</p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {[
+                        { l: "ID",        v: detail.id },
+                        { l: "Correo",    v: detail.correo },
+                        { l: "Teléfono",  v: detail.telefono },
+                        { l: "Documento", v: detail.documento },
+                      ].map(({ l, v }) => (
+                        <div key={l} className="flex items-center justify-between px-4 py-2.5 gap-4">
+                          <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
+                          <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Permisos del rol */}
+                  {rol && (
+                    <div className="border border-border rounded-xl overflow-hidden">
+                      <div className="px-4 py-2 bg-muted/50 border-b border-border flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Permisos del rol
+                        </p>
+                        <span className="text-xs text-primary font-semibold">
+                          {countAccesos(rol.accesos)} sub-opciones
+                        </span>
+                      </div>
+                      <div className="px-4 py-3 max-h-48 overflow-y-auto space-y-3">
+                        {countAccesos(rol.accesos) === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">Sin accesos configurados</p>
+                        ) : MENU_TREE.map(({ modulo, subs }) => {
+                          const activeSubs = subs.filter(s => {
+                            const k = KEY(modulo, s);
+                            return k in rol.accesos && rol.accesos[k].length > 0;
+                          });
+                          if (!activeSubs.length) return null;
+                          return (
+                            <div key={modulo}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{modulo}</p>
+                              <div className="space-y-1">
+                                {activeSubs.map(sub => {
+                                  const k = KEY(modulo, sub);
+                                  const perms = rol.accesos[k] ?? [];
+                                  return (
+                                    <div key={sub} className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-muted/30 rounded-lg">
+                                      <span className="text-xs font-medium text-foreground">{sub}</span>
+                                      <div className="flex gap-1 flex-wrap justify-end">
+                                        {ACCIONES.filter(a => perms.includes(a)).map(a => (
+                                          <span key={a} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${accionColors[a]}`}>{a}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cambiar estado */}
+                  <button onClick={cambiarEstado}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-colors cursor-pointer active:scale-95 ${
+                      detail.activo
+                        ? "border-gray-200 text-gray-600 hover:bg-gray-50"
+                        : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                    }`}>
+                    <RefreshCw className="w-4 h-4" />
+                    {detail.activo ? "Desactivar usuario" : "Activar usuario"}
+                  </button>
+                </div>
+
+                <div className="px-5 py-4 border-t border-border">
+                  <button onClick={() => setDetail(null)}
+                    className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                    Cerrar
+                  </button>
+                </div>
+              </motion.div>
+              </div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ── Modal: Editar usuario ── */}
+     {/* ── Modal: Editar usuario ── */}
+      <AnimatePresence>
+        {editItem && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+            <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
+              exit={{scale:.95,opacity:0}} transition={{duration:.15}}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h3 className="text-lg font-bold text-foreground" style={{fontFamily:SERIF}}>Editar Usuario</h3>
+                <button onClick={() => setEditItem(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  <X className="w-4 h-4"/>
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                {/* Avatar preview */}
+                <div className="flex items-center gap-3 pb-2">
+                  <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+                    {editItem.iniciales}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{editItem.id}</p>
+                  </div>
+                </div>
+
+                {[
+                  { label: "Nombre completo", field: "nombre"    as const, type: "text"  },
+                  { label: "Correo",          field: "correo"    as const, type: "email" },
+                  { label: "Teléfono",        field: "telefono"  as const, type: "tel"   },
+                  { label: "Documento",       field: "documento" as const, type: "text"  },
+                ].map(({ label, field, type }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+                    <input
+                      type={type}
+                      value={editItem[field]}
+                      onChange={e => setEditItem(x => x && ({ ...x, [field]: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                ))}
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
+                  <select
+                    value={editItem.rolId}
+                    onChange={e => setEditItem(x => x && ({ ...x, rolId: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                  >
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre}{!r.activo ? " (Inactivo)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+                  <select
+                    value={editItem.activo ? "activo" : "inactivo"}
+                    onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}
+                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                  >
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 px-5 py-4 border-t border-border">
+                <button onClick={() => setEditItem(null)}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={handleEdit}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  Guardar cambios
+                </button>
+              </div>
+            </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* ── Modal: Confirmar eliminación ── */}
+      <AnimatePresence>
+        {deleteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
+              exit={{scale:.95,opacity:0}} transition={{duration:.15}}
+              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2" style={{fontFamily:SERIF}}>Eliminar usuario</h3>
+              <p className="text-muted-foreground text-sm mb-6">
+                ¿Seguro que deseas eliminar a{" "}
+                <strong className="text-foreground">
+                  {usuarios.find(u => u.id === deleteId)?.nombre}
+                </strong>? Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteId(null)}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => handleDelete(deleteId)}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  Sí, eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
