@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, RefreshCw, ChevronLeft, ChevronRight, Bell, Trash2, X } from "lucide-react";
+import { Plus, Search, Eye, Pencil, ChevronLeft, ChevronRight, Bell, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { EstadoSwitch } from "../components/EstadoSwitch";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO  = "'JetBrains Mono', monospace";
@@ -427,8 +428,7 @@ export function GestionAgendaScreen() {
                         className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4"/></button>
                       <button onClick={()=>setEditItem({...a,tareas:[...a.tareas]})} title="Editar"
                         className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4"/></button>
-                      <button onClick={()=>toggleEstado(a.id)} title="Cambiar estado"
-                        className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer"><RefreshCw className="w-4 h-4"/></button>
+                      <EstadoSwitch activo={a.activo} onToggle={()=>toggleEstado(a.id)}/>
                     </div>
                   </td>
                 </tr>

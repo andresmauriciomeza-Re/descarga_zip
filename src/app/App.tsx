@@ -58,6 +58,7 @@ import {
   Banknote,
   PackageCheck,
   CircleCheck,
+  IdCard,
 } from "lucide-react";
 
 import { CalendarDropdown } from "./components/CalendarDropdown";
@@ -65,8 +66,9 @@ import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, type Rol, type AccesosMap } from "./screens/GestionConfigScreen";
-import { GestionClientesScreen } from "./screens/GestionClientesScreen";
+import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
+import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Empleado } from "./screens/GestionEmpleadosScreen";
 import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
 import { RecetasScreen } from "./screens/RecetasScreen";
 import {
@@ -148,7 +150,8 @@ type Screen =
   | "perecederos"
   | "orden-compra"
   | "gestion-compra"
-  | "devoluciones";
+  | "devoluciones"
+  | "empleados";
 
 interface Product {
   id: number;
@@ -467,6 +470,7 @@ const ADMIN_SCREENS: Screen[] = [
   "orden-compra",
   "gestion-compra",
   "devoluciones",
+  "empleados",
 ];
 
 // Named roles that belong to the public catalog (not the admin panel)
@@ -571,7 +575,7 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
   "perecederos":       KEY("Producción", "Producto No Conforme"),
   "clientes":          KEY("Ventas",     "Clientes"),
   "ventas-pedidos":    KEY("Ventas",     "Ventas"),
-  "devoluciones":      KEY("Ventas",     "Ventas"),
+  "devoluciones":      KEY("Ventas",     "Devoluciones"),
 };
 
 const NAV_SECTIONS = [
@@ -589,6 +593,7 @@ const NAV_SECTIONS = [
     Icon: Users,
     items: [
       { screen: "users" as Screen, label: "Usuarios", Icon: Users },
+      { screen: "empleados" as Screen, label: "Empleados", Icon: IdCard },
     ],
   },
   {
@@ -674,7 +679,7 @@ const NAV_SECTIONS = [
         screen: "devoluciones" as Screen,
         label: "Devoluciones",
         Icon: RefreshCw,
-        permKey: KEY("Ventas", "Ventas"),
+        permKey: KEY("Ventas", "Devoluciones"),
       },
     ],
   },
@@ -805,6 +810,7 @@ function ConfirmModal({
 const ADMIN_ONLY_SCREENS: Screen[] = [
   "gestion-config",
   "users",
+  "empleados",
 ];
 
 function Sidebar({
@@ -956,7 +962,8 @@ function PublicNav({
   navigate,
   cart,
   isLoggedIn,
-  userRole,
+  isStaff,
+  loggedInUser,
   onLogout,
   darkMode,
   setDarkMode,
@@ -964,13 +971,13 @@ function PublicNav({
   navigate: (s: Screen) => void;
   cart: CartItem[];
   isLoggedIn: boolean;
-  userRole: string;
+  isStaff: boolean;
+  loggedInUser: { iniciales: string; avatarColor: string } | null;
   onLogout: () => void;
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
 }) {
   const count = cart.reduce((s, i) => s + i.quantity, 0);
-  const isAdmin = userRole === "Administrador";
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -1045,12 +1052,14 @@ function PublicNav({
           {isLoggedIn ? (
             <button
               onClick={() =>
-                navigate(isAdmin ? "profile" : "client-profile")
+                navigate(isStaff ? "profile" : "client-profile")
               }
-              className={`w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm ${isAdmin ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
+                loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
+              }`}
               title="Mi perfil"
             >
-              {isAdmin ? "G" : "S"}
+              {(loggedInUser?.iniciales.charAt(0) ?? (isStaff ? "G" : "S")).toUpperCase()}
             </button>
           ) : (
             <button
@@ -1107,6 +1116,7 @@ function AdminTopBar({
     roles: "Roles",
     permissions: "Permisos",
     users: "Gestión de usuarios",
+    empleados: "Gestión de empleados",
     access: "Gestión de acceso",
     purchases: "Gestión de compras",
     perecederos: "Productos No Conformes",
@@ -2950,21 +2960,44 @@ function CartScreen({
 function ClientProfileScreen({
   navigate,
   onLogout,
+  loggedInUser,
+  loggedInRoleName,
+  isStaff,
+  onUpdateUser,
 }: {
   navigate: (s: Screen) => void;
   onLogout: () => void;
+  loggedInUser: {
+    id: string;
+    nombre: string;
+    iniciales: string;
+    avatarColor: string;
+    correo: string;
+    telefono: string;
+  } | null;
+  loggedInRoleName: string;
+  isStaff: boolean;
+  onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
 }) {
   const [editando, setEditando] = useState(false);
-  const [correo, setCorreo] = useState("sebas@gmail.com");
-  const [telefono, setTelefono] = useState("3109876543");
+  const [correo, setCorreo] = useState(loggedInUser?.correo ?? "sebas@gmail.com");
+  const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "3109876543");
   const [guardado, setGuardado] = useState({
-    correo: "sebas@gmail.com",
-    telefono: "3109876543",
+    correo: loggedInUser?.correo ?? "sebas@gmail.com",
+    telefono: loggedInUser?.telefono ?? "3109876543",
   });
   const [errores, setErrores] = useState<{
     correo?: string;
     telefono?: string;
   }>({});
+
+  useEffect(() => {
+    if (loggedInUser) {
+      setCorreo(loggedInUser.correo);
+      setTelefono(loggedInUser.telefono);
+      setGuardado({ correo: loggedInUser.correo, telefono: loggedInUser.telefono });
+    }
+  }, [loggedInUser?.id]);
 
   const iCls = (err?: string) =>
     `w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
@@ -2987,6 +3020,8 @@ function ClientProfileScreen({
       correo: correo.trim(),
       telefono: telefono.trim(),
     });
+    if (loggedInUser)
+      onUpdateUser(loggedInUser.id, { correo: correo.trim(), telefono: telefono.trim() });
     setEditando(false);
     setErrores({});
     toast.success("Perfil actualizado correctamente");
@@ -3008,18 +3043,18 @@ function ClientProfileScreen({
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {/* Avatar */}
         <div className="flex items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
-          <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-sm">
-            S
+          <div className={`w-16 h-16 rounded-full ${loggedInUser?.avatarColor ?? "bg-blue-600"} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm`}>
+            {loggedInUser?.iniciales ?? "S"}
           </div>
           <div className="flex-1 min-w-0">
             <h2
               className="text-xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
             >
-              Sebastián
+              {loggedInUser?.nombre ?? "Sebastián"}
             </h2>
             <span className="inline-block mt-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
-              Cliente
+              {loggedInUser ? loggedInRoleName : "Cliente"}
             </span>
           </div>
           {!editando && (
@@ -3043,7 +3078,7 @@ function ClientProfileScreen({
               <User className="w-3.5 h-3.5" /> Nombre
             </label>
             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
-              Sebastián
+              {loggedInUser?.nombre ?? "Sebastián"}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
               Este campo no es editable
@@ -3140,6 +3175,14 @@ function ClientProfileScreen({
               >
                 <ArrowLeft className="w-4 h-4" /> Volver al menú
               </button>
+              {isStaff && (
+                <button
+                  onClick={() => navigate("dashboard")}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Ir a Administración
+                </button>
+              )}
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
@@ -3682,15 +3725,44 @@ function ForgotPasswordModal({
 
 // ─────────────────────────── REGISTER ───────────────────────────
 
+const DOC_OPTIONS = [
+  { code: "CC",  label: "CC · Cédula de Ciudadanía" },
+  { code: "TI",  label: "TI · Tarjeta de Identidad" },
+  { code: "CE",  label: "CE · Cédula de Extranjería" },
+  { code: "PPT", label: "PPT · Permiso por Protección Temporal" },
+  { code: "PEP", label: "PEP · Permiso Especial de Permanencia" },
+  { code: "PAS", label: "PAS · Pasaporte" },
+  { code: "NIT", label: "NIT · Número de Identificación Tributaria" },
+  { code: "RC",  label: "RC · Registro Civil" },
+  { code: "DNI", label: "DNI · Documento Nacional de Identidad" },
+];
+
+const AVATAR_PALETTE = [
+  "bg-red-500",
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-purple-500",
+  "bg-amber-500",
+  "bg-pink-500",
+  "bg-teal-500",
+  "bg-indigo-500",
+];
+
 function RegisterScreen({
   navigate,
+  usuarios,
+  setUsuarios,
 }: {
   navigate: (s: Screen) => void;
+  usuarios: Usuario[];
+  setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
 }) {
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
+    docType: "CC",
+    docNum: "",
     password: "",
     confirm: "",
   });
@@ -3709,6 +3781,33 @@ function RegisterScreen({
       toast.error("Correo electrónico no válido");
       return;
     }
+    if (!form.docType) {
+      toast.error("Selecciona el tipo de documento");
+      return;
+    }
+    if (!form.docNum.trim()) {
+      toast.error("Ingresa el número de documento");
+      return;
+    }
+    if (!/^\d+$/.test(form.docNum.trim())) {
+      toast.error("El número de documento solo debe contener números");
+      return;
+    }
+    const docDuplicado =
+      usuarios.some(u => u.documento === form.docNum.trim()) ||
+      empleados.some(e => e.documento === form.docNum.trim());
+    if (docDuplicado) {
+      toast.error("Este número de documento ya está registrado");
+      return;
+    }
+    const correoDuplicado =
+      usuarios.some(u => u.correo.trim().toLowerCase() === form.email.trim().toLowerCase()) ||
+      empleados.some(e => e.correo.trim().toLowerCase() === form.email.trim().toLowerCase()) ||
+      clientes.some(c => c.correo.trim().toLowerCase() === form.email.trim().toLowerCase());
+    if (correoDuplicado) {
+      toast.error("Este correo ya está registrado");
+      return;
+    }
     if (form.password.length < 6) {
       toast.error(
         "La contraseña debe tener mínimo 6 caracteres",
@@ -3722,6 +3821,29 @@ function RegisterScreen({
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
+      const maxId = usuarios.reduce((max, u) => {
+        const n = parseInt(u.id.replace("USR-", ""), 10);
+        return Number.isNaN(n) ? max : Math.max(max, n);
+      }, 0);
+      const nameParts = form.name.trim().split(/\s+/);
+      const iniciales =
+        (nameParts.length > 1
+          ? (nameParts[0][0] ?? "") + (nameParts[1][0] ?? "")
+          : nameParts[0].slice(0, 2)
+        ).toUpperCase();
+      const nuevoUsuario: Usuario = {
+        id: "USR-" + (maxId + 1),
+        nombre: form.name.trim(),
+        iniciales,
+        avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
+        correo: form.email.trim(),
+        telefono: form.phone.trim(),
+        tipoDocumento: form.docType,
+        documento: form.docNum.trim(),
+        rolId: "ROL-002",
+        activo: true,
+      };
+      setUsuarios(p => [...p, nuevoUsuario]);
       toast.success(
         "¡Cuenta creada exitosamente! Ya puedes ingresar.",
       );
@@ -3749,7 +3871,41 @@ function RegisterScreen({
         </div>
 
         <div className="space-y-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="sm:w-48 sm:shrink-0">
+              <label className="block text-sm font-semibold mb-1.5 text-foreground">
+                Tipo doc.
+              </label>
+              <select
+                value={form.docType}
+                onChange={(e) => setForm((p) => ({ ...p, docType: e.target.value }))}
+                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              >
+                {DOC_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-0">
+              <label className="block text-sm font-semibold mb-1.5 text-foreground">
+                Número de documento
+              </label>
+              <input
+                value={form.docNum}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[^\d]/g, "") }))
+                }
+                type="text"
+                inputMode="numeric"
+                placeholder="Ej: 12345678"
+                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
           {[
+
             {
               label: "Nombre completo",
               key: "name" as const,
@@ -5191,6 +5347,8 @@ export default function App() {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Rol[]>(INITIAL_ROLES);
   const [usuarios, setUsuarios] = useState<Usuario[]>(INIT_USUARIOS);
+  const [empleados, setEmpleados] = useState<Empleado[]>(INITIAL_EMPLEADOS);
+  const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
@@ -5200,6 +5358,8 @@ export default function App() {
   const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
   // True when the user is the named "Administrador" role or has no role record (default)
   const isNamedAdmin = !loggedInRol || loggedInRol.nombre === "Administrador";
+  // True when the logged-in user has a back-office role (not a pure public customer)
+  const isStaff = isLoggedIn && loggedInUser !== null && !PUBLIC_ROLE_NAMES.includes(loggedInRoleName);
 
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
@@ -5366,7 +5526,8 @@ export default function App() {
             navigate={navigate}
             cart={cart}
             isLoggedIn={isLoggedIn}
-            userRole={userRole}
+            isStaff={isStaff}
+            loggedInUser={loggedInUser ? { iniciales: loggedInUser.iniciales, avatarColor: loggedInUser.avatarColor } : null}
             onLogout={logout}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
@@ -5447,9 +5608,10 @@ export default function App() {
                     const newVenta: Venta = {
                       id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
                       usuario:
-                        userRole === "Usuario"
+                        loggedInUser?.nombre ??
+                        (userRole === "Usuario"
                           ? "Sebastián Gómez"
-                          : "Gloria Inés Vargas",
+                          : "Gloria Inés Vargas"),
                       fecha: new Date()
                         .toISOString()
                         .split("T")[0],
@@ -5509,12 +5671,29 @@ export default function App() {
                 />
               )}
               {screen === "register" && (
-                <RegisterScreen navigate={navigate} />
+                <RegisterScreen
+                  navigate={navigate}
+                  usuarios={usuarios}
+                  setUsuarios={setUsuarios}
+                />
               )}
               {screen === "client-profile" && (
                 <ClientProfileScreen
                   navigate={navigate}
                   onLogout={logout}
+                  loggedInUser={loggedInUser ? {
+                    id: loggedInUser.id,
+                    nombre: loggedInUser.nombre,
+                    iniciales: loggedInUser.iniciales,
+                    avatarColor: loggedInUser.avatarColor,
+                    correo: loggedInUser.correo,
+                    telefono: loggedInUser.telefono,
+                  } : null}
+                  loggedInRoleName={loggedInRoleName}
+                  isStaff={isStaff}
+                  onUpdateUser={(id, data) => {
+                    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+                  }}
                 />
               )}
               {screen === "dashboard" && (
@@ -5604,7 +5783,13 @@ export default function App() {
                 />
               )}
               {screen === "clientes" && (
-                <GestionClientesScreen {...getPerms("clientes")} />
+                <GestionClientesScreen
+                  {...getPerms("clientes")}
+                  clientes={clientes}
+                  setClientes={setClientes}
+                  empleados={empleados}
+                  usuarios={usuarios}
+                />
               )}
               {screen === "users" && (
                 <GestionUsuariosScreen
@@ -5612,6 +5797,19 @@ export default function App() {
                   roles={roles}
                   usuarios={usuarios}
                   setUsuarios={setUsuarios}
+                  empleados={empleados}
+                  setEmpleados={setEmpleados}
+                  clientes={clientes}
+                />
+              )}
+              {screen === "empleados" && (
+                <GestionEmpleadosScreen
+                  roles={roles}
+                  usuarios={usuarios}
+                  empleados={empleados}
+                  setEmpleados={setEmpleados}
+                  setUsuarios={setUsuarios}
+                  clientes={clientes}
                 />
               )}
               {screen === "production-orders" && (
@@ -5625,6 +5823,7 @@ export default function App() {
                   userRole={userRole}
                   navigate={navigate as (s: string) => void}
                   onLogout={logout}
+                  isStaff={isStaff}
                   loggedInUser={loggedInUser ? {
                     id: loggedInUser.id,
                     nombre: loggedInUser.nombre,
@@ -5660,6 +5859,7 @@ export default function App() {
                   "gestion-config",
                   "clientes",
                   "users",
+                  "empleados",
                   "production-orders",
                   "finished-products",
                   "profile",

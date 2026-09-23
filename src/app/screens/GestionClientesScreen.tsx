@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, RefreshCw, ChevronLeft, ChevronRight, FileText, X, UserPlus } from "lucide-react";
+import { Search, Eye, Pencil, ChevronLeft, ChevronRight, FileText, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { EstadoSwitch } from "../components/EstadoSwitch";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO  = "'JetBrains Mono', monospace";
@@ -11,7 +12,7 @@ const AVATAR_COLORS = [
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
 
-interface Cliente {
+export interface Cliente {
   id: string;
   nombre: string;
   iniciales: string;
@@ -21,7 +22,7 @@ interface Cliente {
   activo: boolean;
 }
 
-const INITIAL_CLIENTES: Cliente[] = [
+export const INITIAL_CLIENTES: Cliente[] = [
   { id:"CLI-001", nombre:"María González",    iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",   pedidos:12, activo:true  },
   { id:"CLI-002", nombre:"Carlos Martínez",   iniciales:"CM", avatarColor:"bg-blue-500",    correo:"carlos.m@hotmail.com",        pedidos:7,  activo:true  },
   { id:"CLI-003", nombre:"Ana Rodríguez",     iniciales:"AR", avatarColor:"bg-emerald-500", correo:"ana.rodriguez@outlook.com",   pedidos:3,  activo:true  },
@@ -36,8 +37,13 @@ const INITIAL_CLIENTES: Cliente[] = [
 
 const PER_PAGE = 5;
 
-export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
-  const [clientes,     setClientes]   = useState<Cliente[]>(INITIAL_CLIENTES);
+export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios }: {
+  canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
+  clientes: Cliente[];
+  setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
+  empleados: { correo: string }[];
+  usuarios: { correo: string }[];
+}) {
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
   const [sortBy,       setSortBy]     = useState("nombre");
@@ -50,6 +56,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const [newTelefono,  setNewTelefono]= useState("");
   const [newActivo,    setNewActivo]  = useState(true);
   const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string }>({});
+  const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string }>({});
+  const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
 
   const total   = clientes.length;
   const activos = clientes.filter(c => c.activo).length;
@@ -77,9 +85,25 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
 
   const handleEdit = () => {
     if (!editItem) return;
+    const errs: { nombre?: string; correo?: string } = {};
+    if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
+    if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editItem.correo.trim())) errs.correo = "Formato de correo no válido";
+    else {
+      const em = editItem.correo.trim().toLowerCase();
+      const otro = (correo: string) => correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
+      const duplicado =
+        clientes.some(c => c.id !== editItem.id && otro(c.correo) && c.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
+        usuarios.some(u => otro(u.correo) && u.correo.trim().toLowerCase() === em);
+      if (duplicado) errs.correo = "Este correo ya está registrado";
+    }
+    if (Object.keys(errs).length) { setEditErrors(errs); return; }
     const nuevasIniciales = editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
     setClientes(p => p.map(c => c.id === editItem.id ? { ...editItem, iniciales: nuevasIniciales } : c));
     setEditItem(null);
+    setEditPrevCorreo(null);
+    setEditErrors({});
     toast.success("Cliente actualizado correctamente");
   };
 
@@ -95,6 +119,13 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       errs.correo = "El correo es obligatorio";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) {
       errs.correo = "Formato de correo no válido";
+    } else {
+      const em = newCorreo.trim().toLowerCase();
+      const duplicado =
+        clientes.some(c => c.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
+        usuarios.some(u => u.correo.trim().toLowerCase() === em);
+      if (duplicado) errs.correo = "Este correo ya está registrado";
     }
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
 
@@ -220,15 +251,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                         <Eye className="w-4 h-4" />
                       </button>
                       {canEdit && (
-                        <button onClick={() => setEditItem({ ...c })} title="Editar"
+                        <button onClick={() => { setEditItem({ ...c }); setEditPrevCorreo(c.correo); setEditErrors({}); }} title="Editar"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
-                      <button onClick={() => toggleEstado(c.id)} title="Cambiar estado"
-                        className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer">
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
+                      <EstadoSwitch activo={c.activo} onToggle={() => toggleEstado(c.id)} />
                     </div>
                   </td>
                 </tr>
@@ -432,8 +460,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} value={editItem[field]}
-                      onChange={e => setEditItem(x => x && ({ ...x, [field]: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
                   </div>
                 ))}
                 <div>
