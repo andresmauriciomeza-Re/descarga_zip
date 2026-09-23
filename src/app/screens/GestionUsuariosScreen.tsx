@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
+import { type Empleado } from "./GestionEmpleadosScreen";
 
 const SERIF = "'DM Serif Display', serif";
 
@@ -13,6 +14,7 @@ export interface Usuario {
   avatarColor: string;
   correo: string;
   telefono: string;
+  tipoDocumento: string;
   documento: string;
   rolId: string;
   rolInternoId?: string;
@@ -20,18 +22,18 @@ export interface Usuario {
 }
 
 export const INIT_USUARIOS: Usuario[] = [
-  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", documento:"12345678", rolId:"ROL-001", activo:true  },
-  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", documento:"87654321", rolId:"ROL-003", activo:true  },
-  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", documento:"11223344", rolId:"ROL-002", activo:true  },
-  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", documento:"22334455", rolId:"ROL-003", activo:true  },
-  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", documento:"33445566", rolId:"ROL-002", activo:true  },
-  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", documento:"44556677", rolId:"ROL-002", activo:false },
-  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", documento:"55667788", rolId:"ROL-002", activo:true  },
-  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", documento:"66778899", rolId:"ROL-003", activo:true  },
-  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", documento:"77889900", rolId:"ROL-003", activo:false },
-  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", documento:"88990011", rolId:"ROL-002", activo:true  },
-  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", documento:"99001122", rolId:"ROL-002", activo:true  },
-  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", documento:"10111213", rolId:"ROL-003", activo:true  },
+  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", documento:"12345678", rolId:"ROL-001", activo:true  },
+  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", documento:"87654321", rolId:"ROL-003", activo:true  },
+  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", documento:"11223344", rolId:"ROL-003", activo:true  },
+  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", documento:"22334455", rolId:"ROL-003", activo:true  },
+  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", documento:"33445566", rolId:"ROL-003", activo:true  },
+  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", documento:"44556677", rolId:"ROL-003", activo:false },
+  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", documento:"55667788", rolId:"ROL-003", activo:true  },
+  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", documento:"66778899", rolId:"ROL-003", activo:true  },
+  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", documento:"77889900", rolId:"ROL-003", activo:false },
+  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", documento:"88990011", rolId:"ROL-002", activo:true  },
+  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", documento:"99001122", rolId:"ROL-002", activo:true  },
+  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", documento:"10111213", rolId:"ROL-003", activo:true  },
 ];
 
 // Paleta de colores para roles (por índice de ROL-XXX)
@@ -56,9 +58,10 @@ const PER_PAGE = 5;
 
 const SPECIAL_ROLES = ["ROL-001", "ROL-002", "ROL-003"];
 
-function rolLabel(u: Usuario, roles: Rol[]): string {
+function rolLabel(u: Usuario, roles: Rol[], esEmpleado: boolean): string {
   const rol = roles.find(r => r.id === u.rolId);
   const nombre = rol?.nombre ?? u.rolId;
+  if (esEmpleado) return nombre;
   if (!SPECIAL_ROLES.includes(u.rolId)) return `Cliente/${nombre}`;
   return nombre;
 }
@@ -68,11 +71,17 @@ export function GestionUsuariosScreen({
   roles,
   usuarios,
   setUsuarios,
+  empleados,
+  setEmpleados,
+  clientes,
 }: {
   userRole: string;
   roles: Rol[];
   usuarios: Usuario[];
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
+  empleados: Empleado[];
+  setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
+  clientes: { correo: string }[];
 }) {
   const [search,     setSearch]    = useState("");
   const [filterRol,  setFiltroR]   = useState("todos");
@@ -80,10 +89,15 @@ export function GestionUsuariosScreen({
   const [page,       setPage]      = useState(1);
   const [detail,     setDetail]    = useState<Usuario | null>(null);
   const [editItem,   setEditItem]  = useState<Usuario | null>(null);
+  const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
 
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
+
+  const esEmpleado = (u: Usuario) =>
+    empleados.some(e => e.correo.trim().toLowerCase() === u.correo.trim().toLowerCase());
 
   // Métricas
   const total = usuarios.length;
@@ -110,22 +124,77 @@ export function GestionUsuariosScreen({
     setDetail(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
   };
 
+  // Refleja en el registro Empleado vinculado (por correo) los cambios hechos desde "Usuarios".
+  const updateEmpleadoLinked = (
+    buscarCorreo: string,
+    patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "documento" | "rolId" | "activo">>,
+  ) => {
+    const key = buscarCorreo.trim().toLowerCase();
+    setEmpleados(p => p.map(e => {
+      if (e.correo.trim().toLowerCase() !== key) return e;
+      const nombre = patch.nombre ?? e.nombre;
+      const iniciales = nombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+      return { ...e, ...patch, nombre, iniciales };
+    }));
+  };
+
   const cambiarEstado = () => {
     if (!detail) return;
     const nuevoEstado = !detail.activo;
     updateUsuario(detail.id, { activo: nuevoEstado });
+    updateEmpleadoLinked(detail.correo, { activo: nuevoEstado });
     toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
   };
 
   const handleEdit = () => {
     if (!editItem) return;
+    const errs: Record<string, string> = {};
+    if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
+    if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editItem.correo.trim())) errs.correo = "Formato de correo no válido";
+    if (!editItem.documento.trim()) errs.documento = "El número de documento es obligatorio";
+    else if (!/^\d+$/.test(editItem.documento.trim())) errs.documento = "El documento solo debe contener números";
+    if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
+      errs.telefono = "El teléfono solo debe contener números";
+    if (editItem.nombre.trim() && editItem.correo.trim() && editItem.documento.trim()) {
+      const em = editItem.correo.trim().toLowerCase();
+      const dm = editItem.documento.trim();
+      const ancla = editPrevCorreo?.trim().toLowerCase();
+      const otro = (correo: string) => correo.trim().toLowerCase() !== ancla;
+      const correoDup =
+        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => otro(c.correo) && c.correo.trim().toLowerCase() === em);
+      const docDup =
+        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && u.documento.trim() === dm) ||
+        empleados.some(e => otro(e.correo) && e.documento.trim() === dm);
+      if (correoDup) errs.correo = "Este correo ya está registrado";
+      if (docDup) errs.documento = "Este número de documento ya está registrado";
+    }
+    if (Object.keys(errs).length) { setEditErrors(errs); return; }
     setUsuarios(p => p.map(u => u.id === editItem.id ? editItem : u));
+    updateEmpleadoLinked(editPrevCorreo ?? editItem.correo, {
+      nombre: editItem.nombre,
+      correo: editItem.correo,
+      telefono: editItem.telefono,
+      tipoDocumento: editItem.tipoDocumento,
+      documento: editItem.documento,
+      rolId: editItem.rolId,
+      activo: editItem.activo,
+    });
     setEditItem(null);
+    setEditPrevCorreo(null);
+    setEditErrors({});
     toast.success("Usuario actualizado correctamente");
   };
 
   const handleDelete = (id: string) => {
+    const objetivo = usuarios.find(u => u.id === id);
     setUsuarios(p => p.filter(u => u.id !== id));
+    if (objetivo) {
+      const key = objetivo.correo.trim().toLowerCase();
+      setEmpleados(p => p.filter(e => e.correo.trim().toLowerCase() !== key));
+    }
     setDeleteId(null);
     toast.success("Usuario eliminado correctamente");
   };
@@ -221,7 +290,7 @@ export function GestionUsuariosScreen({
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId)} ${rolInactivo ? "opacity-50" : ""}`}>
-                         {rolLabel(u, roles)}
+                         {rolLabel(u, roles, esEmpleado(u))}
                        </span>
                         {rolInactivo && (
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Rol inactivo" />
@@ -239,7 +308,7 @@ export function GestionUsuariosScreen({
                           className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button onClick={() => setEditItem({ ...u })} title="Editar"
+                        <button onClick={() => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); }} title="Editar"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -311,7 +380,7 @@ export function GestionUsuariosScreen({
                       <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
                       <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId)} ${rolInactivo ? "opacity-60" : ""}`}>
-                         {rolLabel(detail, roles)}
+                         {rolLabel(detail, roles, esEmpleado(detail))}
                        </span>
                         {rolInactivo && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
@@ -457,18 +526,20 @@ export function GestionUsuariosScreen({
                     <input
                       type={type}
                       value={editItem[field]}
-                      onChange={e => setEditItem(x => x && ({ ...x, [field]: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
+                    {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
                   </div>
                 ))}
 
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
                   <select
+                    disabled={editItem ? esEmpleado(editItem) : false}
                     value={editItem.rolId}
                     onChange={e => setEditItem(x => x && ({ ...x, rolId: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {roles.map(r => (
                       <option key={r.id} value={r.id}>

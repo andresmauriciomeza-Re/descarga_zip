@@ -9,6 +9,7 @@ interface Props {
   navigate: (s: string) => void;
   userRole: string;
   onLogout: () => void;
+  isStaff: boolean;
   loggedInUser: {
     id: string;
     nombre: string;
@@ -33,7 +34,7 @@ function validarTelefono(t: string): string | null {
   return null;
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, loggedInUser, loggedInRoleName, onUpdateUser }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -234,6 +235,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, loggedInUser, log
                 <ArrowLeft className="w-4 h-4" />
                 Volver al inicio
               </button>
+              {isStaff && (
               <button
                 onClick={() => navigate("users")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
@@ -241,6 +243,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, loggedInUser, log
                 <ShieldCheck className="w-4 h-4" />
                 Ir a Administración
               </button>
+              )}
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
