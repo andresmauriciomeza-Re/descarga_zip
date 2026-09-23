@@ -9,7 +9,7 @@ const SERIF = "'DM Serif Display', serif";
 export const MENU_TREE = [
   { modulo: "Compras",    subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
   { modulo: "Producción", subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Producto No Conforme"] },
-  { modulo: "Ventas",     subs: ["Clientes", "Ventas"] },
+  { modulo: "Ventas",     subs: ["Clientes", "Ventas", "Devoluciones"] },
 ];
 
 export const ACCIONES = ["Ver", "Crear", "Editar", "Eliminar"] as const;
@@ -90,17 +90,20 @@ function ConfirmModal({ title, message, onConfirm, onCancel }: {
 }
 
 // ── RolModal — árbol izquierdo + CRUD derecho ─────────────────────────
-function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave }: {
+function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave, roles, rolId }: {
   title: string;
   initialNombre: string; initialDesc: string; initialActivo: boolean; initialAccesos: AccesosMap;
   onClose: () => void;
   onSave: (nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => void;
+  roles: Rol[];
+  rolId?: string;
 }) {
   const [nombre,     setNombre]     = useState(initialNombre);
   const [desc,       setDesc]       = useState(initialDesc);
   const [activo,     setActivo]     = useState(initialActivo);
   const [accesos,    setAccesos]    = useState<AccesosMap>({ ...initialAccesos });
   const [openModulo, setOpenModulo] = useState<string | null>(null);
+  const [errors,     setErrors]     = useState<{ nombre?: string; modulos?: string }>({});
 
   const toggleOpen = (m: string) => setOpenModulo(prev => prev === m ? null : m);
 
@@ -115,6 +118,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const toggleModule = (m: string, subs: string[]) => {
     const allOn = isAllMod(m, subs);
+    setErrors(p => ({ ...p, modulos: undefined }));
     setAccesos(prev => {
       const next = { ...prev };
       subs.forEach(s => {
@@ -128,6 +132,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const toggleSub = (m: string, s: string) => {
     const k = KEY(m, s);
+    setErrors(p => ({ ...p, modulos: undefined }));
     setAccesos(prev => {
       const next = { ...prev };
       if (k in next && next[k].length > 0) delete next[k];
@@ -138,6 +143,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const toggleAccion = (m: string, s: string, accion: Accion) => {
     const k = KEY(m, s);
+    setErrors(p => ({ ...p, modulos: undefined }));
     setAccesos(prev => {
       const cur = prev[k] ?? [];
       return { ...prev, [k]: cur.includes(accion) ? cur.filter(a => a !== accion) : [...cur, accion] };
@@ -149,7 +155,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   );
 
   const handleSave = () => {
-    if (!nombre.trim()) { toast.error("El nombre del rol es obligatorio"); return; }
+    const errs: { nombre?: string; modulos?: string } = {};
+    if (!nombre.trim()) errs.nombre = "El nombre del rol es obligatorio";
+    else if (roles.some(r =>
+      r.nombre.trim().toLowerCase() === nombre.trim().toLowerCase() && r.id !== rolId
+    )) errs.nombre = "Ya existe un rol con este nombre";
+    if (selectedSubs.length === 0) errs.modulos = "Selecciona al menos un módulo o sub-opción";
+    if (Object.keys(errs).length) { setErrors(errs); return; }
     onSave(nombre.trim(), desc.trim(), activo, accesos);
   };
 
@@ -177,7 +189,11 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Información del rol</p>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Cajero" className={iCls} />
+                <input value={nombre}
+                  onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(p => ({ ...p, nombre: undefined })); }}
+                  placeholder="Ej: Cajero"
+                  className={`${iCls} ${errors.nombre ? "!border-red-400 !bg-red-50/30" : ""}`} />
+                {errors.nombre && <p className="text-xs text-red-500 mt-1">{errors.nombre}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>
@@ -200,6 +216,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 Módulos y sub-opciones
                 <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} seleccionadas</span>
               </p>
+              {errors.modulos && <p className="text-xs text-red-500 mb-2">{errors.modulos}</p>}
               <div className="space-y-2">
                 {MENU_TREE.map(({ modulo, subs }) => {
                   const isOpen = openModulo === modulo;
@@ -279,10 +296,18 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                               <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
                                 <span className="text-sm font-semibold text-foreground">{sub}</span>
                                 <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={allSel}
                                   onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? ["Ver"] : [...ACCIONES] }))}
-                                  className="text-[10px] font-semibold text-muted-foreground hover:text-primary cursor-pointer transition-colors"
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
+                                    allSel
+                                      ? "bg-red-100 text-red-700 border-red-200"
+                                      : "bg-muted text-muted-foreground border-border hover:border-primary/30"
+                                  }`}
                                 >
-                                  {allSel ? "Solo Ver" : "Todos"}
+                                  <Check className={`w-4 h-4 ${allSel ? "" : "opacity-0"}`} />
+                                  Todos
                                 </button>
                               </div>
                               <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
@@ -450,6 +475,7 @@ export function GestionConfigScreen({
         {showCreate && (
           <RolModal key="create" title="Crear Rol"
             initialNombre="" initialDesc="" initialActivo={true} initialAccesos={{}}
+            roles={roles}
             onClose={() => setShowCreate(false)}
             onSave={handleCreate}
           />
@@ -461,6 +487,7 @@ export function GestionConfigScreen({
           <RolModal key={editItem.id} title={`Editar Rol — ${editItem.id}`}
             initialNombre={editItem.nombre} initialDesc={editItem.descripcion}
             initialActivo={editItem.activo} initialAccesos={{ ...editItem.accesos }}
+            roles={roles} rolId={editItem.id}
             onClose={() => setEditItem(null)}
             onSave={(n,d,a,acc) => saveRol(editItem.id,n,d,a,acc)}
           />
