@@ -104,6 +104,7 @@ import { GestionCompraScreen } from "./screens/GestionCompraScreen";
 import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
 import { GestionProductosScreen } from "./screens/GestionProductosScreen";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
+import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import {
   BarChart,
   Bar,
@@ -151,7 +152,8 @@ type Screen =
   | "orden-compra"
   | "gestion-compra"
   | "devoluciones"
-  | "empleados";
+  | "empleados"
+  | "mis-pedidos";
 
 interface Product {
   id: number;
@@ -1030,6 +1032,14 @@ function PublicNav({
           >
             Ver Menú
           </button>
+          {isLoggedIn && (
+            <button
+              onClick={() => navigate("mis-pedidos")}
+              className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
+            >
+              Pedidos
+            </button>
+          )}
         </nav>
 
         {/* Right actions */}
@@ -1209,9 +1219,9 @@ function BottomNav({
   const items = [
     { s: "landing" as Screen, Icon: Home, label: "Inicio" },
     {
-      s: "orders" as Screen,
+      s: "mis-pedidos" as Screen,
       Icon: ShoppingBag,
-      label: "Ventas",
+      label: "Pedidos",
     },
     { s: "catalog" as Screen, Icon: Grid, label: "Menú" },
     {
@@ -2432,12 +2442,17 @@ function CartScreen({
           </div>
         )}
 
-        <PrimaryBtn
-          onClick={() => navigate("landing")}
-          size="lg"
-        >
-          Volver al inicio
-        </PrimaryBtn>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <PrimaryBtn onClick={() => navigate("mis-pedidos")} size="lg">
+            Ver mis pedidos
+          </PrimaryBtn>
+          <GhostBtn
+            onClick={() => navigate("landing")}
+            className="px-7 py-4 text-lg min-h-[56px]"
+          >
+            Volver al inicio
+          </GhostBtn>
+        </div>
       </div>
     );
   }
@@ -5352,6 +5367,10 @@ export default function App() {
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
+  // Nombre con el que se guardan y se buscan los pedidos del usuario en sesión
+  const pedidosUsuarioNombre =
+    loggedInUser?.nombre ??
+    (userRole === "Usuario" ? "Sebastián Gómez" : "Gloria Inés Vargas");
   const loggedInRol = loggedInUser ? roles.find(r => r.id === loggedInUser.rolId) ?? null : null;
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
   // AccesosMap for the logged-in user's role (empty object = no permissions)
@@ -5469,6 +5488,10 @@ export default function App() {
     setTimeout(() => navigate("catalog"), 0);
   }
 
+  if (!isLoggedIn && screen === "mis-pedidos") {
+    setTimeout(() => navigate("login"), 0);
+  }
+
   // Permission guard: redirect admin-level users to dashboard if their named
   // role doesn't grant "Ver" on the current screen.
   if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "profile") {
@@ -5480,6 +5503,7 @@ export default function App() {
       setTimeout(() => navigate("dashboard"), 0);
     }
   }
+
   const sideW = isAdmin
     ? sidebarCollapsed
       ? "ml-16"
@@ -5607,14 +5631,8 @@ export default function App() {
                   ) => {
                     const newVenta: Venta = {
                       id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
-                      usuario:
-                        loggedInUser?.nombre ??
-                        (userRole === "Usuario"
-                          ? "Sebastián Gómez"
-                          : "Gloria Inés Vargas"),
-                      fecha: new Date()
-                        .toISOString()
-                        .split("T")[0],
+                      usuario: pedidosUsuarioNombre,
+                      fecha: new Date().toLocaleDateString("en-CA"),
                       productos: items
                         .map(
                           (i) =>
@@ -5641,10 +5659,18 @@ export default function App() {
                         precio: i.sizePrice + i.extrasPrice,
                         cantidad: i.quantity,
                         imagen: i.product.image,
+                        extras: i.selectedExtras,
                       })),
                     };
                     setVentas((prev) => [newVenta, ...prev]);
                   }}
+                />
+              )}
+              {screen === "mis-pedidos" && (
+                <MisPedidosScreen
+                  pedidos={ventas}
+                  usuarioNombre={pedidosUsuarioNombre}
+                  onVerMenu={() => navigate("catalog")}
                 />
               )}
               {screen === "login" && (
