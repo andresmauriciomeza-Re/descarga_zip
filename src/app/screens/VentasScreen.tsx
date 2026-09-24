@@ -205,6 +205,7 @@ interface DetalleProd {
   cantidad: number;
   imagen?: string;
   tamaño?: string;
+  extras?: string[];
 }
 
 export type DevolucionTipo = "producto" | "dinero";
@@ -410,6 +411,25 @@ export const INITIAL_VENTAS: Venta[] = [
         imagen:
           "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=80&h=80&fit=crop&auto=format",
       },
+    ],
+  },
+  {
+    id: "9",
+    usuario: "Sebastián Gómez",
+    fecha: "2024-01-14",
+    productos: "Pepperoni Premium x1",
+    cantidad: 1,
+    total: 28000,
+    estado: "completado",
+    metodoPago: "Nequi",
+    horaRecogida: "18:30",
+    historial: [
+      { estado: "por-verificar", hora: "5:40 PM" },
+      { estado: "venta", hora: "5:46 PM" },
+      { estado: "completado", hora: "6:35 PM" },
+    ],
+    detalle: [
+      { nombre: "Pepperoni Premium — Mediano", precio: 28000, cantidad: 1 },
     ],
   },
 ];
