@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock, Download, PackageX } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 
 const SERIF = "'DM Serif Display', serif";
@@ -22,98 +23,255 @@ const ESTADO_LABEL: Record<EstadoOrden, string> = {
   cancelada:    "Cancelada",
 };
 
-// Catálogo de recetas (con tiempo de preparación en minutos)
-const RECETAS = [
-  { id: "REC-001", nombre: "Margarita Clásica",   tiempoPrep: 20 },
-  { id: "REC-002", nombre: "Pepperoni Premium",   tiempoPrep: 25 },
-  { id: "REC-003", nombre: "Cuatro Quesos",       tiempoPrep: 30 },
-  { id: "REC-004", nombre: "Especial La Sirena",  tiempoPrep: 35 },
-  { id: "REC-005", nombre: "Veggie Mediterránea", tiempoPrep: 20 },
-  { id: "REC-006", nombre: "Hawaiana Tropical",   tiempoPrep: 25 },
+// Transiciones válidas de estado. "Cancelada" NO es seleccionable:
+// solo se alcanza mediante el flujo de "Dar de baja".
+const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
+  pendiente:    ["en-proceso"],
+  "en-proceso": ["completada"],
+  completada:   [],
+  cancelada:    [],
+};
+
+// Catálogo de productos (mismos IDs y nombres del módulo Productos).
+// El sistema carga internamente el tiempo de preparación de la última
+// versión de la ficha técnica de cada producto (nunca se muestra un ID externo).
+const PRODUCTOS = [
+  { id: "PROD-001", nombre: "Margarita Clásica",   tiempoPrep: 20 },
+  { id: "PROD-002", nombre: "Pepperoni Premium",   tiempoPrep: 25 },
+  { id: "PROD-003", nombre: "Cuatro Quesos",       tiempoPrep: 30 },
+  { id: "PROD-004", nombre: "Especial La Sirena",  tiempoPrep: 35 },
+  { id: "PROD-005", nombre: "Veggie Mediterránea", tiempoPrep: 20 },
 ];
+
+const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
+const MOTIVOS = [
+  "Defecto de calidad",
+  "Daño físico",
+  "Vencimiento",
+  "Contaminación",
+  "Mal almacenamiento",
+  "Incumplimiento de proveedor",
+  "Pérdida en venta",
+  "Otro",
+];
+
+interface LineaProducto {
+  idProducto: string;
+  cantidad: number;
+}
+
+interface TransicionEstado {
+  de: EstadoOrden;
+  a: EstadoOrden;
+  fechaHora: string; // ISO
+}
 
 interface OrdenProduccion {
   id: string;
-  idReceta: string;
-  fechaEntrega: string;   // "YYYY-MM-DD"
-  horaEntrega: string;    // "HH:MM" — hora de entrega
-  cantidadPro: number;
+  lineas: LineaProducto[];
+  fechaSolicitada: string;   // "YYYY-MM-DD" (opcional, referencial)
+  horaSolicitada: string;    // "HH:MM" (opcional, referencial)
   estadoOrden: EstadoOrden;
+  observacion: string;
+  inicioProduccion: string | null;  // fecha/hora real al pasar a "En Proceso"
+  entregaEstimada: string | null;   // entrega real estimada (se fija al iniciar)
+  historial: TransicionEstado[];    // cada transición con fecha/hora
+}
+
+interface OrdenForm {
+  lineas: LineaProducto[];
+  fechaSolicitada: string;
+  horaSolicitada: string;
   observacion: string;
 }
 
 const INITIAL_ORDENES: OrdenProduccion[] = [
-  { id:"ORD-001", idReceta:"REC-001", fechaEntrega:"2024-01-15", horaEntrega:"19:00", cantidadPro:20, estadoOrden:"completada",  observacion:"Turno mañana sin novedades." },
-  { id:"ORD-002", idReceta:"REC-002", fechaEntrega:"2024-01-15", horaEntrega:"20:30", cantidadPro:15, estadoOrden:"en-proceso",  observacion:"Pendiente revisión de calidad." },
-  { id:"ORD-003", idReceta:"REC-003", fechaEntrega:"2024-01-16", horaEntrega:"18:00", cantidadPro:10, estadoOrden:"pendiente",   observacion:"" },
-  { id:"ORD-004", idReceta:"REC-004", fechaEntrega:"2024-01-16", horaEntrega:"21:00", cantidadPro:0,  estadoOrden:"cancelada",   observacion:"Falta mozzarella." },
-  { id:"ORD-005", idReceta:"REC-005", fechaEntrega:"2024-01-17", horaEntrega:"19:30", cantidadPro:8,  estadoOrden:"en-proceso",  observacion:"" },
+  {
+    id: "ORD-001",
+    lineas: [{ idProducto: "PROD-001", cantidad: 20 }],
+    fechaSolicitada: "2024-01-15", horaSolicitada: "19:00",
+    estadoOrden: "completada", observacion: "Turno mañana sin novedades.",
+    inicioProduccion: "2024-01-15T06:00:00", entregaEstimada: "2024-01-15T06:20:00",
+    historial: [
+      { de: "pendiente", a: "en-proceso", fechaHora: "2024-01-15T06:00:00" },
+      { de: "en-proceso", a: "completada", fechaHora: "2024-01-15T09:00:00" },
+    ],
+  },
+  {
+    id: "ORD-002",
+    lineas: [{ idProducto: "PROD-002", cantidad: 15 }],
+    fechaSolicitada: "2024-01-15", horaSolicitada: "20:30",
+    estadoOrden: "en-proceso", observacion: "Pendiente revisión de calidad.",
+    inicioProduccion: "2024-01-15T08:10:00", entregaEstimada: "2024-01-15T08:35:00",
+    historial: [
+      { de: "pendiente", a: "en-proceso", fechaHora: "2024-01-15T08:10:00" },
+    ],
+  },
+  {
+    id: "ORD-003",
+    lineas: [{ idProducto: "PROD-003", cantidad: 10 }],
+    fechaSolicitada: "2024-01-16", horaSolicitada: "18:00",
+    estadoOrden: "pendiente", observacion: "",
+    inicioProduccion: null, entregaEstimada: null, historial: [],
+  },
+  {
+    id: "ORD-004",
+    lineas: [{ idProducto: "PROD-004", cantidad: 12 }],
+    fechaSolicitada: "2024-01-16", horaSolicitada: "21:00",
+    estadoOrden: "cancelada", observacion: "Falta mozzarella.",
+    inicioProduccion: "2024-01-16T11:00:00", entregaEstimada: null,
+    historial: [
+      { de: "pendiente", a: "en-proceso", fechaHora: "2024-01-16T11:00:00" },
+      { de: "en-proceso", a: "cancelada",  fechaHora: "2024-01-16T11:20:00" },
+    ],
+  },
+  {
+    id: "ORD-005",
+    lineas: [{ idProducto: "PROD-005", cantidad: 8 }],
+    fechaSolicitada: "2024-01-17", horaSolicitada: "19:30",
+    estadoOrden: "en-proceso", observacion: "",
+    inicioProduccion: "2024-01-17T09:00:00", entregaEstimada: "2024-01-17T09:20:00",
+    historial: [
+      { de: "pendiente", a: "en-proceso", fechaHora: "2024-01-17T09:00:00" },
+    ],
+  },
 ];
 
 const PER_PAGE = 5;
 
-const emptyForm = (): Omit<OrdenProduccion, "id"> => ({
-  idReceta: "REC-001", fechaEntrega: "", horaEntrega: "",
-  cantidadPro: 0, estadoOrden: "pendiente", observacion: "",
+const emptyForm = (): OrdenForm => ({
+  lineas: [{ idProducto: "PROD-001", cantidad: 1 }],
+  fechaSolicitada: "",
+  horaSolicitada: "",
+  observacion: "",
 });
 
-// Calcula hora de inicio restando tiempo de preparación a la hora de entrega
-function calcInicio(horaEntrega: string, tiempoPrep: number): string {
-  if (!horaEntrega) return "—";
-  const [hh, mm] = horaEntrega.split(":").map(Number);
-  const totalMin = hh * 60 + mm - tiempoPrep;
-  if (totalMin < 0) return "—";
-  const ih = Math.floor(totalMin / 60);
-  const im = totalMin % 60;
-  return `${String(ih).padStart(2, "0")}:${String(im).padStart(2, "0")}`;
+const productById = (id: string) => PRODUCTOS.find(p => p.id === id);
+const totalCantidad = (lineas: LineaProducto[]) => lineas.reduce((s, l) => s + (l.cantidad || 0), 0);
+const totalTiempoPrep = (lineas: LineaProducto[]) =>
+  lineas.reduce((s, l) => s + ((productById(l.idProducto)?.tiempoPrep ?? 0) * (l.cantidad || 0)), 0);
+
+function fmtMinutos(min: number): string {
+  if (min <= 0) return "0 min";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+function fmtDT(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${MM}/${d.getFullYear()} ${hh}:${mm}`;
+}
+
+const nowISO = () => new Date().toISOString();
+const addMinutesISO = (iso: string, min: number) =>
+  new Date(new Date(iso).getTime() + min * 60000).toISOString();
+
+const nombresDeLineas = (lineas: LineaProducto[]) => lineas.map(l => productById(l.idProducto)?.nombre ?? l.idProducto);
+
+function exportExcel(ordenes: OrdenProduccion[]) {
+  const headers = [
+    "ID Orden", "Producto(s)", "Detalle", "Cantidad Total",
+    "Fecha solicitada", "Hora solicitada", "Inicio Producción",
+    "Entrega Estimada", "Estado", "Observación",
+  ];
+  const rows = ordenes.map(o => [
+    o.id,
+    nombresDeLineas(o.lineas).join(", "),
+    o.lineas.map(l => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join("; "),
+    totalCantidad(o.lineas),
+    o.fechaSolicitada || "",
+    o.horaSolicitada || "",
+    o.inicioProduccion ? fmtDT(o.inicioProduccion) : "",
+    o.entregaEstimada ? fmtDT(o.entregaEstimada) : "",
+    ESTADO_LABEL[o.estadoOrden],
+    o.observacion,
+  ]);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws["!cols"] = [
+    { wch: 10 }, { wch: 26 }, { wch: 36 }, { wch: 12 },
+    { wch: 15 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
+    { wch: 12 }, { wch: 32 },
+  ];
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+  XLSX.utils.book_append_sheet(wb, ws, "Ordenes");
+  const date = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `ordenes-produccion-${date}.xlsx`);
+  toast.success("Archivo Excel descargado");
 }
 
 export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
-  const [ordenes,    setOrdenes]    = useState<OrdenProduccion[]>(INITIAL_ORDENES);
-  const [search,     setSearch]     = useState("");
-  const [page,       setPage]       = useState(1);
-  const [showCreate, setShowCreate] = useState(false);
-  const [editItem,   setEditItem]   = useState<OrdenProduccion | null>(null);
-  const [detailItem, setDetailItem] = useState<OrdenProduccion | null>(null);
-  const [deleteId,   setDeleteId]   = useState<string | null>(null);
-  const [form,       setForm]       = useState(emptyForm());
+  const [ordenes,       setOrdenes]    = useState<OrdenProduccion[]>(INITIAL_ORDENES);
+  const [search,        setSearch]     = useState("");
+  const [page,          setPage]       = useState(1);
+  const [showCreate,    setShowCreate] = useState(false);
+  const [editItem,      setEditItem]   = useState<OrdenProduccion | null>(null);
+  const [detailItem,    setDetailItem] = useState<OrdenProduccion | null>(null);
+  const [deleteId,      setDeleteId]   = useState<string | null>(null);
+  const [form,          setForm]       = useState<OrdenForm>(emptyForm());
+  const [darBajaItem,   setDarBajaItem] = useState<OrdenProduccion | null>(null);
   const [confirmEstado, setConfirmEstado] = useState<{
     id: string; current: EstadoOrden; next: EstadoOrden;
   } | null>(null);
 
-  const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-  const recetaNombre  = (id: string) => RECETAS.find(r => r.id === id)?.nombre ?? id;
-  const recetaPrep    = (id: string) => RECETAS.find(r => r.id === id)?.tiempoPrep ?? 0;
+  const [darBajaForm, setDarBajaForm] = useState<{
+    idProducto: string;
+    unidadMedida: string;
+    cantidad: number;
+    fechaRegistro: string;
+    motivo: string;
+    descripcion: string;
+  } | null>(null);
 
-  // Conteo de órdenes por hora de entrega (para el badge informativo)
-  const horaCount = useMemo(() => {
-    const map: Record<string, number> = {};
-    ordenes.forEach(o => {
-      if (o.horaEntrega) map[o.horaEntrega] = (map[o.horaEntrega] ?? 0) + 1;
-    });
-    return map;
-  }, [ordenes]);
+  const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  const sCls = iCls + " cursor-pointer";
+  const tCls = iCls + " resize-none";
 
   const filtered = useMemo(() =>
     ordenes.filter(o =>
       o.id.toLowerCase().includes(search.toLowerCase()) ||
-      recetaNombre(o.idReceta).toLowerCase().includes(search.toLowerCase())
+      nombresDeLineas(o.lineas).some(n => n.toLowerCase().includes(search.toLowerCase()))
     ), [ordenes, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const handleCreate = () => {
-    if (!form.fechaEntrega) { toast.error("La fecha de entrega es obligatoria"); return; }
+    if (form.lineas.length === 0 || form.lineas.every(l => !l.idProducto || l.cantidad <= 0)) {
+      toast.error("Agrega al menos un producto con cantidad");
+      return;
+    }
     const newId = `ORD-${String(ordenes.length + 1).padStart(3, "0")}`;
-    setOrdenes(p => [{ id: newId, ...form }, ...p]);
+    const ord: OrdenProduccion = {
+      id: newId,
+      lineas: form.lineas.map(l => ({ ...l })),
+      fechaSolicitada: form.fechaSolicitada,
+      horaSolicitada: form.horaSolicitada,
+      estadoOrden: "pendiente",
+      observacion: form.observacion,
+      inicioProduccion: null,
+      entregaEstimada: null,
+      historial: [],
+    };
+    setOrdenes(p => [ord, ...p]);
     setShowCreate(false); setForm(emptyForm());
     toast.success("Orden de producción creada");
   };
 
   const handleEdit = () => {
     if (!editItem) return;
-    setOrdenes(p => p.map(o => o.id === editItem.id ? editItem : o));
+    if (editItem.lineas.length === 0 || editItem.lineas.every(l => !l.idProducto || l.cantidad <= 0)) {
+      toast.error("Agrega al menos un producto con cantidad");
+      return;
+    }
+    setOrdenes(p => p.map(o => o.id === editItem.id ? { ...editItem, lineas: editItem.lineas.map(l => ({ ...l })) } : o));
     setEditItem(null);
     toast.success("Orden actualizada");
   };
@@ -124,82 +282,139 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
     toast.success("Orden eliminada");
   };
 
-  // Shared form fields
-  const FormFields = ({ v, set }: {
-    v: Omit<OrdenProduccion, "id">;
-    set: (f: Omit<OrdenProduccion, "id">) => void;
-  }) => {
-    const prep      = recetaPrep(v.idReceta);
-    const inicio    = calcInicio(v.horaEntrega, prep);
-    const inicioOk  = inicio !== "—";
+  const applyTransition = (id: string, next: EstadoOrden) => {
+    setOrdenes(p => p.map(o => {
+      if (o.id !== id) return o;
+      const now = nowISO();
+      const historial = [...o.historial, { de: o.estadoOrden, a: next, fechaHora: now }];
+      let patched: OrdenProduccion = { ...o, estadoOrden: next, historial };
+      if (next === "en-proceso") {
+        patched = {
+          ...patched,
+          inicioProduccion: now,
+          entregaEstimada: addMinutesISO(now, totalTiempoPrep(o.lineas)),
+        };
+      }
+      return patched;
+    }));
+    setConfirmEstado(null);
+    toast.success(`Estado cambiado a: ${ESTADO_LABEL[next]}`);
+  };
+
+  const confirmarDarBaja = () => {
+    if (!darBajaForm || !darBajaItem) return;
+    if (!darBajaForm.descripcion.trim()) {
+      toast.error("Describe el motivo de la baja");
+      return;
+    }
+    setOrdenes(p => p.map(o => o.id === darBajaItem.id
+      ? { ...o, estadoOrden: "cancelada", historial: [...o.historial, { de: o.estadoOrden, a: "cancelada", fechaHora: nowISO() }] }
+      : o));
+    setDarBajaItem(null); setDarBajaForm(null);
+    toast.success(`Orden ${darBajaItem.id} dada de baja`);
+  };
+
+  const openDarBaja = (o: OrdenProduccion) => {
+    const primera = o.lineas[0];
+    setDarBajaItem(o);
+    setDarBajaForm({
+      idProducto: primera.idProducto,
+      unidadMedida: "und",
+      cantidad: primera.cantidad,
+      fechaRegistro: new Date().toISOString().slice(0, 10),
+      motivo: MOTIVOS[0],
+      descripcion: "",
+    });
+  };
+
+  // ── Campos compartidos del formulario de orden (crear / editar) ──
+  const OrdenFormFields = ({ v, set }: { v: OrdenForm; set: (f: OrdenForm) => void }) => {
+    const prepTotal = totalTiempoPrep(v.lineas);
+    const cantTotal = totalCantidad(v.lineas);
+
+    const updateLinea = (idx: number, patch: Partial<LineaProducto>) =>
+      set({ ...v, lineas: v.lineas.map((l, i) => i === idx ? { ...l, ...patch } : l) });
+
+    const addLinea = () =>
+      set({ ...v, lineas: [...v.lineas, { idProducto: PRODUCTOS[0].id, cantidad: 1 }] });
+
+    const removeLinea = (idx: number) =>
+      set({ ...v, lineas: v.lineas.filter((_, i) => i !== idx) });
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* ID Receta */}
+        {/* Líneas de producto */}
         <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Receta *</label>
-          <select value={v.idReceta} onChange={e => set({ ...v, idReceta: e.target.value })}
-            className={iCls + " cursor-pointer"}>
-            {RECETAS.map(r => (
-              <option key={r.id} value={r.id}>{r.id} — {r.nombre} ({r.tiempoPrep} min)</option>
+          <label className="block text-xs font-semibold text-muted-foreground mb-2">Producto(s) de la orden</label>
+          <div className="space-y-2">
+            {v.lineas.map((l, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <select value={l.idProducto} onChange={e => updateLinea(idx, { idProducto: e.target.value })}
+                  className={sCls + " flex-1"}>
+                  {PRODUCTOS.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+                <input
+                  type="number" min={1} value={l.cantidad}
+                  onChange={e => updateLinea(idx, { cantidad: Number(e.target.value) })}
+                  title="Cantidad"
+                  className={iCls + " w-24"}
+                />
+                {v.lineas.length > 1 && (
+                  <button type="button" onClick={() => removeLinea(idx)} title="Quitar producto"
+                    className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             ))}
-          </select>
-        </div>
-
-        {/* Inicio de Producción — readonly, calculado */}
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Inicio de Producción</label>
-          <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm ${inicioOk ? "bg-muted/60 border-border text-foreground" : "bg-muted/30 border-border text-muted-foreground"}`}>
-            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span className={inicioOk ? "font-semibold" : "italic opacity-60"}>
-              {inicioOk ? `Inicio: ${inicio}` : "Selecciona hora de entrega para calcular"}
-            </span>
-            {inicioOk && (
-              <span className="ml-auto text-xs text-muted-foreground">
-                ({prep} min antes de {v.horaEntrega})
-              </span>
-            )}
           </div>
+          <button type="button" onClick={addLinea}
+            className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+            <Plus className="w-3.5 h-3.5" /> Agregar producto
+          </button>
         </div>
 
-        {/* Fecha y Hora de Entrega */}
+        {/* Fecha/hora solicitada por el cliente (opcional, referencial) */}
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha y Hora de Entrega *</label>
-          <CalendarDropdown value={v.fechaEntrega} onChange={f => set({ ...v, fechaEntrega: f })} />
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">
+            Fecha/hora solicitada por el cliente <span className="text-muted-foreground/60">(opcional, referencial)</span>
+          </label>
+          <CalendarDropdown value={v.fechaSolicitada} onChange={f => set({ ...v, fechaSolicitada: f })} />
         </div>
         <div className="flex flex-col justify-end">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Hora (HH:MM)</label>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">Hora (HH:MM) — opcional</label>
           <input
             type="time"
-            value={v.horaEntrega}
-            onChange={e => set({ ...v, horaEntrega: e.target.value })}
+            value={v.horaSolicitada}
+            onChange={e => set({ ...v, horaSolicitada: e.target.value })}
             className={iCls}
           />
         </div>
 
-        {/* Cantidad producida */}
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad Producida</label>
-          <input type="number" min={0} value={v.cantidadPro}
-            onChange={e => set({ ...v, cantidadPro: Number(e.target.value) })}
-            className={iCls} />
+        {/* Tiempo estimado (readonly) */}
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo estimado / Entrega estimada</label>
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-foreground">
+            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="font-semibold">{fmtMinutos(prepTotal)}</span>
+            <span className="text-xs text-muted-foreground">
+              (suma del tiempo de preparación × cantidad de cada producto — se fija como entrega real al iniciar producción)
+            </span>
+          </div>
         </div>
-        {/* Estado */}
+
+        {/* Cantidad producida (resumen) */}
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado Orden</label>
-          <select value={v.estadoOrden} onChange={e => set({ ...v, estadoOrden: e.target.value as EstadoOrden })}
-            className={iCls + " cursor-pointer"}>
-            {(Object.keys(ESTADO_LABEL) as EstadoOrden[]).map(s => (
-              <option key={s} value={s}>{ESTADO_LABEL[s]}</option>
-            ))}
-          </select>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad Producida (resumen)</label>
+          <input value={cantTotal} readOnly className={iCls + " opacity-70 cursor-default"} />
         </div>
+
         {/* Observación */}
         <div className="sm:col-span-2">
           <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
           <textarea value={v.observacion} onChange={e => set({ ...v, observacion: e.target.value })}
             rows={3} placeholder="Notas adicionales sobre esta orden..."
-            className={iCls + " resize-none"} />
+            className={tCls} />
         </div>
       </div>
     );
@@ -257,19 +472,25 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Orden Producción</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
-        {canCreate && (
-          <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
-            <Plus className="w-4 h-4" /> Crear Orden de Producción
+        <div className="flex items-center gap-3">
+          <button onClick={() => exportExcel(ordenes)}
+            className="inline-flex items-center gap-2 px-5 py-3 border border-border font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer text-sm text-foreground">
+            <Download className="w-4 h-4" /> Descargar Excel
           </button>
-        )}
+          {canCreate && (
+            <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
+              <Plus className="w-4 h-4" /> Crear Orden de Producción
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
       <div className="relative mb-5 max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por ID orden o receta..."
+          placeholder="Buscar por ID orden o producto..."
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
@@ -279,7 +500,7 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID Orden","ID Receta","Fecha Orden","Hora Entrega","Cant. Producida","Estado Orden","Acciones"].map(h => (
+                {["ID Orden","Producto(s)","Fecha solicitada","Entrega estimada","Cant. Producida","Estado Orden","Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -289,54 +510,92 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
                 <tr><td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
                 </td></tr>
-              ) : paged.map(o => (
-                <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{o.id}</td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-xs font-mono font-semibold text-foreground">{o.idReceta}</p>
-                    <p className="text-xs text-muted-foreground">{recetaNombre(o.idReceta)}</p>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{o.fechaEntrega}</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                        {o.horaEntrega || <span className="text-muted-foreground font-normal italic text-xs">—</span>}
-                      </span>
-                      {o.horaEntrega && (horaCount[o.horaEntrega] ?? 0) >= 2 && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">
-                          {horaCount[o.horaEntrega]} órdenes a esta hora
+              ) : paged.map(o => {
+                const nombres = nombresDeLineas(o.lineas);
+                const soloPendiente = o.estadoOrden === "pendiente";
+                const puedeBaja = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
+                return (
+                  <tr key={o.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{o.id}</td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-sm font-medium text-foreground">
+                        {nombres.length === 1 ? nombres[0] : `${nombres.length} productos`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {o.lineas.map(l => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join(", ")}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">
+                      {o.fechaSolicitada || "—"}{o.horaSolicitada ? ` ${o.horaSolicitada}` : ""}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          {o.entregaEstimada
+                            ? fmtDT(o.entregaEstimada)
+                            : <span className="text-muted-foreground font-normal italic text-xs">Por iniciar</span>}
                         </span>
+                      </div>
+                      {(o.fechaSolicitada || o.horaSolicitada) && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5" title="Hora solicitada por el cliente">
+                          Solicitada: {o.fechaSolicitada || "—"}{o.horaSolicitada ? ` ${o.horaSolicitada}` : ""}
+                        </p>
                       )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{o.cantidadPro}</td>
-                  <td className="px-4 py-3.5">
-                    <select value={o.estadoOrden}
-                      onChange={e => {
-                        const next = e.target.value as EstadoOrden;
-                        if (next === o.estadoOrden) return;
-                        e.target.value = o.estadoOrden;
-                        setConfirmEstado({ id: o.id, current: o.estadoOrden, next });
-                      }}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${ESTADO_COLOR[o.estadoOrden]}`}>
-                      {(Object.keys(ESTADO_LABEL) as EstadoOrden[]).map(s => (
-                        <option key={s} value={s}>{ESTADO_LABEL[s]}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setDetailItem(o)} title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                      {canEdit && <button onClick={() => setEditItem({ ...o })} title="Editar"
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>}
-                      {canDelete && <button onClick={() => setDeleteId(o.id)} title="Eliminar"
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"><Trash2 className="w-4 h-4" /></button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{totalCantidad(o.lineas)}</td>
+                    <td className="px-4 py-3.5">
+                      {VALID_TRANSITIONS[o.estadoOrden].length === 0 ? (
+                        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
+                          {ESTADO_LABEL[o.estadoOrden]}
+                        </span>
+                      ) : (
+                        <select value={o.estadoOrden}
+                          onChange={e => {
+                            const next = e.target.value as EstadoOrden;
+                            if (next === o.estadoOrden) return;
+                            e.target.value = o.estadoOrden;
+                            setConfirmEstado({ id: o.id, current: o.estadoOrden, next });
+                          }}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${ESTADO_COLOR[o.estadoOrden]}`}>
+                          <option value={o.estadoOrden}>{ESTADO_LABEL[o.estadoOrden]}</option>
+                          {VALID_TRANSITIONS[o.estadoOrden].map(n => (
+                            <option key={n} value={n}>{ESTADO_LABEL[n]}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setDetailItem(o)} title="Ver detalle"
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
+                        {canEdit && (
+                          <button onClick={() => soloPendiente && setEditItem({ ...o })}
+                            disabled={!soloPendiente}
+                            title={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => soloPendiente && setDeleteId(o.id)}
+                            disabled={!soloPendiente}
+                            title={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => puedeBaja && openDarBaja(o)}
+                          disabled={!puedeBaja}
+                          title={puedeBaja ? "Dar de baja" : "No se puede dar de baja en este estado"}
+                          className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                          <PackageX className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -367,7 +626,15 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
           onClose: () => setShowCreate(false),
           onConfirm: handleCreate,
           label: "Crear Orden",
-          children: FormFields({ v: form, set: setForm })
+          children: (
+            <>
+              <div className="flex items-center justify-between mb-4 px-3 py-2 bg-muted/60 rounded-xl border border-border">
+                <span className="text-xs font-semibold text-muted-foreground">Estado Orden</span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR.pendiente}`}>Pendiente</span>
+              </div>
+              <OrdenFormFields v={form} set={setForm} />
+            </>
+          )
         })}
       </AnimatePresence>
 
@@ -378,36 +645,90 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
           onClose: () => setEditItem(null),
           onConfirm: handleEdit,
           label: "Guardar",
-          children: FormFields({ v: editItem, set: v => setEditItem({ ...editItem, ...v }) })
+          children: (
+            <>
+              <div className="flex items-center justify-between mb-4 px-3 py-2 bg-muted/60 rounded-xl border border-border">
+                <span className="text-xs font-semibold text-muted-foreground">Estado Orden</span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[editItem.estadoOrden]}`}>{ESTADO_LABEL[editItem.estadoOrden]}</span>
+              </div>
+              <OrdenFormFields
+                v={{
+                  lineas: editItem.lineas,
+                  fechaSolicitada: editItem.fechaSolicitada,
+                  horaSolicitada: editItem.horaSolicitada,
+                  observacion: editItem.observacion,
+                }}
+                set={nv => setEditItem(x => x && ({
+                  ...x,
+                  lineas: nv.lineas,
+                  fechaSolicitada: nv.fechaSolicitada,
+                  horaSolicitada: nv.horaSolicitada,
+                  observacion: nv.observacion,
+                }))}
+              />
+            </>
+          )
         })}
       </AnimatePresence>
 
       {/* Modal: Ver detalle */}
       <AnimatePresence>
         {detailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
             <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border">
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="px-5 py-4 space-y-2">
                 {[
-                  { l: "ID Orden",            v: detailItem.id },
-                  { l: "ID Receta",           v: `${detailItem.idReceta} — ${recetaNombre(detailItem.idReceta)}` },
-                  { l: "Fecha Entrega",        v: detailItem.fechaEntrega },
-                  { l: "Hora Entrega",         v: detailItem.horaEntrega || "—" },
-                  { l: "Inicio de Producción", v: calcInicio(detailItem.horaEntrega, recetaPrep(detailItem.idReceta)) },
-                  { l: "Cantidad Producida",   v: `${detailItem.cantidadPro} und.` },
-                  { l: "Estado Orden",         v: ESTADO_LABEL[detailItem.estadoOrden] },
+                  { l: "ID Orden", v: detailItem.id },
+                  { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${detailItem.horaSolicitada}` : ""}` : "—" },
+                  { l: "Inicio de producción",  v: fmtDT(detailItem.inicioProduccion) },
+                  { l: "Entrega estimada",      v: fmtDT(detailItem.entregaEstimada) },
+                  { l: "Cantidad producida",    v: `${totalCantidad(detailItem.lineas)} und.` },
+                  { l: "Estado Orden",          v: ESTADO_LABEL[detailItem.estadoOrden] },
                 ].map(({ l, v }) => (
                   <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
                     <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
                     <span className="text-sm font-semibold text-foreground text-right">{v}</span>
                   </div>
                 ))}
+
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Producto(s)</p>
+                  <div className="space-y-1">
+                    {detailItem.lineas.map((l, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm bg-muted rounded-xl px-3 py-2">
+                        <span className="font-semibold text-foreground">{productById(l.idProducto)?.nombre ?? l.idProducto}</span>
+                        <span className="text-muted-foreground">{l.cantidad} und.</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Historial de estado</p>
+                  {detailItem.historial.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">Sin transiciones registradas.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {detailItem.historial.map((h, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                            <span className="text-muted-foreground text-xs">→</span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(h.fechaHora)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {detailItem.observacion && (
                   <div className="pt-2">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">Observación</p>
@@ -419,6 +740,108 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
                 <button onClick={() => setDetailItem(null)} className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Dar de baja */}
+      <AnimatePresence>
+        {darBajaItem && darBajaForm && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+                className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>Dar de baja — {darBajaItem.id}</h3>
+                  <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                </div>
+
+                <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
+                      <p className="text-sm font-semibold text-foreground py-2">Producto</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
+                      <select value={darBajaForm.unidadMedida} onChange={e => setDarBajaForm(f => f && ({ ...f, unidadMedida: e.target.value }))} className={sCls}>
+                        {UNIDADES.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre del producto</label>
+                    <select value={darBajaForm.idProducto}
+                      onChange={e => {
+                        const pid = e.target.value;
+                        const linea = darBajaItem.lineas.find(l => l.idProducto === pid);
+                        setDarBajaForm(f => f && ({ ...f, idProducto: pid, cantidad: linea?.cantidad ?? f.cantidad }));
+                      }}
+                      className={sCls}>
+                      {darBajaItem.lineas.map(l => (
+                        <option key={l.idProducto} value={l.idProducto}>{productById(l.idProducto)?.nombre ?? l.idProducto}</option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Producto terminado</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
+                      <input type="number" min={1} value={darBajaForm.cantidad}
+                        onChange={e => setDarBajaForm(f => f && ({ ...f, cantidad: Number(e.target.value) }))}
+                        className={iCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
+                      <input value={darBajaForm.fechaRegistro} readOnly className={iCls + " opacity-60 cursor-default"} />
+                    </div>
+                  </div>
+
+                  <div className="border border-border rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-muted/60 border-b border-border">
+                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descripción de la no conformidad</p>
+                    </div>
+                    <div className="p-3 space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Título / motivo principal</label>
+                        <select value={darBajaForm.motivo} onChange={e => setDarBajaForm(f => f && ({ ...f, motivo: e.target.value }))} className={sCls}>
+                          {MOTIVOS.map(m => <option key={m}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción detallada</label>
+                        <textarea rows={4} value={darBajaForm.descripcion}
+                          onChange={e => setDarBajaForm(f => f && ({ ...f, descripcion: e.target.value }))}
+                          placeholder="Describe detalladamente qué ocurrió, síntomas observados, impacto..."
+                          className={tCls} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Origen</label>
+                      <input value={`Orden #${darBajaItem.id}`} readOnly className={iCls + " opacity-60 cursor-default"} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={confirmarDarBaja}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    Registrar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </div>
         )}
       </AnimatePresence>
@@ -439,7 +862,7 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
                 <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                   <AlertCircle className="w-5 h-5 text-amber-600" />
                 </div>
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>¿Desea cambiar el estado de la compra?</h3>
+                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>¿Desea cambiar el estado de la orden?</h3>
               </div>
               <p className="text-sm text-muted-foreground mb-2">
                 La orden <strong className="text-foreground">{confirmEstado.id}</strong> pasará de:
@@ -454,11 +877,7 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
-                <button onClick={() => {
-                  setOrdenes(p => p.map(x => x.id === confirmEstado.id ? { ...x, estadoOrden: confirmEstado.next } : x));
-                  toast.success(`Estado cambiado a: ${ESTADO_LABEL[confirmEstado.next]}`);
-                  setConfirmEstado(null);
-                }}
+                <button onClick={() => applyTransition(confirmEstado.id, confirmEstado.next)}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                   Confirmar
                 </button>
