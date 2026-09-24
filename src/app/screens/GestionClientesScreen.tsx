@@ -1,8 +1,11 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, ChevronLeft, ChevronRight, FileText, X, UserPlus } from "lucide-react";
+import { Search, Eye, Pencil, ChevronLeft, ChevronRight, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { EstadoSwitch } from "../components/EstadoSwitch";
+import { DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
+import { type Empleado } from "./GestionEmpleadosScreen";
+import { type Usuario } from "./GestionUsuariosScreen";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO  = "'JetBrains Mono', monospace";
@@ -18,21 +21,23 @@ export interface Cliente {
   iniciales: string;
   avatarColor: string;
   correo: string;
+  tipoDocumento: string;
+  numeroDocumento: string;
   pedidos: number;
   activo: boolean;
 }
 
 export const INITIAL_CLIENTES: Cliente[] = [
-  { id:"CLI-001", nombre:"María González",    iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",   pedidos:12, activo:true  },
-  { id:"CLI-002", nombre:"Carlos Martínez",   iniciales:"CM", avatarColor:"bg-blue-500",    correo:"carlos.m@hotmail.com",        pedidos:7,  activo:true  },
-  { id:"CLI-003", nombre:"Ana Rodríguez",     iniciales:"AR", avatarColor:"bg-emerald-500", correo:"ana.rodriguez@outlook.com",   pedidos:3,  activo:true  },
-  { id:"CLI-004", nombre:"Jorge Vargas",      iniciales:"JV", avatarColor:"bg-purple-500",  correo:"jorge.vargas@gmail.com",      pedidos:0,  activo:false },
-  { id:"CLI-005", nombre:"Patricia Soto",     iniciales:"PS", avatarColor:"bg-amber-500",   correo:"patricia.soto@yahoo.com",     pedidos:5,  activo:true  },
-  { id:"CLI-006", nombre:"Luis Herrera",      iniciales:"LH", avatarColor:"bg-pink-500",    correo:"lherrera@gmail.com",          pedidos:9,  activo:true  },
-  { id:"CLI-007", nombre:"Sandra Ríos",       iniciales:"SR", avatarColor:"bg-indigo-500",  correo:"sandrios@gmail.com",          pedidos:2,  activo:false },
-  { id:"CLI-008", nombre:"Tomás Jiménez",     iniciales:"TJ", avatarColor:"bg-teal-500",    correo:"tomas.j@gmail.com",           pedidos:4,  activo:true  },
-  { id:"CLI-009", nombre:"Valentina Mora",    iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",         pedidos:1,  activo:true  },
-  { id:"CLI-010", nombre:"Andrés Castillo",   iniciales:"AC", avatarColor:"bg-blue-500",    correo:"andres.castillo@gmail.com",   pedidos:6,  activo:true  },
+  { id:"CLI-001", nombre:"María González",    iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",   tipoDocumento:"CC", numeroDocumento:"11223344", pedidos:12, activo:true  },
+  { id:"CLI-002", nombre:"Carlos Martínez",   iniciales:"CM", avatarColor:"bg-blue-500",    correo:"carlos.m@hotmail.com",        tipoDocumento:"CC", numeroDocumento:"22334455", pedidos:7,  activo:true  },
+  { id:"CLI-003", nombre:"Ana Rodríguez",     iniciales:"AR", avatarColor:"bg-emerald-500", correo:"ana.rodriguez@outlook.com",   tipoDocumento:"CC", numeroDocumento:"33445566", pedidos:3,  activo:true  },
+  { id:"CLI-004", nombre:"Jorge Vargas",      iniciales:"JV", avatarColor:"bg-purple-500",  correo:"jorge.vargas@gmail.com",      tipoDocumento:"CC", numeroDocumento:"44556677", pedidos:0,  activo:false },
+  { id:"CLI-005", nombre:"Patricia Soto",     iniciales:"PS", avatarColor:"bg-amber-500",   correo:"patricia.soto@yahoo.com",     tipoDocumento:"CC", numeroDocumento:"55667788", pedidos:5,  activo:true  },
+  { id:"CLI-006", nombre:"Luis Herrera",      iniciales:"LH", avatarColor:"bg-pink-500",    correo:"lherrera@gmail.com",          tipoDocumento:"CC", numeroDocumento:"66778899", pedidos:9,  activo:true  },
+  { id:"CLI-007", nombre:"Sandra Ríos",       iniciales:"SR", avatarColor:"bg-indigo-500",  correo:"sandrios@gmail.com",          tipoDocumento:"CC", numeroDocumento:"77889900", pedidos:2,  activo:false },
+  { id:"CLI-008", nombre:"Tomás Jiménez",     iniciales:"TJ", avatarColor:"bg-teal-500",    correo:"tomas.j@gmail.com",           tipoDocumento:"CC", numeroDocumento:"88990011", pedidos:4,  activo:true  },
+  { id:"CLI-009", nombre:"Valentina Mora",    iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",         tipoDocumento:"CC", numeroDocumento:"99001122", pedidos:1,  activo:true  },
+  { id:"CLI-010", nombre:"Andrés Castillo",   iniciales:"AC", avatarColor:"bg-blue-500",    correo:"andres.castillo@gmail.com",   tipoDocumento:"CC", numeroDocumento:"10111213", pedidos:6,  activo:true  },
 ];
 
 const PER_PAGE = 5;
@@ -41,8 +46,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
-  empleados: { correo: string }[];
-  usuarios: { correo: string }[];
+  empleados: Empleado[];
+  usuarios: Usuario[];
 }) {
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
@@ -54,10 +59,15 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const [newNombre,    setNewNombre]  = useState("");
   const [newCorreo,    setNewCorreo]  = useState("");
   const [newTelefono,  setNewTelefono]= useState("");
+  const [newTipoDoc,   setNewTipoDoc] = useState("CC");
+  const [newDocumento, setNewDocumento] = useState("");
   const [newActivo,    setNewActivo]  = useState(true);
-  const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string }>({});
+  const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string }>({});
   const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string }>({});
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
+  const [editTipoOriginal, setEditTipoOriginal] = useState("");
+  const [editNumOriginal, setEditNumOriginal] = useState("");
+  const [editPedidosOriginal, setEditPedidosOriginal] = useState(0);
 
   const total   = clientes.length;
   const activos = clientes.filter(c => c.activo).length;
@@ -66,7 +76,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const filtered = useMemo(() => {
     let r = clientes.filter(c => {
       const q = search.toLowerCase();
-      const matchQ = !q || c.nombre.toLowerCase().includes(q) || c.correo.toLowerCase().includes(q);
+      const matchQ = !q ||
+        c.nombre.toLowerCase().includes(q) ||
+        c.correo.toLowerCase().includes(q) ||
+        c.numeroDocumento.toLowerCase().includes(q) ||
+        `${c.tipoDocumento} ${c.numeroDocumento}`.toLowerCase().includes(q);
       const matchE = filterEstado === "todos" || (filterEstado === "activo" ? c.activo : !c.activo);
       return matchQ && matchE;
     });
@@ -100,20 +114,35 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
     const nuevasIniciales = editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
-    setClientes(p => p.map(c => c.id === editItem.id ? { ...editItem, iniciales: nuevasIniciales } : c));
+    setClientes(p => p.map(c => c.id === editItem.id ? {
+      ...editItem,
+      iniciales: nuevasIniciales,
+      tipoDocumento: editTipoOriginal,
+      numeroDocumento: editNumOriginal,
+      pedidos: editPedidosOriginal,
+    } : c));
     setEditItem(null);
     setEditPrevCorreo(null);
     setEditErrors({});
     toast.success("Cliente actualizado correctamente");
   };
 
+  const abrirEdicion = (c: Cliente) => {
+    setEditItem({ ...c });
+    setEditPrevCorreo(c.correo);
+    setEditTipoOriginal(c.tipoDocumento);
+    setEditNumOriginal(c.numeroDocumento);
+    setEditPedidosOriginal(c.pedidos);
+    setEditErrors({});
+  };
+
   const resetCreate = () => {
-    setNewNombre(""); setNewCorreo(""); setNewTelefono("");
+    setNewNombre(""); setNewCorreo(""); setNewTelefono(""); setNewTipoDoc("CC"); setNewDocumento("");
     setNewActivo(true); setCreateErrors({});
   };
 
   const handleCreate = () => {
-    const errs: { nombre?: string; correo?: string } = {};
+    const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
@@ -127,6 +156,22 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         usuarios.some(u => u.correo.trim().toLowerCase() === em);
       if (duplicado) errs.correo = "Este correo ya está registrado";
     }
+    if (!newTipoDoc.trim()) {
+      errs.tipoDocumento = "Selecciona el tipo de documento";
+    }
+    const dm = newDocumento.trim();
+    if (!dm) {
+      errs.numeroDocumento = "El número de documento es obligatorio";
+    } else if (newTipoDoc !== "PP" && !/^\d+$/.test(dm)) {
+      errs.numeroDocumento = "El número de documento solo debe contener números";
+    } else {
+      const clave = `${newTipoDoc}||${dm}`.toLowerCase();
+      const docDup =
+        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave) ||
+        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave);
+      if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
+    }
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
 
     const maxNum = clientes.reduce((max, c) => {
@@ -138,7 +183,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     const avatarColor = AVATAR_COLORS[(clientes.length) % AVATAR_COLORS.length];
 
     setClientes(prev => [
-      { id: newId, nombre: newNombre.trim(), iniciales, avatarColor, correo: newCorreo.trim(), pedidos: 0, activo: newActivo },
+      { id: newId, nombre: newNombre.trim(), iniciales, avatarColor, correo: newCorreo.trim(), tipoDocumento: newTipoDoc, numeroDocumento: dm, pedidos: 0, activo: newActivo },
       ...prev,
     ]);
     setShowCreate(false);
@@ -149,21 +194,15 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Clientes</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo cliente en La Sirena</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => toast.info("Generando reporte de clientes...")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
-          >
-            <FileText className="w-4 h-4" /> Generar reporte
-          </button>
           {_canCreate && (
             <button
               onClick={() => { resetCreate(); setShowCreate(true); }}
@@ -176,25 +215,25 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3 shrink-0">
         {[
           { label: "Total clientes", value: total,   cls: "text-foreground",       bg: "bg-card"       },
           { label: "Activos",        value: activos, cls: "text-emerald-600",       bg: "bg-emerald-50" },
           { label: "Inactivos",      value: inact,   cls: "text-muted-foreground", bg: "bg-muted"      },
         ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-4`}>
-            <p className={`text-3xl font-bold ${cls}`}>{value}</p>
+          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
+            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
             <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
         <div className="relative flex-1 min-w-52">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo o estado..."
+            placeholder="Buscar por nombre, correo, documento o estado..."
             className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
@@ -208,15 +247,14 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         </select>
       </div>
 
-      {/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["Cliente","Correo","Pedidos","Estado","Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
+{/* Tabla */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+        <table className="w-full">
+          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
+              {["Cliente","Correo","Pedidos","Estado","Acciones"].map(h => (
+                <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
+              ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -226,32 +264,32 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                 </td></tr>
               ) : paged.map(c => (
                 <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5">
+                  <td className="px-4 py-1.5">
                     <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-full ${c.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                         {c.iniciales}
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-foreground">{c.nombre}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{c.id}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{fmtDoc(c.tipoDocumento, c.numeroDocumento)}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{c.correo}</td>
-                  <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</td>
-                  <td className="px-4 py-3.5">
+                  <td className="px-4 py-1.5 text-sm text-muted-foreground">{c.correo}</td>
+                  <td className="px-4 py-1.5 text-sm font-bold text-center text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</td>
+                  <td className="px-4 py-1.5">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
                       {c.activo ? "Activo" : "Inactivo"}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5">
+                  <td className="px-4 py-1.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => setDetailItem(c)} title="Ver detalle"
                         className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
                         <Eye className="w-4 h-4" />
                       </button>
                       {canEdit && (
-                        <button onClick={() => { setEditItem({ ...c }); setEditPrevCorreo(c.correo); setEditErrors({}); }} title="Editar"
+                        <button onClick={() => { abrirEdicion(c); }} title="Editar"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -262,13 +300,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </table>
       </div>
 
       {/* Paginación */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center shrink-0">
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
@@ -310,12 +347,14 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   </div>
                   <div>
                     <p className="font-bold text-foreground text-base">{detailItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{detailItem.id}</p>
+                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{fmtDoc(detailItem.tipoDocumento, detailItem.numeroDocumento)}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
                   {[
                     { l: "Correo",          v: detailItem.correo },
+                    { l: "Tipo de documento",   v: detailItem.tipoDocumento },
+                    { l: "Número de documento", v: detailItem.numeroDocumento },
                     { l: "Pedidos totales", v: String(detailItem.pedidos) },
                     { l: "Estado",          v: detailItem.activo ? "Activo" : "Inactivo" },
                   ].map(({ l, v }) => (
@@ -399,6 +438,37 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     />
                   </div>
 
+                  {/* Documento */}
+                  <div className="flex gap-3">
+                    <div className="w-28 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Tipo de documento <span className="text-primary">*</span>
+                      </label>
+                      <select
+                        value={newTipoDoc}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      >
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Número de documento <span className="text-primary">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                        value={newDocumento}
+                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      />
+                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.numeroDocumento}</p>}
+                    </div>
+                  </div>
+
                   {/* Estado */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
@@ -450,7 +520,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground">{editItem.id}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
                 {[
@@ -465,11 +535,32 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
                   </div>
                 ))}
+                <div className="flex gap-3">
+                  <div className="w-28 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento</label>
+                    <input
+                      type="text"
+                      value={editItem.tipoDocumento}
+                      disabled
+                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
+                    <input
+                      type="text"
+                      value={editItem.numeroDocumento}
+                      disabled
+                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
-                  <input type="number" value={editItem.pedidos}
-                    onChange={e => setEditItem(x => x && ({ ...x, pedidos: Number(e.target.value) }))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <input type="number" value={editItem.pedidos} disabled
+                    className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed" />
+                  <p className="text-xs text-muted-foreground mt-1">Los pedidos se actualizan automáticamente. No se puede modificar.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>

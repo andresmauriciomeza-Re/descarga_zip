@@ -128,6 +128,7 @@ type Screen =
   | "orders"
   | "clients"
   | "profile"
+  | "store-profile"
   | "reports"
   | "roles"
   | "permissions"
@@ -1065,7 +1066,7 @@ function PublicNav({
           {isLoggedIn ? (
             <button
               onClick={() =>
-                navigate(isStaff ? "profile" : "client-profile")
+                navigate(isStaff ? "store-profile" : "client-profile")
               }
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
                 loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
@@ -1153,13 +1154,6 @@ function AdminTopBar({
       >
         <Menu className="w-5 h-5" />
       </button>
-      <button
-        onClick={() => navigate("landing")}
-        className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-        title="Ver tienda"
-      >
-        <Home className="w-5 h-5" />
-      </button>
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
         <button
           onClick={() => navigate("dashboard")}
@@ -1176,6 +1170,13 @@ function AdminTopBar({
           </>
         )}
       </div>
+      <button
+        onClick={() => navigate("landing")}
+        className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+        title="Ver tienda"
+      >
+        <Home className="w-5 h-5" />
+      </button>
       <div className="ml-auto flex items-center gap-3">
         <button
           onClick={() => setDarkMode(!darkMode)}
@@ -3745,14 +3746,9 @@ function ForgotPasswordModal({
 
 const DOC_OPTIONS = [
   { code: "CC",  label: "CC · Cédula de Ciudadanía" },
-  { code: "TI",  label: "TI · Tarjeta de Identidad" },
   { code: "CE",  label: "CE · Cédula de Extranjería" },
-  { code: "PPT", label: "PPT · Permiso por Protección Temporal" },
-  { code: "PEP", label: "PEP · Permiso Especial de Permanencia" },
-  { code: "PAS", label: "PAS · Pasaporte" },
-  { code: "NIT", label: "NIT · Número de Identificación Tributaria" },
-  { code: "RC",  label: "RC · Registro Civil" },
-  { code: "DNI", label: "DNI · Documento Nacional de Identidad" },
+  { code: "TI",  label: "TI · Tarjeta de Identidad" },
+  { code: "PP",  label: "PP · Pasaporte" },
 ];
 
 const AVATAR_PALETTE = [
@@ -3807,15 +3803,17 @@ function RegisterScreen({
       toast.error("Ingresa el número de documento");
       return;
     }
-    if (!/^\d+$/.test(form.docNum.trim())) {
+    if (form.docType !== "PP" && !/^\d+$/.test(form.docNum.trim())) {
       toast.error("El número de documento solo debe contener números");
       return;
     }
+    const clave = `${form.docType}||${form.docNum.trim()}`.toLowerCase();
     const docDuplicado =
-      usuarios.some(u => u.documento === form.docNum.trim()) ||
-      empleados.some(e => e.documento === form.docNum.trim());
+      usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+      empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+      clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
     if (docDuplicado) {
-      toast.error("Este número de documento ya está registrado");
+      toast.error("Este documento ya está registrado");
       return;
     }
     const correoDuplicado =
@@ -3857,7 +3855,7 @@ function RegisterScreen({
         correo: form.email.trim(),
         telefono: form.phone.trim(),
         tipoDocumento: form.docType,
-        documento: form.docNum.trim(),
+        numeroDocumento: form.docNum.trim(),
         rolId: "ROL-002",
         activo: true,
       };
@@ -3913,11 +3911,11 @@ function RegisterScreen({
               <input
                 value={form.docNum}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[^\d]/g, "") }))
+                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[\s.]/g, "") }))
                 }
                 type="text"
-                inputMode="numeric"
-                placeholder="Ej: 12345678"
+                inputMode={form.docType === "PP" ? "text" : "numeric"}
+                placeholder={form.docType === "PP" ? "AB123456" : "Ej: 12345678"}
                 className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -5498,8 +5496,10 @@ export default function App() {
   }
 
   // Permission guard: redirect admin-level users to dashboard if their named
-  // role doesn't grant "Ver" on the current screen.
-  if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "profile") {
+  // role doesn't grant "Ver" on the current screen. "store-profile" (perfil de
+  // la tienda, que se muestra dentro del layout de la tienda) queda exento de
+  // esta regla; el resto de pantallas de administración siguen protegidas.
+  if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "profile" && screen !== "store-profile") {
     const permKey = SCREEN_PERM_KEY[screen];
     if (permKey && !isNamedAdmin && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
       setTimeout(() => navigate("dashboard"), 0);
@@ -5514,6 +5514,8 @@ export default function App() {
       ? "ml-16"
       : "ml-60"
     : "";
+
+  const isLockedScreen = isAdmin && (screen === "clientes" || screen === "users" || screen === "empleados");
 
   return (
     <div
@@ -5547,7 +5549,7 @@ export default function App() {
       )}
 
       <div
-        className={`transition-all duration-300 ${sideW} flex flex-col min-h-screen`}
+        className={`transition-all duration-300 ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden" : ""}`}
       >
         {/* Public navbar */}
         {!isAdmin && !isAuth && (
@@ -5585,11 +5587,13 @@ export default function App() {
             !isAdmin && !isAuth && screen !== "landing"
               ? "pt-20"
               : "",
+            isLockedScreen ? " flex-1 min-h-0" : "",
           ].join(" ")}
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={screen}
+              className="h-full"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -5895,6 +5899,29 @@ export default function App() {
               {screen === "finished-products" && (
                 <ProductoTerminadoScreen />
               )}
+              {screen === "store-profile" && (
+                <MiPerfilScreen
+                  userRole={userRole}
+                  navigate={navigate as (s: string) => void}
+                  onLogout={logout}
+                  isStaff={isStaff}
+                  loggedInUser={loggedInUser ? {
+                    id: loggedInUser.id,
+                    nombre: loggedInUser.nombre,
+                    iniciales: loggedInUser.iniciales,
+                    avatarColor: loggedInUser.avatarColor,
+                    correo: loggedInUser.correo,
+                    telefono: loggedInUser.telefono,
+                    tipoDocumento: loggedInUser.tipoDocumento,
+                    numeroDocumento: loggedInUser.numeroDocumento,
+                  } : null}
+                  loggedInRoleName={loggedInRoleName}
+                  onUpdateUser={(id, data) => {
+                    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+                  }}
+                  inStore
+                />
+              )}
               {screen === "profile" && (
                 <MiPerfilScreen
                   userRole={userRole}
@@ -5908,6 +5935,8 @@ export default function App() {
                     avatarColor: loggedInUser.avatarColor,
                     correo: loggedInUser.correo,
                     telefono: loggedInUser.telefono,
+                    tipoDocumento: loggedInUser.tipoDocumento,
+                    numeroDocumento: loggedInUser.numeroDocumento,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   onUpdateUser={(id, data) => {
@@ -5957,9 +5986,11 @@ export default function App() {
           </AnimatePresence>
         </main>
 
-        {/* Admin footer */}
+        {/* Admin footer (en Usuarios/Clientes/Empleados queda como fila fija, sin scroll de página) */}
         {isAdmin && (
-          <footer className="border-t border-border bg-card mt-auto">
+          <footer
+            className={`border-t border-border bg-card mt-auto${isLockedScreen ? " shrink-0" : ""}`}
+          >
             <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-9 w-auto object-contain shrink-0" />

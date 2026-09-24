@@ -4,7 +4,8 @@ import { Search, Eye, Pencil, ChevronLeft, ChevronRight, FileText, X, UserPlus }
 import { toast } from "sonner";
 import { EstadoSwitch } from "../components/EstadoSwitch";
 import { type Rol } from "./GestionConfigScreen";
-import { type Usuario } from "./GestionUsuariosScreen";
+import { type Usuario, DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
+import { type Cliente } from "./GestionClientesScreen";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO  = "'JetBrains Mono', monospace";
@@ -14,8 +15,6 @@ const AVATAR_COLORS = [
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
 
-const DOC_TIPOS = ["CC", "TI", "CE", "PPT", "PEP", "PAS", "NIT", "RC", "DNI"];
-
 export interface Empleado {
   id: string;              // EMP-00X
   nombre: string;
@@ -24,7 +23,7 @@ export interface Empleado {
   correo: string;
   telefono: string;
   tipoDocumento: string;
-  documento: string;
+  numeroDocumento: string;
   contrasena: string;
   rolId: string;           // Tb_Empleado.Id_rol (FK)
   activo: boolean;         // Tb_Empleado.Estado
@@ -34,16 +33,16 @@ export interface Empleado {
 }
 
 export const INITIAL_EMPLEADOS: Empleado[] = [
-  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", documento:"12345678", contrasena:"123456", rolId:"ROL-001", activo:true,  cargo:"Administración",        fechaInicio:"2024-01-15", fechaFinal:"" },
-  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", documento:"87654321", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-02-01", fechaFinal:"" },
-  { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", documento:"11223344", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-02-10", fechaFinal:"" },
-  { id:"EMP-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-amber-500",   correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", documento:"22334455", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-03-05", fechaFinal:"" },
-  { id:"EMP-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", documento:"33445566", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Mesera",               fechaInicio:"2024-03-12", fechaFinal:"" },
-  { id:"EMP-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-pink-500",    correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CE", documento:"44556677", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Operador de producción", fechaInicio:"2024-01-20", fechaFinal:"2025-06-30" },
-  { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", documento:"55667788", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-04-01", fechaFinal:"" },
-  { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", documento:"66778899", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-04-18", fechaFinal:"" },
-  { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", documento:"77889900", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Auxiliar de cocina",    fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
-  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"TI", documento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
+  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolId:"ROL-001", activo:true,  cargo:"Administración",        fechaInicio:"2024-01-15", fechaFinal:"" },
+  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-02-01", fechaFinal:"" },
+  { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-02-10", fechaFinal:"" },
+  { id:"EMP-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-amber-500",   correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-03-05", fechaFinal:"" },
+  { id:"EMP-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Mesera",               fechaInicio:"2024-03-12", fechaFinal:"" },
+  { id:"EMP-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-pink-500",    correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CE", numeroDocumento:"44556677", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Operador de producción", fechaInicio:"2024-01-20", fechaFinal:"2025-06-30" },
+  { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-04-01", fechaFinal:"" },
+  { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-04-18", fechaFinal:"" },
+  { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Auxiliar de cocina",    fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
+  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"TI", numeroDocumento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
 ];
 
 const PER_PAGE = 5;
@@ -61,7 +60,7 @@ export function GestionEmpleadosScreen({
   empleados: Empleado[];
   setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
-  clientes: { correo: string }[];
+  clientes: Cliente[];
 }) {
   const [search,      setSearch]    = useState("");
   const [filterEstado,setFiltro]    = useState("todos");
@@ -104,7 +103,7 @@ export function GestionEmpleadosScreen({
         null;
       const base: Pick<Usuario,
         "nombre" | "iniciales" | "avatarColor" | "correo" | "telefono" |
-        "tipoDocumento" | "documento" | "rolId" | "activo"
+        "tipoDocumento" | "numeroDocumento" | "rolId" | "activo"
       > = {
         nombre: emp.nombre.trim(),
         iniciales: emp.iniciales,
@@ -112,7 +111,7 @@ export function GestionEmpleadosScreen({
         correo: emp.correo.trim(),
         telefono: emp.telefono.trim(),
         tipoDocumento: emp.tipoDocumento,
-        documento: emp.documento.trim(),
+        numeroDocumento: emp.numeroDocumento.trim(),
         rolId: emp.rolId,
         activo: emp.activo,
       };
@@ -141,6 +140,8 @@ export function GestionEmpleadosScreen({
         e.nombre.toLowerCase().includes(q) ||
         e.correo.toLowerCase().includes(q) ||
         e.cargo.toLowerCase().includes(q) ||
+        e.numeroDocumento.toLowerCase().includes(q) ||
+        `${e.tipoDocumento} ${e.numeroDocumento}`.toLowerCase().includes(q) ||
         rol.includes(q) ||
         est.includes(q);
       const matchE = filterEstado === "todos" || (filterEstado === "activo" ? e.activo : !e.activo);
@@ -171,8 +172,10 @@ export function GestionEmpleadosScreen({
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.correo.trim())) errs.correo = "Formato de correo no válido";
     if (e.telefono.trim() && !/^[\d\s+()\-]+$/.test(e.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
-    if (!e.documento.trim()) errs.documento = "El número de documento es obligatorio";
-    else if (!/^\d+$/.test(e.documento.trim())) errs.documento = "El documento solo debe contener números";
+    if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
+    if (!e.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
+    else if (e.tipoDocumento !== "PP" && !/^\d+$/.test(e.numeroDocumento.trim()))
+      errs.numeroDocumento = "El número de documento solo debe contener números";
     if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
@@ -182,7 +185,8 @@ export function GestionEmpleadosScreen({
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
 
     const em = e.correo.trim().toLowerCase();
-    const dm = e.documento.trim();
+    const dm = e.numeroDocumento.trim();
+    const clave = `${e.tipoDocumento}||${dm}`.toLowerCase();
     const ancla = editPrevCorreo?.trim().toLowerCase();
     const otro = (correo: string) => correo.trim().toLowerCase() !== ancla;
     const correoDup =
@@ -190,10 +194,11 @@ export function GestionEmpleadosScreen({
       usuarios.some(u => otro(u.correo) && u.correo.trim().toLowerCase() === em) ||
       clientes.some(c => otro(c.correo) && c.correo.trim().toLowerCase() === em);
     const docDup =
-      empleados.some(x => x.id !== e.id && otro(x.correo) && x.documento.trim() === dm) ||
-      usuarios.some(u => u.documento && otro(u.correo) && u.documento.trim() === dm);
+      empleados.some(x => x.id !== e.id && otro(x.correo) && `${x.tipoDocumento}||${x.numeroDocumento}`.toLowerCase() === clave) ||
+      usuarios.some(u => otro(u.correo) && `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+      clientes.some(c => otro(c.correo) && `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
     if (correoDup) errs.correo = "Este correo ya está registrado";
-    if (docDup) errs.documento = "Este número de documento ya está registrado";
+    if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
 
     const nuevasIniciales = e.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
@@ -220,8 +225,9 @@ export function GestionEmpleadosScreen({
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) { errs.correo = "Formato de correo no válido"; }
     if (newTelefono.trim() && !/^[\d\s+()\-]+$/.test(newTelefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
+    if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
     if (!newDocumento.trim()) { errs.documento = "El número de documento es obligatorio"; }
-    else if (!/^\d+$/.test(newDocumento.trim())) { errs.documento = "El documento solo debe contener números"; }
+    else if (newTipoDoc !== "PP" && !/^\d+$/.test(newDocumento.trim())) { errs.documento = "El número de documento solo debe contener números"; }
     if (!newContrasena.trim()) { errs.contrasena = "La contraseña es obligatoria"; }
     else if (newContrasena.length < 6) { errs.contrasena = "Mínimo 6 caracteres"; }
     if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
@@ -234,25 +240,27 @@ export function GestionEmpleadosScreen({
 
     const em = newCorreo.trim().toLowerCase();
     const dm = newDocumento.trim();
+    const clave = `${newTipoDoc}||${dm}`.toLowerCase();
     const dupeInList =
       empleados.length > 0 &&
       (empleados.some(e =>
-        e.correo.trim().toLowerCase() === em || e.documento.trim() === dm
+        e.correo.trim().toLowerCase() === em || `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave
       ));
     const dupeInUsers =
       usuarios.some(u =>
-        u.correo.trim().toLowerCase() === em || (u.documento && u.documento.trim() === dm)
+        u.correo.trim().toLowerCase() === em || `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave
       );
     const dupeInClients =
-      clientes.some(c => c.correo.trim().toLowerCase() === em);
+      clientes.some(c => c.correo.trim().toLowerCase() === em || `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
     if (dupeInList || dupeInUsers || dupeInClients) {
       const hayCorreo = empleados.some(e => e.correo.trim().toLowerCase() === em) ||
         usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
         clientes.some(c => c.correo.trim().toLowerCase() === em);
-      const hayDoc = empleados.some(e => e.documento.trim() === dm) ||
-        usuarios.some(u => u.documento && u.documento.trim() === dm);
+      const hayDoc = empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
       if (hayCorreo) errs.correo = "Este correo ya está registrado";
-      if (hayDoc) errs.documento = "Este número de documento ya está registrado";
+      if (hayDoc) errs.documento = "Este documento ya está registrado";
     }
 
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
@@ -273,7 +281,7 @@ export function GestionEmpleadosScreen({
       correo: newCorreo.trim(),
       telefono: newTelefono.trim(),
       tipoDocumento: newTipoDoc,
-      documento: dm,
+      numeroDocumento: dm,
       contrasena: newContrasena,
       rolId: newRolId,
       activo: newActivo,
@@ -294,10 +302,10 @@ export function GestionEmpleadosScreen({
     `w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
         <div>
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Empleados</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo empleado en La Sirena</p>
@@ -319,25 +327,25 @@ export function GestionEmpleadosScreen({
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3 shrink-0">
         {[
           { label: "Total empleados", value: total,   cls: "text-foreground",       bg: "bg-card"       },
           { label: "Activos",         value: activos, cls: "text-emerald-600",       bg: "bg-emerald-50" },
           { label: "Inactivos",       value: inact,   cls: "text-muted-foreground", bg: "bg-muted"      },
         ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-4`}>
-            <p className={`text-3xl font-bold ${cls}`}>{value}</p>
+          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
+            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
             <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
         <div className="relative flex-1 min-w-52">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo, cargo o estado..."
+            placeholder="Buscar por nombre, correo, cargo, documento o estado..."
             className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
@@ -352,15 +360,14 @@ export function GestionEmpleadosScreen({
         </select>
       </div>
 
-      {/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["Empleado","Correo","Cargo","Estado","Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
+{/* Tabla */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+        <table className="w-full">
+          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
+              {["Empleado","Correo","Cargo","Estado","Acciones"].map(h => (
+                <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
+              ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -372,7 +379,7 @@ export function GestionEmpleadosScreen({
                 const rol = rolInfo(e.rolId);
                 return (
                   <tr key={e.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-full ${e.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                           {e.iniciales}
@@ -380,7 +387,7 @@ export function GestionEmpleadosScreen({
                         <div>
                           <p className="text-sm font-semibold text-foreground">{e.nombre}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-xs font-mono text-muted-foreground">{e.id}</span>
+                            <span className="text-xs font-mono text-muted-foreground">{fmtDoc(e.tipoDocumento, e.numeroDocumento)}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 ${rol && !rol.activo ? "opacity-50" : ""}`}>
                               Empleado/{rolNombre(e.rolId)}
                             </span>
@@ -388,14 +395,14 @@ export function GestionEmpleadosScreen({
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{e.correo}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{e.cargo}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
+                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.cargo}</td>
+                    <td className="px-4 py-1.5">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
                         {e.activo ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setDetailItem(e)} title="Ver detalle"
                           className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
@@ -412,13 +419,12 @@ export function GestionEmpleadosScreen({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </div>
 
       {/* Paginación */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center shrink-0">
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
@@ -460,14 +466,15 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div>
                     <p className="font-bold text-foreground text-base">{detailItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{detailItem.id}</p>
+                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{fmtDoc(detailItem.tipoDocumento, detailItem.numeroDocumento)}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
                   {[
                     { l: "Correo",          v: detailItem.correo },
                     { l: "Teléfono",        v: detailItem.telefono || "—" },
-                    { l: "Documento",       v: `${detailItem.tipoDocumento} ${detailItem.documento}` },
+                    { l: "Tipo de documento",   v: detailItem.tipoDocumento },
+                    { l: "Número de documento", v: detailItem.numeroDocumento },
                     { l: "Cargo",           v: detailItem.cargo },
                     { l: "Rol asignado",    v: rolNombre(detailItem.rolId) },
                     { l: "Fecha inicio",    v: detailItem.fechaInicio },
@@ -542,21 +549,22 @@ export function GestionEmpleadosScreen({
                     {createErrors.telefono && <p className="text-xs text-red-500 mt-1">{createErrors.telefono}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <div className="w-20 shrink-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo doc.</label>
+                    <div className="w-28 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <span className="text-primary">*</span></label>
                       <select value={newTipoDoc}
-                        onChange={e => setNewTipoDoc(e.target.value)}
-                        className={`${fCls()} cursor-pointer`}>
-                        {DOC_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                       </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Número de documento <span className="text-primary">*</span>
                       </label>
-                      <input type="text" inputMode="numeric" value={newDocumento}
-                        onChange={e => { setNewDocumento(e.target.value.replace(/[^\d]/g, "")); if (createErrors.documento) setCreateErrors(p => ({ ...p, documento: undefined })); }}
-                        placeholder="12345678"
+                      <input type="text" inputMode={newTipoDoc === "PP" ? "text" : "numeric"} value={newDocumento}
+                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.documento) setCreateErrors(p => ({ ...p, documento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
                         className={fCls(createErrors.documento)} />
                       {createErrors.documento && <p className="text-xs text-red-500 mt-1">{createErrors.documento}</p>}
                     </div>
@@ -678,14 +686,13 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground">{editItem.id}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
                 {[
                   { label: "Nombre completo", field: "nombre" as const, type: "text"  },
                   { label: "Correo",          field: "correo" as const, type: "email" },
                   { label: "Teléfono",        field: "telefono" as const, type: "tel" },
-                  { label: "Documento",       field: "documento" as const, type: "text" },
                 ].map(({ label, field, type }) => (
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
@@ -695,6 +702,25 @@ export function GestionEmpleadosScreen({
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
                   </div>
                 ))}
+                <div className="flex gap-2 col-span-2">
+                  <div className="w-28 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento</label>
+                    <select value={editItem.tipoDocumento}
+                      onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
+                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                    </select>
+                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.tipoDocumento}</p>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
+                    <input type="text" inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"} value={editItem.numeroDocumento}
+                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: e.target.value.replace(/[\s.]/g, "") })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                      placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.numeroDocumento}</p>}
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Cargo</label>
                   <input type="text" value={editItem.cargo}
