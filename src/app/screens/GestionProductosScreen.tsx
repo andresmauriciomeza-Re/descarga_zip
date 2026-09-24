@@ -23,11 +23,13 @@ function ConfirmModal({
   message,
   onConfirm,
   onCancel,
+  confirmLabel = "Sí, confirmar",
 }: {
   title: string;
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmLabel?: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -63,7 +65,7 @@ function ConfirmModal({
             onClick={onConfirm}
             className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer"
           >
-            Sí, confirmar
+            {confirmLabel}
           </button>
         </div>
       </motion.div>
@@ -81,6 +83,7 @@ interface Producto {
   precioUnitario: number;
   unidadVenta: string;
   stockDisponible: number;
+  estado: "Activo" | "Inactivo";
 }
 
 const CATEGORIAS_PRODUCTO = [
@@ -99,6 +102,7 @@ const INITIAL_PRODUCTOS: Producto[] = [
     precioUnitario: 24000,
     unidadVenta: "und",
     stockDisponible: 50,
+    estado: "Activo",
   },
   {
     id: "PROD-002",
@@ -109,6 +113,7 @@ const INITIAL_PRODUCTOS: Producto[] = [
     precioUnitario: 28000,
     unidadVenta: "und",
     stockDisponible: 40,
+    estado: "Activo",
   },
   {
     id: "PROD-003",
@@ -119,6 +124,7 @@ const INITIAL_PRODUCTOS: Producto[] = [
     precioUnitario: 30000,
     unidadVenta: "und",
     stockDisponible: 30,
+    estado: "Activo",
   },
   {
     id: "PROD-004",
@@ -129,6 +135,7 @@ const INITIAL_PRODUCTOS: Producto[] = [
     precioUnitario: 32000,
     unidadVenta: "und",
     stockDisponible: 25,
+    estado: "Activo",
   },
   {
     id: "PROD-005",
@@ -139,6 +146,7 @@ const INITIAL_PRODUCTOS: Producto[] = [
     precioUnitario: 26000,
     unidadVenta: "und",
     stockDisponible: 20,
+    estado: "Inactivo",
   },
 ];
 
@@ -149,11 +157,42 @@ interface FichaVersion {
   tiempoPreparacion: number;
   porciones: number;
   insumos: RInsumo[];
+  pasos: string[];
+  fechaInicio: string;
+  fechaFin: string | null;
 }
 const UNIDADES_FICHA = ["kg", "g", "lt", "ml", "und", "paq", "caja"];
 
-function emptyFichaVersion(n: number): FichaVersion {
-  return { version: n, idReceta: `REC-${String(n).padStart(3,"0")}`, tiempoPreparacion: 0, porciones: 1, insumos: [] };
+function emptyFichaVersion(n: number, fechaInicio?: string): FichaVersion {
+  return {
+    version: n,
+    idReceta: `REC-${String(n).padStart(3, "0")}`,
+    tiempoPreparacion: 0,
+    porciones: 1,
+    insumos: [],
+    pasos: [],
+    fechaInicio: fechaInicio ?? new Date().toISOString(),
+    fechaFin: null,
+  };
+}
+
+function buildNextFichaVersion(list: FichaVersion[]): { list: FichaVersion[]; activeIdx: number; version: number } {
+  const last = list[list.length - 1];
+  const now = new Date().toISOString();
+  const next: FichaVersion = {
+    version: last.version + 1,
+    idReceta: `REC-${String(last.version + 1).padStart(3, "0")}`,
+    tiempoPreparacion: last.tiempoPreparacion,
+    porciones: last.porciones,
+    insumos: last.insumos.map((i) => ({ ...i })),
+    pasos: [...last.pasos],
+    fechaInicio: now,
+    fechaFin: null,
+  };
+  const nextList = list
+    .map((v, i) => (i === list.length - 1 ? { ...v, fechaFin: now } : v))
+    .concat(next);
+  return { list: nextList, activeIdx: nextList.length - 1, version: next.version };
 }
 
 export function GestionProductosScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
@@ -169,6 +208,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     null,
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [confirmFichaSave, setConfirmFichaSave] = useState(false);
 
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
@@ -177,6 +217,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     precioUnitario: 0,
     unidadVenta: "und",
     stockDisponible: 0,
+    estado: "Activo",
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -187,6 +228,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
   const [fichaInsumoNombre, setFichaInsumoNombre] = useState("");
   const [fichaInsumoCantidad, setFichaInsumoCantidad] = useState(1);
   const [fichaInsumoUnidad, setFichaInsumoUnidad] = useState("kg");
+  const [fichaPaso, setFichaPaso] = useState("");
 
   // Edit-ficha state (separate from create-ficha)
   const [editFichaVersiones, setEditFichaVersiones] = useState<FichaVersion[]>([emptyFichaVersion(1)]);
@@ -194,6 +236,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
   const [editFichaInsumoNombre, setEditFichaInsumoNombre] = useState("");
   const [editFichaInsumoCantidad, setEditFichaInsumoCantidad] = useState(1);
   const [editFichaInsumoUnidad, setEditFichaInsumoUnidad] = useState("kg");
+  const [editFichaPaso, setEditFichaPaso] = useState("");
 
   const resetFichaForm = () => {
     setFichaVersiones([emptyFichaVersion(1)]);
@@ -201,6 +244,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     setFichaInsumoNombre("");
     setFichaInsumoCantidad(1);
     setFichaInsumoUnidad("kg");
+    setFichaPaso("");
   };
 
   const updateFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
@@ -219,30 +263,53 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
       i === fichaVIdx ? { ...v, insumos: v.insumos.filter((_, j) => j !== idx) } : v
     ));
 
-  const addFichaVersion = () => {
-    const last = fichaVersiones[fichaVersiones.length - 1];
-    const nv: FichaVersion = {
-      version: last.version + 1,
-      idReceta: `REC-${String(last.version + 1).padStart(3,"0")}`,
-      tiempoPreparacion: last.tiempoPreparacion,
-      porciones: last.porciones,
-      insumos: last.insumos.map(i => ({ ...i })),
-    };
-    setFichaVersiones(prev => [...prev, nv]);
-    setFichaVIdx(fichaVersiones.length);
+  const addFichaPaso = () => {
+    if (!fichaPaso.trim()) return;
+    setFichaVersiones(prev => prev.map((v, i) =>
+      i === fichaVIdx ? { ...v, pasos: [...v.pasos, fichaPaso.trim()] } : v
+    ));
+    setFichaPaso("");
+  };
+
+  const removeFichaPaso = (idx: number) =>
+    setFichaVersiones(prev => prev.map((v, i) =>
+      i === fichaVIdx ? { ...v, pasos: v.pasos.filter((_, j) => j !== idx) } : v
+    ));
+
+  const saveFichaVersion = () => {
+    const r = buildNextFichaVersion(fichaVersiones);
+    setFichaVersiones(r.list);
+    setFichaVIdx(r.activeIdx);
+    setConfirmFichaSave(false);
+    toast.success(`Se ha creado la versión ${r.version}`);
+  };
+
+  const saveEditFichaVersion = () => {
+    const r = buildNextFichaVersion(editFichaVersiones);
+    setEditFichaVersiones(r.list);
+    setEditFichaVIdx(r.activeIdx);
+    setConfirmFichaSave(false);
+    toast.success(`Se ha creado la versión ${r.version}`);
   };
 
   // ── Edit-ficha helpers ───────────────────────────────────────────
   const openEdit = (p: Producto) => {
     setEditItem({ ...p });
+    setConfirmFichaSave(false);
     const existing = fichas[p.id];
-    setEditFichaVersiones(existing
-      ? existing.map(v => ({ ...v, insumos: v.insumos.map(i => ({ ...i })) }))
-      : [emptyFichaVersion(1)]);
-    setEditFichaVIdx(0);
+    const parsed = existing
+      ? existing.map((v) => ({
+          ...v,
+          insumos: v.insumos.map((i) => ({ ...i })),
+          pasos: [...(v.pasos ?? [])],
+        }))
+      : [emptyFichaVersion(1)];
+    setEditFichaVersiones(parsed);
+    setEditFichaVIdx(parsed.length - 1);
     setEditFichaInsumoNombre("");
     setEditFichaInsumoCantidad(1);
     setEditFichaInsumoUnidad("kg");
+    setEditFichaPaso("");
   };
 
   const updateEditFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
@@ -261,18 +328,18 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
       i === editFichaVIdx ? { ...v, insumos: v.insumos.filter((_, j) => j !== idx) } : v
     ));
 
-  const addEditFichaVersion = () => {
-    const last = editFichaVersiones[editFichaVersiones.length - 1];
-    const nv: FichaVersion = {
-      version: last.version + 1,
-      idReceta: `REC-${String(last.version + 1).padStart(3,"0")}`,
-      tiempoPreparacion: last.tiempoPreparacion,
-      porciones: last.porciones,
-      insumos: last.insumos.map(i => ({ ...i })),
-    };
-    setEditFichaVersiones(prev => [...prev, nv]);
-    setEditFichaVIdx(editFichaVersiones.length);
+  const addEditFichaPaso = () => {
+    if (!editFichaPaso.trim()) return;
+    setEditFichaVersiones(prev => prev.map((v, i) =>
+      i === editFichaVIdx ? { ...v, pasos: [...v.pasos, editFichaPaso.trim()] } : v
+    ));
+    setEditFichaPaso("");
   };
+
+  const removeEditFichaPaso = (idx: number) =>
+    setEditFichaVersiones(prev => prev.map((v, i) =>
+      i === editFichaVIdx ? { ...v, pasos: v.pasos.filter((_, j) => j !== idx) } : v
+    ));
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
@@ -311,11 +378,12 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     }
     const newId = `PROD-${String(productos.length + 1).padStart(3, "0")}`;
     setProductos((p) => [{ id: newId, ...form }, ...p]);
-    const hasficha = fichaVersiones.some(v => v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1);
+    const hasficha = fichaVersiones.some(v => v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1 || v.pasos.length > 0);
     if (hasficha) setFichas(prev => ({ ...prev, [newId]: fichaVersiones }));
     setShowCreate(false);
     setForm(emptyForm());
     resetFichaForm();
+    setConfirmFichaSave(false);
     toast.success("Producto creado correctamente");
   };
 
@@ -324,9 +392,10 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     setProductos((p) =>
       p.map((x) => (x.id === editItem.id ? editItem : x)),
     );
-    const hasficha = editFichaVersiones.some(v => v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1);
+    const hasficha = editFichaVersiones.some(v => v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1 || v.pasos.length > 0);
     if (hasficha) setFichas(prev => ({ ...prev, [editItem.id]: editFichaVersiones }));
     setEditItem(null);
+    setConfirmFichaSave(false);
     toast.success("Producto actualizado");
   };
 
@@ -342,11 +411,13 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
     onChange,
     hideUnidad = false,
     readOnly = false,
+    lockNombre = false,
   }: {
     values: Omit<Producto, "id">;
     onChange: (f: keyof Omit<Producto, "id">, v: string | number) => void;
     hideUnidad?: boolean;
     readOnly?: boolean;
+    lockNombre?: boolean;
   }) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Nombre */}
@@ -358,8 +429,8 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
           value={values.nombre}
           onChange={(e) => onChange("nombre", e.target.value)}
           placeholder="Ej: Margarita Clásica"
-          readOnly={readOnly}
-          className={readOnly ? roCls : inputCls}
+          readOnly={readOnly || lockNombre}
+          className={readOnly || lockNombre ? roCls : inputCls}
         />
       </div>
       {/* Imagen */}
@@ -538,7 +609,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => { setShowCreate(false); setForm(emptyForm()); resetFichaForm(); }}
+            <button onClick={() => { setShowCreate(false); setConfirmFichaSave(false); setForm(emptyForm()); resetFichaForm(); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -621,17 +692,13 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
               <div className="flex items-center gap-1">
                 {fichaVersiones.map((v, i) => (
-                  <button key={i} onClick={() => setFichaVIdx(i)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                      i === fichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"
+                  <span key={v.version}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                      i === fichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground"
                     }`}>
                     v{v.version}
-                  </button>
+                  </span>
                 ))}
-                <button onClick={addFichaVersion}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors ml-1">
-                  + versión
-                </button>
               </div>
             </div>
 
@@ -642,11 +709,11 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
             )}
 
             <div className="space-y-4 flex-1">
-              {/* ID Receta + Tiempo + Porciones */}
+              {/* ID Ficha Técnica + Tiempo + Porciones */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Receta</label>
-                <input value={activeV.idReceta} onChange={e => updateFichaField("idReceta", e.target.value)}
-                  className={iCls} placeholder="REC-001" />
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
+                <input value={activeV.idReceta} readOnly tabIndex={-1}
+                  className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -700,9 +767,59 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                   </button>
                 </div>
               </div>
+
+              {/* Pasos de elaboración */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
+                {activeV.pasos.length > 0 && (
+                  <ol className="space-y-1.5 mb-3">
+                    {activeV.pasos.map((paso, idx) => (
+                      <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+                        <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                        <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
+                        <button onClick={() => removeFichaPaso(idx)}
+                          className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {activeV.pasos.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
+                )}
+                <div className="flex gap-2">
+                  <input value={fichaPaso} onChange={e => setFichaPaso(e.target.value)}
+                    placeholder="Describe un paso de la elaboración"
+                    onKeyDown={e => e.key === "Enter" && addFichaPaso()}
+                    className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <button onClick={addFichaPaso}
+                    className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {/* Guardar ficha técnica */}
+            <button onClick={() => setConfirmFichaSave(true)}
+              className="mt-5 w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+              Guardar Ficha Técnica
+            </button>
           </div>
         </div>
+
+        <AnimatePresence>
+          {confirmFichaSave && (
+            <ConfirmModal
+              title="Guardar ficha técnica"
+              message="¿Estás seguro que deseas guardar los cambios de la ficha técnica del producto?"
+              onConfirm={saveFichaVersion}
+              onCancel={() => setConfirmFichaSave(false)}
+              confirmLabel="Sí"
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -770,7 +887,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
             ) : (
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">ID Receta</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</p>
                   <div className={readCls}>{fichaV.idReceta}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -798,6 +915,21 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                     </div>
                   )}
                 </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</p>
+                  {(fichaV.pasos ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">Sin pasos registrados</p>
+                  ) : (
+                    <ol className="space-y-1.5">
+                      {(fichaV.pasos ?? []).map((paso, idx) => (
+                        <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+                          <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                          <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
                 {ficha && ficha.length > 1 && (
                   <p className="text-[11px] text-muted-foreground bg-muted/40 px-3 py-1.5 rounded-lg">
                     Versión más reciente: <span className="font-bold text-foreground">v{fichaV.version}</span>
@@ -821,7 +953,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
             <p className="text-xs text-muted-foreground mt-0.5">Modifica los datos del producto</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setEditItem(null)}
+            <button onClick={() => { setEditItem(null); setConfirmFichaSave(false); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -840,6 +972,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
             {FormFields({
               values: editItem,
               onChange: (f, v) => setEditItem((x) => x && { ...x, [f]: v }),
+              lockNombre: true,
             })}
           </div>
 
@@ -852,17 +985,13 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
                   <div className="flex items-center gap-1">
                     {editFichaVersiones.map((v, i) => (
-                      <button key={i} onClick={() => setEditFichaVIdx(i)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                          i === editFichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"
+                      <span key={v.version}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                          i === editFichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground"
                         }`}>
                         v{v.version}
-                      </button>
+                      </span>
                     ))}
-                    <button onClick={addEditFichaVersion}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors ml-1">
-                      + versión
-                    </button>
                   </div>
                 </div>
 
@@ -874,9 +1003,9 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
 
                 <div className="space-y-4 flex-1">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Receta</label>
-                    <input value={activeEV.idReceta} onChange={e => updateEditFichaField("idReceta", e.target.value)}
-                      className={inputCls} placeholder="REC-001" />
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
+                    <input value={activeEV.idReceta} readOnly tabIndex={-1}
+                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -927,11 +1056,61 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                       </button>
                     </div>
                   </div>
+
+                  {/* Pasos de elaboración */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
+                    {activeEV.pasos.length > 0 && (
+                      <ol className="space-y-1.5 mb-3">
+                        {activeEV.pasos.map((paso, idx) => (
+                          <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+                            <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                            <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
+                            <button onClick={() => removeEditFichaPaso(idx)}
+                              className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    {activeEV.pasos.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
+                    )}
+                    <div className="flex gap-2">
+                      <input value={editFichaPaso} onChange={e => setEditFichaPaso(e.target.value)}
+                        placeholder="Describe un paso de la elaboración"
+                        onKeyDown={e => e.key === "Enter" && addEditFichaPaso()}
+                        className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      <button onClick={addEditFichaPaso}
+                        className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Guardar ficha técnica */}
+                <button onClick={() => setConfirmFichaSave(true)}
+                  className="mt-5 w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  Guardar Ficha Técnica
+                </button>
               </div>
             );
           })()}
         </div>
+
+        <AnimatePresence>
+          {confirmFichaSave && (
+            <ConfirmModal
+              title="Guardar ficha técnica"
+              message="¿Estás seguro que deseas guardar los cambios de la ficha técnica del producto?"
+              onConfirm={saveEditFichaVersion}
+              onCancel={() => setConfirmFichaSave(false)}
+              confirmLabel="Sí"
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -988,6 +1167,7 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                   "ID Categoría",
                   "Precio Unit.",
                   "Stock",
+                  "Estado",
                   "Acciones",
                 ].map((h) => (
                   <th
@@ -1058,6 +1238,14 @@ export function GestionProductosScreen({ canCreate = true, canEdit = true, canDe
                         className={`text-sm font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
                       >
                         {p.stockDisponible}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap"
+                        style={{ backgroundColor: p.estado === "Activo" ? "#2E7D32" : "#C62828" }}
+                      >
+                        {p.estado}
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
