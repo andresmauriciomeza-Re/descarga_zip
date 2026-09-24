@@ -59,6 +59,7 @@ export interface GestionCompra {
   fechaFactura: string;
   valorTotal: number;
   estado: EstadoGestion;
+  compraCreada?: boolean;
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -479,7 +480,7 @@ function OrdenModal({
                     : (
                       <select value={form.proveedor} onChange={e => handleProvChange(e.target.value)} className={sCls}>
                         {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
-                        <option value="__NUEVO__">+ Nuevo proveedor...</option>
+                        <option value="__NUEVO__">+ Crear nuevo proveedor</option>
                       </select>
                     )}
                 </div>
@@ -500,54 +501,141 @@ function OrdenModal({
                 )}
               </div>
 
-              {/* Add-item row */}
+              {/* Agregar insumo */}
               {!isView && (
-                <div ref={sugRef} className="p-3 bg-muted/40 border border-border rounded-xl flex flex-wrap items-center gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-                    <input
-                      value={aNombre}
-                      onChange={e => { setANombre(e.target.value); setAFromCat(false); setAShowSug(true); }}
-                      onFocus={() => setAShowSug(true)}
-                      placeholder="Buscar insumo..."
-                      className="pl-7 pr-2 py-1.5 w-44 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
-                    />
-                    {aShowSug && suggestions.length > 0 && (
-                      <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                        {suggestions.map(ins => (
-                          <button key={ins.id} type="button" onMouseDown={() => selectSug(ins)}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0">
-                            <p className="font-semibold text-foreground">{ins.nombre}</p>
-                            <p className="text-muted-foreground">{ins.unidadMedida} · ${ins.precioUnitario.toLocaleString("es-CO")}</p>
-                          </button>
-                        ))}
+                <div
+                  ref={sugRef}
+                  className="p-4 bg-muted/40 border border-border rounded-xl"
+                >
+                  <h3
+                    className="text-sm font-bold text-foreground mb-4"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    Agregar insumo
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+
+                    {/* Nombre */}
+                    <div className="lg:col-span-2 relative">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Nombre
+                      </label>
+
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+
+                        <input
+                          value={aNombre}
+                          onChange={e => {
+                            setANombre(e.target.value);
+                            setAFromCat(false);
+                            setAShowSug(true);
+                          }}
+                          onFocus={() => setAShowSug(true)}
+                          placeholder="Buscar insumo..."
+                          className={`${iCls} pl-10`}
+                        />
                       </div>
-                    )}
+
+                      {aShowSug && suggestions.length > 0 && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                          {suggestions.map(ins => (
+                            <button
+                              key={ins.id}
+                              type="button"
+                              onMouseDown={() => selectSug(ins)}
+                              className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                            >
+                              <p className="font-semibold text-foreground">
+                                {ins.nombre}
+                              </p>
+
+                              <p className="text-muted-foreground">
+                                {ins.unidadMedida} ·{" "}
+                                {fmtCOP(ins.precioUnitario)}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cantidad */}
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Cantidad
+                      </label>
+
+                      <input
+                        type="number"
+                        min={1}
+                        value={aCant}
+                        onChange={e => setACant(Number(e.target.value))}
+                        className={iCls}
+                      />
+                    </div>
+
+                    {/* Medida */}
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Medida
+                      </label>
+
+                      <select
+                        value={aUnidad}
+                        onChange={e => setAUnidad(e.target.value)}
+                        disabled={aFromCat}
+                        className={iCls}
+                      >
+                        {UNIDADES.map(u => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Precio */}
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Precio unitario
+                      </label>
+
+                      <input
+                        type="number"
+                        min={0}
+                        value={aPrecio || ""}
+                        onChange={e => setAPrecio(Number(e.target.value))}
+                        placeholder="0"
+                        className={iCls}
+                      />
+                    </div>
+
                   </div>
-                  <input
-                    type="number" min={1} value={aCant}
-                    onChange={e => setACant(Number(e.target.value))}
-                    placeholder="Cant."
-                    className="w-16 px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  />
-                  <select
-                    value={aUnidad} onChange={e => setAUnidad(e.target.value)} disabled={aFromCat}
-                    className={`w-16 px-2 py-1.5 border border-border rounded-lg text-xs focus:outline-none cursor-pointer ${aFromCat ? "bg-muted/40" : "bg-background"}`}
-                  >
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                  <input
-                    type="number" value={aPrecio || ""}
-                    onChange={e => setAPrecio(Number(e.target.value))}
-                    placeholder="P. unit."
-                    className="w-24 px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  />
-                  <button
-                    onClick={addItem}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg cursor-pointer hover:bg-red-700 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> Agregar
-                  </button>
+
+                  {/* Subtotal */}
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-3 mt-4">
+
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Subtotal
+                      </label>
+
+                      <div className={`${iCls} bg-background font-bold`}>
+                        {fmtCOP(aCant * aPrecio)}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={addItem}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl cursor-pointer hover:bg-red-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Agregar insumo
+                    </button>
+
+                  </div>
                 </div>
               )}
 
@@ -1151,6 +1239,7 @@ interface Props {
   insumos: Insumo[];
   setInsumos?: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (nombre: string, telefono: string) => void;
+  onAbrirRecepcion?: (orden: OrdenCompra) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1158,7 +1247,7 @@ interface Props {
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
-  insumos, setInsumos, onNuevoProveedor,
+  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion,
   canCreate = true, canEdit = true,
 }: Props) {
   const [proveedores, setProveedores] = useState<string[]>(PROVEEDORES_INIT);
@@ -1385,7 +1474,7 @@ export function OrdenCompraScreen({
                           )}
                           {o.estado === "Enviado" && (
                             <button
-                              onClick={() => setRecepcionOrden(o)}
+                              onClick={() => onAbrirRecepcion?.(o)}
                               title="Registrar recepción"
                               className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
                             >
@@ -1444,17 +1533,6 @@ export function OrdenCompraScreen({
             onNuevoProveedor={handleNuevoProveedorLocal}
             onEnviarDesdeVista={o => setSendConfirm(o)}
             onAnularDesdeVista={o => setAnularConfirm(o)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {recepcionOrden && (
-          <RecepcionModal
-            orden={recepcionOrden}
-            insumos={insumos}
-            onGuardar={rec => handleGuardarRecepcion(recepcionOrden, rec)}
-            onAnular={() => handleAnularOrden(recepcionOrden)}
-            onClose={() => setRecepcionOrden(null)}
           />
         )}
       </AnimatePresence>

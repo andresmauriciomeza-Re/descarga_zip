@@ -101,6 +101,7 @@ import type {
   GestionCompra,
 } from "./screens/OrdenCompraScreen";
 import { GestionCompraScreen } from "./screens/GestionCompraScreen";
+import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
 import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
 import { GestionProductosScreen } from "./screens/GestionProductosScreen";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
@@ -150,6 +151,7 @@ type Screen =
   | "clientes"
   | "perecederos"
   | "orden-compra"
+  | "recepcion-compra"
   | "gestion-compra"
   | "devoluciones"
   | "empleados"
@@ -470,6 +472,7 @@ const ADMIN_SCREENS: Screen[] = [
   "sales-chart",
   "perecederos",
   "orden-compra",
+  "recepcion-compra",
   "gestion-compra",
   "devoluciones",
   "empleados",
@@ -5355,6 +5358,8 @@ function DevolucionesScreen({
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
+  const [ordenRecepcion, setOrdenRecepcion] =
+    useState<OrdenCompra | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
@@ -5763,6 +5768,52 @@ export default function App() {
                   setGestiones={setGestiones}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  onAbrirRecepcion={(orden) => {
+                    setOrdenRecepcion(orden);
+                    setScreen("recepcion-compra");
+                  }}
+                />
+              )}
+              {screen === "recepcion-compra" && ordenRecepcion && (
+                <RecepcionCompraScreen
+                  orden={ordenRecepcion}
+                  insumos={insumos}
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  onGuardar={(recepcion) => {
+                    setOrdenes((prev) =>
+                      prev.map((o) =>
+                        o.id === ordenRecepcion.id
+                          ? {
+                              ...o,
+                              estado: "Completado",
+                              recepcion,
+                            }
+                          : o
+                      )
+                    );
+
+                    setOrdenRecepcion(null);
+                  }}
+                  onAnular={() => {
+                    setOrdenes((prev) =>
+                      prev.map((o) =>
+                        o.id === ordenRecepcion.id
+                          ? {
+                              ...o,
+                              estado: "Anulado",
+                            }
+                          : o
+                      )
+                    );
+
+                    setOrdenRecepcion(null);
+                    setScreen("orden-compra");
+                  }}
+                  onBack={() => {
+                    setOrdenRecepcion(null);
+                    setScreen("orden-compra");
+                  }}
                 />
               )}
               {screen === "gestion-compra" && (
@@ -5894,6 +5945,7 @@ export default function App() {
                   "sales-chart",
                   "perecederos",
                   "orden-compra",
+                  "recepcion-compra",
                   "gestion-compra",
                 ].includes(screen) && (
                   <GenericAdmin

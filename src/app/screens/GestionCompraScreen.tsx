@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ChevronLeft, ChevronRight,
   FileDown, Ban, CheckCircle2, AlertCircle,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { GestionCompra, OrdenCompra, EstadoGestion } from "./OrdenCompraScreen";
@@ -286,6 +287,27 @@ export function GestionCompraScreen({
     toast.success(`Factura ${numeroFactura} registrada · Gestión ${g.id} completada`);
   };
 
+  const handleCrearCompra = (g: GestionCompra) => {
+    if (!g.numeroFactura || !g.fechaFactura || g.valorTotal <= 0) {
+      toast.error("Primero debes registrar la factura completa.");
+      return;
+    }
+
+    setGestiones((prev) =>
+      prev.map((x) =>
+        x.id === g.id
+          ? {
+              ...x,
+              compraCreada: true,
+              estado: "Recibido",
+            }
+          : x
+      )
+    );
+
+    toast.success(`Compra ${g.id} creada correctamente.`);
+  };
+
   const handleAnular = (g: GestionCompra) => {
     setGestiones(prev => prev.map(x => x.id === g.id ? { ...x, estado: "Anulado" as EstadoGestion } : x));
     setDetail(null);
@@ -409,6 +431,25 @@ export function GestionCompraScreen({
                             >
                               + Factura
                             </button>
+                          )}
+                          {g.estado === "En Proceso" &&
+                            g.numeroFactura &&
+                            g.fechaFactura &&
+                            g.valorTotal > 0 &&
+                            !g.compraCreada && (
+                              <button
+                                onClick={() => handleCrearCompra(g)}
+                                className="ml-1 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-emerald-400 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 cursor-pointer transition-colors"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                Crear compra
+                              </button>
+                            )}
+                          {g.compraCreada && (
+                            <span className="ml-1 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 text-xs font-semibold">
+                              <Check className="w-3.5 h-3.5" />
+                              Compra creada
+                            </span>
                           )}
                         </div>
                       </td>
