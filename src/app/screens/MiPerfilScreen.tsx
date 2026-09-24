@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, Hash, ShieldCheck } from "lucide-react";
+import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const SERIF = "'DM Serif Display', serif";
@@ -17,9 +17,12 @@ interface Props {
     avatarColor: string;
     correo: string;
     telefono: string;
+    tipoDocumento: string;
+    numeroDocumento: string;
   } | null;
   loggedInRoleName: string;
   onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
+  inStore?: boolean;
 }
 
 function validarCorreo(c: string): string | null {
@@ -34,7 +37,7 @@ function validarTelefono(t: string): string | null {
   return null;
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser, inStore = false }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -84,7 +87,6 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
 
   const nombre    = loggedInUser?.nombre    ?? "—";
   const iniciales = loggedInUser?.iniciales ?? "?";
-  const userId    = loggedInUser?.id        ?? "—";
   const avatarBg  = loggedInUser?.avatarColor ?? "bg-primary";
 
   const rolColor = loggedInRoleName === "Administrador"
@@ -134,16 +136,28 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
 
         {/* Datos */}
         <div className="px-6 py-6 space-y-5">
-          {/* ID — solo lectura */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-              <Hash className="w-3.5 h-3.5" />
-              ID de usuario
-            </label>
-            <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-mono text-muted-foreground select-none">
-              {userId}
+          {/* Documento — solo lectura */}
+          <div className="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-4">
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <FileText className="w-3.5 h-3.5" />
+                Tipo de documento
+              </label>
+              <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-mono text-muted-foreground select-none">
+                {loggedInUser?.tipoDocumento ?? "—"}
+              </div>
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <FileText className="w-3.5 h-3.5" />
+                Número de documento
+              </label>
+              <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-mono text-muted-foreground select-none">
+                {loggedInUser?.numeroDocumento ?? "—"}
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-muted-foreground -mt-2 ml-0.5">El documento no es editable</p>
 
           {/* Nombre — solo lectura */}
           <div>
@@ -229,7 +243,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <button
-                onClick={() => navigate("dashboard")}
+                onClick={() => navigate(inStore ? "landing" : "dashboard")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -237,7 +251,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               </button>
               {isStaff && (
               <button
-                onClick={() => navigate("users")}
+                onClick={() => navigate(inStore ? "dashboard" : "users")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
               >
                 <ShieldCheck className="w-4 h-4" />
