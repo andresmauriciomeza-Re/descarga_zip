@@ -93,6 +93,12 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Anulado: "bg-red-100 text-red-800",
 };
 
+/**
+ * Ancho compartido por los formularios de Orden de Compra y de Gestión de Compras,
+ * para que ambos módulos se vean igual de compactos.
+ */
+export const FORM_MAXW = "max-w-4xl";
+
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 
 export const INITIAL_ORDENES: OrdenCompra[] = [
@@ -268,7 +274,7 @@ const sCls = `${iCls} appearance-none`;
 
 // ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
 
-function ConfirmModal({
+export function ConfirmModal({
   title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel,
 }: {
   title: string; body: string; detail?: string; confirmLabel?: string;
@@ -578,14 +584,14 @@ export function OrdenModal({
 
   return (
     <>
-      <div className={isPage ? "w-full p-6 max-w-5xl mx-auto" : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
+      <div className={isPage ? `w-full p-6 ${FORM_MAXW} mx-auto` : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
         <div className={isPage ? "w-full" : "flex min-h-full items-center justify-center p-4"}>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${isPage ? "max-w-5xl" : "max-w-3xl my-4"}`}
+            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${FORM_MAXW}${isPage ? "" : " my-4"}`}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">

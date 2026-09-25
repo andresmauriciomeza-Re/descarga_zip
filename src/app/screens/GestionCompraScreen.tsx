@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  FileDown, Plus, Check,
+  FileDown, Plus, Check, Ban, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "./GestionInsumosScreen";
@@ -10,6 +10,8 @@ import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import {
   NuevoProveedorModal,
+  ConfirmModal,
+  FORM_MAXW,
   type GestionCompra,
   type OrdenCompra,
   type EstadoGestion,
@@ -24,6 +26,15 @@ const ESTADO_CONFIG: Record<EstadoGestion, string> = {
   "Anulado":    "bg-red-100 text-red-800",
 };
 
+/** Badge de estado, con el mismo estilo que el detalle de Orden de Compra. */
+function EstadoBadge({ e }: { e: EstadoGestion }) {
+  return (
+    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
+      {e}
+    </span>
+  );
+}
+
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency", currency: "COP", maximumFractionDigits: 0,
@@ -34,8 +45,12 @@ function fmtCOP(n: number) {
 
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-const roCls = "w-full px-3 py-2.5 bg-muted/40 border border-border rounded-xl text-sm text-muted-foreground cursor-default";
 const sCls = `${iCls} appearance-none`;
+
+// Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
+const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
+const campoMedioCls = "max-w-[240px]"; // Número de factura
+const campoLargoCls = "max-w-xs"; // Proveedor (búsqueda)
 
 type ItemFactura = {
   rowId: string;
@@ -64,6 +79,7 @@ function CompraForm({
   fullPage = false,
   onClose,
   onGuardar,
+  onAnular,
 }: {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
@@ -73,6 +89,7 @@ function CompraForm({
   fullPage?: boolean;
   onClose: () => void;
   onGuardar: (data: NuevaCompraData) => void;
+  onAnular?: (compra: GestionCompra) => void;
 }) {
   const isView = mode === "view";
   const isPage = fullPage;
@@ -238,14 +255,14 @@ function CompraForm({
 
   return (
     <>
-      <div className={isPage ? "w-full p-6 max-w-5xl mx-auto" : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
+      <div className={isPage ? `w-full p-6 ${FORM_MAXW} mx-auto` : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
         <div className={isPage ? "w-full" : "flex min-h-full items-center justify-center p-4"}>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`bg-card rounded-2xl w-full max-w-5xl shadow-2xl border border-border ${isPage ? "" : "my-4"}`}
+            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${FORM_MAXW}${isPage ? "" : " my-4"}`}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
@@ -256,120 +273,147 @@ function CompraForm({
                   <p className="text-xs text-muted-foreground mt-0.5">Compra {compra.id}</p>
                 )}
               </div>
-              {isPage ? (
-                <button
-                  onClick={onClose}
-                  title="Volver"
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {isView && compra && <EstadoBadge e={compra.estado} />}
+                {isPage ? (
+                  <button
+                    onClick={onClose}
+                    title="Volver"
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={onClose}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="px-5 py-5 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+              {/* Banners de estado */}
+              {isView && compra?.estado === "Recibido" && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  Compra registrada. Recibida el <strong className="ml-1">{compra.fechaFactura}</strong>.
+                </div>
+              )}
+              {isView && compra?.estado === "Anulado" && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                  <Ban className="w-4 h-4 shrink-0" />
+                  Esta compra ha sido anulada.
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className={campoMedioCls}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                     Número de factura {!isView && <span className="text-red-500">*</span>}
                   </label>
-                  <input
-                    value={numeroFactura}
-                    onChange={(e) => setNumeroFactura(e.target.value)}
-                    placeholder="Ej: FAC-2026-0001"
-                    readOnly={isView}
-                    className={isView ? roCls : iCls}
-                    autoFocus={!isView}
-                  />
+                  {isView ? (
+                    <p className="text-sm font-semibold text-foreground py-2">{numeroFactura || "—"}</p>
+                  ) : (
+                    <input
+                      value={numeroFactura}
+                      onChange={(e) => setNumeroFactura(e.target.value)}
+                      placeholder="Ej: FAC-2026-0001"
+                      className={iCls}
+                      autoFocus
+                    />
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    Fecha de factura {!isView && <span className="text-red-500">*</span>}
-                  </label>
-                  <input
-                    type="date"
-                    value={fechaFactura}
-                    onChange={(e) => setFechaFactura(e.target.value)}
-                    max={today}
-                    disabled={isView}
-                    className={isView ? roCls : iCls}
-                  />
-                </div>
-
-                <div>
+                <div className={campoLargoCls}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                     Proveedor {!isView && <span className="text-red-500">*</span>}
                   </label>
-                  <div className="relative" ref={provRef}>
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <input
-                      value={provQuery}
-                      onChange={(e) => {
-                        setProvQuery(e.target.value);
-                        setProvSugAbierto(true);
-                      }}
-                      onFocus={isView ? undefined : () => setProvSugAbierto(true)}
-                      placeholder="Buscar por nombre, NIT, asesor o email..."
-                      readOnly={isView}
-                      className={`${isView ? roCls : iCls} pl-10`}
-                    />
-                    {!isView && provSugAbierto && (
-                      <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                        {provSugs.map((p) => (
-                          <button
-                            key={p.nit}
-                            type="button"
-                            onMouseDown={() => seleccionarProveedor(p)}
-                            className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
-                          >
-                            <p className="font-semibold text-foreground">{p.nombre}</p>
-                            <p className="text-muted-foreground">
-                              NIT {p.nit}
-                              {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
-                            </p>
-                          </button>
-                        ))}
-                        {provSugs.length === 0 && provQuery.trim() !== "" && (
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setProvSugAbierto(false);
-                              setMostrarNuevoProveedor(true);
-                            }}
-                            className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Crear proveedor “{provQuery.trim()}”
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {isView ? (
+                    <p className="text-sm font-semibold text-foreground py-2">{provQuery || "—"}</p>
+                  ) : (
+                    <div className="relative" ref={provRef}>
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <input
+                        value={provQuery}
+                        onChange={(e) => {
+                          setProvQuery(e.target.value);
+                          setProvSugAbierto(true);
+                        }}
+                        onFocus={() => setProvSugAbierto(true)}
+                        placeholder="Buscar por nombre, NIT, asesor o email..."
+                        className={`${iCls} pl-10`}
+                      />
+                      {provSugAbierto && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                          {provSugs.map((p) => (
+                            <button
+                              key={p.nit}
+                              type="button"
+                              onMouseDown={() => seleccionarProveedor(p)}
+                              className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                            >
+                              <p className="font-semibold text-foreground">{p.nombre}</p>
+                              <p className="text-muted-foreground">
+                                NIT {p.nit}
+                                {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
+                              </p>
+                            </button>
+                          ))}
+                          {provSugs.length === 0 && provQuery.trim() !== "" && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setProvSugAbierto(false);
+                                setMostrarNuevoProveedor(true);
+                              }}
+                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Crear proveedor “{provQuery.trim()}”
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div>
+                <div className={campoCortoCls}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    Estado
+                    Fecha de factura {!isView && <span className="text-red-500">*</span>}
                   </label>
-                  <select
-                    value={estado}
-                    onChange={(e) => setEstado(e.target.value as EstadoGestion)}
-                    disabled={isView}
-                    className={isView ? roCls : `${sCls} cursor-pointer`}
-                  >
-                    <option value="Recibido">Recibido</option>
-                    <option value="Anulado">Anulado</option>
-                  </select>
+                  {isView ? (
+                    <p className="text-sm font-semibold text-foreground py-2">{fechaFactura || "—"}</p>
+                  ) : (
+                    <input
+                      type="date"
+                      value={fechaFactura}
+                      onChange={(e) => setFechaFactura(e.target.value)}
+                      max={today}
+                      className={iCls}
+                    />
+                  )}
                 </div>
+
+                {!isView && (
+                  <div className={campoCortoCls}>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                      Estado
+                    </label>
+                    <select
+                      value={estado}
+                      onChange={(e) => setEstado(e.target.value as EstadoGestion)}
+                      className={`${sCls} cursor-pointer`}
+                    >
+                      <option value="Recibido">Recibido</option>
+                      <option value="Anulado">Anulado</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Agregar insumo — solo en el formulario de creación */}
@@ -408,10 +452,19 @@ function CompraForm({
             <div className="flex gap-3 px-5 py-4 border-t border-border">
               <button
                 onClick={onClose}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
               >
                 {isView ? "Cerrar" : "Cancelar"}
               </button>
+              {isView && compra?.estado === "Recibido" && onAnular && (
+                <button
+                  onClick={() => { onClose(); onAnular(compra); }}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 inline-flex items-center justify-center gap-2"
+                >
+                  <Ban className="w-4 h-4" />
+                  Anular Compra
+                </button>
+              )}
               {!isView && (
                 <button
                   onClick={guardar}
@@ -514,6 +567,7 @@ export function GestionCompraScreen({
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
+  const [anularConfirm, setAnularConfirm] = useState<GestionCompra | null>(null);
 
   const filtered = useMemo(() =>
     gestiones.filter(g => {
@@ -532,6 +586,12 @@ export function GestionCompraScreen({
   const handleCambiarEstado = (id: string, next: EstadoGestion) => {
     setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
     toast.success(`Estado cambiado a: ${next}`);
+  };
+
+  const handleAnularCompra = (g: GestionCompra) => {
+    setGestiones((prev) => prev.map((x) => (x.id === g.id ? { ...x, estado: "Anulado" } : x)));
+    toast.success(`Compra ${g.id} anulada`);
+    setAnularConfirm(null);
   };
 
   const handleDownload = () => {
@@ -712,6 +772,26 @@ export function GestionCompraScreen({
             insumos={insumos}
             onClose={() => setDetail(null)}
             onGuardar={() => {}}
+            onAnular={(c) => setAnularConfirm(c)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {anularConfirm && (
+          <ConfirmModal
+            title="Anular Compra"
+            body={`¿Deseas anular la compra ${anularConfirm.id}?`}
+            detail="Esta acción no puede revertirse."
+            confirmLabel="Anular"
+            danger={true}
+            icon={
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-red-600" />
+              </div>
+            }
+            onConfirm={() => handleAnularCompra(anularConfirm)}
+            onCancel={() => setAnularConfirm(null)}
           />
         )}
       </AnimatePresence>
