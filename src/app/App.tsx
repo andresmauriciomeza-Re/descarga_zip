@@ -103,7 +103,7 @@ import type {
 import { GestionCompraScreen } from "./screens/GestionCompraScreen";
 import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
 import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
-import { GestionProductosScreen } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import {
@@ -5561,6 +5561,9 @@ export default function App() {
   const [usuarios, setUsuarios] = useState<Usuario[]>(INIT_USUARIOS);
   const [empleados, setEmpleados] = useState<Empleado[]>(INITIAL_EMPLEADOS);
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
+  // Stock de productos: vive aquí para que el completado de una Orden de
+  // Producción (módulo Producción) actualice el stock del módulo Productos.
+  const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
@@ -6037,7 +6040,11 @@ export default function App() {
                 />
               )}
               {screen === "gestion-productos" && (
-                <GestionProductosScreen {...getPerms("gestion-productos")} />
+                <GestionProductosScreen
+                  {...getPerms("gestion-productos")}
+                  productos={productos}
+                  setProductos={setProductos}
+                />
               )}
               {screen === "cat-producto" && (
                 <CategoriaProductoScreen {...getPerms("cat-producto")} />
@@ -6088,7 +6095,11 @@ export default function App() {
                 />
               )}
               {screen === "production-orders" && (
-                <OrdenProduccionScreen {...getPerms("production-orders")} />
+                <OrdenProduccionScreen
+                  {...getPerms("production-orders")}
+                  productos={productos}
+                  setProductos={setProductos}
+                />
               )}
               {screen === "finished-products" && (
                 <ProductoTerminadoScreen />

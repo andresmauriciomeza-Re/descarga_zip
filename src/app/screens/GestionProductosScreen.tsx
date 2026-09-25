@@ -75,7 +75,7 @@ function ConfirmModal({
 
 // ─────────────────────────── GESTIÓN PRODUCTOS ───────────────────────────
 
-interface Producto {
+export interface Producto {
   id: string;
   imagen: string;
   nombre: string;
@@ -92,7 +92,7 @@ const CATEGORIAS_PRODUCTO = [
   { id: "CAT-003", nombre: "Bebidas" },
 ];
 
-const INITIAL_PRODUCTOS: Producto[] = [
+export const INITIAL_PRODUCTOS: Producto[] = [
   {
     id: "PROD-001",
     imagen:
@@ -195,10 +195,19 @@ function buildNextFichaVersion(list: FichaVersion[]): { list: FichaVersion[]; ac
   return { list: nextList, activeIdx: nextList.length - 1, version: next.version };
 }
 
-export function GestionProductosScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
-  const [productos, setProductos] = useState<Producto[]>(
-    INITIAL_PRODUCTOS,
-  );
+export function GestionProductosScreen({
+  productos,
+  setProductos,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
+}: {
+  productos: Producto[];
+  setProductos: React.Dispatch<React.SetStateAction<Producto[]>>;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<Producto | null>(
