@@ -12,6 +12,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { InsumoSearchField, resolverInsumo } from "../components/InsumoSearchField";
+import type { Insumo } from "./GestionInsumosScreen";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO = "'JetBrains Mono', monospace";
@@ -198,12 +200,15 @@ function buildNextFichaVersion(list: FichaVersion[]): { list: FichaVersion[]; ac
 export function GestionProductosScreen({
   productos,
   setProductos,
+  insumos,
   canCreate = true,
   canEdit = true,
   canDelete = true,
 }: {
   productos: Producto[];
   setProductos: React.Dispatch<React.SetStateAction<Producto[]>>;
+  /** Catálogo real del módulo Compras > Insumos: solo lectura, para el buscador. */
+  insumos: Insumo[];
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -237,6 +242,9 @@ export function GestionProductosScreen({
   const [fichaInsumoNombre, setFichaInsumoNombre] = useState("");
   const [fichaInsumoCantidad, setFichaInsumoCantidad] = useState(1);
   const [fichaInsumoUnidad, setFichaInsumoUnidad] = useState("kg");
+  // Insumo elegido en el buscador. Mientras sea null solo hay texto escrito, y
+  // esa búsqueda no cuenta como selección al agregar.
+  const [fichaInsumoSel, setFichaInsumoSel] = useState<Insumo | null>(null);
   const [fichaPaso, setFichaPaso] = useState("");
 
   // Edit-ficha state (separate from create-ficha)
@@ -245,6 +253,7 @@ export function GestionProductosScreen({
   const [editFichaInsumoNombre, setEditFichaInsumoNombre] = useState("");
   const [editFichaInsumoCantidad, setEditFichaInsumoCantidad] = useState(1);
   const [editFichaInsumoUnidad, setEditFichaInsumoUnidad] = useState("kg");
+  const [editFichaInsumoSel, setEditFichaInsumoSel] = useState<Insumo | null>(null);
   const [editFichaPaso, setEditFichaPaso] = useState("");
 
   const resetFichaForm = () => {
@@ -253,18 +262,44 @@ export function GestionProductosScreen({
     setFichaInsumoNombre("");
     setFichaInsumoCantidad(1);
     setFichaInsumoUnidad("kg");
+    setFichaInsumoSel(null);
     setFichaPaso("");
   };
 
   const updateFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
     setFichaVersiones(prev => prev.map((v, i) => i === fichaVIdx ? { ...v, [field]: value } : v));
 
+  // Al elegir del buscador se autocompleta la "Medida" con la unidad del
+  // catálogo; sigue siendo editable a mano después.
+  const seleccionarFichaInsumo = (ins: Insumo) => {
+    setFichaInsumoSel(ins);
+    setFichaInsumoNombre(ins.nombre);
+    setFichaInsumoUnidad(
+      UNIDADES_FICHA.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES_FICHA[0]
+    );
+  };
+
+  const seleccionarEditFichaInsumo = (ins: Insumo) => {
+    setEditFichaInsumoSel(ins);
+    setEditFichaInsumoNombre(ins.nombre);
+    setEditFichaInsumoUnidad(
+      UNIDADES_FICHA.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES_FICHA[0]
+    );
+  };
+
+  // Solo se agrega un insumo que exista en el catálogo: o se seleccionó del
+  // buscador, o el texto escrito coincide exactamente con un insumo real.
+  // Nunca se admite texto libre.
   const addFichaInsumo = () => {
-    if (!fichaInsumoNombre.trim()) return;
+    const ins = fichaInsumoSel ?? resolverInsumo(insumos, fichaInsumoNombre);
+    if (!ins) {
+      toast.error("Selecciona un insumo del catálogo de Insumos");
+      return;
+    }
     setFichaVersiones(prev => prev.map((v, i) =>
-      i === fichaVIdx ? { ...v, insumos: [...v.insumos, { nombre: fichaInsumoNombre.trim(), cantidad: fichaInsumoCantidad, unidad: fichaInsumoUnidad }] } : v
+      i === fichaVIdx ? { ...v, insumos: [...v.insumos, { nombre: ins.nombre, cantidad: fichaInsumoCantidad, unidad: fichaInsumoUnidad }] } : v
     ));
-    setFichaInsumoNombre(""); setFichaInsumoCantidad(1);
+    setFichaInsumoNombre(""); setFichaInsumoCantidad(1); setFichaInsumoSel(null);
   };
 
   const removeFichaInsumo = (idx: number) =>
@@ -318,6 +353,7 @@ export function GestionProductosScreen({
     setEditFichaInsumoNombre("");
     setEditFichaInsumoCantidad(1);
     setEditFichaInsumoUnidad("kg");
+    setEditFichaInsumoSel(null);
     setEditFichaPaso("");
   };
 
@@ -325,11 +361,15 @@ export function GestionProductosScreen({
     setEditFichaVersiones(prev => prev.map((v, i) => i === editFichaVIdx ? { ...v, [field]: value } : v));
 
   const addEditFichaInsumo = () => {
-    if (!editFichaInsumoNombre.trim()) return;
+    const ins = editFichaInsumoSel ?? resolverInsumo(insumos, editFichaInsumoNombre);
+    if (!ins) {
+      toast.error("Selecciona un insumo del catálogo de Insumos");
+      return;
+    }
     setEditFichaVersiones(prev => prev.map((v, i) =>
-      i === editFichaVIdx ? { ...v, insumos: [...v.insumos, { nombre: editFichaInsumoNombre.trim(), cantidad: editFichaInsumoCantidad, unidad: editFichaInsumoUnidad }] } : v
+      i === editFichaVIdx ? { ...v, insumos: [...v.insumos, { nombre: ins.nombre, cantidad: editFichaInsumoCantidad, unidad: editFichaInsumoUnidad }] } : v
     ));
-    setEditFichaInsumoNombre(""); setEditFichaInsumoCantidad(1);
+    setEditFichaInsumoNombre(""); setEditFichaInsumoCantidad(1); setEditFichaInsumoSel(null);
   };
 
   const removeEditFichaInsumo = (idx: number) =>
@@ -758,19 +798,27 @@ export function GestionProductosScreen({
                   <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
                 )}
                 {/* Add insumo row */}
-                <div className="flex gap-2">
-                  <input value={fichaInsumoNombre} onChange={e => setFichaInsumoNombre(e.target.value)}
-                    placeholder="Nombre del insumo"
-                    onKeyDown={e => e.key === "Enter" && addFichaInsumo()}
-                    className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
-                    onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
-                    className="w-20 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
-                    className="px-2 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                    {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-                  </select>
-                  <button onClick={addFichaInsumo}
+                <div className="flex items-end gap-2">
+                  <InsumoSearchField
+                    insumos={insumos}
+                    valor={fichaInsumoNombre}
+                    onValorChange={v => { setFichaInsumoNombre(v); setFichaInsumoSel(null); }}
+                    onSelect={seleccionarFichaInsumo}
+                  />
+                  <div className="w-20">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                    <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
+                      onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                    <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
+                      className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
+                      {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={addFichaInsumo} title="Agregar insumo"
                     className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                     <Plus className="w-4 h-4" />
                   </button>
@@ -1047,19 +1095,27 @@ export function GestionProductosScreen({
                     {activeEV.insumos.length === 0 && (
                       <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
                     )}
-                    <div className="flex gap-2">
-                      <input value={editFichaInsumoNombre} onChange={e => setEditFichaInsumoNombre(e.target.value)}
-                        placeholder="Nombre del insumo"
-                        onKeyDown={e => e.key === "Enter" && addEditFichaInsumo()}
-                        className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      <input type="number" min={0.1} step={0.1} value={editFichaInsumoCantidad}
-                        onChange={e => setEditFichaInsumoCantidad(Number(e.target.value))}
-                        className="w-20 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      <select value={editFichaInsumoUnidad} onChange={e => setEditFichaInsumoUnidad(e.target.value)}
-                        className="px-2 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                        {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-                      </select>
-                      <button onClick={addEditFichaInsumo}
+                    <div className="flex items-end gap-2">
+                      <InsumoSearchField
+                        insumos={insumos}
+                        valor={editFichaInsumoNombre}
+                        onValorChange={v => { setEditFichaInsumoNombre(v); setEditFichaInsumoSel(null); }}
+                        onSelect={seleccionarEditFichaInsumo}
+                      />
+                      <div className="w-20">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                        <input type="number" min={0.1} step={0.1} value={editFichaInsumoCantidad}
+                          onChange={e => setEditFichaInsumoCantidad(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      </div>
+                      <div className="w-24">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                        <select value={editFichaInsumoUnidad} onChange={e => setEditFichaInsumoUnidad(e.target.value)}
+                          className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
+                          {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+                        </select>
+                      </div>
+                      <button onClick={addEditFichaInsumo} title="Agregar insumo"
                         className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                         <Plus className="w-4 h-4" />
                       </button>
