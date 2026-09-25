@@ -363,7 +363,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["NIT", "Nombre", "Teléfono", "Email", "Asesor Comercial", "Estado", "Acciones"].map(h => (
+                {["Nombre", "Teléfono", "Email", "Asesor Comercial", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -371,14 +371,13 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
                     <p className="text-4xl mb-3">🚛</p>
                     <p>No se encontraron proveedores</p>
                   </td>
                 </tr>
               ) : paged.map(s => (
                 <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{s.nit}</td>
                   <td className="px-4 py-3.5 text-sm font-medium text-foreground">{s.nombre}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.telefono}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.email}</td>

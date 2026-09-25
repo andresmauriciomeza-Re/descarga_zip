@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, type Dispatch, type SetStateAction, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock, Download, PackageX } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import type { Producto } from "./GestionProductosScreen";
 
 const SERIF = "'DM Serif Display', serif";
 
@@ -25,12 +26,55 @@ const ESTADO_LABEL: Record<EstadoOrden, string> = {
 
 // Transiciones válidas de estado. "Cancelada" NO es seleccionable:
 // solo se alcanza mediante el flujo de "Dar de baja".
-const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
+export const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
   pendiente:    ["en-proceso"],
   "en-proceso": ["completada"],
   completada:   [],
   cancelada:    [],
 };
+
+// Los 4 estados, en su orden natural de avance por el flujo de producción.
+export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "completada", "cancelada"];
+
+// Qué estados pueden elegirse a mano desde un dropdown, dado el estado actual.
+// Coincide con VALID_TRANSITIONS: se avanza en la cadena y nunca se retrocede.
+// "Cancelada" queda fuera: solo se llega a ella por "Dar de baja".
+export const esEstadoSeleccionable = (actual: EstadoOrden, destino: EstadoOrden): boolean => {
+  if (destino === actual) return true;                    // el estado actual siempre visible
+  if (destino === "cancelada") return false;              // solo vía "Dar de baja"
+  return ORDEN_ESTADOS.indexOf(destino) > ORDEN_ESTADOS.indexOf(actual);
+};
+
+// ── Dropdown de "Estado Orden" para los modales de Crear/Editar ─────────
+// Replica el dropdown de la columna "Estado Orden" del listado: mismo badge de
+// color por estado (ESTADO_COLOR). Siempre muestra los 4 estados; los que no
+// aplican van deshabilitados en vez de desaparecer.
+function EstadoOrdenSelect({
+  value,
+  onChange,
+}: {
+  value: EstadoOrden;
+  onChange: (e: EstadoOrden) => void;
+}) {
+  // Sin transiciones posibles (Completada / Cancelada): se muestra, no se mueve.
+  const bloqueado = VALID_TRANSITIONS[value].length === 0;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as EstadoOrden)}
+      disabled={bloqueado}
+      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none ${
+        bloqueado ? "cursor-not-allowed opacity-80" : "cursor-pointer"
+      } ${ESTADO_COLOR[value]}`}
+    >
+      {ORDEN_ESTADOS.map((e) => (
+        <option key={e} value={e} disabled={!esEstadoSeleccionable(value, e)}>
+          {ESTADO_LABEL[e]}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 // Catálogo de productos (mismos IDs y nombres del módulo Productos).
 // El sistema carga internamente el tiempo de preparación de la última
@@ -66,7 +110,7 @@ interface TransicionEstado {
   fechaHora: string; // ISO
 }
 
-interface OrdenProduccion {
+export interface OrdenProduccion {
   id: string;
   lineas: LineaProducto[];
   fechaSolicitada: string;   // "YYYY-MM-DD" (opcional, referencial)
@@ -76,12 +120,17 @@ interface OrdenProduccion {
   inicioProduccion: string | null;  // fecha/hora real al pasar a "En Proceso"
   entregaEstimada: string | null;   // entrega real estimada (se fija al iniciar)
   historial: TransicionEstado[];    // cada transición con fecha/hora
+  // Marca contable interna (no se muestra en la UI): true cuando la producción
+  // de esta orden ya se sumó al stock de sus productos. Garantiza que el stock
+  // se sume UNA sola vez por orden. Ausente = todavía no se ha sumando.
+  stockAplicado?: boolean;
 }
 
 interface OrdenForm {
   lineas: LineaProducto[];
   fechaSolicitada: string;
   horaSolicitada: string;
+  estadoOrden: EstadoOrden;   // editable en el modal; "Pendiente" por defecto
   observacion: string;
 }
 
@@ -143,6 +192,7 @@ const emptyForm = (): OrdenForm => ({
   lineas: [{ idProducto: "PROD-001", cantidad: 1 }],
   fechaSolicitada: "",
   horaSolicitada: "",
+  estadoOrden: "pendiente",
   observacion: "",
 });
 
@@ -174,6 +224,27 @@ const addMinutesISO = (iso: string, min: number) =>
   new Date(new Date(iso).getTime() + min * 60000).toISOString();
 
 const nombresDeLineas = (lineas: LineaProducto[]) => lineas.map(l => productById(l.idProducto)?.nombre ?? l.idProducto);
+
+// ── Regla contable: stock que aporta una orden al completarse ──────────
+// Función pura: recibe la orden en su estado ANTERIOR a la transición y
+// devuelve el incremento por producto, o null si no se debe sumar nada.
+// Ser pura permite verificar la regla "una sola vez por orden" sin UI.
+export function calcularStockProducido(orden: OrdenProduccion): Map<string, number> | null {
+  // 1) Idempotencia: si esta orden ya aportó su producción, no vuelve a sumar.
+  if (orden.stockAplicado) return null;
+  // 2) Si ya estaba en "Completada", no hay cambio de estado que contabilizar.
+  if (orden.estadoOrden === "completada") return null;
+
+  // 3) Acumula por producto: la misma orden puede traer un producto en varias
+  //    líneas, y varias líneas del mismo producto deben sumar su total.
+  const producido = new Map<string, number>();
+  for (const l of orden.lineas) {
+    if (l.idProducto && l.cantidad > 0) {
+      producido.set(l.idProducto, (producido.get(l.idProducto) ?? 0) + l.cantidad);
+    }
+  }
+  return producido.size > 0 ? producido : null;
+}
 
 function exportExcel(ordenes: OrdenProduccion[]) {
   const headers = [
@@ -207,7 +278,19 @@ function exportExcel(ordenes: OrdenProduccion[]) {
   toast.success("Archivo Excel descargado");
 }
 
-export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
+export function OrdenProduccionScreen({
+  productos,
+  setProductos,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
+}: {
+  productos: Producto[];
+  setProductos: Dispatch<SetStateAction<Producto[]>>;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const [ordenes,       setOrdenes]    = useState<OrdenProduccion[]>(INITIAL_ORDENES);
   const [search,        setSearch]     = useState("");
   const [page,          setPage]       = useState(1);
@@ -230,6 +313,45 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
     descripcion: string;
   } | null>(null);
 
+  // Tooltip de "Producto(s)": muestra el detalle completo de la orden al hacer
+  // hover sobre la celda. Se posiciona con `position: fixed` a partir del rectángulo
+  // de la celda, porque la tabla vive dentro de contenedores con overflow
+  // (overflow-x-auto / overflow-hidden) que recortarían un tooltip absoluto.
+  const [tip, setTip] = useState<{ top: number; left: number; lineas: LineaProducto[] } | null>(null);
+
+  const ANCHO_TIP = 288; // w-72
+  const abrirTip = (e: ReactMouseEvent<HTMLTableCellElement>, lineas: LineaProducto[]) => {
+    if (lineas.length === 0) return; // nunca inventar productos
+    // Solo en dispositivos con hover real (escritorio). En táctil no se abre.
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    // Alto estimado: padding + encabezado + una línea por producto (+ total).
+    // Acotado para que siempre quepa en pantallas bajas.
+    const alto = Math.min(52 + lineas.length * 24 + (lineas.length > 1 ? 30 : 0), window.innerHeight * 0.7);
+    const cabeAbajo = window.innerHeight - r.bottom >= alto + 12;
+    // Debajo de la celda; si no cabe, arriba de la celda. El segundo Min/Max
+    // garantiza que el borde inferior nunca quede fuera de la ventana.
+    const top = Math.max(8, Math.min(
+      cabeAbajo ? r.bottom + 8 : r.top - alto - 8,
+      window.innerHeight - alto - 8,
+    ));
+    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - ANCHO_TIP - 8));
+    setTip({ top, left, lineas });
+  };
+
+  // Si la tabla se desplaza o se redimensiona la ventana, el tooltip queda
+  // desfasado: se cierra en vez de quedar flotando sobre otra celda.
+  useEffect(() => {
+    if (!tip) return;
+    const cerrar = () => setTip(null);
+    window.addEventListener("scroll", cerrar, true);
+    window.addEventListener("resize", cerrar);
+    return () => {
+      window.removeEventListener("scroll", cerrar, true);
+      window.removeEventListener("resize", cerrar);
+    };
+  }, [tip]);
+
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const sCls = iCls + " cursor-pointer";
   const tCls = iCls + " resize-none";
@@ -243,13 +365,72 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // ── Stock por producción ─────────────────────────────────────────────
+  // Al completarse una orden, el "Stock disponible" de cada producto producido
+  // sube solo, en la fuente de datos compartida (estado de App.tsx), sin que el
+  // administrador toque el input "Stock disponible" del formulario de producto.
+  // La regla de "una sola vez por orden" vive en calcularStockProducido.
+  const sumarStockProducido = (orden: OrdenProduccion): boolean => {
+    const producido = calcularStockProducido(orden);
+    if (!producido) return false;
+
+    const nombreDe = (pid: string) =>
+      productos.find(p => p.id === pid)?.nombre ?? productById(pid)?.nombre ?? pid;
+
+    setProductos(prev => prev.map(p => {
+      const cant = producido.get(p.id);
+      if (!cant) return p;
+      return { ...p, stockDisponible: Math.max(0, (p.stockDisponible || 0) + cant) };
+    }));
+
+    const detalle = [...producido.entries()]
+      .map(([pid, cant]) => `${nombreDe(pid)} +${cant}`)
+      .join(" · ");
+    toast.success(`Stock disponible actualizado — ${detalle}`);
+
+    // Líneas sin producto homónimo en el catálogo: se avisa en vez de fallar en silencio.
+    const sinCatalogo = [...producido.keys()].filter(pid => !productos.some(p => p.id === pid));
+    if (sinCatalogo.length > 0) {
+      toast.warning(`Sin actualizar: ${sinCatalogo.join(", ")} no existe(n) en Productos`);
+    }
+    return true;
+  };
+
+  // ── Reglas de transición de estado ────────────────────────────────────
+  // Única fuente de verdad, compartida por el dropdown del listado y por el de
+  // los modales Crear/Editar: registra fecha/hora de la transición, fija la
+  // entrega estimada real al pasar a "En Proceso" y suma el stock al pasar a
+  // "Completada". Recibe la orden en su estado ANTERIOR y devuelve la nueva.
+  const aplicarTransicion = (orden: OrdenProduccion, next: EstadoOrden): OrdenProduccion => {
+    if (orden.estadoOrden === next) return orden;
+
+    const now = nowISO();
+    const historial = [...orden.historial, { de: orden.estadoOrden, a: next, fechaHora: now }];
+    let patched: OrdenProduccion = { ...orden, estadoOrden: next, historial };
+
+    if (next === "en-proceso") {
+      patched = {
+        ...patched,
+        inicioProduccion: now,
+        entregaEstimada: addMinutesISO(now, totalTiempoPrep(orden.lineas)),
+      };
+    }
+    // Se evalúa sobre la orden previa: si ya estaba contabilizada, no repite.
+    if (next === "completada" && sumarStockProducido(orden)) {
+      patched = { ...patched, stockAplicado: true };
+    }
+    return patched;
+  };
+
   const handleCreate = () => {
     if (form.lineas.length === 0 || form.lineas.every(l => !l.idProducto || l.cantidad <= 0)) {
       toast.error("Agrega al menos un producto con cantidad");
       return;
     }
     const newId = `ORD-${String(ordenes.length + 1).padStart(3, "0")}`;
-    const ord: OrdenProduccion = {
+    // Toda orden nace "Pendiente"; si en el modal se eligió otro estado, se
+    // registra la transición con las mismas reglas que usa el listado.
+    const base: OrdenProduccion = {
       id: newId,
       lineas: form.lineas.map(l => ({ ...l })),
       fechaSolicitada: form.fechaSolicitada,
@@ -260,6 +441,7 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
       entregaEstimada: null,
       historial: [],
     };
+    const ord = aplicarTransicion(base, form.estadoOrden);
     setOrdenes(p => [ord, ...p]);
     setShowCreate(false); setForm(emptyForm());
     toast.success("Orden de producción creada");
@@ -271,7 +453,19 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
       toast.error("Agrega al menos un producto con cantidad");
       return;
     }
-    setOrdenes(p => p.map(o => o.id === editItem.id ? { ...editItem, lineas: editItem.lineas.map(l => ({ ...l })) } : o));
+    // Se parte de la orden ya guardada (estado previo real) y se le aplican los
+    // campos editados; así el dropdown puede compararla contra el estado real.
+    const previo = ordenes.find(o => o.id === editItem.id);
+    const base: OrdenProduccion = previo
+      ? {
+          ...previo,
+          lineas: editItem.lineas.map(l => ({ ...l })),
+          fechaSolicitada: editItem.fechaSolicitada,
+          horaSolicitada: editItem.horaSolicitada,
+          observacion: editItem.observacion,
+        }
+      : { ...editItem };
+    setOrdenes(p => p.map(o => o.id === editItem.id ? aplicarTransicion(base, editItem.estadoOrden) : o));
     setEditItem(null);
     toast.success("Orden actualizada");
   };
@@ -283,20 +477,13 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
   };
 
   const applyTransition = (id: string, next: EstadoOrden) => {
-    setOrdenes(p => p.map(o => {
-      if (o.id !== id) return o;
-      const now = nowISO();
-      const historial = [...o.historial, { de: o.estadoOrden, a: next, fechaHora: now }];
-      let patched: OrdenProduccion = { ...o, estadoOrden: next, historial };
-      if (next === "en-proceso") {
-        patched = {
-          ...patched,
-          inicioProduccion: now,
-          entregaEstimada: addMinutesISO(now, totalTiempoPrep(o.lineas)),
-        };
-      }
-      return patched;
-    }));
+    const orden = ordenes.find(o => o.id === id);
+    if (orden) {
+      // La suma de stock se dispara desde aplicarTransicion. Se resuelve fuera
+      // del updater de setOrdenes a propósito: dentro de un reducer se
+      // ejecutaría dos veces en modo estricto.
+      setOrdenes(p => p.map(o => o.id === id ? aplicarTransicion(o, next) : o));
+    }
     setConfirmEstado(null);
     toast.success(`Estado cambiado a: ${ESTADO_LABEL[next]}`);
   };
@@ -517,7 +704,11 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{o.id}</td>
-                    <td className="px-4 py-3.5">
+                    <td
+                      className="px-4 py-3.5 cursor-help"
+                      onMouseEnter={e => abrirTip(e, o.lineas)}
+                      onMouseLeave={() => setTip(null)}
+                    >
                       <p className="text-sm font-medium text-foreground">
                         {nombres.length === 1 ? nombres[0] : `${nombres.length} productos`}
                       </p>
@@ -601,6 +792,32 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
         </div>
       </div>
 
+      {/* Tooltip de detalle de producto(s) — posicionado en fixed, no altera la tabla */}
+      {tip && (
+        <div
+          role="tooltip"
+          style={{ top: tip.top, left: tip.left }}
+          className="fixed z-[100] w-72 max-w-[calc(100vw-16px)] max-h-[70vh] overflow-y-auto rounded-xl bg-foreground text-background shadow-xl px-3.5 py-3 text-sm pointer-events-none"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1.5">
+            Producto(s) de la orden
+          </p>
+          <ul className="space-y-1">
+            {tip.lineas.map((l, idx) => (
+              <li key={`${l.idProducto}-${idx}`} className="flex items-baseline gap-2 leading-snug">
+                <span className="font-bold tabular-nums shrink-0">{l.cantidad} ×</span>
+                <span className="opacity-90">{productById(l.idProducto)?.nombre ?? l.idProducto}</span>
+              </li>
+            ))}
+          </ul>
+          {tip.lineas.length > 1 && (
+            <p className="mt-2 pt-2 border-t border-background/20 text-[11px] opacity-60">
+              Total: {totalCantidad(tip.lineas)} unidades
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Pagination */}
       {filtered.length > 0 && (
         <div className="flex items-center justify-center">
@@ -630,7 +847,10 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
             <>
               <div className="flex items-center justify-between mb-4 px-3 py-2 bg-muted/60 rounded-xl border border-border">
                 <span className="text-xs font-semibold text-muted-foreground">Estado Orden</span>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR.pendiente}`}>Pendiente</span>
+                <EstadoOrdenSelect
+                  value={form.estadoOrden}
+                  onChange={e => setForm(p => ({ ...p, estadoOrden: e }))}
+                />
               </div>
               <OrdenFormFields v={form} set={setForm} />
             </>
@@ -649,13 +869,17 @@ export function OrdenProduccionScreen({ canCreate = true, canEdit = true, canDel
             <>
               <div className="flex items-center justify-between mb-4 px-3 py-2 bg-muted/60 rounded-xl border border-border">
                 <span className="text-xs font-semibold text-muted-foreground">Estado Orden</span>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[editItem.estadoOrden]}`}>{ESTADO_LABEL[editItem.estadoOrden]}</span>
+                <EstadoOrdenSelect
+                  value={editItem.estadoOrden}
+                  onChange={e => setEditItem(x => x && ({ ...x, estadoOrden: e }))}
+                />
               </div>
               <OrdenFormFields
                 v={{
                   lineas: editItem.lineas,
                   fechaSolicitada: editItem.fechaSolicitada,
                   horaSolicitada: editItem.horaSolicitada,
+                  estadoOrden: editItem.estadoOrden,
                   observacion: editItem.observacion,
                 }}
                 set={nv => setEditItem(x => x && ({

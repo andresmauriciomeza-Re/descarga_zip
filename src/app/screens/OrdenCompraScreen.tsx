@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import type { Insumo } from "./GestionInsumosScreen";
 import { motion, AnimatePresence } from "motion/react";
+import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
+import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import {
-  Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight,
+  Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, FileDown, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
@@ -14,7 +16,7 @@ const PER_PAGE = 8;
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 export type EstadoOrden = "Borrador" | "Enviado" | "Completado" | "Anulado";
-export type EstadoGestion = "En Proceso" | "Recibido" | "Anulado";
+export type EstadoGestion = "Recibido" | "Anulado";
 
 export interface OrdenItem {
   rowId: string;
@@ -55,24 +57,34 @@ export interface OrdenCompra {
 export interface GestionCompra {
   id: string;
   ordenId: string;
+  proveedor?: string;
   numeroFactura: string;
   fechaFactura: string;
   valorTotal: number;
   estado: EstadoGestion;
+  items?: OrdenItem[];
   compraCreada?: boolean;
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-export const PROVEEDORES_INIT = [
-  "Molinos del Valle",
-  "Lácteos La Esperanza",
-  "Distribuidora Sur",
-  "Carnes Premium",
-  "Verduras Express",
-];
+export interface ProveedorRef {
+  nombre: string;
+  nit: string;
+  asesorComercial: string;
+  telefono: string;
+  email: string;
+  direccion: string;
+  estado: "activo" | "inactivo";
+}
 
-const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
+export const PROVEEDORES_INIT: ProveedorRef[] = [
+  { nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
+];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Borrador: "bg-gray-100 text-gray-700",
@@ -80,6 +92,12 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Completado: "bg-emerald-100 text-emerald-800",
   Anulado: "bg-red-100 text-red-800",
 };
+
+/**
+ * Ancho compartido por los formularios de Orden de Compra y de Gestión de Compras,
+ * para que ambos módulos se vean igual de compactos.
+ */
+export const FORM_MAXW = "max-w-4xl";
 
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 
@@ -145,11 +163,69 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
 export const INITIAL_GESTIONES: GestionCompra[] = [
   {
     id: "001",
-    ordenId: "004",
-    numeroFactura: "FAC-2024-0432",
-    fechaFactura: "2024-02-03",
-    valorTotal: 280000,
+    ordenId: "",
+    proveedor: "Distribuidora La Cosecha",
+    numeroFactura: "FAC-2026-0301",
+    fechaFactura: "2026-08-05",
+    valorTotal: 410000,
     estado: "Recibido",
+    items: [
+      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", precioUnitario: 7500 },
+      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", precioUnitario: 6500 },
+      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", precioUnitario: 3000 },
+    ],
+  },
+  {
+    id: "002",
+    ordenId: "",
+    proveedor: "Quesos del Norte S.A.S.",
+    numeroFactura: "FAC-2026-0318",
+    fechaFactura: "2026-08-19",
+    valorTotal: 560000,
+    estado: "Recibido",
+    items: [
+      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000 },
+      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", precioUnitario: 10000 },
+    ],
+  },
+  {
+    id: "003",
+    ordenId: "",
+    proveedor: "Carnes Premium Ltda.",
+    numeroFactura: "FAC-2026-0329",
+    fechaFactura: "2026-09-01",
+    valorTotal: 190000,
+    estado: "Anulado",
+    items: [
+      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", precioUnitario: 7600 },
+    ],
+  },
+  {
+    id: "004",
+    ordenId: "",
+    proveedor: "Bebidas y Más",
+    numeroFactura: "FAC-2026-0347",
+    fechaFactura: "2026-09-12",
+    valorTotal: 275500,
+    estado: "Recibido",
+    items: [
+      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", precioUnitario: 3200 },
+      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", precioUnitario: 835 },
+    ],
+  },
+  {
+    id: "005",
+    ordenId: "",
+    proveedor: "Molinos del Valle",
+    numeroFactura: "FAC-2026-0360",
+    fechaFactura: "2026-09-20",
+    valorTotal: 750000,
+    estado: "Recibido",
+    items: [
+      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", precioUnitario: 6000 },
+      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", precioUnitario: 5200 },
+      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", precioUnitario: 10000 },
+    ],
   },
 ];
 
@@ -198,7 +274,7 @@ const sCls = `${iCls} appearance-none`;
 
 // ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
 
-function ConfirmModal({
+export function ConfirmModal({
   title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel,
 }: {
   title: string; body: string; detail?: string; confirmLabel?: string;
@@ -241,67 +317,114 @@ function ConfirmModal({
 
 // ─── NUEVO PROVEEDOR MODAL ────────────────────────────────────────────────────
 
-function NuevoProveedorModal({
-  onGuardar, onClose,
+export function NuevoProveedorModal({
+  onGuardar, onClose, nombreInicial = "",
 }: {
-  onGuardar: (nombre: string, telefono: string) => void;
+  onGuardar: (p: ProveedorRef) => void;
   onClose: () => void;
+  nombreInicial?: string;
 }) {
-  const [nombre, setNombre] = useState("");
+  const [nombre, setNombre] = useState(nombreInicial);
+  const [nit, setNit] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
+  const [asesorComercial, setAsesorComercial] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [estado, setEstado] = useState<ProveedorRef["estado"]>("activo");
 
   const submit = () => {
     if (!nombre.trim()) { toast.error("El nombre es obligatorio."); return; }
-    onGuardar(nombre.trim(), telefono.trim());
+    if (!nit.trim()) { toast.error("El NIT es obligatorio."); return; }
+    if (!telefono.trim()) { toast.error("El teléfono es obligatorio."); return; }
+    if (!email.trim()) { toast.error("El email es obligatorio."); return; }
+    onGuardar({
+      nombre: nombre.trim(),
+      nit: nit.trim(),
+      telefono: telefono.trim(),
+      email: email.trim(),
+      asesorComercial: asesorComercial.trim(),
+      direccion: direccion.trim(),
+      estado,
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border"
+        className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-6 py-5 space-y-6">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-            <input
-              value={nombre}
-              onChange={e => setNombre(e.target.value)}
-              autoFocus
-              placeholder="Nombre del proveedor"
-              className={iCls}
-            />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
+              Identificación del proveedor
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">NIT *</label>
+                <input value={nit} onChange={e => setNit(e.target.value)} placeholder="900.123.456-1" className={iCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
+                <input value={nombre} onChange={e => setNombre(e.target.value)} autoFocus placeholder="Nombre del proveedor" className={iCls} />
+              </div>
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Teléfono / Contacto</label>
-            <input
-              value={telefono}
-              onChange={e => setTelefono(e.target.value)}
-              placeholder="Opcional"
-              className={iCls}
-            />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
+              Contacto
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Asesor comercial</label>
+                <input value={asesorComercial} onChange={e => setAsesorComercial(e.target.value)} placeholder="Ej: Carlos Mejía" className={iCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Teléfono *</label>
+                <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="604 321 0001" className={iCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email *</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ventas@proveedor.co" className={iCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>
+                <input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Cra 50 #30-10, Medellín" className={iCls} />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
+              Configuración
+            </p>
+            <div className="w-full sm:w-1/2">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
+              <select value={estado} onChange={e => setEstado(e.target.value as ProveedorRef["estado"])} className={`${sCls} cursor-pointer`}>
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div className="flex gap-3 px-5 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
-          >
+        <div className="flex gap-3 px-6 py-4 border-t border-border">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
-          <button
-            onClick={submit}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
-          >
+          <button onClick={submit} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all">
             Crear Proveedor
           </button>
         </div>
@@ -312,40 +435,73 @@ function NuevoProveedorModal({
 
 // ─── ORDEN MODAL ──────────────────────────────────────────────────────────────
 
-interface OrdenFormData {
+export interface OrdenFormData {
   proveedor: string;
   fecha: string;
-  estado: "Borrador" | "Enviado";
+  estado: EstadoOrden | EstadoGestion;
   items: OrdenItem[];
+  numeroFactura?: string;
 }
 
-function OrdenModal({
-  mode, orden, proveedores, insumos, onClose, onGuardar, onNuevoProveedor,
+export function OrdenModal({
+  mode, orden, proveedores, insumos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
   onEnviarDesdeVista, onAnularDesdeVista,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
-  proveedores: string[];
+  proveedores: ProveedorRef[];
   insumos: Insumo[];
+  /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
+  tipo?: "orden" | "compra";
+  /** Renderiza el formulario como una página independiente en vez de modal. */
+  fullPage?: boolean;
   onClose: () => void;
   onGuardar: (d: OrdenFormData) => void;
-  onNuevoProveedor: (nombre: string, telefono: string) => string;
+  onNuevoProveedor: (p: ProveedorRef) => string;
   onEnviarDesdeVista?: (o: OrdenCompra) => void;
   onAnularDesdeVista?: (o: OrdenCompra) => void;
 }) {
   const isView = mode === "view";
+  const isCompra = tipo === "compra";
+  const isPage = fullPage;
   const today = new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState<OrdenFormData>({
-    proveedor: orden?.proveedor ?? (proveedores[0] ?? ""),
+    proveedor: orden?.proveedor ?? (proveedores[0]?.nombre ?? ""),
     fecha: orden?.fecha ?? today,
-    estado: (orden?.estado === "Enviado" ? "Enviado" : "Borrador") as "Borrador" | "Enviado",
+    estado: isCompra
+      ? "Recibido"
+      : (orden?.estado === "Enviado" ? "Enviado" : "Borrador"),
     items: orden?.items.map(i => ({ ...i })) ?? [],
+    numeroFactura: "",
   });
   const pf = (p: Partial<OrdenFormData>) => setForm(f => ({ ...f, ...p }));
 
   const [showNuevoProv, setShowNuevoProv] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
+
+  // ── Buscador de proveedor (autocomplete por nombre, NIT, asesor o email) ──
+  const [provQuery, setProvQuery] = useState(orden?.proveedor ?? (proveedores[0]?.nombre ?? ""));
+  const [showProvSug, setShowProvSug] = useState(false);
+  const provRef = useRef<HTMLDivElement>(null);
+
+  const provSugs = useMemo(() => {
+    const q = provQuery.trim().toLowerCase();
+    const base = q
+      ? proveedores.filter(p =>
+          p.nombre.toLowerCase().includes(q) ||
+          p.nit.toLowerCase().includes(q) ||
+          p.asesorComercial.toLowerCase().includes(q) ||
+          p.email.toLowerCase().includes(q)
+        )
+      : proveedores;
+    return base.slice(0, 6);
+  }, [proveedores, provQuery]);
+
+  const provExiste = useMemo(
+    () => provSugs.length > 0,
+    [provSugs]
+  );
 
   const [aNombre, setANombre] = useState("");
   const [aCant, setACant] = useState(1);
@@ -364,6 +520,14 @@ function OrdenModal({
   useEffect(() => {
     const fn = (e: MouseEvent) => {
       if (sugRef.current && !sugRef.current.contains(e.target as Node)) setAShowSug(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      if (provRef.current && !provRef.current.contains(e.target as Node)) setShowProvSug(false);
     };
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
@@ -396,41 +560,46 @@ function OrdenModal({
     setANombre(""); setACant(1); setAPrecio(0); setAFromCat(false);
   };
 
-  const handleProvChange = (v: string) => {
-    if (v === "__NUEVO__") setShowNuevoProv(true);
-    else pf({ proveedor: v });
+  const selectProv = (p: ProveedorRef) => {
+    setProvQuery(p.nombre);
+    pf({ proveedor: p.nombre });
+    setShowProvSug(false);
   };
 
-  const handleNuevoProv = (nombre: string, tel: string) => {
-    pf({ proveedor: onNuevoProveedor(nombre, tel) });
+  const handleNuevoProv = (p: ProveedorRef) => {
+    const nombre = onNuevoProveedor(p);
+    setProvQuery(nombre);
+    pf({ proveedor: nombre });
     setShowNuevoProv(false);
     toast.success(`Proveedor "${nombre}" creado`);
   };
 
   const handleGuardar = () => {
+    if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
+    if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un insumo."); return; }
-    if (form.estado === "Enviado") { setShowSendConf(true); return; }
+    if (!isCompra && form.estado === "Enviado") { setShowSendConf(true); return; }
     onGuardar(form);
   };
 
-  const subtotal = form.items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
-
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
+      <div className={isPage ? `w-full p-6 ${FORM_MAXW} mx-auto` : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
+        <div className={isPage ? "w-full" : "flex min-h-full items-center justify-center p-4"}>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
+            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${FORM_MAXW}${isPage ? "" : " my-4"}`}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
                 <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {mode === "create" ? "Nueva Orden de Compra" : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
+                  {mode === "create"
+                    ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
+                    : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
                 </h3>
                 {orden && (
                   <p className="text-xs text-muted-foreground mt-0.5">{orden.proveedor} · {orden.fecha}</p>
@@ -438,9 +607,15 @@ function OrdenModal({
               </div>
               <div className="flex items-center gap-2">
                 {isView && orden && <EstadoBadge e={orden.estado} />}
-                <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
+                {isPage ? (
+                  <button onClick={onClose} title="Volver" className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -467,6 +642,21 @@ function OrdenModal({
 
               {/* Fields */}
               <div className="grid grid-cols-2 gap-4">
+                {isCompra && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura *</label>
+                    {isView
+                      ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "—"}</p>
+                      : (
+                        <input
+                          value={form.numeroFactura ?? ""}
+                          onChange={e => pf({ numeroFactura: e.target.value })}
+                          placeholder="Ej: FAC-2024-0001"
+                          className={iCls}
+                        />
+                      )}
+                  </div>
+                )}
                 {orden?.id && (
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N° Orden</label>
@@ -478,10 +668,51 @@ function OrdenModal({
                   {isView
                     ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
                     : (
-                      <select value={form.proveedor} onChange={e => handleProvChange(e.target.value)} className={sCls}>
-                        {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
-                        <option value="__NUEVO__">+ Crear nuevo proveedor</option>
-                      </select>
+                      <div className="relative" ref={provRef}>
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <input
+                          value={provQuery}
+                          onChange={e => {
+                            setProvQuery(e.target.value);
+                            pf({ proveedor: e.target.value });
+                            setShowProvSug(true);
+                          }}
+                          onFocus={() => setShowProvSug(true)}
+                          placeholder="Buscar por nombre, NIT, asesor o email..."
+                          className={`${iCls} pl-10`}
+                        />
+                        {showProvSug && (
+                          <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                            {provSugs.map(p => (
+                              <button
+                                key={p.nit}
+                                type="button"
+                                onMouseDown={() => selectProv(p)}
+                                className={`w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0 ${form.proveedor === p.nombre ? "bg-muted/60" : ""}`}
+                              >
+                                <p className="font-semibold text-foreground flex items-center gap-1.5">
+                                  {p.nombre}
+                                  {form.proveedor === p.nombre && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                </p>
+                                <p className="text-muted-foreground">
+                                  NIT {p.nit}
+                                  {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
+                                </p>
+                              </button>
+                            ))}
+                            {!provExiste && provQuery.trim() !== "" && (
+                              <button
+                                type="button"
+                                onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
+                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                Crear proveedor {provQuery.trim() && `“${provQuery.trim()}”`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                 </div>
                 <div>
@@ -493,208 +724,61 @@ function OrdenModal({
                 {!isView && (
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
-                    <select value={form.estado} onChange={e => pf({ estado: e.target.value as "Borrador" | "Enviado" })} className={sCls}>
-                      <option value="Borrador">Borrador</option>
-                      <option value="Enviado">Enviado</option>
-                    </select>
+                    {isCompra ? (
+                      <select
+                        value={form.estado}
+                        onChange={e => pf({ estado: e.target.value as EstadoGestion })}
+                        className={sCls}
+                      >
+                        <option value="Recibido">Recibido</option>
+                        <option value="Anulado">Anulado</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={form.estado}
+                        onChange={e => pf({ estado: e.target.value as EstadoOrden })}
+                        className={sCls}
+                      >
+                        <option value="Borrador">Borrador</option>
+                        <option value="Enviado">Enviado</option>
+                      </select>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Agregar insumo */}
               {!isView && (
-                <div
-                  ref={sugRef}
-                  className="p-4 bg-muted/40 border border-border rounded-xl"
-                >
-                  <h3
-                    className="text-sm font-bold text-foreground mb-4"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    Agregar insumo
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-
-                    {/* Nombre */}
-                    <div className="lg:col-span-2 relative">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Nombre
-                      </label>
-
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-
-                        <input
-                          value={aNombre}
-                          onChange={e => {
-                            setANombre(e.target.value);
-                            setAFromCat(false);
-                            setAShowSug(true);
-                          }}
-                          onFocus={() => setAShowSug(true)}
-                          placeholder="Buscar insumo..."
-                          className={`${iCls} pl-10`}
-                        />
-                      </div>
-
-                      {aShowSug && suggestions.length > 0 && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                          {suggestions.map(ins => (
-                            <button
-                              key={ins.id}
-                              type="button"
-                              onMouseDown={() => selectSug(ins)}
-                              className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
-                            >
-                              <p className="font-semibold text-foreground">
-                                {ins.nombre}
-                              </p>
-
-                              <p className="text-muted-foreground">
-                                {ins.unidadMedida} ·{" "}
-                                {fmtCOP(ins.precioUnitario)}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Cantidad */}
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Cantidad
-                      </label>
-
-                      <input
-                        type="number"
-                        min={1}
-                        value={aCant}
-                        onChange={e => setACant(Number(e.target.value))}
-                        className={iCls}
-                      />
-                    </div>
-
-                    {/* Medida */}
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Medida
-                      </label>
-
-                      <select
-                        value={aUnidad}
-                        onChange={e => setAUnidad(e.target.value)}
-                        disabled={aFromCat}
-                        className={iCls}
-                      >
-                        {UNIDADES.map(u => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Precio */}
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Precio unitario
-                      </label>
-
-                      <input
-                        type="number"
-                        min={0}
-                        value={aPrecio || ""}
-                        onChange={e => setAPrecio(Number(e.target.value))}
-                        placeholder="0"
-                        className={iCls}
-                      />
-                    </div>
-
-                  </div>
-
-                  {/* Subtotal */}
-                  <div className="flex flex-col sm:flex-row sm:items-end gap-3 mt-4">
-
-                    <div className="flex-1">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Subtotal
-                      </label>
-
-                      <div className={`${iCls} bg-background font-bold`}>
-                        {fmtCOP(aCant * aPrecio)}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={addItem}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl cursor-pointer hover:bg-red-700 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Agregar insumo
-                    </button>
-
-                  </div>
-                </div>
+                <CompactInsumoForm
+                  containerRef={sugRef}
+                  titulo="Agregar insumo"
+                  nombre={aNombre}
+                  onNombreChange={(value) => {
+                    setANombre(value);
+                    setAFromCat(false);
+                    setAShowSug(true);
+                  }}
+                  onNombreFocus={() => setAShowSug(true)}
+                  cantidad={aCant}
+                  onCantidadChange={setACant}
+                  unidad={aUnidad}
+                  onUnidadChange={setAUnidad}
+                  unidadDisabled={aFromCat}
+                  precio={aPrecio}
+                  onPrecioChange={setAPrecio}
+                  onAgregar={addItem}
+                  suggestions={suggestions}
+                  showSuggestions={aShowSug}
+                  onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
+                />
               )}
 
               {/* Items table */}
-              <div className="bg-muted/30 rounded-xl border border-border overflow-hidden">
-                <div className="px-3 py-2 border-b border-border bg-muted/30">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Insumos solicitados</p>
-                </div>
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-                    <tr>
-                      {["Nombre", "Cantidad", "Unidad", "P. unitario", "Subtotal"].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left font-semibold">{h}</th>
-                      ))}
-                      {!isView && <th className="px-3 py-2.5" />}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {form.items.length === 0
-                      ? (
-                        <tr>
-                          <td colSpan={6} className="px-3 py-8 text-center text-xs text-muted-foreground">
-                            Sin insumos agregados
-                          </td>
-                        </tr>
-                      )
-                      : form.items.map(item => (
-                        <tr key={item.rowId} className="hover:bg-muted/20">
-                          <td className="px-3 py-2.5 text-sm font-medium text-foreground">{item.nombre}</td>
-                          <td className="px-3 py-2.5 text-sm">{item.cantidad}</td>
-                          <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.unidad}</td>
-                          <td className="px-3 py-2.5 text-sm">{fmtCOP(item.precioUnitario)}</td>
-                          <td className="px-3 py-2.5 text-sm font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
-                          {!isView && (
-                            <td className="px-3 py-2.5">
-                              <button
-                                onClick={() => pf({ items: form.items.filter(i => i.rowId !== item.rowId) })}
-                                className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                  </tbody>
-                  {form.items.length > 0 && (
-                    <tfoot className="bg-muted/50 border-t border-border">
-                      <tr>
-                        <td colSpan={isView ? 4 : 5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider">
-                          Total estimado
-                        </td>
-                        <td className="px-3 py-2 text-sm font-bold text-foreground">{fmtCOP(subtotal)}</td>
-                        {!isView && <td />}
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
+              <InsumosSolicitadosTable
+                items={form.items}
+                showActions={!isView}
+                onRemove={!isView ? (rowId) => pf({ items: form.items.filter((i) => i.rowId !== rowId) }) : undefined}
+              />
 
               {/* Recepcion detail (Completado view) */}
               {isView && orden?.estado === "Completado" && orden.recepcion && (
@@ -786,6 +870,7 @@ function OrdenModal({
       <AnimatePresence>
         {showNuevoProv && (
           <NuevoProveedorModal
+            nombreInicial={provQuery.trim()}
             onGuardar={handleNuevoProv}
             onClose={() => setShowNuevoProv(false)}
           />
@@ -809,6 +894,63 @@ function OrdenModal({
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ─── NUEVA ORDEN COMPRA — PÁGINA INDEPENDIENTE ───────────────────────────────
+
+interface NuevaOrdenCompraPageProps {
+  ordenes: OrdenCompra[];
+  setOrdenes: React.Dispatch<React.SetStateAction<OrdenCompra[]>>;
+  proveedores: ProveedorRef[];
+  setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
+  insumos: Insumo[];
+  onNuevoProveedor?: (p: ProveedorRef) => void;
+  onBack: () => void;
+}
+
+export function NuevaOrdenCompraPage({
+  ordenes,
+  setOrdenes,
+  proveedores,
+  setProveedores,
+  insumos,
+  onNuevoProveedor,
+  onBack,
+}: NuevaOrdenCompraPageProps) {
+  const handleGuardar = (data: OrdenFormData) => {
+    const nueva: OrdenCompra = {
+      id: nextOrdenId(ordenes),
+      proveedor: data.proveedor,
+      fecha: data.fecha,
+      estado: data.estado as EstadoOrden,
+      items: data.items,
+    };
+
+    setOrdenes(prev => [nueva, ...prev]);
+    toast.success(`OC ${nueva.id} guardada como ${nueva.estado}`);
+    onBack();
+  };
+
+  const handleNuevoProveedor = (p: ProveedorRef) => {
+    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
+      setProveedores(prev => [...prev, p]);
+    }
+    onNuevoProveedor?.(p);
+    return p.nombre;
+  };
+
+  return (
+    <OrdenModal
+      fullPage
+      mode="create"
+      tipo="orden"
+      proveedores={proveedores}
+      insumos={insumos}
+      onClose={onBack}
+      onGuardar={handleGuardar}
+      onNuevoProveedor={handleNuevoProveedor}
+    />
   );
 }
 
@@ -1236,10 +1378,13 @@ interface Props {
   setOrdenes: React.Dispatch<React.SetStateAction<OrdenCompra[]>>;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
+  proveedores: ProveedorRef[];
+  setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
   setInsumos?: React.Dispatch<React.SetStateAction<Insumo[]>>;
-  onNuevoProveedor?: (nombre: string, telefono: string) => void;
+  onNuevoProveedor?: (p: ProveedorRef) => void;
   onAbrirRecepcion?: (orden: OrdenCompra) => void;
+  onNuevaOrden: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1247,10 +1392,10 @@ interface Props {
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
-  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion,
+  proveedores, setProveedores,
+  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onNuevaOrden,
   canCreate = true, canEdit = true,
 }: Props) {
-  const [proveedores, setProveedores] = useState<string[]>(PROVEEDORES_INIT);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState<{ mode: "create" | "edit" | "view"; orden?: OrdenCompra } | null>(null);
@@ -1272,20 +1417,30 @@ export function OrdenCompraScreen({
 
   const handleGuardarOrden = (data: OrdenFormData) => {
     if (modal?.mode === "create") {
-      const n: OrdenCompra = { id: nextOrdenId(ordenes), ...data };
+      const n: OrdenCompra = {
+        id: nextOrdenId(ordenes),
+        proveedor: data.proveedor,
+        fecha: data.fecha,
+        estado: data.estado as EstadoOrden,
+        items: data.items,
+      };
       setOrdenes(p => [n, ...p]);
-      toast.success(`OC ${n.id} guardada como ${data.estado}`);
+      toast.success(`OC ${n.id} guardada como ${n.estado}`);
     } else if (modal?.mode === "edit" && modal.orden) {
-      setOrdenes(p => p.map(o => o.id === modal.orden!.id ? { ...o, ...data } : o));
+      setOrdenes(p => p.map(o => o.id === modal.orden!.id
+        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items }
+        : o));
       toast.success(`OC ${modal.orden.id} actualizada`);
     }
     setModal(null);
   };
 
-  const handleNuevoProveedorLocal = (nombre: string, telefono: string): string => {
-    if (!proveedores.includes(nombre)) setProveedores(p => [...p, nombre]);
-    onNuevoProveedor?.(nombre, telefono);
-    return nombre;
+  const handleNuevoProveedorLocal = (p: ProveedorRef): string => {
+    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
+      setProveedores(prev => [...prev, p]);
+    }
+    onNuevoProveedor?.(p);
+    return p.nombre;
   };
 
   const handleEnviarOrden = (o: OrdenCompra) => {
@@ -1309,7 +1464,7 @@ export function OrdenCompraScreen({
       numeroFactura: "",
       fechaFactura: "",
       valorTotal: 0,
-      estado: "En Proceso",
+      estado: "Recibido",
     };
     setGestiones(p => [...p, gc]);
     if (setInsumos) {
@@ -1374,7 +1529,7 @@ export function OrdenCompraScreen({
           </button>
           {canCreate && (
             <button
-              onClick={() => setModal({ mode: "create" })}
+              onClick={onNuevaOrden}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" /> Nueva Orden
@@ -1398,7 +1553,7 @@ export function OrdenCompraScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["N° OC", "Proveedor", "Estado", "Fecha", "N° Factura", "Total", "Acciones"].map(h => (
+                {["Proveedor", "Fecha", "N° Factura", "Total", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -1407,7 +1562,7 @@ export function OrdenCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📋</p>
                       <p className="font-medium">No se encontraron órdenes</p>
                     </td>
@@ -1415,11 +1570,10 @@ export function OrdenCompraScreen({
                 )
                 : paged.map(o => {
                   const factura = getFactura(o.id);
+                  const fechaRecibida = o.recepcion?.fechaRecepcion || factura?.fechaFactura;
                   return (
                     <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 text-xs font-mono font-bold text-foreground">{o.id}</td>
                       <td className="px-4 py-3.5 text-sm text-foreground">{o.proveedor}</td>
-                      <td className="px-4 py-3.5"><EstadoBadge e={o.estado} /></td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground">{o.fecha}</td>
                       <td className="px-4 py-3.5 text-xs">
                         {o.estado === "Completado"
@@ -1427,10 +1581,16 @@ export function OrdenCompraScreen({
                             ? <span className="font-mono font-semibold text-emerald-700">{factura.numeroFactura}</span>
                             : <span className="text-amber-600 font-medium">Pendiente</span>
                           : <span className="text-muted-foreground">—</span>}
+                        {factura?.numeroFactura && fechaRecibida && (
+                          <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
+                            Recibida: {fechaRecibida}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
                         {fmtCOP(calcTotal(o.items))}
                       </td>
+                      <td className="px-4 py-3.5"><EstadoBadge e={o.estado} /></td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
                           <button

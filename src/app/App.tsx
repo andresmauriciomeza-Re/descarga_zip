@@ -65,6 +65,14 @@ import { CalendarDropdown } from "./components/CalendarDropdown";
 import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
+import lasanaCarne from "@/imports/lasaña_carne.png";
+import lasanaMixta from "@/imports/lasaña_mixta.png";
+import lasanaPollo from "@/imports/lasaña_pollo.png";
+import imgQuatro from "@/imports/Quatro.png";
+import imgPremio from "@/imports/Premio.png";
+import imgPepsi from "@/imports/Pepsi.png";
+import imgCocaCola from "@/imports/Coca-Cola.png";
+import imagenLocal from "@/imports/imagen_local.png";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, type Rol, type AccesosMap } from "./screens/GestionConfigScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
@@ -93,17 +101,20 @@ import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
 import {
   OrdenCompraScreen,
+  NuevaOrdenCompraPage,
   INITIAL_ORDENES,
   INITIAL_GESTIONES,
+  PROVEEDORES_INIT,
 } from "./screens/OrdenCompraScreen";
 import type {
   OrdenCompra,
   GestionCompra,
+  ProveedorRef,
 } from "./screens/OrdenCompraScreen";
-import { GestionCompraScreen } from "./screens/GestionCompraScreen";
+import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
 import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
-import { GestionProductosScreen } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import {
@@ -152,8 +163,10 @@ type Screen =
   | "clientes"
   | "perecederos"
   | "orden-compra"
+  | "nueva-orden-compra"
   | "recepcion-compra"
   | "gestion-compra"
+  | "nueva-compra"
   | "devoluciones"
   | "empleados"
   | "mis-pedidos";
@@ -205,6 +218,19 @@ const SIZES_DEFAULT = [
   { label: "Mediano", price: 14000 },
   { label: "Grande", price: 16000 },
 ];
+
+// Un producto con selector de tamaño (pizzas, lasañas) usa el precio del tamaño
+// elegido; uno sin tamaños (bebidas, botella única) cae a su precio base. Evita
+// que el detalle o el quick-add revienten al leer sizes[0] de un array vacío.
+const sizeDe = (p: Product, i: number) => p.sizes[i] ?? { label: "", price: p.price };
+
+const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
+
+// Las botellas de Bebidas son imágenes altas y angostas: con object-cover el
+// recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
+// caber la imagen completa respetando su proporción (queda espacio a los lados).
+// Pizzas y Lasañas conservan object-cover, que es su diseño original.
+const verImagenCompleta = (p: Product) => p.category === "Bebidas";
 
 const PRODUCTS: Product[] = [
   {
@@ -296,6 +322,99 @@ const PRODUCTS: Product[] = [
     status: "pausado",
     rating: 4.5,
     sales: 380,
+  },
+  // ── Lasañas (CAT-002): precio único $20.000, presentación única "Normal" ──
+  {
+    id: 7,
+    name: "Lasaña de Carne",
+    description: "Lasaña de carne.",
+    price: 20000,
+    image: lasanaCarne,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 8,
+    name: "Lasaña Mixta",
+    description: "Lasaña mixta.",
+    price: 20000,
+    image: lasanaMixta,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 9,
+    name: "Lasaña de Pollo",
+    description: "Lasaña de pollo.",
+    price: 20000,
+    image: lasanaPollo,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  // ── Bebidas (CAT-003): botella 2.5 L, precio único $8.000, sin tamaños ──
+  {
+    id: 10,
+    name: "Quatro",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgQuatro,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 11,
+    name: "Premio Rojo",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgPremio,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 12,
+    name: "Pepsi",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgPepsi,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 13,
+    name: "Coca-Cola",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgCocaCola,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
   },
 ];
 
@@ -473,8 +592,10 @@ const ADMIN_SCREENS: Screen[] = [
   "sales-chart",
   "perecederos",
   "orden-compra",
+  "nueva-orden-compra",
   "recepcion-compra",
   "gestion-compra",
+  "nueva-compra",
   "devoluciones",
   "empleados",
 ];
@@ -578,7 +699,9 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
   "supplies":          KEY("Compras",    "Insumos"),
   "suppliers":         KEY("Compras",    "Proveedores"),
   "orden-compra":      KEY("Compras",    "Orden de Compra"),
+  "nueva-orden-compra": KEY("Compras",    "Orden de Compra"),
   "gestion-compra":    KEY("Compras",    "Compra"),
+  "nueva-compra":       KEY("Compras",    "Compra"),
   "cat-producto":      KEY("Producción", "Categoría de Producto"),
   "gestion-productos": KEY("Producción", "Productos"),
   "production-orders": KEY("Producción", "Orden de Producción"),
@@ -866,7 +989,10 @@ function Sidebar({
   });
   const toggle = (k: string) =>
     setOpen((p) => ({ ...p, [k]: !p[k] }));
-  const active = (s: Screen) => current === s;
+  const active = (s: Screen) =>
+    current === s ||
+    (s === "orden-compra" && current === "nueva-orden-compra") ||
+    (s === "gestion-compra" && current === "nueva-compra");
 
   // Returns true if the current user can "Ver" the given permission key
   const canView = (permKey: string) =>
@@ -1173,7 +1299,9 @@ function AdminTopBar({
     purchases: "Gestión de compras",
     perecederos: "Productos No Conformes",
     "orden-compra": "Órdenes de Compra",
+    "nueva-orden-compra": "Nueva Orden de Compra",
     "gestion-compra": "Gestión de Compras",
+    "nueva-compra": "Nueva Compra",
     supplies: "Gestión de insumos",
     suppliers: "Proveedores",
     "production-orders": "Órdenes de producción",
@@ -1733,7 +1861,7 @@ function LandingScreen({
             <div className="relative">
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
                 <img
-                  src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=600&fit=crop&auto=format"
+                  src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
                   className="w-full h-full object-cover"
                 />
@@ -2073,7 +2201,7 @@ function CatalogScreen({
               className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
             >
               <button
-                className="relative w-full overflow-hidden h-48 bg-muted cursor-pointer block"
+                className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
                 onClick={() => {
                   setProduct(p);
                   navigate("product-detail");
@@ -2082,7 +2210,7 @@ function CatalogScreen({
                 <img
                   src={p.image}
                   alt={p.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
                 />
                 <div className="absolute top-3 right-3">
                   <Badge
@@ -2167,7 +2295,7 @@ function ProductDetailScreen({
       (product.extras.find((e) => e.label === ex)?.price ?? 0),
     0,
   );
-  const sizePrice = product.sizes[sizeIdx].price;
+  const sizePrice = sizeDe(product, sizeIdx).price;
   const total = (sizePrice + extrasPrice) * qty;
 
   const toggleExtra = (label: string) =>
@@ -2178,17 +2306,18 @@ function ProductDetailScreen({
     );
 
   const handleAdd = () => {
+    const size = sizeDe(product, sizeIdx);
     addDetailed({
       id: `${product.id}-${Date.now()}`,
       product,
       quantity: qty,
-      size: product.sizes[sizeIdx].label,
+      size: size.label,
       sizePrice,
       selectedExtras: extras,
       extrasPrice,
     });
     toast.success(`¡${product.name} agregada al carrito!`, {
-      description: `${product.sizes[sizeIdx].label} × ${qty}`,
+      description: size.label ? `${size.label} × ${qty}` : `× ${qty}`,
     });
     navigate("cart");
   };
@@ -2204,11 +2333,11 @@ function ProductDetailScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Image */}
-        <div className="rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px]">
+        <div className={`rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
           <img
             src={product.image}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"}`}
           />
         </div>
 
@@ -2232,46 +2361,71 @@ function ProductDetailScreen({
             {product.description}
           </p>
 
-          {/* Tamaño */}
-          <div className="mb-6">
-            <h3 className="font-bold mb-3 text-foreground">
-              Elige el tamaño
-            </h3>
-            <div className="space-y-2">
-              {product.sizes.map((s, i) => (
-                <label
-                  key={s.label}
-                  className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
-                >
+          {/* Tamaño: las bebidas no tienen selector (botella 2.5 L) y las
+              lasañas tienen una única presentación fija "Normal". Solo las
+              pizzas ofrecen una elección real entre Mediano y Grande. */}
+          {product.sizes.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-bold mb-3 text-foreground">
+                {product.sizes.length === 1
+                  ? "Presentación"
+                  : "Elige el tamaño"}
+              </h3>
+              {product.sizes.length === 1 ? (
+                <div className="flex items-center justify-between p-3.5 rounded-xl border-2 border-primary bg-primary/10">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sizeIdx === i ? "border-primary" : "border-muted-foreground"}`}
-                    >
-                      {sizeIdx === i && (
-                        <div className="w-2 h-2 rounded-full bg-primary" />
-                      )}
+                    <div className="w-4 h-4 rounded-full border-2 border-primary flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
                     </div>
-                    <input
-                      type="radio"
-                      name="size"
-                      className="sr-only"
-                      checked={sizeIdx === i}
-                      onChange={() => setSizeIdx(i)}
-                    />
                     <span className="font-medium text-foreground">
-                      {s.label}
+                      {product.sizes[0].label}
                     </span>
                   </div>
                   <span
                     className="font-bold text-foreground"
                     style={{ fontFamily: MONO }}
                   >
-                    {fmt(s.price)}
+                    {fmt(product.sizes[0].price)}
                   </span>
-                </label>
-              ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {product.sizes.map((s, i) => (
+                    <label
+                      key={s.label}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sizeIdx === i ? "border-primary" : "border-muted-foreground"}`}
+                        >
+                          {sizeIdx === i && (
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                          )}
+                        </div>
+                        <input
+                          type="radio"
+                          name="size"
+                          className="sr-only"
+                          checked={sizeIdx === i}
+                          onChange={() => setSizeIdx(i)}
+                        />
+                        <span className="font-medium text-foreground">
+                          {s.label}
+                        </span>
+                      </div>
+                      <span
+                        className="font-bold text-foreground"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {fmt(s.price)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Cantidad */}
           <div className="flex items-center gap-4 mb-6">
@@ -2558,9 +2712,11 @@ function CartScreen({
                       <h3 className="font-bold text-foreground">
                         {item.product.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {item.size}
-                      </p>
+                      {item.size && (
+                        <p className="text-sm text-muted-foreground">
+                          {item.size}
+                        </p>
+                      )}
                       {item.selectedExtras.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           + {item.selectedExtras.join(", ")}
@@ -2696,7 +2852,8 @@ function CartScreen({
                             {item.product.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {item.size} · x{item.quantity}
+                            {item.size ? `${item.size} · ` : ""}x
+                            {item.quantity}
                           </p>
                           {item.selectedExtras.length > 0 && (
                             <p className="text-xs text-muted-foreground truncate">
@@ -5061,9 +5218,10 @@ function DevolucionesScreen({
     id: string;
     tipo: "producto" | "dinero" | null;
     notaDinero: string;
-    selProductos: { id: number; nombre: string; precio: number; tamaño: string }[];
+    devueltos: Record<number, number>;
+    compensacion: { id: number; nombre: string; precio: number; cantidad: number; imagen?: string }[];
   } | null>(null);
-
+  const [detalleDevolucion, setDetalleDevolucion] = useState<Venta | null>(null);
 
   const resolverDev = (id: string, tipo: "producto" | "dinero", nota: string) => {
     setPedidos((prev) =>
@@ -5089,8 +5247,60 @@ function DevolucionesScreen({
     );
   };
 
+  const setDevQty = (idx: number, max: number, delta: number) => {
+    setActiva((prev) => {
+      if (!prev) return prev;
+      const cur = prev.devueltos[idx] ?? 0;
+      const nuevo = Math.max(0, Math.min(max, cur + delta));
+      if (nuevo === cur) return prev;
+      const devueltos = { ...prev.devueltos, [idx]: nuevo };
+      const dd = pedidos.find((p) => p.id === prev.id)?.detalle ?? [];
+      const newTotal = dd.reduce((s, d, i) => s + (devueltos[i] ?? 0), 0);
+      const comp = prev.compensacion.map((c) => ({ ...c }));
+      let compTotal = comp.reduce((s, c) => s + c.cantidad, 0);
+      while (compTotal > newTotal && comp.length) {
+        const last = comp[comp.length - 1];
+        const drop = Math.min(last.cantidad, compTotal - newTotal);
+        last.cantidad = Math.max(0, last.cantidad - drop);
+        if (last.cantidad === 0) comp.pop();
+        compTotal -= drop;
+      }
+      return { ...prev, devueltos, compensacion: comp };
+    });
+  };
+
+  const setComp = (id: number, nombre: string, precio: number, imagen: string | undefined, delta: number) => {
+    setActiva((prev) => {
+      if (!prev) return prev;
+      const dd = pedidos.find((p) => p.id === prev.id)?.detalle ?? [];
+      const devueltosTot = dd.reduce((s, d, i) => s + (prev.devueltos[i] ?? 0), 0);
+      const cur = prev.compensacion.find((c) => c.id === id);
+      const curQty = cur?.cantidad ?? 0;
+      const nuevo = Math.max(0, curQty + delta);
+      if (devueltosTot === 0 || nuevo > devueltosTot) return prev;
+      const rest = prev.compensacion.filter((c) => c.id !== id);
+      const list = nuevo === 0 ? rest : [...rest, { id, nombre, precio, cantidad: nuevo, imagen }];
+      return { ...prev, compensacion: list };
+    });
+  };
+
+  const devActiva = activa ? pedidos.find((p) => p.id === activa.id) ?? null : null;
+  const detalleAct = devActiva?.detalle ?? [];
+  const totalActRaw = devActiva?.total || detalleAct.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
+  const totalDevueltos = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0), 0) : 0;
+  const totalReembolso = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0) * d.precio, 0) : 0;
+  const totalComp = activa ? activa.compensacion.reduce((s, c) => s + c.cantidad, 0) : 0;
+  const montoReembolso = detalleAct.length > 0 ? totalReembolso : totalActRaw;
+  const devolucionDetalle = detalleDevolucion
+    ? pedidos.find((p) => p.id === detalleDevolucion.id) ?? detalleDevolucion
+    : null;
+  const totalDetalleDevolucion =
+    devolucionDetalle?.total ||
+    devolucionDetalle?.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
+    0;
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF_DEV }}>
@@ -5113,300 +5323,603 @@ function DevolucionesScreen({
         </div>
       )}
 
-      {/* Pendientes */}
-      {pendientes.length > 0 && (
-        <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Pendientes de resolución
-          </p>
-          <div className="space-y-4">
-            {pendientes.map((dev) => {
-              const isActiva = activa?.id === dev.id;
-              const totalDev = dev.total || dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
+      {/* Listado de devoluciones */}
+      {devoluciones.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px]">
+              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  {[
+                    "Venta",
+                    "Cliente",
+                    "Fecha",
+                    "Productos",
+                    "Total",
+                    "Pago",
+                    "Estado",
+                    "Acciones",
+                  ].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {[...pendientes, ...resueltas].map((dev) => {
+                  const totalDev =
+                    dev.total ||
+                    dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
+                    0;
+                  const pendiente = !dev.devolucionResuelta;
 
-              return (
-                <div key={dev.id} className="bg-card border border-orange-200 rounded-2xl overflow-hidden">
-                  {/* Fila resumen */}
-                  <div className="flex items-center gap-4 px-5 py-4">
-                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                      <RefreshCw className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold text-muted-foreground">#{dev.id}</span>
-                        <span className="text-sm font-semibold text-foreground">{dev.usuario}</span>
-                        <span className="text-xs text-muted-foreground">· {dev.fecha}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-sm font-bold text-foreground" style={{ fontFamily: MONO_DEV }}>
-                          {fmtCOPDev(totalDev)}
-                        </span>
-                        {dev.metodoPago && (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${dev.metodoPago === "Nequi" ? "bg-purple-100 text-purple-800" : "bg-yellow-100 text-yellow-800"}`}>
-                            {dev.metodoPago === "Nequi" ? "💜" : "🏦"} {dev.metodoPago}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setActiva(isActiva ? null : { id: dev.id, tipo: null, notaDinero: "", selProductos: [] })
-                      }
-                      className={`shrink-0 text-xs font-semibold px-4 py-2 rounded-xl border cursor-pointer transition-all ${
-                        isActiva
-                          ? "bg-muted border-border text-muted-foreground"
-                          : "bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                  return (
+                    <tr
+                      key={dev.id}
+                      className={`transition-colors ${
+                        pendiente
+                          ? "bg-orange-50/20 hover:bg-orange-50/40"
+                          : "bg-emerald-50/20 hover:bg-emerald-50/40"
                       }`}
                     >
-                      {isActiva ? "Cerrar" : "Gestionar"}
-                    </button>
-                  </div>
-
-                  {/* Panel expandible */}
-                  {isActiva && (
-                    <div className="border-t border-orange-100 px-5 py-5 bg-orange-50/40">
-
-                      {/* Paso 1 — elegir tipo */}
-                      {!activa?.tipo && (
-                        <>
-                          <p className="text-sm font-semibold text-foreground mb-4">
-                            ¿Cómo se resuelve esta devolución?
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* Producto por producto */}
-                            <button
-                              onClick={() => setActiva((p) => p ? { ...p, tipo: "producto" } : null)}
-                              className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-blue-200 hover:border-blue-400 rounded-2xl cursor-pointer transition-all group text-left"
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                                <PackageCheck className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-foreground">Producto por producto</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  El cliente devuelve el pedido y recibe un producto de reemplazo.
-                                </p>
-                              </div>
-                            </button>
-
-                            {/* Producto por dinero */}
-                            <button
-                              onClick={() => setActiva((p) => p ? { ...p, tipo: "dinero" } : null)}
-                              className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-emerald-200 hover:border-emerald-400 rounded-2xl cursor-pointer transition-all group text-left"
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
-                                <Banknote className="w-5 h-5 text-emerald-600" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-foreground">Producto por dinero</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  El cliente devuelve el pedido y se le reembolsa el valor pagado.
-                                </p>
-                              </div>
-                            </button>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Paso 2A — canje por producto */}
-                      {activa?.tipo === "producto" && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-4">
-                            <button
-                              onClick={() => setActiva((p) => p ? { ...p, tipo: null } : null)}
-                              className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-                              <PackageCheck className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <p className="text-sm font-bold text-foreground">Canje por producto</p>
-                          </div>
-
-                          <p className="text-xs text-muted-foreground mb-3">
-                            Marca los productos de la venta que el cliente devolverá para canje:
-                          </p>
-
-                          {(!dev.detalle || dev.detalle.length === 0) ? (
-                            <p className="text-xs text-muted-foreground italic mb-4">Esta venta no tiene detalle de productos registrado.</p>
-                          ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                              {dev.detalle.map((prod, idx) => {
-                                const sel = activa.selProductos.find((x) => x.id === idx);
-                                return (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() =>
-                                      setActiva((prev) => {
-                                        if (!prev) return prev;
-                                        const exists = prev.selProductos.find((x) => x.id === idx);
-                                        return {
-                                          ...prev,
-                                          selProductos: exists
-                                            ? prev.selProductos.filter((x) => x.id !== idx)
-                                            : [...prev.selProductos, { id: idx, nombre: prod.nombre, precio: prod.precio, tamaño: "" }],
-                                        };
-                                      })
-                                    }
-                                    className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left cursor-pointer transition-all ${
-                                      sel ? "bg-blue-50 border-blue-400" : "bg-white border-border hover:border-blue-200"
-                                    }`}
-                                  >
-                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? "bg-blue-500 border-blue-500" : "border-border"}`}>
-                                      {sel && <Check className="w-3 h-3 text-white" />}
-                                    </div>
-                                    {prod.imagen && (
-                                      <img src={prod.imagen} alt={prod.nombre} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-foreground truncate">{prod.nombre}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {prod.cantidad > 1 && `x${prod.cantidad} · `}{fmtCOPDev(prod.precio * prod.cantidad)}
-                                      </p>
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {activa.selProductos.length > 0 && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
-                              <p className="text-xs font-semibold text-blue-800 mb-1">Productos para canje:</p>
-                              {activa.selProductos.map((r) => (
-                                <div key={r.id} className="flex justify-between text-xs text-blue-900 py-0.5">
-                                  <span>• {r.nombre}</span>
-                                  <span className="font-bold">{fmtCOPDev(r.precio)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <button
-                            disabled={activa.selProductos.length === 0}
-                            onClick={() => {
-                              const nota = `Canje: ${activa.selProductos.map((r) => r.nombre).join(", ")}`;
-                              resolverDev(dev.id, "producto", nota);
-                            }}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
+                        #{dev.id}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-foreground">
+                        {dev.usuario}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {dev.fecha}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-foreground max-w-[240px]">
+                        <span className="block truncate" title={dev.productos}>
+                          {dev.productos || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-bold text-foreground whitespace-nowrap" style={{ fontFamily: MONO_DEV }}>
+                        {fmtCOPDev(totalDev)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {dev.metodoPago ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              dev.metodoPago === "Nequi"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
                           >
-                            <PackageCheck className="w-4 h-4" />
-                            Confirmar canje
+                            {dev.metodoPago === "Nequi" ? "💜" : "🏦"} {dev.metodoPago}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                            pendiente
+                              ? "bg-orange-100 text-orange-800"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {pendiente
+                            ? "Pendiente"
+                            : dev.devolucionTipo === "dinero"
+                              ? "Resuelta · Dinero"
+                              : "Resuelta · Canje"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={!pendiente}
+                            onClick={() =>
+                              pendiente &&
+                              setActiva({
+                                id: dev.id,
+                                tipo: null,
+                                notaDinero: "",
+                                devueltos: {},
+                                compensacion: [],
+                              })
+                            }
+                            title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                              pendiente
+                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 cursor-pointer"
+                                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                            }`}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Gestionar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetalleDevolucion(dev)}
+                            title="Visualizar devolución"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted text-foreground hover:bg-border transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Visualizar
                           </button>
                         </div>
-                      )}
-
-                      {/* Paso 2B — reembolso dinero */}
-                      {activa?.tipo === "dinero" && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-4">
-                            <button
-                              onClick={() => setActiva((p) => p ? { ...p, tipo: null } : null)}
-                              className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-                              <Banknote className="w-4 h-4 text-emerald-600" />
-                            </div>
-                            <p className="text-sm font-bold text-foreground">Reembolso en dinero</p>
-                          </div>
-
-                          <div className="bg-white border border-emerald-200 rounded-2xl p-4 mb-4">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                              Monto a reembolsar
-                            </p>
-                            <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
-                              {fmtCOPDev(totalDev)}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Método original: <span className="font-semibold">{dev.metodoPago || "No registrado"}</span>
-                            </p>
-                          </div>
-
-                          <div className="mb-4">
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                              Nota del reembolso (opcional)
-                            </label>
-                            <input
-                              type="text"
-                              value={activa.notaDinero}
-                              onChange={(e) =>
-                                setActiva((p) => p ? { ...p, notaDinero: e.target.value } : null)
-                              }
-                              placeholder="Ej: Transferido por Nequi el 10/09..."
-                              className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                            />
-                          </div>
-
-                          <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-4">
-                            <CircleCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-emerald-800">
-                              Asegúrate de haber realizado la transferencia antes de confirmar.
-                              Esta acción no se puede deshacer.
-                            </p>
-                          </div>
-
-                          <button
-                            onClick={() => {
-                              const nota = activa.notaDinero.trim()
-                                ? `Reembolso: ${fmtCOPDev(totalDev)} — ${activa.notaDinero.trim()}`
-                                : `Reembolso de ${fmtCOPDev(totalDev)} procesado`;
-                              resolverDev(dev.id, "dinero", nota);
-                            }}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer"
-                          >
-                            <Banknote className="w-4 h-4" />
-                            Confirmar reembolso
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Resueltas */}
-      {resueltas.length > 0 && (
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Resueltas
-          </p>
-          <div className="space-y-3">
-            {resueltas.map((dev) => {
-              const totalDev = dev.total || dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
-              return (
-                <div key={dev.id} className="bg-emerald-50/50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CircleCheck className="w-5 h-5 text-emerald-600" />
+      {/* Modal de gestión */}
+      <AnimatePresence>
+        {activa && devActiva && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border flex flex-col max-h-[88vh]"
+            >
+              {/* Header modal */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+                    <RefreshCw className="w-5 h-5 text-orange-600" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-muted-foreground">#{dev.id}</span>
-                      <span className="text-sm font-semibold text-foreground">{dev.usuario}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${dev.devolucionTipo === "dinero" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>
-                        {dev.devolucionTipo === "dinero" ? "💵 Dinero" : "📦 Canje"}
-                      </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">Gestionar devolución</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      #{devActiva.id} · {devActiva.usuario} · {devActiva.fecha}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiva(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Cuerpo modal */}
+              <div className="p-5 overflow-y-auto">
+                {/* Paso 1 — elegir tipo */}
+                {!activa.tipo && (
+                  <>
+                    <p className="text-sm font-semibold text-foreground mb-4">
+                      ¿Cómo se resuelve esta devolución?
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Producto por producto */}
+                      <button
+                        onClick={() => setActiva((p) => (p ? { ...p, tipo: "producto" } : p))}
+                        className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-blue-200 hover:border-blue-400 rounded-2xl cursor-pointer transition-all group text-left"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                          <PackageCheck className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">Producto por producto</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            El cliente devuelve productos y recibe productos de reemplazo del menú.
+                          </p>
+                        </div>
+                      </button>
+
+                      {/* Producto por dinero */}
+                      <button
+                        onClick={() => setActiva((p) => (p ? { ...p, tipo: "dinero" } : p))}
+                        className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-emerald-200 hover:border-emerald-400 rounded-2xl cursor-pointer transition-all group text-left"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
+                          <Banknote className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">Producto por dinero</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            El cliente devuelve productos y se le reembolsa el valor de lo devuelto.
+                          </p>
+                        </div>
+                      </button>
                     </div>
-                    {dev.devolucionNota && (
-                      <p className="text-xs text-muted-foreground mt-0.5 italic truncate">"{dev.devolucionNota}"</p>
+                  </>
+                )}
+
+                {/* Paso 2A — canje por producto */}
+                {activa.tipo === "producto" && (
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiva((p) => (p ? { ...p, tipo: null } : p))}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <PackageCheck className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <p className="text-sm font-bold text-foreground">Producto por producto</p>
+                    </div>
+
+                    {detalleAct.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        Esta venta no tiene detalle de productos registrado, así que no se puede calcular el canje.
+                      </p>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                            Productos del pedido a devolver
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Selecciona cuántos de cada producto devolverá el cliente.
+                          </p>
+                          <div className="space-y-2">
+                            {detalleAct.map((d, idx) => {
+                              const qty = activa.devueltos[idx] ?? 0;
+                              return (
+                                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                  {d.imagen && (
+                                    <img src={d.imagen} alt={d.nombre} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-foreground truncate">{d.nombre}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      x{d.cantidad} disponible · {fmtCOPDev(d.precio)} c/u
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setDevQty(idx, d.cantidad, -1)}
+                                      disabled={qty === 0}
+                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                    >
+                                      <Minus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="w-8 text-center text-sm font-bold text-foreground">{qty}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDevQty(idx, d.cantidad, 1)}
+                                      disabled={qty >= d.cantidad}
+                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                            Compensación del menú
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Elige los productos de reemplazo. Puedes elegir hasta{" "}
+                            <span className="font-bold text-blue-700">{totalDevueltos}</span>{" "}
+                            {totalDevueltos === 1 ? "unidad" : "unidades"} de compensación.
+                          </p>
+                          {totalDevueltos === 0 && (
+                            <p className="text-xs font-semibold text-orange-600 mb-2">
+                              Primero selecciona cuántos productos se devuelven.
+                            </p>
+                          )}
+                          <div className="space-y-2">
+                            {PRODUCTS.filter((p) => p.status === "activo").map((prod) => {
+                              const compSel = activa.compensacion.find((c) => c.id === prod.id);
+                              const compQty = compSel?.cantidad ?? 0;
+                              const limitado = totalDevueltos === 0 || compQty >= totalDevueltos;
+                              return (
+                                <div
+                                  key={prod.id}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                                    compQty > 0 ? "bg-blue-50 border-blue-300" : "bg-white border-border"
+                                  }`}
+                                >
+                                  <img src={prod.image} alt={prod.name} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-foreground truncate">{prod.name}</p>
+                                    <p className="text-xs text-muted-foreground">{fmtCOPDev(prod.price)}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setComp(prod.id, prod.name, prod.price, prod.image, -1)}
+                                      disabled={compQty === 0}
+                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                    >
+                                      <Minus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="w-8 text-center text-sm font-bold text-foreground">{compQty}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setComp(prod.id, prod.name, prod.price, prod.image, 1)}
+                                      disabled={limitado}
+                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {activa.compensacion.length > 0 && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                            <p className="text-xs font-semibold text-blue-800 mb-1">Compensación elegida:</p>
+                            {activa.compensacion.map((c) => (
+                              <div key={c.id} className="flex justify-between text-xs text-blue-900 py-0.5">
+                                <span>• {c.cantidad}x {c.nombre}</span>
+                              </div>
+                            ))}
+                            <p className="text-xs text-blue-700 mt-1 border-t border-blue-200 pt-1.5">
+                              {totalDevueltos} devuelt{totalDevueltos === 1 ? "o" : "os"} · {totalComp} de compensación
+                              {totalComp < totalDevueltos && ` · quedan ${totalDevueltos - totalComp} por elegir`}
+                            </p>
+                          </div>
+                        )}
+
+                        <button
+                          disabled={totalDevueltos === 0 || totalComp === 0}
+                          onClick={() => {
+                            const devStr = detalleAct
+                              .map((d, i) => {
+                                const q = activa.devueltos[i] ?? 0;
+                                return q > 0 ? `${q}x ${d.nombre}` : null;
+                              })
+                              .filter(Boolean)
+                              .join(", ");
+                            const compStr = activa.compensacion.map((c) => `${c.cantidad}x ${c.nombre}`).join(", ");
+                            resolverDev(devActiva.id, "producto", `Devolvió: ${devStr} · Canje: ${compStr}`);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <PackageCheck className="w-4 h-4" />
+                          Confirmar canje
+                        </button>
+                      </>
                     )}
                   </div>
-                  <span className="text-sm font-bold text-foreground shrink-0" style={{ fontFamily: MONO_DEV }}>
-                    {fmtCOPDev(totalDev)}
+                )}
+
+                {/* Paso 2B — reembolso dinero */}
+                {activa.tipo === "dinero" && (
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiva((p) => (p ? { ...p, tipo: null } : p))}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <Banknote className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <p className="text-sm font-bold text-foreground">Producto por dinero</p>
+                    </div>
+
+                    <div className="bg-white border border-emerald-200 rounded-2xl p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                        Monto a devolver
+                      </p>
+                      <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                        {fmtCOPDev(montoReembolso)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Método original: <span className="font-semibold">{devActiva.metodoPago || "No registrado"}</span>
+                      </p>
+                    </div>
+
+                    {detalleAct.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        Esta venta no tiene detalle de productos registrado. Se reembolsará el valor total de la venta.
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                          Productos a devolver
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          El total de dinero sube a medida que eliges los productos que devolverá el cliente.
+                        </p>
+                        <div className="space-y-2">
+                          {detalleAct.map((d, idx) => {
+                            const qty = activa.devueltos[idx] ?? 0;
+                            return (
+                              <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                {d.imagen && (
+                                  <img src={d.imagen} alt={d.nombre} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-foreground truncate">{d.nombre}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {qty > 0 && `${qty}x · `}{fmtCOPDev(d.precio * (qty || 0))}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDevQty(idx, d.cantidad, -1)}
+                                    disabled={qty === 0}
+                                    className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="w-8 text-center text-sm font-bold text-foreground">{qty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDevQty(idx, d.cantidad, 1)}
+                                    disabled={qty >= d.cantidad}
+                                    className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Nota del reembolso (opcional)
+                      </label>
+                      <input
+                        type="text"
+                        value={activa.notaDinero}
+                        onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
+                        placeholder="Ej: Transferido por Nequi el 10/09..."
+                        className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      />
+                    </div>
+
+                    <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                      <CircleCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-800">
+                        Asegúrate de haber realizado la transferencia antes de confirmar.
+                        Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+
+                    <button
+                      disabled={detalleAct.length > 0 && totalDevueltos === 0}
+                      onClick={() => {
+                        const nota = activa.notaDinero.trim()
+                          ? `Reembolso: ${fmtCOPDev(montoReembolso)} — ${activa.notaDinero.trim()}`
+                          : `Reembolso de ${fmtCOPDev(montoReembolso)} procesado`;
+                        resolverDev(devActiva.id, "dinero", nota);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Banknote className="w-4 h-4" />
+                      Confirmar reembolso
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: visualizar devolución */}
+      <AnimatePresence>
+        {detalleDevolucion && devolucionDetalle && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                    <Eye className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">Detalle de devolución</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      #{devolucionDetalle.id} · {devolucionDetalle.usuario} · {devolucionDetalle.fecha}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetalleDevolucion(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-lg font-bold text-foreground mt-0.5" style={{ fontFamily: MONO_DEV }}>
+                      {fmtCOPDev(totalDetalleDevolucion)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Método de pago</p>
+                    <p className="text-sm font-semibold text-foreground mt-1">
+                      {devolucionDetalle.metodoPago || "No registrado"}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Estado</p>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      devolucionDetalle.devolucionResuelta
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-orange-100 text-orange-800"
+                    }`}
+                  >
+                    {devolucionDetalle.devolucionResuelta
+                      ? devolucionDetalle.devolucionTipo === "dinero"
+                        ? "Resuelta · Dinero"
+                        : "Resuelta · Canje"
+                      : "Pendiente de resolución"}
                   </span>
                 </div>
-              );
-            })}
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Productos</p>
+                  {devolucionDetalle.detalle && devolucionDetalle.detalle.length > 0 ? (
+                    <div className="border border-border rounded-xl overflow-hidden">
+                      {devolucionDetalle.detalle.map((item, index) => (
+                        <div key={`${item.nombre}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border last:border-0">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{item.nombre}</p>
+                            <p className="text-xs text-muted-foreground">x{item.cantidad} · {fmtCOPDev(item.precio)} c/u</p>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground whitespace-nowrap">
+                            {fmtCOPDev(item.precio * item.cantidad)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{devolucionDetalle.productos || "Sin detalle de productos"}</p>
+                  )}
+                </div>
+
+                {devolucionDetalle.devolucionNota && (
+                  <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Nota de resolución</p>
+                    <p className="text-sm text-foreground italic">“{devolucionDetalle.devolucionNota}”</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-4 border-t border-border">
+                <button
+                  onClick={() => setDetalleDevolucion(null)}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -5562,36 +6075,6 @@ export default function App() {
   const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
-
-  // Refleja en localStorage cualquier alta/edición/borrado de roles.
-  // Ver la nota temporal de ROLES_STORAGE_KEY.
-  useEffect(() => {
-    try {
-      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
-    } catch {
-      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
-    }
-  }, [roles]);
-
-  // Refleja en localStorage cualquier alta/edición/borrado de usuarios.
-  // Ver la nota temporal de USUARIOS_STORAGE_KEY.
-  useEffect(() => {
-    try {
-      localStorage.setItem(USUARIOS_STORAGE_KEY, JSON.stringify(usuarios));
-    } catch {
-      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
-    }
-  }, [usuarios]);
-
-  // Refleja en localStorage cualquier alta/edición/borrado de empleados y, con
-  // ellos, el historial de contrataciones. Ver la nota de EMPLEADOS_STORAGE_KEY.
-  useEffect(() => {
-    try {
-      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(empleados));
-    } catch {
-      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
-    }
-  }, [empleados]);
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
@@ -5642,6 +6125,9 @@ export default function App() {
   );
   const [insumos, setInsumos] =
     useState<Insumo[]>(INITIAL_INSUMOS);
+  const [proveedores, setProveedores] = useState<ProveedorRef[]>(
+    PROVEEDORES_INIT,
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -5668,14 +6154,15 @@ export default function App() {
         ),
       );
     } else {
+      const size = sizeDe(product, 0);
       setCart((p) => [
         ...p,
         {
           id: `${product.id}-${Date.now()}`,
           product,
           quantity: 1,
-          size: product.sizes[0].label,
-          sizePrice: product.sizes[0].price,
+          size: size.label,
+          sizePrice: size.price,
           selectedExtras: [],
           extrasPrice: 0,
         },
@@ -6002,12 +6489,25 @@ export default function App() {
                   setOrdenes={setOrdenes}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
                   insumos={insumos}
                   setInsumos={setInsumos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
                   }}
+                  onNuevaOrden={() => navigate("nueva-orden-compra")}
+                />
+              )}
+              {screen === "nueva-orden-compra" && (
+                <NuevaOrdenCompraPage
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("orden-compra")}
                 />
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
@@ -6058,6 +6558,20 @@ export default function App() {
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   ordenes={ordenes}
+                  insumos={insumos}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  onNuevaCompra={() => navigate("nueva-compra")}
+                />
+              )}
+              {screen === "nueva-compra" && (
+                <NuevaCompraPage
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("gestion-compra")}
                 />
               )}
               {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
@@ -6075,7 +6589,12 @@ export default function App() {
                 />
               )}
               {screen === "gestion-productos" && (
-                <GestionProductosScreen {...getPerms("gestion-productos")} />
+                <GestionProductosScreen
+                  {...getPerms("gestion-productos")}
+                  productos={productos}
+                  setProductos={setProductos}
+                  insumos={insumos}
+                />
               )}
               {screen === "cat-producto" && (
                 <CategoriaProductoScreen {...getPerms("cat-producto")} />
@@ -6126,7 +6645,11 @@ export default function App() {
                 />
               )}
               {screen === "production-orders" && (
-                <OrdenProduccionScreen {...getPerms("production-orders")} />
+                <OrdenProduccionScreen
+                  {...getPerms("production-orders")}
+                  productos={productos}
+                  setProductos={setProductos}
+                />
               )}
               {screen === "finished-products" && (
                 <ProductoTerminadoScreen />
@@ -6210,8 +6733,11 @@ export default function App() {
                   "sales-chart",
                   "perecederos",
                   "orden-compra",
+                  "nueva-orden-compra",
                   "recepcion-compra",
                   "gestion-compra",
+                  "nueva-compra",
+                  "devoluciones",
                 ].includes(screen) && (
                   <GenericAdmin
                     screen={screen}
