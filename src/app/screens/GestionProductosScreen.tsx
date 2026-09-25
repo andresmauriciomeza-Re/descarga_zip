@@ -6,6 +6,8 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Eye,
   Edit,
   Trash2,
@@ -165,6 +167,92 @@ interface FichaVersion {
 }
 const UNIDADES_FICHA = ["kg", "g", "lt", "ml", "und", "paq", "caja"];
 
+/** Mueve un elemento de una lista una posicion. Funcion pura: no muta la entrada. */
+export function moverEnLista<T>(lista: T[], desde: number, dir: -1 | 1): T[] {
+  const hasta = desde + dir;
+  if (desde < 0 || desde >= lista.length || hasta < 0 || hasta >= lista.length) return lista;
+  const copia = [...lista];
+  [copia[desde], copia[hasta]] = [copia[hasta], copia[desde]];
+  return copia;
+}
+
+/**
+ * Fila de un insumo YA agregado a la ficha. La cantidad y la unidad se corrigen
+ * en el sitio: al hacer clic se vuelven un input numerico / un select, sin
+ * borrar el insumo y volver a agregarlo. El basurero lo elimina completo.
+ */
+function InsumoAgregadoRow({
+  ins,
+  editando,
+  onEdit,
+  onChange,
+  onRemove,
+}: {
+  ins: RInsumo;
+  /** Campo abierto en edicion, o null si la fila esta en modo lectura. */
+  editando: "cantidad" | "unidad" | null;
+  onEdit: (campo: "cantidad" | "unidad" | null) => void;
+  onChange: (patch: Partial<RInsumo>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+      <span className="flex-1 text-sm font-medium text-foreground">{ins.nombre}</span>
+
+      {editando === "cantidad" ? (
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step={0.1}
+          value={ins.cantidad}
+          onChange={e => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n) && n >= 0) onChange({ cantidad: n });
+          }}
+          onBlur={() => onEdit(null)}
+          className="w-20 px-2 py-1 bg-card rounded-lg border border-border text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      ) : (
+        <button
+          type="button"
+          title="Editar cantidad"
+          onClick={() => onEdit("cantidad")}
+          className="px-1.5 py-0.5 rounded text-xs text-muted-foreground font-mono hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+        >
+          {ins.cantidad}
+        </button>
+      )}
+
+      {editando === "unidad" ? (
+        <select
+          autoFocus
+          value={ins.unidad}
+          onChange={e => { onChange({ unidad: e.target.value }); onEdit(null); }}
+          onBlur={() => onEdit(null)}
+          className="px-2 py-1 bg-card rounded-lg border border-border text-xs font-mono text-foreground focus:outline-none cursor-pointer"
+        >
+          {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+        </select>
+      ) : (
+        <button
+          type="button"
+          title="Editar unidad"
+          onClick={() => onEdit("unidad")}
+          className="px-1.5 py-0.5 rounded text-xs text-muted-foreground font-mono hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+        >
+          {ins.unidad}
+        </button>
+      )}
+
+      <button onClick={onRemove} title="Eliminar insumo"
+        className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function emptyFichaVersion(n: number, fechaInicio?: string): FichaVersion {
   return {
     version: n,
@@ -245,6 +333,8 @@ export function GestionProductosScreen({
   // Insumo elegido en el buscador. Mientras sea null solo hay texto escrito, y
   // esa búsqueda no cuenta como selección al agregar.
   const [fichaInsumoSel, setFichaInsumoSel] = useState<Insumo | null>(null);
+  // Campo abierto en edicion dentro de la lista de insumos (crear).
+  const [fichaEditando, setFichaEditando] = useState<{ idx: number; campo: "cantidad" | "unidad" } | null>(null);
   const [fichaPaso, setFichaPaso] = useState("");
 
   // Edit-ficha state (separate from create-ficha)
@@ -254,6 +344,8 @@ export function GestionProductosScreen({
   const [editFichaInsumoCantidad, setEditFichaInsumoCantidad] = useState(1);
   const [editFichaInsumoUnidad, setEditFichaInsumoUnidad] = useState("kg");
   const [editFichaInsumoSel, setEditFichaInsumoSel] = useState<Insumo | null>(null);
+  // Campo abierto en edicion dentro de la lista de insumos (editar).
+  const [editFichaEditando, setEditFichaEditando] = useState<{ idx: number; campo: "cantidad" | "unidad" } | null>(null);
   const [editFichaPaso, setEditFichaPaso] = useState("");
 
   const resetFichaForm = () => {
@@ -305,6 +397,21 @@ export function GestionProductosScreen({
   const removeFichaInsumo = (idx: number) =>
     setFichaVersiones(prev => prev.map((v, i) =>
       i === fichaVIdx ? { ...v, insumos: v.insumos.filter((_, j) => j !== idx) } : v
+    ));
+
+  // Corrige en el sitio la cantidad/unidad de un insumo ya agregado.
+  const updateFichaInsumo = (idx: number, patch: Partial<RInsumo>) =>
+    setFichaVersiones(prev => prev.map((v, i) =>
+      i === fichaVIdx
+        ? { ...v, insumos: v.insumos.map((ins, j) => (j === idx ? { ...ins, ...patch } : ins)) }
+        : v
+    ));
+
+  // Reordena los pasos de preparacion. El numero de cada paso se recalcula solo
+  // porque la lista se renderiza con la posicion (idx + 1).
+  const moverFichaPaso = (idx: number, dir: -1 | 1) =>
+    setFichaVersiones(prev => prev.map((v, i) =>
+      i === fichaVIdx ? { ...v, pasos: moverEnLista(v.pasos, idx, dir) } : v
     ));
 
   const addFichaPaso = () => {
@@ -375,6 +482,18 @@ export function GestionProductosScreen({
   const removeEditFichaInsumo = (idx: number) =>
     setEditFichaVersiones(prev => prev.map((v, i) =>
       i === editFichaVIdx ? { ...v, insumos: v.insumos.filter((_, j) => j !== idx) } : v
+    ));
+
+  const updateEditFichaInsumo = (idx: number, patch: Partial<RInsumo>) =>
+    setEditFichaVersiones(prev => prev.map((v, i) =>
+      i === editFichaVIdx
+        ? { ...v, insumos: v.insumos.map((ins, j) => (j === idx ? { ...ins, ...patch } : ins)) }
+        : v
+    ));
+
+  const moverEditFichaPaso = (idx: number, dir: -1 | 1) =>
+    setEditFichaVersiones(prev => prev.map((v, i) =>
+      i === editFichaVIdx ? { ...v, pasos: moverEnLista(v.pasos, idx, dir) } : v
     ));
 
   const addEditFichaPaso = () => {
@@ -783,14 +902,14 @@ export function GestionProductosScreen({
                 {activeV.insumos.length > 0 && (
                   <div className="space-y-1.5 mb-3">
                     {activeV.insumos.map((ins, idx) => (
-                      <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                        <span className="flex-1 text-sm font-medium text-foreground">{ins.nombre}</span>
-                        <span className="text-xs text-muted-foreground font-mono">{ins.cantidad} {ins.unidad}</span>
-                        <button onClick={() => removeFichaInsumo(idx)}
-                          className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <InsumoAgregadoRow
+                        key={idx}
+                        ins={ins}
+                        editando={fichaEditando?.idx === idx ? fichaEditando.campo : null}
+                        onEdit={campo => setFichaEditando(campo ? { idx, campo } : null)}
+                        onChange={patch => updateFichaInsumo(idx, patch)}
+                        onRemove={() => removeFichaInsumo(idx)}
+                      />
                     ))}
                   </div>
                 )}
@@ -834,7 +953,17 @@ export function GestionProductosScreen({
                       <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
                         <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
                         <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-                        <button onClick={() => removeFichaPaso(idx)}
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button onClick={() => moverFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
+                            className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => moverFichaPaso(idx, 1)} disabled={idx === activeV.pasos.length - 1} title="Bajar paso"
+                            className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <button onClick={() => removeFichaPaso(idx)} title="Eliminar paso"
                           className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1081,14 +1210,14 @@ export function GestionProductosScreen({
                     {activeEV.insumos.length > 0 && (
                       <div className="space-y-1.5 mb-3">
                         {activeEV.insumos.map((ins, idx) => (
-                          <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                            <span className="flex-1 text-sm font-medium text-foreground">{ins.nombre}</span>
-                            <span className="text-xs text-muted-foreground font-mono">{ins.cantidad} {ins.unidad}</span>
-                            <button onClick={() => removeEditFichaInsumo(idx)}
-                              className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <InsumoAgregadoRow
+                            key={idx}
+                            ins={ins}
+                            editando={editFichaEditando?.idx === idx ? editFichaEditando.campo : null}
+                            onEdit={campo => setEditFichaEditando(campo ? { idx, campo } : null)}
+                            onChange={patch => updateEditFichaInsumo(idx, patch)}
+                            onRemove={() => removeEditFichaInsumo(idx)}
+                          />
                         ))}
                       </div>
                     )}
@@ -1131,7 +1260,17 @@ export function GestionProductosScreen({
                           <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
                             <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
                             <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-                            <button onClick={() => removeEditFichaPaso(idx)}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button onClick={() => moverEditFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
+                                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => moverEditFichaPaso(idx, 1)} disabled={idx === activeEV.pasos.length - 1} title="Bajar paso"
+                                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button onClick={() => removeEditFichaPaso(idx)} title="Eliminar paso"
                               className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
