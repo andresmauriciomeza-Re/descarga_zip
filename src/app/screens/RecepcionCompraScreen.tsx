@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { ArrowLeft, Check, Plus, Search, Trash2, Ban, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Check, Plus, Search, Trash2, Ban, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "./GestionInsumosScreen";
 import type {
@@ -7,6 +7,7 @@ import type {
   Recepcion,
   ItemRecibido,
   GestionCompra,
+  OrdenItem,
 } from "./OrdenCompraScreen";
 
 const SERIF = "'DM Serif Display', serif";
@@ -15,6 +16,8 @@ const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
 
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+const compactInputCls =
+  "w-full px-2.5 py-2 bg-muted border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
 
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
@@ -22,12 +25,6 @@ function fmtCOP(n: number) {
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(n);
-}
-
-function addDays(d: string, days: number) {
-  const dt = new Date(d);
-  dt.setDate(dt.getDate() + days);
-  return dt.toISOString().slice(0, 10);
 }
 
 interface Props {
@@ -73,8 +70,6 @@ export function RecepcionCompraScreen({
 
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
-
-  const [usarLotes, setUsarLotes] = useState(false);
 
   const [exNombre, setExNombre] = useState("");
   const [exCant, setExCant] = useState(1);
@@ -185,6 +180,11 @@ export function RecepcionCompraScreen({
     toast.success("Insumo adicional agregado.");
   };
 
+  const totalPedido = orden.items.reduce(
+    (total, item) => total + item.cantidad * item.precioUnitario,
+    0
+  );
+
   const totalRec = [...items, ...itemsExtra].reduce(
     (total, item) =>
       total + item.cantidadRecibida * item.precioUnitario,
@@ -207,11 +207,22 @@ export function RecepcionCompraScreen({
     const recepcion: Recepcion = {
       items: items.map(({ malEstado: _malEstado, ...rest }) => rest),
       itemsExtra,
-      usarLotes,
+      usarLotes: false,
       fechaRecepcion: today,
     };
 
     onGuardar(recepcion);
+
+    const itemsRecibidos: OrdenItem[] = [...items, ...itemsExtra].map(
+      (item) => ({
+        rowId: item.rowId,
+        idInsumo: item.idInsumo,
+        nombre: item.nombre,
+        cantidad: item.cantidadRecibida,
+        unidad: item.unidad,
+        precioUnitario: item.precioUnitario,
+      })
+    );
 
     const gestionExistente = gestiones.find(
       (g) => g.ordenId === orden.id
@@ -227,6 +238,7 @@ export function RecepcionCompraScreen({
                 fechaFactura,
                 valorTotal: totalRec,
                 estado: "Recibido",
+                items: itemsRecibidos,
               }
             : g
         )
@@ -248,6 +260,7 @@ export function RecepcionCompraScreen({
           fechaFactura,
           valorTotal: totalRec,
           estado: "Recibido",
+          items: itemsRecibidos,
         },
       ]);
     }
@@ -285,526 +298,533 @@ export function RecepcionCompraScreen({
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* =========================================================
-            LADO IZQUIERDO — ORDEN DE COMPRA
-        ========================================================= */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-lg font-bold text-foreground">
+      {/* CONTENIDO PRINCIPAL — dos columnas (mismo patrón que "Crear Producto") */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-border">
+          {/* =========================================================
+              COLUMNA IZQUIERDA — ORDEN DE COMPRA (solo lectura)
+          ========================================================= */}
+          <div className="w-full lg:w-1/2 px-8 py-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Orden de compra
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-1">
-              Insumos solicitados al proveedor
             </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Insumos pedidos · solo lectura
+            </p>
+
+            <div className="space-y-5">
+              {/* Información */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    N° Orden
+                  </p>
+                  <p className="text-sm font-bold mt-1">
+                    {orden.id}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Proveedor
+                  </p>
+                  <p className="text-sm font-bold mt-1">
+                    {orden.proveedor}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Fecha
+                  </p>
+                  <p className="text-sm font-semibold mt-1">
+                    {orden.fecha}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Estado
+                  </p>
+                  <span className="inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                    Enviado
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabla — insumos pedidos (solo lectura) */}
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-3">
+                  Insumos solicitados
+                </h3>
+
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Insumo
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Cantidad
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Unidad
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
+                            P. referencia
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-border">
+                        {orden.items.map((item) => (
+                          <tr key={item.rowId}>
+                            <td className="px-3 py-3 font-semibold">
+                              {item.nombre}
+                            </td>
+
+                            <td className="px-3 py-3">
+                              {item.cantidad}
+                            </td>
+
+                            <td className="px-3 py-3 text-xs text-muted-foreground">
+                              {item.unidad}
+                            </td>
+
+                            <td className="px-3 py-3">
+                              {fmtCOP(item.precioUnitario)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+
+                      <tfoot className="bg-muted/50 border-t border-border">
+                        <tr>
+                          <td
+                            colSpan={3}
+                            className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                          >
+                            Total pedido
+                          </td>
+                          <td className="px-3 py-2 text-sm font-bold text-foreground">
+                            {fmtCOP(totalPedido)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="p-5 space-y-5">
-            {/* Información */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  N° Orden
-                </p>
-                <p className="text-sm font-bold mt-1">
-                  {orden.id}
-                </p>
-              </div>
+          {/* =========================================================
+              COLUMNA DERECHA — FACTURA REAL DEL PROVEEDOR
+          ========================================================= */}
+          <div className="w-full lg:w-1/2 px-8 py-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+              Factura del proveedor
+            </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Registra lo que trae la factura real para compararlo con la
+              orden
+            </p>
 
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Proveedor
-                </p>
-                <p className="text-sm font-bold mt-1">
-                  {orden.proveedor}
-                </p>
-              </div>
+            <div className="space-y-5">
+              {/* Datos de la factura */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                    Número de factura *
+                  </label>
 
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Fecha
-                </p>
-                <p className="text-sm font-semibold mt-1">
-                  {orden.fecha}
-                </p>
-              </div>
+                  <input
+                    value={numeroFactura}
+                    onChange={(e) =>
+                      setNumeroFactura(e.target.value)
+                    }
+                    placeholder="Ej: FAC-000123"
+                    className={iCls}
+                  />
+                </div>
 
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Estado
-                </p>
-                <span className="inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                  Enviado
-                </span>
-              </div>
-            </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                    Fecha de factura *
+                  </label>
 
-            {/* Tabla */}
-            <div>
-              <h3 className="text-sm font-bold text-foreground mb-3">
-                Insumos solicitados
-              </h3>
-
-              <div className="border border-border rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-3 text-left text-xs">
-                          Insumo
-                        </th>
-
-                        <th className="px-3 py-3 text-left text-xs">
-                          Solicitado
-                        </th>
-
-                        <th className="px-3 py-3 text-left text-xs">
-                          Recibido
-                        </th>
-
-                        <th className="px-3 py-3 text-left text-xs">
-                          P. Unit.
-                        </th>
-
-                        <th className="px-3 py-3 text-left text-xs">
-                          Estado
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-border">
-                      {items.map((item) => (
-                        <tr key={item.rowId}>
-                          <td className="px-3 py-3">
-                            <p className="font-semibold">
-                              {item.nombre}
-                            </p>
-
-                            <p className="text-xs text-muted-foreground">
-                              {item.unidad}
-                            </p>
-                          </td>
-
-                          <td className="px-3 py-3">
-                            {item.cantidadSolicitada}
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <input
-                              type="number"
-                              min={0}
-                              max={item.cantidadSolicitada}
-                              value={item.cantidadRecibida}
-                              onChange={(e) =>
-                                updRec(
-                                  item.rowId,
-                                  Number(e.target.value)
-                                )
-                              }
-                              className="w-20 px-2 py-1.5 bg-muted border border-border rounded-lg text-xs"
-                            />
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <input
-                              type="number"
-                              min={0}
-                              value={item.precioUnitario}
-                              onChange={(e) =>
-                                updPrice(
-                                  item.rowId,
-                                  Number(e.target.value)
-                                )
-                              }
-                              className="w-24 px-2 py-1.5 bg-muted border border-border rounded-lg text-xs"
-                            />
-                          </td>
-
-                          <td className="px-3 py-3">
-                            <button
-                              onClick={() => togMal(item.rowId)}
-                              className={`px-2 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-                                item.malEstado
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                            >
-                              {item.malEstado
-                                ? "Mal estado"
-                                : "Correcto"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <input
+                    type="date"
+                    value={fechaFactura}
+                    onChange={(e) =>
+                      setFechaFactura(e.target.value)
+                    }
+                    max={today}
+                    className={iCls}
+                  />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Proveedor: <span className="font-semibold text-foreground">{orden.proveedor}</span>
+                  </p>
                 </div>
               </div>
-            </div>
 
-            {/* INSUMOS EXTRA */}
-            <div>
-              <h3 className="text-sm font-bold text-foreground mb-3">
-                Insumos no solicitados
-              </h3>
+              {/* Recibido según factura */}
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-3">
+                  Recibido según factura
+                </h3>
 
-              {itemsExtra.length > 0 && (
-                <div className="border border-border rounded-xl overflow-hidden mb-3">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs">
-                          Nombre
-                        </th>
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Insumo
+                          </th>
 
-                        <th className="px-3 py-2 text-left text-xs">
-                          Cantidad
-                        </th>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Cant. recibida
+                          </th>
 
-                        <th className="px-3 py-2 text-left text-xs">
-                          Precio
-                        </th>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            P. real
+                          </th>
 
-                        <th className="px-3 py-2 text-left text-xs">
-                          Subtotal
-                        </th>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Subtotal
+                          </th>
 
-                        <th />
-                      </tr>
-                    </thead>
+                          <th />
+                        </tr>
+                      </thead>
 
-                    <tbody className="divide-y divide-border">
-                      {itemsExtra.map((item) => (
-                        <tr key={item.rowId}>
-                          <td className="px-3 py-2 font-semibold">
-                            {item.nombre}
-                          </td>
+                      <tbody className="divide-y divide-border">
+                        {items.map((item) => (
+                          <tr
+                            key={item.rowId}
+                            className={item.malEstado ? "bg-red-50/60" : ""}
+                          >
+                            <td className="px-3 py-3">
+                              <p className="font-semibold">
+                                {item.nombre}
+                              </p>
 
-                          <td className="px-3 py-2">
-                            {item.cantidadRecibida} {item.unidad}
-                          </td>
+                              <p className="text-[11px] text-muted-foreground">
+                                Pedido: {item.cantidadSolicitada}{" "}
+                                {item.unidad}
+                              </p>
+                            </td>
 
-                          <td className="px-3 py-2">
-                            {fmtCOP(item.precioUnitario)}
-                          </td>
-
-                          <td className="px-3 py-2 font-semibold">
-                            {fmtCOP(
-                              item.cantidadRecibida *
-                                item.precioUnitario
-                            )}
-                          </td>
-
-                          <td className="px-3 py-2">
-                            <button
-                              onClick={() =>
-                                setItemsExtra((prev) =>
-                                  prev.filter(
-                                    (x) =>
-                                      x.rowId !== item.rowId
+                            <td className="px-3 py-3">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.cantidadSolicitada}
+                                value={item.cantidadRecibida}
+                                onChange={(e) =>
+                                  updRec(
+                                    item.rowId,
+                                    Number(e.target.value)
                                   )
-                                )
-                              }
-                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                                }
+                                className="w-20 px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              />
+                            </td>
+
+                            <td className="px-3 py-3">
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.precioUnitario}
+                                onChange={(e) =>
+                                  updPrice(
+                                    item.rowId,
+                                    Number(e.target.value)
+                                  )
+                                }
+                                className="w-24 px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              />
+                            </td>
+
+                            <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
+                              {fmtCOP(
+                                item.cantidadRecibida *
+                                  item.precioUnitario
+                              )}
+                            </td>
+
+                            <td className="px-3 py-3">
+                              <button
+                                onClick={() => togMal(item.rowId)}
+                                title="Marcar mal estado"
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                                  item.malEstado
+                                    ? "bg-red-500 text-white"
+                                    : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600"
+                                }`}
+                              >
+                                <AlertTriangle className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+
+                      <tfoot className="bg-muted/50 border-t border-border">
+                        <tr>
+                          <td
+                            colSpan={3}
+                            className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                          >
+                            Total recibido
+                          </td>
+                          <td
+                            colSpan={2}
+                            className="px-3 py-2 text-sm font-bold text-foreground"
+                          >
+                            {fmtCOP(totalRec)}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
-              )}
+              </div>
 
-              <div
-                ref={exRef}
-                className="border border-dashed border-border rounded-xl p-4 bg-muted/30"
-              >
-                <p className="text-xs font-bold text-muted-foreground mb-3">
-                  Agregar insumo no solicitado
-                </p>
+              {/* INSUMOS EXTRA */}
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-3">
+                  Insumos adicionales recibidos
+                </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Nombre */}
-                  <div className="relative sm:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Nombre
-                    </label>
+                {itemsExtra.length > 0 && (
+                  <div className="border border-border rounded-xl overflow-hidden mb-3">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs">
+                            Nombre
+                          </th>
 
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <th className="px-3 py-2 text-left text-xs">
+                            Cantidad
+                          </th>
 
+                          <th className="px-3 py-2 text-left text-xs">
+                            Precio
+                          </th>
+
+                          <th className="px-3 py-2 text-left text-xs">
+                            Subtotal
+                          </th>
+
+                          <th />
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-border">
+                        {itemsExtra.map((item) => (
+                          <tr key={item.rowId}>
+                            <td className="px-3 py-2 font-semibold">
+                              {item.nombre}
+                            </td>
+
+                            <td className="px-3 py-2">
+                              {item.cantidadRecibida} {item.unidad}
+                            </td>
+
+                            <td className="px-3 py-2">
+                              {fmtCOP(item.precioUnitario)}
+                            </td>
+
+                            <td className="px-3 py-2 font-semibold">
+                              {fmtCOP(
+                                item.cantidadRecibida *
+                                  item.precioUnitario
+                              )}
+                            </td>
+
+                            <td className="px-3 py-2">
+                              <button
+                                onClick={() =>
+                                  setItemsExtra((prev) =>
+                                    prev.filter(
+                                      (x) =>
+                                        x.rowId !== item.rowId
+                                    )
+                                  )
+                                }
+                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div
+                  ref={exRef}
+                  className="border border-dashed border-border rounded-xl p-3 bg-muted/30"
+                >
+                  <p className="text-xs font-bold text-muted-foreground mb-3">
+                    Agregar insumo no solicitado
+                  </p>
+
+                  <div className="flex flex-wrap items-end gap-2">
+                    {/* Nombre */}
+                    <div className="relative flex-[2] min-w-[160px]">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Nombre
+                      </label>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                        <input
+                          value={exNombre}
+                          onChange={(e) => {
+                            setExNombre(e.target.value);
+                            setExShowSug(true);
+                          }}
+                          onFocus={() => setExShowSug(true)}
+                          placeholder="Buscar insumo..."
+                          className={`${compactInputCls} pl-8`}
+                        />
+                      </div>
+                      {exShowSug && exSugs.length > 0 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                          {exSugs.map((ins) => (
+                            <button
+                              key={ins.id}
+                              type="button"
+                              onMouseDown={() => {
+                                setExNombre(ins.nombre);
+                                setExUnidad(
+                                  UNIDADES.includes(ins.unidadMedida)
+                                    ? ins.unidadMedida
+                                    : UNIDADES[0]
+                                );
+                                setExPrecio(ins.precioUnitario);
+                                setExShowSug(false);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                            >
+                              <p className="text-sm font-semibold">{ins.nombre}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {ins.unidadMedida} · {fmtCOP(ins.precioUnitario)}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cantidad */}
+                    <div className="w-16">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Cantidad
+                      </label>
                       <input
-                        value={exNombre}
-                        onChange={(e) => {
-                          setExNombre(e.target.value);
-                          setExShowSug(true);
-                        }}
-                        onFocus={() => setExShowSug(true)}
-                        placeholder="Buscar insumo..."
-                        className={`${iCls} pl-10`}
+                        type="number"
+                        min={1}
+                        value={exCant}
+                        onChange={(e) => setExCant(Number(e.target.value))}
+                        className={compactInputCls}
                       />
                     </div>
 
-                    {exShowSug && exSugs.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                        {exSugs.map((ins) => (
-                          <button
-                            key={ins.id}
-                            type="button"
-                            onMouseDown={() => {
-                              setExNombre(ins.nombre);
-                              setExUnidad(
-                                UNIDADES.includes(
-                                  ins.unidadMedida
-                                )
-                                  ? ins.unidadMedida
-                                  : UNIDADES[0]
-                              );
-                              setExPrecio(
-                                ins.precioUnitario
-                              );
-                              setExShowSug(false);
-                            }}
-                            className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
-                          >
-                            <p className="text-sm font-semibold">
-                              {ins.nombre}
-                            </p>
-
-                            <p className="text-xs text-muted-foreground">
-                              {ins.unidadMedida} ·{" "}
-                              {fmtCOP(ins.precioUnitario)}
-                            </p>
-                          </button>
+                    {/* Medida */}
+                    <div className="w-16">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Medida
+                      </label>
+                      <select
+                        value={exUnidad}
+                        onChange={(e) => setExUnidad(e.target.value)}
+                        className={`${compactInputCls} cursor-pointer`}
+                      >
+                        {UNIDADES.map((u) => (
+                          <option key={u} value={u}>{u}</option>
                         ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cantidad */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Cantidad
-                    </label>
-
-                    <input
-                      type="number"
-                      min={1}
-                      value={exCant}
-                      onChange={(e) =>
-                        setExCant(Number(e.target.value))
-                      }
-                      className={iCls}
-                    />
-                  </div>
-
-                  {/* Medida */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Medida
-                    </label>
-
-                    <select
-                      value={exUnidad}
-                      onChange={(e) =>
-                        setExUnidad(e.target.value)
-                      }
-                      className={iCls}
-                    >
-                      {UNIDADES.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Precio */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Precio unitario
-                    </label>
-
-                    <input
-                      type="number"
-                      min={0}
-                      value={exPrecio || ""}
-                      onChange={(e) =>
-                        setExPrecio(Number(e.target.value))
-                      }
-                      className={iCls}
-                    />
-                  </div>
-
-                  {/* Subtotal */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Subtotal
-                    </label>
-
-                    <div className={`${iCls} bg-muted/60 font-bold`}>
-                      {fmtCOP(exCant * exPrecio)}
+                      </select>
                     </div>
+
+                    {/* Precio */}
+                    <div className="w-24">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        Precio unitario
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={exPrecio || ""}
+                        onChange={(e) => setExPrecio(Number(e.target.value))}
+                        className={compactInputCls}
+                      />
+                    </div>
+
+                    <button
+                      onClick={addExtra}
+                      className="inline-flex h-[34px] items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Agregar
+                    </button>
                   </div>
                 </div>
+              </div>
+
+              {hayMal && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <Ban className="w-4 h-4 text-red-600 mt-0.5" />
+
+                  <p className="text-xs text-red-800">
+                    Hay insumos marcados como recibidos en mal
+                    estado. Revisa las cantidades antes de guardar.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
+
+                <p className="text-xs text-emerald-800">
+                  Al guardar, la orden pasará a completada y la
+                  factura quedará asociada a la compra.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={onBack}
+                  className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold hover:bg-muted cursor-pointer"
+                >
+                  Cancelar
+                </button>
 
                 <button
-                  onClick={addExtra}
-                  className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 cursor-pointer"
+                  onClick={onAnular}
+                  className="px-4 py-3 border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  Agregar insumo
+                  Anular
+                </button>
+
+                <button
+                  onClick={guardarRecepcion}
+                  className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer inline-flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  Guardar recepción
                 </button>
               </div>
-            </div>
-
-            {/* LOTES */}
-            <div className="flex items-center justify-between p-4 bg-muted/30 border border-border rounded-xl">
-              <div>
-                <p className="text-sm font-semibold">
-                  Usar lotes
-                </p>
-
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Vencimiento automático a 7 días.
-                </p>
-              </div>
-
-              <button
-                onClick={() => setUsarLotes((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer ${
-                  usarLotes
-                    ? "bg-primary"
-                    : "bg-muted border border-border"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                    usarLotes
-                      ? "translate-x-6"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {usarLotes && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <p className="text-xs font-semibold text-amber-800">
-                  Fecha de recepción: {today}
-                </p>
-
-                <p className="text-xs text-amber-700 mt-1">
-                  Vencimiento automático:{" "}
-                  {addDays(today, 7)}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* =========================================================
-            LADO DERECHO — FACTURA
-        ========================================================= */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden h-fit">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-lg font-bold text-foreground">
-              Factura
-            </h2>
-
-            <p className="text-xs text-muted-foreground mt-1">
-              Registra la factura correspondiente a esta orden.
-            </p>
-          </div>
-
-          <div className="p-5 space-y-5">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Número de factura *
-              </label>
-
-              <input
-                value={numeroFactura}
-                onChange={(e) =>
-                  setNumeroFactura(e.target.value)
-                }
-                placeholder="Ej: FAC-000123"
-                className={iCls}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Fecha de factura *
-              </label>
-
-              <input
-                type="date"
-                value={fechaFactura}
-                onChange={(e) =>
-                  setFechaFactura(e.target.value)
-                }
-                max={today}
-                className={iCls}
-              />
-            </div>
-
-            <div className="border border-border rounded-xl p-4 bg-muted/30">
-              <p className="text-xs text-muted-foreground">
-                Total de la recepción
-              </p>
-
-              <p className="text-3xl font-bold text-foreground mt-1">
-                {fmtCOP(totalRec)}
-              </p>
-            </div>
-
-            {hayMal && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
-                <Ban className="w-4 h-4 text-red-600 mt-0.5" />
-
-                <p className="text-xs text-red-800">
-                  Hay insumos marcados como recibidos en mal
-                  estado. Revisa las cantidades antes de guardar.
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
-
-              <p className="text-xs text-emerald-800">
-                Al guardar, la orden pasará a completada y la
-                factura quedará asociada a la compra.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={onBack}
-                className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold hover:bg-muted cursor-pointer"
-              >
-                Cancelar
-              </button>
-
-              <button
-                onClick={onAnular}
-                className="px-4 py-3 border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 cursor-pointer"
-              >
-                Anular
-              </button>
-
-              <button
-                onClick={guardarRecepcion}
-                className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer inline-flex items-center justify-center gap-2"
-              >
-                <Check className="w-4 h-4" />
-                Guardar recepción
-              </button>
             </div>
           </div>
         </div>

@@ -93,14 +93,17 @@ import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
 import {
   OrdenCompraScreen,
+  NuevaOrdenCompraPage,
   INITIAL_ORDENES,
   INITIAL_GESTIONES,
+  PROVEEDORES_INIT,
 } from "./screens/OrdenCompraScreen";
 import type {
   OrdenCompra,
   GestionCompra,
+  ProveedorRef,
 } from "./screens/OrdenCompraScreen";
-import { GestionCompraScreen } from "./screens/GestionCompraScreen";
+import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
 import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
 import { GestionProductosScreen } from "./screens/GestionProductosScreen";
@@ -152,8 +155,10 @@ type Screen =
   | "clientes"
   | "perecederos"
   | "orden-compra"
+  | "nueva-orden-compra"
   | "recepcion-compra"
   | "gestion-compra"
+  | "nueva-compra"
   | "devoluciones"
   | "empleados"
   | "mis-pedidos";
@@ -473,8 +478,10 @@ const ADMIN_SCREENS: Screen[] = [
   "sales-chart",
   "perecederos",
   "orden-compra",
+  "nueva-orden-compra",
   "recepcion-compra",
   "gestion-compra",
+  "nueva-compra",
   "devoluciones",
   "empleados",
 ];
@@ -574,7 +581,9 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
   "supplies":          KEY("Compras",    "Insumos"),
   "suppliers":         KEY("Compras",    "Proveedores"),
   "orden-compra":      KEY("Compras",    "Orden de Compra"),
+  "nueva-orden-compra": KEY("Compras",    "Orden de Compra"),
   "gestion-compra":    KEY("Compras",    "Compra"),
+  "nueva-compra":       KEY("Compras",    "Compra"),
   "cat-producto":      KEY("Producción", "Categoría de Producto"),
   "gestion-productos": KEY("Producción", "Productos"),
   "production-orders": KEY("Producción", "Orden de Producción"),
@@ -844,7 +853,10 @@ function Sidebar({
   });
   const toggle = (k: string) =>
     setOpen((p) => ({ ...p, [k]: !p[k] }));
-  const active = (s: Screen) => current === s;
+  const active = (s: Screen) =>
+    current === s ||
+    (s === "orden-compra" && current === "nueva-orden-compra") ||
+    (s === "gestion-compra" && current === "nueva-compra");
 
   // Returns true if the current user can "Ver" the given permission key
   const canView = (permKey: string) =>
@@ -1135,7 +1147,9 @@ function AdminTopBar({
     purchases: "Gestión de compras",
     perecederos: "Productos No Conformes",
     "orden-compra": "Órdenes de Compra",
+    "nueva-orden-compra": "Nueva Orden de Compra",
     "gestion-compra": "Gestión de Compras",
+    "nueva-compra": "Nueva Compra",
     supplies: "Gestión de insumos",
     suppliers: "Proveedores",
     "production-orders": "Órdenes de producción",
@@ -5005,6 +5019,7 @@ function DevolucionesScreen({
     devueltos: Record<number, number>;
     compensacion: { id: number; nombre: string; precio: number; cantidad: number; imagen?: string }[];
   } | null>(null);
+  const [detalleDevolucion, setDetalleDevolucion] = useState<Venta | null>(null);
 
   const resolverDev = (id: string, tipo: "producto" | "dinero", nota: string) => {
     setPedidos((prev) =>
@@ -5074,9 +5089,16 @@ function DevolucionesScreen({
   const totalReembolso = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0) * d.precio, 0) : 0;
   const totalComp = activa ? activa.compensacion.reduce((s, c) => s + c.cantidad, 0) : 0;
   const montoReembolso = detalleAct.length > 0 ? totalReembolso : totalActRaw;
+  const devolucionDetalle = detalleDevolucion
+    ? pedidos.find((p) => p.id === detalleDevolucion.id) ?? detalleDevolucion
+    : null;
+  const totalDetalleDevolucion =
+    devolucionDetalle?.total ||
+    devolucionDetalle?.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
+    0;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF_DEV }}>
@@ -5099,86 +5121,134 @@ function DevolucionesScreen({
         </div>
       )}
 
-      {/* Pendientes */}
-      {pendientes.length > 0 && (
-        <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Pendientes de resolución
-          </p>
-          <div className="space-y-4">
-            {pendientes.map((dev) => {
-              const totalDev = dev.total || dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
+      {/* Listado de devoluciones */}
+      {devoluciones.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px]">
+              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  {[
+                    "Venta",
+                    "Cliente",
+                    "Fecha",
+                    "Productos",
+                    "Total",
+                    "Pago",
+                    "Estado",
+                    "Acciones",
+                  ].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {[...pendientes, ...resueltas].map((dev) => {
+                  const totalDev =
+                    dev.total ||
+                    dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
+                    0;
+                  const pendiente = !dev.devolucionResuelta;
 
-              return (
-                <div key={dev.id} className="bg-card border border-orange-200 rounded-2xl overflow-hidden">
-                  {/* Fila resumen */}
-                  <div className="flex items-center gap-4 px-5 py-4">
-                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                      <RefreshCw className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-mono font-bold text-muted-foreground">#{dev.id}</span>
-                        <span className="text-sm font-semibold text-foreground">{dev.usuario}</span>
-                        <span className="text-xs text-muted-foreground">· {dev.fecha}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-sm font-bold text-foreground" style={{ fontFamily: MONO_DEV }}>
-                          {fmtCOPDev(totalDev)}
+                  return (
+                    <tr
+                      key={dev.id}
+                      className={`transition-colors ${
+                        pendiente
+                          ? "bg-orange-50/20 hover:bg-orange-50/40"
+                          : "bg-emerald-50/20 hover:bg-emerald-50/40"
+                      }`}
+                    >
+                      <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
+                        #{dev.id}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-foreground">
+                        {dev.usuario}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {dev.fecha}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-foreground max-w-[240px]">
+                        <span className="block truncate" title={dev.productos}>
+                          {dev.productos || "—"}
                         </span>
-                        {dev.metodoPago && (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${dev.metodoPago === "Nequi" ? "bg-purple-100 text-purple-800" : "bg-yellow-100 text-yellow-800"}`}>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-bold text-foreground whitespace-nowrap" style={{ fontFamily: MONO_DEV }}>
+                        {fmtCOPDev(totalDev)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {dev.metodoPago ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              dev.metodoPago === "Nequi"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
                             {dev.metodoPago === "Nequi" ? "💜" : "🏦"} {dev.metodoPago}
                           </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">—</span>
                         )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setActiva({ id: dev.id, tipo: null, notaDinero: "", devueltos: {}, compensacion: [] })}
-                      className="shrink-0 text-xs font-semibold px-4 py-2 rounded-xl border cursor-pointer transition-all bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-                    >
-                      Gestionar
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Resueltas */}
-      {resueltas.length > 0 && (
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-            Resueltas
-          </p>
-          <div className="space-y-3">
-            {resueltas.map((dev) => {
-              const totalDev = dev.total || dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
-              return (
-                <div key={dev.id} className="bg-emerald-50/50 border border-emerald-200 rounded-2xl px-5 py-4 flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CircleCheck className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-muted-foreground">#{dev.id}</span>
-                      <span className="text-sm font-semibold text-foreground">{dev.usuario}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${dev.devolucionTipo === "dinero" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>
-                        {dev.devolucionTipo === "dinero" ? "💵 Dinero" : "📦 Canje"}
-                      </span>
-                    </div>
-                    {dev.devolucionNota && (
-                      <p className="text-xs text-muted-foreground mt-0.5 italic truncate">"{dev.devolucionNota}"</p>
-                    )}
-                  </div>
-                  <span className="text-sm font-bold text-foreground shrink-0" style={{ fontFamily: MONO_DEV }}>
-                    {fmtCOPDev(totalDev)}
-                  </span>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                            pendiente
+                              ? "bg-orange-100 text-orange-800"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {pendiente
+                            ? "Pendiente"
+                            : dev.devolucionTipo === "dinero"
+                              ? "Resuelta · Dinero"
+                              : "Resuelta · Canje"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={!pendiente}
+                            onClick={() =>
+                              pendiente &&
+                              setActiva({
+                                id: dev.id,
+                                tipo: null,
+                                notaDinero: "",
+                                devueltos: {},
+                                compensacion: [],
+                              })
+                            }
+                            title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                              pendiente
+                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 cursor-pointer"
+                                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                            }`}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Gestionar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetalleDevolucion(dev)}
+                            title="Visualizar devolución"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted text-foreground hover:bg-border transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Visualizar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -5542,6 +5612,112 @@ function DevolucionesScreen({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal: visualizar devolución */}
+      <AnimatePresence>
+        {detalleDevolucion && devolucionDetalle && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                    <Eye className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">Detalle de devolución</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      #{devolucionDetalle.id} · {devolucionDetalle.usuario} · {devolucionDetalle.fecha}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetalleDevolucion(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-lg font-bold text-foreground mt-0.5" style={{ fontFamily: MONO_DEV }}>
+                      {fmtCOPDev(totalDetalleDevolucion)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Método de pago</p>
+                    <p className="text-sm font-semibold text-foreground mt-1">
+                      {devolucionDetalle.metodoPago || "No registrado"}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Estado</p>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      devolucionDetalle.devolucionResuelta
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-orange-100 text-orange-800"
+                    }`}
+                  >
+                    {devolucionDetalle.devolucionResuelta
+                      ? devolucionDetalle.devolucionTipo === "dinero"
+                        ? "Resuelta · Dinero"
+                        : "Resuelta · Canje"
+                      : "Pendiente de resolución"}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Productos</p>
+                  {devolucionDetalle.detalle && devolucionDetalle.detalle.length > 0 ? (
+                    <div className="border border-border rounded-xl overflow-hidden">
+                      {devolucionDetalle.detalle.map((item, index) => (
+                        <div key={`${item.nombre}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border last:border-0">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{item.nombre}</p>
+                            <p className="text-xs text-muted-foreground">x{item.cantidad} · {fmtCOPDev(item.precio)} c/u</p>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground whitespace-nowrap">
+                            {fmtCOPDev(item.precio * item.cantidad)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{devolucionDetalle.productos || "Sin detalle de productos"}</p>
+                  )}
+                </div>
+
+                {devolucionDetalle.devolucionNota && (
+                  <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Nota de resolución</p>
+                    <p className="text-sm text-foreground italic">“{devolucionDetalle.devolucionNota}”</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-4 border-t border-border">
+                <button
+                  onClick={() => setDetalleDevolucion(null)}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -5604,6 +5780,9 @@ export default function App() {
   );
   const [insumos, setInsumos] =
     useState<Insumo[]>(INITIAL_INSUMOS);
+  const [proveedores, setProveedores] = useState<ProveedorRef[]>(
+    PROVEEDORES_INIT,
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -5964,12 +6143,25 @@ export default function App() {
                   setOrdenes={setOrdenes}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
                   insumos={insumos}
                   setInsumos={setInsumos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
                   }}
+                  onNuevaOrden={() => navigate("nueva-orden-compra")}
+                />
+              )}
+              {screen === "nueva-orden-compra" && (
+                <NuevaOrdenCompraPage
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("orden-compra")}
                 />
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
@@ -6020,6 +6212,20 @@ export default function App() {
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   ordenes={ordenes}
+                  insumos={insumos}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  onNuevaCompra={() => navigate("nueva-compra")}
+                />
+              )}
+              {screen === "nueva-compra" && (
+                <NuevaCompraPage
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("gestion-compra")}
                 />
               )}
               {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
@@ -6168,8 +6374,11 @@ export default function App() {
                   "sales-chart",
                   "perecederos",
                   "orden-compra",
+                  "nueva-orden-compra",
                   "recepcion-compra",
                   "gestion-compra",
+                  "nueva-compra",
+                  "devoluciones",
                 ].includes(screen) && (
                   <GenericAdmin
                     screen={screen}
