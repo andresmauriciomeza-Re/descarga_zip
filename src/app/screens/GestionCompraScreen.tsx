@@ -372,28 +372,30 @@ function CompraForm({
                 </div>
               </div>
 
-              <CompactInsumoForm
-                containerRef={itemRef}
-                readOnly={isView}
-                titulo="Agregar insumo"
-                nombre={itemNombre}
-                onNombreChange={(value) => {
-                  setItemNombre(value);
-                  setItemId("");
-                  setItemSugAbierto(true);
-                }}
-                onNombreFocus={() => setItemSugAbierto(true)}
-                cantidad={itemCantidad}
-                onCantidadChange={setItemCantidad}
-                unidad={itemUnidad}
-                onUnidadChange={setItemUnidad}
-                precio={itemPrecio}
-                onPrecioChange={setItemPrecio}
-                onAgregar={agregarItem}
-                suggestions={itemSugs}
-                showSuggestions={itemSugAbierto}
-                onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
-              />
+              {/* Agregar insumo — solo en el formulario de creación */}
+              {!isView && (
+                <CompactInsumoForm
+                  containerRef={itemRef}
+                  titulo="Agregar insumo"
+                  nombre={itemNombre}
+                  onNombreChange={(value) => {
+                    setItemNombre(value);
+                    setItemId("");
+                    setItemSugAbierto(true);
+                  }}
+                  onNombreFocus={() => setItemSugAbierto(true)}
+                  cantidad={itemCantidad}
+                  onCantidadChange={setItemCantidad}
+                  unidad={itemUnidad}
+                  onUnidadChange={setItemUnidad}
+                  precio={itemPrecio}
+                  onPrecioChange={setItemPrecio}
+                  onAgregar={agregarItem}
+                  suggestions={itemSugs}
+                  showSuggestions={itemSugAbierto}
+                  onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
+                />
+              )}
 
               <InsumosSolicitadosTable
                 items={items}
