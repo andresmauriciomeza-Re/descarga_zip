@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Check,
   Eye,
-  Trash2,
   AlertCircle,
   ShieldCheck,
   ShieldX,
@@ -205,6 +204,7 @@ interface DetalleProd {
   cantidad: number;
   imagen?: string;
   tamaño?: string;
+  extras?: string[];
 }
 
 export type DevolucionTipo = "producto" | "dinero";
@@ -412,6 +412,25 @@ export const INITIAL_VENTAS: Venta[] = [
       },
     ],
   },
+  {
+    id: "9",
+    usuario: "Sebastián Gómez",
+    fecha: "2024-01-14",
+    productos: "Pepperoni Premium x1",
+    cantidad: 1,
+    total: 28000,
+    estado: "completado",
+    metodoPago: "Nequi",
+    horaRecogida: "18:30",
+    historial: [
+      { estado: "por-verificar", hora: "5:40 PM" },
+      { estado: "venta", hora: "5:46 PM" },
+      { estado: "completado", hora: "6:35 PM" },
+    ],
+    detalle: [
+      { nombre: "Pepperoni Premium — Mediano", precio: 28000, cantidad: 1 },
+    ],
+  },
 ];
 
 // ─────────────────────────── VENTAS SCREEN ───────────────────────────
@@ -421,13 +440,11 @@ export function VentasScreen({
   setPedidos,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
-  canDelete = true,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
   canCreate?: boolean;
   canEdit?: boolean;
-  canDelete?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -435,7 +452,6 @@ export function VentasScreen({
   const [detailItem, setDetailItem] = useState<Venta | null>(
     null,
   );
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [montoRecibido, setMontoRecibido] = useState("");
   const [confirmEstadoV, setConfirmEstadoV] = useState<{
     id: string;
@@ -517,12 +533,6 @@ export function VentasScreen({
     );
     setEditItem(null);
     toast.success("Venta actualizada");
-  };
-
-  const handleDelete = (id: string) => {
-    setPedidos((p) => p.filter((x) => x.id !== id));
-    setDeleteId(null);
-    toast.success("Venta eliminada");
   };
 
   // Lista de usuarios registrados para el autocomplete
@@ -1330,15 +1340,6 @@ export function VentasScreen({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {canDelete && (
-                          <button
-                            onClick={() => setDeleteId(p.id)}
-                            title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1979,18 +1980,6 @@ export function VentasScreen({
               setShowCreate(false);
               toast.success(`Pedido #${newId} creado correctamente`);
             }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Eliminar ── */}
-      <AnimatePresence>
-        {deleteId && (
-          <ConfirmModal
-            title="Eliminar venta"
-            message={`¿Seguro que deseas eliminar la venta ${deleteId}? Esta acción no se puede deshacer.`}
-            onConfirm={() => handleDelete(deleteId)}
-            onCancel={() => setDeleteId(null)}
           />
         )}
       </AnimatePresence>

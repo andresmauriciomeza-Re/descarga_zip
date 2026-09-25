@@ -4,8 +4,18 @@ import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, A
 import { toast } from "sonner";
 import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
+import { type Cliente } from "./GestionClientesScreen";
 
 const SERIF = "'DM Serif Display', serif";
+
+export const DOC_TIPOS = [
+  { code: "CC", label: "Cédula de Ciudadanía" },
+  { code: "CE", label: "Cédula de Extranjería" },
+  { code: "TI", label: "Tarjeta de Identidad" },
+  { code: "PP", label: "Pasaporte" },
+];
+
+export const fmtDoc = (tipo: string, numero: string) => `${tipo} ${numero}`;
 
 export interface Usuario {
   id: string;
@@ -15,25 +25,25 @@ export interface Usuario {
   correo: string;
   telefono: string;
   tipoDocumento: string;
-  documento: string;
+  numeroDocumento: string;
   rolId: string;
   rolInternoId?: string;
   activo: boolean;
 }
 
 export const INIT_USUARIOS: Usuario[] = [
-  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", documento:"12345678", rolId:"ROL-001", activo:true  },
-  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", documento:"87654321", rolId:"ROL-003", activo:true  },
-  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", documento:"11223344", rolId:"ROL-003", activo:true  },
-  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", documento:"22334455", rolId:"ROL-003", activo:true  },
-  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", documento:"33445566", rolId:"ROL-003", activo:true  },
-  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", documento:"44556677", rolId:"ROL-003", activo:false },
-  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", documento:"55667788", rolId:"ROL-003", activo:true  },
-  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", documento:"66778899", rolId:"ROL-003", activo:true  },
-  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", documento:"77889900", rolId:"ROL-003", activo:false },
-  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", documento:"88990011", rolId:"ROL-002", activo:true  },
-  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", documento:"99001122", rolId:"ROL-002", activo:true  },
-  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", documento:"10111213", rolId:"ROL-003", activo:true  },
+  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolId:"ROL-001", activo:true  },
+  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolId:"ROL-003", activo:true  },
+  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", rolId:"ROL-003", activo:true  },
+  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", rolId:"ROL-003", activo:true  },
+  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", rolId:"ROL-003", activo:true  },
+  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", rolId:"ROL-003", activo:false },
+  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", rolId:"ROL-003", activo:true  },
+  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", rolId:"ROL-003", activo:true  },
+  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", rolId:"ROL-003", activo:false },
+  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", numeroDocumento:"88990011", rolId:"ROL-002", activo:true  },
+  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", numeroDocumento:"99001122", rolId:"ROL-002", activo:true  },
+  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", rolId:"ROL-003", activo:true  },
 ];
 
 // Paleta de colores para roles (por índice de ROL-XXX)
@@ -81,7 +91,7 @@ export function GestionUsuariosScreen({
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   empleados: Empleado[];
   setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
-  clientes: { correo: string }[];
+  clientes: Cliente[];
 }) {
   const [search,     setSearch]    = useState("");
   const [filterRol,  setFiltroR]   = useState("todos");
@@ -109,7 +119,7 @@ export function GestionUsuariosScreen({
     return usuarios.filter(u => {
       const rol = rolInfo(u.rolId);
       const rolNombre = rol?.nombre ?? u.rolId;
-      const matchQ = !q || u.nombre.toLowerCase().includes(q) || u.correo.toLowerCase().includes(q) || rolNombre.toLowerCase().includes(q);
+      const matchQ = !q || u.nombre.toLowerCase().includes(q) || u.correo.toLowerCase().includes(q) || u.numeroDocumento.toLowerCase().includes(q) || `${u.tipoDocumento} ${u.numeroDocumento}`.toLowerCase().includes(q) || rolNombre.toLowerCase().includes(q);
       const matchR = filterRol === "todos" || u.rolId === filterRol;
       const matchE = filterEst === "todos" || (filterEst === "activo" ? u.activo : !u.activo);
       return matchQ && matchR && matchE;
@@ -127,7 +137,7 @@ export function GestionUsuariosScreen({
   // Refleja en el registro Empleado vinculado (por correo) los cambios hechos desde "Usuarios".
   const updateEmpleadoLinked = (
     buscarCorreo: string,
-    patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "documento" | "rolId" | "activo">>,
+    patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rolId" | "activo">>,
   ) => {
     const key = buscarCorreo.trim().toLowerCase();
     setEmpleados(p => p.map(e => {
@@ -152,13 +162,16 @@ export function GestionUsuariosScreen({
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editItem.correo.trim())) errs.correo = "Formato de correo no válido";
-    if (!editItem.documento.trim()) errs.documento = "El número de documento es obligatorio";
-    else if (!/^\d+$/.test(editItem.documento.trim())) errs.documento = "El documento solo debe contener números";
+    if (!editItem.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
+    if (!editItem.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
+    else if (editItem.tipoDocumento !== "PP" && !/^\d+$/.test(editItem.numeroDocumento.trim()))
+      errs.numeroDocumento = "El número de documento solo debe contener números";
     if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
-    if (editItem.nombre.trim() && editItem.correo.trim() && editItem.documento.trim()) {
+    if (editItem.nombre.trim() && editItem.correo.trim() && editItem.numeroDocumento.trim()) {
       const em = editItem.correo.trim().toLowerCase();
-      const dm = editItem.documento.trim();
+      const dm = editItem.numeroDocumento.trim();
+      const clave = `${editItem.tipoDocumento}||${dm}`.toLowerCase();
       const ancla = editPrevCorreo?.trim().toLowerCase();
       const otro = (correo: string) => correo.trim().toLowerCase() !== ancla;
       const correoDup =
@@ -166,10 +179,11 @@ export function GestionUsuariosScreen({
         empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
         clientes.some(c => otro(c.correo) && c.correo.trim().toLowerCase() === em);
       const docDup =
-        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && u.documento.trim() === dm) ||
-        empleados.some(e => otro(e.correo) && e.documento.trim() === dm);
+        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+        empleados.some(e => otro(e.correo) && `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+        clientes.some(c => otro(c.correo) && `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
       if (correoDup) errs.correo = "Este correo ya está registrado";
-      if (docDup) errs.documento = "Este número de documento ya está registrado";
+      if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
     setUsuarios(p => p.map(u => u.id === editItem.id ? editItem : u));
@@ -178,7 +192,7 @@ export function GestionUsuariosScreen({
       correo: editItem.correo,
       telefono: editItem.telefono,
       tipoDocumento: editItem.tipoDocumento,
-      documento: editItem.documento,
+      numeroDocumento: editItem.numeroDocumento,
       rolId: editItem.rolId,
       activo: editItem.activo,
     });
@@ -212,33 +226,33 @@ export function GestionUsuariosScreen({
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-3 shrink-0">
         <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
         <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 shrink-0">
         {[
           { label: "Total usuarios",  value: total, cls: "text-foreground", bg: "bg-card"      },
           { label: "Clientes",        value: nCli,  cls: "text-gray-600",   bg: "bg-gray-50"   },
           { label: "Administradores", value: nAdm,  cls: "text-primary",    bg: "bg-primary/5" },
         ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-4`}>
-            <p className={`text-3xl font-bold ${cls}`}>{value}</p>
+          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
+            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
             <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
         <div className="relative flex-1 min-w-52">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo o rol..."
+            placeholder="Buscar por nombre, correo, rol o documento..."
             className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <select value={filterRol} onChange={e => { setFiltroR(e.target.value); setPage(1); }} className={iCls}>
@@ -254,15 +268,14 @@ export function GestionUsuariosScreen({
         </select>
       </div>
 
-      {/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["Usuario","Correo","Rol actual","Estado","Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
+{/* Tabla */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+        <table className="w-full">
+          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+            <tr>
+              {["Usuario","Correo","Rol actual","Estado","Acciones"].map(h => (
+                <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
+              ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -275,19 +288,19 @@ export function GestionUsuariosScreen({
                 const rolInactivo = rol && !rol.activo;
                 return (
                   <tr key={u.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                           {u.iniciales}
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-foreground">{u.nombre}</p>
-                          <p className="text-xs font-mono text-muted-foreground">{u.id}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{fmtDoc(u.tipoDocumento, u.numeroDocumento)}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{u.correo}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo}</td>
+                    <td className="px-4 py-1.5">
                       <div className="flex items-center gap-1.5">
                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId)} ${rolInactivo ? "opacity-50" : ""}`}>
                          {rolLabel(u, roles, esEmpleado(u))}
@@ -297,12 +310,12 @@ export function GestionUsuariosScreen({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
                         {u.activo ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-1.5">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setDetail(u)} title="Ver detalle"
                           className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
@@ -322,13 +335,12 @@ export function GestionUsuariosScreen({
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </table>
       </div>
 
       {/* Paginación */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center shrink-0">
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
@@ -401,10 +413,10 @@ export function GestionUsuariosScreen({
                     </div>
                     <div className="divide-y divide-border">
                       {[
-                        { l: "ID",        v: detail.id },
                         { l: "Correo",    v: detail.correo },
                         { l: "Teléfono",  v: detail.telefono },
-                        { l: "Documento", v: detail.documento },
+                        { l: "Tipo de documento",   v: detail.tipoDocumento },
+                        { l: "Número de documento", v: detail.numeroDocumento },
                       ].map(({ l, v }) => (
                         <div key={l} className="flex items-center justify-between px-4 py-2.5 gap-4">
                           <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
@@ -511,7 +523,7 @@ export function GestionUsuariosScreen({
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground">{editItem.id}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
 
@@ -519,7 +531,6 @@ export function GestionUsuariosScreen({
                   { label: "Nombre completo", field: "nombre"    as const, type: "text"  },
                   { label: "Correo",          field: "correo"    as const, type: "email" },
                   { label: "Teléfono",        field: "telefono"  as const, type: "tel"   },
-                  { label: "Documento",       field: "documento" as const, type: "text"  },
                 ].map(({ label, field, type }) => (
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
@@ -532,6 +543,32 @@ export function GestionUsuariosScreen({
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
                   </div>
                 ))}
+
+                <div className="flex gap-3">
+                  <div className="w-24 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <span className="text-primary">*</span></label>
+                    <select
+                      value={editItem.tipoDocumento}
+                      onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    >
+                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                    </select>
+                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.tipoDocumento}</p>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento <span className="text-primary">*</span></label>
+                    <input
+                      type="text"
+                      inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"}
+                      value={editItem.numeroDocumento}
+                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: e.target.value.replace(/[\s.]/g, "") })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                      placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    />
+                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.numeroDocumento}</p>}
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
