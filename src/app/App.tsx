@@ -65,6 +65,14 @@ import { CalendarDropdown } from "./components/CalendarDropdown";
 import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
+import lasanaCarne from "@/imports/lasaña_carne.png";
+import lasanaMixta from "@/imports/lasaña_mixta.png";
+import lasanaPollo from "@/imports/lasaña_pollo.png";
+import imgQuatro from "@/imports/Quatro.png";
+import imgPremio from "@/imports/Premio.png";
+import imgPepsi from "@/imports/Pepsi.png";
+import imgCocaCola from "@/imports/Coca-Cola.png";
+import imagenLocal from "@/imports/imagen_local.png";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, type Rol, type AccesosMap } from "./screens/GestionConfigScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
@@ -211,6 +219,19 @@ const SIZES_DEFAULT = [
   { label: "Grande", price: 16000 },
 ];
 
+// Un producto con selector de tamaño (pizzas, lasañas) usa el precio del tamaño
+// elegido; uno sin tamaños (bebidas, botella única) cae a su precio base. Evita
+// que el detalle o el quick-add revienten al leer sizes[0] de un array vacío.
+const sizeDe = (p: Product, i: number) => p.sizes[i] ?? { label: "", price: p.price };
+
+const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
+
+// Las botellas de Bebidas son imágenes altas y angostas: con object-cover el
+// recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
+// caber la imagen completa respetando su proporción (queda espacio a los lados).
+// Pizzas y Lasañas conservan object-cover, que es su diseño original.
+const verImagenCompleta = (p: Product) => p.category === "Bebidas";
+
 const PRODUCTS: Product[] = [
   {
     id: 1,
@@ -301,6 +322,99 @@ const PRODUCTS: Product[] = [
     status: "pausado",
     rating: 4.5,
     sales: 380,
+  },
+  // ── Lasañas (CAT-002): precio único $20.000, presentación única "Normal" ──
+  {
+    id: 7,
+    name: "Lasaña de Carne",
+    description: "Lasaña de carne.",
+    price: 20000,
+    image: lasanaCarne,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 8,
+    name: "Lasaña Mixta",
+    description: "Lasaña mixta.",
+    price: 20000,
+    image: lasanaMixta,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 9,
+    name: "Lasaña de Pollo",
+    description: "Lasaña de pollo.",
+    price: 20000,
+    image: lasanaPollo,
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  // ── Bebidas (CAT-003): botella 2.5 L, precio único $8.000, sin tamaños ──
+  {
+    id: 10,
+    name: "Quatro",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgQuatro,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 11,
+    name: "Premio Rojo",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgPremio,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 12,
+    name: "Pepsi",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgPepsi,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 13,
+    name: "Coca-Cola",
+    description: "Botella de 2.5 L.",
+    price: 8000,
+    image: imgCocaCola,
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
   },
 ];
 
@@ -1709,7 +1823,7 @@ function LandingScreen({
             <div className="relative">
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
                 <img
-                  src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=600&fit=crop&auto=format"
+                  src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
                   className="w-full h-full object-cover"
                 />
@@ -2049,7 +2163,7 @@ function CatalogScreen({
               className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
             >
               <button
-                className="relative w-full overflow-hidden h-48 bg-muted cursor-pointer block"
+                className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
                 onClick={() => {
                   setProduct(p);
                   navigate("product-detail");
@@ -2058,7 +2172,7 @@ function CatalogScreen({
                 <img
                   src={p.image}
                   alt={p.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
                 />
                 <div className="absolute top-3 right-3">
                   <Badge
@@ -2143,7 +2257,7 @@ function ProductDetailScreen({
       (product.extras.find((e) => e.label === ex)?.price ?? 0),
     0,
   );
-  const sizePrice = product.sizes[sizeIdx].price;
+  const sizePrice = sizeDe(product, sizeIdx).price;
   const total = (sizePrice + extrasPrice) * qty;
 
   const toggleExtra = (label: string) =>
@@ -2154,17 +2268,18 @@ function ProductDetailScreen({
     );
 
   const handleAdd = () => {
+    const size = sizeDe(product, sizeIdx);
     addDetailed({
       id: `${product.id}-${Date.now()}`,
       product,
       quantity: qty,
-      size: product.sizes[sizeIdx].label,
+      size: size.label,
       sizePrice,
       selectedExtras: extras,
       extrasPrice,
     });
     toast.success(`¡${product.name} agregada al carrito!`, {
-      description: `${product.sizes[sizeIdx].label} × ${qty}`,
+      description: size.label ? `${size.label} × ${qty}` : `× ${qty}`,
     });
     navigate("cart");
   };
@@ -2180,11 +2295,11 @@ function ProductDetailScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Image */}
-        <div className="rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px]">
+        <div className={`rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
           <img
             src={product.image}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"}`}
           />
         </div>
 
@@ -2208,46 +2323,71 @@ function ProductDetailScreen({
             {product.description}
           </p>
 
-          {/* Tamaño */}
-          <div className="mb-6">
-            <h3 className="font-bold mb-3 text-foreground">
-              Elige el tamaño
-            </h3>
-            <div className="space-y-2">
-              {product.sizes.map((s, i) => (
-                <label
-                  key={s.label}
-                  className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
-                >
+          {/* Tamaño: las bebidas no tienen selector (botella 2.5 L) y las
+              lasañas tienen una única presentación fija "Normal". Solo las
+              pizzas ofrecen una elección real entre Mediano y Grande. */}
+          {product.sizes.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-bold mb-3 text-foreground">
+                {product.sizes.length === 1
+                  ? "Presentación"
+                  : "Elige el tamaño"}
+              </h3>
+              {product.sizes.length === 1 ? (
+                <div className="flex items-center justify-between p-3.5 rounded-xl border-2 border-primary bg-primary/10">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sizeIdx === i ? "border-primary" : "border-muted-foreground"}`}
-                    >
-                      {sizeIdx === i && (
-                        <div className="w-2 h-2 rounded-full bg-primary" />
-                      )}
+                    <div className="w-4 h-4 rounded-full border-2 border-primary flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
                     </div>
-                    <input
-                      type="radio"
-                      name="size"
-                      className="sr-only"
-                      checked={sizeIdx === i}
-                      onChange={() => setSizeIdx(i)}
-                    />
                     <span className="font-medium text-foreground">
-                      {s.label}
+                      {product.sizes[0].label}
                     </span>
                   </div>
                   <span
                     className="font-bold text-foreground"
                     style={{ fontFamily: MONO }}
                   >
-                    {fmt(s.price)}
+                    {fmt(product.sizes[0].price)}
                   </span>
-                </label>
-              ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {product.sizes.map((s, i) => (
+                    <label
+                      key={s.label}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sizeIdx === i ? "border-primary" : "border-muted-foreground"}`}
+                        >
+                          {sizeIdx === i && (
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                          )}
+                        </div>
+                        <input
+                          type="radio"
+                          name="size"
+                          className="sr-only"
+                          checked={sizeIdx === i}
+                          onChange={() => setSizeIdx(i)}
+                        />
+                        <span className="font-medium text-foreground">
+                          {s.label}
+                        </span>
+                      </div>
+                      <span
+                        className="font-bold text-foreground"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {fmt(s.price)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Cantidad */}
           <div className="flex items-center gap-4 mb-6">
@@ -2534,9 +2674,11 @@ function CartScreen({
                       <h3 className="font-bold text-foreground">
                         {item.product.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {item.size}
-                      </p>
+                      {item.size && (
+                        <p className="text-sm text-muted-foreground">
+                          {item.size}
+                        </p>
+                      )}
                       {item.selectedExtras.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           + {item.selectedExtras.join(", ")}
@@ -2672,7 +2814,8 @@ function CartScreen({
                             {item.product.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {item.size} · x{item.quantity}
+                            {item.size ? `${item.size} · ` : ""}x
+                            {item.quantity}
                           </p>
                           {item.selectedExtras.length > 0 && (
                             <p className="text-xs text-muted-foreground truncate">
@@ -5812,14 +5955,15 @@ export default function App() {
         ),
       );
     } else {
+      const size = sizeDe(product, 0);
       setCart((p) => [
         ...p,
         {
           id: `${product.id}-${Date.now()}`,
           product,
           quantity: 1,
-          size: product.sizes[0].label,
-          sizePrice: product.sizes[0].price,
+          size: size.label,
+          sizePrice: size.price,
           selectedExtras: [],
           extrasPrice: 0,
         },

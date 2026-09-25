@@ -1,4 +1,4 @@
-import { useState, useMemo, type Dispatch, type SetStateAction } from "react";
+import { useState, useMemo, useEffect, type Dispatch, type SetStateAction, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock, Download, PackageX } from "lucide-react";
 import { toast } from "sonner";
@@ -312,6 +312,45 @@ export function OrdenProduccionScreen({
     motivo: string;
     descripcion: string;
   } | null>(null);
+
+  // Tooltip de "Producto(s)": muestra el detalle completo de la orden al hacer
+  // hover sobre la celda. Se posiciona con `position: fixed` a partir del rectángulo
+  // de la celda, porque la tabla vive dentro de contenedores con overflow
+  // (overflow-x-auto / overflow-hidden) que recortarían un tooltip absoluto.
+  const [tip, setTip] = useState<{ top: number; left: number; lineas: LineaProducto[] } | null>(null);
+
+  const ANCHO_TIP = 288; // w-72
+  const abrirTip = (e: ReactMouseEvent<HTMLTableCellElement>, lineas: LineaProducto[]) => {
+    if (lineas.length === 0) return; // nunca inventar productos
+    // Solo en dispositivos con hover real (escritorio). En táctil no se abre.
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    // Alto estimado: padding + encabezado + una línea por producto (+ total).
+    // Acotado para que siempre quepa en pantallas bajas.
+    const alto = Math.min(52 + lineas.length * 24 + (lineas.length > 1 ? 30 : 0), window.innerHeight * 0.7);
+    const cabeAbajo = window.innerHeight - r.bottom >= alto + 12;
+    // Debajo de la celda; si no cabe, arriba de la celda. El segundo Min/Max
+    // garantiza que el borde inferior nunca quede fuera de la ventana.
+    const top = Math.max(8, Math.min(
+      cabeAbajo ? r.bottom + 8 : r.top - alto - 8,
+      window.innerHeight - alto - 8,
+    ));
+    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - ANCHO_TIP - 8));
+    setTip({ top, left, lineas });
+  };
+
+  // Si la tabla se desplaza o se redimensiona la ventana, el tooltip queda
+  // desfasado: se cierra en vez de quedar flotando sobre otra celda.
+  useEffect(() => {
+    if (!tip) return;
+    const cerrar = () => setTip(null);
+    window.addEventListener("scroll", cerrar, true);
+    window.addEventListener("resize", cerrar);
+    return () => {
+      window.removeEventListener("scroll", cerrar, true);
+      window.removeEventListener("resize", cerrar);
+    };
+  }, [tip]);
 
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const sCls = iCls + " cursor-pointer";
@@ -665,7 +704,11 @@ export function OrdenProduccionScreen({
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{o.id}</td>
-                    <td className="px-4 py-3.5">
+                    <td
+                      className="px-4 py-3.5 cursor-help"
+                      onMouseEnter={e => abrirTip(e, o.lineas)}
+                      onMouseLeave={() => setTip(null)}
+                    >
                       <p className="text-sm font-medium text-foreground">
                         {nombres.length === 1 ? nombres[0] : `${nombres.length} productos`}
                       </p>
@@ -748,6 +791,32 @@ export function OrdenProduccionScreen({
           </table>
         </div>
       </div>
+
+      {/* Tooltip de detalle de producto(s) — posicionado en fixed, no altera la tabla */}
+      {tip && (
+        <div
+          role="tooltip"
+          style={{ top: tip.top, left: tip.left }}
+          className="fixed z-[100] w-72 max-w-[calc(100vw-16px)] max-h-[70vh] overflow-y-auto rounded-xl bg-foreground text-background shadow-xl px-3.5 py-3 text-sm pointer-events-none"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1.5">
+            Producto(s) de la orden
+          </p>
+          <ul className="space-y-1">
+            {tip.lineas.map((l, idx) => (
+              <li key={`${l.idProducto}-${idx}`} className="flex items-baseline gap-2 leading-snug">
+                <span className="font-bold tabular-nums shrink-0">{l.cantidad} ×</span>
+                <span className="opacity-90">{productById(l.idProducto)?.nombre ?? l.idProducto}</span>
+              </li>
+            ))}
+          </ul>
+          {tip.lineas.length > 1 && (
+            <p className="mt-2 pt-2 border-t border-background/20 text-[11px] opacity-60">
+              Total: {totalCantidad(tip.lineas)} unidades
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Pagination */}
       {filtered.length > 0 && (
