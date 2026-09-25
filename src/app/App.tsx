@@ -571,6 +571,10 @@ const SCREEN_META: Partial<
 
 // Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
 const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
+  "dashboard":        KEY("Dashboard",    "Dashboard"),
+  "gestion-config":   KEY("Configuración","Configuración"),
+  "users":            KEY("Configuración","Usuarios"),
+  "empleados":        KEY("Configuración","Empleados"),
   "supplies":          KEY("Compras",    "Insumos"),
   "suppliers":         KEY("Compras",    "Proveedores"),
   "orden-compra":      KEY("Compras",    "Orden de Compra"),
@@ -584,13 +588,21 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
   "devoluciones":      KEY("Ventas",     "Devoluciones"),
 };
 
+// Permiso que controla la visibilidad del acceso directo "Dashboard" del sidebar
+const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
+
 const NAV_SECTIONS = [
   {
     key: "configuracion",
     label: "Configuración",
     Icon: Settings,
     items: [
-      { screen: "gestion-config" as Screen, label: "Configuración", Icon: Settings },
+      {
+        screen: "gestion-config" as Screen,
+        label: "Configuración",
+        Icon: Settings,
+        permKey: KEY("Configuración", "Configuración"),
+      },
     ],
   },
   {
@@ -598,8 +610,18 @@ const NAV_SECTIONS = [
     label: "Usuarios",
     Icon: Users,
     items: [
-      { screen: "users" as Screen, label: "Usuarios", Icon: Users },
-      { screen: "empleados" as Screen, label: "Empleados", Icon: IdCard },
+      {
+        screen: "users" as Screen,
+        label: "Usuarios",
+        Icon: Users,
+        permKey: KEY("Configuración", "Usuarios"),
+      },
+      {
+        screen: "empleados" as Screen,
+        label: "Empleados",
+        Icon: IdCard,
+        permKey: KEY("Configuración", "Empleados"),
+      },
     ],
   },
   {
@@ -849,9 +871,21 @@ function Sidebar({
   // Returns true if the current user can "Ver" the given permission key
   const canView = (permKey: string) =>
     isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
-  // Direct-screen sections (Config, Users) only visible to named Administrador
+  // Respaldo para ítems de menú que aún no tienen permKey asociado: esas
+  // pantallas siguen restringidas al Administrador por nombre.
   const canViewScreen = (s: Screen) =>
     isNamedAdmin || !ADMIN_ONLY_SCREENS.includes(s);
+
+  // Cuántos ítems del nav superan el filtro de permisos. Se usa junto con
+  // `active("dashboard")` para no dejar al usuario sin salida: si el guard de
+  // ruta lo manda al dashboard, el botón debe existir para poder moverse.
+  const visibleNavItems = NAV_SECTIONS.reduce(
+    (acc, sec) =>
+      acc + ((sec as any).items ?? []).filter((it: any) => it.permKey && canView(it.permKey)).length,
+    0
+  );
+  const showDashboard =
+    canView(DASHBOARD_PERM_KEY) || visibleNavItems === 0 || active("dashboard");
 
   return (
     <aside
@@ -895,16 +929,18 @@ function Sidebar({
         )}
       </div>
 
-      {/* Dashboard shortcut */}
-      <div className="px-2 pt-3 pb-1 shrink-0">
-        <button
-          onClick={() => navigate("dashboard")}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active("dashboard") ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
-        >
-          <Home className="w-4 h-4 shrink-0" />
-          {!collapsed && <span>{current === "users" ? "Menú" : "Dashboard"}</span>}
-        </button>
-      </div>
+      {/* Dashboard shortcut — controlado por el permiso Dashboard::Dashboard */}
+      {showDashboard && (
+        <div className="px-2 pt-3 pb-1 shrink-0">
+          <button
+            onClick={() => navigate("dashboard")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active("dashboard") ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+          >
+            <Home className="w-4 h-4 shrink-0" />
+            {!collapsed && <span>{current === "users" ? "Menú" : "Dashboard"}</span>}
+          </button>
+        </div>
+      )}
 
       {/* Scrollable nav */}
       <nav
@@ -912,10 +948,12 @@ function Sidebar({
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_SECTIONS.map((sec) => {
-          // For grouped sections: filter items by permission
+          // For grouped sections: un ítem con permKey se decide por permisos
+          // (así Configuración/Usuarios dejan de depender del nombre del rol);
+          // los que no lo tienen caen en la regla legacy de ADMIN_ONLY_SCREENS.
           const allItems: { screen: Screen; label: string; Icon: typeof Home; permKey?: string }[] =
             ((sec as any).items ?? []).filter((it: any) =>
-              canViewScreen(it.screen) && (!it.permKey || canView(it.permKey))
+              it.permKey ? canView(it.permKey) : canViewScreen(it.screen)
             );
 
           // Hide entire module if no sub-items are visible
@@ -4023,26 +4061,44 @@ function DashboardScreen({
   const canSee = (permKey: string) =>
     isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
 
-  // Granular flags, one per sub-opción del sistema
-  const cv  = canSee("Ventas::Ventas");
-  const ccl = canSee("Ventas::Clientes");
-  const ci  = canSee("Compras::Insumos");
-  const cpr = canSee("Compras::Proveedores");
-  const coc = canSee("Compras::Orden de Compra");
-  const cco = canSee("Compras::Compra");
-  const cp  = canSee("Producción::Productos");
-  const ccp = canSee("Producción::Categoría de Producto");
-  const cop = canSee("Producción::Orden de Producción");
-  const cpe = canSee("Producción::Producto No Conforme");
+  // Granular flags, one per sub-opción del sistema.
+  // Se construyen con KEY() para que un renombrado en MENU_TREE rompa aquí
+  // explícitamente en vez de fallar en silencio.
+  const cv  = canSee(KEY("Ventas",      "Ventas"));
+  const ccl = canSee(KEY("Ventas",      "Clientes"));
+  const ci  = canSee(KEY("Compras",     "Insumos"));
+  const cpr = canSee(KEY("Compras",     "Proveedores"));
+  const coc = canSee(KEY("Compras",     "Orden de Compra"));
+  const cco = canSee(KEY("Compras",     "Compra"));
+  const cp  = canSee(KEY("Producción",  "Productos"));
+  const ccp = canSee(KEY("Producción",  "Categoría de Producto"));
+  const cop = canSee(KEY("Producción",  "Orden de Producción"));
+  const cpe = canSee(KEY("Producción",  "Producto No Conforme"));
+  const ccfg = canSee(KEY("Configuración", "Configuración"));
+  const cus  = canSee(KEY("Configuración", "Usuarios"));
+  const cemp = canSee(KEY("Configuración", "Empleados"));
+  const cdb  = canSee(KEY("Dashboard",  "Dashboard"));
 
-  // noAccess: true only when the user cannot see ANY sub-opción
-  const noAccess = !isNamedAdmin && [cv, ccl, ci, cpr, coc, cco, cp, ccp, cop, cpe].every(v => !v);
+  // Vista completa de administrador, evaluada por permisos reales y no por
+  // nombre de rol: "Ver" sobre Dashboard y "Ver" sobre Configuración. Así un
+  // "Administrador Sustituto", "Gerente", etc. ve el Dashboard igual que el
+  // administrador original. Consulta `accesos` directo, y no `canSee`, para que
+  // este criterio NO herede el atajo que `canSee` todavía conserva.
+  const tieneVer = (permKey: string) => accesos[permKey]?.includes("Ver") ?? false;
+  const esAdminCompleto =
+    tieneVer(KEY("Dashboard", "Dashboard")) && tieneVer(KEY("Configuración", "Configuración"));
+
+  // noAccess: true only when the user cannot see ANY sub-opción. La condición
+  // por nombre de rol sobra: el administrador original tiene fullAccesos(), así
+  // que `.every(v => !v)` ya da false sin necesidad de exceptuarlo.
+  const noAccess =
+    [cv, ccl, ci, cpr, coc, cco, cp, ccp, cop, cpe, ccfg, cus, cemp, cdb].every(v => !v);
 
   // KPIs — cada uno ligado a su sub-opción
   type KpiDef = { label: string; value: string; sub: string; Icon: any; bg: string; ic: string; trend: string };
   const kpis: KpiDef[] = [
     cv           && { label: "Ventas hoy",   value: "24",         sub: "+3 en la última hora",  Icon: ShoppingBag, bg: "bg-blue-50",    ic: "text-blue-600",    trend: "+12%" },
-    isNamedAdmin && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
+    esAdminCompleto && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
     cp  && { label: "Productos activos",   value: "5",          sub: "1 en pausa",              Icon: Package,       bg: "bg-orange-50",  ic: "text-orange-600",  trend: ""     },
     ci  && { label: "Insumos críticos",    value: "3",          sub: "Stock bajo mínimo",       Icon: AlertTriangle, bg: "bg-red-50",     ic: "text-red-600",     trend: ""     },
     cpr && { label: "Proveedores activos", value: "8",          sub: "2 con pedido pendiente",  Icon: Truck,         bg: "bg-violet-50",  ic: "text-violet-600",  trend: ""     },
@@ -4059,6 +4115,9 @@ function DashboardScreen({
     cpr && { label: "Proveedores",    Icon: Truck,          screen: "suppliers"         as Screen },
     coc && { label: "Orden de Compra", Icon: ClipboardList, screen: "orden-compra"      as Screen },
     cop && { label: "Producción",     Icon: Layers,         screen: "production-orders" as Screen },
+    ccfg && { label: "Configuración", Icon: Settings,       screen: "gestion-config"    as Screen },
+    cus  && { label: "Usuarios",      Icon: Users,          screen: "users"             as Screen },
+    cemp && { label: "Empleados",     Icon: IdCard,         screen: "empleados"         as Screen },
   ].filter(Boolean) as ActionDef[];
 
   return (
@@ -4070,7 +4129,7 @@ function DashboardScreen({
         </h1>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <p className="text-muted-foreground capitalize">{dateStr}</p>
-          {!isNamedAdmin && (
+          {!esAdminCompleto && (
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
               {loggedInRoleName}
             </span>
@@ -4078,8 +4137,8 @@ function DashboardScreen({
         </div>
       </div>
 
-      {/* Sales chart — solo Administrador (dato financiero sensible) */}
-      {isNamedAdmin && (
+      {/* Sales chart — permiso de Ventas (Ventas::Ventas) */}
+      {cv && (
         <div
           onClick={() => navigate("sales-chart")}
           className="bg-card border border-border rounded-2xl p-5 mb-7 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
@@ -5354,6 +5413,142 @@ function DevolucionesScreen({
 
 // ─────────────────────────── APP ROOT ───────────────────────────
 
+// ── Persistencia de roles (TEMPORAL) ──────────────────────────────────
+// Los roles viven hoy en memoria y se perdían con cada F5, lo que hacía
+// inservible un rol de "Administrador sustituto". Se guardan en localStorage
+// como solución puente.
+//
+// ATENCIÓN: esto NO es persistencia real. Es por navegador y por máquina.
+// Cuando exista backend/base de datos, este bloque debe reemplazarse por una
+// llamada a la API (GET/POST de roles) y el resto del código no cambia: la
+// forma `Rol` / `AccesosMap` ya es JSON-serializable sin transformaciones.
+// La clave incluye versión para poder invalidar el cache al cambiar el schema.
+const ROLES_STORAGE_KEY = "sivpro.roles.v1";
+
+const esRolValido = (r: unknown): r is Rol => {
+  if (!r || typeof r !== "object") return false;
+  const rol = r as Rol;
+  return (
+    typeof rol.id === "string" &&
+    typeof rol.nombre === "string" &&
+    typeof rol.activo === "boolean" &&
+    !!rol.accesos &&
+    typeof rol.accesos === "object"
+  );
+};
+
+const leerRolesPersistidos = (): Rol[] => {
+  try {
+    const raw = localStorage.getItem(ROLES_STORAGE_KEY);
+    if (!raw) return INITIAL_ROLES;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
+      return parsed as Rol[];
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_ROLES;
+};
+
+// ── Persistencia de usuarios (TEMPORAL) ──────────────────────────────
+// Mismo criterio y mismo riesgo que la de roles: los usuarios se creaban solo
+// en memoria, así que cualquier alta se perdía con el F5. Se guardan en
+// localStorage como solución puente, con la misma forma que el bloque de roles
+// y también con versión en la clave.
+//
+// OJO: al persistir TODO el array se guardan también los cambios que hacen
+// otras pantallas, no solo los del modal de alta: las ediciones de "Mi Perfil"
+// y los interruptores de Activo/Inactivo de la pantalla de Usuarios.
+// Para volver a la semilla: localStorage.removeItem(USUARIOS_STORAGE_KEY).
+const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
+
+const esUsuarioValido = (u: unknown): u is Usuario => {
+  if (!u || typeof u !== "object") return false;
+  const usr = u as Usuario;
+  // Se comprueban también `iniciales` y `avatarColor` porque la tabla las
+  // pinta tal cual: un registro corrupto que las traiga ausentes llegaría hasta
+  // el avatar en vez de descartarse aquí.
+  return (
+    typeof usr.id === "string" &&
+    typeof usr.nombre === "string" &&
+    typeof usr.iniciales === "string" &&
+    typeof usr.avatarColor === "string" &&
+    typeof usr.correo === "string" &&
+    typeof usr.telefono === "string" &&
+    typeof usr.tipoDocumento === "string" &&
+    typeof usr.numeroDocumento === "string" &&
+    typeof usr.rolId === "string" &&
+    typeof usr.activo === "boolean"
+  );
+};
+
+const leerUsuariosPersistidos = (): Usuario[] => {
+  try {
+    const raw = localStorage.getItem(USUARIOS_STORAGE_KEY);
+    if (!raw) return INIT_USUARIOS;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esUsuarioValido)) {
+      return parsed as Usuario[];
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INIT_USUARIOS;
+};
+
+// ── Persistencia de empleados (TEMPORAL) ─────────────────────────────
+// Necesita una clave propia porque el historial de contrataciones vive DENTRO
+// de cada empleado (`Empleado.contrataciones`), no en un array aparte: para que
+// sobreviva al F5 hay que persistir el empleado completo.
+//
+// AVISO DE ALCANCE: al guardar el array entero también pasan a sobrevivir al F5
+// las ediciones, los interruptores Activo/Inactivo y los BORRADOS de empleado,
+// no solo las contrataciones. Para volver a la semilla:
+// localStorage.removeItem(EMPLEADOS_STORAGE_KEY).
+const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
+
+const esEmpleadoValido = (e: unknown): e is Empleado => {
+  if (!e || typeof e !== "object") return false;
+  const emp = e as Empleado;
+  return (
+    typeof emp.id === "string" &&
+    typeof emp.nombre === "string" &&
+    typeof emp.correo === "string" &&
+    typeof emp.telefono === "string" &&
+    typeof emp.tipoDocumento === "string" &&
+    typeof emp.numeroDocumento === "string" &&
+    typeof emp.rolId === "string" &&
+    typeof emp.activo === "boolean" &&
+    typeof emp.cargo === "string" &&
+    typeof emp.fechaInicio === "string" &&
+    typeof emp.fechaFinal === "string"
+  );
+};
+
+// `contrataciones` se нормаiza en vez de exigirla: si un array quedó guardado
+// por una build anterior a esta feature, descartar el registro entero perdería
+// también sus datos de contacto. Un histórico ausente se trata como vacío.
+const normalizarEmpleado = (e: Empleado): Empleado => ({
+  ...e,
+  contrasena: typeof e.contrasena === "string" ? e.contrasena : "123456",
+  contrataciones: Array.isArray(e.contrataciones) ? e.contrataciones : [],
+});
+
+const leerEmpleadosPersistidos = (): Empleado[] => {
+  try {
+    const raw = localStorage.getItem(EMPLEADOS_STORAGE_KEY);
+    if (!raw) return INITIAL_EMPLEADOS;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esEmpleadoValido)) {
+      return (parsed as Empleado[]).map(normalizarEmpleado);
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_EMPLEADOS;
+};
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [ordenRecepcion, setOrdenRecepcion] =
@@ -5363,10 +5558,40 @@ export default function App() {
   const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
-  const [roles, setRoles] = useState<Rol[]>(INITIAL_ROLES);
-  const [usuarios, setUsuarios] = useState<Usuario[]>(INIT_USUARIOS);
-  const [empleados, setEmpleados] = useState<Empleado[]>(INITIAL_EMPLEADOS);
+  const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
+  const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
+  const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
+
+  // Refleja en localStorage cualquier alta/edición/borrado de roles.
+  // Ver la nota temporal de ROLES_STORAGE_KEY.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
+    } catch {
+      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
+    }
+  }, [roles]);
+
+  // Refleja en localStorage cualquier alta/edición/borrado de usuarios.
+  // Ver la nota temporal de USUARIOS_STORAGE_KEY.
+  useEffect(() => {
+    try {
+      localStorage.setItem(USUARIOS_STORAGE_KEY, JSON.stringify(usuarios));
+    } catch {
+      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
+    }
+  }, [usuarios]);
+
+  // Refleja en localStorage cualquier alta/edición/borrado de empleados y, con
+  // ellos, el historial de contrataciones. Ver la nota de EMPLEADOS_STORAGE_KEY.
+  useEffect(() => {
+    try {
+      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(empleados));
+    } catch {
+      // Cuota excedida o modo privado: la app sigue funcionando en memoria.
+    }
+  }, [empleados]);
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
@@ -5382,6 +5607,13 @@ export default function App() {
   const isNamedAdmin = !loggedInRol || loggedInRol.nombre === "Administrador";
   // True when the logged-in user has a back-office role (not a pure public customer)
   const isStaff = isLoggedIn && loggedInUser !== null && !PUBLIC_ROLE_NAMES.includes(loggedInRoleName);
+
+  // El usuario de la sesión puede tener ficha de empleado además de la de
+  // usuario. El vínculo entre ambas listas es el correo (ver `upsertUsuario` en
+  // la pantalla de Empleados), porque no comparten identificador.
+  const loggedInEmpleado = loggedInUser
+    ? empleados.find(e => e.correo.trim().toLowerCase() === loggedInUser.correo.trim().toLowerCase()) ?? null
+    : null;
 
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
@@ -5919,6 +6151,8 @@ export default function App() {
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  contrataciones={loggedInEmpleado?.contrataciones}
+                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   inStore
                 />
               )}
@@ -5942,6 +6176,8 @@ export default function App() {
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  contrataciones={loggedInEmpleado?.contrataciones}
+                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                 />
               )}
               {screen === "tech-sheet" && <RecetasScreen />}

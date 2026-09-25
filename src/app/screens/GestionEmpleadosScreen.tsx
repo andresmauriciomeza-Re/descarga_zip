@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, ChevronLeft, ChevronRight, FileText, X, UserPlus } from "lucide-react";
+import { Search, Eye, Pencil, ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { EstadoSwitch } from "../components/EstadoSwitch";
 import { type Rol } from "./GestionConfigScreen";
@@ -15,6 +15,17 @@ const AVATAR_COLORS = [
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
 
+// Una contratación del empleado. `Empleado.cargo/rolId/fechaInicio/fechaFinal`
+// guarda SOLO la contratación vigente (lo que ve la tabla); aquí va el
+// historial completo, para no perder los cambios de cargo ni los reingresos.
+export interface Contratacion {
+  id: string;           // "EMP-001-C01", "EMP-001-C02" (C## con 2 dígitos)
+  cargo: string;
+  rolId: string;
+  fechaInicio: string;  // YYYY-MM-DD
+  fechaFinal: string;   // "" si la contratación sigue vigente
+}
+
 export interface Empleado {
   id: string;              // EMP-00X
   nombre: string;
@@ -27,12 +38,16 @@ export interface Empleado {
   contrasena: string;
   rolId: string;           // Tb_Empleado.Id_rol (FK)
   activo: boolean;         // Tb_Empleado.Estado
-  cargo: string;           // Contratacion_empleado.Cargo
-  fechaInicio: string;     // Contratacion_empleado.Fecha_inicio
+  cargo: string;           // Contratacion_empleado.Cargo (contratación vigente)
+  fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (vigente)
   fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si sigue activo)
+  contrataciones: Contratacion[]; // historial, de la más antigua a la más reciente
 }
 
-export const INITIAL_EMPLEADOS: Empleado[] = [
+// Semilla cruda: los empleados sin historial. `INITIAL_EMPLEADOS` le deriva una
+// única contratación inicial a partir de sus propios campos, para que el dato no
+// quede escrito dos veces y ambas copias no puedan desincronizarse.
+const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
   { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolId:"ROL-001", activo:true,  cargo:"Administración",        fechaInicio:"2024-01-15", fechaFinal:"" },
   { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-02-01", fechaFinal:"" },
   { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-02-10", fechaFinal:"" },
@@ -45,7 +60,36 @@ export const INITIAL_EMPLEADOS: Empleado[] = [
   { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"TI", numeroDocumento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
 ];
 
-const PER_PAGE = 5;
+// Cada empleado de la semilla arranca con una contratación inicial (C01) que es
+// una proyección de sus propios campos de contrato, no una copia escrita a mano.
+export const INITIAL_EMPLEADOS: Empleado[] = EMPLEADOS_SEMILLA.map(e => ({
+  ...e,
+  contrataciones: [{
+    id: `${e.id}-C01`,
+    cargo: e.cargo,
+    rolId: e.rolId,
+    fechaInicio: e.fechaInicio,
+    fechaFinal: e.fechaFinal,
+  }],
+}));
+
+// Siguiente id de contratación para un empleado. Se apoya en el sufijo numérico
+// en vez de en `length` para no repetir un id si alguna vez se editara o quitara
+// una contratación del historial. El cero a la izquierda mantiene el orden
+// lexicético correcto (C02 < C10).
+export const nuevoContratacionId = (empleadoId: string, existentes: Contratacion[]) => {
+  const max = existentes.reduce((m, c) => {
+    const n = parseInt(c.id.split("-C")[1] ?? "", 10) || 0;
+    return Math.max(m, n);
+  }, 0);
+  return `${empleadoId}-C${String(max + 1).padStart(2, "0")}`;
+};
+
+// De la más reciente a la más antigua. Primero por fecha de inicio y, si empatan
+// (dos contrataciones el mismo día), por id, que ya refleja el orden en que se
+// fueron registrando.
+export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
+  [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || b.id.localeCompare(a.id));
 
 export function GestionEmpleadosScreen({
   roles,
@@ -72,6 +116,19 @@ export function GestionEmpleadosScreen({
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
   const [showCreate,  setShowCreate] = useState(false);
 
+  // Modal "Nueva contratación": registra una entrada más en el historial del
+  // empleado elegido y, con esos mismos datos, actualiza su contratación vigente.
+  const [showContrat,       setShowContrat]      = useState(false);
+  const [ctrEmpleadoId,     setCtrEmpleadoId]    = useState("");
+  const [ctrActivo,         setCtrActivo]        = useState(true);
+  const [ctrRolId,          setCtrRolId]         = useState<string>(
+    () => roles.find(r => r.activo)?.id ?? "ROL-003",
+  );
+  const [ctrCargo,          setCtrCargo]         = useState("");
+  const [ctrFechaInicio,    setCtrFechaInicio]   = useState("");
+  const [ctrFechaFinal,     setCtrFechaFinal]    = useState("");
+  const [ctrErrors,         setCtrErrors]        = useState<Record<string, string>>({});
+
   const [newNombre,       setNewNombre]       = useState("");
   const [newCorreo,       setNewCorreo]       = useState("");
   const [newTelefono,     setNewTelefono]     = useState("");
@@ -90,6 +147,14 @@ export function GestionEmpleadosScreen({
 
   const rolInfo = (rolId: string) => roles.find(r => r.id === rolId) ?? null;
   const rolNombre = (rolId: string) => rolInfo(rolId)?.nombre ?? rolId;
+
+  // Historial del empleado abierto en el modal de detalle, de la contratación
+  // más reciente a la más antigua. Un `empleado` leído de una build anterior
+  // podría no tener la lista, así que se tolerate como vacío.
+  const detalleHistorial = useMemo(
+    () => (detailItem ? ordenarContrataciones(detailItem.contrataciones ?? []) : []),
+    [detailItem],
+  );
 
   // Fuente de verdad del rol/identidad = lista `usuarios` (la que consulta el login).
   // Cada operación sobre un empleado actualiza (o crea) su registro Usuario vinculado por correo.
@@ -147,14 +212,63 @@ export function GestionEmpleadosScreen({
       const matchE = filterEstado === "todos" || (filterEstado === "activo" ? e.activo : !e.activo);
       return matchQ && matchE;
     });
-    if (sortBy === "cargo")      r = [...r].sort((a,b) => a.cargo.localeCompare(b.cargo));
-    else if (sortBy === "estado") r = [...r].sort((a,b) => Number(b.activo) - Number(a.activo));
-    else                          r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
+    // Ni "nombre" ni "cargo" dependen de `activo`: con el filtro en "Todos los
+    // estados" los activos y los inactivos quedan intercalados. Se eliminó la
+    // ordenación por estado, que solo servía para agruparlos en bloques.
+    if (sortBy === "cargo") r = [...r].sort((a,b) => a.cargo.localeCompare(b.cargo));
+    else                    r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
     return r;
   }, [empleados, search, filterEstado, sortBy]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged      = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
+  // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
+  // interno, así que el paginador es la única forma de ver más empleados.
+  // Se mide la tarjeta, que al ser `flex-1 min-h-0` dentro de una cadena
+  // bloqueada a `h-dvh` tiene un alto que NO depende de cuántas filas haya,
+  // de modo que no hay bucle de realimentación entre medición y render.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [filasPorPagina, setFilasPorPagina] = useState(6);
+  const hayFilasRef = useRef(false);
+  hayFilasRef.current = filtered.length > 0;
+
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const medir = () => {
+      // Sin resultados la única <tr> es la de "No se encontraron", que mide
+      // distinto: se conserva el último valor válido en vez de calcular con ella.
+      if (!hayFilasRef.current) return;
+      const thead = card.querySelector("thead");
+      const fila  = card.querySelector("tbody tr");
+      if (!(thead instanceof HTMLElement) || !(fila instanceof HTMLElement)) return;
+      const altoFila = fila.offsetHeight;
+      if (altoFila <= 0) return;
+      const disponible = card.clientHeight - thead.offsetHeight;
+      // `divide-y` pone 1px entre filas que el offsetHeight de la primera fila
+      // no incluye, así que el divisor lleva ese +1 y el numerador lo compensa.
+      // Sin piso mínimo: si se forzara un mínimo mayor de lo que cabe, la última
+      // fila de cada página quedaría recortada por el `overflow-hidden` de la
+      // tarjeta sin poder alcanzarla con el paginador (estaría en la misma
+      // página), que es peor que un paginador más largo.
+      const n = Math.max(1, Math.floor((disponible + 1) / (altoFila + 1)));
+      setFilasPorPagina(prev => (prev === n ? prev : n));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
+
+  // Si al encoger la ventana caben menos filas por página, la página actual
+  // puede quedar fuera de rango: se vuelve a la primera.
+  useEffect(() => { setPage(1); }, [filasPorPagina]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
+  // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
+  // se reduce (p. ej. al apagar un switch con un filtro de estado activo) `page`
+  // quedaría fuera de rango, la tabla saldría vacía y la paginación se ocultaría,
+  // dejando al usuario sin forma de volver.
+  const pageActual = Math.min(page, totalPages);
+  const paged      = filtered.slice((pageActual-1)*filasPorPagina, pageActual*filasPorPagina);
 
   const toggleEstado = (id: string) => {
     setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: !e.activo } : e));
@@ -288,6 +402,15 @@ export function GestionEmpleadosScreen({
       cargo: newCargo.trim(),
       fechaInicio: newFechaInicio,
       fechaFinal: newFechaFinal,
+      // El alta es en sí misma la primera contratación: se guarda como registro
+      // del historial para que quede desde el mismo momento, no solo implícita.
+      contrataciones: [{
+        id: nuevoContratacionId(newId, []),
+        cargo: newCargo.trim(),
+        rolId: newRolId,
+        fechaInicio: newFechaInicio,
+        fechaFinal: newFechaFinal,
+      }],
     };
 
     setEmpleados(prev => [nuevoEmpleado, ...prev]);
@@ -295,6 +418,64 @@ export function GestionEmpleadosScreen({
     setShowCreate(false);
     resetCreate();
     toast.success(`Empleado ${newNombre.trim()} creado correctamente`);
+  };
+
+  const resetContratacion = () => {
+    setCtrEmpleadoId(""); setCtrActivo(true);
+    setCtrRolId(roles.find(r => r.activo)?.id ?? "ROL-003");
+    setCtrCargo(""); setCtrFechaInicio(""); setCtrFechaFinal("");
+    setCtrErrors({});
+  };
+
+  // Registra una contratación nueva. Añade la entrada al historial SIN tocar las
+  // anteriores y, a la vez, deja los campos de contrato del empleado reflejando
+  // esta última contratación, que es lo que muestra la tabla.
+  const handleNuevaContratacion = () => {
+    const errs: Record<string, string> = {};
+    const emp = empleados.find(e => e.id === ctrEmpleadoId);
+
+    if (!ctrEmpleadoId) errs.empleado = "Selecciona un empleado";
+    else if (!emp) errs.empleado = "El empleado seleccionado no existe";
+
+    if (!ctrRolId) errs.rol = "Selecciona un rol";
+    if (!ctrCargo.trim()) errs.cargo = "El cargo es obligatorio";
+    if (!ctrFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
+    // Solo tiene sentido si la contratación ya empezó: comparar como texto ISO
+    // (YYYY-MM-DD) es equivalente a comparar fechas.
+    if (ctrFechaFinal && ctrFechaFinal < ctrFechaInicio) {
+      errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
+    }
+
+    if (Object.keys(errs).length) { setCtrErrors(errs); return; }
+
+    const contrato: Contratacion = {
+      id: nuevoContratacionId(emp!.id, emp!.contrataciones ?? []),
+      cargo: ctrCargo.trim(),
+      rolId: ctrRolId,
+      fechaInicio: ctrFechaInicio,
+      fechaFinal: ctrFechaFinal,
+    };
+
+    const actualizado: Empleado = {
+      ...emp!,
+      cargo: contrato.cargo,
+      rolId: contrato.rolId,
+      fechaInicio: contrato.fechaInicio,
+      fechaFinal: contrato.fechaFinal,
+      activo: ctrActivo,
+      contrataciones: [...(emp!.contrataciones ?? []), contrato],
+    };
+
+    setEmpleados(prev => prev.map(e => (e.id === actualizado.id ? actualizado : e)));
+    // El rol y el estado del empleado son también los del Usuario que usa el
+    // login, así que hay que reflejarlos o la etiqueta de rol de la pantalla
+    // de Usuarios quedaría mostrando el valor anterior.
+    upsertUsuario(actualizado);
+    if (detailItem?.id === actualizado.id) setDetailItem(actualizado);
+
+    setShowContrat(false);
+    resetContratacion();
+    toast.success(`Contratación registrada para ${actualizado.nombre}`);
   };
 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
@@ -312,10 +493,10 @@ export function GestionEmpleadosScreen({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => toast.info("Generando reporte de empleados...")}
+            onClick={() => { resetContratacion(); setShowContrat(true); }}
             className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
           >
-            <FileText className="w-4 h-4" /> Generar reporte
+            <Briefcase className="w-4 h-4" /> Nueva contratación
           </button>
           <button
             onClick={() => { resetCreate(); setShowCreate(true); }}
@@ -356,12 +537,13 @@ export function GestionEmpleadosScreen({
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} className={iCls}>
           <option value="nombre">Ordenar por nombre</option>
           <option value="cargo">Ordenar por cargo</option>
-          <option value="estado">Ordenar por estado</option>
         </select>
       </div>
 
-{/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+      {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
+          el número de filas por página se calcula arriba para que siempre quepan
+          enteras y la navegación sea solo por el paginador. */}
+      <div ref={cardRef} className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
         <table className="w-full">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -425,26 +607,136 @@ export function GestionEmpleadosScreen({
       {/* Paginación */}
       {filtered.length > 0 && (
         <div className="flex items-center justify-center shrink-0">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronLeft className="w-4 h-4" />
+          {/* Los controles se muestran siempre, incluso con una sola página: con
+              las filas por página adaptativas puede dar 1 sola página, y ocultarlos
+              dejaría la tabla sin ninguna señal de que la lista estaba completa.
+              Con una sola página ambas flechas salen deshabilitadas (disabled:opacity-40). */}
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={pageActual === 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
+              <button key={n} onClick={() => setPage(n)}
+                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
+                {n}
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
-                <button key={n} onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                  {n}
-                </button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={pageActual === totalPages}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Modal: Nueva contratación */}
+      <AnimatePresence>
+        {showContrat && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+                <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva Contratación</h3>
+                  <button onClick={() => { setShowContrat(false); resetContratacion(); }}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
+                  {/* Empleado al que se le registra la contratación */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Empleado <span className="text-primary">*</span>
+                    </label>
+                    <select value={ctrEmpleadoId} autoFocus
+                      onChange={e => { setCtrEmpleadoId(e.target.value); if (ctrErrors.empleado) setCtrErrors(p => ({ ...p, empleado: undefined })); }}
+                      className={`${fCls(ctrErrors.empleado)} cursor-pointer`}>
+                      <option value="">Selecciona un empleado…</option>
+                      {empleados.map(e => (
+                        <option key={e.id} value={e.id}>
+                          {e.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {ctrErrors.empleado && <p className="text-xs text-red-500 mt-1">{ctrErrors.empleado}</p>}
+                  </div>
+
+                  {/* Datos de Tb_Empleado */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Tb_Empleado</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+                    <select value={ctrActivo ? "activo" : "inactivo"}
+                      onChange={e => setCtrActivo(e.target.value === "activo")}
+                      className={`${fCls()} cursor-pointer`}>
+                      <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Rol <span className="text-primary">*</span>
+                    </label>
+                    <select value={ctrRolId}
+                      onChange={e => { setCtrRolId(e.target.value); if (ctrErrors.rol) setCtrErrors(p => ({ ...p, rol: undefined })); }}
+                      className={`${fCls(ctrErrors.rol)} cursor-pointer`}>
+                      {roles.filter(r => r.activo).map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
+                    {ctrErrors.rol && <p className="text-xs text-red-500 mt-1">{ctrErrors.rol}</p>}
+                  </div>
+
+                  {/* Datos de Contratacion_empleado */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratacion_empleado</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Cargo <span className="text-primary">*</span>
+                    </label>
+                    <input type="text" value={ctrCargo}
+                      onChange={e => { setCtrCargo(e.target.value); if (ctrErrors.cargo) setCtrErrors(p => ({ ...p, cargo: undefined })); }}
+                      placeholder="Ej: Cajero"
+                      className={fCls(ctrErrors.cargo)} />
+                    {ctrErrors.cargo && <p className="text-xs text-red-500 mt-1">{ctrErrors.cargo}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Fecha de inicio <span className="text-primary">*</span>
+                    </label>
+                    <input type="date" value={ctrFechaInicio}
+                      onChange={e => { setCtrFechaInicio(e.target.value); if (ctrErrors.fechaInicio) setCtrErrors(p => ({ ...p, fechaInicio: undefined })); }}
+                      className={fCls(ctrErrors.fechaInicio)} />
+                    {ctrErrors.fechaInicio && <p className="text-xs text-red-500 mt-1">{ctrErrors.fechaInicio}</p>}
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Fecha final <span className="text-muted-foreground font-normal">(opcional)</span>
+                    </label>
+                    <input type="date" value={ctrFechaFinal}
+                      onChange={e => { setCtrFechaFinal(e.target.value); if (ctrErrors.fechaFinal) setCtrErrors(p => ({ ...p, fechaFinal: undefined })); }}
+                      className={fCls(ctrErrors.fechaFinal)} />
+                    {ctrErrors.fechaFinal && <p className="text-xs text-red-500 mt-1">{ctrErrors.fechaFinal}</p>}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-4 py-3 border-t border-border">
+                  <button onClick={() => { setShowContrat(false); resetContratacion(); }}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={handleNuevaContratacion}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    Registrar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Modal: Ver detalle */}
       <AnimatePresence>
@@ -452,7 +744,7 @@ export function GestionEmpleadosScreen({
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border">
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Empleado</h3>
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -487,6 +779,38 @@ export function GestionEmpleadosScreen({
                     </div>
                   ))}
                 </div>
+
+                {/* Historial de contrataciones. La lista lleva su propio tope de
+                    alto: el modal no crece sin límite aunque el empleado haya
+                    cambiado de cargo muchas veces. */}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">
+                    Historial de contrataciones
+                  </p>
+                  {detalleHistorial.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin contrataciones registradas</p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                      {detalleHistorial.map((c, i) => (
+                        <div key={c.id}
+                          className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-sm font-semibold text-foreground">{c.cargo}</span>
+                            {i === 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
+                                Actual
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{rolNombre(c.rolId)}</p>
+                          <p className="text-xs text-muted-foreground font-mono mt-1">
+                            {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="px-5 py-4 border-t border-border">
                 <button onClick={() => setDetailItem(null)}
@@ -515,9 +839,9 @@ export function GestionEmpleadosScreen({
                   </button>
                 </div>
 
-                <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
+                <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-2.5">
                   {/* Datos de cuenta */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-2 first:pt-0">Datos de cuenta</p>
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Nombre completo <span className="text-primary">*</span>
@@ -591,7 +915,7 @@ export function GestionEmpleadosScreen({
                   </div>
 
                   {/* Datos de Tb_Empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-2">Datos de Tb_Empleado</p>
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Tb_Empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     <select value={newActivo ? "activo" : "inactivo"}
@@ -618,7 +942,7 @@ export function GestionEmpleadosScreen({
                   </div>
 
                   {/* Datos de Contratacion_empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-2">Datos de Contratacion_empleado</p>
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratacion_empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Cargo <span className="text-primary">*</span>
