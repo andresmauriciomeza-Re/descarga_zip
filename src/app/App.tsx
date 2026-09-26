@@ -3952,10 +3952,14 @@ function RegisterScreen({
   navigate,
   usuarios,
   setUsuarios,
+  empleados,
+  clientes,
 }: {
   navigate: (s: Screen) => void;
   usuarios: Usuario[];
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
+  empleados: Empleado[];
+  clientes: Cliente[];
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -6072,6 +6076,12 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
+  // Catálogo de productos. Lo consumen GestionProductosScreen y
+  // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
+  // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
+  // `Producto` quedaron importados y sin usar, y App reventaba con
+  // "ReferenceError: productos is not defined" al renderizar el dashboard.
+  const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
@@ -6445,6 +6455,8 @@ export default function App() {
                   navigate={navigate}
                   usuarios={usuarios}
                   setUsuarios={setUsuarios}
+                  empleados={empleados}
+                  clientes={clientes}
                 />
               )}
               {screen === "client-profile" && (
