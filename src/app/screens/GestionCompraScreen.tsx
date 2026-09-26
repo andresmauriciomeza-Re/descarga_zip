@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  FileDown, Plus, Check, Ban, CheckCircle2,
+  FileDown, Plus, Check, Ban, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "./GestionInsumosScreen";
@@ -15,6 +15,7 @@ import {
   type GestionCompra,
   type OrdenCompra,
   type EstadoGestion,
+  type EstadoOrden,
   type ProveedorRef,
 } from "./OrdenCompraScreen";
 
@@ -79,7 +80,6 @@ function CompraForm({
   fullPage = false,
   onClose,
   onGuardar,
-  onAnular,
 }: {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
@@ -89,7 +89,6 @@ function CompraForm({
   fullPage?: boolean;
   onClose: () => void;
   onGuardar: (data: NuevaCompraData) => void;
-  onAnular?: (compra: GestionCompra) => void;
 }) {
   const isView = mode === "view";
   const isPage = fullPage;
@@ -112,6 +111,27 @@ function CompraForm({
   const [provSugAbierto, setProvSugAbierto] = useState(false);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
+
+  // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
+  const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
+
+  const errorNumeroFactura = numeroFactura.trim()
+    ? undefined
+    : "Ingresa el número de factura.";
+  const errorFechaFactura = fechaFactura ? undefined : "Selecciona la fecha de la factura.";
+  // El proveedor es opcional en este formulario.
+  const errorItems = items.length > 0 ? undefined : "Agrega al menos un insumo a la factura.";
+
+  const algunoTocado = tocado.numeroFactura || tocado.fechaFactura;
+  const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
+    setTocado((t) => ({ ...t, [campo]: true }));
+
+  /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
+  const campoCls = (error?: string) =>
+    `${iCls} transition-colors ${
+      error ? "border-red-400 focus:ring-red-300" : ""
+    }`;
 
   const provSugs = useMemo(() => {
     const q = provQuery.trim().toLowerCase();
@@ -157,6 +177,11 @@ function CompraForm({
   }, []);
 
   const total = items.reduce((s, item) => s + item.cantidad * item.precioUnitario, 0);
+
+  // Requiere al menos un insumo y que el total sea mayor que cero.
+  const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
+  const formValido =
+    !errorNumeroFactura && !errorFechaFactura && !errorItems && !errorTotal;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
     setProvQuery(p.nombre);
@@ -221,7 +246,18 @@ function CompraForm({
     setItems((prev) => prev.filter((item) => item.rowId !== rowId));
   };
 
+  const actualizarItem = (
+    rowId: string,
+    patch: Partial<ItemFactura>
+  ) => {
+    setItems((prev) =>
+      prev.map((item) => (item.rowId === rowId ? { ...item, ...patch } : item))
+    );
+  };
+
   const guardar = () => {
+    setIntentoGuardar(true);
+
     if (!numeroFactura.trim()) {
       toast.error("Ingresa el número de factura.");
       return;
@@ -230,10 +266,7 @@ function CompraForm({
       toast.error("Selecciona la fecha de la factura.");
       return;
     }
-    if (!provQuery.trim()) {
-      toast.error("Selecciona o crea un proveedor.");
-      return;
-    }
+    // El proveedor es opcional: si se escribió, se usa; si no, queda vacío.
     if (items.length === 0) {
       toast.error("Agrega al menos un insumo recibido.");
       return;
@@ -255,16 +288,32 @@ function CompraForm({
 
   return (
     <>
-      <div className={isPage ? `w-full p-6 ${FORM_MAXW} mx-auto` : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
-        <div className={isPage ? "w-full" : "flex min-h-full items-center justify-center p-4"}>
+      <div
+        className={
+          isPage
+            ? `w-full p-6 ${FORM_MAXW} mx-auto h-full flex flex-col`
+            : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
+        }
+      >
+        <div
+          className={
+            isPage
+              ? "w-full h-full flex flex-col"
+              : "h-full flex items-center justify-center p-4"
+          }
+        >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${FORM_MAXW}${isPage ? "" : " my-4"}`}
+            className={`flex flex-col w-full ${FORM_MAXW}${
+              isPage
+                ? "h-full"
+                : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
+            }`}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div>
                 <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
                   {isView ? "Detalle de Compra" : "Nueva Compra"}
@@ -294,7 +343,13 @@ function CompraForm({
               </div>
             </div>
 
-            <div className="px-5 py-5 space-y-5">
+            <div
+              className={
+                isPage
+                  ? "flex-1 min-h-0 px-5 py-4 flex flex-col gap-4 overflow-hidden"
+                  : "flex-1 min-h-0 px-5 py-5 space-y-5 overflow-y-auto"
+              }
+            >
               {/* Banners de estado */}
               {isView && compra?.estado === "Recibido" && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
@@ -309,7 +364,7 @@ function CompraForm({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 shrink-0">
                 <div className={campoMedioCls}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                     Número de factura {!isView && <span className="text-red-500">*</span>}
@@ -320,16 +375,23 @@ function CompraForm({
                     <input
                       value={numeroFactura}
                       onChange={(e) => setNumeroFactura(e.target.value)}
+                      onBlur={() => marcarTocado("numeroFactura")}
                       placeholder="Ej: FAC-2026-0001"
-                      className={iCls}
+                      className={campoCls(
+                        (tocado.numeroFactura || intentoGuardar) ? errorNumeroFactura : undefined
+                      )}
+                      aria-invalid={!!((tocado.numeroFactura || intentoGuardar) && errorNumeroFactura)}
                       autoFocus
                     />
+                  )}
+                  {!isView && (tocado.numeroFactura || intentoGuardar) && errorNumeroFactura && (
+                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNumeroFactura}</p>
                   )}
                 </div>
 
                 <div className={campoLargoCls}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    Proveedor {!isView && <span className="text-red-500">*</span>}
+                    Proveedor <span className="text-muted-foreground/70 font-normal">(opcional)</span>
                   </label>
                   {isView ? (
                     <p className="text-sm font-semibold text-foreground py-2">{provQuery || "—"}</p>
@@ -393,9 +455,16 @@ function CompraForm({
                       type="date"
                       value={fechaFactura}
                       onChange={(e) => setFechaFactura(e.target.value)}
+                      onBlur={() => marcarTocado("fechaFactura")}
                       max={today}
-                      className={iCls}
+                      className={campoCls(
+                        (tocado.fechaFactura || intentoGuardar) ? errorFechaFactura : undefined
+                      )}
+                      aria-invalid={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
                     />
+                  )}
+                  {!isView && (tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
+                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
                   )}
                 </div>
 
@@ -418,63 +487,66 @@ function CompraForm({
 
               {/* Agregar insumo — solo en el formulario de creación */}
               {!isView && (
-                <CompactInsumoForm
-                  containerRef={itemRef}
-                  titulo="Agregar insumo"
-                  nombre={itemNombre}
-                  onNombreChange={(value) => {
-                    setItemNombre(value);
-                    setItemId("");
-                    setItemSugAbierto(true);
-                  }}
-                  onNombreFocus={() => setItemSugAbierto(true)}
-                  cantidad={itemCantidad}
-                  onCantidadChange={setItemCantidad}
-                  unidad={itemUnidad}
-                  onUnidadChange={setItemUnidad}
-                  precio={itemPrecio}
-                  onPrecioChange={setItemPrecio}
-                  onAgregar={agregarItem}
-                  suggestions={itemSugs}
-                  showSuggestions={itemSugAbierto}
-                  onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
-                />
+                <div className="shrink-0">
+                  <CompactInsumoForm
+                    containerRef={itemRef}
+                    titulo="Agregar insumo"
+                    nombre={itemNombre}
+                    onNombreChange={(value) => {
+                      setItemNombre(value);
+                      setItemId("");
+                      setItemSugAbierto(true);
+                    }}
+                    onNombreFocus={() => setItemSugAbierto(true)}
+                    cantidad={itemCantidad}
+                    onCantidadChange={setItemCantidad}
+                    unidad={itemUnidad}
+                    onUnidadChange={setItemUnidad}
+                    precio={itemPrecio}
+                    onPrecioChange={setItemPrecio}
+                    onAgregar={agregarItem}
+                    suggestions={itemSugs}
+                    showSuggestions={itemSugAbierto}
+                    onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
+                  />
+                </div>
+              )}
+
+              {!isView && (errorItems || errorTotal) && (algunoTocado || intentoGuardar) && (
+                <p className="text-xs text-red-500 ml-0.5 shrink-0">
+                  {errorItems ?? errorTotal}
+                </p>
               )}
 
               <InsumosSolicitadosTable
                 items={items}
                 showActions={!isView}
                 onRemove={!isView ? eliminarItem : undefined}
+                onUpdate={!isView ? actualizarItem : undefined}
                 totalLabel="Total recibido"
+                className={isPage ? "flex-1 min-h-0" : ""}
               />
             </div>
 
-            <div className="flex gap-3 px-5 py-4 border-t border-border">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-              >
-                {isView ? "Cerrar" : "Cancelar"}
-              </button>
-              {isView && compra?.estado === "Recibido" && onAnular && (
+            {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
+            {!isView && (
+              <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
-                  onClick={() => { onClose(); onAnular(compra); }}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 inline-flex items-center justify-center gap-2"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
-                  <Ban className="w-4 h-4" />
-                  Anular Compra
+                  Cancelar
                 </button>
-              )}
-              {!isView && (
                 <button
                   onClick={guardar}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                  disabled={!formValido}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar Compra
+                  Guardar
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
@@ -550,6 +622,7 @@ interface Props {
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   ordenes: OrdenCompra[];
+  setOrdenes: React.Dispatch<React.SetStateAction<OrdenCompra[]>>;
   insumos: Insumo[];
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
@@ -560,14 +633,14 @@ interface Props {
 }
 
 export function GestionCompraScreen({
-  gestiones, setGestiones, ordenes, insumos, proveedores, setProveedores,
+  gestiones, setGestiones, ordenes, setOrdenes, insumos, proveedores, setProveedores,
   onNuevaCompra,
   canCreate = true,
 }: Props) {
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
-  const [anularConfirm, setAnularConfirm] = useState<GestionCompra | null>(null);
+  const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion; next: EstadoGestion } | null>(null);
 
   const filtered = useMemo(() =>
     gestiones.filter(g => {
@@ -583,15 +656,44 @@ export function GestionCompraScreen({
 
   const getOrden = (oid: string) => ordenes.find(o => o.id === oid);
 
-  const handleCambiarEstado = (id: string, next: EstadoGestion) => {
-    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
-    toast.success(`Estado cambiado a: ${next}`);
+  /** Orden de compra relacionada con la compra del diálogo de confirmación. */
+  const estadoOrdenConfirm = estadoConfirm
+    ? gestiones.find((g) => g.id === estadoConfirm.id)?.ordenId ?? ""
+    : "";
+
+  /** Pide confirmación antes de aplicar el cambio de estado. */
+  const pedirCambiarEstado = (id: string, next: EstadoGestion) => {
+    const actual = gestiones.find((g) => g.id === id)?.estado;
+
+    // "Anulado" es definitivo: no se puede volver a "Recibido".
+    if (!actual || actual === next || actual === "Anulado") {
+      setEstadoConfirm(null);
+      return;
+    }
+
+    setEstadoConfirm({ id, from: actual, next });
   };
 
-  const handleAnularCompra = (g: GestionCompra) => {
-    setGestiones((prev) => prev.map((x) => (x.id === g.id ? { ...x, estado: "Anulado" } : x)));
-    toast.success(`Compra ${g.id} anulada`);
-    setAnularConfirm(null);
+  const handleCambiarEstado = (id: string, next: EstadoGestion) => {
+    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
+    setEstadoConfirm(null);
+
+    // Anular una factura anula también su orden de compra: queda cerrada y no
+    // admite más facturas en "Recibido".
+    const ordenId = next === "Anulado" ? gestiones.find((g) => g.id === id)?.ordenId : "";
+
+    if (ordenId) {
+      setOrdenes((prev) =>
+        prev.map((o) =>
+          o.id === ordenId ? { ...o, estado: "Anulado" as EstadoOrden } : o
+        )
+      );
+
+      toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
+      return;
+    }
+
+    toast.success(`Estado cambiado a: ${next}`);
   };
 
   const handleDownload = () => {
@@ -601,7 +703,7 @@ export function GestionCompraScreen({
     gestiones.forEach(g => {
       const orden = getOrden(g.ordenId);
       rows.push([
-        g.id, g.ordenId || "—", orden?.proveedor ?? g.proveedor ?? "—",
+        g.id, g.ordenId || "—", (orden?.proveedor ?? g.proveedor) || "—",
         g.numeroFactura, g.fechaFactura,
         String(g.valorTotal), g.estado,
       ]);
@@ -616,8 +718,8 @@ export function GestionCompraScreen({
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between gap-4 mb-6">
+    <div className="px-6 pt-5 pb-4 max-w-5xl mx-auto h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Gestión de Compras
@@ -645,7 +747,7 @@ export function GestionCompraScreen({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mb-5">
+      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
         <div className="relative w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -657,8 +759,8 @@ export function GestionCompraScreen({
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3 flex-1 min-h-0">
+        <div className="overflow-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
@@ -685,7 +787,7 @@ export function GestionCompraScreen({
                   return (
                     <tr key={g.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3.5 text-sm text-foreground">
-                        {orden?.proveedor ?? g.proveedor ?? "—"}
+                        {(orden?.proveedor ?? g.proveedor) || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {g.fechaFactura || "—"}
@@ -701,15 +803,24 @@ export function GestionCompraScreen({
                           : <span className="text-muted-foreground font-normal">—</span>}
                       </td>
                       <td className="px-4 py-3.5">
-                        <select
-                          value={g.estado}
-                          onChange={(e) => handleCambiarEstado(g.id, e.target.value as EstadoGestion)}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${ESTADO_CONFIG[g.estado]}`}
-                          title="Cambiar estado"
+                        <button
+                          type="button"
+                          onClick={() => pedirCambiarEstado(g.id, "Anulado")}
+                          disabled={g.estado === "Anulado"}
+                          title={
+                            g.estado === "Anulado"
+                              ? "Una compra anulada no puede volver al estado Recibido"
+                              : "Marcar como Anulado"
+                          }
+                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-all ${
+                            g.estado === "Anulado"
+                              ? `${ESTADO_CONFIG[g.estado]} opacity-80 cursor-not-allowed`
+                              : `${ESTADO_CONFIG[g.estado]} cursor-pointer hover:brightness-95 active:scale-95`
+                          }`}
                         >
-                          <option value="Recibido">Recibido</option>
-                          <option value="Anulado">Anulado</option>
-                        </select>
+                          {g.estado === "Anulado" && <Lock className="w-3 h-3" />}
+                          {g.estado}
+                        </button>
                       </td>
                       <td className="px-4 py-3.5">
                         <button
@@ -729,7 +840,7 @@ export function GestionCompraScreen({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center mt-4">
+        <div className="flex items-center justify-center shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -772,26 +883,39 @@ export function GestionCompraScreen({
             insumos={insumos}
             onClose={() => setDetail(null)}
             onGuardar={() => {}}
-            onAnular={(c) => setAnularConfirm(c)}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
-        {anularConfirm && (
+        {estadoConfirm && (
           <ConfirmModal
-            title="Anular Compra"
-            body={`¿Deseas anular la compra ${anularConfirm.id}?`}
-            detail="Esta acción no puede revertirse."
-            confirmLabel="Anular"
-            danger={true}
-            icon={
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Ban className="w-5 h-5 text-red-600" />
-              </div>
+            title={`¿Cambiar el estado a ${estadoConfirm.next}?`}
+            body={`La compra ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
+            detail={
+              estadoConfirm.next === "Anulado"
+                ? estadoOrdenConfirm
+                  ? `La orden ${estadoOrdenConfirm} también quedará anulada y no podrá recibir más facturas.`
+                  : "Una compra anulada no puede volver al estado Recibido."
+                : "Volverá a contar en los totales de Gestión de Compras."
             }
-            onConfirm={() => handleAnularCompra(anularConfirm)}
-            onCancel={() => setAnularConfirm(null)}
+            confirmLabel={
+              estadoConfirm.next === "Anulado" ? "Anular" : `Marcar ${estadoConfirm.next}`
+            }
+            danger={estadoConfirm.next === "Anulado"}
+            icon={
+              estadoConfirm.next === "Anulado" ? (
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-red-600" />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                </div>
+              )
+            }
+            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
+            onCancel={() => setEstadoConfirm(null)}
           />
         )}
       </AnimatePresence>

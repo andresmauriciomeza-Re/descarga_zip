@@ -6260,7 +6260,13 @@ export default function App() {
       : "ml-60"
     : "";
 
-  const isLockedScreen = isAdmin && (screen === "clientes" || screen === "users" || screen === "empleados");
+  const isLockedScreen = isAdmin && (
+    screen === "clientes" || screen === "users" || screen === "empleados" ||
+    // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
+    screen === "orden-compra" || screen === "nueva-orden-compra" ||
+    screen === "recepcion-compra" || screen === "gestion-compra" ||
+    screen === "nueva-compra"
+  );
 
   return (
     <div
@@ -6545,13 +6551,13 @@ export default function App() {
                   insumos={insumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
-                  onGuardar={(recepcion) => {
+                  onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
                       prev.map((o) =>
                         o.id === ordenRecepcion.id
                           ? {
                               ...o,
-                              estado: "Completado",
+                              estado,
                               recepcion,
                             }
                           : o
@@ -6559,21 +6565,6 @@ export default function App() {
                     );
 
                     setOrdenRecepcion(null);
-                  }}
-                  onAnular={() => {
-                    setOrdenes((prev) =>
-                      prev.map((o) =>
-                        o.id === ordenRecepcion.id
-                          ? {
-                              ...o,
-                              estado: "Anulado",
-                            }
-                          : o
-                      )
-                    );
-
-                    setOrdenRecepcion(null);
-                    setScreen("orden-compra");
                   }}
                   onBack={() => {
                     setOrdenRecepcion(null);
@@ -6587,6 +6578,7 @@ export default function App() {
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   ordenes={ordenes}
+                  setOrdenes={setOrdenes}
                   insumos={insumos}
                   proveedores={proveedores}
                   setProveedores={setProveedores}
