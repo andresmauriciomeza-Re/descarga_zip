@@ -445,7 +445,6 @@ export interface OrdenFormData {
 
 export function OrdenModal({
   mode, orden, proveedores, insumos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
-  onEnviarDesdeVista, onAnularDesdeVista,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
@@ -458,8 +457,6 @@ export function OrdenModal({
   onClose: () => void;
   onGuardar: (d: OrdenFormData) => void;
   onNuevoProveedor: (p: ProveedorRef) => string;
-  onEnviarDesdeVista?: (o: OrdenCompra) => void;
-  onAnularDesdeVista?: (o: OrdenCompra) => void;
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -510,6 +507,31 @@ export function OrdenModal({
   const [aFromCat, setAFromCat] = useState(false);
   const [aShowSug, setAShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
+
+  // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
+  const [tocado, setTocado] = useState({ proveedor: false, fecha: false });
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
+
+  // En "compra" el estado siempre trae un valor por defecto.
+  const errorProveedor = form.proveedor.trim()
+    ? undefined
+    : "Selecciona o crea un proveedor.";
+  const errorFecha = form.fecha ? undefined : "Selecciona la fecha de la orden.";
+  const errorNumeroFactura =
+    isCompra && !form.numeroFactura?.trim()
+      ? "El número de factura es obligatorio."
+      : undefined;
+  const errorItems = form.items.length > 0 ? undefined : "Agrega al menos un insumo a la orden.";
+
+  const formValido =
+    !errorProveedor && !errorFecha && !errorNumeroFactura && !errorItems && !!form.estado;
+  const algunoTocado = tocado.proveedor || tocado.fecha;
+  const marcarTocado = (campo: "proveedor" | "fecha") =>
+    setTocado((t) => ({ ...t, [campo]: true }));
+
+  /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
+  const campoCls = (error?: string) =>
+    `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
   const suggestions = useMemo(() =>
     aNombre.trim().length >= 1
@@ -575,7 +597,10 @@ export function OrdenModal({
   };
 
   const handleGuardar = () => {
+    setIntentoGuardar(true);
+
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
+    if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un insumo."); return; }
     if (!isCompra && form.estado === "Enviado") { setShowSendConf(true); return; }
@@ -584,17 +609,33 @@ export function OrdenModal({
 
   return (
     <>
-      <div className={isPage ? `w-full p-6 ${FORM_MAXW} mx-auto` : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"}>
-        <div className={isPage ? "w-full" : "flex min-h-full items-center justify-center p-4"}>
+      <div
+        className={
+          isPage
+            ? `w-full p-6 ${FORM_MAXW} mx-auto h-full flex flex-col`
+            : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
+        }
+      >
+        <div
+          className={
+            isPage
+              ? "w-full h-full flex flex-col"
+              : "h-full flex items-center justify-center p-4"
+          }
+        >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`bg-card rounded-2xl w-full shadow-2xl border border-border ${FORM_MAXW}${isPage ? "" : " my-4"}`}
+            className={`flex flex-col w-full ${FORM_MAXW}${
+              isPage
+                ? "h-full"
+                : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
+            }`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div>
                 <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
                   {mode === "create"
@@ -619,7 +660,13 @@ export function OrdenModal({
               </div>
             </div>
 
-            <div className="px-5 py-5 space-y-5">
+            <div
+              className={
+                isPage
+                  ? "flex-1 min-h-0 px-5 py-4 flex flex-col gap-4 overflow-hidden"
+                  : "flex-1 min-h-0 px-5 py-5 space-y-5 overflow-y-auto"
+              }
+            >
               {/* Status banners */}
               {isView && orden?.estado === "Completado" && orden.recepcion && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
@@ -641,20 +688,25 @@ export function OrdenModal({
               )}
 
               {/* Fields */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 shrink-0">
                 {isCompra && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura *</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura <span className="text-red-500">*</span></label>
                     {isView
                       ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "—"}</p>
                       : (
                         <input
                           value={form.numeroFactura ?? ""}
                           onChange={e => pf({ numeroFactura: e.target.value })}
+                          onBlur={() => setIntentoGuardar(true)}
                           placeholder="Ej: FAC-2024-0001"
-                          className={iCls}
+                          className={campoCls(intentoGuardar ? errorNumeroFactura : undefined)}
+                          aria-invalid={!!(intentoGuardar && errorNumeroFactura)}
                         />
                       )}
+                    {!isView && intentoGuardar && errorNumeroFactura && (
+                      <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNumeroFactura}</p>
+                    )}
                   </div>
                 )}
                 {orden?.id && (
@@ -664,7 +716,7 @@ export function OrdenModal({
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Proveedor</label>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Proveedor {!isView && <span className="text-red-500">*</span>}</label>
                   {isView
                     ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
                     : (
@@ -678,8 +730,10 @@ export function OrdenModal({
                             setShowProvSug(true);
                           }}
                           onFocus={() => setShowProvSug(true)}
+                          onBlur={() => marcarTocado("proveedor")}
                           placeholder="Buscar por nombre, NIT, asesor o email..."
-                          className={`${iCls} pl-10`}
+                          className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} pl-10`}
+                          aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
                         />
                         {showProvSug && (
                           <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
@@ -714,16 +768,31 @@ export function OrdenModal({
                         )}
                       </div>
                     )}
+                  {!isView && (tocado.proveedor || intentoGuardar) && errorProveedor && (
+                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorProveedor}</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Fecha</label>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Fecha {!isView && <span className="text-red-500">*</span>}</label>
                   {isView
                     ? <p className="text-sm font-semibold text-foreground py-2">{form.fecha}</p>
-                    : <input type="date" value={form.fecha} onChange={e => pf({ fecha: e.target.value })} className={iCls} />}
+                    : (
+                      <input
+                        type="date"
+                        value={form.fecha}
+                        onChange={e => pf({ fecha: e.target.value })}
+                        onBlur={() => marcarTocado("fecha")}
+                        className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
+                        aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
+                      />
+                    )}
+                  {!isView && (tocado.fecha || intentoGuardar) && errorFecha && (
+                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFecha}</p>
+                  )}
                 </div>
                 {!isView && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
                     {isCompra ? (
                       <select
                         value={form.estado}
@@ -749,28 +818,34 @@ export function OrdenModal({
 
               {/* Agregar insumo */}
               {!isView && (
-                <CompactInsumoForm
-                  containerRef={sugRef}
-                  titulo="Agregar insumo"
-                  nombre={aNombre}
-                  onNombreChange={(value) => {
-                    setANombre(value);
-                    setAFromCat(false);
-                    setAShowSug(true);
-                  }}
-                  onNombreFocus={() => setAShowSug(true)}
-                  cantidad={aCant}
-                  onCantidadChange={setACant}
-                  unidad={aUnidad}
-                  onUnidadChange={setAUnidad}
-                  unidadDisabled={aFromCat}
-                  precio={aPrecio}
-                  onPrecioChange={setAPrecio}
-                  onAgregar={addItem}
-                  suggestions={suggestions}
-                  showSuggestions={aShowSug}
-                  onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
-                />
+                <div className="shrink-0">
+                  <CompactInsumoForm
+                    containerRef={sugRef}
+                    titulo="Agregar insumo"
+                    nombre={aNombre}
+                    onNombreChange={(value) => {
+                      setANombre(value);
+                      setAFromCat(false);
+                      setAShowSug(true);
+                    }}
+                    onNombreFocus={() => setAShowSug(true)}
+                    cantidad={aCant}
+                    onCantidadChange={setACant}
+                    unidad={aUnidad}
+                    onUnidadChange={setAUnidad}
+                    unidadDisabled={aFromCat}
+                    precio={aPrecio}
+                    onPrecioChange={setAPrecio}
+                    onAgregar={addItem}
+                    suggestions={suggestions}
+                    showSuggestions={aShowSug}
+                    onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
+                  />
+                </div>
+              )}
+
+              {!isView && errorItems && (algunoTocado || intentoGuardar) && (
+                <p className="text-xs text-red-500 ml-0.5 shrink-0">{errorItems}</p>
               )}
 
               {/* Items table */}
@@ -778,10 +853,11 @@ export function OrdenModal({
                 items={form.items}
                 showActions={!isView}
                 onRemove={!isView ? (rowId) => pf({ items: form.items.filter((i) => i.rowId !== rowId) }) : undefined}
+                className={isPage ? "flex-1 min-h-0" : ""}
               />
 
-              {/* Recepcion detail (Completado view) */}
-              {isView && orden?.estado === "Completado" && orden.recepcion && (
+              {/* Recepcion detail — acumulado de todas las facturas de la OC */}
+              {isView && orden?.recepcion && (
                 <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
                   <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
                     <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
@@ -830,39 +906,24 @@ export function OrdenModal({
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex gap-3 px-5 py-4 border-t border-border">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
-              >
-                {isView ? "Cerrar" : "Cancelar"}
-              </button>
-              {isView && orden?.estado === "Borrador" && onEnviarDesdeVista && (
+            {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
+            {!isView && (
+              <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
-                  onClick={() => { onClose(); onEnviarDesdeVista(orden); }}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 cursor-pointer active:scale-95 inline-flex items-center justify-center gap-2"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
                 >
-                  <Send className="w-4 h-4" /> Enviar a Proveedor
+                  Cancelar
                 </button>
-              )}
-              {isView && orden?.estado === "Enviado" && onAnularDesdeVista && (
-                <button
-                  onClick={() => { onClose(); onAnularDesdeVista(orden); }}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 inline-flex items-center justify-center gap-2"
-                >
-                  <Ban className="w-4 h-4" /> Anular Orden
-                </button>
-              )}
-              {!isView && (
                 <button
                   onClick={handleGuardar}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95"
+                  disabled={!formValido}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   Guardar
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
@@ -1413,7 +1474,10 @@ export function OrdenCompraScreen({
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  const getFactura = (oid: string) => gestiones.find(g => g.ordenId === oid && g.numeroFactura);
+  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && g.numeroFactura);
+
+  /** Facturas (compras) registradas para una orden. */
+  const facturasDeOrden = (oid: string) => gestiones.filter((g) => g.ordenId === oid);
 
   const handleGuardarOrden = (data: OrdenFormData) => {
     if (modal?.mode === "create") {
@@ -1451,9 +1515,22 @@ export function OrdenCompraScreen({
 
   const handleAnularOrden = (o: OrdenCompra) => {
     setOrdenes(p => p.map(x => x.id === o.id ? { ...x, estado: "Anulado" as EstadoOrden } : x));
+
+    // Anular la orden anula también sus facturas: la compra queda cerrada y no
+    // vuelve al estado "Recibido".
+    const anuladas = facturasDeOrden(o.id);
+
+    if (anuladas.length > 0) {
+      setGestiones(p => p.map(g => g.ordenId === o.id ? { ...g, estado: "Anulado" as EstadoGestion } : g));
+    }
+
     setAnularConfirm(null);
     setRecepcionOrden(null);
-    toast.success(`OC ${o.id} anulada`);
+    toast.success(
+      anuladas.length > 0
+        ? `OC ${o.id} y sus compras anuladas`
+        : `OC ${o.id} anulada`
+    );
   };
 
   const handleGuardarRecepcion = (o: OrdenCompra, rec: Recepcion) => {
@@ -1509,8 +1586,8 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between gap-4 mb-6">
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Órdenes de Compra
@@ -1538,7 +1615,7 @@ export function OrdenCompraScreen({
         </div>
       </div>
 
-      <div className="relative mb-5 max-w-sm">
+      <div className="relative mb-4 max-w-sm shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           value={search}
@@ -1548,8 +1625,8 @@ export function OrdenCompraScreen({
         />
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3 flex-1 min-h-0">
+        <div className="overflow-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
@@ -1569,22 +1646,34 @@ export function OrdenCompraScreen({
                   </tr>
                 )
                 : paged.map(o => {
-                  const factura = getFactura(o.id);
-                  const fechaRecibida = o.recepcion?.fechaRecepcion || factura?.fechaFactura;
+                  const facturas = getFacturas(o.id);
                   return (
                     <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3.5 text-sm text-foreground">{o.proveedor}</td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground">{o.fecha}</td>
                       <td className="px-4 py-3.5 text-xs">
-                        {o.estado === "Completado"
-                          ? factura?.numeroFactura
-                            ? <span className="font-mono font-semibold text-emerald-700">{factura.numeroFactura}</span>
-                            : <span className="text-amber-600 font-medium">Pendiente</span>
-                          : <span className="text-muted-foreground">—</span>}
-                        {factura?.numeroFactura && fechaRecibida && (
-                          <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
-                            Recibida: {fechaRecibida}
-                          </p>
+                        {facturas.length > 0 ? (
+                          <>
+                            {facturas.slice(0, 2).map((f) => (
+                              <span key={f.id} className="block font-mono font-semibold text-emerald-700">
+                                {f.numeroFactura}
+                              </span>
+                            ))}
+                            {facturas.length > 2 && (
+                              <span className="block text-muted-foreground">
+                                +{facturas.length - 2} factura{facturas.length - 2 > 1 ? "s" : ""}
+                              </span>
+                            )}
+                            <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
+                              {facturas.length === 1
+                                ? `Recibida: ${facturas[0].fechaFactura}`
+                                : `${facturas.length} facturas recibidas`}
+                            </p>
+                          </>
+                        ) : o.estado === "Completado" ? (
+                          <span className="text-amber-600 font-medium">Pendiente</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
@@ -1652,7 +1741,7 @@ export function OrdenCompraScreen({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center mt-4">
+        <div className="flex items-center justify-center shrink-0">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -1691,8 +1780,6 @@ export function OrdenCompraScreen({
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}
-            onEnviarDesdeVista={o => setSendConfirm(o)}
-            onAnularDesdeVista={o => setAnularConfirm(o)}
           />
         )}
       </AnimatePresence>
@@ -1718,7 +1805,11 @@ export function OrdenCompraScreen({
           <ConfirmModal
             title="Anular Orden"
             body={`¿Deseas anular la OC ${anularConfirm.id}?`}
-            detail="Esta acción no puede revertirse."
+            detail={
+              facturasDeOrden(anularConfirm.id).length > 0
+                ? `También se anularán sus ${facturasDeOrden(anularConfirm.id).length} factura(s) registradas en Gestión de Compras.`
+                : "Esta acción no puede revertirse."
+            }
             confirmLabel="Anular"
             danger={true}
             icon={
