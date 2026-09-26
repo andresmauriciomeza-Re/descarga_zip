@@ -68,7 +68,9 @@ import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
 import pizzaFondo from "@/imports/pizzafondo.jpeg";
 import fondoDefinitivo from "@/imports/fondoDefinitivo.png";
+import fondoDefinitivoNegro from "@/imports/fondoDefinitivoNegro.png";
 import pizzaDefinitiva from "@/imports/pizzaDefinitiva.png";
+import pizzaDefinitivaCompleta from "@/imports/pizzaDefinitivaCompleta.png";
 import lasanaCarne from "@/imports/lasaña_carne.png";
 import lasanaMixta from "@/imports/lasaña_mixta.png";
 import lasanaPollo from "@/imports/lasaña_pollo.png";
@@ -3446,10 +3448,12 @@ function AuthLayout({
   children,
   overlay,
   contentClassName,
+  darkMode,
 }: {
   children: React.ReactNode;
   overlay?: React.ReactNode;
   contentClassName: string;
+  darkMode: boolean;
 }) {
   return (
     <div className="relative min-h-screen bg-muted">
@@ -3457,8 +3461,9 @@ function AuthLayout({
           izquierda, el formulario a la derecha); ahora el fondo es la imagen
           entera y la tarjeta flota encima, alineada a la derecha.
 
-          `fondoDefinitivo.png` (1536x1024, ratio 1.5) es un PATRON ilustrado de
-          ingredientes, no una foto: es puramente decorativo. Viene en
+           `fondoDefinitivo.png` y `fondoDefinitivoNegro.png` (1536x1024, ratio
+           1.5) son patrones ilustrados de ingredientes, no fotos: son puramente
+           decorativos. Vienen en
           Format24bppRgb, SIN canal alfa, y ningun pixel muestreado baja de
           A250, asi que no puede transparentarse ni dejar ver el `body`.
 
@@ -3485,19 +3490,17 @@ function AuthLayout({
           1280x1024) manda el alto y se ve el 89% del ancho; en movil vertical
           baja al 31%. Al ser textura repartida, cualquier recorte se ve bien.
 
-          AVISO QUE OJO: las tarjetas son `bg-card` #ffffff y este fondo es casi
-          blanco. Antes el fondo era una foto (luminancia media 174.5) y la
-          tarjeta se separaba sola; ahora la separacion depende casi por
-          completo de la sombra (`shadow-xl` / `shadow-2xl`), porque el
-          `border-border` es solo rgba(0,0,0,0.08). Si al verlo no destaca, el
-          arreglo es una sombra o un borde mas marcado en la tarjeta, que aqui
-          NO se toca.
+           Las tarjetas usan `bg-card` y sus inputs `bg-muted`, por lo que ambos
+           adoptan automaticamente los tokens correspondientes al modo activo.
+           En claro la separacion depende casi por completo de la sombra
+           (`shadow-xl` / `shadow-2xl`), porque el `border-border` es solo
+           rgba(0,0,0,0.08).
 
           El `alt` va vacio a proposito: esto es decorativo y anunciarlo a un
           lector de pantalla es ruido. No se pierde nada porque TODO el texto
           de los formularios esta dentro de las tarjetas, que si se anuncian. */}
       <img
-        src={fondoDefinitivo}
+        src={darkMode ? fondoDefinitivoNegro : fondoDefinitivo}
         alt=""
         aria-hidden="true"
         className="absolute inset-0 z-0 w-full h-full object-cover object-center"
@@ -3507,47 +3510,17 @@ function AuthLayout({
           `z-0` y el contenido `z-20`, asi que el orden queda explicito y no
           depende del DOM).
 
-          `pizzaDefinitiva.png` (612x408) es el recorte de la pizza con fondo
-          quitado, y OJO con dos cosas que no se ven hasta que se mide:
+           `pizzaDefinitivaCompleta.png` (612x407) contiene la pizza circular
+           completa. Su fondo es transparente (incluidas las esquinas), asi que
+           se integra con ambos patrones de fondo sin formar un recuadro blanco.
+           El import de `pizzaDefinitiva.png` se conserva por compatibilidad con
+           la referencia anterior, pero esta imagen ya no se utiliza.
 
-          1) NO tiene fondo blanco: es `Format32bppArgb` con alfa real, A=0 en
-             las cuatro esquinas. No hay ningun rectangulo blanco que recortar
-             ni que tratar. Es ademas el mismo archivo byte a byte que
-             `pizzafondo-removebg-preview.png` (mismo MD5).
-
-          2) La pizza esta CORTA por la izquierda: la mascara de alfa es una D
-             (arco circular a la derecha, borde vertical recto en x=0, con 74%
-             de opacidad justo en el borde y sin estrecharse). El recorte viene
-             de la foto original, no de remove.bg: en `pizzafondo.jpeg` el
-             pixel(0,421) tambien es masa de la masa. Por eso el `left-0`: al
-             apoyar el corte contra el borde de la pantalla se vuelve
-             invisible. Si alguna vez se la separa del borde, aparece una linea
-             vertical recta cruzando la pizza y se ve rota.
-
-          El ancho se calcula sobre el CANVAS, no sobre la pizza. El contenido
-          real es solo `x 0..306, y 23..402` (307x380, ratio 0.808) y la mitad
-          derecha del lienzo es 100% transparente, o sea que la pizza es el
-          50.16% del ancho. De ahi el factor 2 y el `150vh`:
-
-            ancho = min( (100vw - 584px) * 2 , 150vh )
-
-          - `100vw - 584px` es el hueco real a la izquierda de la tarjeta
-            (512 de ancho + 32 de margen + 40 de aire), y al multiplicar por 2
-            se convierte en ancho de lienzo.
-          - `150vh` es el tope de alto: el lienzo es 1.5 mas ancho que alto, y
-            150vh de ancho = 100vh de alto exacto. Asi la pizza entra completa
-            sin recorte vertical, que es lo que hacia la version "A1" (que si
-            recortaba 100-286px arriba y abajo, como la referencia vieja).
-
-          Medido: 1024x768 -> pizza 441x547 con la tarjeta en 480 (39px de
-          aire); 1366x768 -> 578x715, tarjeta en 822; 1920x1080 -> 813x1006,
-          tarjeta en 1376. Nunca se superpone, y el patron de fondo sigue
-          visible en ~58% del ancho.
-
-          Ni el lienzo ni la pizza desbordan en ningun eje (150vh siempre es
-          menor que 100vw), asi que la raiz NO necesita `overflow-hidden`. El
-          `max-w-none` si hace falta: el preflight de Tailwind pone
-          `max-width:100%` en `img` y deformaria el lienzo.
+           El ancho conserva el calculo sobre el hueco disponible junto a la
+           tarjeta, con un factor intermedio de `1.55` y un tope de `115vh`.
+           `left-[1vw]` separa la pizza del borde izquierdo ahora que ya no hace
+           falta ocultar un corte recto. `max-w-none` evita que el preflight de
+           Tailwind limite el lienzo de la imagen.
 
           `pointer-events-none` porque el lienzo transparente se extiende por
           debajo de la tarjeta y sin esto bloquearia los clics;
@@ -3556,11 +3529,11 @@ function AuthLayout({
           completo y no hay hueco: ahi se ve solo el patron. Sin blur, sin scale,
           sin opacity, a plena intensidad como el fondo. */}
       <img
-        src={pizzaDefinitiva}
+        src={pizzaDefinitivaCompleta}
         alt=""
         aria-hidden="true"
         draggable={false}
-        className="pointer-events-none absolute left-0 top-1/2 z-10 hidden w-[min(calc((100vw_-_584px)*1.8),135vh)] max-w-none -translate-y-1/2 select-none lg:block"
+        className="pointer-events-none absolute left-[1vw] top-1/2 z-10 hidden w-[min(calc((100vw_-_584px)*1.55),115vh)] max-w-none -translate-y-1/2 select-none lg:block"
       />
 
       {/* Capa del contenido, la mas alta de las tres (`z-20`; fondo `z-0` y
@@ -3586,10 +3559,12 @@ function LoginScreen({
   navigate,
   onLogin,
   usuarios,
+  darkMode,
 }: {
   navigate: (s: Screen) => void;
   onLogin: (role: string, email: string) => void;
   usuarios: Usuario[];
+  darkMode: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -3669,6 +3644,7 @@ function LoginScreen({
   return (
     <AuthLayout
       contentClassName="items-start justify-center lg:justify-end px-4 py-6 lg:px-8"
+      darkMode={darkMode}
       overlay={
         <AnimatePresence>
           {showForgot && (
@@ -3709,7 +3685,7 @@ function LoginScreen({
           <ArrowLeft className="w-5 h-5" />
         </button>
       <div className="text-center mb-4">
-        <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground"
@@ -4179,12 +4155,14 @@ function RegisterScreen({
   setUsuarios,
   empleados,
   clientes,
+  darkMode,
 }: {
   navigate: (s: Screen) => void;
   usuarios: Usuario[];
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   empleados: Empleado[];
   clientes: Cliente[];
+  darkMode: boolean;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -4290,16 +4268,16 @@ function RegisterScreen({
   };
 
   return (
-    <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0">
+    <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-4"
       >
         <div className="text-center mb-2">
-          {/* El logo va exactamente igual que en Login (`logoClaro`, `h-14`,
+          {/* El logo va exactamente igual que en Login (`h-14`,
               `mb-2`): mismo tratamiento visual en las dos pantallas de auth. */}
-          <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground"
@@ -7155,6 +7133,7 @@ export default function App() {
                 <LoginScreen
                   navigate={navigate}
                   usuarios={usuarios}
+                  darkMode={darkMode}
                   onLogin={(role: string, loginEmail: string) => {
                     setIsLoggedIn(true);
                     const u = usuarios.find(x => x.correo.toLowerCase() === loginEmail.toLowerCase());
@@ -7195,6 +7174,7 @@ export default function App() {
                   setUsuarios={setUsuarios}
                   empleados={empleados}
                   clientes={clientes}
+                  darkMode={darkMode}
                 />
               )}
               {screen === "client-profile" && (
