@@ -19,6 +19,7 @@ import {
   Edit,
   LogOut,
   Home,
+  Store,
   ShoppingBag,
   CheckCircle,
   AlertCircle,
@@ -1389,9 +1390,8 @@ function AdminTopBar({
         <button
           onClick={() => navigate("landing")}
           className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-          title="Ver tienda"
         >
-          <Home className="w-5 h-5" />
+          <Store className="w-5 h-5" />
         </button>
         <button
           onClick={() => setDarkMode(!darkMode)}
