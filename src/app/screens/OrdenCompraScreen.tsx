@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 
 const SERIF = "'DM Serif Display', serif";
-const PER_PAGE = 8;
+const PER_PAGE = 5;
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -810,6 +810,7 @@ export function OrdenModal({
                       >
                         <option value="Borrador">Borrador</option>
                         <option value="Enviado">Enviado</option>
+                        <option value="Anulado">Anulado</option>
                       </select>
                     )}
                   </div>
@@ -853,6 +854,7 @@ export function OrdenModal({
                 items={form.items}
                 showActions={!isView}
                 onRemove={!isView ? (rowId) => pf({ items: form.items.filter((i) => i.rowId !== rowId) }) : undefined}
+                onUpdate={!isView ? (rowId, patch) => pf({ items: form.items.map(i => i.rowId === rowId ? { ...i, ...patch } : i) }) : undefined}
                 className={isPage ? "flex-1 min-h-0" : ""}
               />
 
@@ -1463,6 +1465,7 @@ export function OrdenCompraScreen({
   const [recepcionOrden, setRecepcionOrden] = useState<OrdenCompra | null>(null);
   const [sendConfirm, setSendConfirm] = useState<OrdenCompra | null>(null);
   const [anularConfirm, setAnularConfirm] = useState<OrdenCompra | null>(null);
+  const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
   const filtered = useMemo(() =>
     ordenes.filter(o => {
@@ -1531,6 +1534,12 @@ export function OrdenCompraScreen({
         ? `OC ${o.id} y sus compras anuladas`
         : `OC ${o.id} anulada`
     );
+  };
+
+  const handleCambiarEstado = (id: string, next: EstadoOrden) => {
+    setOrdenes(p => p.map(x => x.id === id ? { ...x, estado: next } : x));
+    setEstadoConfirm(null);
+    toast.success(`Estado cambiado a: ${next}`);
   };
 
   const handleGuardarRecepcion = (o: OrdenCompra, rec: Recepcion) => {
@@ -1625,7 +1634,7 @@ export function OrdenCompraScreen({
         />
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3 flex-1 min-h-0">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -1679,7 +1688,38 @@ export function OrdenCompraScreen({
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
                         {fmtCOP(calcTotal(o.items))}
                       </td>
-                      <td className="px-4 py-3.5"><EstadoBadge e={o.estado} /></td>
+                      <td className="px-4 py-3.5">
+                        <select
+                          value={o.estado}
+                          onChange={(e) => {
+                            const nuevoEstado = e.target.value as EstadoOrden;
+                            if (nuevoEstado === o.estado) return;
+                            setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                          }}
+                          disabled={o.estado === "Anulado" || o.estado === "Completado"}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none ${o.estado === "Anulado" || o.estado === "Completado" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${ESTADO_CONFIG[o.estado]}`}
+                        >
+                          {o.estado === "Borrador" && (
+                            <>
+                              <option value="Borrador">Borrador</option>
+                              <option value="Enviado">Enviado</option>
+                              <option value="Anulado">Anulado</option>
+                            </>
+                          )}
+                          {o.estado === "Enviado" && (
+                            <>
+                              <option value="Enviado">Enviado</option>
+                              <option value="Anulado">Anulado</option>
+                            </>
+                          )}
+                          {o.estado === "Anulado" && (
+                            <option value="Anulado">Anulado</option>
+                          )}
+                          {o.estado === "Completado" && (
+                            <option value="Completado">Completado</option>
+                          )}
+                        </select>
+                      </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
                           <button
@@ -1698,24 +1738,7 @@ export function OrdenCompraScreen({
                               <Pencil className="w-4 h-4" />
                             </button>
                           )}
-                          {o.estado === "Borrador" && (
-                            <button
-                              onClick={() => setSendConfirm(o)}
-                              title="Enviar a proveedor"
-                              className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 cursor-pointer transition-colors"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-                          )}
-                          {o.estado === "Enviado" && (
-                            <button
-                              onClick={() => setAnularConfirm(o)}
-                              title="Anular"
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
-                            >
-                              <Ban className="w-4 h-4" />
-                            </button>
-                          )}
+
                           {o.estado === "Completado" && (
                             <span className="p-1.5 text-muted-foreground/40" title="Orden bloqueada">
                               <Lock className="w-4 h-4" />
@@ -1819,6 +1842,32 @@ export function OrdenCompraScreen({
             }
             onConfirm={() => handleAnularOrden(anularConfirm)}
             onCancel={() => setAnularConfirm(null)}
+          />
+        )}
+        {estadoConfirm && (
+          <ConfirmModal
+            title={`¿Cambiar el estado a ${estadoConfirm.next}?`}
+            body={`La orden ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
+            detail={
+              estadoConfirm.next === "Anulado"
+                ? "Una orden anulada no puede volver a un estado anterior."
+                : "La orden avanzará en el flujo de estados."
+            }
+            confirmLabel={estadoConfirm.next === "Anulado" ? "Anular" : `Cambiar a ${estadoConfirm.next}`}
+            danger={estadoConfirm.next === "Anulado"}
+            icon={
+              estadoConfirm.next === "Anulado" ? (
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-red-600" />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-blue-600" />
+                </div>
+              )
+            }
+            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
+            onCancel={() => setEstadoConfirm(null)}
           />
         )}
       </AnimatePresence>
