@@ -238,6 +238,22 @@ const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
 // Pizzas y Lasañas conservan object-cover, que es su diseño original.
 const verImagenCompleta = (p: Product) => p.category === "Bebidas";
 
+// Secciones del grid cuando el filtro es "Todas", en el orden en que se
+// muestran. El título va aparte del nombre de la categoría porque no siempre
+// coinciden: internamente las lasañas son "Lasaña" (en singular, que es la
+// etiqueta del botón de filtro) pero el encabezado se lee "Lasañas".
+//
+// El listado es explícito para controlar el orden, pero no es una lista cerrada:
+// `CatalogScreen` agrupa al final, con su propio título, cualquier categoría
+// que aparezca en el catálogo y no esté aquí. Al añadir una categoría nueva
+// basta con agregar su fila en el orden deseado; si se olvida, sus productos
+// se siguen viendo en una sección propia en vez de desaparecer del grid.
+const SECCIONES_MENU: { categoria: string; titulo: string }[] = [
+  { categoria: "Pizzas", titulo: "Pizzas" },
+  { categoria: "Lasaña", titulo: "Lasañas" },
+  { categoria: "Bebidas", titulo: "Bebidas" },
+];
+
 const PRODUCTS: Product[] = [
   {
     id: 1,
@@ -2169,6 +2185,87 @@ function LandingScreen({
 
 // ─────────────────────────── CATALOG ───────────────────────────
 
+// Tarjeta de producto del catálogo. Vive fuera de `CatalogScreen` porque el
+// grid se pinta por dos caminos —grid único al elegir una categoría y grid por
+// secciones con "Todas"— y los dos tienen que mostrar exactamente la misma
+// tarjeta. `index` solo escalona la animación dentro de su propia fila.
+function ProductCard({
+  product: p,
+  index,
+  onOpen,
+  onQuickAdd,
+}: {
+  product: Product;
+  index: number;
+  onOpen: (p: Product) => void;
+  onQuickAdd: (p: Product) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
+    >
+      <button
+        className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
+        onClick={() => onOpen(p)}
+      >
+        <img
+          src={p.image}
+          alt={p.name}
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
+        />
+        <div className="absolute top-3 right-3">
+          <Badge className={PROD_STATUS_COLOR[p.status]}>
+            {p.status === "activo"
+              ? "Disponible"
+              : p.status === "agotado"
+                ? "Agotado"
+                : "Pausado"}
+          </Badge>
+        </div>
+      </button>
+      <div className="p-4">
+        <div className="mb-1">
+          <h3
+            className="font-bold text-base text-foreground"
+            style={{ fontFamily: SERIF }}
+          >
+            {p.name}
+          </h3>
+        </div>
+        <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-snug">
+          {p.description}
+        </p>
+        <div className="flex items-center justify-between">
+          <span
+            className="font-bold text-lg text-foreground"
+            style={{ fontFamily: MONO }}
+          >
+            {fmt(p.price)}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onOpen(p)}
+              className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
+            >
+              Ver más
+            </button>
+            <button
+              onClick={() => onQuickAdd(p)}
+              disabled={p.status !== "activo"}
+              className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function CatalogScreen({
   navigate,
   setProduct,
@@ -2199,6 +2296,44 @@ function CatalogScreen({
       ),
     [search, cat],
   );
+
+  // Con el filtro "Todas" el grid se parte en las secciones tituladas de
+  // SECCIONES_MENU; al elegir una sola categoría se deja el grid único de antes,
+  // sin encabezados. Se agrupa sobre `filtered`, no sobre PRODUCTS, para que la
+  // búsqueda también se reparta por secciones, y las categorías sin resultados
+  // se omiten en vez de dejar un título colgado sobre un grid vacío.
+  const secciones = useMemo(() => {
+    if (cat !== "Todas") return [];
+    const porCategoria = new Map<string, Product[]>();
+    for (const p of filtered) {
+      const lista = porCategoria.get(p.category);
+      if (lista) lista.push(p);
+      else porCategoria.set(p.category, [p]);
+    }
+    const declaradas = SECCIONES_MENU.map(
+      ({ categoria, titulo }) => ({
+        titulo,
+        productos: porCategoria.get(categoria) ?? [],
+      }),
+    ).filter((s) => s.productos.length > 0);
+    const conocidas = new Set(
+      SECCIONES_MENU.map((s) => s.categoria),
+    );
+    const nuevas = [...porCategoria.entries()]
+      .filter(([categoria]) => !conocidas.has(categoria))
+      .map(([titulo, productos]) => ({ titulo, productos }));
+    return [...declaradas, ...nuevas];
+  }, [filtered, cat]);
+
+  const abrirDetalle = (p: Product) => {
+    setProduct(p);
+    navigate("product-detail");
+  };
+
+  const agregarAlCarrito = (p: Product) => {
+    quickAdd(p);
+    toast.success(`¡${p.name} agregada!`);
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -2248,83 +2383,42 @@ function CatalogScreen({
             otro!
           </p>
         </div>
+      ) : cat === "Todas" ? (
+        /* "space-y-10" deja el mismo aire entre el final de una sección y el
+           título de la siguiente, y el "mb-5" del título el de título a grid. */
+        <div className="space-y-10">
+          {secciones.map(({ titulo, productos }) => (
+            <section key={titulo}>
+              <h2
+                className="text-2xl font-bold text-foreground mb-5"
+                style={{ fontFamily: SERIF }}
+              >
+                {titulo}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {productos.map((p, i) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    index={i}
+                    onOpen={abrirDetalle}
+                    onQuickAdd={agregarAlCarrito}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((p, i) => (
-            <motion.div
+            <ProductCard
               key={p.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
-            >
-              <button
-                className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
-                onClick={() => {
-                  setProduct(p);
-                  navigate("product-detail");
-                }}
-              >
-                <img
-                  src={p.image}
-                  alt={p.name}
-                  className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
-                />
-                <div className="absolute top-3 right-3">
-                  <Badge
-                    className={PROD_STATUS_COLOR[p.status]}
-                  >
-                    {p.status === "activo"
-                      ? "Disponible"
-                      : p.status === "agotado"
-                        ? "Agotado"
-                        : "Pausado"}
-                  </Badge>
-                </div>
-              </button>
-              <div className="p-4">
-                <div className="mb-1">
-                  <h3
-                    className="font-bold text-base text-foreground"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    {p.name}
-                  </h3>
-                </div>
-                <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-snug">
-                  {p.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <span
-                    className="font-bold text-lg text-foreground"
-                    style={{ fontFamily: MONO }}
-                  >
-                    {fmt(p.price)}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setProduct(p);
-                        navigate("product-detail");
-                      }}
-                      className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
-                    >
-                      Ver más
-                    </button>
-                    <button
-                      onClick={() => {
-                        quickAdd(p);
-                        toast.success(`¡${p.name} agregada!`);
-                      }}
-                      disabled={p.status !== "activo"}
-                      className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+              product={p}
+              index={i}
+              onOpen={abrirDetalle}
+              onQuickAdd={agregarAlCarrito}
+            />
           ))}
         </div>
       )}
