@@ -419,6 +419,17 @@ const PRODUCTS: Product[] = [
   },
 ];
 
+// La imagen de un producto se resuelve SIEMPRE contra PRODUCTS, que es la misma
+// fuente que renderiza "Ver Menú". La sección de favoritas de la landing
+// usaba URLs escritas a mano por tarjeta, y las de Margarita Clásica y Cuatro
+// Quesos apuntaban a fotos que ya no existen en Unsplash (404), por eso salían
+// vacías mientras las otras dos sí cargaban. Se busca por id porque el nombre
+// de la landing y el del catálogo no coinciden tal cual (p. ej. "Pepperoni
+// Premium" vs "Pepperoni Suprema", "Especial La Sirena" vs "La Sirena
+// Especial"). El "" solo aparece si un id no existe en PRODUCTS.
+const imagenDeProducto = (id: Product["id"]): string =>
+  PRODUCTS.find((p) => p.id === id)?.image ?? "";
+
 const ORDERS: Order[] = [
   {
     id: "VEN-2024-0156",
@@ -1759,40 +1770,36 @@ function LandingScreen({
           >
             {[
               {
+                productoId: 1,
                 name: "Margarita Clásica",
                 description:
                   "La reina de las pizzas. Salsa de tomate casera, mozzarella fresca y albahaca.",
                 price: 24000,
                 rating: 4.8,
-                image:
-                  "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=420&fit=crop&auto=format",
               },
               {
+                productoId: 2,
                 name: "Pepperoni Premium",
                 description:
                   "Generosa capa de pepperoni importado, mozzarella abundante y salsa secreta.",
                 price: 28000,
                 rating: 4.9,
-                image:
-                  "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=600&h=420&fit=crop&auto=format",
               },
               {
+                productoId: 4,
                 name: "Cuatro Quesos",
                 description:
                   "Mozzarella, cheddar, parmesano y gorgonzola en perfecta armonía.",
                 price: 30000,
                 rating: 4.7,
-                image:
-                  "https://images.unsplash.com/photo-1571407970349-bc81e71e5080?w=600&h=420&fit=crop&auto=format",
               },
               {
+                productoId: 3,
                 name: "Especial La Sirena",
                 description:
                   "Nuestra pizza insignia desde 1994. Pollo a la plancha y tocineta crocante.",
                 price: 32000,
                 rating: 5.0,
-                image:
-                  "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&h=420&fit=crop&auto=format",
               },
             ].map((p, i) => (
               <motion.div
@@ -1806,7 +1813,7 @@ function LandingScreen({
                 {/* Image */}
                 <div className="relative h-52 bg-muted overflow-hidden">
                   <img
-                    src={p.image}
+                    src={imagenDeProducto(p.productoId)}
                     alt={p.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -6291,7 +6298,13 @@ export default function App() {
       : "ml-60"
     : "";
 
-  const isLockedScreen = isAdmin && (screen === "clientes" || screen === "users" || screen === "empleados");
+  const isLockedScreen = isAdmin && (
+    screen === "clientes" || screen === "users" || screen === "empleados" ||
+    // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
+    screen === "orden-compra" || screen === "nueva-orden-compra" ||
+    screen === "recepcion-compra" || screen === "gestion-compra" ||
+    screen === "nueva-compra"
+  );
 
   return (
     <div
@@ -6576,13 +6589,13 @@ export default function App() {
                   insumos={insumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
-                  onGuardar={(recepcion) => {
+                  onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
                       prev.map((o) =>
                         o.id === ordenRecepcion.id
                           ? {
                               ...o,
-                              estado: "Completado",
+                              estado,
                               recepcion,
                             }
                           : o
@@ -6590,21 +6603,6 @@ export default function App() {
                     );
 
                     setOrdenRecepcion(null);
-                  }}
-                  onAnular={() => {
-                    setOrdenes((prev) =>
-                      prev.map((o) =>
-                        o.id === ordenRecepcion.id
-                          ? {
-                              ...o,
-                              estado: "Anulado",
-                            }
-                          : o
-                      )
-                    );
-
-                    setOrdenRecepcion(null);
-                    setScreen("orden-compra");
                   }}
                   onBack={() => {
                     setOrdenRecepcion(null);
@@ -6618,6 +6616,7 @@ export default function App() {
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   ordenes={ordenes}
+                  setOrdenes={setOrdenes}
                   insumos={insumos}
                   proveedores={proveedores}
                   setProveedores={setProveedores}
