@@ -629,7 +629,7 @@ export function GestionConfigScreen({
         {deleteId && (() => {
           const count = rolUserCounts[deleteId] ?? 0;
           const message = count > 0
-            ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios mantendrán el ID de rol pero perderán su referencia.`
+            ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios quedarán SIN ACCESO hasta que les asignes otro rol.`
             : `¿Seguro que deseas eliminar el rol ${deleteId}? Se eliminan también sus accesos configurados.`;
           return (
             <ConfirmModal

@@ -957,13 +957,6 @@ function ConfirmModal({
 
 // ─────────────────────────── SIDEBAR ───────────────────────────
 
-// Screens/sections restricted to Administrador only
-const ADMIN_ONLY_SCREENS: Screen[] = [
-  "gestion-config",
-  "users",
-  "empleados",
-];
-
 function Sidebar({
   current,
   navigate,
@@ -994,13 +987,11 @@ function Sidebar({
     (s === "orden-compra" && current === "nueva-orden-compra") ||
     (s === "gestion-compra" && current === "nueva-compra");
 
-  // Returns true if the current user can "Ver" the given permission key
+  // Returns true if the current user can "Ver" the given permission key. Es la
+  // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
+  // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
   const canView = (permKey: string) =>
     isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
-  // Respaldo para ítems de menú que aún no tienen permKey asociado: esas
-  // pantallas siguen restringidas al Administrador por nombre.
-  const canViewScreen = (s: Screen) =>
-    isNamedAdmin || !ADMIN_ONLY_SCREENS.includes(s);
 
   // Cuántos ítems del nav superan el filtro de permisos. Se usa junto con
   // `active("dashboard")` para no dejar al usuario sin salida: si el guard de
@@ -1074,12 +1065,12 @@ function Sidebar({
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_SECTIONS.map((sec) => {
-          // For grouped sections: un ítem con permKey se decide por permisos
-          // (así Configuración/Usuarios dejan de depender del nombre del rol);
-          // los que no lo tienen caen en la regla legacy de ADMIN_ONLY_SCREENS.
+          // Todos los ítems de NAV_SECTIONS declaran permKey, así que la
+          // decisión es siempre por permisos. El fallback solo cubre un ítem
+          // futuro sin permKey, que quedaría restringido al rol semilla.
           const allItems: { screen: Screen; label: string; Icon: typeof Home; permKey?: string }[] =
             ((sec as any).items ?? []).filter((it: any) =>
-              it.permKey ? canView(it.permKey) : canViewScreen(it.screen)
+              it.permKey ? canView(it.permKey) : isNamedAdmin
             );
 
           // Hide entire module if no sub-items are visible
@@ -4197,6 +4188,7 @@ function DashboardScreen({
   orders,
   loggedInUser,
   loggedInRoleName,
+  tieneRolActivo,
   isNamedAdmin,
   accesos,
 }: {
@@ -4204,6 +4196,9 @@ function DashboardScreen({
   orders: Order[];
   loggedInUser: { nombre: string } | null;
   loggedInRoleName: string;
+  // false = el rol fue borrado, está desactivado o el usuario no tiene rol.
+  // Distingue "no tienes permisos" de "ya no existe tu rol".
+  tieneRolActivo: boolean;
   isNamedAdmin: boolean;
   accesos: AccesosMap;
 }) {
@@ -4214,36 +4209,38 @@ function DashboardScreen({
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  // Central permission checker — isNamedAdmin bypasses all restrictions
-  const canSee = (permKey: string) =>
+  // ÚNICA regla de acceso de la app. Antes había dos: `canSee` (con atajo por
+  // nombre de rol) y `tieneVer` (sin atajo), y cada una servía a una capa
+  // distinta — menú y rutas usaban una, los KPIs del Dashboard la otra. Por eso
+  // un admin podía tener control total en la navegación y al mismo tiempo ver
+  // el badge de "no sos administrador". Ahora las dos capas llaman a esto.
+  const puedeVer = (permKey: string) =>
     isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
 
   // Granular flags, one per sub-opción del sistema.
   // Se construyen con KEY() para que un renombrado en MENU_TREE rompa aquí
   // explícitamente en vez de fallar en silencio.
-  const cv  = canSee(KEY("Ventas",      "Ventas"));
-  const ccl = canSee(KEY("Ventas",      "Clientes"));
-  const ci  = canSee(KEY("Compras",     "Insumos"));
-  const cpr = canSee(KEY("Compras",     "Proveedores"));
-  const coc = canSee(KEY("Compras",     "Orden de Compra"));
-  const cco = canSee(KEY("Compras",     "Compra"));
-  const cp  = canSee(KEY("Producción",  "Productos"));
-  const ccp = canSee(KEY("Producción",  "Categoría de Producto"));
-  const cop = canSee(KEY("Producción",  "Orden de Producción"));
-  const cpe = canSee(KEY("Producción",  "Producto No Conforme"));
-  const ccfg = canSee(KEY("Configuración", "Configuración"));
-  const cus  = canSee(KEY("Configuración", "Usuarios"));
-  const cemp = canSee(KEY("Configuración", "Empleados"));
-  const cdb  = canSee(KEY("Dashboard",  "Dashboard"));
+  const cv  = puedeVer(KEY("Ventas",      "Ventas"));
+  const ccl = puedeVer(KEY("Ventas",      "Clientes"));
+  const ci  = puedeVer(KEY("Compras",     "Insumos"));
+  const cpr = puedeVer(KEY("Compras",     "Proveedores"));
+  const coc = puedeVer(KEY("Compras",     "Orden de Compra"));
+  const cco = puedeVer(KEY("Compras",     "Compra"));
+  const cp  = puedeVer(KEY("Producción",  "Productos"));
+  const ccp = puedeVer(KEY("Producción",  "Categoría de Producto"));
+  const cop = puedeVer(KEY("Producción",  "Orden de Producción"));
+  const cpe = puedeVer(KEY("Producción",  "Producto No Conforme"));
+  const ccfg = puedeVer(KEY("Configuración", "Configuración"));
+  const cus  = puedeVer(KEY("Configuración", "Usuarios"));
+  const cemp = puedeVer(KEY("Configuración", "Empleados"));
+  const cdb  = puedeVer(KEY("Dashboard",  "Dashboard"));
 
-  // Vista completa de administrador, evaluada por permisos reales y no por
-  // nombre de rol: "Ver" sobre Dashboard y "Ver" sobre Configuración. Así un
-  // "Administrador Sustituto", "Gerente", etc. ve el Dashboard igual que el
-  // administrador original. Consulta `accesos` directo, y no `canSee`, para que
-  // este criterio NO herede el atajo que `canSee` todavía conserva.
-  const tieneVer = (permKey: string) => accesos[permKey]?.includes("Ver") ?? false;
-  const esAdminCompleto =
-    tieneVer(KEY("Dashboard", "Dashboard")) && tieneVer(KEY("Configuración", "Configuración"));
+  // El panel completo del Dashboard (KPIs, gráfica y "Ingresos hoy") se abre con
+  // "Ver" en Dashboard y en Ventas. Antes exigía Configuración::Configuración,
+  // un permiso de otra sección decidiendo sobre dinero, y por eso un gerente de
+  // ventas sin acceso a Configuración perdía el widget de ingresos. El nombre
+  // viejo ("esAdminCompleto") tampoco describía lo que comprobaba.
+  const vePanelCompleto = cdb && cv;
 
   // noAccess: true only when the user cannot see ANY sub-opción. La condición
   // por nombre de rol sobra: el administrador original tiene fullAccesos(), así
@@ -4255,7 +4252,7 @@ function DashboardScreen({
   type KpiDef = { label: string; value: string; sub: string; Icon: any; bg: string; ic: string; trend: string };
   const kpis: KpiDef[] = [
     cv           && { label: "Ventas hoy",   value: "24",         sub: "+3 en la última hora",  Icon: ShoppingBag, bg: "bg-blue-50",    ic: "text-blue-600",    trend: "+12%" },
-    esAdminCompleto && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
+    vePanelCompleto && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
     cp  && { label: "Productos activos",   value: "5",          sub: "1 en pausa",              Icon: Package,       bg: "bg-orange-50",  ic: "text-orange-600",  trend: ""     },
     ci  && { label: "Insumos críticos",    value: "3",          sub: "Stock bajo mínimo",       Icon: AlertTriangle, bg: "bg-red-50",     ic: "text-red-600",     trend: ""     },
     cpr && { label: "Proveedores activos", value: "8",          sub: "2 con pedido pendiente",  Icon: Truck,         bg: "bg-violet-50",  ic: "text-violet-600",  trend: ""     },
@@ -4286,9 +4283,9 @@ function DashboardScreen({
         </h1>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <p className="text-muted-foreground capitalize">{dateStr}</p>
-          {!esAdminCompleto && (
+          {!vePanelCompleto && (
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
-              {loggedInRoleName}
+              {tieneRolActivo ? loggedInRoleName : "sin rol"}
             </span>
           )}
         </div>
@@ -4425,9 +4422,15 @@ function DashboardScreen({
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Lock className="w-7 h-7 text-muted-foreground" />
           </div>
-          <p className="text-lg font-semibold text-foreground mb-1">Sin módulos asignados</p>
+          <p className="text-lg font-semibold text-foreground mb-1">
+            {tieneRolActivo ? "Sin módulos asignados" : "Sin rol asignado"}
+          </p>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Tu rol <span className="font-semibold">{loggedInRoleName}</span> aún no tiene permisos configurados. Contacta al administrador.
+            {tieneRolActivo ? (
+              <>Tu rol <span className="font-semibold">{loggedInRoleName}</span> aún no tiene permisos configurados. Contacta al administrador.</>
+            ) : (
+              <>Tu usuario no tiene un rol activo: fue eliminado o está desactivado. Pide al administrador que te asigne uno para poder trabajar.</>
+            )}
           </p>
         </div>
       )}
@@ -6082,12 +6085,24 @@ export default function App() {
   const pedidosUsuarioNombre =
     loggedInUser?.nombre ??
     (userRole === "Usuario" ? "Sebastián Gómez" : "Gloria Inés Vargas");
-  const loggedInRol = loggedInUser ? roles.find(r => r.id === loggedInUser.rolId) ?? null : null;
+  // Un rol DESACTIVADO no concede permisos. El formulario de empleados ya
+  // respetaba este flag al ofrecer roles (`roles.find(r => r.activo)`); el acceso
+  // no, y por eso un rol desactivado seguía dando lo mismo que antes de apagarlo.
+  // Un rol ausente (borrado) también queda sin permisos: antes `!loggedInRol`
+  // concedía acceso TOTAL, de modo que borrar un rol desde Configuración
+  // convertía a sus usuarios en administradores completos. Esos usuarios ahora
+  // caen en la pantalla de "sin permisos" vía `noAccess`.
+  const loggedInRol = loggedInUser
+    ? roles.find(r => r.id === loggedInUser.rolId && r.activo) ?? null
+    : null;
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
   // AccesosMap for the logged-in user's role (empty object = no permissions)
   const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
-  // True when the user is the named "Administrador" role or has no role record (default)
-  const isNamedAdmin = !loggedInRol || loggedInRol.nombre === "Administrador";
+  // El atajo se ancla al rol SEMILLA por id, no por nombre. Así renombrar el rol
+  // no altera el acceso, y ningún rol con permisos parciales puede apropiárselo
+  // por llamarse "Administrador". Cualquier otro rol —incluso con acceso
+  // total— se decide únicamente por sus permisos.
+  const isNamedAdmin = loggedInRol?.id === "ROL-001";
   // True when the logged-in user has a back-office role (not a pure public customer)
   const isStaff = isLoggedIn && loggedInUser !== null && !PUBLIC_ROLE_NAMES.includes(loggedInRoleName);
 
@@ -6219,11 +6234,12 @@ export default function App() {
   // la tienda, que se muestra dentro del layout de la tienda) queda exento de
   // esta regla; el resto de pantallas de administración siguen protegidas.
   if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "profile" && screen !== "store-profile") {
+    // Toda pantalla de administración con permKey queda cubierta por esta regla.
+    // La lista legacy ADMIN_ONLY_SCREENS se eliminó: sus tres pantallas
+    // (gestion-config, users, empleados) ya declaran permKey en SCREEN_PERM_KEY,
+    // así que el fallback nunca se disparaba.
     const permKey = SCREEN_PERM_KEY[screen];
     if (permKey && !isNamedAdmin && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
-      setTimeout(() => navigate("dashboard"), 0);
-    }
-    if (!permKey && ADMIN_ONLY_SCREENS.includes(screen) && !isNamedAdmin) {
       setTimeout(() => navigate("dashboard"), 0);
     }
   }
@@ -6456,6 +6472,7 @@ export default function App() {
                   orders={orders}
                   loggedInUser={loggedInUser}
                   loggedInRoleName={loggedInRoleName}
+                  tieneRolActivo={loggedInRol !== null}
                   isNamedAdmin={isNamedAdmin}
                   accesos={loggedInAccesos}
                 />
