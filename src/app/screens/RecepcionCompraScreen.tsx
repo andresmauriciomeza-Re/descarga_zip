@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "./GestionInsumosScreen";
 import type {
@@ -111,6 +111,14 @@ export function RecepcionCompraScreen({
   const [exUnidad, setExUnidad] = useState(UNIDADES[0]);
   const [exPrecio, setExPrecio] = useState(0);
   const [exShowSug, setExShowSug] = useState(false);
+
+  // ── Edición en línea de insumos adicionales ────────────────────────────────
+  const [editExtraId, setEditExtraId] = useState<string | null>(null);
+  const [editExtraDraft, setEditExtraDraft] = useState<{
+    cantidad: number;
+    unidad: string;
+    precioUnitario: number;
+  } | null>(null);
 
   const exRef = useRef<HTMLDivElement>(null);
 
@@ -248,6 +256,38 @@ export function RecepcionCompraScreen({
     setExShowSug(false);
 
     toast.success("Insumo adicional agregado.");
+  };
+
+  const startEditExtra = (item: ItemRecibido) => {
+    setEditExtraId(item.rowId);
+    setEditExtraDraft({
+      cantidad: item.cantidadRecibida,
+      unidad: item.unidad,
+      precioUnitario: item.precioUnitario,
+    });
+  };
+
+  const cancelEditExtra = () => {
+    setEditExtraId(null);
+    setEditExtraDraft(null);
+  };
+
+  const commitEditExtra = () => {
+    if (editExtraId && editExtraDraft) {
+      setItemsExtra((prev) =>
+        prev.map((item) =>
+          item.rowId === editExtraId
+            ? {
+                ...item,
+                cantidadRecibida: Math.max(0, editExtraDraft.cantidad),
+                unidad: editExtraDraft.unidad,
+                precioUnitario: Math.max(0, editExtraDraft.precioUnitario),
+              }
+            : item
+        )
+      );
+    }
+    cancelEditExtra();
   };
 
   const totalPedido = orden.items.reduce(
@@ -810,7 +850,11 @@ export function RecepcionCompraScreen({
                           </th>
 
                           <th className="px-3 py-2 text-left text-xs">
-                            Precio
+                            Unidad
+                          </th>
+
+                          <th className="px-3 py-2 text-left text-xs">
+                            P. Unitario
                           </th>
 
                           <th className="px-3 py-2 text-left text-xs">
@@ -822,44 +866,137 @@ export function RecepcionCompraScreen({
                       </thead>
 
                       <tbody className="divide-y divide-border">
-                        {itemsExtra.map((item) => (
-                          <tr key={item.rowId}>
-                            <td className="px-3 py-2 font-semibold">
-                              {item.nombre}
-                            </td>
+                        {itemsExtra.map((item) => {
+                          const isEditing = editExtraId === item.rowId;
+                          const draft = isEditing ? editExtraDraft : null;
 
-                            <td className="px-3 py-2">
-                              {item.cantidadRecibida} {item.unidad}
-                            </td>
+                          return (
+                            <tr key={item.rowId}>
+                              {/* Nombre */}
+                              <td className="px-3 py-2 font-semibold">
+                                {item.nombre}
+                              </td>
 
-                            <td className="px-3 py-2">
-                              {fmtCOP(item.precioUnitario)}
-                            </td>
+                              {/* Cantidad */}
+                              <td className="px-3 py-2">
+                                {draft ? (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={draft.cantidad}
+                                    onChange={(e) =>
+                                      setEditExtraDraft({
+                                        ...draft,
+                                        cantidad: Number(e.target.value),
+                                      })
+                                    }
+                                    className="w-14 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  />
+                                ) : (
+                                  item.cantidadRecibida
+                                )}
+                              </td>
 
-                            <td className="px-3 py-2 font-semibold">
-                              {fmtCOP(
-                                item.cantidadRecibida *
-                                  item.precioUnitario
-                              )}
-                            </td>
+                              {/* Unidad */}
+                              <td className="px-3 py-2">
+                                {draft ? (
+                                  <select
+                                    value={draft.unidad}
+                                    onChange={(e) =>
+                                      setEditExtraDraft({
+                                        ...draft,
+                                        unidad: e.target.value,
+                                      })
+                                    }
+                                    className="w-14 px-1 py-1 bg-background border border-border rounded-lg text-xs focus:outline-none cursor-pointer"
+                                  >
+                                    {UNIDADES.map((u) => (
+                                      <option key={u} value={u}>
+                                        {u}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    {item.unidad}
+                                  </span>
+                                )}
+                              </td>
 
-                            <td className="px-3 py-2">
-                              <button
-                                onClick={() =>
-                                  setItemsExtra((prev) =>
-                                    prev.filter(
-                                      (x) =>
-                                        x.rowId !== item.rowId
-                                    )
-                                  )
-                                }
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                              {/* P. Unitario */}
+                              <td className="px-3 py-2">
+                                {draft ? (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={draft.precioUnitario}
+                                    onChange={(e) =>
+                                      setEditExtraDraft({
+                                        ...draft,
+                                        precioUnitario: Number(e.target.value),
+                                      })
+                                    }
+                                    className="w-20 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  />
+                                ) : (
+                                  fmtCOP(item.precioUnitario)
+                                )}
+                              </td>
+
+                              {/* Subtotal */}
+                              <td className="px-3 py-2 font-semibold">
+                                {fmtCOP(
+                                  (draft ? draft.cantidad : item.cantidadRecibida) *
+                                    (draft ? draft.precioUnitario : item.precioUnitario)
+                                )}
+                              </td>
+
+                              {/* Acciones */}
+                              <td className="px-3 py-2">
+                                {draft ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={commitEditExtra}
+                                      title="Guardar cambios"
+                                      className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={cancelEditExtra}
+                                      title="Cancelar"
+                                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => startEditExtra(item)}
+                                      title="Editar insumo"
+                                      className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        setItemsExtra((prev) =>
+                                          prev.filter(
+                                            (x) => x.rowId !== item.rowId
+                                          )
+                                        )
+                                      }
+                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

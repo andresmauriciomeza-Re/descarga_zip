@@ -20,7 +20,7 @@ import {
 } from "./OrdenCompraScreen";
 
 const SERIF = "'DM Serif Display', serif";
-const PER_PAGE = 8;
+const PER_PAGE = 5;
 
 const ESTADO_CONFIG: Record<EstadoGestion, string> = {
   "Recibido":   "bg-emerald-100 text-emerald-800",
@@ -759,7 +759,7 @@ export function GestionCompraScreen({
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3 flex-1 min-h-0">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
