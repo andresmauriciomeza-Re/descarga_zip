@@ -1644,22 +1644,65 @@ function LandingScreen({
                 treinta años de amor.
               </p>
 
-              {/* CTAs */}
-              <div className="flex flex-wrap gap-4">
+              {/* CTAs — en columna solo por debajo de `sm`; en escritorio van
+                  siempre en la misma fila. `flex-col` estira los dos botones al
+                  ancho del contenido, así que apilados se ven del mismo tamaño;
+                  `sm:items-center` les devuelve su ancho natural en fila. */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <button
                   onClick={() => navigate("catalog")}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-[#DC2626] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DC2626] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
                 >
                   <ShoppingCart className="w-5 h-5" />
                   Ordenar ahora
                 </button>
                 <button
                   onClick={() => navigate("catalog")}
-                  className="inline-flex items-center gap-3 px-8 py-4 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
                 >
                   Ver menú completo
                   <ArrowRight className="w-5 h-5" />
                 </button>
+              </div>
+
+              {/* Estadísticas del hero — tarjeta oscura con divisores, NO la
+                  franja roja de ancho completo de más abajo: esa se mantiene
+                  igual y las dos conviven. Va dentro de la columna izquierda,
+                  debajo de los botones. */}
+              <div className="mt-10 inline-flex items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
+                {[
+                  {
+                    value: "+5.200",
+                    label: "Ventas entregadas",
+                  },
+                  {
+                    value: "25 min",
+                    label: "Preparación promedio",
+                  },
+                  {
+                    value: "30 años",
+                    label: "De tradición",
+                  },
+                ].map(({ value, label }) => (
+                  <div
+                    key={label}
+                    className="px-2 sm:px-5 text-center"
+                  >
+                    <p
+                      // `clamp` en vez de pasos fijos: las tres celdas se
+                      // reparten el ancho de la columna del hero, así que la
+                      // cifra tiene que encogerse en pantallas muy angostas
+                      // para que el bloque nunca desborde ni se corte.
+                      className="text-[clamp(1rem,4.6vw,1.5rem)] font-bold text-white leading-none"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {value}
+                    </p>
+                    <p className="text-[clamp(0.625rem,2.6vw,0.75rem)] text-white/70 font-medium mt-1.5 leading-snug">
+                      {label}
+                    </p>
+                  </div>
+                ))}
               </div>
             </motion.div>
           </div>
@@ -1669,27 +1712,38 @@ function LandingScreen({
       {/* ── SECCIÓN 1: Estadísticas ── */}
       <section className="bg-[#DC2626] py-12 md:py-14">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {/* 3 columnas, no 4: la cuarta quedaba vacía en escritorio y el
+              grupo se corría hacia la izquierda de la franja. Al ocupar cada
+              estadística una columna, el bloque queda centrado en el contenedor
+              y con el mismo espacio a ambos lados. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
             {[
               {
                 emoji: "📦",
                 value: "+5.200",
                 label: "Ventas entregadas",
+                className: "",
               },
               {
                 emoji: "⚡",
                 value: "25 min",
                 label: "Entrega promedio",
+                className: "",
               },
               {
                 emoji: "🏆",
                 value: "30 años",
                 label: "De tradición",
+                // En el grid de 2 columnas de mobile esta cae sola en la
+                // segunda fila y quedaba pegada a la izquierda; al ocupar las
+                // dos columnas se centra sola. En escritorio vuelve a ocupar
+                // una sola columna.
+                className: "col-span-2 md:col-span-1",
               },
-            ].map(({ emoji, value, label }) => (
+            ].map(({ emoji, value, label, className }) => (
               <div
                 key={label}
-                className="flex flex-col items-center gap-2 text-center"
+                className={`flex flex-col items-center gap-2 text-center ${className}`}
               >
                 <span className="text-4xl leading-none">
                   {emoji}
