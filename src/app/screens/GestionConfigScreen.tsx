@@ -229,7 +229,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                   onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(p => ({ ...p, nombre: undefined })); }}
                   placeholder="Ej: Cajero"
                   className={`${iCls} ${errors.nombre ? "!border-red-400 !bg-red-50/30" : ""}`} />
-                {errors.nombre && <p className="text-xs text-red-500 mt-1">{errors.nombre}</p>}
+                {errors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{errors.nombre}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>

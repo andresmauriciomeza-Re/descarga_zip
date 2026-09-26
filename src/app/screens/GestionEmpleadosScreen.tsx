@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { EstadoSwitch } from "../components/EstadoSwitch";
+import { PasswordField, soloDigitos, filtrarDocumento } from "../components/campo";
 import { type Rol } from "./GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Cliente } from "./GestionClientesScreen";
@@ -662,7 +663,7 @@ export function GestionEmpleadosScreen({
                         </option>
                       ))}
                     </select>
-                    {ctrErrors.empleado && <p className="text-xs text-red-500 mt-1">{ctrErrors.empleado}</p>}
+                    {ctrErrors.empleado && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.empleado}</p>}
                   </div>
 
                   {/* Datos de Tb_Empleado */}
@@ -687,7 +688,7 @@ export function GestionEmpleadosScreen({
                         <option key={r.id} value={r.id}>{r.nombre}</option>
                       ))}
                     </select>
-                    {ctrErrors.rol && <p className="text-xs text-red-500 mt-1">{ctrErrors.rol}</p>}
+                    {ctrErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.rol}</p>}
                   </div>
 
                   {/* Datos de Contratacion_empleado */}
@@ -700,7 +701,7 @@ export function GestionEmpleadosScreen({
                       onChange={e => { setCtrCargo(e.target.value); if (ctrErrors.cargo) setCtrErrors(p => ({ ...p, cargo: undefined })); }}
                       placeholder="Ej: Cajero"
                       className={fCls(ctrErrors.cargo)} />
-                    {ctrErrors.cargo && <p className="text-xs text-red-500 mt-1">{ctrErrors.cargo}</p>}
+                    {ctrErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.cargo}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -709,7 +710,7 @@ export function GestionEmpleadosScreen({
                     <input type="date" value={ctrFechaInicio}
                       onChange={e => { setCtrFechaInicio(e.target.value); if (ctrErrors.fechaInicio) setCtrErrors(p => ({ ...p, fechaInicio: undefined })); }}
                       className={fCls(ctrErrors.fechaInicio)} />
-                    {ctrErrors.fechaInicio && <p className="text-xs text-red-500 mt-1">{ctrErrors.fechaInicio}</p>}
+                    {ctrErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.fechaInicio}</p>}
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -718,7 +719,7 @@ export function GestionEmpleadosScreen({
                     <input type="date" value={ctrFechaFinal}
                       onChange={e => { setCtrFechaFinal(e.target.value); if (ctrErrors.fechaFinal) setCtrErrors(p => ({ ...p, fechaFinal: undefined })); }}
                       className={fCls(ctrErrors.fechaFinal)} />
-                    {ctrErrors.fechaFinal && <p className="text-xs text-red-500 mt-1">{ctrErrors.fechaFinal}</p>}
+                    {ctrErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.fechaFinal}</p>}
                   </div>
                 </div>
 
@@ -842,6 +843,27 @@ export function GestionEmpleadosScreen({
                 <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-2.5">
                   {/* Datos de cuenta */}
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
+                  <div className="col-span-2 flex gap-2 items-start">
+                    <div className="w-32 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
+                      <select value={newTipoDoc}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Número de documento <span className="text-primary">*</span>
+                      </label>
+                      <input type="text" inputMode={newTipoDoc === "PP" ? "text" : "numeric"} value={newDocumento}
+                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.documento) setCreateErrors(p => ({ ...p, documento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                        className={fCls(createErrors.documento)} />
+                      {createErrors.documento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.documento}</p>}
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Nombre completo <span className="text-primary">*</span>
@@ -850,7 +872,7 @@ export function GestionEmpleadosScreen({
                       onChange={e => { setNewNombre(e.target.value); if (createErrors.nombre) setCreateErrors(p => ({ ...p, nombre: undefined })); }}
                       placeholder="Ej: Laura Martínez"
                       className={fCls(createErrors.nombre)} />
-                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1">{createErrors.nombre}</p>}
+                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -860,58 +882,39 @@ export function GestionEmpleadosScreen({
                       onChange={e => { setNewCorreo(e.target.value); if (createErrors.correo) setCreateErrors(p => ({ ...p, correo: undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={fCls(createErrors.correo)} />
-                    {createErrors.correo && <p className="text-xs text-red-500 mt-1">{createErrors.correo}</p>}
+                    {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
                     </label>
-                    <input type="tel" value={newTelefono}
-                      onChange={e => { setNewTelefono(e.target.value); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
+                    <input type="tel" inputMode="numeric" value={newTelefono}
+                      onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
                       placeholder="3001234567"
                       className={fCls(createErrors.telefono)} />
-                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1">{createErrors.telefono}</p>}
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="w-28 shrink-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <span className="text-primary">*</span></label>
-                      <select value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
-                        className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
-                      </select>
-                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Número de documento <span className="text-primary">*</span>
-                      </label>
-                      <input type="text" inputMode={newTipoDoc === "PP" ? "text" : "numeric"} value={newDocumento}
-                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.documento) setCreateErrors(p => ({ ...p, documento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
-                        className={fCls(createErrors.documento)} />
-                      {createErrors.documento && <p className="text-xs text-red-500 mt-1">{createErrors.documento}</p>}
-                    </div>
+                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Contraseña <span className="text-primary">*</span>
                     </label>
-                    <input type="password" value={newContrasena}
-                      onChange={e => { setNewContrasena(e.target.value); if (createErrors.contrasena) setCreateErrors(p => ({ ...p, contrasena: undefined })); }}
+                    <PasswordField
+                      value={newContrasena}
+                      onChange={v => { setNewContrasena(v); if (createErrors.contrasena) setCreateErrors(p => ({ ...p, contrasena: undefined })); }}
                       placeholder="Mínimo 6 caracteres"
-                      className={fCls(createErrors.contrasena)} />
-                    {createErrors.contrasena && <p className="text-xs text-red-500 mt-1">{createErrors.contrasena}</p>}
+                      cls={fCls(createErrors.contrasena)} />
+                    {createErrors.contrasena && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.contrasena}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Confirmar contraseña <span className="text-primary">*</span>
                     </label>
-                    <input type="password" value={newConfirmar}
-                      onChange={e => { setNewConfirmar(e.target.value); if (createErrors.confirmar) setCreateErrors(p => ({ ...p, confirmar: undefined })); }}
+                    <PasswordField
+                      value={newConfirmar}
+                      onChange={v => { setNewConfirmar(v); if (createErrors.confirmar) setCreateErrors(p => ({ ...p, confirmar: undefined })); }}
                       placeholder="Repite la contraseña"
-                      className={fCls(createErrors.confirmar)} />
-                    {createErrors.confirmar && <p className="text-xs text-red-500 mt-1">{createErrors.confirmar}</p>}
+                      cls={fCls(createErrors.confirmar)} />
+                    {createErrors.confirmar && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.confirmar}</p>}
                   </div>
 
                   {/* Datos de Tb_Empleado */}
@@ -938,7 +941,7 @@ export function GestionEmpleadosScreen({
                         </option>
                       ))}
                     </select>
-                    {createErrors.rol && <p className="text-xs text-red-500 mt-1">{createErrors.rol}</p>}
+                    {createErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.rol}</p>}
                   </div>
 
                   {/* Datos de Contratacion_empleado */}
@@ -951,7 +954,7 @@ export function GestionEmpleadosScreen({
                       onChange={e => { setNewCargo(e.target.value); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
                       placeholder="Ej: Cajero"
                       className={fCls(createErrors.cargo)} />
-                    {createErrors.cargo && <p className="text-xs text-red-500 mt-1">{createErrors.cargo}</p>}
+                    {createErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.cargo}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -960,7 +963,7 @@ export function GestionEmpleadosScreen({
                     <input type="date" value={newFechaInicio}
                       onChange={e => { setNewFechaInicio(e.target.value); if (createErrors.fechaInicio) setCreateErrors(p => ({ ...p, fechaInicio: undefined })); }}
                       className={fCls(createErrors.fechaInicio)} />
-                    {createErrors.fechaInicio && <p className="text-xs text-red-500 mt-1">{createErrors.fechaInicio}</p>}
+                    {createErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.fechaInicio}</p>}
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -969,7 +972,7 @@ export function GestionEmpleadosScreen({
                     <input type="date" value={newFechaFinal}
                       onChange={e => { setNewFechaFinal(e.target.value); if (createErrors.fechaFinal) setCreateErrors(p => ({ ...p, fechaFinal: undefined })); }}
                       className={fCls(createErrors.fechaFinal)} />
-                    {createErrors.fechaFinal && <p className="text-xs text-red-500 mt-1">{createErrors.fechaFinal}</p>}
+                    {createErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.fechaFinal}</p>}
                   </div>
                 </div>
 
@@ -1013,44 +1016,44 @@ export function GestionEmpleadosScreen({
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                {[
-                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
-                  { label: "Correo",          field: "correo" as const, type: "email" },
-                  { label: "Teléfono",        field: "telefono" as const, type: "tel" },
-                ].map(({ label, field, type }) => (
-                  <div key={field}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} value={editItem[field]}
-                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
-                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
-                  </div>
-                ))}
-                <div className="flex gap-2 col-span-2">
-                  <div className="w-28 shrink-0">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento</label>
+                <div className="col-span-2 flex gap-2 items-start">
+                  <div className="w-32 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <select value={editItem.tipoDocumento}
                       onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                     </select>
-                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.tipoDocumento}</p>}
+                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
                     <input type="text" inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"} value={editItem.numeroDocumento}
-                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: e.target.value.replace(/[\s.]/g, "") })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: filtrarDocumento(e.target.value, x.tipoDocumento) })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
                       placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.numeroDocumento}</p>}
+                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
                 </div>
+                {[
+                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
+                  { label: "Correo",          field: "correo" as const, type: "email" },
+                  { label: "Teléfono",        field: "telefono" as const, type: "tel", numeric: true },
+                ].map(({ label, field, type, numeric }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+                    <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]}
+                      onChange={e => { const v = numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
+                  </div>
+                ))}
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Cargo</label>
                   <input type="text" value={editItem.cargo}
                     onChange={e => { setEditItem(x => x && ({ ...x, cargo: e.target.value })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.cargo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                  {editErrors.cargo && <p className="text-xs text-red-500 mt-1">{editErrors.cargo}</p>}
+                  {editErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.cargo}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
@@ -1066,14 +1069,14 @@ export function GestionEmpleadosScreen({
                   <input type="date" value={editItem.fechaInicio}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaInicio: e.target.value })); if (editErrors.fechaInicio) setEditErrors(p => ({ ...p, fechaInicio: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                  {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1">{editErrors.fechaInicio}</p>}
+                  {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
                   <input type="date" value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                  {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1">{editErrors.fechaFinal}</p>}
+                  {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
                 </div>
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
@@ -1086,7 +1089,7 @@ export function GestionEmpleadosScreen({
                       </option>
                     ))}
                   </select>
-                  {editErrors.rol && <p className="text-xs text-red-500 mt-1">{editErrors.rol}</p>}
+                  {editErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.rol}</p>}
                 </div>
               </div>
               <div className="flex gap-3 px-4 py-3 border-t border-border">

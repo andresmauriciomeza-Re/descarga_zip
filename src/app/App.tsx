@@ -62,10 +62,12 @@ import {
 } from "lucide-react";
 
 import { CalendarDropdown } from "./components/CalendarDropdown";
-import { inputCls, MensajeError } from "./components/campo";
+import { inputCls, MensajeError, PasswordField, soloDigitos, filtrarDocumento } from "./components/campo";
 import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
+import pizzaFondo from "@/imports/pizzafondo.jpeg";
+import pizzaFondoRecorte from "@/imports/pizzafondo-removebg-preview.png";
 import lasanaCarne from "@/imports/lasaña_carne.png";
 import lasanaMixta from "@/imports/lasaña_mixta.png";
 import lasanaPollo from "@/imports/lasaña_pollo.png";
@@ -3318,7 +3320,7 @@ function ClientProfileScreen({
                   autoFocus
                 />
                 {errores.correo && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-red-500 mt-1 leading-tight">
                     {errores.correo}
                   </p>
                 )}
@@ -3348,7 +3350,7 @@ function ClientProfileScreen({
                   className={iCls(errores.telefono)}
                 />
                 {errores.telefono && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-red-500 mt-1 leading-tight">
                     {errores.telefono}
                   </p>
                 )}
@@ -3497,126 +3499,175 @@ function LoginScreen({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-muted">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-8"
-      >
-        <div className="text-center mb-8">
-          <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-24 w-auto object-contain mx-auto mb-4" />
-          <h1
-            className="text-2xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            Bienvenido a La Sirena
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Ingresa tus datos para continuar
-          </p>
-        </div>
-
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-1.5">
-              Correo electrónico
-            </label>
-            <input
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
-              }}
-              type="email"
-              placeholder="gloria@lasirena.com"
-              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+      {/* Columna izquierda: la imagen de pizza. Solo en escritorio; en movil se
+          oculta y el formulario queda centrado como antes. */}
+      <div className="hidden lg:block lg:w-1/2 lg:shrink-0 relative overflow-hidden">
+        {/* Capa 1: la ilustracion de ingredientes, ampliada y desenfocada, para
+            que las franjas que deja la composicion 3:2 no queden vacias. */}
+        <img
+          src={pizzaFondo}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-80"
+        />
+        {/* Capa 2: la composicion real, en una caja 3:2 centrada. Las dos capas
+            comparten la MISMA caja a proposito: los dos archivos son 1.5:1, asi
+            que el recorte cae exacto sobre la pizza del jpeg. Si el jpeg fuera
+            a sangre y el recorte encima, cada uno se escalaria distinto (0.912x
+            vs 1.116x) y se verian dos pizzas desalineadas. */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative w-full aspect-[3/2]">
+            <img
+              src={pizzaFondo}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover"
             />
-            {errors.email && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">
-                {errors.email}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-1.5">
-              Contraseña
-            </label>
-            <input
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
-              }}
-              type="password"
-              placeholder="••••••••"
-              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
+            <img
+              src={pizzaFondoRecorte}
+              alt="Pizzas de La Sirena"
+              className="absolute inset-0 w-full h-full object-contain"
             />
-            {errors.password && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">
-                {errors.password}
-              </p>
-            )}
-          </div>
-          <div className="text-right">
-            <button
-              onClick={() => setShowForgot(true)}
-              className="text-sm text-primary font-medium hover:underline cursor-pointer"
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
           </div>
         </div>
+      </div>
 
-        <PrimaryBtn
-          onClick={handleLogin}
-          size="lg"
-          className="w-full mb-4"
-          disabled={loading}
+      {/* Columna derecha: el formulario. `items-start` + `my-auto` en la tarjeta
+          en vez de `items-center`: con el centrado clasico de flex, una tarjeta
+          mas alta que la pantalla se empuja hacia arriba y la flecha de volver
+          queda recortada sin forma de llegar a ella. Con `my-auto` los margenes
+          automaticos absorben el espacio sobrante (centrado) y valen 0 cuando no
+          hay, dejando la tarjeta arriba y todo accesible con scroll. */}
+      <div className="lg:w-1/2 lg:overflow-y-auto bg-muted flex items-start justify-center px-4 py-4 min-h-screen lg:min-h-0">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-6"
         >
-          {loading ? (
-            <RefreshCw className="w-5 h-5 animate-spin" />
-          ) : null}
-          {loading ? "Ingresando..." : "Iniciar sesión"}
-        </PrimaryBtn>
-
-        <div className="relative mb-4">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative text-center">
-            <span className="px-3 bg-card text-muted-foreground text-sm">
-              o continúa con
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {[
-            { label: "Google", icon: "G" },
-            { label: "Apple", icon: "🍎" },
-          ].map(({ label, icon }) => (
-            <button
-              key={label}
-              onClick={() =>
-                toast.info(`Continuando con ${label}...`)
-              }
-              className="flex items-center justify-center gap-2 py-3 border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-sm font-medium text-foreground"
-            >
-              <span className="font-bold">{icon}</span> {label}
-            </button>
-          ))}
-        </div>
-
-        <p className="text-center text-sm text-muted-foreground">
-          {"¿No tienes cuenta? "}
           <button
-            onClick={() => navigate("register")}
-            className="text-primary font-semibold hover:underline cursor-pointer"
+            onClick={() => navigate("landing")}
+            title="Volver al inicio"
+            className="absolute top-6 left-6 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           >
-            Regístrate aquí
+            <ArrowLeft className="w-5 h-5" />
           </button>
-        </p>
-      </motion.div>
+        <div className="text-center mb-5">
+          <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-20 w-auto object-contain mx-auto mb-3" />
+
+            <h1
+              className="text-2xl font-bold text-foreground"
+              style={{ fontFamily: SERIF }}
+            >
+              Bienvenido a La Sirena
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Ingresa tus datos para continuar
+            </p>
+          </div>
+
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1">
+                Correo electrónico
+              </label>
+              <input
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+                }}
+                type="email"
+                placeholder="gloria@lasirena.com"
+                className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              />
+              {errors.email && (
+                <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
+                  {errors.email}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-1">
+                Contraseña
+              </label>
+              <PasswordField
+                value={password}
+                onChange={(v) => {
+                  setPassword(v);
+                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                }}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                cls={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              />
+              {errors.password && (
+                <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
+                  {errors.password}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <button
+                onClick={() => setShowForgot(true)}
+                className="text-sm text-primary font-medium hover:underline cursor-pointer"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+          </div>
+
+          <PrimaryBtn
+            onClick={handleLogin}
+            size="lg"
+            className="w-full mb-3"
+            disabled={loading}
+          >
+            {loading ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : null}
+            {loading ? "Ingresando..." : "Iniciar sesión"}
+          </PrimaryBtn>
+
+          <div className="relative mb-3">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative text-center">
+              <span className="px-3 bg-card text-muted-foreground text-sm">
+                o continúa con
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {[
+              { label: "Google", icon: "G" },
+              { label: "Apple", icon: "🍎" },
+            ].map(({ label, icon }) => (
+              <button
+                key={label}
+                onClick={() =>
+                  toast.info(`Continuando con ${label}...`)
+                }
+                className="flex items-center justify-center gap-2 py-3 border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-sm font-medium text-foreground"
+              >
+                <span className="font-bold">{icon}</span> {label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            {"¿No tienes cuenta? "}
+            <button
+              onClick={() => navigate("register")}
+              className="text-primary font-semibold hover:underline cursor-pointer"
+            >
+              Regístrate aquí
+            </button>
+          </p>
+        </motion.div>
+      </div>
 
       {/* ── Modal: Olvidé mi contraseña ── */}
       <AnimatePresence>
@@ -3883,16 +3934,16 @@ function ForgotPasswordModal({
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
                   Nueva contraseña
                 </label>
-                <input
+                <PasswordField
                   value={newPass}
-                  onChange={(e) => {
-                    setNewPass(e.target.value);
+                  onChange={(v) => {
+                    setNewPass(v);
                     if (errores.newPass)
                       setErrores((p) => ({ ...p, newPass: "" }));
                   }}
-                  type="password"
                   placeholder="Mínimo 6 caracteres"
-                  className={inputCls(errores.newPass)}
+                  autoComplete="new-password"
+                  cls={inputCls(errores.newPass)}
                 />
                 <MensajeError err={errores.newPass} />
               </div>
@@ -3900,16 +3951,16 @@ function ForgotPasswordModal({
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
                   Confirmar contraseña
                 </label>
-                <input
+                <PasswordField
                   value={confirm}
-                  onChange={(e) => {
-                    setConfirm(e.target.value);
+                  onChange={(v) => {
+                    setConfirm(v);
                     if (errores.confirm)
                       setErrores((p) => ({ ...p, confirm: "" }));
                   }}
-                  type="password"
                   placeholder="Repite tu contraseña"
-                  className={inputCls(errores.confirm)}
+                  autoComplete="new-password"
+                  cls={inputCls(errores.confirm)}
                 />
                 <MensajeError err={errores.confirm} />
               </div>
@@ -3928,7 +3979,7 @@ function ForgotPasswordModal({
               onClick={() => setStep("code")}
               className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
-              ← Volver al código
+              ← Volver
             </button>
           </>
         )}
@@ -4006,12 +4057,22 @@ function RegisterScreen({
   });
   const [loading, setLoading] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
-  const set =
+  const setVal =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm((p) => ({ ...p, [k]: e.target.value }));
+    (v: string) => {
+      setForm((p) => ({ ...p, [k]: v }));
       if (errores[k]) setErrores((p) => ({ ...p, [k]: "" }));
     };
+  const set =
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setVal(k)(e.target.value);
+  // Igual que `set`, pero dejando solo dígitos: el teléfono nunca debe poder
+  // guardar letras ni símbolos aunque se peguen desde el portapapeles.
+  const setDigitos =
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setVal(k)(soloDigitos(e.target.value));
 
   const register = () => {
     const errs: Record<string, string> = {};
@@ -4136,7 +4197,7 @@ function RegisterScreen({
               <input
                 value={form.docNum}
                 onChange={(e) => {
-                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[\s.]/g, "") }));
+                  setForm((p) => ({ ...p, docNum: filtrarDocumento(e.target.value, form.docType) }));
                   if (errores.docNum) setErrores((p) => ({ ...p, docNum: "" }));
                 }}
                 type="text"
@@ -4164,8 +4225,9 @@ function RegisterScreen({
             {
               label: "Teléfono",
               key: "phone" as const,
-              placeholder: "310 123 4567",
+              placeholder: "3101234567",
               type: "tel",
+              numeric: true,
             },
             {
               label: "Contraseña",
@@ -4179,18 +4241,29 @@ function RegisterScreen({
               placeholder: "Repite tu contraseña",
               type: "password",
             },
-          ].map(({ label, key, placeholder, type }) => (
+          ].map(({ label, key, placeholder, type, numeric }) => (
             <div key={key}>
               <label className="block text-sm font-semibold mb-1.5 text-foreground">
                 {label}
               </label>
-              <input
-                value={form[key]}
-                onChange={set(key)}
-                type={type}
-                placeholder={placeholder}
-                className={inputCls(errores[key])}
-              />
+              {type === "password" ? (
+                <PasswordField
+                  value={form[key]}
+                  onChange={setVal(key)}
+                  placeholder={placeholder}
+                  autoComplete="new-password"
+                  cls={inputCls(errores[key])}
+                />
+              ) : (
+                <input
+                  value={form[key]}
+                  onChange={numeric ? setDigitos(key) : set(key)}
+                  type={type}
+                  inputMode={numeric ? "numeric" : undefined}
+                  placeholder={placeholder}
+                  className={inputCls(errores[key])}
+                />
+              )}
               <MensajeError err={errores[key]} />
             </div>
           ))}
