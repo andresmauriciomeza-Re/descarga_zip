@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 
 import { CalendarDropdown } from "./components/CalendarDropdown";
+import { inputCls, MensajeError } from "./components/campo";
 import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
@@ -3515,13 +3516,16 @@ function LoginScreen({
             </label>
             <input
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+              }}
               type="email"
               placeholder="gloria@lasirena.com"
-              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400" : "border-border"}`}
+              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
             />
             {errors.email && (
-              <p className="text-red-500 text-sm mt-1">
+              <p className="text-xs text-red-500 mt-1 ml-0.5">
                 {errors.email}
               </p>
             )}
@@ -3532,13 +3536,16 @@ function LoginScreen({
             </label>
             <input
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+              }}
               type="password"
               placeholder="••••••••"
-              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400" : "border-border"}`}
+              className={`w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
             />
             {errors.password && (
-              <p className="text-red-500 text-sm mt-1">
+              <p className="text-xs text-red-500 mt-1 ml-0.5">
                 {errors.password}
               </p>
             )}
@@ -3630,6 +3637,7 @@ function ForgotPasswordModal({
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [errores, setErrores] = useState<Record<string, string>>({});
 
   const startCooldown = () => {
     setResendCooldown(30);
@@ -3645,10 +3653,11 @@ function ForgotPasswordModal({
   };
 
   const sendCode = () => {
-    if (!forgotEmail.includes("@")) {
-      toast.error("Ingresa un correo válido");
-      return;
-    }
+    const err = !forgotEmail.includes("@")
+      ? "Ingresa un correo electrónico válido (ej: nombre@dominio.com)"
+      : null;
+    setErrores(err ? { forgotEmail: err } : {});
+    if (err) return;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -3671,9 +3680,10 @@ function ForgotPasswordModal({
   const verifyCode = () => {
     const fullCode = code.join("");
     if (fullCode.length < 6) {
-      toast.error("Ingresa el código completo");
+      setErrores({ code: "Ingresa el código completo" });
       return;
     }
+    setErrores({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -3682,16 +3692,12 @@ function ForgotPasswordModal({
   };
 
   const changePassword = () => {
-    if (newPass.length < 6) {
-      toast.error(
-        "La contraseña debe tener mínimo 6 caracteres",
-      );
-      return;
-    }
-    if (newPass !== confirm) {
-      toast.error("Las contraseñas no coinciden");
-      return;
-    }
+    const errs: Record<string, string> = {};
+    if (newPass.length < 6)
+      errs.newPass = "La contraseña debe tener al menos 6 caracteres";
+    if (newPass !== confirm) errs.confirm = "Las contraseñas no coinciden";
+    setErrores(errs);
+    if (Object.values(errs).some(Boolean)) return;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -3704,6 +3710,7 @@ function ForgotPasswordModal({
     const next = [...code];
     next[i] = val;
     setCode(next);
+    if (errores.code) setErrores((p) => ({ ...p, code: "" }));
     if (val && i < 5) {
       document.getElementById(`otp-${i + 1}`)?.focus();
     }
@@ -3748,11 +3755,16 @@ function ForgotPasswordModal({
               </label>
               <input
                 value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
+                onChange={(e) => {
+                  setForgotEmail(e.target.value);
+                  if (errores.forgotEmail)
+                    setErrores((p) => ({ ...p, forgotEmail: "" }));
+                }}
                 type="email"
                 placeholder="gloria@lasirena.com"
-                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className={inputCls(errores.forgotEmail)}
               />
+              <MensajeError err={errores.forgotEmail} />
             </div>
             <button
               onClick={sendCode}
@@ -3793,7 +3805,7 @@ function ForgotPasswordModal({
                 </strong>
               </p>
             </div>
-            <div className="flex justify-center gap-2 mb-6">
+            <div className="flex justify-center gap-2 mb-6 flex-wrap">
               {code.map((c, i) => (
                 <input
                   key={i}
@@ -3805,9 +3817,14 @@ function ForgotPasswordModal({
                   onKeyDown={(e) => handleCodeKey(i, e)}
                   maxLength={1}
                   inputMode="numeric"
-                  className="w-10 h-12 text-center text-lg font-bold bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
+                  className={`w-10 h-12 text-center text-lg font-bold bg-muted rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground ${
+                    errores.code ? "border-red-400 bg-red-50/30" : "border-border"
+                  }`}
                 />
               ))}
+            </div>
+            <div className="-mt-4 mb-4">
+              <MensajeError err={errores.code} />
             </div>
             <button
               onClick={verifyCode}
@@ -3861,11 +3878,16 @@ function ForgotPasswordModal({
                 </label>
                 <input
                   value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
+                  onChange={(e) => {
+                    setNewPass(e.target.value);
+                    if (errores.newPass)
+                      setErrores((p) => ({ ...p, newPass: "" }));
+                  }}
                   type="password"
                   placeholder="Mínimo 6 caracteres"
-                  className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className={inputCls(errores.newPass)}
                 />
+                <MensajeError err={errores.newPass} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
@@ -3873,11 +3895,16 @@ function ForgotPasswordModal({
                 </label>
                 <input
                   value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  onChange={(e) => {
+                    setConfirm(e.target.value);
+                    if (errores.confirm)
+                      setErrores((p) => ({ ...p, confirm: "" }));
+                  }}
                   type="password"
                   placeholder="Repite tu contraseña"
-                  className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className={inputCls(errores.confirm)}
                 />
+                <MensajeError err={errores.confirm} />
               </div>
             </div>
             <button
@@ -3971,59 +3998,56 @@ function RegisterScreen({
     confirm: "",
   });
   const [loading, setLoading] = useState(false);
+  const [errores, setErrores] = useState<Record<string, string>>({});
   const set =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm((p) => ({ ...p, [k]: e.target.value }));
+      if (errores[k]) setErrores((p) => ({ ...p, [k]: "" }));
+    };
 
   const register = () => {
-    if (!form.name || !form.email || !form.phone) {
-      toast.error("Por favor completa todos los campos");
-      return;
+    const errs: Record<string, string> = {};
+
+    if (!form.name) errs.name = "El nombre completo es obligatorio";
+    if (!form.email) errs.email = "El correo electrónico es obligatorio";
+    else if (!form.email.includes("@"))
+      errs.email = "Ingresa un correo electrónico válido (ej: nombre@dominio.com)";
+    if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
+    if (!form.docType) errs.docType = "Selecciona el tipo de documento";
+
+    const docTrim = form.docNum.trim();
+    if (!docTrim) errs.docNum = "El número de documento es obligatorio";
+    else if (form.docType !== "PP" && !/^\d+$/.test(docTrim))
+      errs.docNum = "El número de documento solo debe contener números";
+
+    if (!errs.docNum) {
+      const clave = `${form.docType}||${docTrim}`.toLowerCase();
+
+      const docDuplicado =
+        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
+      if (docDuplicado) errs.docNum = "Este documento ya está registrado";
     }
-    if (!form.email.includes("@")) {
-      toast.error("Correo electrónico no válido");
-      return;
+
+    if (!errs.email) {
+      const em = form.email.trim().toLowerCase();
+      const correoDuplicado =
+        usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => c.correo.trim().toLowerCase() === em);
+      if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
-    if (!form.docType) {
-      toast.error("Selecciona el tipo de documento");
-      return;
-    }
-    if (!form.docNum.trim()) {
-      toast.error("Ingresa el número de documento");
-      return;
-    }
-    if (form.docType !== "PP" && !/^\d+$/.test(form.docNum.trim())) {
-      toast.error("El número de documento solo debe contener números");
-      return;
-    }
-    const clave = `${form.docType}||${form.docNum.trim()}`.toLowerCase();
-    const docDuplicado =
-      usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
-      empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
-      clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
-    if (docDuplicado) {
-      toast.error("Este documento ya está registrado");
-      return;
-    }
-    const correoDuplicado =
-      usuarios.some(u => u.correo.trim().toLowerCase() === form.email.trim().toLowerCase()) ||
-      empleados.some(e => e.correo.trim().toLowerCase() === form.email.trim().toLowerCase()) ||
-      clientes.some(c => c.correo.trim().toLowerCase() === form.email.trim().toLowerCase());
-    if (correoDuplicado) {
-      toast.error("Este correo ya está registrado");
-      return;
-    }
-    if (form.password.length < 6) {
-      toast.error(
-        "La contraseña debe tener mínimo 6 caracteres",
-      );
-      return;
-    }
-    if (form.password !== form.confirm) {
-      toast.error("Las contraseñas no coinciden");
-      return;
-    }
+
+    if (form.password.length < 6)
+      errs.password = "La contraseña debe tener al menos 6 caracteres";
+    if (form.password !== form.confirm)
+      errs.confirm = "Las contraseñas no coinciden";
+
+    setErrores(errs);
+    if (Object.values(errs).some(Boolean)) return;
+
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -4084,8 +4108,11 @@ function RegisterScreen({
               </label>
               <select
                 value={form.docType}
-                onChange={(e) => setForm((p) => ({ ...p, docType: e.target.value }))}
-                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                onChange={(e) => {
+                  setForm((p) => ({ ...p, docType: e.target.value }));
+                  if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
+                }}
+                className={inputCls(errores.docType, "cursor-pointer")}
               >
                 {DOC_OPTIONS.map((opt) => (
                   <option key={opt.code} value={opt.code}>
@@ -4093,6 +4120,7 @@ function RegisterScreen({
                   </option>
                 ))}
               </select>
+              <MensajeError err={errores.docType} />
             </div>
             <div className="flex-1 min-w-0">
               <label className="block text-sm font-semibold mb-1.5 text-foreground">
@@ -4100,14 +4128,16 @@ function RegisterScreen({
               </label>
               <input
                 value={form.docNum}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[\s.]/g, "") }))
-                }
+                onChange={(e) => {
+                  setForm((p) => ({ ...p, docNum: e.target.value.replace(/[\s.]/g, "") }));
+                  if (errores.docNum) setErrores((p) => ({ ...p, docNum: "" }));
+                }}
                 type="text"
                 inputMode={form.docType === "PP" ? "text" : "numeric"}
                 placeholder={form.docType === "PP" ? "AB123456" : "Ej: 12345678"}
-                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className={inputCls(errores.docNum)}
               />
+              <MensajeError err={errores.docNum} />
             </div>
           </div>
           {[
@@ -4152,8 +4182,9 @@ function RegisterScreen({
                 onChange={set(key)}
                 type={type}
                 placeholder={placeholder}
-                className="w-full px-4 py-3 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className={inputCls(errores[key])}
               />
+              <MensajeError err={errores[key]} />
             </div>
           ))}
         </div>

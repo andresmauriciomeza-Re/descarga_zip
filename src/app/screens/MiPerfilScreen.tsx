@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "./GestionEmpleadosScreen";
+import { validarCorreo, validarTelefono } from "../components/campo";
 
 const SERIF = "'DM Serif Display', serif";
 
@@ -30,18 +31,6 @@ interface Props {
   // Nombre del rol asociado a cada contratación (mismo criterio que el detalle
   // en la pantalla de Empleados). Sin esto el id crudo se vería en pantalla.
   rolNombreDe?: (rolId: string) => string;
-}
-
-function validarCorreo(c: string): string | null {
-  if (!c.trim()) return "El correo es obligatorio";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return "Formato de correo no válido";
-  return null;
-}
-
-function validarTelefono(t: string): string | null {
-  if (!t.trim()) return "El teléfono es obligatorio";
-  if (!/^\d{7,15}$/.test(t.replace(/\s/g, ""))) return "Solo números, entre 7 y 15 dígitos";
-  return null;
 }
 
 export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser, inStore = false, contrataciones, rolNombreDe }: Props) {
