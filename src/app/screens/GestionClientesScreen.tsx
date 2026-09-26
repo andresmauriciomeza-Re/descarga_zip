@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, ChevronLeft, ChevronRight, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -39,8 +39,6 @@ export const INITIAL_CLIENTES: Cliente[] = [
   { id:"CLI-009", nombre:"Valentina Mora",    iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",         tipoDocumento:"CC", numeroDocumento:"99001122", pedidos:1,  activo:true  },
   { id:"CLI-010", nombre:"Andrés Castillo",   iniciales:"AC", avatarColor:"bg-blue-500",    correo:"andres.castillo@gmail.com",   tipoDocumento:"CC", numeroDocumento:"10111213", pedidos:6,  activo:true  },
 ];
-
-const PER_PAGE = 5;
 
 export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
@@ -84,13 +82,64 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       const matchE = filterEstado === "todos" || (filterEstado === "activo" ? c.activo : !c.activo);
       return matchQ && matchE;
     });
-    if (sortBy === "estado") r = [...r].sort((a,b) => Number(b.activo) - Number(a.activo));
-    else                     r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
+    // El orden nunca depende de `activo`: con el filtro en "Todos los estados"
+    // los activos y los inactivos quedan intercalados según el criterio elegido.
+    // El desempate alfabético mantiene el orden determinista si dos clientes
+    // tienen los mismos pedidos.
+    if (sortBy === "pedidos") r = [...r].sort((a,b) => b.pedidos - a.pedidos || a.nombre.localeCompare(b.nombre));
+    else                      r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
     return r;
   }, [clientes, search, filterEstado, sortBy]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged      = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
+  // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
+  // interno, así que el paginador es la única forma de ver más clientes.
+  // Se mide la tarjeta, que al ser `flex-1 min-h-0` dentro de una cadena
+  // bloqueada a `h-dvh` tiene un alto que NO depende de cuántas filas haya,
+  // de modo que no hay bucle de realimentación entre medición y render.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [filasPorPagina, setFilasPorPagina] = useState(6);
+  const hayFilasRef = useRef(false);
+  hayFilasRef.current = filtered.length > 0;
+
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const medir = () => {
+      // Sin resultados la única <tr> es la de "No se encontraron", que mide
+      // distinto: se conserva el último valor válido en vez de calcular con ella.
+      if (!hayFilasRef.current) return;
+      const thead = card.querySelector("thead");
+      const fila  = card.querySelector("tbody tr");
+      if (!(thead instanceof HTMLElement) || !(fila instanceof HTMLElement)) return;
+      const altoFila = fila.offsetHeight;
+      if (altoFila <= 0) return;
+      const disponible = card.clientHeight - thead.offsetHeight;
+      // `divide-y` pone 1px entre filas que el offsetHeight de la primera fila
+      // no incluye, así que el divisor lleva ese +1 y el numerador lo compensa.
+      // Sin piso mínimo: si se forzara un mínimo mayor de lo que cabe, la última
+      // fila de cada página quedaría recortada por el `overflow-hidden` de la
+      // tarjeta sin poder alcanzarla con el paginador (estaría en la misma
+      // página), que es peor que un paginador más largo.
+      const n = Math.max(1, Math.floor((disponible + 1) / (altoFila + 1)));
+      setFilasPorPagina(prev => (prev === n ? prev : n));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
+
+  // Si al encoger la ventana caben menos filas por página, la página actual
+  // puede quedar fuera de rango: se vuelve a la primera.
+  useEffect(() => { setPage(1); }, [filasPorPagina]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
+  // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
+  // se reduce (p. ej. al apagar un switch con un filtro de estado activo) `page`
+  // quedaría fuera de rango, la tabla saldría vacía y la paginación se ocultaría,
+  // dejando al usuario sin forma de volver.
+  const pageActual = Math.min(page, totalPages);
+  const paged      = filtered.slice((pageActual-1)*filasPorPagina, pageActual*filasPorPagina);
 
   const toggleEstado = (id: string) => {
     setClientes(p => p.map(c => c.id === id ? { ...c, activo: !c.activo } : c));
@@ -243,12 +292,14 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         </select>
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} className={iCls}>
           <option value="nombre">Ordenar por nombre</option>
-          <option value="estado">Ordenar por estado</option>
+          <option value="pedidos">Ordenar por pedidos</option>
         </select>
       </div>
 
-{/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+      {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
+          el número de filas por página se calcula arriba para que siempre quepan
+          enteras y la navegación sea solo por el paginador. */}
+      <div ref={cardRef} className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
         <table className="w-full">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -306,24 +357,26 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       {/* Paginación */}
       {filtered.length > 0 && (
         <div className="flex items-center justify-center shrink-0">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronLeft className="w-4 h-4" />
+          {/* Los controles se muestran siempre, incluso con una sola página: con
+              las filas por página adaptativas puede dar 1 sola página, y ocultarlos
+              dejaría la tabla sin ninguna señal de que la lista estaba completa.
+              Con una sola página ambas flechas salen deshabilitadas (disabled:opacity-40). */}
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={pageActual === 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
+              <button key={n} onClick={() => setPage(n)}
+                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
+                {n}
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
-                <button key={n} onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                  {n}
-                </button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={pageActual === totalPages}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

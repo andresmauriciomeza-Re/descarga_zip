@@ -1,19 +1,74 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Eye, Pencil, Trash2, X, AlertCircle, Check, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Eye, Pencil, Trash2, X, AlertCircle, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
 const SERIF = "'DM Serif Display', serif";
 
 // ── Árbol de módulos / sub-opciones del sistema ──────────────────────
 export const MENU_TREE = [
-  { modulo: "Compras",    subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
-  { modulo: "Producción", subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Producto No Conforme"] },
-  { modulo: "Ventas",     subs: ["Clientes", "Ventas", "Devoluciones"] },
+  // Dashboard no tiene submenú: es un ítem directo del sidebar. Se modela con
+  // una sub-opción homónima porque el resto de la lógica (fullAccesos,
+  // toggleModule, el contador y el panel de permisos) espera `subs` no vacío.
+  { modulo: "Dashboard",     subs: ["Dashboard"] },
+  { modulo: "Configuración", subs: ["Configuración", "Usuarios", "Empleados"] },
+  { modulo: "Compras",       subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
+  { modulo: "Producción",    subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Producto No Conforme"] },
+  { modulo: "Ventas",        subs: ["Clientes", "Ventas", "Devoluciones"] },
 ];
+
+// ── Celdas de la grilla de módulos ──────────────────────────────────────
+// Replican el orden de las secciones del sidebar del Admin (NAV_SECTIONS en
+// App.tsx): Dashboard · Configuración · Usuarios · Compras · Producción ·
+// Ventas. "Usuarios" es una celda propia porque en el sidebar lo es, pero NO es
+// un módulo nuevo: sigue siendo la sub-opción `Configuración::Usuarios` de
+// MENU_TREE, igual que la nombra el `permKey` del sidebar y el guard de ruta.
+// Por eso `modulo` + `subs` apuntan a algo que ya existe y ninguna clave de
+// permiso cambia: los roles ya guardados en localStorage no pierden acceso.
+type Celda = { nombre: string; modulo: string; subs?: string[] };
+
+const CELDAS: Celda[] = [
+  { nombre: "Dashboard",     modulo: "Dashboard" },
+  { nombre: "Configuración", modulo: "Configuración", subs: ["Configuración"] },
+  // El sidebar agrupa Usuarios y Empleados bajo una sección "Usuarios", de ahí
+  // que compartan celda. Sigue siendo "un módulo simple" en permisos: cada
+  // sub-opción ofrece las 4 acciones de accionesDe("Configuración").
+  { nombre: "Usuarios",      modulo: "Configuración", subs: ["Usuarios", "Empleados"] },
+  { nombre: "Compras",       modulo: "Compras" },
+  { nombre: "Producción",    modulo: "Producción" },
+  { nombre: "Ventas",        modulo: "Ventas" },
+];
+
+// Sub-opciones que gobierna una celda: las declaradas, o todas las del módulo.
+// Con MENU_TREE intacto, las 6 celdas cubren las 15 sub-opciones sin dejar
+// ninguna huérfana (1+1+2+4+4+3), así que todas siguen siendo asignables.
+const subsDeCelda = (c: Celda): string[] =>
+  c.subs ?? MENU_TREE.find(m => m.modulo === c.modulo)!.subs;
+
+// Ícono de cada celda, indexado por nombre de celda y NO por módulo: la celda
+// "Usuarios" apunta al módulo "Configuración" y debe mostrar las personas, no
+// el engranaje. Son los mismos iconos que usa el sidebar. Una celda sin entrada
+// aquí se sigue mostrando por su nombre, solo sin icono.
+const CELDA_ICONOS: Record<string, typeof Home> = {
+  Dashboard:     Home,
+  Configuración: Settings,
+  Usuarios:      Users,
+  Compras:       ShoppingBag,
+  Producción:    Layers,
+  Ventas:        DollarSign,
+};
 
 export const ACCIONES = ["Ver", "Crear", "Editar", "Eliminar"] as const;
 export type Accion = typeof ACCIONES[number];
+
+// Módulos de solo lectura: no admiten Crear/Editar/Eliminar, así que el modal
+// únicamente les ofrece el permiso "Ver".
+export const MODULOS_SOLO_LECTURA = ["Dashboard"];
+
+// Acciones disponibles para un módulo. Todo lo que asigne permisos debe pasar
+// por aquí en lugar de leer ACCIONES directamente.
+export const accionesDe = (modulo: string): readonly Accion[] =>
+  MODULOS_SOLO_LECTURA.includes(modulo) ? (["Ver"] as const) : ACCIONES;
 
 // AccesosMap: "Módulo::SubOpcion" → Accion[]
 export type AccesosMap = Record<string, Accion[]>;
@@ -23,7 +78,7 @@ export const KEY = (modulo: string, sub: string) => `${modulo}::${sub}`;
 export const fullAccesos = (): AccesosMap => {
   const m: AccesosMap = {};
   MENU_TREE.forEach(({ modulo, subs }) =>
-    subs.forEach(sub => { m[KEY(modulo, sub)] = [...ACCIONES]; })
+    subs.forEach(sub => { m[KEY(modulo, sub)] = [...accionesDe(modulo)]; })
   );
   return m;
 };
@@ -102,12 +157,18 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const [desc,       setDesc]       = useState(initialDesc);
   const [activo,     setActivo]     = useState(initialActivo);
   const [accesos,    setAccesos]    = useState<AccesosMap>({ ...initialAccesos });
-  const [openModulo, setOpenModulo] = useState<string | null>(null);
+  const [moduloActivo, setModuloActivo] = useState<string | null>(null);
   const [errors,     setErrors]     = useState<{ nombre?: string; modulos?: string }>({});
 
-  const toggleOpen = (m: string) => setOpenModulo(prev => prev === m ? null : m);
-
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+  // OJO: los permisos SOLO se conceden desde el panel derecho, con
+  // toggleAccion o el botón "Todos". Esta grilla es un visor: hacer clic en un
+  // módulo solo cambia `moduloActivo` y jamás escribe en `accesos`. Por eso un
+  // clic no puede alterar el contador "X seleccionadas" ni el rol guardado.
+  // Antes `toggleModule` y `toggleSub` vivían aquí y escribían ["Ver"] al
+  // activar, lo que dejaba "Ver" preseleccionado en azul sin que nadie lo
+  // pidiera; se eliminaron por ese motivo.
 
   const isSubOn = (m: string, s: string) => {
     const k = KEY(m, s);
@@ -115,31 +176,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   };
   const isAllMod = (m: string, subs: string[]) => subs.every(s => isSubOn(m, s));
   const isSomeMod = (m: string, subs: string[]) => subs.some(s => isSubOn(m, s));
-
-  const toggleModule = (m: string, subs: string[]) => {
-    const allOn = isAllMod(m, subs);
-    setErrors(p => ({ ...p, modulos: undefined }));
-    setAccesos(prev => {
-      const next = { ...prev };
-      subs.forEach(s => {
-        const k = KEY(m, s);
-        if (allOn) delete next[k];
-        else next[k] = ["Ver"];
-      });
-      return next;
-    });
-  };
-
-  const toggleSub = (m: string, s: string) => {
-    const k = KEY(m, s);
-    setErrors(p => ({ ...p, modulos: undefined }));
-    setAccesos(prev => {
-      const next = { ...prev };
-      if (k in next && next[k].length > 0) delete next[k];
-      else next[k] = ["Ver"];
-      return next;
-    });
-  };
 
   const toggleAccion = (m: string, s: string, accion: Accion) => {
     const k = KEY(m, s);
@@ -210,52 +246,57 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               </div>
             </div>
 
-            {/* BOTTOM: Árbol de módulos (sin scroll) */}
-            <div className="flex flex-col flex-1 px-5 py-3 overflow-hidden">
+            {/* BOTTOM: Grilla de módulos. El scroll vive DENTRO de la grilla;
+                `min-h-0` evita que el contenedor flex la recorte (antes usaba
+                overflow-hidden y "Ventas" quedaba inalcanzable). */}
+            <div className="flex flex-col flex-1 min-h-0 px-5 py-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
                 Módulos y sub-opciones
                 <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} seleccionadas</span>
               </p>
               {errors.modulos && <p className="text-xs text-red-500 mb-2">{errors.modulos}</p>}
-              <div className="space-y-2">
-                {MENU_TREE.map(({ modulo, subs }) => {
-                  const isOpen = openModulo === modulo;
+              <div className="grid grid-cols-3 gap-2 max-h-[38vh] overflow-y-auto pr-1">
+                {CELDAS.map(celda => {
+                  const modulo = celda.nombre;
+                  const Icon = CELDA_ICONOS[modulo];
+                  const subs = subsDeCelda(celda);
+                  const activo = moduloActivo === modulo;
+                  const allOn = isAllMod(celda.modulo, subs);
+                  const someOn = isSomeMod(celda.modulo, subs);
                   return (
-                    <div key={modulo} className="border border-border rounded-xl overflow-hidden">
-                      <div className="flex items-center gap-2.5 px-3 py-2 bg-muted/50 hover:bg-muted transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={isAllMod(modulo, subs)}
-                          ref={el => { if (el) el.indeterminate = isSomeMod(modulo, subs) && !isAllMod(modulo, subs); }}
-                          onChange={() => toggleModule(modulo, subs)}
-                          className="accent-primary w-4 h-4 cursor-pointer shrink-0"
-                        />
-                        <button
-                          onClick={() => toggleOpen(modulo)}
-                          className="flex items-center gap-2 flex-1 text-left cursor-pointer"
-                        >
-                          <span className="text-sm font-bold text-foreground flex-1">{modulo}</span>
-                          <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-                        </button>
-                      </div>
-                      {isOpen && (
-                        <div className="divide-y divide-border">
-                          {subs.map(sub => (
-                            <label key={sub} className="flex items-center gap-2.5 px-5 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={isSubOn(modulo, sub)}
-                                onChange={() => toggleSub(modulo, sub)}
-                                className="accent-primary w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <span className={`text-sm ${isSubOn(modulo, sub) ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                                {sub}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={modulo}
+                      type="button"
+                      onClick={() => setModuloActivo(modulo)}
+                      aria-pressed={activo}
+                      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                        activo
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:bg-muted hover:border-primary/30"
+                      }`}
+                    >
+                      {/* Indicador de permisos: informativo, sin onClick. Refleja
+                          >=1 acción marcada en el panel derecho. */}
+                      <span
+                        aria-hidden
+                        className={`absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-[5px] border flex items-center justify-center transition-colors ${
+                          allOn
+                            ? "bg-primary border-primary"
+                            : someOn
+                              ? "bg-primary/40 border-primary/40"
+                              : "border-border bg-background"
+                        }`}
+                      >
+                        {allOn && <Check className="w-2.5 h-2.5 text-white" />}
+                        {someOn && !allOn && <span className="w-1.5 h-0.5 rounded-full bg-primary" />}
+                      </span>
+                      {Icon
+                        ? <Icon className={`w-5 h-5 ${activo ? "text-primary" : "text-muted-foreground"}`} />
+                        : <span className="w-5 h-5" />}
+                      <span className={`text-[11px] font-semibold text-center leading-tight ${activo ? "text-primary" : "text-foreground"}`}>
+                        {modulo}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
@@ -268,53 +309,65 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               Asignar permisos al rol
             </p>
 
-            {selectedSubs.length === 0 ? (
+            {moduloActivo === null ? (
               <div className="flex flex-col items-center justify-center text-center flex-1">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                   <span className="text-2xl">🔒</span>
                 </div>
-                <p className="text-sm font-semibold text-foreground mb-1">Sin módulos seleccionados</p>
+                <p className="text-sm font-semibold text-foreground mb-1">Ningún módulo abierto</p>
                 <p className="text-xs text-muted-foreground max-w-44">
-                  Selecciona módulos y sub-opciones a la izquierda para configurar sus permisos
+                  Elige un módulo en la grilla para ver sus permisos y configurarlos
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
-                {MENU_TREE.map(({ modulo, subs }) => {
-                  const activeSubs = subs.filter(sub => isSubOn(modulo, sub));
-                  if (!activeSubs.length) return null;
+                {(() => {
+                  // Solo la celda abierta. Antes se iteraba todo MENU_TREE
+                  // filtrando por isSubOn, así que un módulo sin permisos no
+                  // mostraba nada; ahora se listan TODAS sus sub-opciones para
+                  // que sus botones aparezcan sin marcar hasta que se pulse uno.
+                  // Se resuelve por celda (no por módulo) para que "Usuarios",
+                  // que comparte módulo con Configuración, muestre las suyas.
+                  const celda = CELDAS.find(c => c.nombre === moduloActivo);
+                  if (!celda) return null;
+                  const mod = { modulo: celda.modulo, subs: subsDeCelda(celda) };
                   return (
-                    <div key={modulo}>
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{modulo}</p>
+                    <>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {celda.nombre}
+                      </p>
                       <div className="space-y-2">
-                        {activeSubs.map(sub => {
-                          const k = KEY(modulo, sub);
+                        {mod.subs.map(sub => {
+                          const k = KEY(mod.modulo, sub);
                           const selAcc = accesos[k] ?? [];
-                          const allSel = ACCIONES.every(a => selAcc.includes(a));
+                          const disponibles = accionesDe(mod.modulo);
+                          const allSel = disponibles.every(a => selAcc.includes(a));
                           return (
                             <div key={sub} className="border border-border rounded-xl overflow-hidden">
                               <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
                                 <span className="text-sm font-semibold text-foreground">{sub}</span>
+                                {disponibles.length > 1 && (
                                 <button
                                   type="button"
                                   role="checkbox"
                                   aria-checked={allSel}
-                                  onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? ["Ver"] : [...ACCIONES] }))}
+                                  onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? ["Ver"] : [...disponibles] }))}
                                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
                                     allSel
                                       ? "bg-red-100 text-red-700 border-red-200"
-                                      : "bg-muted text-muted-foreground border-border hover:border-primary/30"
+                                      : "bg-muted text-muted-foreground border-border hover:bg-primary/30"
                                   }`}
                                 >
                                   <Check className={`w-4 h-4 ${allSel ? "" : "opacity-0"}`} />
                                   Todos
                                 </button>
+                                )}
                               </div>
                               <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
-                                {ACCIONES.map(accion => {
+                                {disponibles.map(accion => {
                                   const on = selAcc.includes(accion);
                                   return (
-                                    <button key={accion} onClick={() => toggleAccion(modulo, sub, accion)}
+                                    <button key={accion} onClick={() => toggleAccion(mod.modulo, sub, accion)}
                                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer active:scale-95 ${
                                         on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
                                       }`}
@@ -328,9 +381,9 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                           );
                         })}
                       </div>
-                    </div>
+                    </>
                   );
-                })}
+                })()}
               </div>
             )}
           </div>
@@ -576,7 +629,7 @@ export function GestionConfigScreen({
         {deleteId && (() => {
           const count = rolUserCounts[deleteId] ?? 0;
           const message = count > 0
-            ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios mantendrán el ID de rol pero perderán su referencia.`
+            ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios quedarán SIN ACCESO hasta que les asignes otro rol.`
             : `¿Seguro que deseas eliminar el rol ${deleteId}? Se eliminan también sus accesos configurados.`;
           return (
             <ConfirmModal

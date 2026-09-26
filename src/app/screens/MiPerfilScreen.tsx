@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck } from "lucide-react";
+import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase } from "lucide-react";
 import { toast } from "sonner";
+import { type Contratacion, ordenarContrataciones } from "./GestionEmpleadosScreen";
 
 const SERIF = "'DM Serif Display', serif";
 
@@ -23,6 +24,12 @@ interface Props {
   loggedInRoleName: string;
   onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
   inStore?: boolean;
+  // Historial de contrataciones del empleado de la sesión, en solo lectura.
+  // Lo resuelve App.tsx cruzando el correo de `loggedInUser` contra `empleados`.
+  contrataciones?: Contratacion[];
+  // Nombre del rol asociado a cada contratación (mismo criterio que el detalle
+  // en la pantalla de Empleados). Sin esto el id crudo se vería en pantalla.
+  rolNombreDe?: (rolId: string) => string;
 }
 
 function validarCorreo(c: string): string | null {
@@ -37,7 +44,7 @@ function validarTelefono(t: string): string | null {
   return null;
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser, inStore = false }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser, inStore = false, contrataciones, rolNombreDe }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -57,6 +64,12 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
     `w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${
       err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"
     }`;
+
+  // Historial del usuario de la sesión, de la más reciente a la más antigua.
+  const misContrataciones = useMemo(
+    () => ordenarContrataciones(contrataciones ?? []),
+    [contrataciones],
+  );
 
   const handleEditar = () => {
     setCorreo(guardado.correo);
@@ -219,6 +232,45 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               </div>
             )}
           </div>
+
+          {/* Historial de contrataciones (solo lectura). Aparece solo si el
+              usuario de la sesión es además un empleado: el resto de perfiles
+              no tienen contrataciones que mostrar. */}
+          {contrataciones && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-2">
+                <Briefcase className="w-3.5 h-3.5" />
+                Historial de contrataciones
+              </label>
+              {misContrataciones.length === 0 ? (
+                <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm text-muted-foreground">
+                  Sin contrataciones registradas
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {misContrataciones.map((c, i) => (
+                    <div key={c.id}
+                      className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-sm font-semibold text-foreground">{c.cargo}</span>
+                        {i === 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
+                            Actual
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {rolNombreDe ? rolNombreDe(c.rolId) : c.rolId}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                        {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer actions */}
