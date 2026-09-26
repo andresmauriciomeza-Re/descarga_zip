@@ -21,7 +21,7 @@ import { Eye, EyeOff } from "lucide-react";
  */
 export function inputCls(err?: string, base: string = ""): string {
   const propia =
-    "w-full px-4 py-3 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const estado = err ? "border-red-400 bg-red-50/30" : "border-border";
   return `${propia} ${estado}${base ? ` ${base}` : ""}`;
 }

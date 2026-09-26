@@ -67,7 +67,8 @@ import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import pizzaHero from "@/imports/image-23.png";
 import pizzaFondo from "@/imports/pizzafondo.jpeg";
-import pizzaFondoRecorte from "@/imports/pizzafondo-removebg-preview.png";
+import fondoDefinitivo from "@/imports/fondoDefinitivo.png";
+import pizzaDefinitiva from "@/imports/pizzaDefinitiva.png";
 import lasanaCarne from "@/imports/lasaña_carne.png";
 import lasanaMixta from "@/imports/lasaña_mixta.png";
 import lasanaPollo from "@/imports/lasaña_pollo.png";
@@ -1350,14 +1351,14 @@ function AdminTopBar({
           </>
         )}
       </div>
-      <button
-        onClick={() => navigate("landing")}
-        className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-        title="Ver tienda"
-      >
-        <Home className="w-5 h-5" />
-      </button>
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex items-center gap-0">
+        <button
+          onClick={() => navigate("landing")}
+          className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          title="Ver tienda"
+        >
+          <Home className="w-5 h-5" />
+        </button>
         <button
           onClick={() => setDarkMode(!darkMode)}
           className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
@@ -1370,7 +1371,7 @@ function AdminTopBar({
           )}
         </button>
         <div
-          className="flex items-center gap-2 cursor-pointer"
+          className="ml-3 flex items-center gap-2 cursor-pointer"
           onClick={() => navigate("profile")}
         >
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
@@ -3412,6 +3413,173 @@ function ClientProfileScreen({
   );
 }
 
+// ─────────────────────────── AUTH LAYOUT ───────────────────────────
+
+/**
+ * Fondo comun de TODO el flujo de autenticacion: login, registro y las
+ * pantallas de recuperacion / cambio de contrasena (que son los pasos del modal
+ * `ForgotPasswordModal`).
+ *
+ * Antes cada pantalla repetia el `div` raiz y las dos imagenes, asi que cambiar
+ * el fondo obligaba a editar N sitios y era facil que se desincronizasen. Ahora
+ * el fondo vive aqui una sola vez y cada pantalla aporta solo:
+ *
+ *   - `contentClassName`: como se coloca la tarjeta (`items-start`,
+ *     `justify-center`, `lg:justify-end`, `px-4 py-6 lg:px-8`...).
+ *   - `children`: la tarjeta.
+ *   - `overlay`: contenido `fixed` que debe quedar por ENCIMA de la tarjeta.
+ *
+ * `contentClassName` DEBE llevar `lg:justify-end` en escritorio. El ancho de la
+ * pizza se calcula sobre el hueco que deja la tarjeta a la izquierda
+ * (`100vw - 584px`); si una pantalla centra la tarjeta, la pizza se le mete
+ * debajo. Ese hueco esta calibrado para una tarjeta de hasta 512px (los 448px
+ * de la de registro entran de sobra), asi que mientras la tarjeta no crezca de
+ * 512px el margen sigue siendo correcto.
+ *
+ * `overlay` va como hermano del wrapper `z-20`, no dentro, a proposito: asi un
+ * modal que se abre desde dentro de una pantalla de auth sigue resolviendo su
+ * `fixed inset-0 z-50` contra la raiz y no queda atrapado en la pila de la
+ * tarjeta. Si se metiera dentro, el modal tendria que subir su `z-index` por
+ * encima de 50 para no quedar debajo.
+ */
+function AuthLayout({
+  children,
+  overlay,
+  contentClassName,
+}: {
+  children: React.ReactNode;
+  overlay?: React.ReactNode;
+  contentClassName: string;
+}) {
+  return (
+    <div className="relative min-h-screen bg-muted">
+      {/* Fondo unico de TODA la pantalla. Antes eran dos columnas (la foto a la
+          izquierda, el formulario a la derecha); ahora el fondo es la imagen
+          entera y la tarjeta flota encima, alineada a la derecha.
+
+          `fondoDefinitivo.png` (1536x1024, ratio 1.5) es un PATRON ilustrado de
+          ingredientes, no una foto: es puramente decorativo. Viene en
+          Format24bppRgb, SIN canal alfa, y ningun pixel muestreado baja de
+          A250, asi que no puede transparentarse ni dejar ver el `body`.
+
+          Por eso el `bg-muted` del contenedor es solo una red de seguridad para
+          el instante en que la imagen aun no ha llegado: son 1.9 MB y se emiten
+          como archivo aparte, no inlined. En operacion normal la imagen tapa el
+          100% del contenedor y ese color no se ve nunca. Ojo con la tentacion
+          de oscurecerlo: el patron es 83.5% casi blanco (luminancia media
+          234.3), asi que un respaldo oscuro daria un salto dark->light mas
+          fuerte que el blanco que se queria evitar.
+
+          `object-cover` llena los dos ejes, asi que no puede quedar nada sin
+          cubrir. El `object-center` es casi una formalidad: el patron es
+          uniforme (las nueve regiones de una rejilla 3x3 miden 13-19% de color)
+          y su centro de masa esta en (48.9%, 50.5%), o sea centrado. Antes
+          llevaba `object-left` porque la foto de la pizza vivia en el 32%
+          izquierdo y sin eso se veia la mesa vacia de la derecha; con un
+          patron repartido por todo el lienzo eso ya no aplica y `center`
+          describe lo que realmente pasa.
+
+          El recorte es el de siempre: con ratio 1.5, a 16:9 y 16:10 manda el
+          ancho y se ve el lienzo entero de lado a lado, perdiendo 143px
+          verticales a 1366x768 y 200px a 1920x1080; en 4:3 y 5:4 (1024x768,
+          1280x1024) manda el alto y se ve el 89% del ancho; en movil vertical
+          baja al 31%. Al ser textura repartida, cualquier recorte se ve bien.
+
+          AVISO QUE OJO: las tarjetas son `bg-card` #ffffff y este fondo es casi
+          blanco. Antes el fondo era una foto (luminancia media 174.5) y la
+          tarjeta se separaba sola; ahora la separacion depende casi por
+          completo de la sombra (`shadow-xl` / `shadow-2xl`), porque el
+          `border-border` es solo rgba(0,0,0,0.08). Si al verlo no destaca, el
+          arreglo es una sombra o un borde mas marcado en la tarjeta, que aqui
+          NO se toca.
+
+          El `alt` va vacio a proposito: esto es decorativo y anunciarlo a un
+          lector de pantalla es ruido. No se pierde nada porque TODO el texto
+          de los formularios esta dentro de las tarjetas, que si se anuncian. */}
+      <img
+        src={fondoDefinitivo}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 z-0 w-full h-full object-cover object-center"
+      />
+
+      {/* Capa de la pizza, ENTRE el fondo y la tarjeta (`z-10`; el fondo es
+          `z-0` y el contenido `z-20`, asi que el orden queda explicito y no
+          depende del DOM).
+
+          `pizzaDefinitiva.png` (612x408) es el recorte de la pizza con fondo
+          quitado, y OJO con dos cosas que no se ven hasta que se mide:
+
+          1) NO tiene fondo blanco: es `Format32bppArgb` con alfa real, A=0 en
+             las cuatro esquinas. No hay ningun rectangulo blanco que recortar
+             ni que tratar. Es ademas el mismo archivo byte a byte que
+             `pizzafondo-removebg-preview.png` (mismo MD5).
+
+          2) La pizza esta CORTA por la izquierda: la mascara de alfa es una D
+             (arco circular a la derecha, borde vertical recto en x=0, con 74%
+             de opacidad justo en el borde y sin estrecharse). El recorte viene
+             de la foto original, no de remove.bg: en `pizzafondo.jpeg` el
+             pixel(0,421) tambien es masa de la masa. Por eso el `left-0`: al
+             apoyar el corte contra el borde de la pantalla se vuelve
+             invisible. Si alguna vez se la separa del borde, aparece una linea
+             vertical recta cruzando la pizza y se ve rota.
+
+          El ancho se calcula sobre el CANVAS, no sobre la pizza. El contenido
+          real es solo `x 0..306, y 23..402` (307x380, ratio 0.808) y la mitad
+          derecha del lienzo es 100% transparente, o sea que la pizza es el
+          50.16% del ancho. De ahi el factor 2 y el `150vh`:
+
+            ancho = min( (100vw - 584px) * 2 , 150vh )
+
+          - `100vw - 584px` es el hueco real a la izquierda de la tarjeta
+            (512 de ancho + 32 de margen + 40 de aire), y al multiplicar por 2
+            se convierte en ancho de lienzo.
+          - `150vh` es el tope de alto: el lienzo es 1.5 mas ancho que alto, y
+            150vh de ancho = 100vh de alto exacto. Asi la pizza entra completa
+            sin recorte vertical, que es lo que hacia la version "A1" (que si
+            recortaba 100-286px arriba y abajo, como la referencia vieja).
+
+          Medido: 1024x768 -> pizza 441x547 con la tarjeta en 480 (39px de
+          aire); 1366x768 -> 578x715, tarjeta en 822; 1920x1080 -> 813x1006,
+          tarjeta en 1376. Nunca se superpone, y el patron de fondo sigue
+          visible en ~58% del ancho.
+
+          Ni el lienzo ni la pizza desbordan en ningun eje (150vh siempre es
+          menor que 100vw), asi que la raiz NO necesita `overflow-hidden`. El
+          `max-w-none` si hace falta: el preflight de Tailwind pone
+          `max-width:100%` en `img` y deformaria el lienzo.
+
+          `pointer-events-none` porque el lienzo transparente se extiende por
+          debajo de la tarjeta y sin esto bloquearia los clics;
+          `draggable={false}` para que no aparezca la imagen fantasma al
+          arrastrar. `hidden lg:block` porque bajo 1024px la tarjeta es de ancho
+          completo y no hay hueco: ahi se ve solo el patron. Sin blur, sin scale,
+          sin opacity, a plena intensidad como el fondo. */}
+      <img
+        src={pizzaDefinitiva}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="pointer-events-none absolute left-0 top-1/2 z-10 hidden w-[min(calc((100vw_-_584px)*1.8),135vh)] max-w-none -translate-y-1/2 select-none lg:block"
+      />
+
+      {/* Capa del contenido, la mas alta de las tres (`z-20`; fondo `z-0` y
+          pizza `z-10`). Antes de la capa de la pizza esto era `z-10` y el orden
+          del DOM ya bastaba, pero con tres capas superpuestas queda explicito y
+          no depende de que alguien reordene el JSX.
+
+          `min-h-screen` y no `h-screen`: asi la pagina hace scroll normal
+          cuando la tarjeta no cabe, en vez de recortarse, y el fondo se estira
+          acompanando. */}
+      <div className={`relative z-20 flex min-h-screen ${contentClassName}`}>
+        {children}
+      </div>
+
+      {overlay}
+    </div>
+  );
+}
+
 // ─────────────────────────── LOGIN ───────────────────────────
 
 function LoginScreen({
@@ -3499,185 +3667,163 @@ function LoginScreen({
   };
 
   return (
-    <div className="lg:flex lg:h-screen lg:overflow-hidden">
-      {/* Columna izquierda: la imagen de pizza. Solo en escritorio; en movil se
-          oculta y el formulario queda centrado como antes. */}
-      <div className="hidden lg:block lg:w-1/2 lg:shrink-0 relative overflow-hidden">
-        {/* Capa 1: la ilustracion de ingredientes, ampliada y desenfocada, para
-            que las franjas que deja la composicion 3:2 no queden vacias. */}
-        <img
-          src={pizzaFondo}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-80"
-        />
-        {/* Capa 2: la composicion real, en una caja 3:2 centrada. Las dos capas
-            comparten la MISMA caja a proposito: los dos archivos son 1.5:1, asi
-            que el recorte cae exacto sobre la pizza del jpeg. Si el jpeg fuera
-            a sangre y el recorte encima, cada uno se escalaria distinto (0.912x
-            vs 1.116x) y se verian dos pizzas desalineadas. */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-full aspect-[3/2]">
-            <img
-              src={pizzaFondo}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover"
+    <AuthLayout
+      contentClassName="items-start justify-center lg:justify-end px-4 py-6 lg:px-8"
+      overlay={
+        <AnimatePresence>
+          {showForgot && (
+            <ForgotPasswordModal onClose={() => setShowForgot(false)} />
+          )}
+        </AnimatePresence>
+      }
+    >
+      {/* Contenido del login. El fondo, la pizza y el `z-index` de esta capa
+          viven en `AuthLayout` (mas arriba): aqui solo va la tarjeta y las
+          clases de posicionamiento que se le pasan en `contentClassName`.
+
+          `items-start` + `my-auto` en la tarjeta en vez de `items-center`: con
+          el centrado clasico de flex, una tarjeta mas alta que la pantalla se
+          empuja hacia arriba y la flecha de volver queda recortada sin forma de
+          llegar a ella. Con `my-auto` los margenes automaticos absorben el
+          espacio sobrante (centrado) y valen 0 cuando no hay, dejando la
+          tarjeta arriba y todo accesible con scroll.
+
+          `lg:justify-end` manda la tarjeta a la derecha en escritorio; por
+          debajo de 544px la tarjeta es de ancho completo, asi que ahi el
+          `justify-center` no se nota. `px-4 lg:px-8` son los margenes.
+
+          OJO: el fondo no es solo decorativo aqui, porque el ancho de la pizza
+          se calcula sobre el hueco que deja la tarjeta (`100vw - 584px`).
+          Quitar el `lg:justify-end` haria que la pizza se le metiera debajo de
+          la tarjeta en pantallas anchas. */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-lg p-5"
+      >
+        <button
+          onClick={() => navigate("landing")}
+          title="Volver al inicio"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+      <div className="text-center mb-4">
+        <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+
+          <h1
+            className="text-2xl font-bold text-foreground"
+            style={{ fontFamily: SERIF }}
+          >
+            Bienvenido a La Sirena
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Ingresa tus datos para continuar
+          </p>
+        </div>
+
+        <div className="space-y-2.5 mb-3">
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-1">
+              Correo electrónico
+            </label>
+            <input
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+              }}
+              type="email"
+              placeholder="gloria@lasirena.com"
+              className={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
             />
-            <img
-              src={pizzaFondoRecorte}
-              alt="Pizzas de La Sirena"
-              className="absolute inset-0 w-full h-full object-contain"
+            {errors.email && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
+                {errors.email}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-1">
+              Contraseña
+            </label>
+            <PasswordField
+              value={password}
+              onChange={(v) => {
+                setPassword(v);
+                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+              }}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              cls={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
             />
+            {errors.password && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
+                {errors.password}
+              </p>
+            )}
+          </div>
+          <div className="text-right">
+            <button
+              onClick={() => setShowForgot(true)}
+              className="text-sm text-primary font-medium hover:underline cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Columna derecha: el formulario. `items-start` + `my-auto` en la tarjeta
-          en vez de `items-center`: con el centrado clasico de flex, una tarjeta
-          mas alta que la pantalla se empuja hacia arriba y la flecha de volver
-          queda recortada sin forma de llegar a ella. Con `my-auto` los margenes
-          automaticos absorben el espacio sobrante (centrado) y valen 0 cuando no
-          hay, dejando la tarjeta arriba y todo accesible con scroll. */}
-      <div className="lg:w-1/2 lg:overflow-y-auto bg-muted flex items-start justify-center px-4 py-4 min-h-screen lg:min-h-0">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-6"
+        <PrimaryBtn
+          onClick={handleLogin}
+          size="md"
+          className="w-full mb-3"
+          disabled={loading}
         >
-          <button
-            onClick={() => navigate("landing")}
-            title="Volver al inicio"
-            className="absolute top-6 left-6 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        <div className="text-center mb-5">
-          <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-20 w-auto object-contain mx-auto mb-3" />
+          {loading ? (
+            <RefreshCw className="w-5 h-5 animate-spin" />
+          ) : null}
+          {loading ? "Ingresando..." : "Iniciar sesión"}
+        </PrimaryBtn>
 
-            <h1
-              className="text-2xl font-bold text-foreground"
-              style={{ fontFamily: SERIF }}
-            >
-              Bienvenido a La Sirena
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Ingresa tus datos para continuar
-            </p>
+        <div className="relative mb-2.5">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border" />
           </div>
-
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-1">
-                Correo electrónico
-              </label>
-              <input
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
-                }}
-                type="email"
-                placeholder="gloria@lasirena.com"
-                className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
-              />
-              {errors.email && (
-                <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
-                  {errors.email}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-1">
-                Contraseña
-              </label>
-              <PasswordField
-                value={password}
-                onChange={(v) => {
-                  setPassword(v);
-                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
-                }}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                cls={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
-              />
-              {errors.password && (
-                <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
-                  {errors.password}
-                </p>
-              )}
-            </div>
-            <div className="text-right">
-              <button
-                onClick={() => setShowForgot(true)}
-                className="text-sm text-primary font-medium hover:underline cursor-pointer"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
+          <div className="relative text-center">
+            <span className="px-3 bg-card text-muted-foreground text-sm">
+              o continúa con
+            </span>
           </div>
+        </div>
 
-          <PrimaryBtn
-            onClick={handleLogin}
-            size="lg"
-            className="w-full mb-3"
-            disabled={loading}
-          >
-            {loading ? (
-              <RefreshCw className="w-5 h-5 animate-spin" />
-            ) : null}
-            {loading ? "Ingresando..." : "Iniciar sesión"}
-          </PrimaryBtn>
-
-          <div className="relative mb-3">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative text-center">
-              <span className="px-3 bg-card text-muted-foreground text-sm">
-                o continúa con
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {[
-              { label: "Google", icon: "G" },
-              { label: "Apple", icon: "🍎" },
-            ].map(({ label, icon }) => (
-              <button
-                key={label}
-                onClick={() =>
-                  toast.info(`Continuando con ${label}...`)
-                }
-                className="flex items-center justify-center gap-2 py-3 border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-sm font-medium text-foreground"
-              >
-                <span className="font-bold">{icon}</span> {label}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-center text-sm text-muted-foreground">
-            {"¿No tienes cuenta? "}
+        <div className="grid grid-cols-2 gap-2.5 mb-3.5">
+          {[
+            { label: "Google", icon: "G" },
+            { label: "Apple", icon: "🍎" },
+          ].map(({ label, icon }) => (
             <button
-              onClick={() => navigate("register")}
-              className="text-primary font-semibold hover:underline cursor-pointer"
+              key={label}
+              onClick={() =>
+                toast.info(`Continuando con ${label}...`)
+              }
+              className="flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-sm font-medium text-foreground"
             >
-              Regístrate aquí
+              <span className="font-bold">{icon}</span> {label}
             </button>
-          </p>
-        </motion.div>
-      </div>
+          ))}
+        </div>
 
-      {/* ── Modal: Olvidé mi contraseña ── */}
-      <AnimatePresence>
-        {showForgot && (
-          <ForgotPasswordModal
-            onClose={() => setShowForgot(false)}
-          />
-        )}
-      </AnimatePresence>
-    </div>
+        <p className="text-center text-sm text-muted-foreground">
+          {"¿No tienes cuenta? "}
+          <button
+            onClick={() => navigate("register")}
+            className="text-primary font-semibold hover:underline cursor-pointer"
+          >
+            Regístrate aquí
+          </button>
+        </p>
+      </motion.div>
+    </AuthLayout>
   );
 }
 
@@ -3781,13 +3927,13 @@ function ForgotPasswordModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm">
       <motion.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
+        className="my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
       >
         {/* ── Paso 1: Correo ── */}
         {step === "email" && (
@@ -3975,12 +4121,6 @@ function ForgotPasswordModal({
               ) : null}
               {loading ? "Cambiando..." : "Cambiar contraseña"}
             </button>
-            <button
-              onClick={() => setStep("code")}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-            >
-              ← Volver
-            </button>
           </>
         )}
 
@@ -4150,13 +4290,17 @@ function RegisterScreen({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-muted">
+    <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-8"
+        className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-4"
       >
-        <div className="text-center mb-6">
+        <div className="text-center mb-2">
+          {/* El logo va exactamente igual que en Login (`logoClaro`, `h-14`,
+              `mb-2`): mismo tratamiento visual en las dos pantallas de auth. */}
+          <img src={logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+
           <h1
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: SERIF }}
@@ -4168,10 +4312,15 @@ function RegisterScreen({
           </p>
         </div>
 
-        <div className="space-y-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
+        {/* Grid y no `space-y`: hace falta para que "Correo electronico" y
+            "Telefono" compartan fila y el formulario quepa sin scroll a
+            1366x768. El flag `full` de cada descriptor marca los campos que
+            ocupan las 2 columnas; en movil (<640px) el grid cae a 1 columna y
+            todo se apila igual que antes. */}
+        <div className="grid gap-x-3 gap-y-1 sm:grid-cols-2 mb-1">
+          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
             <div className="sm:w-48 sm:shrink-0">
-              <label className="block text-sm font-semibold mb-1.5 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 Tipo doc.
               </label>
               <select
@@ -4191,7 +4340,7 @@ function RegisterScreen({
               <MensajeError err={errores.docType} />
             </div>
             <div className="flex-1 min-w-0">
-              <label className="block text-sm font-semibold mb-1.5 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 Número de documento
               </label>
               <input
@@ -4215,6 +4364,7 @@ function RegisterScreen({
               key: "name" as const,
               placeholder: "Gloria Muñoz",
               type: "text",
+              full: true,
             },
             {
               label: "Correo electrónico",
@@ -4234,16 +4384,18 @@ function RegisterScreen({
               key: "password" as const,
               placeholder: "Mínimo 6 caracteres",
               type: "password",
+              full: true,
             },
             {
               label: "Confirmar contraseña",
               key: "confirm" as const,
               placeholder: "Repite tu contraseña",
               type: "password",
+              full: true,
             },
-          ].map(({ label, key, placeholder, type, numeric }) => (
-            <div key={key}>
-              <label className="block text-sm font-semibold mb-1.5 text-foreground">
+          ].map(({ label, key, placeholder, type, numeric, full }) => (
+            <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 {label}
               </label>
               {type === "password" ? (
@@ -4271,8 +4423,8 @@ function RegisterScreen({
 
         <PrimaryBtn
           onClick={register}
-          size="lg"
-          className="w-full mb-4"
+          size="md"
+          className="w-full mb-1"
           disabled={loading}
         >
           {loading ? (
@@ -4293,7 +4445,7 @@ function RegisterScreen({
           </button>
         </p>
       </motion.div>
-    </div>
+    </AuthLayout>
   );
 }
 // ─────────────────────────── DASHBOARD ───────────────────────────
