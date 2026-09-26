@@ -23,6 +23,7 @@ interface Props {
     numeroDocumento: string;
   } | null;
   loggedInRoleName: string;
+  adminHomeScreen: string;
   onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
   inStore?: boolean;
   // Historial de contrataciones del empleado de la sesión, en solo lectura.
@@ -33,7 +34,7 @@ interface Props {
   rolNombreDe?: (rolId: string) => string;
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, onUpdateUser, inStore = false, contrataciones, rolNombreDe }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, inStore = false, contrataciones, rolNombreDe }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -292,7 +293,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               </button>
               {isStaff && (
               <button
-                onClick={() => navigate(inStore ? "dashboard" : "users")}
+                onClick={() => navigate(inStore ? adminHomeScreen : "users")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
               >
                 <ShieldCheck className="w-4 h-4" />

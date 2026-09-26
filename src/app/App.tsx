@@ -141,6 +141,7 @@ type Screen =
   | "login"
   | "register"
   | "dashboard"
+  | "inicio"
   | "manage-products"
   | "orders"
   | "clients"
@@ -591,6 +592,7 @@ const PROD_STATUS_COLOR: Record<string, string> = {
 
 const ADMIN_SCREENS: Screen[] = [
   "dashboard",
+  "inicio",
   "manage-products",
   "orders",
   "clients",
@@ -718,7 +720,6 @@ const SCREEN_META: Partial<
 
 // Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
 const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
-  "dashboard":        KEY("Dashboard",    "Dashboard"),
   "gestion-config":   KEY("Configuración","Configuración"),
   "users":            KEY("Configuración","Usuarios"),
   "empleados":        KEY("Configuración","Empleados"),
@@ -737,10 +738,34 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
   "devoluciones":      KEY("Ventas",     "Devoluciones"),
 };
 
-// Permiso que controla la visibilidad del acceso directo "Dashboard" del sidebar
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
 
 const NAV_SECTIONS = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    Icon: Home,
+    items: [
+      {
+        screen: "dashboard" as Screen,
+        label: "Dashboard",
+        Icon: Home,
+        permKey: DASHBOARD_PERM_KEY,
+      },
+    ],
+  },
+  {
+    key: "inicio",
+    label: "Inicio",
+    Icon: Home,
+    items: [
+      {
+        screen: "inicio" as Screen,
+        label: "Inicio",
+        Icon: Home,
+      },
+    ],
+  },
   {
     key: "configuracion",
     label: "Configuración",
@@ -861,6 +886,9 @@ const NAV_SECTIONS = [
     ],
   },
 ];
+
+const canViewPermission = (accesos: AccesosMap, permKey: string, isNamedAdmin: boolean) =>
+  isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
@@ -992,6 +1020,7 @@ function Sidebar({
   userRole,
   accesos,
   isNamedAdmin,
+  hasDashboardAccess,
 }: {
   current: Screen;
   navigate: (s: Screen) => void;
@@ -1001,6 +1030,7 @@ function Sidebar({
   userRole: string;
   accesos: AccesosMap;
   isNamedAdmin: boolean;
+  hasDashboardAccess: boolean;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     ventas: true,
@@ -1017,18 +1047,7 @@ function Sidebar({
   // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
   // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
   const canView = (permKey: string) =>
-    isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
-
-  // Cuántos ítems del nav superan el filtro de permisos. Se usa junto con
-  // `active("dashboard")` para no dejar al usuario sin salida: si el guard de
-  // ruta lo manda al dashboard, el botón debe existir para poder moverse.
-  const visibleNavItems = NAV_SECTIONS.reduce(
-    (acc, sec) =>
-      acc + ((sec as any).items ?? []).filter((it: any) => it.permKey && canView(it.permKey)).length,
-    0
-  );
-  const showDashboard =
-    canView(DASHBOARD_PERM_KEY) || visibleNavItems === 0 || active("dashboard");
+    hasDashboardAccess || canViewPermission(accesos, permKey, isNamedAdmin);
 
   return (
     <aside
@@ -1072,19 +1091,6 @@ function Sidebar({
         )}
       </div>
 
-      {/* Dashboard shortcut — controlado por el permiso Dashboard::Dashboard */}
-      {showDashboard && (
-        <div className="px-2 pt-3 pb-1 shrink-0">
-          <button
-            onClick={() => navigate("dashboard")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active("dashboard") ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
-          >
-            <Home className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>{current === "users" ? "Menú" : "Dashboard"}</span>}
-          </button>
-        </div>
-      )}
-
       {/* Scrollable nav */}
       <nav
         className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5"
@@ -1096,11 +1102,34 @@ function Sidebar({
           // futuro sin permKey, que quedaría restringido al rol semilla.
           const allItems: { screen: Screen; label: string; Icon: typeof Home; permKey?: string }[] =
             ((sec as any).items ?? []).filter((it: any) =>
-              it.permKey ? canView(it.permKey) : isNamedAdmin
+              sec.key === "dashboard"
+                ? hasDashboardAccess
+                : sec.key === "inicio"
+                  ? !hasDashboardAccess
+                  : it.permKey
+                    ? canView(it.permKey)
+                    : isNamedAdmin
             );
 
           // Hide entire module if no sub-items are visible
           if (allItems.length === 0) return null;
+
+          if (sec.key === "dashboard" || sec.key === "inicio") {
+            return (
+              <div key={sec.key} className="pt-3 pb-1">
+                {allItems.map((it) => (
+                  <button
+                    key={it.screen}
+                    onClick={() => navigate(it.screen)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                  >
+                    <it.Icon className="w-4 h-4 shrink-0" />
+                    {!collapsed && <span>{it.label}</span>}
+                  </button>
+                ))}
+              </div>
+            );
+          }
 
           const groupActive = allItems.some(it => active(it.screen));
 
@@ -1293,6 +1322,7 @@ function AdminTopBar({
   setDarkMode,
   userName,
   roleName,
+  homeScreen,
 }: {
   current: Screen;
   onToggleSidebar: () => void;
@@ -1301,9 +1331,11 @@ function AdminTopBar({
   setDarkMode: (v: boolean) => void;
   userName: string;
   roleName: string;
+  homeScreen: Screen;
 }) {
   const labels: Partial<Record<Screen, string>> = {
-    dashboard: "Inicio",
+    dashboard: "Dashboard",
+    inicio: "Inicio",
     "manage-products": "Gestión de productos",
     orders: "Gestión de ventas",
     clients: "Gestión de clientes",
@@ -1339,10 +1371,10 @@ function AdminTopBar({
       </button>
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
         <button
-          onClick={() => navigate("dashboard")}
+          onClick={() => navigate(homeScreen)}
           className="hover:text-foreground transition-colors cursor-pointer"
         >
-          Inicio
+          {homeScreen === "dashboard" ? "Dashboard" : "Inicio"}
         </button>
         {current !== "dashboard" && (
           <>
@@ -3181,6 +3213,7 @@ function ClientProfileScreen({
   loggedInUser,
   loggedInRoleName,
   isStaff,
+  adminHomeScreen,
   onUpdateUser,
 }: {
   navigate: (s: Screen) => void;
@@ -3195,6 +3228,7 @@ function ClientProfileScreen({
   } | null;
   loggedInRoleName: string;
   isStaff: boolean;
+  adminHomeScreen: Screen;
   onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
 }) {
   const [editando, setEditando] = useState(false);
@@ -3395,7 +3429,7 @@ function ClientProfileScreen({
               </button>
               {isStaff && (
                 <button
-                  onClick={() => navigate("dashboard")}
+                  onClick={() => navigate(adminHomeScreen)}
                   className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
                 >
                   <ShieldCheck className="w-4 h-4" /> Ir a Administración
@@ -4430,21 +4464,23 @@ function RegisterScreen({
 
 function DashboardScreen({
   navigate,
-  orders,
+  ventas,
   loggedInUser,
   loggedInRoleName,
   tieneRolActivo,
   isNamedAdmin,
+  hasDashboardAccess,
   accesos,
 }: {
   navigate: (s: Screen) => void;
-  orders: Order[];
+  ventas: Venta[];
   loggedInUser: { nombre: string } | null;
   loggedInRoleName: string;
   // false = el rol fue borrado, está desactivado o el usuario no tiene rol.
   // Distingue "no tienes permisos" de "ya no existe tu rol".
   tieneRolActivo: boolean;
   isNamedAdmin: boolean;
+  hasDashboardAccess: boolean;
   accesos: AccesosMap;
 }) {
   const firstName = (loggedInUser?.nombre ?? "Gloria").split(" ")[0];
@@ -4454,13 +4490,36 @@ function DashboardScreen({
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
+  const horaVenta = (venta: Venta) =>
+    venta.historial?.[venta.historial.length - 1]?.hora ?? venta.horaRecogida ?? "Sin hora";
+  const minutosHora = (hora: string) => {
+    const match = hora.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!match) return 0;
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const period = match[3]?.toUpperCase();
+    if (period === "PM" && hour < 12) hour += 12;
+    if (period === "AM" && hour === 12) hour = 0;
+    return hour * 60 + minute;
+  };
+  const ventasRecientes = ventas
+    .map((venta, index) => ({ venta, index }))
+    .sort((a, b) => {
+      const porFecha = b.venta.fecha.localeCompare(a.venta.fecha);
+      if (porFecha !== 0) return porFecha;
+      const porHora = minutosHora(horaVenta(b.venta)) - minutosHora(horaVenta(a.venta));
+      return porHora !== 0 ? porHora : a.index - b.index;
+    })
+    .slice(0, 5)
+    .map(({ venta }) => venta);
+
   // ÚNICA regla de acceso de la app. Antes había dos: `canSee` (con atajo por
   // nombre de rol) y `tieneVer` (sin atajo), y cada una servía a una capa
   // distinta — menú y rutas usaban una, los KPIs del Dashboard la otra. Por eso
   // un admin podía tener control total en la navegación y al mismo tiempo ver
   // el badge de "no sos administrador". Ahora las dos capas llaman a esto.
   const puedeVer = (permKey: string) =>
-    isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
+    hasDashboardAccess || isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
 
   // Granular flags, one per sub-opción del sistema.
   // Se construyen con KEY() para que un renombrado en MENU_TREE rompa aquí
@@ -4478,26 +4537,20 @@ function DashboardScreen({
   const ccfg = puedeVer(KEY("Configuración", "Configuración"));
   const cus  = puedeVer(KEY("Configuración", "Usuarios"));
   const cemp = puedeVer(KEY("Configuración", "Empleados"));
-  const cdb  = puedeVer(KEY("Dashboard",  "Dashboard"));
-
-  // El panel completo del Dashboard (KPIs, gráfica y "Ingresos hoy") se abre con
-  // "Ver" en Dashboard y en Ventas. Antes exigía Configuración::Configuración,
-  // un permiso de otra sección decidiendo sobre dinero, y por eso un gerente de
-  // ventas sin acceso a Configuración perdía el widget de ingresos. El nombre
-  // viejo ("esAdminCompleto") tampoco describía lo que comprobaba.
-  const vePanelCompleto = cdb && cv;
+  // El contenido de ventas depende únicamente del permiso de Ventas.
+  const vePanelCompleto = hasDashboardAccess || cv;
 
   // noAccess: true only when the user cannot see ANY sub-opción. La condición
   // por nombre de rol sobra: el administrador original tiene fullAccesos(), así
   // que `.every(v => !v)` ya da false sin necesidad de exceptuarlo.
   const noAccess =
-    [cv, ccl, ci, cpr, coc, cco, cp, ccp, cop, cpe, ccfg, cus, cemp, cdb].every(v => !v);
+    [cv, ccl, ci, cpr, coc, cco, cp, ccp, cop, cpe, ccfg, cus, cemp].every(v => !v);
 
   // KPIs — cada uno ligado a su sub-opción
   type KpiDef = { label: string; value: string; sub: string; Icon: any; bg: string; ic: string; trend: string };
   const kpis: KpiDef[] = [
-    cv           && { label: "Ventas hoy",   value: "24",         sub: "+3 en la última hora",  Icon: ShoppingBag, bg: "bg-blue-50",    ic: "text-blue-600",    trend: "+12%" },
-    vePanelCompleto && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
+    cv           && { label: "Ventas registradas", value: String(ventas.length), sub: "Total acumulado", Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600", trend: "" },
+    cv           && { label: "Ingresos hoy", value: "$1.248.000", sub: "Meta: $1.500.000",       Icon: DollarSign,  bg: "bg-emerald-50", ic: "text-emerald-600", trend: "+8%"  },
     cp  && { label: "Productos activos",   value: "5",          sub: "1 en pausa",              Icon: Package,       bg: "bg-orange-50",  ic: "text-orange-600",  trend: ""     },
     ci  && { label: "Insumos críticos",    value: "3",          sub: "Stock bajo mínimo",       Icon: AlertTriangle, bg: "bg-red-50",     ic: "text-red-600",     trend: ""     },
     cpr && { label: "Proveedores activos", value: "8",          sub: "2 con pedido pendiente",  Icon: Truck,         bg: "bg-violet-50",  ic: "text-violet-600",  trend: ""     },
@@ -4536,8 +4589,9 @@ function DashboardScreen({
         </div>
       </div>
 
-      {/* Sales chart — permiso de Ventas (Ventas::Ventas) */}
-      {cv && (
+      {/* Full Dashboard shows the chart for all modules; filtered Inicio only
+          shows it when Ventas is allowed. */}
+      {(hasDashboardAccess || cv) && (
         <div
           onClick={() => navigate("sales-chart")}
           className="bg-card border border-border rounded-2xl p-5 mb-7 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
@@ -4555,8 +4609,8 @@ function DashboardScreen({
           </div>
           <ResponsiveContainer width="100%" height={120}>
             <BarChart data={HOURLY_TODAY} barSize={22} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}>
-              <XAxis key="x" dataKey="hora" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-              <Tooltip key="tip" content={({ active, payload, label }: any) =>
+              <XAxis dataKey="hora" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+              <Tooltip content={({ active, payload, label }: any) =>
                 active && payload?.length ? (
                   <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
                     <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
@@ -4564,7 +4618,10 @@ function DashboardScreen({
                   </div>
                 ) : null
               } />
-              <Bar key="bar" dataKey="ventas" radius={[4, 4, 0, 0]} isAnimationActive={false}
+              <Bar
+                dataKey="ventas"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
                 shape={(props: any) => {
                   const { x, y, width, height, index } = props;
                   const fill = index === HOURLY_TODAY.length - 1 ? "#ef5350" : "#C62828";
@@ -4637,24 +4694,31 @@ function DashboardScreen({
             <table className="w-full">
               <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                 <tr>
-                  {["Venta", "Cliente", "Total", "Estado", "Pago", "Hora"].map((h) => (
+                  {["Cliente", "Monto", "Hora"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {orders.slice(0, 5).map((o) => (
-                  <tr key={o.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3.5 text-sm font-mono font-medium text-foreground">{o.id}</td>
-                    <td className="px-4 py-3.5 text-sm text-foreground">{o.client}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{fmt(o.total)}</td>
-                    <td className="px-4 py-3.5">
-                      <Badge className={STATUS_COLOR[o.status]}>{STATUS_LABEL[o.status]}</Badge>
+                {ventasRecientes.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      No hay ventas registradas todavía
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{o.paymentMethod}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{o.date.split(" ")[1]}</td>
                   </tr>
-                ))}
+                ) : (
+                  ventasRecientes.map((venta) => (
+                    <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3.5 text-sm text-foreground">
+                        {venta.usuario?.trim() || "Venta general"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                        {fmt(venta.total)}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{horaVenta(venta)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -5404,9 +5468,11 @@ function OrdersScreen({
 function GenericAdmin({
   screen,
   navigate,
+  homeScreen,
 }: {
   screen: Screen;
   navigate: (s: Screen) => void;
+  homeScreen: Screen;
 }) {
   const meta = SCREEN_META[screen];
   return (
@@ -5431,7 +5497,7 @@ function GenericAdmin({
         </div>
         <div>
           <button
-            onClick={() => navigate("dashboard")}
+            onClick={() => navigate(homeScreen)}
             className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-semibold cursor-pointer hover:bg-red-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> Volver al inicio
@@ -6788,6 +6854,9 @@ export default function App() {
   // por llamarse "Administrador". Cualquier otro rol —incluso con acceso
   // total— se decide únicamente por sus permisos.
   const isNamedAdmin = loggedInRol?.id === "ROL-001";
+  const hasDashboardAccess =
+    isNamedAdmin || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
+  const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
   // True when the logged-in user has a back-office role (not a pure public customer)
   const isStaff = isLoggedIn && loggedInUser !== null && !PUBLIC_ROLE_NAMES.includes(loggedInRoleName);
 
@@ -6801,7 +6870,7 @@ export default function App() {
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
     const key = SCREEN_PERM_KEY[s];
-    if (!key || isNamedAdmin) return { canCreate: true, canEdit: true, canDelete: true };
+    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true };
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
@@ -6935,18 +7004,22 @@ export default function App() {
     setTimeout(() => navigate("login"), 0);
   }
 
-  // Permission guard: redirect admin-level users to dashboard if their named
-  // role doesn't grant "Ver" on the current screen. "store-profile" (perfil de
-  // la tienda, que se muestra dentro del layout de la tienda) queda exento de
-  // esta regla; el resto de pantallas de administración siguen protegidas.
-  if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "profile" && screen !== "store-profile") {
+  // Dashboard and Inicio are mutually exclusive landing screens. Other admin
+  // screens remain protected by their module permission below.
+  if (isLoggedIn && isAdminRole && screen === "dashboard" && !hasDashboardAccess) {
+    setTimeout(() => navigate("inicio"), 0);
+  }
+  if (isLoggedIn && isAdminRole && screen === "inicio" && hasDashboardAccess) {
+    setTimeout(() => navigate("dashboard"), 0);
+  }
+  if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "inicio" && screen !== "profile" && screen !== "store-profile") {
     // Toda pantalla de administración con permKey queda cubierta por esta regla.
     // La lista legacy ADMIN_ONLY_SCREENS se eliminó: sus tres pantallas
     // (gestion-config, users, empleados) ya declaran permKey en SCREEN_PERM_KEY,
     // así que el fallback nunca se disparaba.
     const permKey = SCREEN_PERM_KEY[screen];
-    if (permKey && !isNamedAdmin && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
-      setTimeout(() => navigate("dashboard"), 0);
+    if (permKey && !isNamedAdmin && !hasDashboardAccess && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
+      setTimeout(() => navigate(adminHomeScreen), 0);
     }
   }
 
@@ -6989,9 +7062,10 @@ export default function App() {
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
           darkMode={darkMode}
-          userRole={userRole}
-          accesos={loggedInAccesos}
-          isNamedAdmin={isNamedAdmin}
+           userRole={userRole}
+           accesos={loggedInAccesos}
+           isNamedAdmin={isNamedAdmin}
+           hasDashboardAccess={hasDashboardAccess}
         />
       )}
 
@@ -7024,6 +7098,7 @@ export default function App() {
             setDarkMode={setDarkMode}
             userName={loggedInUserName}
             roleName={loggedInRoleName}
+            homeScreen={adminHomeScreen}
           />
         )}
 
@@ -7162,8 +7237,17 @@ export default function App() {
                     // Employee login: resolve named role to decide admin panel vs catalog
                     const namedRol = u ? roles.find(r => r.id === u.rolId) ?? null : null;
                     const goPublic = namedRol ? PUBLIC_ROLE_NAMES.includes(namedRol.nombre) : false;
+                    const loginHasDashboard =
+                      namedRol?.id === "ROL-001" ||
+                      (namedRol?.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
                     setUserRole(goPublic ? "Usuario" : "Administrador");
-                    navigate(goPublic ? "catalog" : "dashboard");
+                    navigate(
+                      goPublic
+                        ? "catalog"
+                        : loginHasDashboard
+                          ? "dashboard"
+                          : "inicio",
+                    );
                   }}
                 />
               )}
@@ -7191,19 +7275,21 @@ export default function App() {
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   isStaff={isStaff}
+                  adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
                 />
               )}
-              {screen === "dashboard" && (
+              {((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
                 <DashboardScreen
                   navigate={navigate}
-                  orders={orders}
+                  ventas={ventas}
                   loggedInUser={loggedInUser}
                   loggedInRoleName={loggedInRoleName}
                   tieneRolActivo={loggedInRol !== null}
                   isNamedAdmin={isNamedAdmin}
+                  hasDashboardAccess={hasDashboardAccess}
                   accesos={loggedInAccesos}
                 />
               )}
@@ -7344,7 +7430,7 @@ export default function App() {
               )}
               {screen === "sales-chart" && (
                 <SalesChartScreen
-                  onBack={() => setScreen("dashboard")}
+                  onBack={() => navigate(adminHomeScreen)}
                 />
               )}
               {screen === "clientes" && (
@@ -7404,6 +7490,7 @@ export default function App() {
                     numeroDocumento: loggedInUser.numeroDocumento,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
+                  adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
@@ -7429,6 +7516,7 @@ export default function App() {
                     numeroDocumento: loggedInUser.numeroDocumento,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
+                  adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
@@ -7447,6 +7535,7 @@ export default function App() {
               {isAdmin &&
                 ![
                   "dashboard",
+                  "inicio",
                   "manage-products",
                   "orders",
                   "purchases",
@@ -7475,6 +7564,7 @@ export default function App() {
                   <GenericAdmin
                     screen={screen}
                     navigate={navigate}
+                    homeScreen={adminHomeScreen}
                   />
                 )}
             </motion.div>

@@ -7,9 +7,6 @@ const SERIF = "'DM Serif Display', serif";
 
 // ── Árbol de módulos / sub-opciones del sistema ──────────────────────
 export const MENU_TREE = [
-  // Dashboard no tiene submenú: es un ítem directo del sidebar. Se modela con
-  // una sub-opción homónima porque el resto de la lógica (fullAccesos,
-  // toggleModule, el contador y el panel de permisos) espera `subs` no vacío.
   { modulo: "Dashboard",     subs: ["Dashboard"] },
   { modulo: "Configuración", subs: ["Configuración", "Usuarios", "Empleados"] },
   { modulo: "Compras",       subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
@@ -61,8 +58,8 @@ const CELDA_ICONOS: Record<string, typeof Home> = {
 export const ACCIONES = ["Ver", "Crear", "Editar", "Eliminar"] as const;
 export type Accion = typeof ACCIONES[number];
 
-// Módulos de solo lectura: no admiten Crear/Editar/Eliminar, así que el modal
-// únicamente les ofrece el permiso "Ver".
+// Dashboard es configurable, pero solo admite el permiso de lectura. Inicio
+// sigue siendo universal y no depende de esta entrada del editor de roles.
 export const MODULOS_SOLO_LECTURA = ["Dashboard"];
 
 // Acciones disponibles para un módulo. Todo lo que asigne permisos debe pasar
@@ -255,7 +252,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} seleccionadas</span>
               </p>
               {errors.modulos && <p className="text-xs text-red-500 mb-2">{errors.modulos}</p>}
-              <div className="grid grid-cols-3 gap-2 max-h-[38vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-3 gap-2 pr-1">
                 {CELDAS.map(celda => {
                   const modulo = celda.nombre;
                   const Icon = CELDA_ICONOS[modulo];
@@ -303,8 +300,8 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
             </div>
           </div>
 
-          {/* ── RIGHT 50%: Permisos CRUD (scrollable) ── */}
-          <div className="md:w-1/2 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
+          {/* ── RIGHT 50%: Permisos CRUD ── */}
+          <div className="md:w-1/2 flex flex-col min-h-0 px-5 py-4">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
               Asignar permisos al rol
             </p>
