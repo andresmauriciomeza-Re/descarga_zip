@@ -113,7 +113,7 @@ import type {
 } from "./screens/OrdenCompraScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
-import { VentasScreen, type Venta, type VentaStatus, INITIAL_VENTAS } from "./screens/VentasScreen";
+import { VentasScreen, type Venta, type VentaStatus, type DevolucionTipo, INITIAL_VENTAS } from "./screens/VentasScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -428,6 +428,15 @@ const PRODUCTS: Product[] = [
 // Especial"). El "" solo aparece si un id no existe en PRODUCTS.
 const imagenDeProducto = (id: Product["id"]): string =>
   PRODUCTS.find((p) => p.id === id)?.image ?? "";
+
+// El precio se resuelve contra la misma PRODUCTS que renderiza "Ver Menú", por
+// el mismo motivo que la imagen: la sección de favoritas traía el precio
+// escrito a mano por tarjeta (24.000 / 28.000 / 30.000 / 32.000) y quedó
+// desalineada del catálogo, donde esas cuatro pizzas cuestan 14.000. Leyéndolo
+// del producto el precio deja de ser un valor fijo por tarjeta. El 0 solo
+// aparece si un id no existe en PRODUCTS.
+const precioDeProducto = (id: Product["id"]): number =>
+  PRODUCTS.find((p) => p.id === id)?.price ?? 0;
 
 const ORDERS: Order[] = [
   {
@@ -1773,7 +1782,6 @@ function LandingScreen({
                 name: "Margarita Clásica",
                 description:
                   "La reina de las pizzas. Salsa de tomate casera, mozzarella fresca y albahaca.",
-                price: 24000,
                 rating: 4.8,
               },
               {
@@ -1781,7 +1789,6 @@ function LandingScreen({
                 name: "Pepperoni Premium",
                 description:
                   "Generosa capa de pepperoni importado, mozzarella abundante y salsa secreta.",
-                price: 28000,
                 rating: 4.9,
               },
               {
@@ -1789,7 +1796,6 @@ function LandingScreen({
                 name: "Cuatro Quesos",
                 description:
                   "Mozzarella, cheddar, parmesano y gorgonzola en perfecta armonía.",
-                price: 30000,
                 rating: 4.7,
               },
               {
@@ -1797,7 +1803,6 @@ function LandingScreen({
                 name: "Especial La Sirena",
                 description:
                   "Nuestra pizza insignia desde 1994. Pollo a la plancha y tocineta crocante.",
-                price: 32000,
                 rating: 5.0,
               },
             ].map((p, i) => (
@@ -1841,7 +1846,7 @@ function LandingScreen({
                       className="text-[#DC2626] text-lg font-semibold"
                       style={{ fontFamily: MONO }}
                     >
-                      $ {p.price.toLocaleString("es-CO")}
+                      $ {precioDeProducto(p.productoId).toLocaleString("es-CO")}
                     </span>
                   </div>
                 </div>
@@ -1950,7 +1955,7 @@ function LandingScreen({
           >
             ¿Por qué La Sirena?
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {[
               {
                 icon: "🍕",
@@ -1961,11 +1966,6 @@ function LandingScreen({
                 icon: "🌿",
                 title: "Ingredientes frescos",
                 desc: "Seleccionamos los mejores ingredientes locales cada día para garantizar calidad en cada mordida.",
-              },
-              {
-                icon: "🛵",
-                title: "Entrega rápida",
-                desc: "Tu pizza caliente y crujiente en menos de 30 minutos, donde la necesites en Medellín.",
               },
             ].map(({ icon, title, desc }) => (
               <div
@@ -5217,6 +5217,9 @@ const fmtCOPDev = (n: number) =>
 const nowHoraDev = () =>
   new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
 
+// Producto del menú elegido como canje de la devolución.
+type Reemplazo = { id: number; nombre: string; precio: number; cantidad: number; imagen?: string };
+
 function DevolucionesScreen({
   pedidos,
   setPedidos,
@@ -5228,16 +5231,29 @@ function DevolucionesScreen({
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
   const resueltas    = devoluciones.filter((d) => d.devolucionResuelta);
 
+  // La devolución se resuelve con las dos opciones a la vez: una parte se canjea
+  // por productos del menú y las unidades que sobren se devuelven en dinero.
+  // `paso` es solo qué panel está abierto — no decide nada, porque ninguna
+  // elección se confirma hasta que se pulsa el botón "Confirmar".
   const [activa, setActiva] = useState<{
     id: string;
-    tipo: "producto" | "dinero" | null;
+    paso: "producto" | "dinero" | null;
+    reembolsoDinero: boolean;
     notaDinero: string;
     devueltos: Record<number, number>;
-    compensacion: { id: number; nombre: string; precio: number; cantidad: number; imagen?: string }[];
+    compensacion: Reemplazo[];
   } | null>(null);
   const [detalleDevolucion, setDetalleDevolucion] = useState<Venta | null>(null);
+  // Resumen que se muestra al confirmar, una vez la devolución ya quedó cerrada.
+  const [resumen, setResumen] = useState<{
+    unidadesDevueltas: number;
+    compensacion: Reemplazo[];
+    valorComp: number;
+    dinero: number;
+    unidadesDinero: number;
+  } | null>(null);
 
-  const resolverDev = (id: string, tipo: "producto" | "dinero", nota: string) => {
+  const resolverDev = (id: string, tipo: DevolucionTipo, nota: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
@@ -5252,13 +5268,6 @@ function DevolucionesScreen({
       ),
     );
     setActiva(null);
-    import("sonner").then(({ toast }) =>
-      toast.success(
-        tipo === "producto"
-          ? "Devolución resuelta — canje por producto registrado"
-          : "Devolución resuelta — reembolso en dinero registrado",
-      ),
-    );
   };
 
   const setDevQty = (idx: number, max: number, delta: number) => {
@@ -5268,9 +5277,11 @@ function DevolucionesScreen({
       const nuevo = Math.max(0, Math.min(max, cur + delta));
       if (nuevo === cur) return prev;
       const devueltos = { ...prev.devueltos, [idx]: nuevo };
+      // Si bajan las unidades devueltas se recorta el canje para que nunca
+      // cubra más de lo que el cliente devuelve.
+      const comp = prev.compensacion.map((c) => ({ ...c }));
       const dd = pedidos.find((p) => p.id === prev.id)?.detalle ?? [];
       const newTotal = dd.reduce((s, d, i) => s + (devueltos[i] ?? 0), 0);
-      const comp = prev.compensacion.map((c) => ({ ...c }));
       let compTotal = comp.reduce((s, c) => s + c.cantidad, 0);
       while (compTotal > newTotal && comp.length) {
         const last = comp[comp.length - 1];
@@ -5283,18 +5294,19 @@ function DevolucionesScreen({
     });
   };
 
-  const setComp = (id: number, nombre: string, precio: number, imagen: string | undefined, delta: number) => {
+  // Producto de canje del menú. Tope: las unidades devueltas, para que el canje
+  // no supere lo que entra.
+  const setReemplazo = (prod: Product, delta: number) => {
     setActiva((prev) => {
       if (!prev) return prev;
       const dd = pedidos.find((p) => p.id === prev.id)?.detalle ?? [];
       const devueltosTot = dd.reduce((s, d, i) => s + (prev.devueltos[i] ?? 0), 0);
-      const cur = prev.compensacion.find((c) => c.id === id);
-      const curQty = cur?.cantidad ?? 0;
+      const curQty = prev.compensacion.find((c) => c.id === prod.id)?.cantidad ?? 0;
       const nuevo = Math.max(0, curQty + delta);
-      if (devueltosTot === 0 || nuevo > devueltosTot) return prev;
-      const rest = prev.compensacion.filter((c) => c.id !== id);
-      const list = nuevo === 0 ? rest : [...rest, { id, nombre, precio, cantidad: nuevo, imagen }];
-      return { ...prev, compensacion: list };
+      if (nuevo > devueltosTot) return prev;
+      const rest = prev.compensacion.filter((c) => c.id !== prod.id);
+      const nueva = nuevo === 0 ? rest : [...rest, { id: prod.id, nombre: prod.name, precio: prod.price, cantidad: nuevo, imagen: prod.image }];
+      return { ...prev, compensacion: nueva };
     });
   };
 
@@ -5302,9 +5314,92 @@ function DevolucionesScreen({
   const detalleAct = devActiva?.detalle ?? [];
   const totalActRaw = devActiva?.total || detalleAct.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
   const totalDevueltos = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0), 0) : 0;
-  const totalReembolso = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0) * d.precio, 0) : 0;
   const totalComp = activa ? activa.compensacion.reduce((s, c) => s + c.cantidad, 0) : 0;
-  const montoReembolso = detalleAct.length > 0 ? totalReembolso : totalActRaw;
+  const valorComp = activa ? activa.compensacion.reduce((s, c) => s + c.cantidad * c.precio, 0) : 0;
+
+  // Reparto: el canje se queda con las primeras `totalComp` unidades devueltas
+  // y las que sobran se devuelven en dinero. Así una devolución mixta reparte
+  // el mismo total entre las dos opciones sin pedir asignación unidad por unidad.
+  const sinCanjear = Math.max(0, totalDevueltos - totalComp);
+  const dineroPorLinea = (() => {
+    let resto = sinCanjear;
+    return detalleAct.map((d, i) => {
+      const aDinero = Math.min(activa?.devueltos[i] ?? 0, resto);
+      resto -= aDinero;
+      return aDinero * d.precio;
+    });
+  })();
+  // El dinero solo cuenta si la opción "producto por dinero" está activa. Sin
+  // detalle de productos no hay unidades que repartir, así que se reembolsa el
+  // total de la venta.
+  const conDinero = activa?.reembolsoDinero ?? false;
+  const montoReembolso = !conDinero
+    ? 0
+    : detalleAct.length > 0
+      ? dineroPorLinea.reduce((s, n) => s + n, 0)
+      : totalActRaw;
+  const unidadesDinero = conDinero ? sinCanjear : 0;
+
+  const textoComp = activa?.compensacion.map((c) => `${c.cantidad}x ${c.nombre}`).join(", ") ?? "";
+  const puedeConfirmar = !!activa && totalDevueltos > 0 && (totalComp > 0 || montoReembolso > 0);
+  const modoGlobal: DevolucionTipo =
+    totalComp > 0 && montoReembolso > 0 ? "mixto" : totalComp > 0 ? "producto" : "dinero";
+
+  // "Aún puedes hacer…": lo que todavía falta decidir de cada opción.
+  const faltan: string[] = [];
+  if (totalDevueltos === 0) {
+    faltan.push("Elegir qué productos devuelve el cliente.");
+  } else if (sinCanjear > 0) {
+    faltan.push(
+      `Producto por producto: faltan ${sinCanjear} ${sinCanjear === 1 ? "unidad" : "unidades"} por canjear.`,
+    );
+    if (!conDinero) {
+      faltan.push("Producto por dinero: activar la devolución de las unidades que no se canjean.");
+    }
+  }
+
+  const confirmarDevolucion = () => {
+    if (!activa || !devActiva || !puedeConfirmar) return;
+    const devStr = detalleAct
+      .map((d, i) => {
+        const q = activa.devueltos[i] ?? 0;
+        return q > 0 ? `${q}x ${d.nombre}` : null;
+      })
+      .filter(Boolean)
+      .join(", ");
+    const nota = [
+      devStr ? `Devolvió: ${devStr}` : null,
+      totalComp > 0 ? `Canje: ${textoComp}` : null,
+      montoReembolso > 0 ? `Devolución: ${fmtCOPDev(montoReembolso)}` : null,
+      activa.notaDinero.trim() ? `Nota: ${activa.notaDinero.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    setResumen({
+      unidadesDevueltas: totalDevueltos,
+      compensacion: activa.compensacion,
+      valorComp,
+      dinero: montoReembolso,
+      unidadesDinero,
+    });
+    resolverDev(devActiva.id, modoGlobal, nota);
+    import("sonner").then(({ toast }) =>
+      toast.success(
+        modoGlobal === "mixto"
+          ? "Devolución mixta registrada"
+          : modoGlobal === "producto"
+            ? "Devolución resuelta — canje por producto registrado"
+            : "Devolución resuelta — reembolso en dinero registrado",
+        {
+          description: totalComp > 0
+            ? `Compensación elegida: ${textoComp} · Dinero a devolver: ${fmtCOPDev(montoReembolso)}`
+            : `Dinero a devolver: ${fmtCOPDev(montoReembolso)}`,
+        },
+      ),
+    );
+  };
+
   const devolucionDetalle = detalleDevolucion
     ? pedidos.find((p) => p.id === detalleDevolucion.id) ?? detalleDevolucion
     : null;
@@ -5421,7 +5516,9 @@ function DevolucionesScreen({
                             ? "Pendiente"
                             : dev.devolucionTipo === "dinero"
                               ? "Resuelta · Dinero"
-                              : "Resuelta · Canje"}
+                              : dev.devolucionTipo === "producto"
+                                ? "Resuelta · Canje"
+                                : "Resuelta · Mixta"}
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
@@ -5431,13 +5528,14 @@ function DevolucionesScreen({
                             disabled={!pendiente}
                             onClick={() =>
                               pendiente &&
-                              setActiva({
-                                id: dev.id,
-                                tipo: null,
-                                notaDinero: "",
-                                devueltos: {},
-                                compensacion: [],
-                              })
+                                setActiva({
+                                  id: dev.id,
+                                  paso: null,
+                                  reembolsoDinero: false,
+                                  notaDinero: "",
+                                  devueltos: {},
+                                  compensacion: [],
+                                })
                             }
                             title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
@@ -5502,288 +5600,291 @@ function DevolucionesScreen({
               </div>
 
               {/* Cuerpo modal */}
-              <div className="p-5 overflow-y-auto">
-                {/* Paso 1 — elegir tipo */}
-                {!activa.tipo && (
-                  <>
-                    <p className="text-sm font-semibold text-foreground mb-4">
-                      ¿Cómo se resuelve esta devolución?
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Producto por producto */}
-                      <button
-                        onClick={() => setActiva((p) => (p ? { ...p, tipo: "producto" } : p))}
-                        className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-blue-200 hover:border-blue-400 rounded-2xl cursor-pointer transition-all group text-left"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                          <PackageCheck className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-foreground">Producto por producto</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            El cliente devuelve productos y recibe productos de reemplazo del menú.
-                          </p>
-                        </div>
-                      </button>
+              <div className="p-5 overflow-y-auto space-y-4">
+                {/* Paso 1: qué unidades entran de vuelta */}
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-1">
+                    ¿Qué devuelve el cliente?
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Marca las unidades de cada producto que entran de vuelta. Ese total es el que se
+                    reparte entre las dos compensaciones de abajo.
+                  </p>
+                </div>
 
-                      {/* Producto por dinero */}
-                      <button
-                        onClick={() => setActiva((p) => (p ? { ...p, tipo: "dinero" } : p))}
-                        className="flex flex-col items-start gap-3 p-5 bg-white border-2 border-emerald-200 hover:border-emerald-400 rounded-2xl cursor-pointer transition-all group text-left"
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
-                          <Banknote className="w-5 h-5 text-emerald-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-foreground">Producto por dinero</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            El cliente devuelve productos y se le reembolsa el valor de lo devuelto.
-                          </p>
-                        </div>
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Paso 2A — canje por producto */}
-                {activa.tipo === "producto" && (
-                  <div className="space-y-5">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setActiva((p) => (p ? { ...p, tipo: null } : p))}
-                        className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <PackageCheck className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <p className="text-sm font-bold text-foreground">Producto por producto</p>
-                    </div>
-
-                    {detalleAct.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        Esta venta no tiene detalle de productos registrado, así que no se puede calcular el canje.
-                      </p>
-                    ) : (
-                      <>
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                            Productos del pedido a devolver
-                          </p>
-                          <p className="text-xs text-muted-foreground mb-3">
-                            Selecciona cuántos de cada producto devolverá el cliente.
-                          </p>
-                          <div className="space-y-2">
-                            {detalleAct.map((d, idx) => {
-                              const qty = activa.devueltos[idx] ?? 0;
-                              return (
-                                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                                  {d.imagen && (
-                                    <img src={d.imagen} alt={d.nombre} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-foreground truncate">{d.nombre}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      x{d.cantidad} disponible · {fmtCOPDev(d.precio)} c/u
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => setDevQty(idx, d.cantidad, -1)}
-                                      disabled={qty === 0}
-                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                    >
-                                      <Minus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <span className="w-8 text-center text-sm font-bold text-foreground">{qty}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDevQty(idx, d.cantidad, 1)}
-                                      disabled={qty >= d.cantidad}
-                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                            Compensación del menú
-                          </p>
-                          <p className="text-xs text-muted-foreground mb-3">
-                            Elige los productos de reemplazo. Puedes elegir hasta{" "}
-                            <span className="font-bold text-blue-700">{totalDevueltos}</span>{" "}
-                            {totalDevueltos === 1 ? "unidad" : "unidades"} de compensación.
-                          </p>
-                          {totalDevueltos === 0 && (
-                            <p className="text-xs font-semibold text-orange-600 mb-2">
-                              Primero selecciona cuántos productos se devuelven.
-                            </p>
-                          )}
-                          <div className="space-y-2">
-                            {PRODUCTS.filter((p) => p.status === "activo").map((prod) => {
-                              const compSel = activa.compensacion.find((c) => c.id === prod.id);
-                              const compQty = compSel?.cantidad ?? 0;
-                              const limitado = totalDevueltos === 0 || compQty >= totalDevueltos;
-                              return (
-                                <div
-                                  key={prod.id}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                                    compQty > 0 ? "bg-blue-50 border-blue-300" : "bg-white border-border"
-                                  }`}
-                                >
-                                  <img src={prod.image} alt={prod.name} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-foreground truncate">{prod.name}</p>
-                                    <p className="text-xs text-muted-foreground">{fmtCOPDev(prod.price)}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => setComp(prod.id, prod.name, prod.price, prod.image, -1)}
-                                      disabled={compQty === 0}
-                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                    >
-                                      <Minus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <span className="w-8 text-center text-sm font-bold text-foreground">{compQty}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setComp(prod.id, prod.name, prod.price, prod.image, 1)}
-                                      disabled={limitado}
-                                      className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {activa.compensacion.length > 0 && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                            <p className="text-xs font-semibold text-blue-800 mb-1">Compensación elegida:</p>
-                            {activa.compensacion.map((c) => (
-                              <div key={c.id} className="flex justify-between text-xs text-blue-900 py-0.5">
-                                <span>• {c.cantidad}x {c.nombre}</span>
-                              </div>
-                            ))}
-                            <p className="text-xs text-blue-700 mt-1 border-t border-blue-200 pt-1.5">
-                              {totalDevueltos} devuelt{totalDevueltos === 1 ? "o" : "os"} · {totalComp} de compensación
-                              {totalComp < totalDevueltos && ` · quedan ${totalDevueltos - totalComp} por elegir`}
-                            </p>
-                          </div>
-                        )}
-
-                        <button
-                          disabled={totalDevueltos === 0 || totalComp === 0}
-                          onClick={() => {
-                            const devStr = detalleAct
-                              .map((d, i) => {
-                                const q = activa.devueltos[i] ?? 0;
-                                return q > 0 ? `${q}x ${d.nombre}` : null;
-                              })
-                              .filter(Boolean)
-                              .join(", ");
-                            const compStr = activa.compensacion.map((c) => `${c.cantidad}x ${c.nombre}`).join(", ");
-                            resolverDev(devActiva.id, "producto", `Devolvió: ${devStr} · Canje: ${compStr}`);
-                          }}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                {detalleAct.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    Esta venta no tiene detalle de productos registrado, así que no hay productos
+                    que compensar.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {detalleAct.map((d, i) => {
+                      const q = activa.devueltos[i] ?? 0;
+                      return (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                            q > 0 ? "border-orange-300 bg-orange-50/40" : "border-border bg-white"
+                          }`}
                         >
-                          <PackageCheck className="w-4 h-4" />
-                          Confirmar canje
-                        </button>
-                      </>
-                    )}
+                          {d.imagen ? (
+                            <img src={d.imagen} alt={d.nombre} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-muted shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">{d.nombre}</p>
+                            <p className="text-xs text-muted-foreground">
+                              x{d.cantidad} en el pedido · {fmtCOPDev(d.precio)} c/u
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setDevQty(i, d.cantidad, -1)}
+                              disabled={q === 0}
+                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-8 text-center text-sm font-bold text-foreground">{q}</span>
+                            <button
+                              type="button"
+                              onClick={() => setDevQty(i, d.cantidad, 1)}
+                              disabled={q >= d.cantidad}
+                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Paso 2B — reembolso dinero */}
-                {activa.tipo === "dinero" && (
-                  <div className="space-y-5">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setActiva((p) => (p ? { ...p, tipo: null } : p))}
-                        className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-                        <Banknote className="w-4 h-4 text-emerald-600" />
-                      </div>
+                {/* Paso 2: las dos compensaciones. Se pueden usar las dos a la vez y
+                    abrir una nunca confirma nada: solo cambia el panel visible. */}
+                <div className="space-y-2 pt-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    Elige la compensación
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Puedes usar una sola o las dos a la vez. Al abrir una te devuelve a este
+                    selector para que elijas la otra; nada se confirma hasta que pulses{" "}
+                    <span className="font-semibold">Confirmar</span>.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Opción 1: producto por producto */}
+                  <button
+                    onClick={() =>
+                      setActiva((p) => (p ? { ...p, paso: p.paso === "producto" ? null : "producto" } : p))
+                    }
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                      activa.paso === "producto" || totalComp > 0
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-border bg-white hover:border-blue-300"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                      <PackageCheck className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-foreground">Producto por producto</p>
+                      <p className="text-xs text-muted-foreground">
+                        {totalComp > 0
+                          ? `${totalComp} de ${totalDevueltos} canjeadas · ${textoComp}`
+                          : "Cambiarlo por otro producto del menú"}
+                      </p>
+                    </div>
+                    {totalComp > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Opción 2: producto por dinero */}
+                  <button
+                    onClick={() =>
+                      setActiva((p) =>
+                        p
+                          ? {
+                              ...p,
+                              paso: p.paso === "dinero" ? null : "dinero",
+                              reembolsoDinero: p.paso === "dinero" ? false : true,
+                            }
+                          : p,
+                      )
+                    }
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                      activa.paso === "dinero" || conDinero
+                        ? "border-emerald-500 bg-emerald-50"
+                        : "border-border bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                      <Banknote className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-foreground">Producto por dinero</p>
-                    </div>
-
-                    <div className="bg-white border border-emerald-200 rounded-2xl p-4">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                        Monto a devolver
-                      </p>
-                      <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
-                        {fmtCOPDev(montoReembolso)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Método original: <span className="font-semibold">{devActiva.metodoPago || "No registrado"}</span>
+                      <p className="text-xs text-muted-foreground">
+                        {conDinero
+                          ? `${unidadesDinero} ${unidadesDinero === 1 ? "unidad" : "unidades"} · ${fmtCOPDev(montoReembolso)}`
+                          : "Devolver su valor"}
                       </p>
                     </div>
+                    {conDinero && (
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                </div>
 
-                    {detalleAct.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        Esta venta no tiene detalle de productos registrado. Se reembolsará el valor total de la venta.
+                {/* Panel: producto por producto */}
+                {activa.paso === "producto" && (
+                  <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                        Producto por producto
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiva((p) => (p ? { ...p, paso: null } : p))}
+                        className="flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline cursor-pointer shrink-0"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Volver a elegir
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white border border-blue-200">
+                      <p className="text-xs font-semibold text-foreground">Unidades a canjear</p>
+                      <p className="text-xs text-muted-foreground">
+                        {totalComp} de {totalDevueltos}
+                      </p>
+                    </div>
+
+                    {activa.compensacion.length > 0 && (
+                      <div className="bg-white border border-blue-200 rounded-xl px-3 py-2">
+                        {activa.compensacion.map((r) => (
+                          <div key={r.id} className="flex justify-between gap-2 text-xs text-blue-900 py-0.5">
+                            <span className="truncate">• {r.cantidad}x {r.nombre}</span>
+                            <span className="font-semibold whitespace-nowrap">
+                              {fmtCOPDev(r.cantidad * r.precio)}
+                            </span>
+                          </div>
+                        ))}
+                        <p className="text-xs text-blue-700 mt-1 border-t border-blue-200 pt-1.5">
+                          Valor del canje: {fmtCOPDev(valorComp)}
+                        </p>
+                      </div>
+                    )}
+
+                    {totalDevueltos === 0 ? (
+                      <p className="text-xs font-semibold text-orange-600">
+                        Marca primero cuántas unidades devuelve el cliente.
+                      </p>
+                    ) : totalComp === 0 ? (
+                      <p className="text-xs font-semibold text-orange-600">
+                        Falta elegir el producto de canje.
+                      </p>
+                    ) : null}
+
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {PRODUCTS.filter((p) => p.status === "activo").map((prod) => {
+                        const cant = activa.compensacion.find((r) => r.id === prod.id)?.cantidad ?? 0;
+                        return (
+                          <div
+                            key={prod.id}
+                            className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                              cant > 0 ? "bg-blue-50 border-blue-300" : "bg-white border-border"
+                            }`}
+                          >
+                            <img src={prod.image} alt={prod.name} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-foreground truncate">{prod.name}</p>
+                              <p className="text-xs text-muted-foreground">{fmtCOPDev(prod.price)}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setReemplazo(prod, -1)}
+                                disabled={cant === 0}
+                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-6 text-center text-xs font-bold text-foreground">{cant}</span>
+                              <button
+                                type="button"
+                                onClick={() => setReemplazo(prod, 1)}
+                                disabled={totalDevueltos === 0 || totalComp >= totalDevueltos}
+                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Panel: producto por dinero */}
+                {activa.paso === "dinero" && (
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                        Producto por dinero
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiva((p) => (p ? { ...p, paso: null, reembolsoDinero: false } : p))
+                        }
+                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        Volver a elegir
+                      </button>
+                    </div>
+
+                    {montoReembolso > 0 ? (
+                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2.5">
+                        <p className="text-xs text-muted-foreground">Se devolverá al cliente</p>
+                        <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                          {fmtCOPDev(montoReembolso)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {unidadesDinero} de {totalDevueltos}{" "}
+                          {unidadesDinero === 1 ? "unidad sin canjear" : "unidades sin canjear"} · método
+                          original: <span className="font-semibold">{devActiva.metodoPago || "No registrado"}</span>
+                        </p>
+                      </div>
                     ) : (
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                          Productos a devolver
-                        </p>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          El total de dinero sube a medida que eliges los productos que devolverá el cliente.
-                        </p>
-                        <div className="space-y-2">
-                          {detalleAct.map((d, idx) => {
-                            const qty = activa.devueltos[idx] ?? 0;
-                            return (
-                              <div key={idx} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                                {d.imagen && (
-                                  <img src={d.imagen} alt={d.nombre} className="w-10 h-10 rounded-lg object-cover bg-muted shrink-0" />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-foreground truncate">{d.nombre}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {qty > 0 && `${qty}x · `}{fmtCOPDev(d.precio * (qty || 0))}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => setDevQty(idx, d.cantidad, -1)}
-                                    disabled={qty === 0}
-                                    className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                  >
-                                    <Minus className="w-3.5 h-3.5" />
-                                  </button>
-                                  <span className="w-8 text-center text-sm font-bold text-foreground">{qty}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDevQty(idx, d.cantidad, 1)}
-                                    disabled={qty >= d.cantidad}
-                                    className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <p className="text-xs font-semibold text-orange-600">
+                        Marca primero cuántas unidades devuelve el cliente para calcular el monto.
+                      </p>
+                    )}
+
+                    {detalleAct.length > 0 && dineroPorLinea.some((n) => n > 0) && (
+                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2 space-y-1">
+                        {detalleAct.map((d, i) =>
+                          dineroPorLinea[i] > 0 ? (
+                            <div key={i} className="flex justify-between gap-2 text-xs text-emerald-900">
+                              <span className="truncate">• {d.nombre}</span>
+                              <span className="font-semibold whitespace-nowrap">
+                                {fmtCOPDev(dineroPorLinea[i])}
+                              </span>
+                            </div>
+                          ) : null,
+                        )}
                       </div>
                     )}
 
@@ -5796,33 +5897,188 @@ function DevolucionesScreen({
                         value={activa.notaDinero}
                         onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
                         placeholder="Ej: Transferido por Nequi el 10/09..."
-                        className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        className="w-full px-3 py-2.5 bg-white rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
                       />
                     </div>
-
-                    <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                      <CircleCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-emerald-800">
-                        Asegúrate de haber realizado la transferencia antes de confirmar.
-                        Esta acción no se puede deshacer.
-                      </p>
-                    </div>
-
-                    <button
-                      disabled={detalleAct.length > 0 && totalDevueltos === 0}
-                      onClick={() => {
-                        const nota = activa.notaDinero.trim()
-                          ? `Reembolso: ${fmtCOPDev(montoReembolso)} — ${activa.notaDinero.trim()}`
-                          : `Reembolso de ${fmtCOPDev(montoReembolso)} procesado`;
-                        resolverDev(devActiva.id, "dinero", nota);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Banknote className="w-4 h-4" />
-                      Confirmar reembolso
-                    </button>
                   </div>
                 )}
+
+                {/* Aviso + único botón que cierra la devolución */}
+                <div className="rounded-2xl border-2 border-border bg-muted/40 p-4 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <CircleCheck className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground">
+                        ¿Estás seguro de confirmar esta devolución?
+                      </p>
+                      {faltan.length > 0 ? (
+                        <div className="mt-1 space-y-0.5">
+                          <p className="text-xs text-muted-foreground">Aún puedes hacer:</p>
+                          {faltan.map((f) => (
+                            <p key={f} className="text-xs font-semibold text-orange-600">
+                              • {f}
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Las dos compensaciones están listas. Al confirmar la devolución queda
+                          registrada y ya no se puede deshacer.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lo que se va a aplicar al confirmar */}
+                  <div className="bg-white border border-border rounded-xl divide-y divide-border">
+                    <div className="flex items-center justify-between gap-2 px-3 py-2">
+                      <p className="text-xs font-semibold text-foreground">Producto por producto</p>
+                      <p className="text-xs font-semibold text-right truncate pl-2">
+                        {totalComp > 0 ? (
+                          <span className="text-blue-700">{textoComp} · {fmtCOPDev(valorComp)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">No se canjeó nada</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 px-3 py-2">
+                      <p className="text-xs font-semibold text-foreground">Producto por dinero</p>
+                      <p className="text-xs font-semibold text-right pl-2">
+                        {montoReembolso > 0 ? (
+                          <span className="text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                            {fmtCOPDev(montoReembolso)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">No se devuelve dinero</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!puedeConfirmar}
+                    onClick={confirmarDevolucion}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Check className="w-4 h-4" strokeWidth={3} />
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: resumen de la devolución ya confirmada */}
+      <AnimatePresence>
+        {resumen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                    <CircleCheck className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">Devolución confirmada</p>
+                    <p className="text-xs text-muted-foreground truncate">Resumen de la compensación</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setResumen(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-foreground">Unidades devueltas</p>
+                  <p className="text-sm font-bold text-foreground">
+                    {resumen.unidadesDevueltas}{" "}
+                    {resumen.unidadesDevueltas === 1 ? "unidad" : "unidades"}
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
+                    <p className="text-xs font-bold text-blue-900">Producto por producto</p>
+                  </div>
+                  {resumen.compensacion.length === 0 ? (
+                    <p className="px-3 py-2.5 text-xs text-muted-foreground italic">
+                      No se canjeó ningún producto.
+                    </p>
+                  ) : (
+                    resumen.compensacion.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 px-3 py-2.5 border-b border-border last:border-0"
+                      >
+                        {r.imagen ? (
+                          <img src={r.imagen} alt={r.nombre} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-muted shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground truncate">{r.nombre}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.cantidad} {r.cantidad === 1 ? "unidad" : "unidades"} elegida
+                            {r.cantidad === 1 ? "" : "s"} como compensación
+                          </p>
+                        </div>
+                        <p className="text-sm font-bold text-blue-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                          {fmtCOPDev(r.cantidad * r.precio)}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                  {resumen.compensacion.length > 0 && (
+                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-t border-blue-200">
+                      <p className="text-xs font-semibold text-blue-900">Valor del canje</p>
+                      <p className="text-sm font-bold text-blue-700" style={{ fontFamily: MONO_DEV }}>
+                        {fmtCOPDev(resumen.valorComp)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
+                    <p className="text-xs font-bold text-emerald-900">Producto por dinero</p>
+                  </div>
+                  <div className="px-3 py-3 flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {resumen.dinero > 0
+                        ? `${resumen.unidadesDinero} ${resumen.unidadesDinero === 1 ? "unidad" : "unidades"} sin canjear`
+                        : "Sin unidades pendientes de reembolso"}
+                    </p>
+                    <p className="text-xl font-bold text-emerald-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                      {fmtCOPDev(resumen.dinero)}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  La devolución quedó registrada y ya no se puede deshacer.
+                </p>
+              </div>
+
+              <div className="px-5 py-4 border-t border-border">
+                <button
+                  onClick={() => setResumen(null)}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
               </div>
             </motion.div>
           </div>
@@ -5888,7 +6144,9 @@ function DevolucionesScreen({
                     {devolucionDetalle.devolucionResuelta
                       ? devolucionDetalle.devolucionTipo === "dinero"
                         ? "Resuelta · Dinero"
-                        : "Resuelta · Canje"
+                        : devolucionDetalle.devolucionTipo === "producto"
+                          ? "Resuelta · Canje"
+                          : "Resuelta · Mixta"
                       : "Pendiente de resolución"}
                   </span>
                 </div>
