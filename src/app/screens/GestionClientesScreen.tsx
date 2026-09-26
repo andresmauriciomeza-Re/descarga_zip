@@ -6,6 +6,7 @@ import { EstadoSwitch } from "../components/EstadoSwitch";
 import { DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Usuario } from "./GestionUsuariosScreen";
+import { soloDigitos, filtrarDocumento } from "../components/campo";
 
 const SERIF = "'DM Serif Display', serif";
 const MONO  = "'JetBrains Mono', monospace";
@@ -446,6 +447,37 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                 </div>
 
                 <div className="px-5 py-4 space-y-4">
+                  {/* Documento */}
+                  <div className="flex gap-3 items-start">
+                    <div className="w-32 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
+                        Tipo de documento <span className="text-primary">*</span>
+                      </label>
+                      <select
+                        value={newTipoDoc}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      >
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Número de documento <span className="text-primary">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                        value={newDocumento}
+                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      />
+                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
+                    </div>
+                  </div>
+
                   {/* Nombre */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -459,7 +491,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       autoFocus
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1">{createErrors.nombre}</p>}
+                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
 
                   {/* Correo */}
@@ -474,7 +506,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {createErrors.correo && <p className="text-xs text-red-500 mt-1">{createErrors.correo}</p>}
+                    {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
 
                   {/* Teléfono */}
@@ -484,42 +516,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       value={newTelefono}
-                      onChange={e => setNewTelefono(e.target.value)}
+                      onChange={e => setNewTelefono(soloDigitos(e.target.value))}
                       placeholder="3001234567"
                       className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
-                  </div>
-
-                  {/* Documento */}
-                  <div className="flex gap-3">
-                    <div className="w-28 shrink-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Tipo de documento <span className="text-primary">*</span>
-                      </label>
-                      <select
-                        value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
-                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                      >
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
-                      </select>
-                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Número de documento <span className="text-primary">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
-                        value={newDocumento}
-                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
-                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                      />
-                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.numeroDocumento}</p>}
-                    </div>
                   </div>
 
                   {/* Estado */}
@@ -576,21 +578,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                {[
-                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
-                  { label: "Correo",          field: "correo" as const, type: "email" },
-                ].map(({ label, field, type }) => (
-                  <div key={field}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} value={editItem[field]}
-                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
-                  </div>
-                ))}
-                <div className="flex gap-3">
-                  <div className="w-28 shrink-0">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento</label>
+                <div className="flex gap-3 items-start">
+                  <div className="w-32 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <input
                       type="text"
                       value={editItem.tipoDocumento}
@@ -609,6 +599,18 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
+                {[
+                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
+                  { label: "Correo",          field: "correo" as const, type: "email" },
+                ].map(({ label, field, type }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+                    <input type={type} value={editItem[field]}
+                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
+                  </div>
+                ))}
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
                   <input type="number" value={editItem.pedidos} disabled

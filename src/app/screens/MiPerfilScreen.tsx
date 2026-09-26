@@ -189,7 +189,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                   className={iCls(errores.correo)}
                   autoFocus
                 />
-                {errores.correo && <p className="text-xs text-red-500 mt-1 ml-0.5">{errores.correo}</p>}
+                {errores.correo && <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{errores.correo}</p>}
               </>
             ) : (
               <div className="px-3 py-2.5 rounded-xl border border-border bg-muted text-sm text-foreground font-medium">
@@ -213,7 +213,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                   placeholder="3001234567"
                   className={iCls(errores.telefono)}
                 />
-                {errores.telefono && <p className="text-xs text-red-500 mt-1 ml-0.5">{errores.telefono}</p>}
+                {errores.telefono && <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{errores.telefono}</p>}
               </>
             ) : (
               <div className="px-3 py-2.5 rounded-xl border border-border bg-muted text-sm text-foreground font-medium">

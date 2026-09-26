@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
+import { soloDigitos, filtrarDocumento } from "../components/campo";
 
 const SERIF = "'DM Serif Display', serif";
 
@@ -702,26 +703,9 @@ export function GestionUsuariosScreen({
                   </div>
                 </div>
 
-                {[
-                  { label: "Nombre completo", field: "nombre"    as const, type: "text"  },
-                  { label: "Correo",          field: "correo"    as const, type: "email" },
-                  { label: "Teléfono",        field: "telefono"  as const, type: "tel"   },
-                ].map(({ label, field, type }) => (
-                  <div key={field}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input
-                      type={type}
-                      value={editItem[field]}
-                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    />
-                    {editErrors[field] && <p className="text-xs text-red-500 mt-1">{editErrors[field]}</p>}
-                  </div>
-                ))}
-
-                <div className="flex gap-3">
-                  <div className="w-24 shrink-0">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <span className="text-primary">*</span></label>
+                <div className="flex gap-3 items-start">
+                  <div className="w-32 shrink-0">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                     <select
                       value={editItem.tipoDocumento}
                       onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
@@ -729,7 +713,7 @@ export function GestionUsuariosScreen({
                     >
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                     </select>
-                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.tipoDocumento}</p>}
+                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento <span className="text-primary">*</span></label>
@@ -737,13 +721,31 @@ export function GestionUsuariosScreen({
                       type="text"
                       inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"}
                       value={editItem.numeroDocumento}
-                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: e.target.value.replace(/[\s.]/g, "") })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: filtrarDocumento(e.target.value, x.tipoDocumento) })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
                       placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{editErrors.numeroDocumento}</p>}
+                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
                 </div>
+
+                {[
+                  { label: "Nombre completo", field: "nombre"    as const, type: "text"  },
+                  { label: "Correo",          field: "correo"    as const, type: "email" },
+                  { label: "Teléfono",        field: "telefono"  as const, type: "tel", numeric: true },
+                ].map(({ label, field, type, numeric }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+                    <input
+                      type={type}
+                      inputMode={numeric ? "numeric" : undefined}
+                      value={editItem[field]}
+                      onChange={e => { const v = numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    />
+                    {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
+                  </div>
+                ))}
 
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
@@ -835,6 +837,37 @@ export function GestionUsuariosScreen({
                 </div>
 
                 <div className="px-5 py-4 space-y-4">
+                  {/* Documento */}
+                  <div className="flex gap-3 items-start">
+                    <div className="w-32 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
+                        Tipo de documento <span className="text-primary">*</span>
+                      </label>
+                      <select
+                        value={newTipoDoc}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      >
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Número de documento <span className="text-primary">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                        value={newDocumento}
+                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      />
+                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
+                    </div>
+                  </div>
+
                   {/* Nombre */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -848,7 +881,7 @@ export function GestionUsuariosScreen({
                       autoFocus
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1">{createErrors.nombre}</p>}
+                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
 
                   {/* Correo */}
@@ -863,7 +896,7 @@ export function GestionUsuariosScreen({
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {createErrors.correo && <p className="text-xs text-red-500 mt-1">{createErrors.correo}</p>}
+                    {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
 
                   {/* Teléfono */}
@@ -875,42 +908,11 @@ export function GestionUsuariosScreen({
                       type="tel"
                       inputMode="numeric"
                       value={newTelefono}
-                      onChange={e => { setNewTelefono(e.target.value.replace(/[\s.-]/g, "")); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
+                      onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
                       placeholder="3001234567"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
-                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1">{createErrors.telefono}</p>}
-                  </div>
-
-                  {/* Documento */}
-                  <div className="flex gap-3">
-                    <div className="w-28 shrink-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Tipo de documento <span className="text-primary">*</span>
-                      </label>
-                      <select
-                        value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
-                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                      >
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
-                      </select>
-                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Número de documento <span className="text-primary">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
-                        value={newDocumento}
-                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
-                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                      />
-                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.numeroDocumento}</p>}
-                    </div>
+                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
 
                   {/* Rol */}
@@ -928,7 +930,7 @@ export function GestionUsuariosScreen({
                         <option key={r.id} value={r.id}>{r.nombre}</option>
                       ))}
                     </select>
-                    {createErrors.rolId && <p className="text-xs text-red-500 mt-1">{createErrors.rolId}</p>}
+                    {createErrors.rolId && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.rolId}</p>}
                   </div>
 
                   {/* Estado */}
