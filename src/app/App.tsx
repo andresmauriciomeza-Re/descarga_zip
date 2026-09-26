@@ -6438,11 +6438,187 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
   return INITIAL_EMPLEADOS;
 };
 
+// ── Persistencia del carrito ───────────────────────────────────────────
+// El carrito vivía solo en el `useState` de App: cualquier recarga, cambio de
+// categoría o ida al detalle de otro producto lo borraba, y con él todo lo que
+// el cliente había armado sin haber iniciado sesión. Ahora hay dos destinos:
+//
+//   · CARRITO_STORAGE_KEY      → el carrito de quien NO tiene sesión abierta.
+//   · CARRITOS_USUARIOS_STORAGE_KEY → { userId: CartItem[] }, el carrito que
+//     pertenece a cada cuenta, para que se recupere al volver a entrar.
+//
+// Las dos mitades nunca cuentan dos veces lo mismo: el carrito invitado se
+// borra en cuanto la sesión lo absorbe, y la fusión descarta toda línea cuyo
+// `id` ya esté en pantalla (ver `fusionarCarritos`), de modo que entrar y salir
+// de la cuenta las veces que sea deja siempre el mismo carrito.
+//
+// Para volver a cero: localStorage.removeItem(CARRITO_STORAGE_KEY) y
+// localStorage.removeItem(CARRITOS_USUARIOS_STORAGE_KEY).
+const CARRITO_STORAGE_KEY = "sivpro.carrito.v1";
+const CARRITOS_USUARIOS_STORAGE_KEY = "sivpro.carritos.usuarios.v1";
+
+// Cartrito ligado a cada cuenta, indexado por `Usuario.id`.
+type CarritosPorUsuario = Record<string, CartItem[]>;
+
+// Un item se acepta solo con lo que el carrito necesita para COBRAR y PINTAR la
+// línea: producto, cantidad, tamaño y extras. El resto se normaliza después. Se
+// evita exigirle todos los campos de `Product` porque un campo que solo afecta
+// a la ficha del producto (rating, ventas, descripción) descartaría la línea
+// entera —y con ella un producto que el cliente ya había elegido— por un
+// detalle que no altera ni el cobro ni el carrito.
+const esCartItemValido = (i: unknown): i is CartItem => {
+  if (!i || typeof i !== "object") return false;
+  const item = i as CartItem;
+  const prod = item.product;
+  return (
+    typeof item.id === "string" &&
+    !!prod && typeof prod === "object" &&
+    typeof prod.id === "number" &&
+    typeof prod.name === "string" &&
+    typeof item.quantity === "number" && item.quantity > 0 &&
+    typeof item.size === "string" &&
+    typeof item.sizePrice === "number" &&
+    typeof item.extrasPrice === "number"
+  );
+};
+
+// El producto guardado se re-resuelve contra PRODUCTS por id, igual que hacen
+// `imagenDeProducto` y `precioDeProducto`: las fotos del menú son imports de
+// Vite y su URL cambia en cada build, así que un carrito arrastrado desde una
+// sesión anterior apuntaría a un archivo que ya no existe. Se toma el producto
+// del catálogo y no al revés porque el precio que se cobra es el de la LÍNEA
+// (`sizePrice` + `extrasPrice`), el que el cliente vio al agregarla. Si el id
+// ya no está en el catálogo se conserva el producto guardado antes que perder
+// la línea.
+const productoDeCarrito = (p: Product): Product =>
+  PRODUCTS.find((x) => x.id === p.id) ?? p;
+
+// `selectedExtras` se normaliza en vez de exigirse: un carrito guardado por una
+// build anterior a esta feature puede no traerlo, y un extra ausente es "sin
+// extras", no una línea inválida.
+const normalizarCartItem = (i: CartItem): CartItem => ({
+  ...i,
+  product: productoDeCarrito(i.product),
+  selectedExtras: Array.isArray(i.selectedExtras)
+    ? i.selectedExtras.filter((e) => typeof e === "string")
+    : [],
+});
+
+const leerCarritoGuardado = (): CartItem[] => {
+  try {
+    const raw = localStorage.getItem(CARRITO_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(esCartItemValido).map(normalizarCartItem);
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se arranca con carrito vacío.
+  }
+  return [];
+};
+
+const escribirCarritoGuardado = (items: CartItem[]) => {
+  try {
+    localStorage.setItem(CARRITO_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // Sin cuota o con el almacenamiento deshabilitado: el carrito sigue
+    // funcionando en memoria, simplemente no sobrevive a la recarga.
+  }
+};
+
+const borrarCarritoGuardado = () => {
+  try {
+    localStorage.removeItem(CARRITO_STORAGE_KEY);
+  } catch {
+    // localStorage bloqueado: no hay nada que borrar.
+  }
+};
+
+const leerCarritosDeUsuarios = (): CarritosPorUsuario => {
+  try {
+    const raw = localStorage.getItem(CARRITOS_USUARIOS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const carritos: CarritosPorUsuario = {};
+      for (const [userId, items] of Object.entries(parsed as Record<string, unknown>)) {
+        if (Array.isArray(items)) {
+          carritos[userId] = items.filter(esCartItemValido).map(normalizarCartItem);
+        }
+      }
+      return carritos;
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se empieza sin carritos.
+  }
+  return {};
+};
+
+const escribirCarritosDeUsuarios = (carritos: CarritosPorUsuario) => {
+  try {
+    localStorage.setItem(CARRITOS_USUARIOS_STORAGE_KEY, JSON.stringify(carritos));
+  } catch {
+    // Sin cuota o con el almacenamiento deshabilitado: el carrito sigue
+    // funcionando en memoria, simplemente no sobrevive a la recarga.
+  }
+};
+
+// Dos líneas son "el mismo producto con la misma configuración" cuando
+// coinciden el producto, el tamaño y el conjunto de extras. El orden de los
+// extras no cuenta: se comparan ordenados porque un cliente puede haberlos
+// ticked en distinto orden en dos visitas al detalle. Es el mismo criterio con
+// el que `quickAdd` agrupa las unidades de un producto sin extras, así que
+// fusionar no desagrupa nada que ya se viera junto en pantalla.
+const mismaConfig = (a: CartItem, b: CartItem) =>
+  a.product.id === b.product.id &&
+  a.size === b.size &&
+  [...a.selectedExtras].sort().join("|") ===
+    [...b.selectedExtras].sort().join("|");
+
+// Al iniciar sesión, el carrito que el cliente ya tenía en pantalla (`base`, el
+// local sin sesión) es el que manda: conserva su id de línea y su precio, o sea
+// lo que se ve al volver al carrito. Lo que venía guardado en la cuenta se le
+// suma encima cuando coincide producto, tamaño y extras, o se agrega al final
+// como línea propia cuando es un producto distinto. Nada se descarta en
+// ninguno de los dos casos.
+const fusionarCarritos = (
+  base: CartItem[],
+  guardado: CartItem[],
+): CartItem[] => {
+  if (guardado.length === 0) return base;
+  const fusionado = [...base];
+  for (const item of guardado) {
+    // Una línea con el MISMO id es la misma línea que ya está en pantalla, no
+    // una unidad más: los ids se generan con marca de tiempo al agregar el
+    // producto y sobreviven a la persistencia, así que un id repetido solo
+    // puede ser la misma línea. Se conserva la de `base`, que es la que refleja
+    // lo que el cliente acaba de hacer. Esto además hace la fusión
+    // idempotente: entrar en la cuenta, salir y volver a entrar no duplica el
+    // carrito.
+    if (fusionado.some((x) => x.id === item.id)) continue;
+    const i = fusionado.findIndex((x) => mismaConfig(x, item));
+    if (i === -1) {
+      fusionado.push(item);
+    } else {
+      fusionado[i] = {
+        ...fusionado[i],
+        quantity: fusionado[i].quantity + item.quantity,
+      };
+    }
+  }
+  return fusionado;
+};
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
+  // página, cambiar de categoría o abrir el detalle de otro producto borraba
+  // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
+  // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
+  const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
   // Catálogo de productos. Lo consumen GestionProductosScreen y
@@ -6527,6 +6703,22 @@ export default function App() {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
+  // Cada cambio del carrito se guarda donde corresponde: en la clave de
+  // invitado mientras no hay sesión, y en el registro del usuario en cuanto la
+  // hay. Al abrirse la sesión la clave de invitado se borra porque su contenido
+  // ya quedó absorbido en el carrito de la cuenta, y dejarla ahí lo volvería a
+  // sumar en el próximo inicio de sesión de ese mismo usuario.
+  useEffect(() => {
+    if (loggedInUserId) {
+      const carritos = leerCarritosDeUsuarios();
+      carritos[loggedInUserId] = cart;
+      escribirCarritosDeUsuarios(carritos);
+      borrarCarritoGuardado();
+      return;
+    }
+    escribirCarritoGuardado(cart);
+  }, [cart, loggedInUserId]);
+
   const navigate = (s: Screen) => {
     setScreen(s);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -6586,6 +6778,11 @@ export default function App() {
     setIsLoggedIn(false);
     setUserRole("Administrador");
     setLoggedInUserId(null);
+    // El carrito no se vacía al cerrar sesión —eso no cambia—: el efecto de
+    // persistencia lo deja en la clave de invitado al quedar `loggedInUserId`
+    // en null, y el de la cuenta se conserva para recuperarlo al volver a
+    // entrar. La fusión descarta por id las líneas que ya estén en pantalla,
+    // así que reentrar no duplica nada.
     navigate("landing");
     toast.success("Has cerrado sesión correctamente");
   };
@@ -6809,7 +7006,21 @@ export default function App() {
                   onLogin={(role: string, loginEmail: string) => {
                     setIsLoggedIn(true);
                     const u = usuarios.find(x => x.correo.toLowerCase() === loginEmail.toLowerCase());
-                    setLoggedInUserId(u?.id ?? null);
+                    const userId = u?.id ?? null;
+                    setLoggedInUserId(userId);
+                    // El carrito NO se reinicia al iniciar sesión. Lo que el
+                    // cliente armó sin sesión se fusiona con lo que ya tenía
+                    // guardado en la cuenta —sumando cantidades cuando es el
+                    // mismo producto con la misma configuración— y el resultado
+                    // pasa a vivir en la cuenta. Aplica igual para Cliente,
+                    // Empleado y Administrador: los tres entran por aquí.
+                    // El cliente legacy sebas@gmail.com no está en `usuarios`,
+                    // así que no tiene registro: su carrito sigue en la clave de
+                    // invitado, intacto.
+                    if (userId) {
+                      const guardado = leerCarritosDeUsuarios()[userId] ?? [];
+                      setCart((prev) => fusionarCarritos(prev, guardado));
+                    }
 
                     if (role === "Usuario") {
                       // Legacy public customer (sebas@gmail.com) — LoginScreen already navigates to catalog
