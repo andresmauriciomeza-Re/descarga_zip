@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
@@ -46,6 +46,13 @@ export const INIT_USUARIOS: Usuario[] = [
   { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", rolId:"ROL-003", activo:true  },
 ];
 
+// Colores de avatar para los usuarios de alta. La misma paleta que usa Clientes
+// para que ambos listados se vean homogéneos.
+const AVATAR_COLORS = [
+  "bg-red-500","bg-blue-500","bg-emerald-500",
+  "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
+];
+
 // Paleta de colores para roles (por índice de ROL-XXX)
 const ROL_PALETTE = [
   "bg-red-100 text-red-800",
@@ -62,9 +69,6 @@ function rolColor(rolId: string) {
   const idx = parseInt(rolId.replace("ROL-",""), 10) - 1;
   return ROL_PALETTE[idx >= 0 ? idx % ROL_PALETTE.length : 0];
 }
-
-const PER_PAGE = 5;
-
 
 const SPECIAL_ROLES = ["ROL-001", "ROL-002", "ROL-003"];
 
@@ -103,6 +107,18 @@ export function GestionUsuariosScreen({
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
 
+  // Formulario de alta (modal "Crear usuario"). Se guarda con un prefijo `new`
+  // para no chocar con el `editItem`, que lleva el mismo tipo de datos.
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [newNombre,    setNewNombre]    = useState("");
+  const [newCorreo,    setNewCorreo]    = useState("");
+  const [newTelefono,  setNewTelefono]  = useState("");
+  const [newTipoDoc,   setNewTipoDoc]   = useState("CC");
+  const [newDocumento, setNewDocumento] = useState("");
+  const [newRolId,     setNewRolId]     = useState("");
+  const [newActivo,    setNewActivo]    = useState(true);
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
 
@@ -126,8 +142,55 @@ export function GestionUsuariosScreen({
     });
   }, [usuarios, search, filterRol, filterEst, roles]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
+  // interno, así que el paginador es la única forma de ver más usuarios.
+  // Se mide la tarjeta, que al ser `flex-1 min-h-0` dentro de una cadena
+  // bloqueada a `h-dvh` tiene un alto que NO depende de cuántas filas haya,
+  // de modo que no hay bucle de realimentación entre medición y render.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [filasPorPagina, setFilasPorPagina] = useState(6);
+  const hayFilasRef = useRef(false);
+  hayFilasRef.current = filtered.length > 0;
+
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const medir = () => {
+      // Sin resultados la única <tr> es la de "No se encontraron", que mide
+      // distinto: se conserva el último valor válido en vez de calcular con ella.
+      if (!hayFilasRef.current) return;
+      const thead = card.querySelector("thead");
+      const fila  = card.querySelector("tbody tr");
+      if (!(thead instanceof HTMLElement) || !(fila instanceof HTMLElement)) return;
+      const altoFila = fila.offsetHeight;
+      if (altoFila <= 0) return;
+      const disponible = card.clientHeight - thead.offsetHeight;
+      // `divide-y` pone 1px entre filas que el offsetHeight de la primera fila
+      // no incluye, así que el divisor lleva ese +1 y el numerador lo compensa.
+      // Sin piso mínimo: si se forzara un mínimo mayor de lo que cabe, la última
+      // fila de cada página quedaría recortada por el `overflow-hidden` de la
+      // tarjeta sin poder alcanzarla con el paginador (estaría en la misma
+      // página), que es peor que un paginador más largo.
+      const n = Math.max(1, Math.floor((disponible + 1) / (altoFila + 1)));
+      setFilasPorPagina(prev => (prev === n ? prev : n));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
+
+  // Si al encoger la ventana caben menos filas por página, la página actual
+  // puede quedar fuera de rango: se vuelve a la primera.
+  useEffect(() => { setPage(1); }, [filasPorPagina]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
+  // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
+  // se reduce (p. ej. al apagar un switch con un filtro de estado activo, o al
+  // eliminar un usuario) `page` quedaría fuera de rango, la tabla saldría vacía
+  // y la paginación se ocultaría, dejando al usuario sin forma de volver.
+  const pageActual = Math.min(page, totalPages);
+  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
 
   const updateUsuario = (id: string, patch: Partial<Usuario>) => {
     setUsuarios(p => p.map(u => u.id === id ? { ...u, ...patch } : u));
@@ -213,6 +276,101 @@ export function GestionUsuariosScreen({
     toast.success("Usuario eliminado correctamente");
   };
 
+  const resetCreate = () => {
+    setNewNombre(""); setNewCorreo(""); setNewTelefono(""); setNewTipoDoc("CC");
+    setNewDocumento(""); setNewRolId(""); setNewActivo(true); setCreateErrors({});
+  };
+
+  // Alta de usuario. Mismo criterio que la validación de "Crear cliente": los
+  // duplicados de correo y de documento se buscan en las TRES colecciones
+  // (usuarios, empleados y clientes) porque un mismo correo o cédula no puede
+  // representar a dos personas distintas dentro del sistema.
+  const handleCreate = () => {
+    const errs: Record<string, string> = {};
+
+    if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
+
+    if (!newCorreo.trim()) {
+      errs.correo = "El correo es obligatorio";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) {
+      errs.correo = "Formato de correo no válido";
+    } else {
+      const em = newCorreo.trim().toLowerCase();
+      const dupCorreo =
+        usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => c.correo.trim().toLowerCase() === em);
+      if (dupCorreo) errs.correo = "Este correo ya está registrado";
+    }
+
+    // Solo dígitos, 7 a 15. El mismo criterio que valida "Mi Perfil". Los
+    // espacios, guiones y puntos se van quitando mientras se escribe.
+    if (!newTelefono.trim()) {
+      errs.telefono = "El teléfono es obligatorio";
+    } else if (!/^\d{7,15}$/.test(newTelefono)) {
+      errs.telefono = "El teléfono debe tener entre 7 y 15 dígitos";
+    }
+
+    // Un usuario no puede quedar sin rol: sin él no tendría permisos y la
+    // etiqueta de la tabla saldría con el id crudo.
+    const rolElegido = roles.find(r => r.id === newRolId);
+    if (!newRolId) {
+      errs.rolId = "Selecciona un rol";
+    } else if (!rolElegido) {
+      errs.rolId = "El rol seleccionado no existe";
+    } else if (!rolElegido.activo) {
+      errs.rolId = "El rol seleccionado está inactivo";
+    }
+
+    if (!newTipoDoc.trim()) {
+      errs.tipoDocumento = "Selecciona el tipo de documento";
+    }
+    const dm = newDocumento.trim();
+    if (!dm) {
+      errs.numeroDocumento = "El número de documento es obligatorio";
+    } else if (newTipoDoc !== "PP" && !/^\d+$/.test(dm)) {
+      errs.numeroDocumento = "El número de documento solo debe contener números";
+    } else {
+      const clave = `${newTipoDoc}||${dm}`.toLowerCase();
+      const dupDoc =
+        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
+        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
+      if (dupDoc) errs.numeroDocumento = "Este documento ya está registrado";
+    }
+
+    if (Object.keys(errs).length) { setCreateErrors(errs); return; }
+
+    // El id sigue la numeración más alta existente y no el largo del array: si
+    // se borra un usuario intermedio, `length + 1` reutilizaría su id.
+    const maxNum = usuarios.reduce((max, u) => {
+      const n = parseInt(u.id.replace("USR-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0);
+    const newId = `USR-${String(maxNum + 1).padStart(3, "0")}`;
+    const iniciales = newNombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    const avatarColor = AVATAR_COLORS[usuarios.length % AVATAR_COLORS.length];
+
+    setUsuarios(prev => [
+      {
+        id: newId,
+        nombre: newNombre.trim(),
+        iniciales,
+        avatarColor,
+        correo: newCorreo.trim(),
+        telefono: newTelefono,
+        tipoDocumento: newTipoDoc,
+        numeroDocumento: dm,
+        rolId: newRolId,
+        activo: newActivo,
+      },
+      ...prev,
+    ]);
+    setShowCreate(false);
+    resetCreate();
+    toast.success(`Usuario ${newNombre.trim()} creado correctamente`);
+  };
+
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
 
   if (userRole !== "Administrador") {
@@ -228,9 +386,22 @@ export function GestionUsuariosScreen({
   return (
     <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-3 shrink-0">
-        <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
+        </div>
+        {/* Sin control de permiso: la pantalla ya está bloqueada para quien no
+            sea Administrador más abajo, así que un chequeo extra sería código
+            muerto. */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => { resetCreate(); setShowCreate(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+          >
+            <UserPlus className="w-4 h-4" /> Crear usuario
+          </button>
+        </div>
       </div>
 
       {/* Métricas */}
@@ -268,8 +439,10 @@ export function GestionUsuariosScreen({
         </select>
       </div>
 
-{/* Tabla */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+      {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
+          el número de filas por página se calcula arriba para que siempre quepan
+          enteras y la navegación sea solo por el paginador. */}
+      <div ref={cardRef} className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
         <table className="w-full">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -341,24 +514,26 @@ export function GestionUsuariosScreen({
       {/* Paginación */}
       {filtered.length > 0 && (
         <div className="flex items-center justify-center shrink-0">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronLeft className="w-4 h-4"/>
+          {/* Los controles se muestran siempre, incluso con una sola página: con
+              las filas por página adaptativas puede dar 1 sola página, y ocultarlos
+              dejaría la tabla sin ninguna señal de que la lista estaba completa.
+              Con una sola página ambas flechas salen deshabilitadas (disabled:opacity-40). */}
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={pageActual === 1}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronLeft className="w-4 h-4"/>
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
+              <button key={n} onClick={() => setPage(n)}
+                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
+                {n}
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
-                <button key={n} onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                  {n}
-                </button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-                <ChevronRight className="w-4 h-4"/>
-              </button>
-            </div>
-          )}
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={pageActual === totalPages}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
+              <ChevronRight className="w-4 h-4"/>
+            </button>
+          </div>
         </div>
       )}
 
@@ -639,6 +814,149 @@ export function GestionUsuariosScreen({
                 </button>
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal: Crear usuario ── */}
+      <AnimatePresence>
+        {showCreate && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
+                exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Usuario</h3>
+                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="px-5 py-4 space-y-4">
+                  {/* Nombre */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Nombre completo <span className="text-primary">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newNombre}
+                      onChange={e => { setNewNombre(e.target.value); if (createErrors.nombre) setCreateErrors(p => ({ ...p, nombre: undefined })); }}
+                      placeholder="Ej: Laura Martínez"
+                      autoFocus
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    />
+                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1">{createErrors.nombre}</p>}
+                  </div>
+
+                  {/* Correo */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Correo electrónico <span className="text-primary">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={newCorreo}
+                      onChange={e => { setNewCorreo(e.target.value); if (createErrors.correo) setCreateErrors(p => ({ ...p, correo: undefined })); }}
+                      placeholder="correo@ejemplo.com"
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    />
+                    {createErrors.correo && <p className="text-xs text-red-500 mt-1">{createErrors.correo}</p>}
+                  </div>
+
+                  {/* Teléfono */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Número de teléfono <span className="text-primary">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={newTelefono}
+                      onChange={e => { setNewTelefono(e.target.value.replace(/[\s.-]/g, "")); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
+                      placeholder="3001234567"
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    />
+                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1">{createErrors.telefono}</p>}
+                  </div>
+
+                  {/* Documento */}
+                  <div className="flex gap-3">
+                    <div className="w-28 shrink-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Tipo de documento <span className="text-primary">*</span>
+                      </label>
+                      <select
+                        value={newTipoDoc}
+                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      >
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      </select>
+                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.tipoDocumento}</p>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Número de documento <span className="text-primary">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                        value={newDocumento}
+                        onChange={e => { setNewDocumento(e.target.value.replace(/[\s.]/g, "")); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                        className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      />
+                      {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1">{createErrors.numeroDocumento}</p>}
+                    </div>
+                  </div>
+
+                  {/* Rol */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Rol <span className="text-primary">*</span>
+                    </label>
+                    <select
+                      value={newRolId}
+                      onChange={e => { setNewRolId(e.target.value); if (createErrors.rolId) setCreateErrors(p => ({ ...p, rolId: undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.rolId ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                    >
+                      <option value="">Selecciona un rol…</option>
+                      {roles.filter(r => r.activo).map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
+                    {createErrors.rolId && <p className="text-xs text-red-500 mt-1">{createErrors.rolId}</p>}
+                  </div>
+
+                  {/* Estado */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+                    <select
+                      value={newActivo ? "activo" : "inactivo"}
+                      onChange={e => setNewActivo(e.target.value === "activo")}
+                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                    >
+                      <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={handleCreate}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    Crear usuario
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </div>
         )}
       </AnimatePresence>
