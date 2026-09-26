@@ -207,7 +207,9 @@ interface DetalleProd {
   extras?: string[];
 }
 
-export type DevolucionTipo = "producto" | "dinero";
+// "mixto" es una devolución donde cada producto se compensó de forma distinta:
+// unos se canjearon por producto y otros se devolvieron en dinero.
+export type DevolucionTipo = "producto" | "dinero" | "mixto";
 
 export interface Venta {
   id: string;
