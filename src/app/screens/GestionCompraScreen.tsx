@@ -675,22 +675,26 @@ export function GestionCompraScreen({
   };
 
   const handleCambiarEstado = (id: string, next: EstadoGestion) => {
+    // Solo se actualiza el estado de la Compra puntual (por su ID).
     setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
     setEstadoConfirm(null);
 
-    // Anular una factura anula también su orden de compra: queda cerrada y no
-    // admite más facturas en "Recibido".
-    const ordenId = next === "Anulado" ? gestiones.find((g) => g.id === id)?.ordenId : "";
-
-    if (ordenId) {
-      setOrdenes((prev) =>
-        prev.map((o) =>
-          o.id === ordenId ? { ...o, estado: "Anulado" as EstadoOrden } : o
-        )
-      );
-
-      toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
-      return;
+    // Caso 2 — Orden de Compra con SOLO una Compra asociada:
+    // Al anular esa única Compra, la Orden de Compra asociada también pasa a Anulado.
+    if (next === "Anulado") {
+      const ordenId = gestiones.find((g) => g.id === id)?.ordenId ?? "";
+      if (ordenId) {
+        const comprasAsociadas = gestiones.filter((g) => g.ordenId === ordenId);
+        if (comprasAsociadas.length === 1) {
+          setOrdenes((prev) =>
+            prev.map((o) =>
+              o.id === ordenId ? { ...o, estado: "Anulado" as EstadoOrden } : o
+            )
+          );
+          toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
+          return;
+        }
+      }
     }
 
     toast.success(`Estado cambiado a: ${next}`);
