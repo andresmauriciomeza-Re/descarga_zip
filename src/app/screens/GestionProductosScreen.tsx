@@ -769,7 +769,7 @@ export function GestionProductosScreen({
     const activeV = fichaVersiones[fichaVIdx];
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
     return (
-      <div className="min-h-screen bg-background">
+      <div className="h-screen bg-background overflow-hidden">
         {/* Sticky top bar */}
         <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
           <div>
@@ -789,7 +789,7 @@ export function GestionProductosScreen({
         </div>
 
         {/* Two columns */}
-        <div className="flex divide-x divide-border" style={{ minHeight: "calc(100vh - 73px)" }}>
+        <div className="flex divide-x divide-border" style={{ height: "calc(100vh - 73px)" }}>
 
           {/* ── COLUMNA IZQUIERDA: datos del producto ── */}
           <div className="w-1/2 px-8 py-6 overflow-y-auto">
@@ -987,11 +987,13 @@ export function GestionProductosScreen({
               </div>
             </div>
 
-            {/* Guardar ficha técnica */}
-            <button onClick={() => setConfirmFichaSave(true)}
-              className="mt-5 w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-              Guardar Ficha Técnica
-            </button>
+            {/* Footer sticky: Guardar ficha técnica */}
+            <div className="sticky bottom-0 pt-3 pb-1 bg-gradient-to-t from-background via-background to-transparent">
+              <button onClick={() => setConfirmFichaSave(true)}
+                className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                Guardar Ficha Técnica
+              </button>
+            </div>
           </div>
         </div>
 
