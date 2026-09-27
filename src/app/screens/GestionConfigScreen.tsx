@@ -118,6 +118,58 @@ export const accionColors: Record<Accion, string> = {
   Eliminar: "bg-red-100 text-red-700 border-red-200",
 };
 
+export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }) {
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
+
+  return (
+    <>
+      {MENU_TREE.map(({ modulo, subs }) => {
+        const activeSubs = subs.filter(sub => {
+          const k = KEY(modulo, sub);
+          return k in accesos && accesos[k].length > 0;
+        });
+        if (!activeSubs.length) return null;
+
+        const isExpanded = expandedModules.includes(modulo);
+        return (
+          <div key={modulo}>
+            <button
+              type="button"
+              onClick={() => setExpandedModules(prev => isExpanded
+                ? prev.filter(item => item !== modulo)
+                : [...prev, modulo]
+              )}
+              className="w-full flex items-center gap-1.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 cursor-pointer hover:text-foreground transition-colors"
+              aria-expanded={isExpanded}
+            >
+              <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+              {modulo}
+            </button>
+            {isExpanded && (
+              <div className="space-y-1">
+                {activeSubs.map(sub => {
+                  const k = KEY(modulo, sub);
+                  const perms = accesos[k] ?? [];
+                  return (
+                    <div key={sub} className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/30 rounded-xl">
+                      <span className="text-sm font-medium text-foreground">{sub}</span>
+                      <div className="flex gap-1 flex-wrap justify-end">
+                        {ACCIONES.filter(a => perms.includes(a)).map(a => (
+                          <span key={a} className={`text-[10px] font-semibold px-1.5 py-0 rounded-full border ${accionColors[a]}`}>{a}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // ── Confirm modal ─────────────────────────────────────────────────────
 function ConfirmModal({ title, message, onConfirm, onCancel }: {
   title: string; message: string; onConfirm: () => void; onCancel: () => void;
@@ -550,12 +602,12 @@ export function GestionConfigScreen({
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale:.95,opacity:0 }} animate={{ scale:1,opacity:1 }}
               exit={{ scale:.95,opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              className="bg-card rounded-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
-              <div className="px-5 py-4 space-y-2">
+              <div className="px-5 py-3 space-y-1.5 shrink-0">
                 {[
                   { l: "ID Rol",      v: detailItem.id },
                   { l: "Nombre",      v: detailItem.nombre },
@@ -570,43 +622,16 @@ export function GestionConfigScreen({
                 ))}
               </div>
               {/* Accesos configurados con badges */}
-              <div className="px-5 pb-4 space-y-3 max-h-60 overflow-y-auto">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground pt-1 pb-2 border-b border-border sticky top-0 bg-card">
+              <div className="px-5 pb-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground pt-1 pb-1.5 border-b border-border sticky top-0 bg-card">
                   Accesos configurados
                   <span className="ml-2 text-primary normal-case font-semibold">{countAccesos(detailItem.accesos)} sub-opciones</span>
                 </p>
                 {countAccesos(detailItem.accesos) === 0 ? (
                   <p className="text-sm text-muted-foreground italic">Sin accesos configurados</p>
-                ) : MENU_TREE.map(({ modulo, subs }) => {
-                  const activeSubs = subs.filter(s => {
-                    const k = KEY(modulo,s);
-                    return k in detailItem.accesos && detailItem.accesos[k].length > 0;
-                  });
-                  if (!activeSubs.length) return null;
-                  return (
-                    <div key={modulo}>
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{modulo}</p>
-                      <div className="space-y-1.5">
-                        {activeSubs.map(sub => {
-                          const k = KEY(modulo,sub);
-                          const perms = detailItem.accesos[k] ?? [];
-                          return (
-                            <div key={sub} className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 rounded-xl">
-                              <span className="text-sm font-medium text-foreground">{sub}</span>
-                              <div className="flex gap-1 flex-wrap justify-end">
-                                {ACCIONES.filter(a => perms.includes(a)).map(a => (
-                                  <span key={a} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${accionColors[a]}`}>{a}</span>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                ) : <PermissionCategoryAccordion accesos={detailItem.accesos} />}
               </div>
-              <div className="px-5 py-4 border-t border-border flex gap-3">
+              <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
