@@ -103,7 +103,7 @@ function SmModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.16 }}
-        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border"
+        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3
