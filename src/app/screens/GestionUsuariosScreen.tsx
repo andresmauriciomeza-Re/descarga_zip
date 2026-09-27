@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { type Rol, MENU_TREE, ACCIONES, KEY, accionColors, countAccesos } from "./GestionConfigScreen";
+import { type Rol, PermissionCategoryAccordion, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 import { soloDigitos, filtrarDocumento } from "../components/campo";
@@ -544,13 +544,13 @@ export function GestionUsuariosScreen({
           const rol = rolInfo(detail.rolId);
           const rolInactivo = rol && !rol.activo;
           return (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
               <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
                 exit={{scale:.95,opacity:0}} transition={{duration:.15}}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border">
 
-                <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-start justify-between px-5 py-3 border-b border-border shrink-0">
                   <span className="text-base font-bold text-foreground" style={{fontFamily:SERIF}}>Detalle Usuario</span>
                   <button onClick={() => setDetail(null)}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -558,15 +558,15 @@ export function GestionUsuariosScreen({
                   </button>
                 </div>
 
-                <div className="px-5 py-5 space-y-5">
+                <div className="px-5 py-4 space-y-1.5 overflow-visible">
                   {/* Avatar */}
-                  <div className="flex flex-col items-center text-center gap-3">
+                  <div className="flex flex-col items-center text-center gap-2">
                     <div className={`w-20 h-20 rounded-full ${detail.avatarColor} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
                       {detail.iniciales}
                     </div>
                     <div>
                       <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
-                      <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                      <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId)} ${rolInactivo ? "opacity-60" : ""}`}>
                          {rolLabel(detail, roles, esEmpleado(detail))}
                        </span>
@@ -587,14 +587,14 @@ export function GestionUsuariosScreen({
                     <div className="px-4 py-2 bg-muted/50 border-b border-border">
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Información del usuario</p>
                     </div>
-                    <div className="divide-y divide-border">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 px-4 py-2">
                       {[
                         { l: "Correo",    v: detail.correo },
                         { l: "Teléfono",  v: detail.telefono },
                         { l: "Tipo de documento",   v: detail.tipoDocumento },
                         { l: "Número de documento", v: detail.numeroDocumento },
                       ].map(({ l, v }) => (
-                        <div key={l} className="flex items-center justify-between px-4 py-2.5 gap-4">
+                        <div key={l} className="flex items-center justify-between py-2 border-b border-border gap-4 min-w-0">
                           <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
                           <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
                         </div>
@@ -613,37 +613,10 @@ export function GestionUsuariosScreen({
                           {countAccesos(rol.accesos)} sub-opciones
                         </span>
                       </div>
-                      <div className="px-4 py-3 max-h-48 overflow-y-auto space-y-3">
+                      <div className="px-4 py-2 space-y-2">
                         {countAccesos(rol.accesos) === 0 ? (
                           <p className="text-xs text-muted-foreground italic">Sin accesos configurados</p>
-                        ) : MENU_TREE.map(({ modulo, subs }) => {
-                          const activeSubs = subs.filter(s => {
-                            const k = KEY(modulo, s);
-                            return k in rol.accesos && rol.accesos[k].length > 0;
-                          });
-                          if (!activeSubs.length) return null;
-                          return (
-                            <div key={modulo}>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{modulo}</p>
-                              <div className="space-y-1">
-                                {activeSubs.map(sub => {
-                                  const k = KEY(modulo, sub);
-                                  const perms = rol.accesos[k] ?? [];
-                                  return (
-                                    <div key={sub} className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-muted/30 rounded-lg">
-                                      <span className="text-xs font-medium text-foreground">{sub}</span>
-                                      <div className="flex gap-1 flex-wrap justify-end">
-                                        {ACCIONES.filter(a => perms.includes(a)).map(a => (
-                                          <span key={a} className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${accionColors[a]}`}>{a}</span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
+                        ) : <PermissionCategoryAccordion accesos={rol.accesos} />}
                       </div>
                     </div>
                   )}
@@ -660,7 +633,7 @@ export function GestionUsuariosScreen({
                   </button>
                 </div>
 
-                <div className="px-5 py-4 border-t border-border">
+                <div className="px-5 py-3 border-t border-border shrink-0">
                   <button onClick={() => setDetail(null)}
                     className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                     Cerrar
@@ -677,13 +650,13 @@ export function GestionUsuariosScreen({
      {/* ── Modal: Editar usuario ── */}
       <AnimatePresence>
         {editItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
               exit={{scale:.95,opacity:0}} transition={{duration:.15}}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
 
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                 <h3 className="text-lg font-bold text-foreground" style={{fontFamily:SERIF}}>Editar Usuario</h3>
                 <button onClick={() => setEditItem(null)}
                   className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -691,7 +664,7 @@ export function GestionUsuariosScreen({
                 </button>
               </div>
 
-              <div className="px-5 py-4 space-y-4">
+              <div className="px-5 py-4 space-y-4 overflow-visible">
                 {/* Avatar preview */}
                 <div className="flex items-center gap-3 pb-2">
                   <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
@@ -729,12 +702,13 @@ export function GestionUsuariosScreen({
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-4">
                 {[
-                  { label: "Nombre completo", field: "nombre"    as const, type: "text"  },
+                  { label: "Nombre completo", field: "nombre"    as const, type: "text", full: true  },
                   { label: "Correo",          field: "correo"    as const, type: "email" },
                   { label: "Teléfono",        field: "telefono"  as const, type: "tel", numeric: true },
-                ].map(({ label, field, type, numeric }) => (
-                  <div key={field}>
+                ].map(({ label, field, type, numeric, full }) => (
+                  <div key={field} className={full ? "sm:col-span-2" : "min-w-0"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input
                       type={type}
@@ -774,9 +748,10 @@ export function GestionUsuariosScreen({
                     <option value="inactivo">Inactivo</option>
                   </select>
                 </div>
+                </div>
               </div>
 
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
+              <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button onClick={() => setEditItem(null)}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
@@ -827,8 +802,8 @@ export function GestionUsuariosScreen({
             <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
                 exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Usuario</h3>
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -868,8 +843,9 @@ export function GestionUsuariosScreen({
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-4">
                   {/* Nombre */}
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Nombre completo <span className="text-primary">*</span>
                     </label>
@@ -884,7 +860,6 @@ export function GestionUsuariosScreen({
                     {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
 
-                  {/* Correo */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Correo electrónico <span className="text-primary">*</span>
@@ -899,7 +874,6 @@ export function GestionUsuariosScreen({
                     {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
 
-                  {/* Teléfono */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Número de teléfono <span className="text-primary">*</span>
@@ -915,7 +889,6 @@ export function GestionUsuariosScreen({
                     {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
 
-                  {/* Rol */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Rol <span className="text-primary">*</span>
@@ -933,7 +906,6 @@ export function GestionUsuariosScreen({
                     {createErrors.rolId && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.rolId}</p>}
                   </div>
 
-                  {/* Estado */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     <select
@@ -945,9 +917,10 @@ export function GestionUsuariosScreen({
                       <option value="inactivo">Inactivo</option>
                     </select>
                   </div>
+                  </div>
                 </div>
 
-                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
