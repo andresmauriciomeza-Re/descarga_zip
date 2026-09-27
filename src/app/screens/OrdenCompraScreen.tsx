@@ -1470,7 +1470,12 @@ export function OrdenCompraScreen({
   const filtered = useMemo(() =>
     ordenes.filter(o => {
       const q = search.toLowerCase();
-      return !q || o.id.includes(q) || o.proveedor.toLowerCase().includes(q);
+      if (!q) return true;
+      const facturas = getFacturas(o.id);
+      const facturasTexto = facturas.map(f => f.numeroFactura).join(" ");
+      return o.proveedor.toLowerCase().includes(q)
+        || facturasTexto.toLowerCase().includes(q)
+        || o.estado.toLowerCase().includes(q);
     }),
     [ordenes, search]);
 
