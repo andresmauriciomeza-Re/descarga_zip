@@ -35,6 +35,8 @@ interface NoConformidad {
   fechaLimite?: string;
   responsableAccion?: string;
   fechaCierre?: string;
+  tipoSolucion?: string;
+  solucion?: string;
   ventaRef?: string;
   ordenRef?: string;
 }
@@ -67,6 +69,12 @@ const TIPOS_NC = [
 ];
 
 const AREAS = ["Producción", "Compras", "Almacén", "Distribución", "Cocina", "Ventas"];
+const TIPOS_SOLUCION = [
+  "Reposición del producto", "Reproceso", "Devolución al proveedor",
+  "Descarte / baja del producto", "Reembolso al cliente",
+  "Ajuste de proceso / capacitación", "Otra",
+];
+type SolucionNC = { tipoSolucion: string; solucion: string; estado: EstadoNC; fechaCierre?: string };
 const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
 const CATEGORIAS = ["Pizzas", "Bebidas", "Lasaña", "Insumo seco", "Insumo fresco", "Ventas", "Otro"];
 
@@ -178,6 +186,8 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
   fechaLimite: "",
   responsableAccion: "",
   fechaCierre: "",
+  tipoSolucion: "",
+  solucion: "",
   ventaRef: "",
   ordenRef: "",
 });
@@ -201,6 +211,7 @@ function downloadXLSX(data: NoConformidad[]) {
     "Área de proceso", "Proveedor", "Lote", "Responsable", "Estado",
     "Acción tomada", "Acción correctiva", "Fecha límite",
     "Responsable acción", "Fecha cierre", "Referencia venta", "Referencia orden producción",
+    "Tipo de solución", "Solución",
   ];
   const resumenRows = data.map(i => [
     i.id, i.tipo, i.nombre, i.categoria, i.fechaRegistro,
@@ -208,7 +219,7 @@ function downloadXLSX(data: NoConformidad[]) {
     i.areaProceso, i.proveedor || "", i.lote || "", i.responsable, i.estado,
     i.accionTomada || "", i.accionCorrectiva || "",
     i.fechaLimite || "", i.responsableAccion || "", i.fechaCierre || "",
-    i.ventaRef || "", i.ordenRef || "",
+    i.ventaRef || "", i.ordenRef || "", i.tipoSolucion || "", i.solucion || "",
   ]);
   const ws1 = XLSX.utils.aoa_to_sheet([resumenHeaders, ...resumenRows]);
   ws1["!cols"] = [
@@ -216,7 +227,7 @@ function downloadXLSX(data: NoConformidad[]) {
     { wch: 9 },  { wch: 8 },  { wch: 26 }, { wch: 40 },
     { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
     { wch: 30 }, { wch: 30 }, { wch: 13 }, { wch: 20 }, { wch: 13 },
-    { wch: 18 }, { wch: 24 },
+    { wch: 18 }, { wch: 24 }, { wch: 22 }, { wch: 40 },
   ];
   ws1["!freeze"] = { xSplit: 0, ySplit: 1 };
   XLSX.utils.book_append_sheet(wb, ws1, "Todas las NC");
@@ -333,6 +344,8 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<NoConformidad | null>(null);
   const [form, setForm] = useState<Omit<NoConformidad, "id">>(emptyForm());
+  const [soluciones, setSoluciones] = useState<Record<string, SolucionNC>>({});
+  const [solForm, setSolForm] = useState<SolucionNC>({ tipoSolucion: "", solucion: "", estado: "Pendiente" });
 
   // Autocomplete state for ventaRef
   const [showVentaSugg, setShowVentaSugg] = useState(false);
@@ -363,11 +376,13 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   [ventasPerdidas]);
 
   const allItems = useMemo(() =>
-    [...ventasNC, ...items].sort((a, b) => {
-      if (b.fechaRegistro !== a.fechaRegistro) return b.fechaRegistro.localeCompare(a.fechaRegistro);
-      return parseInt(b.id, 10) - parseInt(a.id, 10);
-    }),
-  [ventasNC, items]);
+    [...ventasNC, ...items]
+      .map(i => (soluciones[i.id] ? { ...i, ...soluciones[i.id] } : i))
+      .sort((a, b) => {
+        if (b.fechaRegistro !== a.fechaRegistro) return b.fechaRegistro.localeCompare(a.fechaRegistro);
+        return parseInt(b.id, 10) - parseInt(a.id, 10);
+      }),
+  [ventasNC, items, soluciones]);
 
   const filtered = useMemo(() =>
     allItems.filter(i => {
@@ -407,6 +422,21 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
     setItems(prev => prev.filter(i => i.id !== deleteTarget.id));
     setDeleteTarget(null);
     toast.success(`${deleteTarget.id} eliminado`);
+  };
+
+  const guardarSolucion = () => {
+    if (!viewItem) return;
+    if (solForm.estado === "Cerrado" && !solForm.solucion.trim()) {
+      toast.error("Para cerrar la no conformidad debes registrar la solución aplicada.");
+      return;
+    }
+    const hoy = new Date().toLocaleDateString("en-CA");
+    setSoluciones(prev => ({
+      ...prev,
+      [viewItem.id]: { ...solForm, fechaCierre: solForm.estado === "Cerrado" ? (viewItem.fechaCierre || hoy) : undefined },
+    }));
+    toast.success(`Solución registrada en ${viewItem.id}`);
+    setViewItem(null);
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -461,7 +491,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   const renderFormBody = (readOnly: boolean, previewId?: string) => {
     const nombreLabel = form.tipo === "Insumo" ? "Nombre del insumo" : "Nombre del producto";
     return (
-      <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
+      <div className="space-y-4 px-5 py-5">
         {previewId && (
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">ID</label>
@@ -474,19 +504,25 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
             {readOnly
               ? <p className="text-sm font-semibold text-foreground py-2">{form.tipo}</p>
-              : <select value={form.tipo} onChange={e => set({ tipo: e.target.value as Tipo })} className={sCls}>
-                  <option>Producto</option>
-                  <option>Insumo</option>
-                </select>
+              : <div className="relative">
+                  <select value={form.tipo} onChange={e => set({ tipo: e.target.value as Tipo })} className={sCls}>
+                    <option>Producto</option>
+                    <option>Insumo</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
+                </div>
             }
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
             {readOnly
               ? <p className="text-sm font-semibold text-foreground py-2">{form.unidadMedida}</p>
-              : <select value={form.unidadMedida} onChange={e => set({ unidadMedida: e.target.value })} className={sCls}>
-                  {UNIDADES.map(u => <option key={u}>{u}</option>)}
-                </select>
+              : <div className="relative">
+                  <select value={form.unidadMedida} onChange={e => set({ unidadMedida: e.target.value })} className={sCls}>
+                    {UNIDADES.map(u => <option key={u}>{u}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
+                </div>
             }
           </div>
         </div>
@@ -557,6 +593,28 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
             </div>
           </div>
         </div>
+
+        {!readOnly && (
+          <div className="border border-border rounded-xl overflow-hidden">
+            <div className="px-3 py-2 bg-muted/60 border-b border-border">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Solución de la no conformidad</p>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
+                <select value={form.tipoSolucion ?? ""} onChange={e => set({ tipoSolucion: e.target.value })} className={sCls}>
+                  <option value="">Selecciona...</option>
+                  {TIPOS_SOLUCION.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
+                <textarea rows={3} value={form.solucion ?? ""} onChange={e => set({ solucion: e.target.value })}
+                  placeholder="Describe qué se hizo o se hará para resolver la no conformidad..." className={tCls} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {!readOnly && (
           <div className="grid grid-cols-2 gap-3">
@@ -695,6 +753,43 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
     </div>
   );
 
+  const renderSolucionPanel = () => (
+    <div className="mx-5 mb-5 border border-emerald-200 rounded-xl overflow-hidden">
+      <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
+        <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Solución de la no conformidad</p>
+      </div>
+      <div className="p-3 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
+            <select value={solForm.tipoSolucion} onChange={e => setSolForm(f => ({ ...f, tipoSolucion: e.target.value }))} className={sCls}>
+              <option value="">Selecciona...</option>
+              {TIPOS_SOLUCION.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+            <select value={solForm.estado} onChange={e => setSolForm(f => ({ ...f, estado: e.target.value as EstadoNC }))} className={sCls}>
+              <option>Pendiente</option>
+              <option>En análisis</option>
+              <option>En proceso</option>
+              <option>Cerrado</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
+          <textarea rows={3} value={solForm.solucion} onChange={e => setSolForm(f => ({ ...f, solucion: e.target.value }))}
+            placeholder="Describe qué se hizo para resolver la no conformidad..." className={tCls} />
+        </div>
+        <button onClick={guardarSolucion}
+          className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 cursor-pointer active:scale-95 transition-all">
+          Guardar solución
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -798,7 +893,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => { const { id: _id, ...rest } = item; setForm(rest); setViewItem(item); }}
+                          onClick={() => {
+                            const { id: _id, ...rest } = item;
+                            setForm(rest);
+                            setSolForm({ tipoSolucion: item.tipoSolucion ?? "", solucion: item.solucion ?? "", estado: item.estado });
+                            setViewItem(item);
+                          }}
                           title="Visualizar"
                           className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                         >
@@ -963,74 +1063,76 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
       {/* ── MODAL: VIEW ── */}
       <AnimatePresence>
         {viewItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                      {viewItem.id} — {viewItem.nombre}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">{viewItem.categoria} · {viewItem.areaProceso}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TipoBadge tipo={viewItem.tipo} />
-                    <EstadoBadge e={viewItem.estado} />
-                    <button onClick={() => setViewItem(null)}
-                      className="ml-2 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-                  </div>
-                </div>
-
-                {viewItem.tipo === "Venta"
-                  ? renderVentaDetail(viewItem)
-                  : renderFormBody(true, viewItem.id)
-                }
-
-                <div className="px-5 py-4 border-t border-border">
-                  <button onClick={() => setViewItem(null)}
-                    className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
-                    Cerrar
-                  </button>
-                </div>
-              </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 bg-background overflow-y-auto"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
+              <div>
+                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                  {viewItem.id} · {viewItem.nombre}
+                </h3>
+                <p className="text-xs text-muted-foreground">{viewItem.categoria} · {viewItem.areaProceso}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <TipoBadge tipo={viewItem.tipo} />
+                <EstadoBadge e={viewItem.estado} />
+                <button onClick={() => setViewItem(null)}
+                  className="ml-2 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
+
+            <div className="max-w-3xl mx-auto w-full">
+              {viewItem.tipo === "Venta"
+                ? renderVentaDetail(viewItem)
+                : renderFormBody(true, viewItem.id)
+              }
+
+              {renderSolucionPanel()}
+            </div>
+
+            <div className="px-6 py-4 border-t border-border sticky bottom-0 bg-background max-w-3xl mx-auto w-full">
+              <button onClick={() => setViewItem(null)}
+                className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
+                Cerrar
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* ── MODAL: CREATE ── */}
       <AnimatePresence>
         {showCreate && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-                className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4"
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva no conformidad</h3>
-                  <button onClick={() => setShowCreate(false)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-                </div>
-                {renderFormBody(false)}
-                <div className="flex gap-3 px-5 py-4 border-t border-border">
-                  <button onClick={() => setShowCreate(false)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                    Cancelar
-                  </button>
-                  <button onClick={handleCreate}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    Registrar
-                  </button>
-                </div>
-              </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 bg-background overflow-y-auto"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
+              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva no conformidad</h3>
+              <button onClick={() => setShowCreate(false)}
+                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          </div>
+
+            <div className="max-w-3xl mx-auto w-full">
+              {renderFormBody(false)}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-border sticky bottom-0 bg-background max-w-3xl mx-auto w-full">
+              <button onClick={() => setShowCreate(false)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleCreate}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                Registrar
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

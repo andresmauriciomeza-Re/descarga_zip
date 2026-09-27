@@ -480,7 +480,9 @@ export function GestionUsuariosScreen({
                          {rolLabel(u, roles, esEmpleado(u))}
                        </span>
                         {rolInactivo && (
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Rol inactivo" />
+                          <span title="Rol inactivo" className="flex items-center shrink-0">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          </span>
                         )}
                       </div>
                     </td>
