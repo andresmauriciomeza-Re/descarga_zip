@@ -1,136 +1,128 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Toaster, toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
 import {
-  ShoppingCart,
-  Menu,
-  X,
-  ChevronRight,
-  ChevronDown,
-  ChevronLeft,
-  Search,
-  Star,
-  Package,
-  Users,
-  TrendingUp,
-  Plus,
-  Minus,
-  Trash2,
-  Edit,
-  LogOut,
-  Home,
-  Store,
-  ShoppingBag,
-  CheckCircle,
   AlertCircle,
-  ArrowLeft,
-  Settings,
-  FileText,
-  BarChart2,
-  Truck,
-  UserCircle,
-  Bell,
-  Moon,
-  Sun,
-  MapPin,
-  CreditCard,
-  ArrowRight,
-  Tag,
-  DollarSign,
-  Layers,
-  Grid,
-  MoreHorizontal,
-  Check,
-  Phone,
-  RefreshCw,
-  Eye,
-  UtensilsCrossed,
-  Mail,
-  Edit2,
-  User,
-  Upload,
-  ImageIcon,
-  ShieldCheck,
-  ShieldX,
   AlertTriangle,
   Archive,
-  Lock,
-  ClipboardList,
+  ArrowLeft,
+  ArrowRight,
   Banknote,
-  PackageCheck,
+  BarChart2,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleCheck,
+  ClipboardList,
+  CreditCard,
+  DollarSign,
+  Edit,
+  Edit2,
+  Eye,
+  FileText,
+  Grid,
+  Home,
   IdCard,
+  ImageIcon,
+  Layers,
+  Lock,
+  LogOut,
+  Mail,
+  MapPin,
+  Menu,
+  Minus,
+  Moon,
+  MoreHorizontal,
+  Package,
+  PackageCheck,
+  Phone,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Star,
+  Store,
+  Sun,
+  Tag,
+  Trash2,
+  TrendingUp,
+  Truck,
+  Upload,
+  User,
+  UserCircle,
+  Users,
+  X
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast, Toaster } from "sonner";
 
-import { CalendarDropdown } from "./components/CalendarDropdown";
-import { inputCls, MensajeError, PasswordField, soloDigitos, filtrarDocumento } from "./components/campo";
-import logoBlanco from "@/imports/logo-blanco.png";
-import logoClaro from "@/imports/logoclaro2.png";
-import pizzaHero from "@/imports/image-23.png";
-import pizzaFondo from "@/imports/pizzafondo.jpeg";
+import imgCocaCola from "@/imports/Coca-Cola.png";
 import fondoDefinitivo from "@/imports/fondoDefinitivo.png";
 import fondoDefinitivoNegro from "@/imports/fondoDefinitivoNegro.png";
-import pizzaDefinitiva from "@/imports/pizzaDefinitiva.png";
-import pizzaDefinitivaCompleta from "@/imports/pizzaDefinitivaCompleta.png";
+import pizzaHero from "@/imports/image-23.png";
+import imagenLocal from "@/imports/imagen_local.png";
 import lasanaCarne from "@/imports/lasaña_carne.png";
 import lasanaMixta from "@/imports/lasaña_mixta.png";
 import lasanaPollo from "@/imports/lasaña_pollo.png";
-import imgQuatro from "@/imports/Quatro.png";
-import imgPremio from "@/imports/Premio.png";
+import logoBlanco from "@/imports/logo-blanco.png";
+import logoClaro from "@/imports/logoclaro2.png";
 import imgPepsi from "@/imports/Pepsi.png";
-import imgCocaCola from "@/imports/Coca-Cola.png";
-import imagenLocal from "@/imports/imagen_local.png";
-import { GestionConfigScreen, INITIAL_ROLES, KEY, type Rol, type AccesosMap } from "./screens/GestionConfigScreen";
+import pizzaDefinitivaCompleta from "@/imports/pizzaDefinitivaCompleta.png";
+import imgPremio from "@/imports/Premio.png";
+import imgQuatro from "@/imports/Quatro.png";
+import {
+  Bar,
+  BarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+} from "recharts";
+import { filtrarDocumento, inputCls, MensajeError, PasswordField, soloDigitos } from "./components/campo";
+import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
-import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
+import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
+import { GestionConfigScreen, INITIAL_ROLES, KEY, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Empleado } from "./screens/GestionEmpleadosScreen";
-import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
-import { RecetasScreen } from "./screens/RecetasScreen";
+import type { Insumo } from "./screens/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
-import type { Insumo } from "./screens/GestionInsumosScreen";
-import {
-  PurchasesScreen,
-  INITIAL_PURCHASES,
-} from "./screens/PurchasesScreen";
-import {
-  SuppliersScreen,
-  INITIAL_SUPPLIERS,
-} from "./screens/SuppliersScreen";
-import {
-  SalesChartScreen,
-  HOURLY_TODAY,
-} from "./screens/SalesChartScreen";
-import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
+import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
-import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
-import {
-  OrdenCompraScreen,
-  NuevaOrdenCompraPage,
-  INITIAL_ORDENES,
-  INITIAL_GESTIONES,
-  PROVEEDORES_INIT,
-} from "./screens/OrdenCompraScreen";
+import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import type {
-  OrdenCompra,
   GestionCompra,
+  OrdenCompra,
   ProveedorRef,
 } from "./screens/OrdenCompraScreen";
-import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
-import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
-import { VentasScreen, type Venta, type VentaStatus, type DevolucionTipo, INITIAL_VENTAS } from "./screens/VentasScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
-import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
-import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+  INITIAL_GESTIONES,
+  INITIAL_ORDENES,
+  NuevaOrdenCompraPage,
+  OrdenCompraScreen,
+  PROVEEDORES_INIT,
+} from "./screens/OrdenCompraScreen";
+import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
+import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
+import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
+import {
+  PurchasesScreen
+} from "./screens/PurchasesScreen";
+import { RecepcionCompraScreen } from "./screens/RecepcionCompraScreen";
+import { RecetasScreen } from "./screens/RecetasScreen";
+import {
+  HOURLY_TODAY,
+  SalesChartScreen,
+} from "./screens/SalesChartScreen";
+import {
+  SuppliersScreen
+} from "./screens/SuppliersScreen";
+import { INITIAL_VENTAS, VentasScreen, type DevolucionTipo, type Venta, type VentaStatus } from "./screens/VentasScreen";
 
 // ─────────────────────────── TYPES ───────────────────────────
 
@@ -1075,7 +1067,7 @@ function Sidebar({
         className={`flex items-center border-b border-sidebar-border shrink-0 ${collapsed ? "justify-center px-2 py-4" : "gap-3 px-4 py-5"}`}
       >
         <div className="relative shrink-0">
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className={`object-contain shrink-0 ${darkMode ? "w-10 h-10" : "h-10 w-auto"}`} />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-10 h-10" />
           {collapsed && (
             <button
               onClick={() => setCollapsed(false)}
@@ -1235,7 +1227,7 @@ function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer shrink-0 group"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11" />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-cover shrink-0 w-11 h-11" />
           <div className="leading-none">
             <p
               className="font-bold text-[17px] text-foreground leading-tight"
