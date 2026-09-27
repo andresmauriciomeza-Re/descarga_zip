@@ -5916,8 +5916,8 @@ function DevolucionesScreen({
                       key={dev.id}
                       className={`transition-colors ${
                         pendiente
-                          ? "bg-orange-50/20 hover:bg-orange-50/40"
-                          : "bg-emerald-50/20 hover:bg-emerald-50/40"
+                          ? "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
+                          : "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
                       }`}
                     >
                       <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
@@ -5942,8 +5942,8 @@ function DevolucionesScreen({
                           <span
                             className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
                               dev.metodoPago === "Nequi"
-                                ? "bg-purple-100 text-purple-800"
-                                : "bg-yellow-100 text-yellow-800"
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200"
+                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-200"
                             }`}
                           >
                             {dev.metodoPago === "Nequi" ? "💜" : "🏦"} {dev.metodoPago}
@@ -5956,8 +5956,8 @@ function DevolucionesScreen({
                         <span
                           className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                             pendiente
-                              ? "bg-orange-100 text-orange-800"
-                              : "bg-emerald-100 text-emerald-800"
+                              ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
+                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
                           }`}
                         >
                           {pendiente
@@ -5988,7 +5988,7 @@ function DevolucionesScreen({
                             title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                               pendiente
-                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 cursor-pointer"
+                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 dark:bg-orange-500/10 dark:border-orange-500/30 dark:text-orange-300 dark:hover:bg-orange-500/20 cursor-pointer"
                                 : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                             }`}
                           >
@@ -6029,8 +6029,8 @@ function DevolucionesScreen({
               {/* Header modal */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                    <RefreshCw className="w-5 h-5 text-orange-600" />
+                    <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center shrink-0">
+                      <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">Gestionar devolución</p>
@@ -6073,7 +6073,9 @@ function DevolucionesScreen({
                         <div
                           key={i}
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
-                            q > 0 ? "border-orange-300 bg-orange-50/40" : "border-border bg-white"
+                            q > 0
+                              ? "border-orange-300 bg-orange-50/40 dark:border-orange-500/40 dark:bg-orange-500/10"
+                              : "border-border bg-card"
                           }`}
                         >
                           {d.imagen ? (
@@ -6092,7 +6094,7 @@ function DevolucionesScreen({
                               type="button"
                               onClick={() => setDevQty(i, d.cantidad, -1)}
                               disabled={q === 0}
-                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -6101,7 +6103,7 @@ function DevolucionesScreen({
                               type="button"
                               onClick={() => setDevQty(i, d.cantidad, 1)}
                               disabled={q >= d.cantidad}
-                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -6133,12 +6135,12 @@ function DevolucionesScreen({
                     }
                     className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                       activa.paso === "producto" || totalComp > 0
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-border bg-white hover:border-blue-300"
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/15"
+                        : "border-border bg-card hover:border-blue-300 dark:hover:border-blue-500/60"
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                      <PackageCheck className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <PackageCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-foreground">Producto por producto</p>
@@ -6149,7 +6151,7 @@ function DevolucionesScreen({
                       </p>
                     </div>
                     {totalComp > 0 && (
-                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 dark:bg-blue-500 text-white flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3" strokeWidth={3} />
                       </span>
                     )}
@@ -6170,12 +6172,12 @@ function DevolucionesScreen({
                     }
                     className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                       activa.paso === "dinero" || conDinero
-                        ? "border-emerald-500 bg-emerald-50"
-                        : "border-border bg-white hover:border-emerald-300"
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15"
+                        : "border-border bg-card hover:border-emerald-300 dark:hover:border-emerald-500/60"
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                      <Banknote className="w-5 h-5 text-emerald-600" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-foreground">Producto por dinero</p>
@@ -6186,7 +6188,7 @@ function DevolucionesScreen({
                       </p>
                     </div>
                     {conDinero && (
-                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3" strokeWidth={3} />
                       </span>
                     )}
@@ -6195,22 +6197,22 @@ function DevolucionesScreen({
 
                 {/* Panel: producto por producto */}
                 {activa.paso === "producto" && (
-                  <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                  <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-500/10 p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                      <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wide">
                         Producto por producto
                       </p>
                       <button
                         type="button"
                         onClick={() => setActiva((p) => (p ? { ...p, paso: null } : p))}
-                        className="flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline cursor-pointer shrink-0"
+                        className="flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:underline cursor-pointer shrink-0"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                         Volver a elegir
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white border border-blue-200">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-card border border-blue-200 dark:border-blue-500/30">
                       <p className="text-xs font-semibold text-foreground">Unidades a canjear</p>
                       <p className="text-xs text-muted-foreground">
                         {totalComp} de {totalDevueltos}
@@ -6218,27 +6220,27 @@ function DevolucionesScreen({
                     </div>
 
                     {activa.compensacion.length > 0 && (
-                      <div className="bg-white border border-blue-200 rounded-xl px-3 py-2">
+                      <div className="bg-card border border-blue-200 dark:border-blue-500/30 rounded-xl px-3 py-2">
                         {activa.compensacion.map((r) => (
-                          <div key={r.id} className="flex justify-between gap-2 text-xs text-blue-900 py-0.5">
+                          <div key={r.id} className="flex justify-between gap-2 text-xs text-blue-900 dark:text-blue-200 py-0.5">
                             <span className="truncate">• {r.cantidad}x {r.nombre}</span>
                             <span className="font-semibold whitespace-nowrap">
                               {fmtCOPDev(r.cantidad * r.precio)}
                             </span>
                           </div>
                         ))}
-                        <p className="text-xs text-blue-700 mt-1 border-t border-blue-200 pt-1.5">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 border-t border-blue-200 dark:border-blue-500/30 pt-1.5">
                           Valor del canje: {fmtCOPDev(valorComp)}
                         </p>
                       </div>
                     )}
 
                     {totalDevueltos === 0 ? (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Marca primero cuántas unidades devuelve el cliente.
                       </p>
                     ) : totalComp === 0 ? (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Falta elegir el producto de canje.
                       </p>
                     ) : null}
@@ -6250,7 +6252,9 @@ function DevolucionesScreen({
                           <div
                             key={prod.id}
                             className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
-                              cant > 0 ? "bg-blue-50 border-blue-300" : "bg-white border-border"
+                              cant > 0
+                                ? "bg-blue-50 border-blue-300 dark:bg-blue-500/15 dark:border-blue-400"
+                                : "bg-card border-border"
                             }`}
                           >
                             <img src={prod.image} alt={prod.name} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
@@ -6263,7 +6267,7 @@ function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setReemplazo(prod, -1)}
                                 disabled={cant === 0}
-                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
@@ -6272,7 +6276,7 @@ function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setReemplazo(prod, 1)}
                                 disabled={totalDevueltos === 0 || totalComp >= totalDevueltos}
-                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
@@ -6286,9 +6290,9 @@ function DevolucionesScreen({
 
                 {/* Panel: producto por dinero */}
                 {activa.paso === "dinero" && (
-                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-500/10 p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
                         Producto por dinero
                       </p>
                       <button
@@ -6296,7 +6300,7 @@ function DevolucionesScreen({
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: null, reembolsoDinero: false } : p))
                         }
-                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer shrink-0"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                         Volver a elegir
@@ -6304,9 +6308,9 @@ function DevolucionesScreen({
                     </div>
 
                     {montoReembolso > 0 ? (
-                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2.5">
+                      <div className="bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2.5">
                         <p className="text-xs text-muted-foreground">Se devolverá al cliente</p>
-                        <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                        <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300" style={{ fontFamily: MONO_DEV }}>
                           {fmtCOPDev(montoReembolso)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -6316,16 +6320,16 @@ function DevolucionesScreen({
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Marca primero cuántas unidades devuelve el cliente para calcular el monto.
                       </p>
                     )}
 
                     {detalleAct.length > 0 && dineroPorLinea.some((n) => n > 0) && (
-                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2 space-y-1">
+                      <div className="bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2 space-y-1">
                         {detalleAct.map((d, i) =>
                           dineroPorLinea[i] > 0 ? (
-                            <div key={i} className="flex justify-between gap-2 text-xs text-emerald-900">
+                            <div key={i} className="flex justify-between gap-2 text-xs text-emerald-900 dark:text-emerald-200">
                               <span className="truncate">• {d.nombre}</span>
                               <span className="font-semibold whitespace-nowrap">
                                 {fmtCOPDev(dineroPorLinea[i])}
@@ -6345,7 +6349,7 @@ function DevolucionesScreen({
                         value={activa.notaDinero}
                         onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
                         placeholder="Ej: Transferido por Nequi el 10/09..."
-                        className="w-full px-3 py-2.5 bg-white rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        className="w-full px-3 py-2.5 bg-card rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 dark:focus:ring-emerald-500/40"
                       />
                     </div>
                   </div>
@@ -6363,7 +6367,7 @@ function DevolucionesScreen({
                         <div className="mt-1 space-y-0.5">
                           <p className="text-xs text-muted-foreground">Aún puedes hacer:</p>
                           {faltan.map((f) => (
-                            <p key={f} className="text-xs font-semibold text-orange-600">
+                            <p key={f} className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                               • {f}
                             </p>
                           ))}
@@ -6378,12 +6382,12 @@ function DevolucionesScreen({
                   </div>
 
                   {/* Lo que se va a aplicar al confirmar */}
-                  <div className="bg-white border border-border rounded-xl divide-y divide-border">
+                  <div className="bg-card border border-border rounded-xl divide-y divide-border">
                     <div className="flex items-center justify-between gap-2 px-3 py-2">
                       <p className="text-xs font-semibold text-foreground">Producto por producto</p>
                       <p className="text-xs font-semibold text-right truncate pl-2">
                         {totalComp > 0 ? (
-                          <span className="text-blue-700">{textoComp} · {fmtCOPDev(valorComp)}</span>
+                          <span className="text-blue-700 dark:text-blue-300">{textoComp} · {fmtCOPDev(valorComp)}</span>
                         ) : (
                           <span className="text-muted-foreground">No se canjeó nada</span>
                         )}
@@ -6393,7 +6397,7 @@ function DevolucionesScreen({
                       <p className="text-xs font-semibold text-foreground">Producto por dinero</p>
                       <p className="text-xs font-semibold text-right pl-2">
                         {montoReembolso > 0 ? (
-                          <span className="text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                          <span className="text-emerald-700 dark:text-emerald-300" style={{ fontFamily: MONO_DEV }}>
                             {fmtCOPDev(montoReembolso)}
                           </span>
                         ) : (
@@ -6432,8 +6436,8 @@ function DevolucionesScreen({
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CircleCheck className="w-5 h-5 text-emerald-600" />
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <CircleCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">Devolución confirmada</p>
@@ -6458,8 +6462,8 @@ function DevolucionesScreen({
                 </div>
 
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
-                    <p className="text-xs font-bold text-blue-900">Producto por producto</p>
+                  <div className="px-3 py-2 bg-blue-50 dark:bg-blue-500/15 border-b border-blue-200 dark:border-blue-500/30">
+                    <p className="text-xs font-bold text-blue-900 dark:text-blue-200">Producto por producto</p>
                   </div>
                   {resumen.compensacion.length === 0 ? (
                     <p className="px-3 py-2.5 text-xs text-muted-foreground italic">
@@ -6483,16 +6487,16 @@ function DevolucionesScreen({
                             {r.cantidad === 1 ? "" : "s"} como compensación
                           </p>
                         </div>
-                        <p className="text-sm font-bold text-blue-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-300 shrink-0" style={{ fontFamily: MONO_DEV }}>
                           {fmtCOPDev(r.cantidad * r.precio)}
                         </p>
                       </div>
                     ))
                   )}
                   {resumen.compensacion.length > 0 && (
-                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-t border-blue-200">
-                      <p className="text-xs font-semibold text-blue-900">Valor del canje</p>
-                      <p className="text-sm font-bold text-blue-700" style={{ fontFamily: MONO_DEV }}>
+                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 dark:bg-blue-500/15 border-t border-blue-200 dark:border-blue-500/30">
+                      <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Valor del canje</p>
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-300" style={{ fontFamily: MONO_DEV }}>
                         {fmtCOPDev(resumen.valorComp)}
                       </p>
                     </div>
@@ -6500,8 +6504,8 @@ function DevolucionesScreen({
                 </div>
 
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
-                    <p className="text-xs font-bold text-emerald-900">Producto por dinero</p>
+                  <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/15 border-b border-emerald-200 dark:border-emerald-500/30">
+                    <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Producto por dinero</p>
                   </div>
                   <div className="px-3 py-3 flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
@@ -6509,7 +6513,7 @@ function DevolucionesScreen({
                         ? `${resumen.unidadesDinero} ${resumen.unidadesDinero === 1 ? "unidad" : "unidades"} sin canjear`
                         : "Sin unidades pendientes de reembolso"}
                     </p>
-                    <p className="text-xl font-bold text-emerald-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                    <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300 shrink-0" style={{ fontFamily: MONO_DEV }}>
                       {fmtCOPDev(resumen.dinero)}
                     </p>
                   </div>
@@ -6585,8 +6589,8 @@ function DevolucionesScreen({
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                       devolucionDetalle.devolucionResuelta
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-orange-100 text-orange-800"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
+                        : "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
                     }`}
                   >
                     {devolucionDetalle.devolucionResuelta
