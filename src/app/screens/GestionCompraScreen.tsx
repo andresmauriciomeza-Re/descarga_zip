@@ -645,11 +645,13 @@ export function GestionCompraScreen({
   const filtered = useMemo(() =>
     gestiones.filter(g => {
       const q = search.toLowerCase();
-      return !q || g.id.toLowerCase().includes(q)
-        || g.ordenId.toLowerCase().includes(q)
-        || g.numeroFactura.toLowerCase().includes(q);
+      if (!q) return true;
+      const proveedor = g.proveedor ?? getOrden(g.ordenId)?.proveedor ?? "";
+      return proveedor.toLowerCase().includes(q)
+        || g.numeroFactura.toLowerCase().includes(q)
+        || g.estado.toLowerCase().includes(q);
     }),
-    [gestiones, search]);
+    [gestiones, search, ordenes]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);

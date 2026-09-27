@@ -149,10 +149,11 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
 
   const filtered = useMemo(
     () => suppliers.filter(s =>
-      s.nit.toLowerCase().includes(search.toLowerCase()) ||
       s.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      s.telefono.toLowerCase().includes(search.toLowerCase()) ||
       s.email.toLowerCase().includes(search.toLowerCase()) ||
-      s.asesorComercial.toLowerCase().includes(search.toLowerCase())
+      s.asesorComercial.toLowerCase().includes(search.toLowerCase()) ||
+      s.estado.toLowerCase().includes(search.toLowerCase())
     ),
     [suppliers, search],
   );
