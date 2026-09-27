@@ -1467,22 +1467,22 @@ export function OrdenCompraScreen({
   const [anularConfirm, setAnularConfirm] = useState<OrdenCompra | null>(null);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
+  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && g.numeroFactura);
+
   const filtered = useMemo(() =>
     ordenes.filter(o => {
       const q = search.toLowerCase();
       if (!q) return true;
       const facturas = getFacturas(o.id);
-      const facturasTexto = facturas.map(f => f.numeroFactura).join(" ");
-      return o.proveedor.toLowerCase().includes(q)
+      const facturasTexto = facturas.map(f => f.numeroFactura ?? "").join(" ");
+      return (o.proveedor ?? "").toLowerCase().includes(q)
         || facturasTexto.toLowerCase().includes(q)
-        || o.estado.toLowerCase().includes(q);
+        || (o.estado ?? "").toLowerCase().includes(q);
     }),
-    [ordenes, search]);
+    [ordenes, search, gestiones]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && g.numeroFactura);
 
   /** Facturas (compras) registradas para una orden. */
   const facturasDeOrden = (oid: string) => gestiones.filter((g) => g.ordenId === oid);
