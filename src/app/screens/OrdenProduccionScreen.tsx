@@ -611,22 +611,20 @@ export function OrdenProduccionScreen({
   const Modal = ({ title, onClose, onConfirm, label, children }: {
     title: string; onClose: () => void; onConfirm: () => void; label: string; children: React.ReactNode;
   }) => (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-          className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="px-5 py-4">{children}</div>
-          <div className="flex gap-3 px-5 py-4 border-t border-border">
-            <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-            <button onClick={onConfirm} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{label}</button>
-          </div>
-        </motion.div>
-      </div>
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+        className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border max-h-[90vh] flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
+          <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{label}</button>
+        </div>
+      </motion.div>
     </div>
   );
 

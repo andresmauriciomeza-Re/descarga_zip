@@ -343,7 +343,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "pausado",
+    status: "activo",
     rating: 4.5,
     sales: 380,
   },
@@ -1235,7 +1235,7 @@ function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer shrink-0 group"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className={`object-contain shrink-0 ${darkMode ? "w-11 h-11" : "h-11 w-auto"}`} />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11" />
           <div className="leading-none">
             <p
               className="font-bold text-[17px] text-foreground leading-tight"
@@ -7129,11 +7129,7 @@ export default function App() {
     setIsLoggedIn(false);
     setUserRole("Administrador");
     setLoggedInUserId(null);
-    // El carrito no se vacía al cerrar sesión —eso no cambia—: el efecto de
-    // persistencia lo deja en la clave de invitado al quedar `loggedInUserId`
-    // en null, y el de la cuenta se conserva para recuperarlo al volver a
-    // entrar. La fusión descarta por id las líneas que ya estén en pantalla,
-    // así que reentrar no duplica nada.
+    clear();
     navigate("landing");
     toast.success("Has cerrado sesión correctamente");
   };

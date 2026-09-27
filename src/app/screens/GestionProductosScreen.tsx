@@ -311,6 +311,9 @@ export function GestionProductosScreen({
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [confirmFichaSave, setConfirmFichaSave] = useState(false);
+  const [confirmEstado, setConfirmEstado] = useState<{
+    id: string; nombre: string; current: "Activo" | "Inactivo"; next: "Activo" | "Inactivo";
+  } | null>(null);
 
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
@@ -573,7 +576,7 @@ export function GestionProductosScreen({
     toast.success("Producto eliminado");
   };
 
-  const roCls = "w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
+  const roCls = "w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
   const FormFields = ({
     values,
     onChange,
@@ -769,9 +772,9 @@ export function GestionProductosScreen({
     const activeV = fichaVersiones[fichaVIdx];
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
     return (
-      <div className="h-screen bg-background overflow-hidden">
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
         {/* Sticky top bar */}
-        <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
+        <div className="shrink-0 bg-card border-b border-border px-6 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Producto</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
@@ -789,10 +792,10 @@ export function GestionProductosScreen({
         </div>
 
         {/* Two columns */}
-        <div className="flex divide-x divide-border" style={{ height: "calc(100vh - 73px)" }}>
+        <div className="flex-1 min-h-0 flex divide-x divide-border">
 
           {/* ── COLUMNA IZQUIERDA: datos del producto ── */}
-          <div className="w-1/2 px-8 py-6 overflow-y-auto">
+          <div className="w-1/2 px-6 py-4 overflow-y-auto">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
             <div className="space-y-4">
               {/* Nombre */}
@@ -819,7 +822,7 @@ export function GestionProductosScreen({
                     className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
                 {form.imagen && (
-                  <div className="relative w-full h-44 rounded-xl overflow-hidden bg-muted border border-border">
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden bg-muted border border-border">
                     <img src={form.imagen} alt="Vista previa" className="w-full h-full object-cover" />
                     <button type="button" onClick={() => setForm(p => ({ ...p, imagen: "" }))}
                       className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer">
@@ -855,7 +858,7 @@ export function GestionProductosScreen({
           </div>
 
           {/* ── COLUMNA DERECHA: ficha técnica ── */}
-          <div className="w-1/2 px-8 py-6 overflow-y-auto flex flex-col">
+          <div className="w-1/2 px-6 py-4 overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
               <div className="flex items-center gap-1">
@@ -1447,12 +1450,19 @@ export function GestionProductosScreen({
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap"
+                      <button
+                        onClick={() => setConfirmEstado({
+                          id: p.id,
+                          nombre: p.nombre,
+                          current: p.estado,
+                          next: p.estado === "Activo" ? "Inactivo" : "Activo",
+                        })}
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity"
                         style={{ backgroundColor: p.estado === "Activo" ? "#2E7D32" : "#C62828" }}
+                        title="Cambiar estado"
                       >
                         {p.estado}
-                      </span>
+                      </button>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -1540,6 +1550,54 @@ export function GestionProductosScreen({
             onConfirm={() => handleDelete(deleteId)}
             onCancel={() => setDeleteId(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Confirmar cambio de estado ── */}
+      <AnimatePresence>
+        {confirmEstado && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                  ¿Desea cambiar el estado del producto?
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">
+                El producto <strong className="text-foreground">{confirmEstado.nombre}</strong> pasará de:
+              </p>
+              <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
+                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.current === "Activo" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                  {confirmEstado.current}
+                </span>
+                <span className="text-muted-foreground text-sm">→</span>
+                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.next === "Activo" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                  {confirmEstado.next}
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmEstado(null)}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => {
+                  setProductos((prev) =>
+                    prev.map((x) => x.id === confirmEstado.id ? { ...x, estado: confirmEstado.next } : x)
+                  );
+                  setConfirmEstado(null);
+                  toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+                }}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
