@@ -437,7 +437,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
             <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
                 exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+                 className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Cliente</h3>
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
@@ -446,9 +446,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   </button>
                 </div>
 
-                <div className="px-5 py-4 space-y-4">
+                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                   {/* Documento */}
-                  <div className="flex gap-3 items-start">
+                   <div className="sm:col-span-2 flex gap-3 items-start">
                     <div className="w-32 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
                         Tipo de documento <span className="text-primary">*</span>
@@ -561,15 +561,15 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
               exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar Cliente</h3>
                 <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="px-5 py-4 space-y-4">
-                <div className="flex items-center gap-3 pb-2">
+                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                 <div className="sm:col-span-2 flex items-center gap-3 pb-2">
                   <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
                     {editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase()}
                   </div>
@@ -578,7 +578,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                <div className="flex gap-3 items-start">
+                 <div className="sm:col-span-2 flex gap-3 items-start">
                   <div className="w-32 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <input
@@ -598,7 +598,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
+                 <p className="sm:col-span-2 text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
                 {[
                   { label: "Nombre completo", field: "nombre" as const, type: "text"  },
                   { label: "Correo",          field: "correo" as const, type: "email" },
@@ -611,13 +611,13 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
-                <div>
+                  <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
                   <input type="number" value={editItem.pedidos} disabled
                     className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed" />
                   <p className="text-xs text-muted-foreground mt-1">Los pedidos se actualizan automáticamente. No se puede modificar.</p>
                 </div>
-                <div>
+                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                   <select value={editItem.activo ? "activo" : "inactivo"}
                     onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}

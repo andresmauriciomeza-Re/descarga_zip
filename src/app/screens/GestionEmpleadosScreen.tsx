@@ -638,7 +638,7 @@ export function GestionEmpleadosScreen({
             <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+                 className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
                 <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva Contratación</h3>
                   <button onClick={() => { setShowContrat(false); resetContratacion(); }}
@@ -742,10 +742,11 @@ export function GestionEmpleadosScreen({
       {/* Modal: Ver detalle */}
       <AnimatePresence>
         {detailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border">
+              className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Empleado</h3>
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -762,36 +763,44 @@ export function GestionEmpleadosScreen({
                     <p className="text-xs font-mono text-muted-foreground mt-0.5">{fmtDoc(detailItem.tipoDocumento, detailItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {[
-                    { l: "Correo",          v: detailItem.correo },
-                    { l: "Teléfono",        v: detailItem.telefono || "—" },
-                    { l: "Tipo de documento",   v: detailItem.tipoDocumento },
-                    { l: "Número de documento", v: detailItem.numeroDocumento },
-                    { l: "Cargo",           v: detailItem.cargo },
-                    { l: "Rol asignado",    v: rolNombre(detailItem.rolId) },
-                    { l: "Fecha inicio",    v: detailItem.fechaInicio },
-                    { l: "Fecha final",     v: detailItem.fechaFinal || "Continúa activo" },
-                    { l: "Estado",          v: detailItem.activo ? "Activo" : "Inactivo" },
-                  ].map(({ l, v }) => (
-                    <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
-                      <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                      <span className="text-sm font-semibold text-foreground text-right">{v}</span>
-                    </div>
-                  ))}
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                  <div className="space-y-2">
+                    {[
+                      { l: "Correo", v: detailItem.correo },
+                      { l: "Teléfono", v: detailItem.telefono || "—" },
+                      { l: "Tipo de documento", v: detailItem.tipoDocumento },
+                      { l: "Número de documento", v: detailItem.numeroDocumento },
+                    ].map(({ l, v }) => (
+                      <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
+                        <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
+                        <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      { l: "Cargo", v: detailItem.cargo },
+                      { l: "Rol asignado", v: rolNombre(detailItem.rolId) },
+                      { l: "Fecha inicio", v: detailItem.fechaInicio },
+                      { l: "Fecha final", v: detailItem.fechaFinal || "Continúa activo" },
+                      { l: "Estado", v: detailItem.activo ? "Activo" : "Inactivo" },
+                    ].map(({ l, v }) => (
+                      <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
+                        <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
+                        <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
+                      </div>
+                    ))}
+                  </div>
 
-                {/* Historial de contrataciones. La lista lleva su propio tope de
-                    alto: el modal no crece sin límite aunque el empleado haya
-                    cambiado de cargo muchas veces. */}
-                <div className="mt-4 pt-4 border-t border-border">
+                  {/* Historial de contrataciones a ancho completo. */}
+                  <div className="sm:col-span-2 mt-2 pt-4 border-t border-border">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">
                     Historial de contrataciones
                   </p>
                   {detalleHistorial.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Sin contrataciones registradas</p>
                   ) : (
-                    <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                    <div className="space-y-2 pr-1">
                       {detalleHistorial.map((c, i) => (
                         <div key={c.id}
                           className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
@@ -811,6 +820,7 @@ export function GestionEmpleadosScreen({
                       ))}
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
               <div className="px-5 py-4 border-t border-border">
@@ -820,6 +830,7 @@ export function GestionEmpleadosScreen({
                 </button>
               </div>
             </motion.div>
+            </div>
           </div>
         )}
       </AnimatePresence>
@@ -831,7 +842,7 @@ export function GestionEmpleadosScreen({
             <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
+               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Empleado</h3>
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
@@ -864,7 +875,7 @@ export function GestionEmpleadosScreen({
                       {createErrors.documento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.documento}</p>}
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Nombre completo <span className="text-primary">*</span>
                     </label>
@@ -884,7 +895,7 @@ export function GestionEmpleadosScreen({
                       className={fCls(createErrors.correo)} />
                     {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
                     </label>
@@ -1036,11 +1047,11 @@ export function GestionEmpleadosScreen({
                   </div>
                 </div>
                 {[
-                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
+                  { label: "Nombre completo", field: "nombre" as const, type: "text", full: true  },
                   { label: "Correo",          field: "correo" as const, type: "email" },
                   { label: "Teléfono",        field: "telefono" as const, type: "tel", numeric: true },
-                ].map(({ label, field, type, numeric }) => (
-                  <div key={field}>
+                ].map(({ label, field, type, numeric, full }) => (
+                  <div key={field} className={full ? "col-span-2" : ""}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]}
                       onChange={e => { const v = numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
@@ -1078,7 +1089,7 @@ export function GestionEmpleadosScreen({
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
                   <select value={editItem.rolId}
                     onChange={e => { setEditItem(x => x && ({ ...x, rolId: e.target.value })); if (editErrors.rol) setEditErrors(p => ({ ...p, rol: undefined })); }}

@@ -19,6 +19,7 @@ import {
   Edit,
   LogOut,
   Home,
+  Store,
   ShoppingBag,
   CheckCircle,
   AlertCircle,
@@ -238,6 +239,22 @@ const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
 // caber la imagen completa respetando su proporción (queda espacio a los lados).
 // Pizzas y Lasañas conservan object-cover, que es su diseño original.
 const verImagenCompleta = (p: Product) => p.category === "Bebidas";
+
+// Secciones del grid cuando el filtro es "Todas", en el orden en que se
+// muestran. El título va aparte del nombre de la categoría porque no siempre
+// coinciden: internamente las lasañas son "Lasaña" (en singular, que es la
+// etiqueta del botón de filtro) pero el encabezado se lee "Lasañas".
+//
+// El listado es explícito para controlar el orden, pero no es una lista cerrada:
+// `CatalogScreen` agrupa al final, con su propio título, cualquier categoría
+// que aparezca en el catálogo y no esté aquí. Al añadir una categoría nueva
+// basta con agregar su fila en el orden deseado; si se olvida, sus productos
+// se siguen viendo en una sección propia en vez de desaparecer del grid.
+const SECCIONES_MENU: { categoria: string; titulo: string }[] = [
+  { categoria: "Pizzas", titulo: "Pizzas" },
+  { categoria: "Lasaña", titulo: "Lasañas" },
+  { categoria: "Bebidas", titulo: "Bebidas" },
+];
 
 const PRODUCTS: Product[] = [
   {
@@ -1389,9 +1406,8 @@ function AdminTopBar({
         <button
           onClick={() => navigate("landing")}
           className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-          title="Ver tienda"
         >
-          <Home className="w-5 h-5" />
+          <Store className="w-5 h-5" />
         </button>
         <button
           onClick={() => setDarkMode(!darkMode)}
@@ -2201,6 +2217,87 @@ function LandingScreen({
 
 // ─────────────────────────── CATALOG ───────────────────────────
 
+// Tarjeta de producto del catálogo. Vive fuera de `CatalogScreen` porque el
+// grid se pinta por dos caminos —grid único al elegir una categoría y grid por
+// secciones con "Todas"— y los dos tienen que mostrar exactamente la misma
+// tarjeta. `index` solo escalona la animación dentro de su propia fila.
+function ProductCard({
+  product: p,
+  index,
+  onOpen,
+  onQuickAdd,
+}: {
+  product: Product;
+  index: number;
+  onOpen: (p: Product) => void;
+  onQuickAdd: (p: Product) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
+    >
+      <button
+        className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
+        onClick={() => onOpen(p)}
+      >
+        <img
+          src={p.image}
+          alt={p.name}
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
+        />
+        <div className="absolute top-3 right-3">
+          <Badge className={PROD_STATUS_COLOR[p.status]}>
+            {p.status === "activo"
+              ? "Disponible"
+              : p.status === "agotado"
+                ? "Agotado"
+                : "Pausado"}
+          </Badge>
+        </div>
+      </button>
+      <div className="p-4">
+        <div className="mb-1">
+          <h3
+            className="font-bold text-base text-foreground"
+            style={{ fontFamily: SERIF }}
+          >
+            {p.name}
+          </h3>
+        </div>
+        <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-snug">
+          {p.description}
+        </p>
+        <div className="flex items-center justify-between">
+          <span
+            className="font-bold text-lg text-foreground"
+            style={{ fontFamily: MONO }}
+          >
+            {fmt(p.price)}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onOpen(p)}
+              className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
+            >
+              Ver más
+            </button>
+            <button
+              onClick={() => onQuickAdd(p)}
+              disabled={p.status !== "activo"}
+              className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function CatalogScreen({
   navigate,
   setProduct,
@@ -2231,6 +2328,44 @@ function CatalogScreen({
       ),
     [search, cat],
   );
+
+  // Con el filtro "Todas" el grid se parte en las secciones tituladas de
+  // SECCIONES_MENU; al elegir una sola categoría se deja el grid único de antes,
+  // sin encabezados. Se agrupa sobre `filtered`, no sobre PRODUCTS, para que la
+  // búsqueda también se reparta por secciones, y las categorías sin resultados
+  // se omiten en vez de dejar un título colgado sobre un grid vacío.
+  const secciones = useMemo(() => {
+    if (cat !== "Todas") return [];
+    const porCategoria = new Map<string, Product[]>();
+    for (const p of filtered) {
+      const lista = porCategoria.get(p.category);
+      if (lista) lista.push(p);
+      else porCategoria.set(p.category, [p]);
+    }
+    const declaradas = SECCIONES_MENU.map(
+      ({ categoria, titulo }) => ({
+        titulo,
+        productos: porCategoria.get(categoria) ?? [],
+      }),
+    ).filter((s) => s.productos.length > 0);
+    const conocidas = new Set(
+      SECCIONES_MENU.map((s) => s.categoria),
+    );
+    const nuevas = [...porCategoria.entries()]
+      .filter(([categoria]) => !conocidas.has(categoria))
+      .map(([titulo, productos]) => ({ titulo, productos }));
+    return [...declaradas, ...nuevas];
+  }, [filtered, cat]);
+
+  const abrirDetalle = (p: Product) => {
+    setProduct(p);
+    navigate("product-detail");
+  };
+
+  const agregarAlCarrito = (p: Product) => {
+    quickAdd(p);
+    toast.success(`¡${p.name} agregada!`);
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -2280,83 +2415,42 @@ function CatalogScreen({
             otro!
           </p>
         </div>
+      ) : cat === "Todas" ? (
+        /* "space-y-10" deja el mismo aire entre el final de una sección y el
+           título de la siguiente, y el "mb-5" del título el de título a grid. */
+        <div className="space-y-10">
+          {secciones.map(({ titulo, productos }) => (
+            <section key={titulo}>
+              <h2
+                className="text-2xl font-bold text-foreground mb-5"
+                style={{ fontFamily: SERIF }}
+              >
+                {titulo}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {productos.map((p, i) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    index={i}
+                    onOpen={abrirDetalle}
+                    onQuickAdd={agregarAlCarrito}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((p, i) => (
-            <motion.div
+            <ProductCard
               key={p.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
-            >
-              <button
-                className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
-                onClick={() => {
-                  setProduct(p);
-                  navigate("product-detail");
-                }}
-              >
-                <img
-                  src={p.image}
-                  alt={p.name}
-                  className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
-                />
-                <div className="absolute top-3 right-3">
-                  <Badge
-                    className={PROD_STATUS_COLOR[p.status]}
-                  >
-                    {p.status === "activo"
-                      ? "Disponible"
-                      : p.status === "agotado"
-                        ? "Agotado"
-                        : "Pausado"}
-                  </Badge>
-                </div>
-              </button>
-              <div className="p-4">
-                <div className="mb-1">
-                  <h3
-                    className="font-bold text-base text-foreground"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    {p.name}
-                  </h3>
-                </div>
-                <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-snug">
-                  {p.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <span
-                    className="font-bold text-lg text-foreground"
-                    style={{ fontFamily: MONO }}
-                  >
-                    {fmt(p.price)}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setProduct(p);
-                        navigate("product-detail");
-                      }}
-                      className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
-                    >
-                      Ver más
-                    </button>
-                    <button
-                      onClick={() => {
-                        quickAdd(p);
-                        toast.success(`¡${p.name} agregada!`);
-                      }}
-                      disabled={p.status !== "activo"}
-                      className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+              product={p}
+              index={i}
+              onOpen={abrirDetalle}
+              onQuickAdd={agregarAlCarrito}
+            />
           ))}
         </div>
       )}
@@ -5822,8 +5916,8 @@ function DevolucionesScreen({
                       key={dev.id}
                       className={`transition-colors ${
                         pendiente
-                          ? "bg-orange-50/20 hover:bg-orange-50/40"
-                          : "bg-emerald-50/20 hover:bg-emerald-50/40"
+                          ? "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
+                          : "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
                       }`}
                     >
                       <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
@@ -5848,8 +5942,8 @@ function DevolucionesScreen({
                           <span
                             className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
                               dev.metodoPago === "Nequi"
-                                ? "bg-purple-100 text-purple-800"
-                                : "bg-yellow-100 text-yellow-800"
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200"
+                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-200"
                             }`}
                           >
                             {dev.metodoPago === "Nequi" ? "💜" : "🏦"} {dev.metodoPago}
@@ -5862,8 +5956,8 @@ function DevolucionesScreen({
                         <span
                           className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                             pendiente
-                              ? "bg-orange-100 text-orange-800"
-                              : "bg-emerald-100 text-emerald-800"
+                              ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
+                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
                           }`}
                         >
                           {pendiente
@@ -5894,7 +5988,7 @@ function DevolucionesScreen({
                             title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                               pendiente
-                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 cursor-pointer"
+                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 dark:bg-orange-500/10 dark:border-orange-500/30 dark:text-orange-300 dark:hover:bg-orange-500/20 cursor-pointer"
                                 : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                             }`}
                           >
@@ -5935,8 +6029,8 @@ function DevolucionesScreen({
               {/* Header modal */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
-                    <RefreshCw className="w-5 h-5 text-orange-600" />
+                    <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center shrink-0">
+                      <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">Gestionar devolución</p>
@@ -5979,7 +6073,9 @@ function DevolucionesScreen({
                         <div
                           key={i}
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
-                            q > 0 ? "border-orange-300 bg-orange-50/40" : "border-border bg-white"
+                            q > 0
+                              ? "border-orange-300 bg-orange-50/40 dark:border-orange-500/40 dark:bg-orange-500/10"
+                              : "border-border bg-card"
                           }`}
                         >
                           {d.imagen ? (
@@ -5998,7 +6094,7 @@ function DevolucionesScreen({
                               type="button"
                               onClick={() => setDevQty(i, d.cantidad, -1)}
                               disabled={q === 0}
-                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -6007,7 +6103,7 @@ function DevolucionesScreen({
                               type="button"
                               onClick={() => setDevQty(i, d.cantidad, 1)}
                               disabled={q >= d.cantidad}
-                              className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                              className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -6039,12 +6135,12 @@ function DevolucionesScreen({
                     }
                     className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                       activa.paso === "producto" || totalComp > 0
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-border bg-white hover:border-blue-300"
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/15"
+                        : "border-border bg-card hover:border-blue-300 dark:hover:border-blue-500/60"
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                      <PackageCheck className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <PackageCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-foreground">Producto por producto</p>
@@ -6055,7 +6151,7 @@ function DevolucionesScreen({
                       </p>
                     </div>
                     {totalComp > 0 && (
-                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 dark:bg-blue-500 text-white flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3" strokeWidth={3} />
                       </span>
                     )}
@@ -6076,12 +6172,12 @@ function DevolucionesScreen({
                     }
                     className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                       activa.paso === "dinero" || conDinero
-                        ? "border-emerald-500 bg-emerald-50"
-                        : "border-border bg-white hover:border-emerald-300"
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15"
+                        : "border-border bg-card hover:border-emerald-300 dark:hover:border-emerald-500/60"
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                      <Banknote className="w-5 h-5 text-emerald-600" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-foreground">Producto por dinero</p>
@@ -6092,7 +6188,7 @@ function DevolucionesScreen({
                       </p>
                     </div>
                     {conDinero && (
-                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3" strokeWidth={3} />
                       </span>
                     )}
@@ -6101,22 +6197,22 @@ function DevolucionesScreen({
 
                 {/* Panel: producto por producto */}
                 {activa.paso === "producto" && (
-                  <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                  <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-500/10 p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                      <p className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wide">
                         Producto por producto
                       </p>
                       <button
                         type="button"
                         onClick={() => setActiva((p) => (p ? { ...p, paso: null } : p))}
-                        className="flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline cursor-pointer shrink-0"
+                        className="flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:underline cursor-pointer shrink-0"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                         Volver a elegir
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white border border-blue-200">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-card border border-blue-200 dark:border-blue-500/30">
                       <p className="text-xs font-semibold text-foreground">Unidades a canjear</p>
                       <p className="text-xs text-muted-foreground">
                         {totalComp} de {totalDevueltos}
@@ -6124,27 +6220,27 @@ function DevolucionesScreen({
                     </div>
 
                     {activa.compensacion.length > 0 && (
-                      <div className="bg-white border border-blue-200 rounded-xl px-3 py-2">
+                      <div className="bg-card border border-blue-200 dark:border-blue-500/30 rounded-xl px-3 py-2">
                         {activa.compensacion.map((r) => (
-                          <div key={r.id} className="flex justify-between gap-2 text-xs text-blue-900 py-0.5">
+                          <div key={r.id} className="flex justify-between gap-2 text-xs text-blue-900 dark:text-blue-200 py-0.5">
                             <span className="truncate">• {r.cantidad}x {r.nombre}</span>
                             <span className="font-semibold whitespace-nowrap">
                               {fmtCOPDev(r.cantidad * r.precio)}
                             </span>
                           </div>
                         ))}
-                        <p className="text-xs text-blue-700 mt-1 border-t border-blue-200 pt-1.5">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 border-t border-blue-200 dark:border-blue-500/30 pt-1.5">
                           Valor del canje: {fmtCOPDev(valorComp)}
                         </p>
                       </div>
                     )}
 
                     {totalDevueltos === 0 ? (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Marca primero cuántas unidades devuelve el cliente.
                       </p>
                     ) : totalComp === 0 ? (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Falta elegir el producto de canje.
                       </p>
                     ) : null}
@@ -6156,7 +6252,9 @@ function DevolucionesScreen({
                           <div
                             key={prod.id}
                             className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
-                              cant > 0 ? "bg-blue-50 border-blue-300" : "bg-white border-border"
+                              cant > 0
+                                ? "bg-blue-50 border-blue-300 dark:bg-blue-500/15 dark:border-blue-400"
+                                : "bg-card border-border"
                             }`}
                           >
                             <img src={prod.image} alt={prod.name} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
@@ -6169,7 +6267,7 @@ function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setReemplazo(prod, -1)}
                                 disabled={cant === 0}
-                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
@@ -6178,7 +6276,7 @@ function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setReemplazo(prod, 1)}
                                 disabled={totalDevueltos === 0 || totalComp >= totalDevueltos}
-                                className="w-7 h-7 rounded-lg bg-white border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
@@ -6192,9 +6290,9 @@ function DevolucionesScreen({
 
                 {/* Panel: producto por dinero */}
                 {activa.paso === "dinero" && (
-                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-500/10 p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
                         Producto por dinero
                       </p>
                       <button
@@ -6202,7 +6300,7 @@ function DevolucionesScreen({
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: null, reembolsoDinero: false } : p))
                         }
-                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer shrink-0"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                         Volver a elegir
@@ -6210,9 +6308,9 @@ function DevolucionesScreen({
                     </div>
 
                     {montoReembolso > 0 ? (
-                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2.5">
+                      <div className="bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2.5">
                         <p className="text-xs text-muted-foreground">Se devolverá al cliente</p>
-                        <p className="text-2xl font-bold text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                        <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300" style={{ fontFamily: MONO_DEV }}>
                           {fmtCOPDev(montoReembolso)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -6222,16 +6320,16 @@ function DevolucionesScreen({
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs font-semibold text-orange-600">
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                         Marca primero cuántas unidades devuelve el cliente para calcular el monto.
                       </p>
                     )}
 
                     {detalleAct.length > 0 && dineroPorLinea.some((n) => n > 0) && (
-                      <div className="bg-white border border-emerald-200 rounded-xl px-3 py-2 space-y-1">
+                      <div className="bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2 space-y-1">
                         {detalleAct.map((d, i) =>
                           dineroPorLinea[i] > 0 ? (
-                            <div key={i} className="flex justify-between gap-2 text-xs text-emerald-900">
+                            <div key={i} className="flex justify-between gap-2 text-xs text-emerald-900 dark:text-emerald-200">
                               <span className="truncate">• {d.nombre}</span>
                               <span className="font-semibold whitespace-nowrap">
                                 {fmtCOPDev(dineroPorLinea[i])}
@@ -6251,7 +6349,7 @@ function DevolucionesScreen({
                         value={activa.notaDinero}
                         onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
                         placeholder="Ej: Transferido por Nequi el 10/09..."
-                        className="w-full px-3 py-2.5 bg-white rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        className="w-full px-3 py-2.5 bg-card rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 dark:focus:ring-emerald-500/40"
                       />
                     </div>
                   </div>
@@ -6269,7 +6367,7 @@ function DevolucionesScreen({
                         <div className="mt-1 space-y-0.5">
                           <p className="text-xs text-muted-foreground">Aún puedes hacer:</p>
                           {faltan.map((f) => (
-                            <p key={f} className="text-xs font-semibold text-orange-600">
+                            <p key={f} className="text-xs font-semibold text-orange-600 dark:text-orange-400">
                               • {f}
                             </p>
                           ))}
@@ -6284,12 +6382,12 @@ function DevolucionesScreen({
                   </div>
 
                   {/* Lo que se va a aplicar al confirmar */}
-                  <div className="bg-white border border-border rounded-xl divide-y divide-border">
+                  <div className="bg-card border border-border rounded-xl divide-y divide-border">
                     <div className="flex items-center justify-between gap-2 px-3 py-2">
                       <p className="text-xs font-semibold text-foreground">Producto por producto</p>
                       <p className="text-xs font-semibold text-right truncate pl-2">
                         {totalComp > 0 ? (
-                          <span className="text-blue-700">{textoComp} · {fmtCOPDev(valorComp)}</span>
+                          <span className="text-blue-700 dark:text-blue-300">{textoComp} · {fmtCOPDev(valorComp)}</span>
                         ) : (
                           <span className="text-muted-foreground">No se canjeó nada</span>
                         )}
@@ -6299,7 +6397,7 @@ function DevolucionesScreen({
                       <p className="text-xs font-semibold text-foreground">Producto por dinero</p>
                       <p className="text-xs font-semibold text-right pl-2">
                         {montoReembolso > 0 ? (
-                          <span className="text-emerald-700" style={{ fontFamily: MONO_DEV }}>
+                          <span className="text-emerald-700 dark:text-emerald-300" style={{ fontFamily: MONO_DEV }}>
                             {fmtCOPDev(montoReembolso)}
                           </span>
                         ) : (
@@ -6338,8 +6436,8 @@ function DevolucionesScreen({
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CircleCheck className="w-5 h-5 text-emerald-600" />
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <CircleCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">Devolución confirmada</p>
@@ -6364,8 +6462,8 @@ function DevolucionesScreen({
                 </div>
 
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
-                    <p className="text-xs font-bold text-blue-900">Producto por producto</p>
+                  <div className="px-3 py-2 bg-blue-50 dark:bg-blue-500/15 border-b border-blue-200 dark:border-blue-500/30">
+                    <p className="text-xs font-bold text-blue-900 dark:text-blue-200">Producto por producto</p>
                   </div>
                   {resumen.compensacion.length === 0 ? (
                     <p className="px-3 py-2.5 text-xs text-muted-foreground italic">
@@ -6389,16 +6487,16 @@ function DevolucionesScreen({
                             {r.cantidad === 1 ? "" : "s"} como compensación
                           </p>
                         </div>
-                        <p className="text-sm font-bold text-blue-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-300 shrink-0" style={{ fontFamily: MONO_DEV }}>
                           {fmtCOPDev(r.cantidad * r.precio)}
                         </p>
                       </div>
                     ))
                   )}
                   {resumen.compensacion.length > 0 && (
-                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-t border-blue-200">
-                      <p className="text-xs font-semibold text-blue-900">Valor del canje</p>
-                      <p className="text-sm font-bold text-blue-700" style={{ fontFamily: MONO_DEV }}>
+                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 dark:bg-blue-500/15 border-t border-blue-200 dark:border-blue-500/30">
+                      <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Valor del canje</p>
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-300" style={{ fontFamily: MONO_DEV }}>
                         {fmtCOPDev(resumen.valorComp)}
                       </p>
                     </div>
@@ -6406,8 +6504,8 @@ function DevolucionesScreen({
                 </div>
 
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
-                    <p className="text-xs font-bold text-emerald-900">Producto por dinero</p>
+                  <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/15 border-b border-emerald-200 dark:border-emerald-500/30">
+                    <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Producto por dinero</p>
                   </div>
                   <div className="px-3 py-3 flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
@@ -6415,7 +6513,7 @@ function DevolucionesScreen({
                         ? `${resumen.unidadesDinero} ${resumen.unidadesDinero === 1 ? "unidad" : "unidades"} sin canjear`
                         : "Sin unidades pendientes de reembolso"}
                     </p>
-                    <p className="text-xl font-bold text-emerald-700 shrink-0" style={{ fontFamily: MONO_DEV }}>
+                    <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300 shrink-0" style={{ fontFamily: MONO_DEV }}>
                       {fmtCOPDev(resumen.dinero)}
                     </p>
                   </div>
@@ -6491,8 +6589,8 @@ function DevolucionesScreen({
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                       devolucionDetalle.devolucionResuelta
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-orange-100 text-orange-800"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
+                        : "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
                     }`}
                   >
                     {devolucionDetalle.devolucionResuelta
