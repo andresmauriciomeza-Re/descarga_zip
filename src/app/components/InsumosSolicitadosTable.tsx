@@ -23,6 +23,10 @@ const cellInputCls =
 
 type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario">;
 
+function mergeRow(item: InsumoSolicitadoRow, draft: DraftRow): InsumoSolicitadoRow {
+  return { ...item, ...draft };
+}
+
 export function InsumosSolicitadosTable({
   items,
   onRemove,
@@ -115,7 +119,7 @@ export function InsumosSolicitadosTable({
             items.map((item) => {
               const draftRow: DraftRow | null =
                 editId === item.rowId ? draft : null;
-              const row: InsumoSolicitadoRow = draftRow ?? item;
+              const row: InsumoSolicitadoRow = draftRow ? mergeRow(item, draftRow) : item;
 
               return (
                 <tr key={item.rowId} className="hover:bg-muted/20">

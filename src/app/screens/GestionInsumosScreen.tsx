@@ -21,6 +21,8 @@ const CATEGORIAS_INS = [
 
 const UNIDADES = ["kg","g","lt","ml","und","paq","caja","bolsa"];
 
+export type TipoInsumo = "Insumo" | "Insumo producto";
+
 export interface Insumo {
   id: string;
   idCategoriaIns: string;
@@ -29,26 +31,28 @@ export interface Insumo {
   stockActual: number;
   stockMinimo: number;
   precioUnitario: number;
+  tipo?: TipoInsumo;
+  iva: number;
 }
 
 export const INITIAL_INSUMOS: Insumo[] = [
-  { id:"INS-001", idCategoriaIns:"CINS-001", nombre:"Queso Mozzarella",    unidadMedida:"kg",  stockActual:25, stockMinimo:10, precioUnitario:18000 },
-  { id:"INS-002", idCategoriaIns:"CINS-005", nombre:"Salsa de Tomate",     unidadMedida:"lt",  stockActual:30, stockMinimo:15, precioUnitario:8000  },
-  { id:"INS-003", idCategoriaIns:"CINS-002", nombre:"Pepperoni",            unidadMedida:"kg",  stockActual:8,  stockMinimo:5,  precioUnitario:25000 },
-  { id:"INS-004", idCategoriaIns:"CINS-004", nombre:"Masa Pre-elaborada",   unidadMedida:"und", stockActual:50, stockMinimo:20, precioUnitario:3500  },
-  { id:"INS-005", idCategoriaIns:"CINS-003", nombre:"Champiñones",          unidadMedida:"kg",  stockActual:4,  stockMinimo:5,  precioUnitario:12000 },
-  { id:"INS-006", idCategoriaIns:"CINS-003", nombre:"Albahaca Fresca",      unidadMedida:"kg",  stockActual:2,  stockMinimo:1,  precioUnitario:9000  },
-  { id:"INS-007", idCategoriaIns:"CINS-002", nombre:"Jamón Serrano",        unidadMedida:"kg",  stockActual:6,  stockMinimo:3,  precioUnitario:32000 },
-  { id:"INS-008", idCategoriaIns:"CINS-006", nombre:"Piña en Trozos",       unidadMedida:"kg",  stockActual:12, stockMinimo:5,  precioUnitario:6000  },
-  { id:"INS-009", idCategoriaIns:"CINS-003", nombre:"Aceitunas Negras",     unidadMedida:"kg",  stockActual:3,  stockMinimo:2,  precioUnitario:14000 },
-  { id:"INS-010", idCategoriaIns:"CINS-003", nombre:"Cebolla Morada",       unidadMedida:"kg",  stockActual:7,  stockMinimo:4,  precioUnitario:4000  },
-  { id:"INS-011", idCategoriaIns:"CINS-003", nombre:"Pimentón",             unidadMedida:"kg",  stockActual:5,  stockMinimo:3,  precioUnitario:5000  },
-  { id:"INS-012", idCategoriaIns:"CINS-007", nombre:"Bebidas 350ml",        unidadMedida:"und", stockActual:80, stockMinimo:30, precioUnitario:2500  },
+  { id:"INS-001", idCategoriaIns:"CINS-001", nombre:"Queso Mozzarella",    unidadMedida:"kg",  stockActual:25, stockMinimo:10, precioUnitario:18000, iva: 0 },
+  { id:"INS-002", idCategoriaIns:"CINS-005", nombre:"Salsa de Tomate",     unidadMedida:"lt",  stockActual:30, stockMinimo:15, precioUnitario:8000,  iva: 0 },
+  { id:"INS-003", idCategoriaIns:"CINS-002", nombre:"Pepperoni",            unidadMedida:"kg",  stockActual:8,  stockMinimo:5,  precioUnitario:25000, iva: 0 },
+  { id:"INS-004", idCategoriaIns:"CINS-004", nombre:"Masa Pre-elaborada",   unidadMedida:"und", stockActual:50, stockMinimo:20, precioUnitario:3500,  iva: 0 },
+  { id:"INS-005", idCategoriaIns:"CINS-003", nombre:"Champiñones",          unidadMedida:"kg",  stockActual:4,  stockMinimo:5,  precioUnitario:12000, iva: 0 },
+  { id:"INS-006", idCategoriaIns:"CINS-003", nombre:"Albahaca Fresca",      unidadMedida:"kg",  stockActual:2,  stockMinimo:1,  precioUnitario:9000,  iva: 0 },
+  { id:"INS-007", idCategoriaIns:"CINS-002", nombre:"Jamón Serrano",        unidadMedida:"kg",  stockActual:6,  stockMinimo:3,  precioUnitario:32000, iva: 0 },
+  { id:"INS-008", idCategoriaIns:"CINS-006", nombre:"Piña en Trozos",       unidadMedida:"kg",  stockActual:12, stockMinimo:5,  precioUnitario:6000,  iva: 0 },
+  { id:"INS-009", idCategoriaIns:"CINS-003", nombre:"Aceitunas Negras",     unidadMedida:"kg",  stockActual:3,  stockMinimo:2,  precioUnitario:14000, iva: 0 },
+  { id:"INS-010", idCategoriaIns:"CINS-003", nombre:"Cebolla Morada",       unidadMedida:"kg",  stockActual:7,  stockMinimo:4,  precioUnitario:4000,  iva: 0 },
+  { id:"INS-011", idCategoriaIns:"CINS-003", nombre:"Pimentón",             unidadMedida:"kg",  stockActual:5,  stockMinimo:3,  precioUnitario:5000,  iva: 0 },
+  { id:"INS-012", idCategoriaIns:"CINS-007", nombre:"Bebidas 350ml",        unidadMedida:"und", stockActual:80, stockMinimo:30, precioUnitario:2500, iva: 0 },
 ];
 
 const emptyForm = (): Omit<Insumo,"id"> => ({
   idCategoriaIns: "CINS-001", nombre: "", unidadMedida: "kg",
-  stockActual: 0, stockMinimo: 0, precioUnitario: 0,
+  stockActual: 0, stockMinimo: 0, precioUnitario: 0, tipo: "Insumo", iva: 0,
 });
 
 const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
@@ -106,7 +110,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
 
   const handleEdit = () => {
     if (!editItem) return;
-    setInsumos(p => p.map(i => i.id === editItem.id ? editItem : i));
+    setInsumos(p => p.map(i => i.id === editItem.id
+      ? { ...editItem, nombre: i.nombre, idCategoriaIns: i.idCategoriaIns }
+      : i));
     setEditItem(null);
     toast.success("Insumo actualizado");
   };
@@ -117,22 +123,32 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
     toast.success("Insumo eliminado");
   };
 
-  const FormFields = ({ v, set }: { v: Omit<Insumo,"id">; set:(f: Omit<Insumo,"id">)=>void }) => (
+  const FormFields = ({ v, set, editando = false }: {
+    v: Omit<Insumo,"id">; set:(f: Omit<Insumo,"id">)=>void; editando?: boolean;
+  }) => {
+    const lock = editando ? " opacity-60 cursor-not-allowed" : "";
+    const lbl = "block text-xs font-semibold text-muted-foreground mb-1";
+    return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {/* Nombre */}
       <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-        <input value={v.nombre} onChange={e=>set({...v,nombre:e.target.value})}
-          placeholder="Ej: Queso Mozzarella" className={iCls} />
+        <label className={lbl}>Nombre *</label>
+        <input value={v.nombre} readOnly={editando} onChange={e=>set({...v,nombre:e.target.value})}
+          placeholder="Ej: Queso Mozzarella" className={iCls+lock} />
+        {editando && <p className="text-[11px] text-muted-foreground mt-1">El nombre no se puede modificar.</p>}
       </div>
-      {/* Categoría */}
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Categoría Insumo</label>
-        <select value={v.idCategoriaIns} onChange={e=>set({...v,idCategoriaIns:e.target.value})}
+        <label className={lbl}>ID Categoría Insumo</label>
+        <select value={v.idCategoriaIns} disabled={editando} onChange={e=>set({...v,idCategoriaIns:e.target.value})}
+          className={iCls+(editando ? lock : " cursor-pointer")}>
+          {CATEGORIAS_INS.map(c=>(<option key={c.id} value={c.id}>{c.id} {c.nombre}</option>))}
+        </select>
+      </div>
+      <div>
+        <label className={lbl}>Tipo</label>
+        <select value={v.tipo ?? "Insumo"} onChange={e=>set({...v,tipo:e.target.value as TipoInsumo})}
           className={iCls+" cursor-pointer"}>
-          {CATEGORIAS_INS.map(c=>(
-            <option key={c.id} value={c.id}>{c.id} — {c.nombre}</option>
-          ))}
+          <option value="Insumo">Insumo</option>
+          <option value="Insumo producto">Insumo producto</option>
         </select>
       </div>
       {/* Unidad medida */}
@@ -142,6 +158,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
           className={iCls+" cursor-pointer"}>
           {UNIDADES.map(u=><option key={u} value={u}>{u}</option>)}
         </select>
+      </div>
+      <div>
+        <label className={lbl}>IVA (%)</label>
+        <input type="number" min={0} max={100} value={v.iva}
+          onChange={e=>set({...v,iva:Number(e.target.value)})} className={iCls} />
       </div>
       {/* Stock actual */}
       <div>
@@ -157,12 +178,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
       </div>
       {/* Precio unitario */}
       <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">Precio Unitario (COP)</label>
+        <label className={lbl}>Precio Unitario máximo (COP)</label>
         <input type="number" min={0} value={v.precioUnitario}
           onChange={e=>set({...v,precioUnitario:Number(e.target.value)})} className={iCls} />
+        <p className="text-[11px] text-muted-foreground mt-1">Se actualiza solo con el precio más alto pagado en las compras.</p>
       </div>
     </div>
-  );
+    );
+  };
 
   const Modal = ({ title, onClose, onConfirm, label, children }: {
     title:string; onClose:()=>void; onConfirm:()=>void; label:string; children:React.ReactNode;
@@ -256,7 +279,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
                     <p className="text-xs font-mono font-semibold text-foreground">{i.idCategoriaIns}</p>
                     <p className="text-xs text-muted-foreground">{catNombre(i.idCategoriaIns)}</p>
                   </td>
-                  <td className="px-4 py-3.5 text-sm font-medium text-foreground">{i.nombre}</td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-sm font-medium text-foreground">{i.nombre}</p>
+                    <span className={`inline-block mt-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${i.tipo === "Insumo producto" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-700"}`}>
+                      {i.tipo ?? "Insumo"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground">{i.unidadMedida}</td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2">
@@ -265,7 +293,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground" style={{fontFamily:MONO}}>{i.stockMinimo}</td>
-                  <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{fontFamily:MONO}}>{fmtCOP(i.precioUnitario)}</td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-sm font-bold text-foreground" style={{fontFamily:MONO}}>{fmtCOP(i.precioUnitario)}</p>
+                    <p className="text-[11px] text-muted-foreground">IVA {i.iva}%</p>
+                  </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={()=>setDetailItem(i)} title="Ver detalle"
@@ -313,7 +344,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
       <AnimatePresence>
         {editItem&&(
           Modal({ title: `Editar — ${editItem.id}`, onClose: ()=>setEditItem(null), onConfirm: handleEdit, label: "Guardar",
-            children: FormFields({ v: editItem, set: v=>setEditItem({...editItem,...v}) }) })
+            children: FormFields({ v: editItem, set: v=>setEditItem({...editItem,...v}), editando: true }) })
         )}
       </AnimatePresence>
 
@@ -333,10 +364,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
                   {l:"ID Insumo",       v:detailItem.id},
                   {l:"ID Cat. Insumo",  v:`${detailItem.idCategoriaIns} — ${catNombre(detailItem.idCategoriaIns)}`},
                   {l:"Nombre",          v:detailItem.nombre},
+                  {l:"Tipo",             v:detailItem.tipo ?? "Insumo"},
+                  {l:"IVA",              v:`${detailItem.iva}%`},
                   {l:"Unidad Medida",   v:detailItem.unidadMedida},
                   {l:"Stock Actual",    v:`${detailItem.stockActual} ${detailItem.unidadMedida}`},
                   {l:"Stock Mínimo",    v:`${detailItem.stockMinimo} ${detailItem.unidadMedida}`},
-                  {l:"Precio Unitario", v:fmtCOP(detailItem.precioUnitario)},
+                  {l:"Precio Unitario (máx.)", v:fmtCOP(detailItem.precioUnitario)},
                 ].map(({l,v})=>(
                   <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
                     <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>

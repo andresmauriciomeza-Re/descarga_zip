@@ -854,7 +854,7 @@ const NAV_SECTIONS = [
       },
       {
         screen: "perecederos" as Screen,
-        label: "Productos No Conformes",
+        label: "CPN",
         Icon: AlertTriangle,
         permKey: KEY("Producción", "Producto No Conforme"),
       },
@@ -1346,7 +1346,7 @@ function AdminTopBar({
     empleados: "Gestión de empleados",
     access: "Gestión de acceso",
     purchases: "Gestión de compras",
-    perecederos: "Productos No Conformes",
+    perecederos: "CPN",
     "orden-compra": "Órdenes de Compra",
     "nueva-orden-compra": "Nueva Orden de Compra",
     "gestion-compra": "Gestión de Compras",
