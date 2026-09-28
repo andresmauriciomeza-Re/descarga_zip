@@ -2235,7 +2235,7 @@ function ProductCard({
               disabled={p.status !== "activo"}
               className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <ShoppingCart className="w-4 h-4" />
             </button>
           </div>
         </div>
