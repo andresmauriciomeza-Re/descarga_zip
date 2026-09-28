@@ -25,25 +25,30 @@ export function ConfirmDeleteModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
+        className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border"
       >
         <div className="flex items-center gap-3 mb-3">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-          <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF }}>
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+          </div>
+          <h3
+            className="text-xl font-bold text-foreground"
+            style={{ fontFamily: SERIF }}
+          >
             {title}
           </h3>
         </div>
-        <p className="text-sm text-muted-foreground mb-5">{message}</p>
+        <p className="text-muted-foreground mb-6 leading-relaxed">{message}</p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
+            className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer"
+            className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer active:scale-95"
           >
             {confirmLabel}
           </button>
