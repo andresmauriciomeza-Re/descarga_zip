@@ -1599,24 +1599,14 @@ export function OrdenCompraScreen({
 
   return (
     <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
-      <div className="mb-5 shrink-0">
-        <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-          Órdenes de Compra
-        </h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Crea y gestiona las órdenes de compra a proveedores
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between gap-4 mb-4 shrink-0">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por N° o proveedor..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
+      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
+            Órdenes de Compra
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Crea y gestiona las órdenes de compra a proveedores
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1631,10 +1621,20 @@ export function OrdenCompraScreen({
               onClick={onNuevaOrden}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
             >
-              <Plus className="w-4 h-4" /> Nueva Orden
+              <Plus className="w-4 h-4" /> Crear Orden
             </button>
           )}
         </div>
+      </div>
+
+      <div className="relative mb-4 max-w-sm shrink-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Buscar por N° o proveedor..."
+          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
       </div>
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
