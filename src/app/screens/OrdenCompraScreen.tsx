@@ -1006,7 +1006,6 @@ export function NuevaOrdenCompraPage({
 
   return (
     <OrdenModal
-      fullPage
       mode="create"
       tipo="orden"
       proveedores={proveedores}

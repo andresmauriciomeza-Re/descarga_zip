@@ -630,7 +630,6 @@ export function NuevaCompraPage({
 
   return (
     <CompraForm
-      fullPage
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}

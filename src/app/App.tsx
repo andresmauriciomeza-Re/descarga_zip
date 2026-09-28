@@ -6973,6 +6973,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
+  const [showNuevaOrden, setShowNuevaOrden] = useState(false);
+  const [showNuevaCompra, setShowNuevaCompra] = useState(false);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -7515,32 +7517,34 @@ export default function App() {
                 />
               )}
               {screen === "orden-compra" && (
-                <OrdenCompraScreen
-                  {...getPerms("orden-compra")}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  onAbrirRecepcion={(orden) => {
-                    setOrdenRecepcion(orden);
-                    setScreen("recepcion-compra");
-                  }}
-                  onNuevaOrden={() => navigate("nueva-orden-compra")}
-                />
-              )}
-              {screen === "nueva-orden-compra" && (
-                <NuevaOrdenCompraPage
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  onBack={() => navigate("orden-compra")}
-                />
+                <>
+                  <OrdenCompraScreen
+                    {...getPerms("orden-compra")}
+                    ordenes={ordenes}
+                    setOrdenes={setOrdenes}
+                    gestiones={gestiones}
+                    setGestiones={setGestiones}
+                    proveedores={proveedores}
+                    setProveedores={setProveedores}
+                    insumos={insumos}
+                    setInsumos={setInsumos}
+                    onAbrirRecepcion={(orden) => {
+                      setOrdenRecepcion(orden);
+                      setScreen("recepcion-compra");
+                    }}
+                    onNuevaOrden={() => setShowNuevaOrden(true)}
+                  />
+                  {showNuevaOrden && (
+                    <NuevaOrdenCompraPage
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      onBack={() => setShowNuevaOrden(false)}
+                    />
+                  )}
+                </>
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
                 <RecepcionCompraScreen
@@ -7570,27 +7574,29 @@ export default function App() {
                 />
               )}
               {screen === "gestion-compra" && (
-                <GestionCompraScreen
-                  {...getPerms("gestion-compra")}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  insumos={insumos}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  onNuevaCompra={() => navigate("nueva-compra")}
-                />
-              )}
-              {screen === "nueva-compra" && (
-                <NuevaCompraPage
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  onBack={() => navigate("gestion-compra")}
-                />
+                <>
+                  <GestionCompraScreen
+                    {...getPerms("gestion-compra")}
+                    gestiones={gestiones}
+                    setGestiones={setGestiones}
+                    ordenes={ordenes}
+                    setOrdenes={setOrdenes}
+                    insumos={insumos}
+                    proveedores={proveedores}
+                    setProveedores={setProveedores}
+                    onNuevaCompra={() => setShowNuevaCompra(true)}
+                  />
+                  {showNuevaCompra && (
+                    <NuevaCompraPage
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      onBack={() => setShowNuevaCompra(false)}
+                    />
+                  )}
+                </>
               )}
               {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
               {screen === "ventas-pedidos" && (
