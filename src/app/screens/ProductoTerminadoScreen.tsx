@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, PackageCheck, ChevronLeft, ChevronRight, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 type EstadoEntrega = "listo" | "entregado";
 

@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 import { INITIAL_SUPPLIERS } from "./SuppliersScreen";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO = "var(--font-texto)";
 
 function ConfirmModal({
   title,

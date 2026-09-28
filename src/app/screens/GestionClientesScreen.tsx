@@ -8,8 +8,8 @@ import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Usuario } from "./GestionUsuariosScreen";
 import { soloDigitos, filtrarDocumento } from "../components/campo";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO  = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO  = "var(--font-texto)";
 
 const AVATAR_COLORS = [
   "bg-red-500","bg-blue-500","bg-emerald-500",

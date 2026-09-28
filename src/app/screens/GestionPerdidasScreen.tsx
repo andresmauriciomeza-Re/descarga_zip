@@ -14,8 +14,8 @@ import {
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO = "var(--font-texto)";
 
 // ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
 

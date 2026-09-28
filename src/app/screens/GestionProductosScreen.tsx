@@ -17,8 +17,8 @@ import { toast } from "sonner";
 import { InsumoSearchField, resolverInsumo } from "../components/InsumoSearchField";
 import type { Insumo } from "./GestionInsumosScreen";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO = "var(--font-texto)";
 
 // ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
 
