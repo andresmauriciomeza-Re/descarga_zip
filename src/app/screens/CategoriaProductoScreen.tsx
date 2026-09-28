@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
 
@@ -545,7 +546,7 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
       {/* ── Eliminar ── */}
       <AnimatePresence>
         {deleteId && (
-          <ConfirmModal
+          <ConfirmDeleteModal
             title="Eliminar categoría"
             message={`¿Seguro que deseas eliminar la categoría ${deleteId}? Esta acción no se puede deshacer.`}
             onConfirm={() => handleDelete(deleteId)}

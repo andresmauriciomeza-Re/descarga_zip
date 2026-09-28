@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 import type { Producto } from "./GestionProductosScreen";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
 
@@ -642,26 +643,6 @@ export function OrdenProduccionScreen({
   );
 
   // Confirm delete modal
-  const ConfirmDelete = ({ id, onCancel }: { id: string; onCancel: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-        className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border p-6">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-          </div>
-          <h3 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Eliminar orden</h3>
-        </div>
-        <p className="text-muted-foreground mb-6">¿Seguro que deseas eliminar la orden <strong>{id}</strong>? Esta acción no se puede deshacer.</p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-          <button onClick={() => handleDelete(id)} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer active:scale-95">Eliminar</button>
-        </div>
-      </motion.div>
-    </div>
-  );
-
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -1083,7 +1064,14 @@ export function OrdenProduccionScreen({
 
       {/* Confirm delete */}
       <AnimatePresence>
-        {deleteId && ConfirmDelete({ id: deleteId, onCancel: () => setDeleteId(null) })}
+        {deleteId && (
+          <ConfirmDeleteModal
+            title="Eliminar orden"
+            message={<>¿Seguro que deseas eliminar la orden <strong>{deleteId}</strong>? Esta acción no se puede deshacer.</>}
+            onConfirm={() => handleDelete(deleteId)}
+            onCancel={() => setDeleteId(null)}
+          />
+        )}
       </AnimatePresence>
 
       {/* Confirm estado change */}

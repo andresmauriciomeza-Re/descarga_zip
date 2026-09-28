@@ -190,15 +190,4 @@
     font-weight: 400 !important;
   }
 
-  body :where(p, label, input, button, select, textarea, option, td, th, span, a) {
-    font-family: var(--font-texto) !important;
-    font-size: 14px !important;
-    font-weight: 400 !important;
-  }
-
-  .font-mono,
-  .font-serif,
-  .font-sans {
-    font-family: var(--font-texto) !important;
-  }
 }
