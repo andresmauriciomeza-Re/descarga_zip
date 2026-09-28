@@ -337,25 +337,25 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Proveedor</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{suppliers.length} proveedores registrados</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Proveedor</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">{suppliers.length} proveedores registrados</p>
+      </div>
+
+      {/* Search + actions */}
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por NIT, nombre, asesor o email..."
+            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         {canCreate && (
           <button onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm">
             <Plus className="w-4 h-4" /> Crear Proveedor
           </button>
         )}
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por NIT, nombre, asesor o email..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
       {/* Table */}

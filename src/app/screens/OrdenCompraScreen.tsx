@@ -9,6 +9,7 @@ import {
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportToExcel } from "../utils/exportExcel";
 
 const SERIF = "'DM Serif Display', serif";
 const PER_PAGE = 5;
@@ -1576,47 +1577,54 @@ export function OrdenCompraScreen({
   };
 
   const handleDownload = () => {
-    const rows: string[][] = [
-      ["N° OC", "Proveedor", "Estado", "Fecha", "Nombre Insumo", "Cantidad", "Unidad", "P. Unitario", "Subtotal"],
-    ];
-    ordenes.forEach(o => {
-      if (!o.items.length) {
-        rows.push([o.id, o.proveedor, o.estado, o.fecha, "", "", "", "", ""]);
-      } else {
-        o.items.forEach(i => rows.push([
-          o.id, o.proveedor, o.estado, o.fecha,
-          i.nombre, String(i.cantidad), i.unidad,
-          String(i.precioUnitario), String(i.cantidad * i.precioUnitario),
-        ]));
-      }
-    });
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "ordenes_compra.csv"; a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV descargado");
+    exportToExcel(
+      filtered.map(o => ({
+        proveedor: o.proveedor,
+        fecha: o.fecha,
+        numeroFactura: getFacturas(o.id).map(f => f.numeroFactura).join(", ") || "—",
+        total: fmtCOP(calcTotal(o.items)),
+        estado: o.estado,
+      })),
+      [
+        { key: "proveedor", label: "Proveedor" },
+        { key: "fecha", label: "Fecha" },
+        { key: "numeroFactura", label: "N° Factura" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+      ],
+      "ordenes-de-compra"
+    );
+    toast.success("Excel descargado");
   };
 
   return (
     <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Órdenes de Compra
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Crea y gestiona las órdenes de compra a proveedores
-          </p>
+      <div className="mb-5 shrink-0">
+        <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
+          Órdenes de Compra
+        </h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Crea y gestiona las órdenes de compra a proveedores
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 mb-4 shrink-0">
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Buscar por N° o proveedor..."
+            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
-            title="Descargar CSV"
+            title="Descargar Excel"
             className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
           >
-            <FileDown className="w-4 h-4" /> CSV
+            <FileDown className="w-4 h-4" /> Excel
           </button>
           {canCreate && (
             <button
@@ -1627,16 +1635,6 @@ export function OrdenCompraScreen({
             </button>
           )}
         </div>
-      </div>
-
-      <div className="relative mb-4 max-w-sm shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por N° o proveedor..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
       </div>
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
