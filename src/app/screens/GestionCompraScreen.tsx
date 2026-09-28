@@ -111,6 +111,7 @@ function CompraForm({
   const [provQuery, setProvQuery] = useState(compra?.proveedor ?? proveedores[0]?.nombre ?? "");
   const [provSugAbierto, setProvSugAbierto] = useState(false);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
+  const [showGuardarConf, setShowGuardarConf] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
@@ -277,6 +278,11 @@ function CompraForm({
       return;
     }
 
+    setShowGuardarConf(true);
+  };
+
+  const confirmarGuardar = () => {
+    setShowGuardarConf(false);
     onGuardar({
       proveedor: provQuery.trim(),
       numeroFactura: numeroFactura.trim(),
@@ -561,6 +567,23 @@ function CompraForm({
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showGuardarConf && (
+          <ConfirmModal
+            title="¿Está seguro de los cambios?"
+            detail="Una vez guardado no se podrá modificar."
+            confirmLabel="Confirmar"
+            icon={
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              </div>
+            }
+            onConfirm={confirmarGuardar}
+            onCancel={() => setShowGuardarConf(false)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -607,7 +630,6 @@ export function NuevaCompraPage({
 
   return (
     <CompraForm
-      fullPage
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}
