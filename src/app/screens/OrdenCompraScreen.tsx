@@ -9,6 +9,7 @@ import {
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportToExcel } from "../utils/exportExcel";
 
 const SERIF = "'DM Serif Display', serif";
 const PER_PAGE = 5;
@@ -1576,27 +1577,24 @@ export function OrdenCompraScreen({
   };
 
   const handleDownload = () => {
-    const rows: string[][] = [
-      ["N° OC", "Proveedor", "Estado", "Fecha", "Nombre Insumo", "Cantidad", "Unidad", "P. Unitario", "Subtotal"],
-    ];
-    ordenes.forEach(o => {
-      if (!o.items.length) {
-        rows.push([o.id, o.proveedor, o.estado, o.fecha, "", "", "", "", ""]);
-      } else {
-        o.items.forEach(i => rows.push([
-          o.id, o.proveedor, o.estado, o.fecha,
-          i.nombre, String(i.cantidad), i.unidad,
-          String(i.precioUnitario), String(i.cantidad * i.precioUnitario),
-        ]));
-      }
-    });
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "ordenes_compra.csv"; a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV descargado");
+    exportToExcel(
+      filtered.map(o => ({
+        proveedor: o.proveedor,
+        fecha: o.fecha,
+        numeroFactura: getFacturas(o.id).map(f => f.numeroFactura).join(", ") || "—",
+        total: fmtCOP(calcTotal(o.items)),
+        estado: o.estado,
+      })),
+      [
+        { key: "proveedor", label: "Proveedor" },
+        { key: "fecha", label: "Fecha" },
+        { key: "numeroFactura", label: "N° Factura" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+      ],
+      "ordenes-de-compra"
+    );
+    toast.success("Excel descargado");
   };
 
   return (
@@ -1613,10 +1611,10 @@ export function OrdenCompraScreen({
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
-            title="Descargar CSV"
+            title="Descargar Excel"
             className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
           >
-            <FileDown className="w-4 h-4" /> CSV
+            <FileDown className="w-4 h-4" /> Excel
           </button>
           {canCreate && (
             <button

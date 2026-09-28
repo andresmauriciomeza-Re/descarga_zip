@@ -5,6 +5,7 @@ import {
   FileDown, Plus, Check, Ban, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportToExcel } from "../utils/exportExcel";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
@@ -703,24 +704,24 @@ export function GestionCompraScreen({
   };
 
   const handleDownload = () => {
-    const rows: string[][] = [
-      ["ID Gestión", "OC Asociada", "Proveedor", "N° Factura", "Fecha Factura", "Valor Total", "Estado"],
-    ];
-    gestiones.forEach(g => {
-      const orden = getOrden(g.ordenId);
-      rows.push([
-        g.id, g.ordenId || "—", (orden?.proveedor ?? g.proveedor) || "—",
-        g.numeroFactura, g.fechaFactura,
-        String(g.valorTotal), g.estado,
-      ]);
-    });
-    const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "gestiones_compra.csv"; a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV descargado");
+    exportToExcel(
+      filtered.map(g => ({
+        proveedor: (getOrden(g.ordenId)?.proveedor ?? g.proveedor) || "—",
+        fechaFactura: g.fechaFactura,
+        numeroFactura: g.numeroFactura,
+        total: fmtCOP(g.valorTotal),
+        estado: g.estado,
+      })),
+      [
+        { key: "proveedor", label: "Proveedor" },
+        { key: "fechaFactura", label: "Fecha de factura" },
+        { key: "numeroFactura", label: "N° Factura" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+      ],
+      "gestion-de-compras"
+    );
+    toast.success("Excel descargado");
   };
 
   return (
@@ -737,10 +738,10 @@ export function GestionCompraScreen({
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
-            title="Descargar CSV"
+            title="Descargar Excel"
             className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
           >
-            <FileDown className="w-4 h-4" /> CSV
+            <FileDown className="w-4 h-4" /> Excel
           </button>
           {canCreate && (
             <button
