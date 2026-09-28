@@ -1,14 +1,16 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
+import { AnimatePresence } from "motion/react";
 import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "./GestionInsumosScreen";
-import type {
-  OrdenCompra,
-  Recepcion,
-  ItemRecibido,
-  GestionCompra,
-  OrdenItem,
-  EstadoOrden,
+import {
+  ConfirmModal,
+  type OrdenCompra,
+  type Recepcion,
+  type ItemRecibido,
+  type GestionCompra,
+  type OrdenItem,
+  type EstadoOrden,
 } from "./OrdenCompraScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -111,6 +113,7 @@ export function RecepcionCompraScreen({
   const [exUnidad, setExUnidad] = useState(UNIDADES[0]);
   const [exPrecio, setExPrecio] = useState(0);
   const [exShowSug, setExShowSug] = useState(false);
+  const [showGuardarConf, setShowGuardarConf] = useState(false);
 
   // ── Edición en línea de insumos adicionales ────────────────────────────────
   const [editExtraId, setEditExtraId] = useState<string | null>(null);
@@ -345,6 +348,14 @@ export function RecepcionCompraScreen({
       toast.error("Registra al menos un insumo recibido en la factura.");
       return;
     }
+
+    setShowGuardarConf(true);
+  };
+
+  const confirmarGuardar = () => {
+    setShowGuardarConf(false);
+
+    const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
     // Esta factura: solo lo que trae, con su número, fecha y total propios.
     const itemsFactura: OrdenItem[] = [...filasRecibidas, ...itemsExtra].map(
@@ -1141,6 +1152,23 @@ export function RecepcionCompraScreen({
                   Guardar
                 </button>
               </div>
+
+              <AnimatePresence>
+                {showGuardarConf && (
+                  <ConfirmModal
+                    title="¿Está seguro de los cambios?"
+                    detail="Una vez guardado no se podrá modificar."
+                    confirmLabel="Confirmar"
+                    icon={
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      </div>
+                    }
+                    onConfirm={confirmarGuardar}
+                    onCancel={() => setShowGuardarConf(false)}
+                  />
+                )}
+              </AnimatePresence>
             </div>
           </div>
       </div>

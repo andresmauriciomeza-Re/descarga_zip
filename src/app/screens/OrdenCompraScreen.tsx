@@ -1399,10 +1399,9 @@ function RecepcionModal({
       <AnimatePresence>
         {showGuardarConf && (
           <ConfirmModal
-            title="¿Guardar recepción?"
-            body="¿Está seguro que desea guardar estos datos?"
+            title="¿Está seguro de los cambios?"
             detail="Una vez guardado no se podrá modificar."
-            confirmLabel="Guardar"
+            confirmLabel="Confirmar"
             icon={
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
