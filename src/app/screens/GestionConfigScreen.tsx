@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Eye, Pencil, Trash2, X, AlertCircle, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
+import { Eye, Pencil, Trash2, X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
 
@@ -167,29 +168,6 @@ export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }
         );
       })}
     </>
-  );
-}
-
-// ── Confirm modal ─────────────────────────────────────────────────────
-function ConfirmModal({ title, message, onConfirm, onCancel }: {
-  title: string; message: string; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-          <h3 className="font-bold text-foreground">{title}</h3>
-        </div>
-        <p className="text-sm text-muted-foreground mb-5">{message}</p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer">Eliminar</button>
-        </div>
-      </motion.div>
-    </div>
   );
 }
 
@@ -654,7 +632,7 @@ export function GestionConfigScreen({
             ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios quedarán SIN ACCESO hasta que les asignes otro rol.`
             : `¿Seguro que deseas eliminar el rol ${deleteId}? Se eliminan también sus accesos configurados.`;
           return (
-            <ConfirmModal
+            <ConfirmDeleteModal
               title="Eliminar rol"
               message={message}
               onConfirm={() => handleDelete(deleteId)}

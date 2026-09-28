@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
 
@@ -580,7 +581,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
       {/* ── Confirmar eliminación ── */}
       <AnimatePresence>
         {deleteId && (
-          <ConfirmModal
+          <ConfirmDeleteModal
             title="Eliminar proveedor"
             message={`¿Seguro que deseas eliminar al proveedor ${deleteId}? Esta acción no se puede deshacer.`}
             onConfirm={() => handleDelete(deleteId)}

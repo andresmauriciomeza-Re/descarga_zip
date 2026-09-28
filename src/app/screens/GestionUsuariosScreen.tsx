@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { type Rol, PermissionCategoryAccordion, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
@@ -771,29 +772,12 @@ export function GestionUsuariosScreen({
       {/* ── Modal: Confirmar eliminación ── */}
       <AnimatePresence>
         {deleteId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
-              exit={{scale:.95,opacity:0}} transition={{duration:.15}}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6">
-              <h3 className="text-lg font-bold text-foreground mb-2" style={{fontFamily:SERIF}}>Eliminar usuario</h3>
-              <p className="text-muted-foreground text-sm mb-6">
-                ¿Seguro que deseas eliminar a{" "}
-                <strong className="text-foreground">
-                  {usuarios.find(u => u.id === deleteId)?.nombre}
-                </strong>? Esta acción no se puede deshacer.
-              </p>
-              <div className="flex gap-3">
-                <button onClick={() => setDeleteId(null)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => handleDelete(deleteId)}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  Sí, eliminar
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          <ConfirmDeleteModal
+            title="Eliminar usuario"
+            message={<>¿Seguro que deseas eliminar a <strong className="text-foreground">{usuarios.find(u => u.id === deleteId)?.nombre}</strong>? Esta acción no se puede deshacer.</>}
+            onConfirm={() => handleDelete(deleteId)}
+            onCancel={() => setDeleteId(null)}
+          />
         )}
       </AnimatePresence>
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -965,7 +966,7 @@ export function GestionPerdidasScreen({
       {/* ── Eliminar ── */}
       <AnimatePresence>
         {deleteId && (
-          <ConfirmModal
+          <ConfirmDeleteModal
             title="Eliminar pérdida"
             message={`¿Seguro que deseas eliminar la pérdida ${deleteId}? Esta acción no se puede deshacer.`}
             onConfirm={() => handleDelete(deleteId)}

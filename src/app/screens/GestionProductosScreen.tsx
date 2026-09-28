@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { InsumoSearchField, resolverInsumo } from "../components/InsumoSearchField";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import type { Insumo } from "./GestionInsumosScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -1544,7 +1545,7 @@ export function GestionProductosScreen({
       {/* ── Eliminar ── */}
       <AnimatePresence>
         {deleteId && (
-          <ConfirmModal
+          <ConfirmDeleteModal
             title="Eliminar producto"
             message={`¿Seguro que deseas eliminar el producto ${deleteId}? Esta acción no se puede deshacer.`}
             onConfirm={() => handleDelete(deleteId)}
