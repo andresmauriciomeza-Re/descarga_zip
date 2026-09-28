@@ -257,7 +257,9 @@ function nextGestionId(items: GestionCompra[]) {
 function addDays(d: string, days: number) {
   const dt = new Date(d);
   dt.setDate(dt.getDate() + days);
-  return dt.toISOString().slice(0, 10);
+  // Fecha local, no UTC: `dt` se movió en hora local, así que `toISOString()`
+  // lo convertía a UTC y en Colombia (UTC-5) devolvía el día anterior.
+  return dt.toLocaleDateString("en-CA");
 }
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
@@ -278,7 +280,10 @@ const sCls = `${iCls} appearance-none`;
 export function ConfirmModal({
   title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel,
 }: {
-  title: string; body: string; detail?: string; confirmLabel?: string;
+  // `body` es opcional: hay confirmaciones que solo llevan `detail` como
+  // advertencia (p. ej. "¿Está seguro de los cambios?"). Antes era obligatorio y
+  // esas 3 llamadas fallaban el typecheck mientras en runtime pintaban un <p> vacío.
+  title: string; body?: string; detail?: string; confirmLabel?: string;
   danger?: boolean; icon?: React.ReactNode; onConfirm: () => void; onCancel: () => void;
 }) {
   return (
@@ -292,7 +297,7 @@ export function ConfirmModal({
       >
         {icon && <div className="mb-3">{icon}</div>}
         <h3 className="text-base font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>{title}</h3>
-        <p className="text-sm text-muted-foreground mb-1 leading-relaxed">{body}</p>
+        {body && <p className="text-sm text-muted-foreground mb-1 leading-relaxed">{body}</p>}
         {detail && (
           <p className={`text-sm font-semibold mb-5 ${danger ? "text-red-600" : "text-amber-600"}`}>{detail}</p>
         )}
@@ -462,7 +467,9 @@ export function OrdenModal({
   const isView = mode === "view";
   const isCompra = tipo === "compra";
   const isPage = fullPage;
-  const today = new Date().toISOString().slice(0, 10);
+  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
+  // daba el día siguiente, y `today` es el `max` del date-picker de vencimiento.
+  const today = new Date().toLocaleDateString("en-CA");
 
   const [form, setForm] = useState<OrdenFormData>({
     proveedor: orden?.proveedor ?? (proveedores[0]?.nombre ?? ""),
@@ -506,6 +513,11 @@ export function OrdenModal({
   const [aUnidad, setAUnidad] = useState(UNIDADES[0]);
   const [aPrecio, setAPrecio] = useState(0);
   const [aFromCat, setAFromCat] = useState(false);
+  // Id del insumo elegido del catálogo. Antes `addItem` fabricaba
+  // `idInsumo: INS-${Date.now()}`, un id que no existía en el catálogo: se perdía
+  // el enlace que Recepción usa para no volver a ofrecer un insumo ya recibido y
+  // para agrupar las líneas por insumo.
+  const [aInsumoId, setAInsumoId] = useState("");
   const [aShowSug, setAShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
 
@@ -560,6 +572,7 @@ export function OrdenModal({
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setAPrecio(ins.precioUnitario);
+    setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
   };
@@ -570,17 +583,24 @@ export function OrdenModal({
       toast.error("Este insumo ya está en la orden.");
       return;
     }
+    // Se conserva el id del catálogo cuando la línea viene de una sugerencia; si
+    // el nombre se escribió a mano se genera uno secuencial. `Date.now()` no sirve
+    // como id de fila: dos additions en el mismo milisegundo colisionaban.
+    const nextRow = form.items.reduce((max, i) => {
+      const n = parseInt(i.rowId.replace(/^r/, ""), 10);
+      return Number.isFinite(n) ? Math.max(max, n) : max;
+    }, 0) + 1;
     pf({
       items: [...form.items, {
-        rowId: `r${Date.now()}`,
-        idInsumo: `INS-${Date.now()}`,
+        rowId: `r${nextRow}`,
+        idInsumo: aInsumoId || `INS-M-${nextRow}`,
         nombre: aNombre.trim(),
         cantidad: aCant,
         unidad: aUnidad,
         precioUnitario: aPrecio,
       }],
     });
-    setANombre(""); setACant(1); setAPrecio(0); setAFromCat(false);
+    setANombre(""); setACant(1); setAPrecio(0); setAFromCat(false); setAInsumoId("");
   };
 
   const selectProv = (p: ProveedorRef) => {
@@ -828,6 +848,9 @@ export function OrdenModal({
                     onNombreChange={(value) => {
                       setANombre(value);
                       setAFromCat(false);
+                      // El nombre ya no coincide con la sugerencia elegida, así que
+                      // la línea deja de estar ligada a ese insumo del catálogo.
+                      setAInsumoId("");
                       setAShowSug(true);
                     }}
                     onNombreFocus={() => setAShowSug(true)}
@@ -1028,7 +1051,8 @@ function RecepcionModal({
   onAnular: () => void;
   onClose: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
+  const today = new Date().toLocaleDateString("en-CA");
 
   type ItemRow = ItemRecibido & { malEstado: boolean };
 

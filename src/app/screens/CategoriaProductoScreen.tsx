@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -175,12 +175,26 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
     page * PER_PAGE,
   );
 
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
+
   const handleCreate = () => {
     if (!formNombre.trim()) {
       toast.error("El nombre es obligatorio");
       return;
     }
-    const newId = `CAT-${String(categorias.length + 1).padStart(3, "0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado una categoría
+    // del medio: quedaban dos filas con la misma clave y editar/borrar una
+    // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = categorias.reduce((max, c) => {
+      const n = parseInt(c.id.replace("CAT-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `CAT-${String(nextNum).padStart(3, "0")}`;
     setCategorias((p) => [
       ...p,
       { id: newId, nombre: formNombre.trim() },
@@ -387,7 +401,12 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                   }
                 >
                   CAT-
-                  {String(categorias.length + 1).padStart(
+                  {String(
+                    categorias.reduce((max, c) => {
+                      const n = parseInt(c.id.replace("CAT-", ""), 10) || 0;
+                      return Math.max(max, n);
+                    }, 0) + 1,
+                  ).padStart(
                     3,
                     "0",
                   )}{" "}

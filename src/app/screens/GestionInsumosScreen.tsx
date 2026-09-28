@@ -103,7 +103,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, canCreate = true, ca
 
   const handleCreate = () => {
     if (!form.nombre.trim()) { toast.error("El nombre del insumo es obligatorio"); return; }
-    const newId = `INS-${String(insumos.length + 1).padStart(3,"0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado un insumo del
+    // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
+    // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = insumos.reduce((max, i) => {
+      const n = parseInt(i.id.replace("INS-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `INS-${String(nextNum).padStart(3,"0")}`;
     setInsumos(p => [...p, { id: newId, ...form }]);
     setShowCreate(false); setForm(emptyForm());
     toast.success("Insumo creado correctamente");

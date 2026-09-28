@@ -107,8 +107,14 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
               Borrar
             </button>
             <button type="button" onClick={() => {
-              setView({ year: today.getFullYear(), month: today.getMonth() });
-              pick(today.getDate());
+              // No se delega en `pick`: leería el `view` viejo del closure, ya
+              // que `setView` es asíncrono, así que si el usuario estaba viendo
+              // otro mes la fecha se armaba en ese mes y "Hoy" podía caer en el
+              // mes siguiente (ver el 31 de enero sobre febrero, p. ej.).
+              const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              setView({ year: d.getFullYear(), month: d.getMonth() });
+              onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+              setOpen(false);
             }}
               className="text-[11px] font-semibold text-primary hover:text-red-700 cursor-pointer">
               Hoy

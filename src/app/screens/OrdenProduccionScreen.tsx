@@ -274,7 +274,9 @@ function exportExcel(ordenes: OrdenProduccion[]) {
   ];
   ws["!freeze"] = { xSplit: 0, ySplit: 1 };
   XLSX.utils.book_append_sheet(wb, ws, "Ordenes");
-  const date = new Date().toISOString().slice(0, 10);
+  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
+  // fechaba la orden con el día siguiente.
+  const date = new Date().toLocaleDateString("en-CA");
   XLSX.writeFile(wb, `ordenes-produccion-${date}.xlsx`);
   toast.success("Archivo Excel descargado");
 }
@@ -428,7 +430,14 @@ export function OrdenProduccionScreen({
       toast.error("Agrega al menos un producto con cantidad");
       return;
     }
-    const newId = `ORD-${String(ordenes.length + 1).padStart(3, "0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado una orden del
+    // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
+    // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = ordenes.reduce((max, o) => {
+      const n = parseInt(o.id.replace("ORD-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `ORD-${String(nextNum).padStart(3, "0")}`;
     // Toda orden nace "Pendiente"; si en el modal se eligió otro estado, se
     // registra la transición con las mismas reglas que usa el listado.
     const base: OrdenProduccion = {
@@ -480,10 +489,13 @@ export function OrdenProduccionScreen({
   const applyTransition = (id: string, next: EstadoOrden) => {
     const orden = ordenes.find(o => o.id === id);
     if (orden) {
-      // La suma de stock se dispara desde aplicarTransicion. Se resuelve fuera
-      // del updater de setOrdenes a propósito: dentro de un reducer se
-      // ejecutaría dos veces en modo estricto.
-      setOrdenes(p => p.map(o => o.id === id ? aplicarTransicion(o, next) : o));
+      // La suma de stock (setProductos) y los toasts se disparan dentro de
+      // aplicarTransicion, así que se resuelve FUERA del updater de setOrdenes:
+      // antes se llamaba desde dentro del updater, y en modo estricto el updater
+      // se invoca dos veces, con lo que `setProductos` (que es funcional)
+      // habría contabilizado el stock dos veces y los avisos salían duplicados.
+      const patched = aplicarTransicion(orden, next);
+      setOrdenes(p => p.map(o => o.id === id ? patched : o));
     }
     setConfirmEstado(null);
     toast.success(`Estado cambiado a: ${ESTADO_LABEL[next]}`);
@@ -509,7 +521,8 @@ export function OrdenProduccionScreen({
       idProducto: primera.idProducto,
       unidadMedida: "und",
       cantidad: primera.cantidad,
-      fechaRegistro: new Date().toISOString().slice(0, 10),
+        // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
+      fechaRegistro: new Date().toLocaleDateString("en-CA"),
       motivo: MOTIVOS[0],
       descripcion: "",
     });

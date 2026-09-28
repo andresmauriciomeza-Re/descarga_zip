@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, X, Check, ChevronLeft, ChevronRight, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -79,6 +79,12 @@ interface InsumoLine {
   subtotal: number;
 }
 
+interface Lote {
+  id: string;
+  cantidad: number;
+  fechaVenc: string;
+}
+
 interface Purchase {
   id: string;
   idProveedor: string;
@@ -88,6 +94,12 @@ interface Purchase {
   total: number;
   estado: PurchaseStatus;
   insumos: InsumoLine[];
+  // Vencimientos registrados al recibir la compra. Se guardan en la propia
+  // compra (y no en un estado global de la pantalla) para que el detalle de una
+  // compra no muestre los lotes de otra, ya que el idInsumo se repite entre
+  // compras distintas.
+  lotes?: Record<string, Lote[]>;
+  fechaEntrada?: string;
 }
 
 const PURCHASE_STATUS_COLOR: Record<PurchaseStatus, string> = {
@@ -343,10 +355,25 @@ export function PurchasesScreen() {
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
+  // El modal de detalle lee los vencimientos de la compra abierta, no del estado
+  // global de la pantalla: `idInsumo` se repite entre compras, así que con el
+  // estado global el detalle de una compra mostraba los lotes de otra.
+  const detalleLotes: Record<string, Lote[]> = detailItem?.lotes ?? {};
+  const detalleLotesFecha = detailItem?.fechaEntrada ?? "";
+
   // Totales calculados desde los insumos
   const calcSubtotal = (lines: InsumoLine[]) =>
     lines.reduce((s, l) => s + l.subtotal, 0);
   const calcIva = (sub: number) => Math.round(sub * IVA_RATE);
+
+  // El campo de IVA % solo filtra lo que no es dígito ni punto, así que admite
+  // entradas como "1.2.3" o "..", donde `Number(...)` es NaN. Ese NaN se
+  // propagaba a `iva`/`total` (que se guardan en la compra) y se pintaba como
+  // "$NaN". Cualquier valor no finito cae a 0.
+  const pctIva = (v: string) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
@@ -368,6 +395,13 @@ export function PurchasesScreen() {
     (page - 1) * PER_PAGE,
     page * PER_PAGE,
   );
+
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
 
   // ── Insumo helpers ──
   const updateInsumo = (
@@ -461,7 +495,18 @@ export function PurchasesScreen() {
     toast.success("Compra creada exitosamente");
   };
 
-  // ── Editar compra (cabecera) ──
+  // ── Editar compra (cabecera + vencimientos) ──
+  // Abre el modal de edición sembrando el estado del IVA desde la compra. Sin
+  // esto `editIvaManual` se quedaba en su valor inicial (0), y como `handleEdit`
+  // guarda `iva: editIvaManual`, cualquier compra en estado "proceso" perdía su
+  // IVA y su total al guardar: quedaba `total = subtotal` mientras el formulario
+  // seguía mostrando el 19% del encabezado.
+  const abrirEdicion = (p: Purchase) => {
+    setEditItem({ ...p });
+    setEditIvaManual(p.iva);
+    setEditIvaPercent(p.subtotal > 0 ? String(Math.round((p.iva / p.subtotal) * 100)) : "19");
+  };
+
   const handleEdit = () => {
     if (!editItem) return;
     if (!editItem.idProveedor || !editItem.fecha) {
@@ -470,6 +515,12 @@ export function PurchasesScreen() {
     }
     const sub = calcSubtotal(editItem.insumos);
     const iva = editIvaManual;
+    // Los vencimientos se guardan con la compra. Antes vivían solo en el estado
+    // de la pantalla y `handleEdit` no los copiaba a ninguna parte, así que
+    // "Guardar" descartaba en silencio todas las fechas y cantidades de lote.
+    const vencimientos = usarLotes
+      ? { lotes, fechaEntrada }
+      : { lotes: editItem.lotes, fechaEntrada: editItem.fechaEntrada };
     setPurchases((p) =>
       p.map((x) =>
         x.id === editItem.id
@@ -478,6 +529,7 @@ export function PurchasesScreen() {
               subtotal: sub,
               iva,
               total: sub + iva,
+              ...vencimientos,
             }
           : x,
       ),
@@ -485,7 +537,24 @@ export function PurchasesScreen() {
     setEditItem(null);
     setShowEditInsumoList(false);
     setEditIvaManual(0);
+    setLotes({});
+    setFechaEntrada("");
+    setUsarLotes(false);
     toast.success("Compra editada exitosamente");
+  };
+
+  /** Cierra el modal de edición revirviendo el estado, igual que "Cancelar". */
+  const cerrarEdicion = () => {
+    if (editItem?.estado === "recibido") {
+      setPurchases((prev) =>
+        prev.map((x) => (x.id === editItem.id ? { ...x, estado: prevEstadoCompra } : x)),
+      );
+    }
+    setEditItem(null);
+    setShowEditInsumoList(false);
+    setUsarLotes(false);
+    setLotes({});
+    setFechaEntrada("");
   };
 
   const ESTADO_TRANSITIONS: Record<PurchaseStatus, PurchaseStatus[]> = {
@@ -502,9 +571,11 @@ export function PurchasesScreen() {
       setPrevEstadoCompra(purchase.estado);
       setEditItem(updated);
       setEditIvaManual(updated.iva);
-      setEditIvaPercent("19");
-      setLotes({});
-      setFechaEntrada("");
+      setEditIvaPercent(updated.subtotal > 0 ? String(Math.round((updated.iva / updated.subtotal) * 100)) : "19");
+      // Se siembran los vencimientos ya guardados de la compra para que, al
+      // reabrirla, el formulario muestre los lotes existentes y no arranque vacío.
+      setLotes(updated.lotes ?? {});
+      setFechaEntrada(updated.fechaEntrada ?? "");
       setUsarLotes(false);
     } else {
       toast.success(`Estado: ${PURCHASE_STATUS_LABEL[nuevoEstado]}`);
@@ -521,7 +592,7 @@ export function PurchasesScreen() {
 
   // Computed totals for create form
   const createSub = calcSubtotal(formInsumos);
-  const formIva = Math.round(createSub * Number(formIvaPercent) / 100);
+  const formIva = Math.round(createSub * pctIva(formIvaPercent) / 100);
   const createTotal = createSub + formIva;
 
   return (
@@ -655,7 +726,7 @@ export function PurchasesScreen() {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => p.estado === "proceso" && setEditItem({ ...p })}
+                          onClick={() => p.estado === "proceso" && abrirEdicion(p)}
                           disabled={p.estado !== "proceso"}
                           className={`p-1.5 rounded-lg transition-colors ${p.estado === "proceso" ? "hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer" : "text-muted-foreground/30 cursor-not-allowed"}`}
                           title={p.estado === "proceso" ? "Editar" : "Solo editable en estado En proceso"}
@@ -1246,10 +1317,7 @@ export function PurchasesScreen() {
       <AnimatePresence>
         {editItem && (
           <WideModal
-            onClose={() => {
-              setEditItem(null);
-              setShowEditInsumoList(false);
-            }}
+            onClose={cerrarEdicion}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -1260,10 +1328,7 @@ export function PurchasesScreen() {
                 Editar Compra — {editItem.id}
               </h3>
               <button
-                onClick={() => {
-                  setEditItem(null);
-                  setShowEditInsumoList(false);
-                }}
+                onClick={cerrarEdicion}
                 className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
               >
                 <X className="w-4 h-4" />
@@ -1345,7 +1410,7 @@ export function PurchasesScreen() {
                   {/* IVA — número directo */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      IVA % — <span className="text-primary font-bold">{fmtCOP(Math.round(calcSubtotal(editItem.insumos) * Number(editIvaPercent) / 100))}</span>
+                      IVA % — <span className="text-primary font-bold">{fmtCOP(Math.round(calcSubtotal(editItem.insumos) * pctIva(editIvaPercent) / 100))}</span>
                     </label>
                     <div className="flex items-center gap-2">
                     <input
@@ -1353,7 +1418,7 @@ export function PurchasesScreen() {
                       min={0}
                       max={100}
                       value={editIvaPercent}
-                      onChange={e => { setEditIvaPercent(e.target.value.replace(/[^0-9.]/g,"")); setEditIvaManual(Math.round(calcSubtotal(editItem.insumos) * Number(e.target.value) / 100)); }}
+                      onChange={e => { setEditIvaPercent(e.target.value.replace(/[^0-9.]/g,"")); setEditIvaManual(Math.round(calcSubtotal(editItem.insumos) * pctIva(e.target.value) / 100)); }}
                       onKeyPress={e => { if (!/[0-9.]/.test(e.key)) e.preventDefault(); }}
                       className={inputCls}
                     />
@@ -1824,7 +1889,10 @@ export function PurchasesScreen() {
                       if (!usarLotes) {
                         const d = new Date();
                         d.setDate(d.getDate() + 7);
-                        const defaultVenc = d.toISOString().split("T")[0];
+                    // Fecha local: `d` se movió con `setDate` en hora local, así
+                    // que `toISOString()` lo reconvertía a UTC y en Colombia
+                    // (UTC-5) devolvía el día anterior.
+                    const defaultVenc = d.toLocaleDateString("en-CA");
                         const init: Record<string, { id: string; cantidad: number; fechaVenc: string }[]> = {};
                         editItem.insumos.forEach(ins => {
                           init[ins.idInsumo] = [{ id: "L-01", cantidad: ins.cantidad, fechaVenc: defaultVenc }];
@@ -1875,17 +1943,22 @@ export function PurchasesScreen() {
                   const addLote = () => {
                     const d = new Date();
                     d.setDate(d.getDate() + 7);
-                    const defaultVenc = d.toISOString().split("T")[0];
-                    const newLote = {
-                      id: `L-${String((lotes[ins.idInsumo]?.length ?? 0) + 1).padStart(2, "0")}`,
-                      cantidad: ins.cantidad,
-                      fechaVenc: defaultVenc,
-                    };
+                    // Fecha local: `setDate` trabaja en hora local, así que
+                    // `toISOString()` reconvertiría a UTC y daría el día anterior.
+                    const defaultVenc = d.toLocaleDateString("en-CA");
+                    // El id se calcula DENTRO del updater: leerlo del closure de
+                    // render daba el mismo "L-01" en dos clics seguidos (el estado
+                    // aún no había cambiado), dejando claves duplicadas y
+                    // haciendo que editar/eliminar un lote afectara al equivocado.
                     setLotes((prev) => ({
                       ...prev,
                       [ins.idInsumo]: [
                         ...(prev[ins.idInsumo] ?? []),
-                        newLote,
+                        {
+                          id: `L-${String((prev[ins.idInsumo]?.length ?? 0) + 1).padStart(2, "0")}`,
+                          cantidad: ins.cantidad,
+                          fechaVenc: defaultVenc,
+                        },
                       ],
                     }));
                   };
@@ -1922,12 +1995,18 @@ export function PurchasesScreen() {
 
                   const diasHastaVenc = (fecha: string) => {
                     if (!fecha) return null;
-                    const diff =
-                      new Date(fecha).getTime() -
-                      today.getTime();
-                    return Math.ceil(
-                      diff / (1000 * 60 * 60 * 24),
-                    );
+                    // "YYYY-MM-DD" se parsea como medianoche UTC mientras `today`
+                    // es local: en Colombia (UTC-5) un lote que vencía hoy salía
+                    // como "vence en -1 días". Se comparan ambos a medianoche local.
+                    const [y, m, d] = fecha.split("-").map(Number);
+                    if (!y || !m || !d) return null;
+                    const venc = new Date(y, m - 1, d).getTime();
+                    const hoy = new Date(
+                      today.getFullYear(),
+                      today.getMonth(),
+                      today.getDate(),
+                    ).getTime();
+                    return Math.ceil((venc - hoy) / 86400000);
                   };
 
                   return (
@@ -2056,14 +2135,7 @@ export function PurchasesScreen() {
 
             <div className="flex gap-3 px-6 py-4 border-t border-border">
               <button
-                onClick={() => {
-                  if (editItem.estado === "recibido") {
-                    setPurchases(prev => prev.map(x => x.id === editItem.id ? { ...x, estado: prevEstadoCompra } : x));
-                  }
-                  setEditItem(null);
-                  setShowEditInsumoList(false);
-                  setUsarLotes(false);
-                }}
+                onClick={cerrarEdicion}
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
               >
                 Cancelar
@@ -2264,14 +2336,15 @@ export function PurchasesScreen() {
             </div>
 
             {/* Lotes en detalle (solo Recibido) */}
-            {detailItem.estado === "recibido" && Object.keys(lotes).length > 0 && (
+            {detailItem.estado === "recibido" && Object.keys(detalleLotes).length > 0 && (
               <div className="px-6 py-4 border-t border-border space-y-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
                   <span>📦</span> Lotes registrados
-                  {fechaEntrada && <span className="ml-2 text-muted-foreground font-normal normal-case">· Fecha entrada: {fechaEntrada}</span>}
+                  {detalleLotesFecha && <span className="ml-2 text-muted-foreground font-normal normal-case">· Fecha entrada: {detalleLotesFecha}</span>}
                 </p>
                 {detailItem.insumos.map(ins => {
-                  const insLotes = lotes[ins.idInsumo] ?? [];
+                  const insLotes = detalleLotes[ins.idInsumo] ?? [];
+
                   if (!insLotes.length) return null;
                   return (
                     <div key={ins.idInsumo} className="border border-border rounded-xl overflow-hidden">

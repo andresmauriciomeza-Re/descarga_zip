@@ -170,7 +170,8 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
   tipo: "Producto",
   nombre: "",
   categoria: CATEGORIAS[0],
-  fechaRegistro: new Date().toISOString().slice(0, 10),
+      // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
+      fechaRegistro: new Date().toLocaleDateString("en-CA"),
   cantidadAfectada: 1,
   unidadMedida: "und",
   tipoNoConformidad: TIPOS_NC[0],
@@ -278,7 +279,9 @@ function downloadXLSX(data: NoConformidad[]) {
   ws3["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws3, "Resumen por tipo");
 
-  const date = new Date().toISOString().slice(0, 10);
+  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
+  // fechaba la merma con el día siguiente.
+  const date = new Date().toLocaleDateString("en-CA");
   XLSX.writeFile(wb, `no-conformidades-${date}.xlsx`);
   toast.success("Archivo Excel descargado");
 }
