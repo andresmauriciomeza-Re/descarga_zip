@@ -75,11 +75,16 @@ import imgQuatro from "@/imports/Quatro.png";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
+  YAxis,
 } from "recharts";
-import { filtrarDocumento, inputCls, MensajeError, PasswordField, soloDigitos } from "./components/campo";
+import { filtrarDocumento, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
@@ -158,7 +163,7 @@ type Screen =
   | "ventas-pedidos"
   | "gestion-productos"
   | "cat-producto"
-  | "gestion-config"
+  | "gestion-roles"
   | "client-profile"
   | "clientes"
   | "perecederos"
@@ -630,7 +635,7 @@ const ADMIN_SCREENS: Screen[] = [
   "tech-sheet",
   "sales",
   // custom screens
-  "gestion-config",
+  "gestion-roles",
   "ventas-pedidos",
   "gestion-productos",
   "cat-producto",
@@ -738,9 +743,9 @@ const SCREEN_META: Partial<
 
 // Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
 const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
-  "gestion-config":   KEY("Configuración","Configuración"),
+  "gestion-roles":    KEY("Configuración","Roles"),
   "users":            KEY("Configuración","Usuarios"),
-  "empleados":        KEY("Configuración","Empleados"),
+  "empleados":        KEY("Producción","Empleados"),
   "supplies":          KEY("Compras",    "Insumos"),
   "suppliers":         KEY("Compras",    "Proveedores"),
   "orden-compra":      KEY("Compras",    "Orden de Compra"),
@@ -790,10 +795,10 @@ const NAV_SECTIONS = [
     Icon: Settings,
     items: [
       {
-        screen: "gestion-config" as Screen,
-        label: "Configuración",
+        screen: "gestion-roles" as Screen,
+        label: "Roles",
         Icon: Settings,
-        permKey: KEY("Configuración", "Configuración"),
+        permKey: KEY("Configuración", "Roles"),
       },
     ],
   },
@@ -807,12 +812,6 @@ const NAV_SECTIONS = [
         label: "Usuarios",
         Icon: Users,
         permKey: KEY("Configuración", "Usuarios"),
-      },
-      {
-        screen: "empleados" as Screen,
-        label: "Empleados",
-        Icon: IdCard,
-        permKey: KEY("Configuración", "Empleados"),
       },
     ],
   },
@@ -869,6 +868,12 @@ const NAV_SECTIONS = [
         label: "Orden de Producción",
         Icon: FileText,
         permKey: KEY("Producción", "Orden de Producción"),
+      },
+      {
+        screen: "empleados" as Screen,
+        label: "Empleados",
+        Icon: IdCard,
+        permKey: KEY("Producción", "Empleados"),
       },
       {
         screen: "perecederos" as Screen,
@@ -3822,7 +3827,6 @@ function LoginScreen({
   loginNotice,
 }: {
   navigate: (s: Screen) => void;
-  onLogin: () => void;
   onLogin: (role: string, email: string) => void;
   usuarios: Usuario[];
   darkMode: boolean;
@@ -4029,34 +4033,6 @@ function LoginScreen({
           </p>
         )}
 
-        <div className="relative mb-2.5">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative text-center">
-            <span className="px-3 bg-card text-muted-foreground text-sm">
-              o continúa con
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5 mb-3.5">
-          {[
-            { label: "Google", icon: "G" },
-            { label: "Apple", icon: "🍎" },
-          ].map(({ label, icon }) => (
-            <button
-              key={label}
-              onClick={() =>
-                toast.info(`Continuando con ${label}...`)
-              }
-              className="flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-sm font-medium text-foreground"
-            >
-              <span className="font-bold">{icon}</span> {label}
-            </button>
-          ))}
-        </div>
-
         <p className="text-center text-sm text-muted-foreground">
           {"¿No tienes cuenta? "}
           <button
@@ -4086,6 +4062,14 @@ function ForgotPasswordModal({
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeWithEscape);
+    return () => document.removeEventListener("keydown", closeWithEscape);
+  }, [onClose]);
 
   const startCooldown = () => {
     setResendCooldown(30);
@@ -4171,14 +4155,27 @@ function ForgotPasswordModal({
   };
 
   return (
-      <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm">
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
       <motion.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
+        className="relative my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar recuperación de contraseña"
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
         {/* ── Paso 1: Correo ── */}
         {step === "email" && (
           <>
@@ -4414,7 +4411,6 @@ function ForgotPasswordModal({
 const DOC_OPTIONS = [
   { code: "CC",  label: "CC · Cédula de Ciudadanía" },
   { code: "CE",  label: "CE · Cédula de Extranjería" },
-  { code: "TI",  label: "TI · Tarjeta de Identidad" },
   { code: "PP",  label: "PP · Pasaporte" },
 ];
 
@@ -4459,7 +4455,16 @@ function RegisterScreen({
     (k: keyof typeof form) =>
     (v: string) => {
       setForm((p) => ({ ...p, [k]: v }));
-      if (errores[k]) setErrores((p) => ({ ...p, [k]: "" }));
+      setErrores((prev) => {
+        const next = { ...prev };
+        if (k === "email" && v) next.email = validarCorreo(v) ?? "";
+        if (k === "phone" && v) next.phone = validarTelefono(v) ?? "";
+        if (k === "docNum" && v) next.docNum = validarDocumento(v, form.docType) ?? "";
+        if (k === "password" && v) next.password = validarContrasena(v) ?? "";
+        if (k === "confirm" && v) next.confirm = v === form.password ? "" : "Las contraseñas no coinciden";
+        if (k === "name" && v) next.name = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]{2,}$/.test(v.trim()) ? "" : "Usa solo letras y espacios";
+        return next;
+      });
     };
   const set =
     (k: keyof typeof form) =>
@@ -4475,17 +4480,22 @@ function RegisterScreen({
   const register = () => {
     const errs: Record<string, string> = {};
 
-    if (!form.name) errs.name = "El nombre completo es obligatorio";
+    if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
+    else if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]{2,}$/.test(form.name.trim()))
+      errs.name = "Usa solo letras y espacios";
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
-    else if (!form.email.includes("@"))
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = "Ingresa un correo electrónico válido (ej: nombre@dominio.com)";
     if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
+    else if (!/^3\d{9}$/.test(form.phone)) errs.phone = "Debe tener 10 dígitos y comenzar por 3";
     if (!form.docType) errs.docType = "Selecciona el tipo de documento";
 
     const docTrim = form.docNum.trim();
     if (!docTrim) errs.docNum = "El número de documento es obligatorio";
-    else if (form.docType !== "PP" && !/^\d+$/.test(docTrim))
-      errs.docNum = "El número de documento solo debe contener números";
+    else if (form.docType === "CC" && !/^\d{6,10}$/.test(docTrim))
+      errs.docNum = "La CC debe tener entre 6 y 10 dígitos";
+    else if ((form.docType === "CE" || form.docType === "PP") && !/^[A-Za-z0-9]{6,12}$/.test(docTrim))
+      errs.docNum = "Debe tener entre 6 y 12 caracteres alfanuméricos";
 
     if (!errs.docNum) {
       const clave = `${form.docType}||${docTrim}`.toLowerCase();
@@ -4506,8 +4516,8 @@ function RegisterScreen({
       if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
 
-    if (form.password.length < 6)
-      errs.password = "La contraseña debe tener al menos 6 caracteres";
+    if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/\d/.test(form.password))
+      errs.password = "Usa 8 caracteres, mayúscula, minúscula y número";
     if (form.password !== form.confirm)
       errs.confirm = "Las contraseñas no coinciden";
 
@@ -4585,6 +4595,9 @@ function RegisterScreen({
                 value={form.docType}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
+                  if (form.docNum) {
+                    setErrores((p) => ({ ...p, docNum: validarDocumento(form.docNum, e.target.value) ?? "" }));
+                  }
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
                 className={inputCls(errores.docType, "cursor-pointer")}
@@ -4683,7 +4696,7 @@ function RegisterScreen({
           onClick={register}
           size="md"
           className="w-full mb-1"
-          disabled={loading}
+          disabled={loading || Object.values(errores).some(Boolean)}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -4759,6 +4772,35 @@ function DashboardScreen({
     .slice(0, 5)
     .map(({ venta }) => venta);
 
+  const [periodoDashboard, setPeriodoDashboard] = useState<"Día" | "Mes" | "Año">("Mes");
+  const clientesTop = Object.values(
+    ventas.reduce<Record<string, { nombre: string; pedidos: number; total: number }>>((acc, venta) => {
+      const nombre = venta.usuario?.trim() || "Venta general";
+      const actual = acc[nombre] ?? { nombre, pedidos: 0, total: 0 };
+      actual.pedidos += 1;
+      actual.total += venta.total;
+      acc[nombre] = actual;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b.pedidos - a.pedidos || b.total - a.total).slice(0, 10);
+
+  const productosTop = Object.values(
+    ventas.flatMap(venta => venta.detalle ?? []).reduce<Record<string, { nombre: string; vendidos: number }>>((acc, detalle) => {
+      const actual = acc[detalle.nombre] ?? { nombre: detalle.nombre, vendidos: 0 };
+      actual.vendidos += detalle.cantidad;
+      acc[detalle.nombre] = actual;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b.vendidos - a.vendidos).slice(0, 10);
+
+  const ventasPorDia = Object.values(
+    ventas.reduce<Record<string, { fecha: string; ventas: number }>>((acc, venta) => {
+      const fecha = venta.fecha || "Sin fecha";
+      acc[fecha] = { fecha, ventas: (acc[fecha]?.ventas ?? 0) + venta.total };
+      return acc;
+    }, {}),
+  ).sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(-31);
+
   // ÚNICA regla de acceso de la app. Antes había dos: `canSee` (con atajo por
   // nombre de rol) y `tieneVer` (sin atajo), y cada una servía a una capa
   // distinta — menú y rutas usaban una, los KPIs del Dashboard la otra. Por eso
@@ -4780,9 +4822,9 @@ function DashboardScreen({
   const ccp = puedeVer(KEY("Producción",  "Categoría de Producto"));
   const cop = puedeVer(KEY("Producción",  "Orden de Producción"));
   const cpe = puedeVer(KEY("Producción",  "Producto No Conforme"));
-  const ccfg = puedeVer(KEY("Configuración", "Configuración"));
+  const ccfg = puedeVer(KEY("Configuración", "Roles"));
   const cus  = puedeVer(KEY("Configuración", "Usuarios"));
-  const cemp = puedeVer(KEY("Configuración", "Empleados"));
+  const cemp = puedeVer(KEY("Producción", "Empleados"));
   // El contenido de ventas depende únicamente del permiso de Ventas.
   const vePanelCompleto = hasDashboardAccess || cv;
 
@@ -4813,7 +4855,7 @@ function DashboardScreen({
     cpr && { label: "Proveedores",    Icon: Truck,          screen: "suppliers"         as Screen },
     coc && { label: "Orden de Compra", Icon: ClipboardList, screen: "orden-compra"      as Screen },
     cop && { label: "Producción",     Icon: Layers,         screen: "production-orders" as Screen },
-    ccfg && { label: "Configuración", Icon: Settings,       screen: "gestion-config"    as Screen },
+    ccfg && { label: "Roles", Icon: Settings,       screen: "gestion-roles"    as Screen },
     cus  && { label: "Usuarios",      Icon: Users,          screen: "users"             as Screen },
     cemp && { label: "Empleados",     Icon: IdCard,         screen: "empleados"         as Screen },
   ].filter(Boolean) as ActionDef[];
@@ -4880,6 +4922,96 @@ function DashboardScreen({
             Última barra = hora en curso · clic para ver ventas y compras
           </p>
         </div>
+      )}
+
+      {(hasDashboardAccess || cv) && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+              Indicadores comerciales
+            </h2>
+            <select
+              value={periodoDashboard}
+              onChange={event => setPeriodoDashboard(event.target.value as typeof periodoDashboard)}
+              className="px-3 py-2 rounded-xl border border-border bg-card text-sm text-foreground cursor-pointer"
+            >
+              <option>Día</option>
+              <option>Mes</option>
+              <option>Año</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-7">
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground mb-1" style={{ fontFamily: SERIF }}>
+                Top clientes: pedidos vs. valor comprado
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">Datos disponibles en ventas locales</p>
+              {clientesTop.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">No hay datos de clientes</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={230}>
+                  <BarChart data={clientesTop} margin={{ left: 0, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="nombre" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={55} />
+                    <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="total" orientation="right" hide />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill="#C62828" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="total" dataKey="total" name="Valor comprado" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground mb-1" style={{ fontFamily: SERIF }}>
+                Top productos más vendidos
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">Unidades vendidas por producto</p>
+              {productosTop.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">No hay productos vendidos</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={230}>
+                  <BarChart data={productosTop} layout="vertical" margin={{ left: 15, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="nombre" width={110} tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="vendidos" name="Unidades" fill="#2563EB" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground mb-1" style={{ fontFamily: SERIF }}>
+                Comportamiento de ventas
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">Periodo seleccionado: {periodoDashboard}</p>
+              {ventasPorDia.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">No hay ventas registradas</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={230}>
+                  <LineChart data={ventasPorDia}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="ventas" name="Ventas" stroke="#16A34A" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground mb-1" style={{ fontFamily: SERIF }}>
+                Compras, proveedores y no conformes
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">Se mostrarán cuando existan registros locales en estos módulos.</p>
+              <div className="h-48 flex items-center justify-center rounded-xl bg-muted/40 text-sm text-muted-foreground text-center px-6">
+                No hay datos suficientes para generar estas series.
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* KPIs */}
@@ -7757,7 +7889,7 @@ export default function App() {
               {screen === "cat-producto" && (
                 <CategoriaProductoScreen {...getPerms("cat-producto")} />
               )}
-              {screen === "gestion-config" && (
+               {screen === "gestion-roles" && (
                 <GestionConfigScreen
                   userRole={userRole}
                   roles={roles}
@@ -7882,7 +8014,7 @@ export default function App() {
                   "ventas-pedidos",
                   "gestion-productos",
                   "cat-producto",
-                  "gestion-config",
+                   "gestion-roles",
                   "clientes",
                   "users",
                   "empleados",
