@@ -2449,7 +2449,6 @@ function ProductDetailScreen({
     toast.success(`¡${product.name} agregada al carrito!`, {
       description: size.label ? `${size.label} × ${qty}` : `× ${qty}`,
     });
-    navigate("cart");
   };
 
   return (
@@ -2890,12 +2889,20 @@ function CartScreen({
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                    <span
-                      className="font-bold text-foreground"
-                      style={{ fontFamily: MONO }}
-                    >
-                      {fmt(cartTotal(item))}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="text-sm text-muted-foreground"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {fmt(item.sizePrice + item.extrasPrice)} c/u
+                      </span>
+                      <span
+                        className="font-bold text-foreground"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {fmt(cartTotal(item))}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
