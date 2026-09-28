@@ -88,20 +88,21 @@ export function PasswordField({
 // el mismo regex este copiado en cada pantalla.
 
 const RE_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RE_TELEFONO = /^\d{7,15}$/;
+const RE_TELEFONO = /^3\d{9}$/;
 const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
 
-export const MIN_CONTRASENA = 6;
+export const MIN_CONTRASENA = 8;
 
 export function validarCorreo(v: string): string | null {
   if (!v.trim()) return "El correo es obligatorio";
-  if (!RE_CORREO.test(v.trim())) return "Ingresa un correo electrónico válido (ej: nombre@dominio.com)";
+  if (v !== v.trim() || !RE_CORREO.test(v)) return "Ingresa un correo válido y sin espacios";
   return null;
 }
 
 export function validarTelefono(v: string): string | null {
   if (!v.trim()) return "El teléfono es obligatorio";
-  if (!RE_TELEFONO.test(v.replace(/\s/g, ""))) return "El teléfono debe tener entre 7 y 15 dígitos";
+  const limpio = v.replace(/\s/g, "");
+  if (!RE_TELEFONO.test(limpio)) return "El teléfono debe tener 10 dígitos y comenzar por 3";
   return null;
 }
 
@@ -115,6 +116,8 @@ export function validarTelefonoOpcional(v: string): string | null {
 export function validarContrasena(v: string): string | null {
   if (v.length < MIN_CONTRASENA)
     return `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`;
+  if (!/[A-Z]/.test(v) || !/[a-z]/.test(v) || !/\d/.test(v))
+    return "Debe incluir mayúscula, minúscula y número";
   return null;
 }
 
@@ -124,8 +127,13 @@ export function validarContrasena(v: string): string | null {
  */
 export function validarDocumento(valor: string, tipoDocumento: string): string | null {
   if (!valor.trim()) return "El número de documento es obligatorio";
-  if (tipoDocumento !== "PP" && !/^\d+$/.test(valor.trim()))
-    return "El número de documento solo debe contener números";
+  const documento = valor.trim();
+  if (tipoDocumento === "CC" && !/^\d{6,10}$/.test(documento))
+    return "La CC debe tener entre 6 y 10 dígitos";
+  if ((tipoDocumento === "CE" || tipoDocumento === "PP") && !/^[a-zA-Z0-9]{6,12}$/.test(documento))
+    return "Debe tener entre 6 y 12 caracteres alfanuméricos";
+  if (tipoDocumento === "NIT" && !/^\d{9,10}(?:-\d)?$/.test(documento))
+    return "El NIT debe tener 9 o 10 dígitos y un guion opcional";
   return null;
 }
 
@@ -147,5 +155,7 @@ export function soloDigitos(valor: string): string {
  * que antes.
  */
 export function filtrarDocumento(valor: string, tipoDocumento: string): string {
-  return tipoDocumento === "PP" ? valor.replace(/[\s.]/g, "") : soloDigitos(valor);
+  if (tipoDocumento === "CC") return soloDigitos(valor).slice(0, 10);
+  if (tipoDocumento === "NIT") return valor.replace(/[^\d-]/g, "").slice(0, 12);
+  return valor.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
 }

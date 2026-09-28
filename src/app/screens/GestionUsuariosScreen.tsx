@@ -13,7 +13,6 @@ const SERIF = "var(--font-titulo)";
 export const DOC_TIPOS = [
   { code: "CC", label: "Cédula de Ciudadanía" },
   { code: "CE", label: "Cédula de Extranjería" },
-  { code: "TI", label: "Tarjeta de Identidad" },
   { code: "PP", label: "Pasaporte" },
 ];
 
@@ -687,9 +686,10 @@ export function GestionUsuariosScreen({
                   <div className="w-32 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                     <select
+                      disabled
                       value={editItem.tipoDocumento}
                       onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed"
                     >
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                     </select>
@@ -701,9 +701,9 @@ export function GestionUsuariosScreen({
                       type="text"
                       inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"}
                       value={editItem.numeroDocumento}
-                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: filtrarDocumento(e.target.value, x.tipoDocumento) })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                      readOnly
                       placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed"
                     />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
@@ -731,12 +731,12 @@ export function GestionUsuariosScreen({
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
                   <select
-                    disabled={editItem ? esEmpleado(editItem) : false}
+                     disabled={false}
                     value={editItem.rolId}
                     onChange={e => setEditItem(x => x && ({ ...x, rolId: e.target.value }))}
                     className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {roles.map(r => (
+                     {roles.filter(r => r.activo || r.id === editItem.rolId).map(r => (
                       <option key={r.id} value={r.id}>
                         {r.nombre}{!r.activo ? " (Inactivo)" : ""}
                       </option>

@@ -58,7 +58,7 @@ const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
   { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-04-01", fechaFinal:"" },
   { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-04-18", fechaFinal:"" },
   { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Auxiliar de cocina",    fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
-  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"TI", numeroDocumento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
+  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
 ];
 
 // Cada empleado de la semilla arranca con una contratación inicial (C01) que es
@@ -1030,19 +1030,17 @@ export function GestionEmpleadosScreen({
                 <div className="col-span-2 flex gap-2 items-start">
                   <div className="w-32 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
-                    <select value={editItem.tipoDocumento}
-                      onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
-                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
+                    <select disabled value={editItem.tipoDocumento}
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                     </select>
                     {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
-                    <input type="text" inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"} value={editItem.numeroDocumento}
-                      onChange={e => { setEditItem(x => x && ({ ...x, numeroDocumento: filtrarDocumento(e.target.value, x.tipoDocumento) })); if (editErrors.numeroDocumento) setEditErrors(p => ({ ...p, numeroDocumento: undefined })); }}
+                    <input readOnly type="text" inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"} value={editItem.numeroDocumento}
                       placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
-                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
                 </div>

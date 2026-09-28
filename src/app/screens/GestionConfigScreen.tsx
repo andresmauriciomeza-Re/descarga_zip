@@ -9,9 +9,9 @@ const SERIF = "var(--font-titulo)";
 // ── Árbol de módulos / sub-opciones del sistema ──────────────────────
 export const MENU_TREE = [
   { modulo: "Dashboard",     subs: ["Dashboard"] },
-  { modulo: "Configuración", subs: ["Configuración", "Usuarios", "Empleados"] },
+  { modulo: "Configuración", subs: ["Roles", "Usuarios"] },
   { modulo: "Compras",       subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
-  { modulo: "Producción",    subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Producto No Conforme"] },
+  { modulo: "Producción",    subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Empleados", "Producto No Conforme"] },
   { modulo: "Ventas",        subs: ["Clientes", "Ventas", "Devoluciones"] },
 ];
 
@@ -27,11 +27,11 @@ type Celda = { nombre: string; modulo: string; subs?: string[] };
 
 const CELDAS: Celda[] = [
   { nombre: "Dashboard",     modulo: "Dashboard" },
-  { nombre: "Configuración", modulo: "Configuración", subs: ["Configuración"] },
+  { nombre: "Configuración", modulo: "Configuración", subs: ["Roles"] },
   // El sidebar agrupa Usuarios y Empleados bajo una sección "Usuarios", de ahí
   // que compartan celda. Sigue siendo "un módulo simple" en permisos: cada
   // sub-opción ofrece las 4 acciones de accionesDe("Configuración").
-  { nombre: "Usuarios",      modulo: "Configuración", subs: ["Usuarios", "Empleados"] },
+  { nombre: "Usuarios",      modulo: "Configuración", subs: ["Usuarios"] },
   { nombre: "Compras",       modulo: "Compras" },
   { nombre: "Producción",    modulo: "Producción" },
   { nombre: "Ventas",        modulo: "Ventas" },
@@ -213,6 +213,15 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     });
   };
 
+  const allPermissionsSelected = MENU_TREE.every(({ modulo, subs }) =>
+    subs.every(sub => accionesDe(modulo).every(a => (accesos[KEY(modulo, sub)] ?? []).includes(a))),
+  );
+
+  const toggleAllPermissions = () => {
+    setAccesos(allPermissionsSelected ? {} : fullAccesos());
+    setErrors(p => ({ ...p, modulos: undefined }));
+  };
+
   const selectedSubs = MENU_TREE.flatMap(({ modulo, subs }) =>
     subs.filter(sub => isSubOn(modulo, sub)).map(sub => ({ modulo, sub }))
   );
@@ -332,9 +341,17 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
           {/* ── RIGHT 50%: Permisos CRUD ── */}
           <div className="md:w-1/2 flex flex-col min-h-0 px-5 py-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
-              Asignar permisos al rol
-            </p>
+           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
+             Asignar permisos al rol
+           </p>
+            <button
+              type="button"
+              onClick={toggleAllPermissions}
+              className={`w-full mb-3 flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${allPermissionsSelected ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted text-foreground"}`}
+            >
+              <span>Todos los permisos y privilegios</span>
+              <Check className={`w-4 h-4 ${allPermissionsSelected ? "" : "opacity-20"}`} />
+            </button>
 
             {moduloActivo === null ? (
               <div className="flex flex-col items-center justify-center text-center flex-1">
@@ -466,6 +483,16 @@ export function GestionConfigScreen({
   };
 
   const handleDelete = (id: string) => {
+    const rol = roles.find(r => r.id === id);
+    const asignados = rolUserCounts[id] ?? 0;
+    if (id === "ROL-001" || id === "ROL-002" || asignados > 0) {
+      toast.error(
+        id === "ROL-001" || id === "ROL-002"
+          ? "No se puede eliminar un rol base"
+          : `No se puede eliminar el rol porque tiene ${asignados} usuario(s) asignado(s)`,
+      );
+      return;
+    }
     setRoles(p => p.filter(r => r.id !== id));
     setDeleteId(null);
     toast.success("Rol eliminado");
@@ -485,13 +512,19 @@ export function GestionConfigScreen({
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Configuración</h1>
+           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión de Roles</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{roles.length} roles registrados</p>
         </div>
-        <button onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
-          <Plus className="w-4 h-4" /> Crear Rol
-        </button>
+         <div className="flex items-center gap-2">
+           <button onClick={() => setPage(1)}
+             className="px-4 py-3 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted transition-colors cursor-pointer">
+             Ver todos los roles
+           </button>
+           <button onClick={() => setShowCreate(true)}
+             className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
+             <Plus className="w-4 h-4" /> Crear Rol
+           </button>
+         </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -524,7 +557,7 @@ export function GestionConfigScreen({
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => setDetailItem(r)} title="Ver detalle" className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => setEditItem(r)} title="Editar" className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => setDeleteId(r.id)} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                       <button onClick={() => handleDelete(r.id)} disabled={r.id === "ROL-001" || r.id === "ROL-002" || (rolUserCounts[r.id] ?? 0) > 0} title={(rolUserCounts[r.id] ?? 0) > 0 ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)` : "Eliminar"} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
