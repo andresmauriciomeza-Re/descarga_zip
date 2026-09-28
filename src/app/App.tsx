@@ -2454,12 +2454,20 @@ function ProductDetailScreen({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <button
-        onClick={() => navigate("catalog")}
-        className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 cursor-pointer transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Volver al menú
-      </button>
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => navigate("catalog")}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Volver al menú
+        </button>
+        <button
+          onClick={() => navigate("landing")}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        >
+          <Home className="w-4 h-4" /> Volver al inicio
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Image */}
