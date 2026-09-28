@@ -105,7 +105,7 @@ export function GestionUsuariosScreen({
   const [detail,     setDetail]    = useState<Usuario | null>(null);
   const [editItem,   setEditItem]  = useState<Usuario | null>(null);
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
-  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string | undefined>>({});
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
 
   // Formulario de alta (modal "Crear usuario"). Se guarda con un prefijo `new`
@@ -118,7 +118,7 @@ export function GestionUsuariosScreen({
   const [newDocumento, setNewDocumento] = useState("");
   const [newRolId,     setNewRolId]     = useState("");
   const [newActivo,    setNewActivo]    = useState(true);
-  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [createErrors, setCreateErrors] = useState<Record<string, string | undefined>>({});
 
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
@@ -207,7 +207,7 @@ export function GestionUsuariosScreen({
     setEmpleados(p => p.map(e => {
       if (e.correo.trim().toLowerCase() !== key) return e;
       const nombre = patch.nombre ?? e.nombre;
-      const iniciales = nombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+      const iniciales = nombre.trim().split(" ").filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
       return { ...e, ...patch, nombre, iniciales };
     }));
   };
@@ -250,7 +250,11 @@ export function GestionUsuariosScreen({
       if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
-    setUsuarios(p => p.map(u => u.id === editItem.id ? editItem : u));
+    // Se recalculan las iniciales al renombrar: antes se guardaba `editItem` tal
+    // cual y el avatar de la tabla, del detalle y de la vista previa seguían
+    // mostrando las del nombre viejo. Empleados y Clientes ya lo hacían así.
+    const nuevasIniciales = editItem.nombre.trim().split(" ").filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    setUsuarios(p => p.map(u => u.id === editItem.id ? { ...editItem, iniciales: nuevasIniciales } : u));
     updateEmpleadoLinked(editPrevCorreo ?? editItem.correo, {
       nombre: editItem.nombre,
       correo: editItem.correo,
@@ -349,7 +353,7 @@ export function GestionUsuariosScreen({
       return Math.max(max, n);
     }, 0);
     const newId = `USR-${String(maxNum + 1).padStart(3, "0")}`;
-    const iniciales = newNombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    const iniciales = newNombre.trim().split(" ").filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
     const avatarColor = AVATAR_COLORS[usuarios.length % AVATAR_COLORS.length];
 
     setUsuarios(prev => [

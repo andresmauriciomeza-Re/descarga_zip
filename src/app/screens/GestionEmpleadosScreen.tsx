@@ -109,7 +109,7 @@ export function GestionEmpleadosScreen({
 }) {
   const [search,      setSearch]    = useState("");
   const [filterEstado,setFiltro]    = useState("todos");
-  const [editErrors,  setEditErrors] = useState<Record<string, string>>({});
+  const [editErrors,  setEditErrors] = useState<Record<string, string | undefined>>({});
   const [sortBy,      setSortBy]    = useState("nombre");
   const [page,        setPage]      = useState(1);
   const [detailItem,  setDetailItem] = useState<Empleado | null>(null);
@@ -128,7 +128,7 @@ export function GestionEmpleadosScreen({
   const [ctrCargo,          setCtrCargo]         = useState("");
   const [ctrFechaInicio,    setCtrFechaInicio]   = useState("");
   const [ctrFechaFinal,     setCtrFechaFinal]    = useState("");
-  const [ctrErrors,         setCtrErrors]        = useState<Record<string, string>>({});
+  const [ctrErrors,         setCtrErrors]        = useState<Record<string, string | undefined>>({});
 
   const [newNombre,       setNewNombre]       = useState("");
   const [newCorreo,       setNewCorreo]       = useState("");
@@ -144,7 +144,7 @@ export function GestionEmpleadosScreen({
   const [newCargo,        setNewCargo]        = useState("");
   const [newFechaInicio,  setNewFechaInicio]  = useState("");
   const [newFechaFinal,   setNewFechaFinal]   = useState("");
-  const [createErrors,    setCreateErrors]    = useState<Record<string, string>>({});
+  const [createErrors,    setCreateErrors]    = useState<Record<string, string | undefined>>({});
 
   const rolInfo = (rolId: string) => roles.find(r => r.id === rolId) ?? null;
   const rolNombre = (rolId: string) => rolInfo(rolId)?.nombre ?? rolId;

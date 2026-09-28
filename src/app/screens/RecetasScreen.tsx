@@ -102,7 +102,14 @@ export function RecetasScreen() {
 
   const handleCreate = () => {
     if (!validarForm(form)) return;
-    const newId = `REC-${String(recetas.length + 1).padStart(3,"0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado una receta del
+    // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
+    // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = recetas.reduce((max, r) => {
+      const n = parseInt(r.id.replace("REC-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `REC-${String(nextNum).padStart(3,"0")}`;
     setRecetas(p => [...p, { id: newId, ...form }]);
     setShowCreate(false); setForm(emptyForm());
     toast.success("Receta creada correctamente");

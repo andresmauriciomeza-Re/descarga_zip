@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from "react";
+﻿import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -496,6 +496,13 @@ export function VentasScreen({
     (page - 1) * PER_PAGE,
     page * PER_PAGE,
   );
+
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
 
   // Lista de usuarios registrados para el autocomplete
   const USUARIOS_LISTA = [

@@ -93,7 +93,11 @@ function CompraForm({
 }) {
   const isView = mode === "view";
   const isPage = fullPage;
-  const today = new Date().toISOString().slice(0, 10);
+  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) después de las
+  // 19:00 devolvía el día siguiente, así que las facturas de hoy quedaban
+  // bloqueadas por el `max` del date-picker. Se usa la fecha local, que es la
+  // convención del proyecto (App.tsx, ProductosPerecederosScreen).
+  const today = new Date().toLocaleDateString("en-CA");
 
   const [numeroFactura, setNumeroFactura] = useState(compra?.numeroFactura ?? "");
   const [fechaFactura, setFechaFactura] = useState(compra?.fechaFactura || today);
@@ -665,6 +669,11 @@ export function GestionCompraScreen({
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion; next: EstadoGestion } | null>(null);
 
+  // Se declara antes del `useMemo` de abajo porque la fábrica lo invoca durante
+  // el render; como `const`, usarla desde allí la lanzaba en TDZ
+  // ("Cannot access 'getOrden' before initialization") al escribir en el buscador.
+  const getOrden = (oid: string) => ordenes.find(o => o.id === oid);
+
   const filtered = useMemo(() =>
     gestiones.filter(g => {
       const q = search.toLowerCase();
@@ -678,8 +687,6 @@ export function GestionCompraScreen({
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  const getOrden = (oid: string) => ordenes.find(o => o.id === oid);
 
   /** Orden de compra relacionada con la compra del diálogo de confirmación. */
   const estadoOrdenConfirm = estadoConfirm
