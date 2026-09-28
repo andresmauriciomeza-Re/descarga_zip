@@ -1858,7 +1858,14 @@ function LandingScreen({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08, duration: 0.45 }}
-                onClick={() => navigate("catalog")}
+                onClick={() => {
+                  const producto = PRODUCTS.find(
+                    (item) => item.id === p.productoId,
+                  );
+                  if (!producto) return;
+                  setProduct(producto);
+                  navigate("product-detail");
+                }}
                 className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
               >
                 {/* Image */}
