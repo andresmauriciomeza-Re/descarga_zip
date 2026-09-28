@@ -6797,6 +6797,25 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
 const CARRITO_STORAGE_KEY = "sivpro.carrito.v1";
 const CARRITOS_USUARIOS_STORAGE_KEY = "sivpro.carritos.usuarios.v1";
 
+// No hay credenciales persistidas en esta build, pero se limpian también las
+// claves que usa el contrato de autenticación para evitar sesiones parciales
+// si el backend se habilita o una versión anterior dejó datos en el navegador.
+const AUTH_STORAGE_KEYS = [
+  "token",
+  "accessToken",
+  "refreshToken",
+  "authToken",
+  "user",
+  "currentUser",
+  "userRole",
+  "role",
+  "permissions",
+  "sivpro.token",
+  "sivpro.user",
+  "sivpro.role",
+  "sivpro.permissions",
+];
+
 // Cartrito ligado a cada cuenta, indexado por `Usuario.id`.
 type CarritosPorUsuario = Record<string, CartItem[]>;
 
@@ -7062,8 +7081,11 @@ export default function App() {
     escribirCarritoGuardado(cart);
   }, [cart, loggedInUserId]);
 
-  const navigate = (s: Screen) => {
+  const navigate = (s: Screen, options?: { replace?: boolean }) => {
     setScreen(s);
+    if (options?.replace) {
+      window.history.replaceState(null, "", "/");
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     setDrawerOpen(false);
   };
@@ -7117,31 +7139,68 @@ export default function App() {
     toast.success("Producto eliminado del carrito");
   };
 
-  const logout = () => {
-    setIsLoggedIn(false);
-    setUserRole("Administrador");
-    setLoggedInUserId(null);
-    clear();
-    navigate("landing");
-    toast.success("Has cerrado sesión correctamente");
+  const clearAuthStorage = () => {
+    for (const storage of [window.localStorage, window.sessionStorage]) {
+      try {
+        for (const key of AUTH_STORAGE_KEYS) storage.removeItem(key);
+      } catch {
+        // El almacenamiento puede estar bloqueado por el navegador.
+      }
+    }
+
+    // Solo se pueden eliminar cookies accesibles desde JavaScript.
+    for (const cookie of document.cookie.split(";")) {
+      const name = cookie.split("=", 1)[0]?.trim();
+      if (name) document.cookie = `${name}=; Max-Age=0; path=/`;
+    }
   };
 
+  // El frontend actual no tiene endpoint de logout. Si se configura uno para
+  // una integración futura, la limpieza local sigue ocurriendo en finally.
+  const logout = async () => {
+    try {
+      const endpoint = import.meta.env.VITE_AUTH_LOGOUT_URL;
+      if (endpoint) {
+        await fetch(endpoint, { method: "POST", credentials: "include" });
+      }
+    } catch {
+      // La sesión local debe cerrarse aunque el servidor no responda.
+    } finally {
+      clearAuthStorage();
+      setIsLoggedIn(false);
+      setUserRole("");
+      setLoggedInUserId(null);
+      navigate("landing", { replace: true });
+      toast.success("Has cerrado sesión correctamente");
+    }
+  };
+
+  // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
+  // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
+  const hasValidSession = isLoggedIn && (
+    userRole === "Usuario" || (loggedInUser !== null && loggedInRol !== null)
+  );
+
   // Only admin role can access admin screens; clients are redirected
-  const isAdminRole = userRole === "Administrador";
+  const isAdminRole = hasValidSession && userRole === "Administrador";
   const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
   const isAuth = screen === "login" || screen === "register";
 
-  // If a client somehow lands on an admin screen, send them back
+  useEffect(() => {
+    if (isLoggedIn && !hasValidSession) void logout();
+  }, [isLoggedIn, hasValidSession]);
+
+  // If a client or an invalid session somehow lands on an admin screen, send
+  // them out of the protected area.
   if (
-    isLoggedIn &&
-    !isAdminRole &&
+    (!hasValidSession || !isAdminRole) &&
     ADMIN_SCREENS.includes(screen)
   ) {
-    setTimeout(() => navigate("catalog"), 0);
+    setTimeout(() => navigate("landing", { replace: true }), 0);
   }
 
-  if (!isLoggedIn && screen === "mis-pedidos") {
-    setTimeout(() => navigate("login"), 0);
+  if (!hasValidSession && screen === "mis-pedidos") {
+    setTimeout(() => navigate("landing", { replace: true }), 0);
   }
 
   // Dashboard and Inicio are mutually exclusive landing screens. Other admin
