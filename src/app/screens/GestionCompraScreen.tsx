@@ -5,6 +5,7 @@ import {
   FileDown, Plus, Check, Ban, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportToExcel } from "../utils/exportExcel";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
@@ -703,44 +704,54 @@ export function GestionCompraScreen({
   };
 
   const handleDownload = () => {
-    const rows: string[][] = [
-      ["ID Gestión", "OC Asociada", "Proveedor", "N° Factura", "Fecha Factura", "Valor Total", "Estado"],
-    ];
-    gestiones.forEach(g => {
-      const orden = getOrden(g.ordenId);
-      rows.push([
-        g.id, g.ordenId || "—", (orden?.proveedor ?? g.proveedor) || "—",
-        g.numeroFactura, g.fechaFactura,
-        String(g.valorTotal), g.estado,
-      ]);
-    });
-    const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "gestiones_compra.csv"; a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV descargado");
+    exportToExcel(
+      filtered.map(g => ({
+        proveedor: (getOrden(g.ordenId)?.proveedor ?? g.proveedor) || "—",
+        fechaFactura: g.fechaFactura,
+        numeroFactura: g.numeroFactura,
+        total: fmtCOP(g.valorTotal),
+        estado: g.estado,
+      })),
+      [
+        { key: "proveedor", label: "Proveedor" },
+        { key: "fechaFactura", label: "Fecha de factura" },
+        { key: "numeroFactura", label: "N° Factura" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+      ],
+      "gestion-de-compras"
+    );
+    toast.success("Excel descargado");
   };
 
   return (
     <div className="px-6 pt-5 pb-4 max-w-5xl mx-auto h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Gestión de Compras
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Registro de facturas vinculadas a órdenes completadas
-          </p>
+      <div className="mb-5 shrink-0">
+        <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
+          Gestión de Compras
+        </h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Registro de facturas vinculadas a órdenes completadas
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 mb-4 shrink-0">
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Buscar por ID, OC o N° Factura..."
+            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
-            title="Descargar CSV"
+            title="Descargar Excel"
             className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
           >
-            <FileDown className="w-4 h-4" /> CSV
+            <FileDown className="w-4 h-4" /> Excel
           </button>
           {canCreate && (
             <button
@@ -750,18 +761,6 @@ export function GestionCompraScreen({
               <Plus className="w-4 h-4" /> Crear Compra
             </button>
           )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por ID, OC o N° Factura..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
         </div>
       </div>
 
