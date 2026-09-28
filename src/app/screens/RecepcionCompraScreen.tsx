@@ -64,7 +64,11 @@ export function RecepcionCompraScreen({
   onGuardar,
   onBack,
 }: Props) {
-  const today = new Date().toISOString().slice(0, 10);
+  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) después de las
+  // 19:00 devolvía el día siguiente, así que la recepción de hoy quedaba
+  // bloqueada por el `max` del date-picker. Se usa la fecha local, que es la
+  // convención del proyecto.
+  const today = new Date().toLocaleDateString("en-CA");
 
   const registrados = useMemo(
     () => registradosEnOrden(gestiones, orden.id),

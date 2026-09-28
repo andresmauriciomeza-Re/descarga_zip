@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -542,12 +542,26 @@ export function GestionProductosScreen({
     page * PER_PAGE,
   );
 
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
+
   const handleCreate = () => {
     if (!form.nombre || !form.idCategoria) {
       toast.error("Nombre y categoría son obligatorios");
       return;
     }
-    const newId = `PROD-${String(productos.length + 1).padStart(3, "0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado un producto del
+    // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
+    // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = productos.reduce((max, p) => {
+      const n = parseInt(p.id.replace("PROD-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `PROD-${String(nextNum).padStart(3, "0")}`;
     setProductos((p) => [{ id: newId, ...form }, ...p]);
     const hasficha = fichaVersiones.some(v => v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1 || v.pasos.length > 0);
     if (hasficha) setFichas(prev => ({ ...prev, [newId]: fichaVersiones }));

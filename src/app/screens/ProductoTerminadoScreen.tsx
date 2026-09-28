@@ -65,7 +65,9 @@ export function ProductoTerminadoScreen() {
 
   const handleConfirmarEntrega = () => {
     if (!confirmItem) return;
-    const hoy = new Date().toISOString().slice(0, 10);
+    // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
+  // contaba el día siguiente como entregado hoy.
+  const hoy = new Date().toLocaleDateString("en-CA");
     setProductos(prev => prev.map(p =>
       p.id === confirmItem.id
         ? { ...p, estadoEntrega: "entregado", recalentado, fechaEntregaReal: hoy }

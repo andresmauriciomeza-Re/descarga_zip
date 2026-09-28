@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -161,6 +161,13 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
+
   const inputCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const disabledCls = "w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
@@ -169,7 +176,14 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
       toast.error("NIT, nombre, teléfono y email son obligatorios");
       return;
     }
-    const newId = `PROV-${String(suppliers.length + 1).padStart(3, "0")}`;
+    // `length + 1` reutilizaba un id existente si se había borrado un proveedor
+    // del medio: quedaban dos filas con la misma clave y editar/borrar una
+    // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
+    const nextNum = suppliers.reduce((max, s) => {
+      const n = parseInt(s.id.replace("PROV-", ""), 10) || 0;
+      return Math.max(max, n);
+    }, 0) + 1;
+    const newId = `PROV-${String(nextNum).padStart(3, "0")}`;
     setSuppliers(p => [{ id: newId, ...form }, ...p]);
     setShowCreate(false);
     setForm(emptySupplier());
