@@ -11,7 +11,7 @@ import type {
   EstadoOrden,
 } from "./OrdenCompraScreen";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Eye, Pencil, Trash2, X, AlertCircle, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 // ── Árbol de módulos / sub-opciones del sistema ──────────────────────
 export const MENU_TREE = [

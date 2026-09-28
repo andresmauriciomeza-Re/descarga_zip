@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO  = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO  = "var(--font-texto)";
 const PER_PAGE = 5;
 
 // Categorías de insumos (Tb_Categoria_Insumos)

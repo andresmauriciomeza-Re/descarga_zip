@@ -6,7 +6,7 @@ import {
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 const TODAY = { y: 2026, m: 8, d: 20 };
 const DOW_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MON_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

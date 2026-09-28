@@ -7,7 +7,7 @@ import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 import { soloDigitos, filtrarDocumento } from "../components/campo";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 export const DOC_TIPOS = [
   { code: "CC", label: "Cédula de Ciudadanía" },

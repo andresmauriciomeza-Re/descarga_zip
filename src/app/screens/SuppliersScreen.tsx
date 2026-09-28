@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 function ConfirmModal({
   title, message, onConfirm, onCancel,

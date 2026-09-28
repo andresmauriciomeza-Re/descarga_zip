@@ -10,8 +10,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { Venta, VentaStatus } from "./VentasScreen";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO = "var(--font-texto)";
 
 const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 

@@ -2,6 +2,8 @@
 
 :root {
   --font-size: 16px;
+  --font-titulo: 'Montserrat', sans-serif;
+  --font-texto: 'Poppins', sans-serif;
   --background: #ffffff;
   --foreground: #1a1a1a;
   --card: #ffffff;
@@ -128,53 +130,75 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-texto);
+    font-size: 14px;
   }
 
   html {
     font-size: var(--font-size);
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-texto);
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-titulo);
+    font-weight: 700;
+  }
+
+  h3,
+  h4 {
+    font-family: var(--font-titulo);
+    font-weight: 400;
   }
 
   h1 {
     font-size: var(--text-2xl);
-    font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
   h2 {
     font-size: var(--text-xl);
-    font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
   h3 {
     font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
   h4 {
     font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
-  label {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+  label,
+  input,
+  button,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: 14px;
   }
 
-  button {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+  h3.font-bold,
+  h4.font-bold {
+    font-weight: 700;
   }
 
-  input {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
-    line-height: 1.5;
+  h3:not(.font-bold),
+  h4:not(.font-bold) {
+    font-weight: 400 !important;
+  }
+
+  body :where(p, label, input, button, select, textarea, option, td, th, span, a) {
+    font-family: var(--font-texto) !important;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+  }
+
+  .font-mono,
+  .font-serif,
+  .font-sans {
+    font-family: var(--font-texto) !important;
   }
 }

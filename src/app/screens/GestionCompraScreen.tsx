@@ -20,7 +20,7 @@ import {
   type ProveedorRef,
 } from "./OrdenCompraScreen";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 
 const ESTADO_CONFIG: Record<EstadoGestion, string> = {

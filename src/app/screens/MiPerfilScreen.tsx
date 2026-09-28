@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "./GestionEmpleadosScreen";
 import { validarCorreo, validarTelefono } from "../components/campo";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 interface Props {
   navigate: (s: string) => void;

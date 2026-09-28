@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────

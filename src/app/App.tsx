@@ -572,8 +572,8 @@ const ORDERS: Order[] = [
 
 // ─────────────────────────── CONSTANTS ───────────────────────────
 
-const SERIF = "'DM Serif Display', serif";
-const MONO = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO = "var(--font-texto)";
 
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
@@ -5650,8 +5650,8 @@ function GenericAdmin({
 
 // ─────────────────────────── DEVOLUCIONES SCREEN ───────────────────────────
 
-const SERIF_DEV = "'DM Serif Display', serif";
-const MONO_DEV  = "'JetBrains Mono', monospace";
+const SERIF_DEV = "var(--font-titulo)";
+const MONO_DEV  = "var(--font-texto)";
 const fmtCOPDev = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 const nowHoraDev = () =>
@@ -7180,7 +7180,7 @@ export default function App() {
   return (
     <div
       className="min-h-screen bg-background text-foreground"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
+      style={{ fontFamily: "var(--font-texto)" }}
     >
       <Toaster
         position="top-right"
@@ -7188,7 +7188,7 @@ export default function App() {
         closeButton
         toastOptions={{
           style: {
-            fontFamily: "'DM Sans', sans-serif",
+            fontFamily: "var(--font-texto)",
             fontSize: "15px",
           },
         }}

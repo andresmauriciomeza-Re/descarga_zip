@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 
 type Tipo = "Producto" | "Insumo" | "Venta";

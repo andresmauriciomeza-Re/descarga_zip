@@ -1,7 +1,7 @@
 import React from "react";
 import { Plus, Search } from "lucide-react";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 export const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
 

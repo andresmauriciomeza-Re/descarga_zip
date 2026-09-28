@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 import type { Producto } from "./GestionProductosScreen";
 
-const SERIF = "'DM Serif Display', serif";
+const SERIF = "var(--font-titulo)";
 
 type EstadoOrden = "pendiente" | "en-proceso" | "completada" | "cancelada";
 

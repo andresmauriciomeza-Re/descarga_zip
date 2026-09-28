@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 import { EstadoSwitch } from "../components/EstadoSwitch";
 
-const SERIF = "'DM Serif Display', serif";
-const MONO  = "'JetBrains Mono', monospace";
+const SERIF = "var(--font-titulo)";
+const MONO  = "var(--font-texto)";
 
 // ─────────────────────────── GESTIÓN AGENDA ───────────────────────────
 
