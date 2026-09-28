@@ -195,6 +195,15 @@ interface CartItem {
   extrasPrice: number;
 }
 
+interface PendingOrder {
+  metodoPago: string;
+  comprobante: string;
+  items: CartItem[];
+  horaRecogida: string;
+  nombre?: string;
+  documento?: string;
+}
+
 interface Order {
   id: string;
   client: string;
@@ -1132,6 +1141,7 @@ function Sidebar({
 
 function PublicNav({
   navigate,
+  onLogin,
   cart,
   isLoggedIn,
   isStaff,
@@ -1243,7 +1253,7 @@ function PublicNav({
             </button>
           ) : (
             <button
-              onClick={() => navigate("login")}
+              onClick={onLogin}
               className="px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20"
             >
               Iniciar sesión
@@ -1440,6 +1450,7 @@ function MobileDrawer({
   open,
   onClose,
   navigate,
+  onLogin,
   cart,
   isLoggedIn,
   onLogout,
@@ -1447,6 +1458,7 @@ function MobileDrawer({
   open: boolean;
   onClose: () => void;
   navigate: (s: Screen) => void;
+  onLogin: () => void;
   cart: CartItem[];
   isLoggedIn: boolean;
   onLogout: () => void;
@@ -2649,6 +2661,9 @@ function CartScreen({
   remove,
   clear,
   onOrder,
+  isLoggedIn,
+  onRequireLogin,
+  confirmationHora,
 }: {
   cart: CartItem[];
   navigate: (s: Screen) => void;
@@ -2660,17 +2675,26 @@ function CartScreen({
     comprobante: string,
     items: CartItem[],
     horaRecogida: string,
+    clienteNombre?: string,
   ) => void;
+  isLoggedIn: boolean;
+  onRequireLogin: (order: PendingOrder) => void;
+  confirmationHora?: string;
 }) {
   const [payment, setPayment] = useState("Nequi");
-  const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 2>(
+  const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 2 | 3>(
     0,
   );
   const [comprobante, setComprobante] = useState<string>("");
   const [horaRecogida, setHoraRecogida] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [guestDocument, setGuestDocument] = useState("");
   const [loading, setLoading] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] =
-    useState(false);
+    useState(Boolean(confirmationHora));
+  const [horaConfirmada, setHoraConfirmada] = useState(
+    confirmationHora ?? "",
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cartTotal = (item: CartItem) =>
@@ -2697,12 +2721,33 @@ function CartScreen({
       toast.error("Por favor selecciona la hora de recogida");
       return;
     }
+    if (!isLoggedIn) {
+      setCheckoutStep(3);
+      return;
+    }
     setLoading(true);
     setTimeout(() => {
       onOrder(payment, comprobante, [...cart], horaRecogida);
       clear();
       setLoading(false);
       setCheckoutStep(0);
+      setHoraConfirmada(horaRecogida);
+      setPedidoConfirmado(true);
+    }, 1400);
+  };
+
+  const submitAsGuest = () => {
+    if (!guestName.trim() || !guestDocument.trim()) {
+      toast.error("Ingresa tu nombre y documento para continuar");
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      onOrder(payment, comprobante, [...cart], horaRecogida, guestName.trim());
+      clear();
+      setLoading(false);
+      setCheckoutStep(0);
+      setHoraConfirmada(horaRecogida);
       setPedidoConfirmado(true);
     }, 1400);
   };
@@ -2717,68 +2762,52 @@ function CartScreen({
         >
           ¡Pedido recibido!
         </h2>
-        <p className="text-muted-foreground mb-2">
-          Estamos verificando tu comprobante de pago.
-        </p>
-        <p className="text-muted-foreground mb-6 text-sm">
-          Esto tardará unos pocos minutos — te confirmaremos
-          cuando tu pedido esté listo.
-        </p>
-
-        {/* Status indicator */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-          <span className="text-sm font-semibold text-amber-700">
-            Esperando confirmación
-          </span>
-        </div>
-
-        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-          <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" /> Dónde
-            recoger tu pedido
-          </h3>
-          <p className="text-xs text-muted-foreground mb-3">
-            Podrás pasar a recogerlo una vez que tu pedido sea
-            confirmado.
-          </p>
-          <p className="text-foreground font-semibold">
-            La Sirena Pizza
-          </p>
+         <p className="text-muted-foreground mb-2">
+           Estamos verificando tu comprobante de pago.
+         </p>
+         <p className="text-muted-foreground mb-6 text-sm">
+           Esto tardará unos pocos minutos; te confirmaremos cuando tu pedido esté listo.
+         </p>
+         <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+           <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+             <MapPin className="w-4 h-4 text-primary" /> Dónde
+             recoger tu pedido
+           </h3>
+           <p className="text-sm text-muted-foreground mb-4">
+             Podrás pasar por tu pedido
+             {horaConfirmada ? ` a las ${horaConfirmada}` : ""}.
+           </p>
+           <div className="mb-4 border-l-2 border-primary/60 pl-3">
+             <p className="text-xs text-muted-foreground">Hora de recogida</p>
+             <p className="text-base font-bold text-primary">
+               {horaConfirmada}
+             </p>
+           </div>
+           <p className="text-foreground font-semibold">
+             La Sirena Pizza
+           </p>
           <p className="text-muted-foreground text-sm">
             Cra. 45 #104-30, Laureles
           </p>
           <p className="text-muted-foreground text-sm">
             Medellín, Antioquia
           </p>
-          <div className="mt-3 pt-3 border-t border-border space-y-1">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5" /> 604 234 5678
-            </p>
-            <p className="text-xs font-semibold text-primary">
-              Horario: Jue – Dom · 4:00 pm – 10:00 pm
-            </p>
-          </div>
-        </div>
-
-        {horaRecogida && (
-          <div className="bg-primary/10 border border-primary/20 rounded-2xl px-5 py-3.5 mb-6 flex items-center gap-3">
-            <span className="text-xl">🕐</span>
-            <div className="text-left">
-              <p className="text-xs text-muted-foreground font-medium">
-                Hora de recogida solicitada
-              </p>
-              <p className="text-base font-bold text-primary">
-                {horaRecogida}
-              </p>
-            </div>
-          </div>
-        )}
+           <div className="mt-3 pt-3 border-t border-border space-y-1">
+             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+               <Phone className="w-3.5 h-3.5" /> 604 234 5678
+             </p>
+             <p className="text-xs font-semibold text-primary">
+               Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+             </p>
+           </div>
+         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <PrimaryBtn onClick={() => navigate("mis-pedidos")} size="lg">
-            Ver mis pedidos
-          </PrimaryBtn>
+          {isLoggedIn && (
+            <PrimaryBtn onClick={() => navigate("mis-pedidos")} size="lg">
+              Ver mis pedidos
+            </PrimaryBtn>
+          )}
           <GhostBtn
             onClick={() => navigate("landing")}
             className="px-7 py-4 text-lg min-h-[56px]"
@@ -2894,13 +2923,17 @@ function CartScreen({
                         className="text-sm text-muted-foreground"
                         style={{ fontFamily: MONO }}
                       >
-                        {fmt(item.sizePrice + item.extrasPrice)} c/u
+                        {fmt(item.sizePrice + item.extrasPrice)}{" "}
+                        <span className="text-[11px] font-sans">unitario</span>
                       </span>
                       <span
                         className="font-bold text-foreground"
                         style={{ fontFamily: MONO }}
                       >
-                        {fmt(cartTotal(item))}
+                        {fmt(cartTotal(item))}{" "}
+                        <span className="text-[11px] font-sans font-normal text-muted-foreground">
+                          subtotal
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -2919,7 +2952,7 @@ function CartScreen({
               <div className="space-y-2 mb-4 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>
-                    Subtotal (
+                    Total (
                     {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
                     productos)
                   </span>
@@ -2928,7 +2961,7 @@ function CartScreen({
                   </span>
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between font-bold text-base text-foreground">
-                  <span>Total</span>
+                   <span>Total</span>
                   <span style={{ fontFamily: MONO }}>
                     {fmt(subtotal)}
                   </span>
@@ -3006,12 +3039,24 @@ function CartScreen({
                             </p>
                           )}
                         </div>
-                        <span
-                          className="text-sm font-bold text-foreground shrink-0"
-                          style={{ fontFamily: MONO }}
-                        >
-                          {fmt(cartTotal(item))}
-                        </span>
+                        <div className="flex flex-col items-end shrink-0 text-right">
+                          <span
+                            className="text-xs text-muted-foreground"
+                            style={{ fontFamily: MONO }}
+                          >
+                            {fmt(item.sizePrice + item.extrasPrice)}{" "}
+                            <span className="font-sans text-[10px]">unitario</span>
+                          </span>
+                          <span
+                            className="text-sm font-bold text-foreground"
+                            style={{ fontFamily: MONO }}
+                          >
+                            {fmt(cartTotal(item))}{" "}
+                            <span className="font-sans text-[10px] font-normal text-muted-foreground">
+                              subtotal
+                            </span>
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -3067,10 +3112,14 @@ function CartScreen({
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
                       Hora de recogida
                     </p>
-                    {/* Business hours badge */}
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 mb-2 w-fit">
-                      <span>🟢</span>
-                      Atendemos de <strong>4:00 PM</strong> a <strong>10:00 PM</strong>
+                    <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
+                      <p>
+                        Atendemos de <strong className="text-foreground">4:00 PM</strong> a{" "}
+                        <strong className="text-foreground">10:00 PM</strong>
+                      </p>
+                      <p className="text-xs mt-0.5">
+                        Ejemplo: a las <strong className="text-foreground">06:00 p. m.</strong>
+                      </p>
                     </div>
                     <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${
                       horaRecogida && (() => {
@@ -3088,13 +3137,13 @@ function CartScreen({
                         value={horaRecogida}
                         min="16:00"
                         max="21:59"
+                        aria-label="Hora de recogida, por ejemplo 06:00 p. m."
                         onChange={(e) => setHoraRecogida(e.target.value)}
                         className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
                       />
                     </div>
-                    {/* Example hint */}
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      Ej: <span className="font-semibold text-foreground">06:30 PM</span> — usa el formato HH:MM y selecciona AM/PM
+                      Ej: <span className="font-semibold text-foreground">06:00 p. m.</span> — usa el formato HH:MM y selecciona AM/PM
                     </p>
                     {/* Past-time / out-of-hours error */}
                     {horaRecogida && (() => {
@@ -3157,6 +3206,73 @@ function CartScreen({
                 </button>
               </div>
             </motion.div>
+            </div>
+          </div>
+        )}
+        {checkoutStep === 3 && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4 p-6"
+              >
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <h3
+                    className="text-xl font-bold text-foreground"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    Datos para enviar tu pedido
+                  </h3>
+                  <button
+                    onClick={() => setCheckoutStep(0)}
+                    title="Volver al carrito"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-sm text-muted-foreground mb-5">
+                  Ingresa tus datos para continuar como invitado o inicia sesión.
+                </p>
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Nombre completo
+                    </label>
+                    <input
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      placeholder="Ej: Laura Martínez"
+                      className="w-full px-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Documento
+                    </label>
+                    <input
+                      value={guestDocument}
+                      onChange={(e) => setGuestDocument(e.target.value)}
+                      placeholder="Ej: 1234567890"
+                      inputMode="numeric"
+                      className="w-full px-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={submitAsGuest}
+                    disabled={loading}
+                    className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                    {loading ? "Enviando..." : "Ingresar"}
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
         )}
@@ -3292,7 +3408,7 @@ function CartScreen({
                 </button>
                 <button
                   onClick={handleConfirm}
-                  disabled={loading || !comprobante}
+                  disabled={loading}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -3301,8 +3417,8 @@ function CartScreen({
                     <CheckCircle className="w-4 h-4" />
                   )}
                   {loading
-                    ? "Confirmando..."
-                    : "Confirmar pedido"}
+                    ? "Enviando..."
+                    : "Enviar"}
                 </button>
               </div>
             </motion.div>
@@ -3703,11 +3819,14 @@ function LoginScreen({
   onLogin,
   usuarios,
   darkMode,
+  loginNotice,
 }: {
   navigate: (s: Screen) => void;
+  onLogin: () => void;
   onLogin: (role: string, email: string) => void;
   usuarios: Usuario[];
   darkMode: boolean;
+  loginNotice?: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -3903,6 +4022,12 @@ function LoginScreen({
           ) : null}
           {loading ? "Ingresando..." : "Iniciar sesión"}
         </PrimaryBtn>
+
+        {loginNotice && (
+          <p className="text-center text-sm font-semibold text-red-600 mb-3">
+            Debes iniciar sesión para poder hacer un pedido.
+          </p>
+        )}
 
         <div className="relative mb-2.5">
           <div className="absolute inset-0 flex items-center">
@@ -4174,6 +4299,12 @@ function ForgotPasswordModal({
             >
               ← Ingresar otro correo
             </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              Volver a iniciar sesión
+            </button>
           </>
         )}
 
@@ -4239,6 +4370,12 @@ function ForgotPasswordModal({
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : null}
               {loading ? "Cambiando..." : "Cambiar contraseña"}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              Volver a iniciar sesión
             </button>
           </>
         )}
@@ -6951,6 +7088,9 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
+  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null);
+  const [loginNotice, setLoginNotice] = useState(false);
   // Catálogo de productos. Lo consumen GestionProductosScreen y
   // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
   // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
@@ -7061,6 +7201,11 @@ export default function App() {
     setDrawerOpen(false);
   };
 
+  const openLogin = () => {
+    setLoginNotice(false);
+    navigate("login");
+  };
+
   const quickAdd = (product: Product) => {
     const existing = cart.find(
       (i) =>
@@ -7094,6 +7239,40 @@ export default function App() {
 
   const addDetailed = (item: CartItem) =>
     setCart((p) => [...p, item]);
+
+  const registrarPedido = (
+    metodoPago: string,
+    comprobante: string,
+    items: CartItem[],
+    horaRecogida: string,
+    clienteNombre?: string,
+  ) => {
+    const newVenta: Venta = {
+      id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
+      usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
+      fecha: new Date().toLocaleDateString("en-CA"),
+      productos: items
+        .map((i) => `${i.product.name} x${i.quantity}`)
+        .join(", "),
+      cantidad: items.reduce((s, i) => s + i.quantity, 0),
+      total: items.reduce(
+        (s, i) => s + (i.sizePrice + i.extrasPrice) * i.quantity,
+        0,
+      ),
+      estado: "por-verificar" as VentaStatus,
+      metodoPago,
+      comprobante,
+      horaRecogida,
+      detalle: items.map((i) => ({
+        nombre: `${i.product.name} — ${i.size}`,
+        precio: i.sizePrice + i.extrasPrice,
+        cantidad: i.quantity,
+        imagen: i.product.image,
+        extras: i.selectedExtras,
+      })),
+    };
+    setVentas((prev) => [newVenta, ...prev]);
+  };
 
   const updateQty = (id: string, qty: number) => {
     if (qty <= 0) {
@@ -7158,8 +7337,8 @@ export default function App() {
   const isAuth = screen === "login" || screen === "register";
 
   useEffect(() => {
-    if (isLoggedIn && !hasValidSession) void logout();
-  }, [isLoggedIn, hasValidSession]);
+    if (isLoggedIn && !hasValidSession && !pendingOrder) void logout();
+  }, [isLoggedIn, hasValidSession, pendingOrder]);
 
   // If a client or an invalid session somehow lands on an admin screen, send
   // them out of the protected area.
@@ -7246,6 +7425,7 @@ export default function App() {
         {!isAdmin && !isAuth && (
           <PublicNav
             navigate={navigate}
+            onLogin={openLogin}
             cart={cart}
             isLoggedIn={isLoggedIn}
             isStaff={isStaff}
@@ -7324,47 +7504,14 @@ export default function App() {
                   updateQty={updateQty}
                   remove={remove}
                   clear={() => setCart([])}
-                  onOrder={(
-                    metodoPago,
-                    comprobante,
-                    items,
-                    horaRecogida,
-                  ) => {
-                    const newVenta: Venta = {
-                      id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
-                      usuario: pedidosUsuarioNombre,
-                      fecha: new Date().toLocaleDateString("en-CA"),
-                      productos: items
-                        .map(
-                          (i) =>
-                            `${i.product.name} x${i.quantity}`,
-                        )
-                        .join(", "),
-                      cantidad: items.reduce(
-                        (s, i) => s + i.quantity,
-                        0,
-                      ),
-                      total: items.reduce(
-                        (s, i) =>
-                          s +
-                          (i.sizePrice + i.extrasPrice) *
-                            i.quantity,
-                        0,
-                      ),
-                      estado: "por-verificar" as VentaStatus,
-                      metodoPago,
-                      comprobante,
-                      horaRecogida,
-                      detalle: items.map((i) => ({
-                        nombre: `${i.product.name} — ${i.size}`,
-                        precio: i.sizePrice + i.extrasPrice,
-                        cantidad: i.quantity,
-                        imagen: i.product.image,
-                        extras: i.selectedExtras,
-                      })),
-                    };
-                    setVentas((prev) => [newVenta, ...prev]);
+                  onOrder={registrarPedido}
+                  isLoggedIn={isLoggedIn}
+                  onRequireLogin={(order) => {
+                    setPendingOrder(order);
+                    setLoginNotice(true);
+                    onLogin();
                   }}
+                  confirmationHora={orderConfirmation ?? undefined}
                 />
               )}
               {screen === "mis-pedidos" && (
@@ -7375,12 +7522,30 @@ export default function App() {
                 />
               )}
               {screen === "login" && (
-                <LoginScreen
-                  navigate={navigate}
-                  usuarios={usuarios}
-                  darkMode={darkMode}
+                  <LoginScreen
+                    navigate={navigate}
+                    usuarios={usuarios}
+                    darkMode={darkMode}
+                    loginNotice={loginNotice}
                   onLogin={(role: string, loginEmail: string) => {
                     setIsLoggedIn(true);
+                    setLoginNotice(false);
+                    const orderToResume = pendingOrder;
+                    if (orderToResume) {
+                      registrarPedido(
+                        orderToResume.metodoPago,
+                        orderToResume.comprobante,
+                        orderToResume.items,
+                        orderToResume.horaRecogida,
+                        orderToResume.nombre,
+                      );
+                      setCart([]);
+                      setOrderConfirmation(orderToResume.horaRecogida);
+                      window.setTimeout(() => {
+                        setPendingOrder(null);
+                        navigate("cart");
+                      }, 0);
+                    }
                     const u = usuarios.find(x => x.correo.toLowerCase() === loginEmail.toLowerCase());
                     const userId = u?.id ?? null;
                     setLoggedInUserId(userId);
@@ -7790,6 +7955,7 @@ export default function App() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         navigate={navigate}
+        onLogin={openLogin}
         cart={cart}
         isLoggedIn={isLoggedIn}
         onLogout={logout}
