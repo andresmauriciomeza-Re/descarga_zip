@@ -25,7 +25,7 @@ export interface OrdenItem {
   nombre: string;
   cantidad: number;
   unidad: string;
-  precioUnitario: number;
+  costoUnitario: number;
 }
 
 export interface ItemRecibido {
@@ -36,7 +36,7 @@ export interface ItemRecibido {
   cantidadRecibida: number;
   unidad: string;
   precioReferencia: number;
-  precioUnitario: number;
+  costoUnitario: number;
 }
 
 export interface Recepcion {
@@ -109,8 +109,8 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-05",
     estado: "Enviado",
     items: [
-      { rowId: "r1", idInsumo: "INS-001", nombre: "Harina de trigo", cantidad: 100, unidad: "kg", precioUnitario: 3500 },
-      { rowId: "r2", idInsumo: "INS-006", nombre: "Levadura", cantidad: 5000, unidad: "g", precioUnitario: 80 },
+      { rowId: "r1", idInsumo: "INS-001", nombre: "Harina de trigo", cantidad: 100, unidad: "kg", costoUnitario: 3500 },
+      { rowId: "r2", idInsumo: "INS-006", nombre: "Levadura", cantidad: 5000, unidad: "g", costoUnitario: 80 },
     ],
   },
   {
@@ -119,8 +119,8 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-08",
     estado: "Enviado",
     items: [
-      { rowId: "r3", idInsumo: "INS-002", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000 },
-      { rowId: "r4", idInsumo: "INS-005", nombre: "Aceite de oliva", cantidad: 10, unidad: "lt", precioUnitario: 15000 },
+      { rowId: "r3", idInsumo: "INS-002", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", costoUnitario: 18000 },
+      { rowId: "r4", idInsumo: "INS-005", nombre: "Aceite de oliva", cantidad: 10, unidad: "lt", costoUnitario: 15000 },
     ],
   },
   {
@@ -129,8 +129,8 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-10",
     estado: "Borrador",
     items: [
-      { rowId: "r5", idInsumo: "INS-003", nombre: "Salsa de tomate", cantidad: 30, unidad: "lt", precioUnitario: 5000 },
-      { rowId: "r6", idInsumo: "INS-004", nombre: "Pepperoni", cantidad: 15, unidad: "kg", precioUnitario: 22000 },
+      { rowId: "r5", idInsumo: "INS-003", nombre: "Salsa de tomate", cantidad: 30, unidad: "lt", costoUnitario: 5000 },
+      { rowId: "r6", idInsumo: "INS-004", nombre: "Pepperoni", cantidad: 15, unidad: "kg", costoUnitario: 22000 },
     ],
   },
   {
@@ -139,13 +139,13 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-01",
     estado: "Completado",
     items: [
-      { rowId: "r7", idInsumo: "INS-008", nombre: "Jamón serrano", cantidad: 10, unidad: "kg", precioUnitario: 28000 },
+      { rowId: "r7", idInsumo: "INS-008", nombre: "Jamón serrano", cantidad: 10, unidad: "kg", costoUnitario: 28000 },
     ],
     recepcion: {
       fechaRecepcion: "2024-02-02",
       usarLotes: false,
       items: [
-        { rowId: "rr1", idInsumo: "INS-008", nombre: "Jamón serrano", cantidadSolicitada: 10, cantidadRecibida: 10, unidad: "kg", precioReferencia: 28000, precioUnitario: 28000 },
+        { rowId: "rr1", idInsumo: "INS-008", nombre: "Jamón serrano", cantidadSolicitada: 10, cantidadRecibida: 10, unidad: "kg", precioReferencia: 28000, costoUnitario: 28000 },
       ],
       itemsExtra: [],
     },
@@ -156,7 +156,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-01-28",
     estado: "Anulado",
     items: [
-      { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", precioUnitario: 12000 },
+      { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", costoUnitario: 12000 },
     ],
   },
 ];
@@ -171,9 +171,9 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 410000,
     estado: "Recibido",
     items: [
-      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", precioUnitario: 7500 },
-      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", precioUnitario: 6500 },
-      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", precioUnitario: 3000 },
+      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", costoUnitario: 7500 },
+      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", costoUnitario: 6500 },
+      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", costoUnitario: 3000 },
     ],
   },
   {
@@ -185,8 +185,8 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 560000,
     estado: "Recibido",
     items: [
-      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000 },
-      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", precioUnitario: 10000 },
+      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", costoUnitario: 18000 },
+      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", costoUnitario: 10000 },
     ],
   },
   {
@@ -198,7 +198,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 190000,
     estado: "Anulado",
     items: [
-      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", precioUnitario: 7600 },
+      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", costoUnitario: 7600 },
     ],
   },
   {
@@ -210,8 +210,8 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 275500,
     estado: "Recibido",
     items: [
-      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", precioUnitario: 3200 },
-      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", precioUnitario: 835 },
+      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", costoUnitario: 3200 },
+      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", costoUnitario: 835 },
     ],
   },
   {
@@ -223,9 +223,9 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 750000,
     estado: "Recibido",
     items: [
-      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", precioUnitario: 6000 },
-      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", precioUnitario: 5200 },
-      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", precioUnitario: 10000 },
+      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", costoUnitario: 6000 },
+      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", costoUnitario: 5200 },
+      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", costoUnitario: 10000 },
     ],
   },
 ];
@@ -241,7 +241,7 @@ function fmtCOP(n: number) {
 }
 
 function calcTotal(items: OrdenItem[]) {
-  return items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+  return items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
 }
 
 function nextOrdenId(items: OrdenCompra[]) {
@@ -571,7 +571,7 @@ export function OrdenModal({
   const selectSug = (ins: Insumo) => {
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setAPrecio(ins.precioUnitario);
+    setAPrecio(ins.costoUnitario);
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -597,7 +597,7 @@ export function OrdenModal({
         nombre: aNombre.trim(),
         cantidad: aCant,
         unidad: aUnidad,
-        precioUnitario: aPrecio,
+        costoUnitario: aPrecio,
       }],
     });
     setANombre(""); setACant(1); setAPrecio(0); setAFromCat(false); setAInsumoId("");
@@ -910,8 +910,8 @@ export function OrdenModal({
                           <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
                           <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
-                          <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
-                          <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.precioUnitario)}</td>
+                          <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
+                          <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -922,7 +922,7 @@ export function OrdenModal({
                         </td>
                         <td className="px-3 py-2 text-sm font-bold text-foreground">
                           {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
-                            (s, i) => s + i.cantidadRecibida * i.precioUnitario, 0
+                            (s, i) => s + i.cantidadRecibida * i.costoUnitario, 0
                           ))}
                         </td>
                       </tr>
@@ -1064,8 +1064,8 @@ function RecepcionModal({
       cantidadSolicitada: i.cantidad,
       cantidadRecibida: i.cantidad,
       unidad: i.unidad,
-      precioReferencia: i.precioUnitario,
-      precioUnitario: i.precioUnitario,
+      precioReferencia: i.costoUnitario,
+      costoUnitario: i.costoUnitario,
       malEstado: false,
     }))
   );
@@ -1098,7 +1098,7 @@ function RecepcionModal({
   const updRec = (rowId: string, v: number) =>
     setItems(p => p.map(i => i.rowId === rowId ? { ...i, cantidadRecibida: v } : i));
   const updPrice = (rowId: string, v: number) =>
-    setItems(p => p.map(i => i.rowId === rowId ? { ...i, precioUnitario: v } : i));
+    setItems(p => p.map(i => i.rowId === rowId ? { ...i, costoUnitario: v } : i));
   const togMal = (rowId: string) =>
     setItems(p => p.map(i => i.rowId === rowId ? { ...i, malEstado: !i.malEstado } : i));
 
@@ -1112,14 +1112,14 @@ function RecepcionModal({
       cantidadRecibida: exCant,
       unidad: exUnidad,
       precioReferencia: exPrecio,
-      precioUnitario: exPrecio,
+      costoUnitario: exPrecio,
     }]);
     setExNombre(""); setExCant(1); setExPrecio(0);
   };
 
   const hayMal = items.some(i => i.malEstado);
   const totalRec = [...items, ...itemsExtra].reduce(
-    (s, i) => s + i.cantidadRecibida * i.precioUnitario, 0
+    (s, i) => s + i.cantidadRecibida * i.costoUnitario, 0
   );
 
   const doGuardar = () => {
@@ -1209,13 +1209,13 @@ function RecepcionModal({
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{fmtCOP(item.precioReferencia)}</td>
                             <td className="px-3 py-2.5">
                               <input
-                                type="number" min={0} value={item.precioUnitario}
+                                type="number" min={0} value={item.costoUnitario}
                                 onChange={e => updPrice(item.rowId, Number(e.target.value))}
                                 className="w-28 px-2 py-1 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
                             <td className="px-3 py-2.5 text-sm font-semibold">
-                              {fmtCOP(item.cantidadRecibida * item.precioUnitario)}
+                              {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
                             </td>
                             <td className="px-3 py-2.5">
                               <button
@@ -1264,9 +1264,9 @@ function RecepcionModal({
                             <td className="px-3 py-2 font-medium text-foreground">{item.nombre}</td>
                             <td className="px-3 py-2">{item.cantidadRecibida}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
-                            <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
+                            <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
                             <td className="px-3 py-2 font-semibold">
-                              {fmtCOP(item.cantidadRecibida * item.precioUnitario)}
+                              {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
                             </td>
                             <td className="px-3 py-2">
                               <button
@@ -1305,14 +1305,14 @@ function RecepcionModal({
                             onMouseDown={() => {
                               setExNombre(ins.nombre);
                               setExUnidad(ins.unidadMedida);
-                              setExPrecio(ins.precioUnitario);
+                              setExPrecio(ins.costoUnitario);
                               setExShowSug(false);
                             }}
                             className="w-full text-left px-3 py-2 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
                           >
                             <p className="font-semibold text-foreground">{ins.nombre}</p>
                             <p className="text-muted-foreground">
-                              {ins.unidadMedida} · ${ins.precioUnitario.toLocaleString("es-CO")}
+                              {ins.unidadMedida} · ${ins.costoUnitario.toLocaleString("es-CO")}
                             </p>
                           </button>
                         ))}

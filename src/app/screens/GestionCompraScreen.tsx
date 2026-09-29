@@ -60,7 +60,7 @@ type ItemFactura = {
   nombre: string;
   unidad: string;
   cantidad: number;
-  precioUnitario: number;
+  costoUnitario: number;
 };
 
 export interface NuevaCompraData {
@@ -182,7 +182,7 @@ function CompraForm({
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  const total = items.reduce((s, item) => s + item.cantidad * item.precioUnitario, 0);
+  const total = items.reduce((s, item) => s + item.cantidad * item.costoUnitario, 0);
 
   // Requiere al menos un insumo y que el total sea mayor que cero.
   const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
@@ -207,7 +207,7 @@ function CompraForm({
     setItemId(ins.id);
     setItemNombre(ins.nombre);
     setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setItemPrecio(ins.precioUnitario);
+    setItemPrecio(ins.costoUnitario);
     setItemSugAbierto(false);
   };
 
@@ -237,7 +237,7 @@ function CompraForm({
         nombre: itemNombre.trim(),
         unidad: itemUnidad,
         cantidad: itemCantidad,
-        precioUnitario: itemPrecio,
+        costoUnitario: itemPrecio,
       },
     ]);
 

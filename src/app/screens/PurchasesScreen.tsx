@@ -75,7 +75,7 @@ interface InsumoLine {
   nombre: string;
   cantidad: number;
   unidadMedida: string;
-  precioUnitario: number;
+  costoUnitario: number;
   subtotal: number;
 }
 
@@ -177,7 +177,7 @@ const emptyInsumo = (): InsumoLine => ({
   nombre: "",
   cantidad: 1,
   unidadMedida: "kg",
-  precioUnitario: 0,
+  costoUnitario: 0,
   subtotal: 0,
 });
 
@@ -187,73 +187,73 @@ const CATALOGO_INSUMOS = [
     idInsumo: "INS-001",
     nombre: "Queso Mozzarella",
     unidadMedida: "kg",
-    precioUnitario: 18000,
+    costoUnitario: 18000,
   },
   {
     idInsumo: "INS-002",
     nombre: "Salsa de Tomate",
     unidadMedida: "lt",
-    precioUnitario: 8000,
+    costoUnitario: 8000,
   },
   {
     idInsumo: "INS-003",
     nombre: "Pepperoni",
     unidadMedida: "kg",
-    precioUnitario: 25000,
+    costoUnitario: 25000,
   },
   {
     idInsumo: "INS-004",
     nombre: "Masa Pre-elaborada",
     unidadMedida: "und",
-    precioUnitario: 3500,
+    costoUnitario: 3500,
   },
   {
     idInsumo: "INS-005",
     nombre: "Champiñones",
     unidadMedida: "kg",
-    precioUnitario: 12000,
+    costoUnitario: 12000,
   },
   {
     idInsumo: "INS-006",
     nombre: "Albahaca Fresca",
     unidadMedida: "kg",
-    precioUnitario: 9000,
+    costoUnitario: 9000,
   },
   {
     idInsumo: "INS-007",
     nombre: "Jamón Serrano",
     unidadMedida: "kg",
-    precioUnitario: 32000,
+    costoUnitario: 32000,
   },
   {
     idInsumo: "INS-008",
     nombre: "Piña en Trozos",
     unidadMedida: "kg",
-    precioUnitario: 6000,
+    costoUnitario: 6000,
   },
   {
     idInsumo: "INS-009",
     nombre: "Aceitunas Negras",
     unidadMedida: "kg",
-    precioUnitario: 14000,
+    costoUnitario: 14000,
   },
   {
     idInsumo: "INS-010",
     nombre: "Cebolla Morada",
     unidadMedida: "kg",
-    precioUnitario: 4000,
+    costoUnitario: 4000,
   },
   {
     idInsumo: "INS-011",
     nombre: "Pimentón",
     unidadMedida: "kg",
-    precioUnitario: 5000,
+    costoUnitario: 5000,
   },
   {
     idInsumo: "INS-012",
     nombre: "Bebidas 350ml",
     unidadMedida: "und",
-    precioUnitario: 2500,
+    costoUnitario: 2500,
   },
 ];
 
@@ -414,14 +414,14 @@ export function PurchasesScreen() {
         if (l.id !== id) return l;
         const updated = {
           ...l,
-          [field]: ["cantidad", "precioUnitario"].includes(
+          [field]: ["cantidad", "costoUnitario"].includes(
             field,
           )
             ? Number(raw)
             : raw,
         };
         updated.subtotal =
-          updated.cantidad * updated.precioUnitario;
+          updated.cantidad * updated.costoUnitario;
         return updated;
       }),
     );
@@ -442,7 +442,7 @@ export function PurchasesScreen() {
           return {
             ...l,
             cantidad: qty,
-            subtotal: qty * l.precioUnitario,
+            subtotal: qty * l.costoUnitario,
           };
         }),
       );
@@ -454,8 +454,8 @@ export function PurchasesScreen() {
         nombre: cat.nombre,
         cantidad: 1,
         unidadMedida: cat.unidadMedida,
-        precioUnitario: cat.precioUnitario,
-        subtotal: cat.precioUnitario,
+        costoUnitario: cat.costoUnitario,
+        subtotal: cat.costoUnitario,
       };
       setFormInsumos((prev) => [...prev, line]);
       toast.success(`${cat.nombre} agregado`);
@@ -1077,12 +1077,12 @@ export function PurchasesScreen() {
                                       <input
                                         type="number"
                                         value={
-                                          line.precioUnitario
+                                          line.costoUnitario
                                         }
                                         onChange={(e) =>
                                           updateInsumo(
                                             line.id,
-                                            "precioUnitario",
+                                            "costoUnitario",
                                             e.target.value,
                                           )
                                         }
@@ -1167,7 +1167,7 @@ export function PurchasesScreen() {
                                       }}
                                     >
                                       {fmtCOP(
-                                        line.precioUnitario,
+                                        line.costoUnitario,
                                       )}
                                     </td>
                                     <td
@@ -1274,7 +1274,7 @@ export function PurchasesScreen() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-primary font-mono">{`$${cat.precioUnitario.toLocaleString("es-CO")}`}</span>
+                        <span className="text-xs font-bold text-primary font-mono">{`$${cat.costoUnitario.toLocaleString("es-CO")}`}</span>
                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                           <Plus className="w-3.5 h-3.5 text-primary" />
                         </div>
@@ -1501,14 +1501,14 @@ export function PurchasesScreen() {
                                       ...l,
                                       [field]: [
                                         "cantidad",
-                                        "precioUnitario",
+                                        "costoUnitario",
                                       ].includes(field)
                                         ? Number(raw)
                                         : raw,
                                     };
                                     up.subtotal =
                                       up.cantidad *
-                                      up.precioUnitario;
+                                      up.costoUnitario;
                                     return up;
                                   },
                                 );
@@ -1627,11 +1627,11 @@ export function PurchasesScreen() {
                                       <input
                                         type="number"
                                         value={
-                                          line.precioUnitario
+                                          line.costoUnitario
                                         }
                                         onChange={(e) =>
                                           updateLine(
-                                            "precioUnitario",
+                                            "costoUnitario",
                                             e.target.value,
                                           )
                                         }
@@ -1710,7 +1710,7 @@ export function PurchasesScreen() {
                                       }}
                                     >
                                       {fmtCOP(
-                                        line.precioUnitario,
+                                        line.costoUnitario,
                                       )}
                                     </td>
                                     <td
@@ -1817,7 +1817,7 @@ export function PurchasesScreen() {
                                           l.cantidad + 1,
                                         subtotal:
                                           (l.cantidad + 1) *
-                                          l.precioUnitario,
+                                          l.costoUnitario,
                                       }
                                     : l,
                                 );
@@ -1831,10 +1831,10 @@ export function PurchasesScreen() {
                                     cantidad: 1,
                                     unidadMedida:
                                       cat.unidadMedida,
-                                    precioUnitario:
-                                      cat.precioUnitario,
+                                    costoUnitario:
+                                      cat.costoUnitario,
                                     subtotal:
-                                      cat.precioUnitario,
+                                      cat.costoUnitario,
                                   },
                                 ];
                               }
@@ -1866,7 +1866,7 @@ export function PurchasesScreen() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-primary font-mono">{`$${cat.precioUnitario.toLocaleString("es-CO")}`}</span>
+                            <span className="text-xs font-bold text-primary font-mono">{`$${cat.costoUnitario.toLocaleString("es-CO")}`}</span>
                             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                               <Plus className="w-3.5 h-3.5 text-primary" />
                             </div>
@@ -2299,7 +2299,7 @@ export function PurchasesScreen() {
                                 className={tdCls + " text-xs"}
                                 style={{ fontFamily: MONO }}
                               >
-                                {fmtCOP(line.precioUnitario)}
+                                {fmtCOP(line.costoUnitario)}
                               </td>
                               <td
                                 className={

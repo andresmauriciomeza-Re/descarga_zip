@@ -102,8 +102,8 @@ export function RecepcionCompraScreen({
         cantidadSolicitada: i.cantidad,
         cantidadRecibida: i.cantidad,
         unidad: i.unidad,
-        precioReferencia: i.precioUnitario,
-        precioUnitario: i.precioUnitario,
+        precioReferencia: i.costoUnitario,
+        costoUnitario: i.costoUnitario,
       }));
   });
 
@@ -124,7 +124,7 @@ export function RecepcionCompraScreen({
   const [editExtraDraft, setEditExtraDraft] = useState<{
     cantidad: number;
     unidad: string;
-    precioUnitario: number;
+    costoUnitario: number;
   } | null>(null);
 
   const exRef = useRef<HTMLDivElement>(null);
@@ -221,7 +221,7 @@ export function RecepcionCompraScreen({
     setItems((prev) =>
       prev.map((item) =>
         item.rowId === rowId
-          ? { ...item, precioUnitario: Math.max(0, value) }
+          ? { ...item, costoUnitario: Math.max(0, value) }
           : item
       )
     );
@@ -253,7 +253,7 @@ export function RecepcionCompraScreen({
         cantidadRecibida: exCant,
         unidad: exUnidad,
         precioReferencia: exPrecio,
-        precioUnitario: exPrecio,
+        costoUnitario: exPrecio,
       },
     ]);
 
@@ -270,7 +270,7 @@ export function RecepcionCompraScreen({
     setEditExtraDraft({
       cantidad: item.cantidadRecibida,
       unidad: item.unidad,
-      precioUnitario: item.precioUnitario,
+      costoUnitario: item.costoUnitario,
     });
   };
 
@@ -288,7 +288,7 @@ export function RecepcionCompraScreen({
                 ...item,
                 cantidadRecibida: Math.max(0, editExtraDraft.cantidad),
                 unidad: editExtraDraft.unidad,
-                precioUnitario: Math.max(0, editExtraDraft.precioUnitario),
+                costoUnitario: Math.max(0, editExtraDraft.costoUnitario),
               }
             : item
         )
@@ -298,32 +298,32 @@ export function RecepcionCompraScreen({
   };
 
   const totalPedido = orden.items.reduce(
-    (total, item) => total + item.cantidad * item.precioUnitario,
+    (total, item) => total + item.cantidad * item.costoUnitario,
     0
   );
 
   const totalRec = [...items, ...itemsExtra].reduce(
     (total, item) =>
-      total + item.cantidadRecibida * item.precioUnitario,
+      total + item.cantidadRecibida * item.costoUnitario,
     0
   );
 
   /** Suma una factura al acumulado de lo recibido en la OC. */
   const acumular = (
-    mapa: Map<string, { nombre: string; unidad: string; cantidad: number; precioUnitario: number }>,
+    mapa: Map<string, { nombre: string; unidad: string; cantidad: number; costoUnitario: number }>,
     item: OrdenItem
   ) => {
     const previo = mapa.get(item.idInsumo);
 
     if (previo) {
       previo.cantidad += item.cantidad;
-      previo.precioUnitario = item.precioUnitario;
+      previo.costoUnitario = item.costoUnitario;
     } else {
       mapa.set(item.idInsumo, {
         nombre: item.nombre,
         unidad: item.unidad,
         cantidad: item.cantidad,
-        precioUnitario: item.precioUnitario,
+        costoUnitario: item.costoUnitario,
       });
     }
   };
@@ -369,12 +369,12 @@ export function RecepcionCompraScreen({
         nombre: item.nombre,
         cantidad: item.cantidadRecibida,
         unidad: item.unidad,
-        precioUnitario: item.precioUnitario,
+        costoUnitario: item.costoUnitario,
       })
     );
 
     const valorTotal = itemsFactura.reduce(
-      (total, item) => total + item.cantidad * item.precioUnitario,
+      (total, item) => total + item.cantidad * item.costoUnitario,
       0
     );
 
@@ -400,7 +400,7 @@ export function RecepcionCompraScreen({
     // 2) Acumulado de la OC: facturas anteriores + esta.
     const acum = new Map<
       string,
-      { nombre: string; unidad: string; cantidad: number; precioUnitario: number }
+      { nombre: string; unidad: string; cantidad: number; costoUnitario: number }
     >();
 
     for (const g of gestiones) {
@@ -436,8 +436,8 @@ export function RecepcionCompraScreen({
             cantidadSolicitada: pedido.cantidad,
             cantidadRecibida: a.cantidad,
             unidad: pedido.unidad,
-            precioReferencia: pedido.precioUnitario,
-            precioUnitario: a.precioUnitario,
+            precioReferencia: pedido.costoUnitario,
+            costoUnitario: a.costoUnitario,
           } as ItemRecibido;
         })
         .filter((x): x is ItemRecibido => x !== null),
@@ -450,8 +450,8 @@ export function RecepcionCompraScreen({
           cantidadSolicitada: 0,
           cantidadRecibida: a.cantidad,
           unidad: a.unidad,
-          precioReferencia: a.precioUnitario,
-          precioUnitario: a.precioUnitario,
+          precioReferencia: a.costoUnitario,
+          costoUnitario: a.costoUnitario,
         })),
       usarLotes: false,
       fechaRecepcion: today,
@@ -599,7 +599,7 @@ export function RecepcionCompraScreen({
                             </td>
 
                             <td className="px-3 py-3">
-                              {fmtCOP(item.precioUnitario)}
+                              {fmtCOP(item.costoUnitario)}
                             </td>
                           </tr>
                         ))}
@@ -790,7 +790,7 @@ export function RecepcionCompraScreen({
                               <input
                                 type="number"
                                 min={0}
-                                value={item.precioUnitario}
+                                value={item.costoUnitario}
                                 onChange={(e) =>
                                   updPrice(
                                     item.rowId,
@@ -804,7 +804,7 @@ export function RecepcionCompraScreen({
                             <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
                               {fmtCOP(
                                 item.cantidadRecibida *
-                                  item.precioUnitario
+                                  item.costoUnitario
                               )}
                             </td>
 
@@ -944,17 +944,17 @@ export function RecepcionCompraScreen({
                                   <input
                                     type="number"
                                     min={0}
-                                    value={draft.precioUnitario}
+                                    value={draft.costoUnitario}
                                     onChange={(e) =>
                                       setEditExtraDraft({
                                         ...draft,
-                                        precioUnitario: Number(e.target.value),
+                                        costoUnitario: Number(e.target.value),
                                       })
                                     }
                                     className="w-20 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                                   />
                                 ) : (
-                                  fmtCOP(item.precioUnitario)
+                                  fmtCOP(item.costoUnitario)
                                 )}
                               </td>
 
@@ -962,7 +962,7 @@ export function RecepcionCompraScreen({
                               <td className="px-3 py-2 font-semibold">
                                 {fmtCOP(
                                   (draft ? draft.cantidad : item.cantidadRecibida) *
-                                    (draft ? draft.precioUnitario : item.precioUnitario)
+                                    (draft ? draft.costoUnitario : item.costoUnitario)
                                 )}
                               </td>
 
@@ -1057,14 +1057,14 @@ export function RecepcionCompraScreen({
                                     ? ins.unidadMedida
                                     : UNIDADES[0]
                                 );
-                                setExPrecio(ins.precioUnitario);
+                                setExPrecio(ins.costoUnitario);
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
                             >
                               <p className="text-sm font-semibold">{ins.nombre}</p>
                               <p className="text-xs text-muted-foreground">
-                                {ins.unidadMedida} · {fmtCOP(ins.precioUnitario)}
+                                {ins.unidadMedida} · {fmtCOP(ins.costoUnitario)}
                               </p>
                             </button>
                           ))}

@@ -85,7 +85,7 @@ export interface Producto {
   imagen: string;
   nombre: string;
   idCategoria: string;
-  precioUnitario: number;
+  costoUnitario: number;
   unidadVenta: string;
   stockDisponible: number;
   estado: "Activo" | "Inactivo";
@@ -104,7 +104,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
       "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=300&h=300&fit=crop&auto=format",
     nombre: "Margarita Clásica",
     idCategoria: "CAT-001",
-    precioUnitario: 24000,
+    costoUnitario: 24000,
     unidadVenta: "und",
     stockDisponible: 50,
     estado: "Activo",
@@ -115,7 +115,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
       "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=300&h=300&fit=crop&auto=format",
     nombre: "Pepperoni Premium",
     idCategoria: "CAT-001",
-    precioUnitario: 28000,
+    costoUnitario: 28000,
     unidadVenta: "und",
     stockDisponible: 40,
     estado: "Activo",
@@ -126,7 +126,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
       "https://images.unsplash.com/photo-1571407970349-bc81e71e5080?w=300&h=300&fit=crop&auto=format",
     nombre: "Cuatro Quesos",
     idCategoria: "CAT-002",
-    precioUnitario: 30000,
+    costoUnitario: 30000,
     unidadVenta: "und",
     stockDisponible: 30,
     estado: "Activo",
@@ -137,7 +137,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
       "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=300&h=300&fit=crop&auto=format",
     nombre: "Especial La Sirena",
     idCategoria: "CAT-002",
-    precioUnitario: 32000,
+    costoUnitario: 32000,
     unidadVenta: "und",
     stockDisponible: 25,
     estado: "Activo",
@@ -148,7 +148,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
       "https://images.unsplash.com/photo-1702716059239-385baacdabdc?w=300&h=300&fit=crop&auto=format",
     nombre: "Veggie Mediterránea",
     idCategoria: "CAT-003",
-    precioUnitario: 26000,
+    costoUnitario: 26000,
     unidadVenta: "und",
     stockDisponible: 20,
     estado: "Inactivo",
@@ -320,7 +320,7 @@ export function GestionProductosScreen({
     imagen: "",
     nombre: "",
     idCategoria: "CAT-001",
-    precioUnitario: 0,
+    costoUnitario: 0,
     unidadVenta: "und",
     stockDisponible: 0,
     estado: "Activo",
@@ -686,8 +686,8 @@ export function GestionProductosScreen({
         </label>
         <input
           type="number"
-          value={values.precioUnitario}
-          onChange={(e) => onChange("precioUnitario", Number(e.target.value))}
+          value={values.costoUnitario}
+          onChange={(e) => onChange("costoUnitario", Number(e.target.value))}
           readOnly={readOnly}
           className={readOnly ? roCls : inputCls}
         />
@@ -860,8 +860,8 @@ export function GestionProductosScreen({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Precio unitario (COP)</label>
-                  <input type="number" value={form.precioUnitario}
-                    onChange={e => setForm(p => ({ ...p, precioUnitario: Number(e.target.value) }))} className={iCls} />
+                  <input type="number" value={form.costoUnitario}
+                    onChange={e => setForm(p => ({ ...p, costoUnitario: Number(e.target.value) }))} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock disponible</label>
@@ -1455,7 +1455,7 @@ export function GestionProductosScreen({
                       className="px-4 py-3.5 text-sm font-bold text-foreground"
                       style={{ fontFamily: MONO }}
                     >
-                      {fmtCOP(p.precioUnitario)}
+                      {fmtCOP(p.costoUnitario)}
                     </td>
                     <td className="px-4 py-3.5">
                       <span

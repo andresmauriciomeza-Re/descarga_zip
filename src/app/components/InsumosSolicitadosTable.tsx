@@ -7,7 +7,7 @@ export interface InsumoSolicitadoRow {
   nombre: string;
   cantidad: number;
   unidad: string;
-  precioUnitario: number;
+  costoUnitario: number;
 }
 
 function fmtCOP(n: number) {
@@ -21,7 +21,7 @@ function fmtCOP(n: number) {
 const cellInputCls =
   "px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30";
 
-type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario">;
+type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "costoUnitario">;
 
 function mergeRow(item: InsumoSolicitadoRow, draft: DraftRow): InsumoSolicitadoRow {
   return { ...item, ...draft };
@@ -52,7 +52,7 @@ export function InsumosSolicitadosTable({
     setDraft({
       cantidad: item.cantidad,
       unidad: item.unidad,
-      precioUnitario: item.precioUnitario,
+      costoUnitario: item.costoUnitario,
     });
   };
 
@@ -66,7 +66,7 @@ export function InsumosSolicitadosTable({
       onUpdate?.(editId, {
         cantidad: Math.max(0, draft.cantidad),
         unidad: draft.unidad,
-        precioUnitario: Math.max(0, draft.precioUnitario),
+        costoUnitario: Math.max(0, draft.costoUnitario),
       });
     }
 
@@ -79,7 +79,7 @@ export function InsumosSolicitadosTable({
     return (
       sum +
       (d ? d.cantidad : item.cantidad) *
-        (d ? d.precioUnitario : item.precioUnitario)
+        (d ? d.costoUnitario : item.costoUnitario)
     );
   }, 0);
   const columnCount = showActions ? 6 : 5;
@@ -97,7 +97,7 @@ export function InsumosSolicitadosTable({
         <table className="w-full text-sm">
         <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
           <tr>
-            {["Nombre", "Cantidad", "Unidad", "P. unitario", "Subtotal"].map((h) => (
+            {["Nombre", "Cantidad", "Unidad", "C. unitario", "Subtotal"].map((h) => (
               <th key={h} className="px-3 py-2.5 text-left font-semibold">
                 {h}
               </th>
@@ -171,22 +171,22 @@ export function InsumosSolicitadosTable({
                       <input
                         type="number"
                         min={0}
-                        value={draftRow.precioUnitario}
+                        value={draftRow.costoUnitario}
                         onChange={(e) =>
                           setDraft({
                             ...draftRow,
-                            precioUnitario: Number(e.target.value),
+                            costoUnitario: Number(e.target.value),
                           })
                         }
                         className={`${cellInputCls} w-24`}
                       />
                     ) : (
-                      fmtCOP(row.precioUnitario)
+                      fmtCOP(row.costoUnitario)
                     )}
                   </td>
 
                   <td className="px-3 py-2.5 text-sm font-semibold">
-                    {fmtCOP(row.cantidad * row.precioUnitario)}
+                    {fmtCOP(row.cantidad * row.costoUnitario)}
                   </td>
 
                   {showActions && (

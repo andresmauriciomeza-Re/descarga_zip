@@ -14,7 +14,7 @@ export interface InsumoSuggestion {
   id: string;
   nombre: string;
   unidadMedida: string;
-  precioUnitario: number;
+  costoUnitario: number;
 }
 
 function fmtCompactCOP(n: number) {
@@ -108,7 +108,7 @@ export function CompactInsumoForm({
                 >
                   <p className="font-semibold text-foreground">{ins.nombre}</p>
                   <p className="text-muted-foreground">
-                    {ins.unidadMedida} · {fmtCompactCOP(ins.precioUnitario)}
+                    {ins.unidadMedida} · {fmtCompactCOP(ins.costoUnitario)}
                   </p>
                 </button>
               ))}
@@ -155,7 +155,7 @@ export function CompactInsumoForm({
         {/* Precio */}
         <div className="w-[112px]">
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-            Precio unitario
+            Costo unitario
           </label>
 
           <input
