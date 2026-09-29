@@ -87,7 +87,7 @@ interface Perdida {
   usuario: string;
   fecha: string;
   imagenProducto: string;
-  precioUnitario: number;
+  costoUnitario: number;
   cantidadPerdida: number;
 }
 
@@ -198,7 +198,7 @@ const INITIAL_PERDIDAS: Perdida[] = [
     usuario: "Jorge Vargas",
     fecha: "2024-01-16",
     imagenProducto: PRODUCT_IMAGES["VEN-004"],
-    precioUnitario: 32000,
+    costoUnitario: 32000,
     cantidadPerdida: 1,
   },
   {
@@ -207,7 +207,7 @@ const INITIAL_PERDIDAS: Perdida[] = [
     usuario: "Jorge Vargas",
     fecha: "2024-01-17",
     imagenProducto: PRODUCT_IMAGES["VTA-004"],
-    precioUnitario: 32000,
+    costoUnitario: 32000,
     cantidadPerdida: 2,
   },
   {
@@ -216,7 +216,7 @@ const INITIAL_PERDIDAS: Perdida[] = [
     usuario: "Luis Herrera",
     fecha: "2024-01-18",
     imagenProducto: PRODUCT_IMAGES["VEN-006"],
-    precioUnitario: 60000,
+    costoUnitario: 60000,
     cantidadPerdida: 1,
   },
 ];
@@ -240,7 +240,7 @@ function PerdidaModal({
   const [usuario, setUsuario] = useState(initial.usuario);
   const [fecha, setFecha] = useState(initial.fecha);
   const [precioU, setPrecioU] = useState(
-    initial.precioUnitario,
+    initial.costoUnitario,
   );
   const [cantidad, setCantidad] = useState(
     initial.cantidadPerdida,
@@ -286,7 +286,7 @@ function PerdidaModal({
       usuario,
       fecha,
       imagenProducto: img,
-      precioUnitario: precioU,
+      costoUnitario: precioU,
       cantidadPerdida: cantidad,
     });
   };
@@ -516,7 +516,7 @@ export function GestionPerdidasScreen({
     usuario: "",
     fecha: "",
     imagenProducto: "",
-    precioUnitario: 0,
+    costoUnitario: 0,
     cantidadPerdida: 1,
   });
   const [form, setForm] = useState(emptyForm());
@@ -927,7 +927,7 @@ export function GestionPerdidasScreen({
                         className="text-xs font-semibold text-foreground"
                         style={{ fontFamily: MONO }}
                       >
-                        {fmtCOP(detailItem.precioUnitario)}
+                        {fmtCOP(detailItem.costoUnitario)}
                       </span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-border">
@@ -947,7 +947,7 @@ export function GestionPerdidasScreen({
                         style={{ fontFamily: MONO }}
                       >
                         {fmtCOP(
-                          detailItem.precioUnitario *
+                          detailItem.costoUnitario *
                             detailItem.cantidadPerdida,
                         )}
                       </span>
