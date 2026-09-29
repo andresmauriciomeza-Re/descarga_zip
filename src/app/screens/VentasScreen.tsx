@@ -210,6 +210,9 @@ export type DevolucionTipo = "producto" | "dinero" | "mixto";
 export interface Venta {
   id: string;
   usuario: string;
+  /** Documento del cliente. Solo lo llenan los pedidos hechos como invitado:
+      el checkout lo pedía y lo validaba, pero se perdía antes de guardarse. */
+  documento?: string;
   fecha: string;
   productos: string;
   cantidad: number;
