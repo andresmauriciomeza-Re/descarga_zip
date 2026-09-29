@@ -61,6 +61,7 @@ type ItemFactura = {
   unidad: string;
   cantidad: number;
   precioUnitario: number;
+  iva: number;
 };
 
 export interface NuevaCompraData {
@@ -112,10 +113,11 @@ function CompraForm({
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
 
-  const [provQuery, setProvQuery] = useState(compra?.proveedor ?? proveedores[0]?.nombre ?? "");
+  const [provQuery, setProvQuery] = useState(compra?.proveedor ?? "");
   const [provSugAbierto, setProvSugAbierto] = useState(false);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
+  const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
@@ -152,15 +154,13 @@ function CompraForm({
     return base.slice(0, 6);
   }, [proveedores, provQuery]);
 
-  const itemSugs = useMemo(
-    () =>
-      itemNombre.trim().length >= 1
-        ? insumos
-            .filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase()))
-            .slice(0, 6)
-        : [],
-    [insumos, itemNombre]
-  );
+  const itemSugs = useMemo(() => {
+    // Punto 6: filtrar solo por tipo "Insumo" (excluye "Insumo producto", etc.)
+    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo");
+    // Punto 6: si el campo está vacío, mostrar todos los insumos disponibles
+    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 6);
+    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 6);
+  }, [insumos, itemNombre]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -182,7 +182,13 @@ function CompraForm({
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  const total = items.reduce((s, item) => s + item.cantidad * item.precioUnitario, 0);
+  // Punto 1: El Subtotal es cantidad × precio (sin IVA). El IVA se suma aparte.
+  const subtotalGeneral = items.reduce((s, item) => s + item.cantidad * item.precioUnitario, 0);
+  const ivaGeneral = items.reduce((s, item) => {
+    const subtotal = item.cantidad * item.precioUnitario;
+    return s + subtotal * (item.iva / 100);
+  }, 0);
+  const total = subtotalGeneral + ivaGeneral;
 
   // Requiere al menos un insumo y que el total sea mayor que cero.
   const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
@@ -435,7 +441,7 @@ function CompraForm({
                               </p>
                             </button>
                           ))}
-                          {provSugs.length === 0 && provQuery.trim() !== "" && (
+                          {(provSugs.length === 0 || provQuery.trim() === "") && (
                             <button
                               type="button"
                               onMouseDown={(e) => {
@@ -519,7 +525,19 @@ function CompraForm({
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
                     onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
+                    onCrearInsumo={() => setShowNuevoInsumo(true)}
                   />
+                  {/* Punto 2: Botón para crear insumo desde el formulario */}
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowNuevoInsumo(true)}
+                      className="text-[11px] text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Crear insumo
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -568,6 +586,25 @@ function CompraForm({
             nombreInicial={provQuery.trim()}
             onGuardar={crearProveedor}
             onClose={() => setMostrarNuevoProveedor(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Punto 2: Modal de nuevo insumo */}
+      <AnimatePresence>
+        {showNuevoInsumo && (
+          <NuevoInsumoModal
+            nombreInicial={itemNombre}
+            insumosExistentes={insumos}
+            onGuardar={(ins) => {
+              setItemNombre(ins.nombre);
+              setItemUnidad(ins.unidadMedida);
+              setItemPrecio(ins.precioUnitario);
+              setItemId(ins.id);
+              setShowNuevoInsumo(false);
+              toast.success(`Insumo "${ins.nombre}" creado`);
+            }}
+            onClose={() => setShowNuevoInsumo(false)}
           />
         )}
       </AnimatePresence>

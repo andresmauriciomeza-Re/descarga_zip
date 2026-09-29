@@ -584,25 +584,36 @@ export function RecepcionCompraScreen({
                       </thead>
 
                       <tbody className="divide-y divide-border">
-                        {orden.items.map((item) => (
-                          <tr key={item.rowId}>
-                            <td className="px-3 py-3 font-semibold">
-                              {item.nombre}
-                            </td>
+                        {orden.items.map((item) => {
+                          // Punto 5: Verificar si el insumo ya fue facturado
+                          const facturado = registrados.has(item.idInsumo);
+                          return (
+                            <tr key={item.rowId}>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">{item.nombre}</span>
+                                  {facturado && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full whitespace-nowrap">
+                                      Facturado
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
 
-                            <td className="px-3 py-3">
-                              {item.cantidad}
-                            </td>
+                              <td className="px-3 py-3">
+                                {item.cantidad}
+                              </td>
 
-                            <td className="px-3 py-3 text-xs text-muted-foreground">
-                              {item.unidad}
-                            </td>
+                              <td className="px-3 py-3 text-xs text-muted-foreground">
+                                {item.unidad}
+                              </td>
 
-                            <td className="px-3 py-3">
-                              {fmtCOP(item.precioUnitario)}
-                            </td>
-                          </tr>
-                        ))}
+                              <td className="px-3 py-3">
+                                {fmtCOP(item.precioUnitario)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
 
                       <tfoot className="bg-muted/50 border-t border-border">
@@ -760,9 +771,16 @@ export function RecepcionCompraScreen({
                           items.map((item) => (
                           <tr key={item.rowId}>
                             <td className="px-3 py-3">
-                              <p className="font-semibold">
-                                {item.nombre}
-                              </p>
+                              <div className="flex items-center gap-2">
+  <p className="font-semibold">
+    {item.nombre}
+  </p>
+  {registrados.has(item.idInsumo) && (
+    <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full whitespace-nowrap">
+      Facturado
+    </span>
+  )}
+</div>
 
                               <p className="text-[11px] text-muted-foreground">
                                 Pedido: {item.cantidadSolicitada}{" "}
@@ -1105,7 +1123,7 @@ export function RecepcionCompraScreen({
                     {/* Precio */}
                     <div className="w-24 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Precio unitario
+                        Monto unitario
                       </label>
                       <input
                         type="number"
@@ -1127,17 +1145,7 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
 
-                <p className="text-xs text-emerald-800">
-                  Al guardar se creará la factura{" "}
-                  {numeroFactura.trim() ? `${numeroFactura.trim()} ` : ""}
-                  en Gestión de Compras con lo recibido aquí. La OC{" "}
-                  {orden.id} seguirá Enviada hasta registrar todos los
-                  insumos.
-                </p>
-              </div>
 
               <div className="flex gap-3 pt-2">
                 <button

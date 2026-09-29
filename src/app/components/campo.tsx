@@ -149,6 +149,15 @@ export function soloDigitos(valor: string): string {
 }
 
 /**
+ * Deja solo letras (incluyendo acentos), espacios y algunos caracteres comunes
+ * en nombres propios (guion, punto, apóstrofo). Se usa en campos como Nombre,
+ * Asesor Comercial, Dirección, etc.
+ */
+export function soloLetras(valor: string): string {
+  return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-'.]/g, "");
+}
+
+/**
  * Numero de documento al escribir. El pasaporte (`PP`) conserva el criterio
  * previo, que admite letras (`AB123456`); el resto de tipos se queda solo con
  * digitos. Los espacios y los puntos se siguen descartando para todos, igual

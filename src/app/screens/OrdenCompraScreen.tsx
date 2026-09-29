@@ -6,10 +6,11 @@ import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, FileDown, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock,
+  AlertTriangle, CheckCircle2, Lock, ChevronDown, Minus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
+import { soloLetras, soloDigitos } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -26,6 +27,7 @@ export interface OrdenItem {
   cantidad: number;
   unidad: string;
   precioUnitario: number;
+  iva: number;
 }
 
 export interface ItemRecibido {
@@ -46,6 +48,11 @@ export interface Recepcion {
   fechaRecepcion: string;
 }
 
+export interface HistorialEstado {
+  estado: EstadoOrden;
+  fecha: string;
+}
+
 export interface OrdenCompra {
   id: string;
   proveedor: string;
@@ -53,6 +60,8 @@ export interface OrdenCompra {
   estado: EstadoOrden;
   items: OrdenItem[];
   recepcion?: Recepcion;
+  fechaCambioEstado?: string;
+  historialEstados?: HistorialEstado[];
 }
 
 export interface GestionCompra {
@@ -109,8 +118,8 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-05",
     estado: "Enviado",
     items: [
-      { rowId: "r1", idInsumo: "INS-001", nombre: "Harina de trigo", cantidad: 100, unidad: "kg", precioUnitario: 3500 },
-      { rowId: "r2", idInsumo: "INS-006", nombre: "Levadura", cantidad: 5000, unidad: "g", precioUnitario: 80 },
+      { rowId: "r1", idInsumo: "INS-001", nombre: "Harina de trigo", cantidad: 100, unidad: "kg", precioUnitario: 3500, iva: 0 },
+      { rowId: "r2", idInsumo: "INS-006", nombre: "Levadura", cantidad: 5000, unidad: "g", precioUnitario: 80, iva: 0 },
     ],
   },
   {
@@ -119,8 +128,8 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-08",
     estado: "Enviado",
     items: [
-      { rowId: "r3", idInsumo: "INS-002", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000 },
-      { rowId: "r4", idInsumo: "INS-005", nombre: "Aceite de oliva", cantidad: 10, unidad: "lt", precioUnitario: 15000 },
+      { rowId: "r3", idInsumo: "INS-002", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000, iva: 0 },
+      { rowId: "r4", idInsumo: "INS-005", nombre: "Aceite de oliva", cantidad: 10, unidad: "lt", precioUnitario: 15000, iva: 0 },
     ],
   },
   {
@@ -129,34 +138,18 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-10",
     estado: "Borrador",
     items: [
-      { rowId: "r5", idInsumo: "INS-003", nombre: "Salsa de tomate", cantidad: 30, unidad: "lt", precioUnitario: 5000 },
-      { rowId: "r6", idInsumo: "INS-004", nombre: "Pepperoni", cantidad: 15, unidad: "kg", precioUnitario: 22000 },
+      { rowId: "r5", idInsumo: "INS-003", nombre: "Salsa de tomate", cantidad: 30, unidad: "lt", precioUnitario: 5000, iva: 0 },
+      { rowId: "r6", idInsumo: "INS-004", nombre: "Pepperoni", cantidad: 15, unidad: "kg", precioUnitario: 22000, iva: 0 },
     ],
   },
-  {
-    id: "004",
-    proveedor: "Carnes Premium",
-    fecha: "2024-02-01",
-    estado: "Completado",
-    items: [
-      { rowId: "r7", idInsumo: "INS-008", nombre: "Jamón serrano", cantidad: 10, unidad: "kg", precioUnitario: 28000 },
-    ],
-    recepcion: {
-      fechaRecepcion: "2024-02-02",
-      usarLotes: false,
-      items: [
-        { rowId: "rr1", idInsumo: "INS-008", nombre: "Jamón serrano", cantidadSolicitada: 10, cantidadRecibida: 10, unidad: "kg", precioReferencia: 28000, precioUnitario: 28000 },
-      ],
-      itemsExtra: [],
-    },
-  },
+
   {
     id: "005",
     proveedor: "Verduras Express",
     fecha: "2024-01-28",
     estado: "Anulado",
     items: [
-      { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", precioUnitario: 12000 },
+      { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", precioUnitario: 12000, iva: 0 },
     ],
   },
 ];
@@ -171,9 +164,9 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 410000,
     estado: "Recibido",
     items: [
-      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", precioUnitario: 7500 },
-      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", precioUnitario: 6500 },
-      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", precioUnitario: 3000 },
+      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", precioUnitario: 7500, iva: 0 },
+      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", precioUnitario: 6500, iva: 0 },
+      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", precioUnitario: 3000, iva: 0 },
     ],
   },
   {
@@ -185,8 +178,8 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 560000,
     estado: "Recibido",
     items: [
-      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000 },
-      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", precioUnitario: 10000 },
+      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", precioUnitario: 18000, iva: 0 },
+      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", precioUnitario: 10000, iva: 0 },
     ],
   },
   {
@@ -198,7 +191,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 190000,
     estado: "Anulado",
     items: [
-      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", precioUnitario: 7600 },
+      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", precioUnitario: 7600, iva: 0 },
     ],
   },
   {
@@ -210,8 +203,8 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 275500,
     estado: "Recibido",
     items: [
-      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", precioUnitario: 3200 },
-      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", precioUnitario: 835 },
+      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", precioUnitario: 3200, iva: 0 },
+      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", precioUnitario: 835, iva: 0 },
     ],
   },
   {
@@ -223,9 +216,9 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     valorTotal: 750000,
     estado: "Recibido",
     items: [
-      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", precioUnitario: 6000 },
-      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", precioUnitario: 5200 },
-      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", precioUnitario: 10000 },
+      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", precioUnitario: 6000, iva: 0 },
+      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", precioUnitario: 5200, iva: 0 },
+      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", precioUnitario: 10000, iva: 0 },
     ],
   },
 ];
@@ -240,8 +233,19 @@ function fmtCOP(n: number) {
   }).format(n);
 }
 
-function calcTotal(items: OrdenItem[]) {
+function calcSubtotal(items: OrdenItem[]) {
   return items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0);
+}
+
+function calcIva(items: OrdenItem[]) {
+  return items.reduce((s, i) => {
+    const subtotal = i.cantidad * i.precioUnitario;
+    return s + subtotal * (i.iva / 100);
+  }, 0);
+}
+
+function calcTotal(items: OrdenItem[]) {
+  return calcSubtotal(items) + calcIva(items);
 }
 
 function nextOrdenId(items: OrdenCompra[]) {
@@ -380,11 +384,11 @@ export function NuevoProveedorModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">NIT *</label>
-                <input value={nit} onChange={e => setNit(e.target.value)} placeholder="900.123.456-1" className={iCls} />
+                <input value={nit} onChange={e => setNit(e.target.value.replace(/[^\d-]/g, ""))} placeholder="900.123.456-1" className={iCls} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)} autoFocus placeholder="Nombre del proveedor" className={iCls} />
+                <input value={nombre} onChange={e => setNombre(soloLetras(e.target.value))} autoFocus placeholder="Nombre del proveedor" className={iCls} />
               </div>
             </div>
           </div>
@@ -396,11 +400,11 @@ export function NuevoProveedorModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Asesor comercial</label>
-                <input value={asesorComercial} onChange={e => setAsesorComercial(e.target.value)} placeholder="Ej: Carlos Mejía" className={iCls} />
+                <input value={asesorComercial} onChange={e => setAsesorComercial(soloLetras(e.target.value))} placeholder="Ej: Carlos Mejía" className={iCls} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Teléfono *</label>
-                <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="604 321 0001" className={iCls} />
+                <input type="tel" value={telefono} onChange={e => setTelefono(soloDigitos(e.target.value))} placeholder="604 321 0001" className={iCls} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email *</label>
@@ -408,7 +412,7 @@ export function NuevoProveedorModal({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>
-                <input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Cra 50 #30-10, Medellín" className={iCls} />
+                <input value={direccion} onChange={e => setDireccion(e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, ""))} placeholder="Cra 50 #30-10, Medellín" className={iCls} />
               </div>
             </div>
           </div>
@@ -439,6 +443,151 @@ export function NuevoProveedorModal({
   );
 }
 
+// ─── NUEVO INSUMO MODAL ───────────────────────────────────────────────────────
+
+export function NuevoInsumoModal({
+  onGuardar, onClose, nombreInicial = "", insumosExistentes = [],
+}: {
+  onGuardar: (ins: { id: string; nombre: string; unidadMedida: string; precioUnitario: number; iva: number }) => void;
+  onClose: () => void;
+  nombreInicial?: string;
+  insumosExistentes?: { nombre: string }[];
+}) {
+  const [nombre, setNombre] = useState(nombreInicial);
+  const [unidad, setUnidad] = useState(UNIDADES[0]);
+  const [precio, setPrecio] = useState(0);
+  const [iva, setIva] = useState(0);
+  const [tocado, setTocado] = useState({ nombre: false, unidad: false, precio: false, iva: false });
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
+
+  // Punto 5: Validación en tiempo real
+  const errorNombre = nombre.trim()
+    ? (insumosExistentes.some(i => i.nombre.toLowerCase() === nombre.trim().toLowerCase())
+      ? "Este insumo ya existe."
+      : undefined)
+    : "El nombre es obligatorio.";
+  const errorUnidad = unidad ? undefined : "Selecciona una unidad.";
+  const errorPrecio = precio > 0 ? undefined : "El monto debe ser mayor que cero.";
+  const errorIva = iva >= 0 && iva <= 100 ? undefined : "El IVA debe estar entre 0 y 100.";
+
+  const formValido = !errorNombre && !errorUnidad && !errorPrecio && !errorIva;
+
+  const marcarTocado = (campo: "nombre" | "unidad" | "precio" | "iva") =>
+    setTocado((t) => ({ ...t, [campo]: true }));
+
+  const submit = () => {
+    setIntentoGuardar(true);
+    if (!formValido) return;
+    onGuardar({
+      id: `INS-N-${Date.now()}`,
+      nombre: nombre.trim(),
+      unidadMedida: unidad,
+      precioUnitario: precio,
+      iva,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Insumo</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Crea un insumo para agregar a la orden.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              onBlur={() => marcarTocado("nombre")}
+              autoFocus
+              placeholder="Nombre del insumo"
+              className={`${iCls} transition-colors ${(tocado.nombre || intentoGuardar) && errorNombre ? "border-red-400 focus:ring-red-300" : ""}`}
+            />
+            {(tocado.nombre || intentoGuardar) && errorNombre && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNombre}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de medida</label>
+              <div className="relative">
+                <select
+                  value={unidad}
+                  onChange={e => { setUnidad(e.target.value); marcarTocado("unidad"); }}
+                  onBlur={() => marcarTocado("unidad")}
+                  className={`${sCls} pr-8 cursor-pointer`}
+                >
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+              {(tocado.unidad || intentoGuardar) && errorUnidad && (
+                <p className="text-xs text-red-500 mt-1 ml-0.5">{errorUnidad}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Monto unitario</label>
+              <input
+                type="number"
+                min={0}
+                value={precio || ""}
+                onChange={e => { setPrecio(Number(e.target.value)); marcarTocado("precio"); }}
+                onBlur={() => marcarTocado("precio")}
+                placeholder="0"
+                className={`${iCls} transition-colors ${(tocado.precio || intentoGuardar) && errorPrecio ? "border-red-400 focus:ring-red-300" : ""}`}
+              />
+              {(tocado.precio || intentoGuardar) && errorPrecio && (
+                <p className="text-xs text-red-500 mt-1 ml-0.5">{errorPrecio}</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">IVA (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={iva}
+              onChange={e => { setIva(Math.min(100, Math.max(0, Number(e.target.value)))); marcarTocado("iva"); }}
+              onBlur={() => marcarTocado("iva")}
+              placeholder="0"
+              className={`${iCls} transition-colors ${(tocado.iva || intentoGuardar) && errorIva ? "border-red-400 focus:ring-red-300" : ""}`}
+            />
+            {(tocado.iva || intentoGuardar) && errorIva && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorIva}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-border">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={submit}
+            disabled={intentoGuardar && !formValido}
+            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Crear Insumo
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── ORDEN MODAL ──────────────────────────────────────────────────────────────
 
 export interface OrdenFormData {
@@ -450,12 +599,13 @@ export interface OrdenFormData {
 }
 
 export function OrdenModal({
-  mode, orden, proveedores, insumos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
+  mode, orden, proveedores, insumos, gestiones = [], tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
   proveedores: ProveedorRef[];
   insumos: Insumo[];
+  gestiones?: GestionCompra[];
   /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
   tipo?: "orden" | "compra";
   /** Renderiza el formulario como una página independiente en vez de modal. */
@@ -472,7 +622,7 @@ export function OrdenModal({
   const today = new Date().toLocaleDateString("en-CA");
 
   const [form, setForm] = useState<OrdenFormData>({
-    proveedor: orden?.proveedor ?? (proveedores[0]?.nombre ?? ""),
+    proveedor: orden?.proveedor ?? "",
     fecha: orden?.fecha ?? today,
     estado: isCompra
       ? "Recibido"
@@ -486,7 +636,7 @@ export function OrdenModal({
   const [showSendConf, setShowSendConf] = useState(false);
 
   // ── Buscador de proveedor (autocomplete por nombre, NIT, asesor o email) ──
-  const [provQuery, setProvQuery] = useState(orden?.proveedor ?? (proveedores[0]?.nombre ?? ""));
+  const [provQuery, setProvQuery] = useState(orden?.proveedor ?? "");
   const [showProvSug, setShowProvSug] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
@@ -512,6 +662,7 @@ export function OrdenModal({
   const [aCant, setACant] = useState(1);
   const [aUnidad, setAUnidad] = useState(UNIDADES[0]);
   const [aPrecio, setAPrecio] = useState(0);
+  const [aIva, setAIva] = useState(0);
   const [aFromCat, setAFromCat] = useState(false);
   // Id del insumo elegido del catálogo. Antes `addItem` fabricaba
   // `idInsumo: INS-${Date.now()}`, un id que no existía en el catálogo: se perdía
@@ -520,6 +671,10 @@ export function OrdenModal({
   const [aInsumoId, setAInsumoId] = useState("");
   const [aShowSug, setAShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
+  // Punto 1: Estado para el modal de historial de estados
+  const [showHistorial, setShowHistorial] = useState(false);
+  // Punto 9: Estado para el modal de nuevo insumo
+  const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
 
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
   const [tocado, setTocado] = useState({ proveedor: false, fecha: false });
@@ -546,11 +701,13 @@ export function OrdenModal({
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
-  const suggestions = useMemo(() =>
-    aNombre.trim().length >= 1
-      ? insumos.filter(i => i.nombre.toLowerCase().includes(aNombre.toLowerCase())).slice(0, 6)
-      : [],
-    [insumos, aNombre]);
+  const suggestions = useMemo(() => {
+    // Punto 6: filtrar solo por tipo "Insumo" (excluye "Insumo producto", etc.)
+    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo");
+    // Punto 5: si el campo está vacío, mostrar todos los insumos disponibles
+    if (aNombre.trim().length === 0) return soloInsumos.slice(0, 6);
+    return soloInsumos.filter(i => i.nombre.toLowerCase().includes(aNombre.toLowerCase())).slice(0, 6);
+  }, [insumos, aNombre]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -572,6 +729,7 @@ export function OrdenModal({
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setAPrecio(ins.precioUnitario);
+    setAIva(ins.iva);
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -598,9 +756,10 @@ export function OrdenModal({
         cantidad: aCant,
         unidad: aUnidad,
         precioUnitario: aPrecio,
+        iva: aIva,
       }],
     });
-    setANombre(""); setACant(1); setAPrecio(0); setAFromCat(false); setAInsumoId("");
+    setANombre(""); setACant(1); setAPrecio(0); setAIva(0); setAFromCat(false); setAInsumoId("");
   };
 
   const selectProv = (p: ProveedorRef) => {
@@ -736,6 +895,12 @@ export function OrdenModal({
                     <input value={orden.id} readOnly className={`${iCls} opacity-60 cursor-default`} />
                   </div>
                 )}
+                {orden?.fechaCambioEstado && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Fecha cambio Estado</label>
+                    <input value={orden.fechaCambioEstado} readOnly className={`${iCls} opacity-60 cursor-default`} />
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Proveedor {!isView && <span className="text-red-500">*</span>}</label>
                   {isView
@@ -775,7 +940,7 @@ export function OrdenModal({
                                 </p>
                               </button>
                             ))}
-                            {!provExiste && provQuery.trim() !== "" && (
+                            {(!provExiste || provQuery.trim() === "") && (
                               <button
                                 type="button"
                                 onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
@@ -803,7 +968,8 @@ export function OrdenModal({
                         value={form.fecha}
                         onChange={e => pf({ fecha: e.target.value })}
                         onBlur={() => marcarTocado("fecha")}
-                        className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
+                        readOnly
+                        className={`${campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)} opacity-60 cursor-not-allowed`}
                         aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
                       />
                     )}
@@ -814,26 +980,54 @@ export function OrdenModal({
                 {!isView && (
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
-                    {isCompra ? (
-                      <select
-                        value={form.estado}
-                        onChange={e => pf({ estado: e.target.value as EstadoGestion })}
-                        className={sCls}
-                      >
-                        <option value="Recibido">Recibido</option>
-                        <option value="Anulado">Anulado</option>
-                      </select>
-                    ) : (
-                      <select
-                        value={form.estado}
-                        onChange={e => pf({ estado: e.target.value as EstadoOrden })}
-                        className={sCls}
-                      >
-                        <option value="Borrador">Borrador</option>
-                        <option value="Enviado">Enviado</option>
-                        <option value="Anulado">Anulado</option>
-                      </select>
-                    )}
+                    <div className="relative">
+                      {isCompra ? (
+                        <select
+                          value={form.estado}
+                          onChange={e => pf({ estado: e.target.value as EstadoGestion })}
+                          className={`${sCls} pr-8`}
+                        >
+                          <option value="Recibido">Recibido</option>
+                          <option value="Anulado">Anulado</option>
+                        </select>
+                      ) : (
+                        <select
+                          value={form.estado}
+                          onChange={e => pf({ estado: e.target.value as EstadoOrden })}
+                          className={`${sCls} pr-8`}
+                        >
+                          <option value="Borrador">Borrador</option>
+                          <option value="Enviado">Enviado</option>
+                          <option value="Completado">Completado</option>
+                          <option value="Anulado">Anulado</option>
+                        </select>
+                      )}
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    </div>
+                    {/* Punto 1: Fecha de cambio de estado y botón ver historial */}
+                    {/* En modo creación, mostrar la fecha actual como fecha de cambio de estado inicial */}
+                    {(() => {
+                      const fechaMostrar = orden?.fechaCambioEstado ?? (modal?.mode === "create" ? new Date().toLocaleDateString("en-CA") : undefined);
+                      const historialMostrar = orden?.historialEstados ?? (modal?.mode === "create" ? [{ estado: form.estado as EstadoOrden, fecha: new Date().toLocaleDateString("en-CA") }] : []);
+                      return (
+                        <>
+                          {fechaMostrar && (
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                              {fechaMostrar}
+                            </p>
+                          )}
+                          {historialMostrar && historialMostrar.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowHistorial(true)}
+                              className="text-[11px] text-primary hover:underline mt-1 cursor-pointer"
+                            >
+                              Ver historial ({historialMostrar.length} cambios)
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -861,10 +1055,13 @@ export function OrdenModal({
                     unidadDisabled={aFromCat}
                     precio={aPrecio}
                     onPrecioChange={setAPrecio}
+                    iva={aIva}
+                    onIvaChange={setAIva}
                     onAgregar={addItem}
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
                     onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
+                    onCrearInsumo={() => setShowNuevoInsumo(true)}
                   />
                 </div>
               )}
@@ -882,54 +1079,153 @@ export function OrdenModal({
                 className={isPage ? "flex-1 min-h-0" : ""}
               />
 
-              {/* Recepcion detail — acumulado de todas las facturas de la OC */}
-              {isView && orden?.recepcion && (
-                <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
-                  <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
-                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                      <tr>
-                        {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
-                          <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-emerald-100">
-                      {[...orden.recepcion.items, ...orden.recepcion.itemsExtra].map(item => (
-                        <tr key={item.rowId}>
-                          <td className="px-3 py-2 font-medium text-foreground">
-                            {item.nombre}
-                            {item.cantidadSolicitada === 0 && (
-                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
-                                No solicitado
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
-                          <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
-                          <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
-                          <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.precioUnitario)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
-                      <tr>
-                        <td colSpan={5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
-                          Total recibido
-                        </td>
-                        <td className="px-3 py-2 text-sm font-bold text-foreground">
-                          {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
-                            (s, i) => s + i.cantidadRecibida * i.precioUnitario, 0
+              {/* Recepcion detail — Rediseño con pestañas para múltiples facturas (Punto 14) */}
+              {isView && orden?.recepcion && (() => {
+                const facturas = gestiones.filter(g => g.ordenId === orden.id);
+                const totalOrden = calcTotal(orden.items);
+                const totalFacturado = facturas.reduce((s, g) => s + g.valorTotal, 0);
+                const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                
+                // Si no hay factura seleccionada, seleccionar la primera
+                const facturaActual = facturaSeleccionada 
+                  ? facturas.find(f => f.id === facturaSeleccionada) 
+                  : facturas[0];
+                
+                return (
+                  <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
+                    {/* Pestañas de facturas */}
+                    {facturas.length > 0 && (
+                      <div className="border-b border-emerald-200 bg-emerald-100/60">
+                        <div className="flex items-center gap-1 px-2 py-2 overflow-x-auto">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 mr-2 whitespace-nowrap">
+                            Facturas:
+                          </span>
+                          {facturas.map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setFacturaSeleccionada(f.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                                (facturaSeleccionada ?? facturas[0]?.id) === f.id
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-white/60 text-emerald-800 hover:bg-white"
+                              }`}
+                            >
+                              {f.numeroFactura || `Factura ${f.id}`}
+                            </button>
                           ))}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Detalle de la factura seleccionada */}
+                    {facturaActual ? (
+                      <div>
+                        <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-50/60">
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                            {facturaActual.numeroFactura || `Factura ${facturaActual.id}`}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Fecha: {facturaActual.fechaFactura || "—"} · Total: {fmtCOP(facturaActual.valorTotal)}
+                          </p>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                            <tr>
+                              {["Nombre", "Cantidad", "Unidad", "P. unitario", "Subtotal"].map(h => (
+                                <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-emerald-100">
+                            {(facturaActual.items ?? []).map(item => (
+                              <tr key={item.rowId}>
+                                <td className="px-3 py-2 font-medium text-foreground">{item.nombre}</td>
+                                <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidad}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
+                                <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
+                                <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
+                            <tr>
+                              <td colSpan={4} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
+                                Total factura
+                              </td>
+                              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                                {fmtCOP(facturaActual.valorTotal)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    ) : (
+                      /* Si no hay facturas, mostrar el acumulado de recepción */
+                      <div>
+                        <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                            <tr>
+                              {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
+                                <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-emerald-100">
+                            {[...orden.recepcion.items, ...orden.recepcion.itemsExtra].map(item => (
+                              <tr key={item.rowId}>
+                                <td className="px-3 py-2 font-medium text-foreground">
+                                  {item.nombre}
+                                  {item.cantidadSolicitada === 0 && (
+                                    <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
+                                      No solicitado
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
+                                <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
+                                <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
+                                <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.precioUnitario)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
+                            <tr>
+                              <td colSpan={5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
+                                Total recibido
+                              </td>
+                              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                                {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
+                                  (s, i) => s + i.cantidadRecibida * i.precioUnitario, 0
+                                ))}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                    
+                    {/* Punto 12: Total facturado y Por facturar */}
+                    <div className="px-3 py-3 bg-emerald-50/60 border-t border-emerald-200 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-muted-foreground uppercase tracking-wider">Total orden</span>
+                        <span className="font-bold text-foreground">{fmtCOP(totalOrden)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-muted-foreground uppercase tracking-wider">Total facturado</span>
+                        <span className="font-bold text-emerald-700">{fmtCOP(totalFacturado)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-muted-foreground uppercase tracking-wider">Por facturar</span>
+                        <span className={`font-bold ${porFacturar > 0 ? "text-amber-600" : "text-emerald-700"}`}>{fmtCOP(porFacturar)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
@@ -977,6 +1273,70 @@ export function OrdenModal({
             }
             onConfirm={() => { onGuardar(form); setShowSendConf(false); }}
             onCancel={() => setShowSendConf(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Punto 1: Modal de historial de estados */}
+      <AnimatePresence>
+        {showHistorial && orden && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                  Historial de estados
+                </h3>
+                <button onClick={() => setShowHistorial(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                {orden.historialEstados && orden.historialEstados.length > 0 ? (
+                  <div className="space-y-3">
+                    {orden.historialEstados.map((h, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-foreground">{h.estado}</p>
+                          <p className="text-xs text-muted-foreground">{h.fecha}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No hay cambios de estado registrados.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Punto 9: Modal de nuevo insumo */}
+      <AnimatePresence>
+        {showNuevoInsumo && (
+          <NuevoInsumoModal
+            nombreInicial={aNombre}
+            insumosExistentes={insumos}
+            onGuardar={(ins) => {
+              setANombre(ins.nombre);
+              setAUnidad(ins.unidadMedida);
+              setAPrecio(ins.precioUnitario);
+              setAIva(ins.iva);
+              setAInsumoId(ins.id);
+              setAFromCat(true);
+              setShowNuevoInsumo(false);
+              toast.success(`Insumo "${ins.nombre}" creado`);
+            }}
+            onClose={() => setShowNuevoInsumo(false)}
           />
         )}
       </AnimatePresence>
@@ -1471,6 +1831,7 @@ interface Props {
   onNuevoProveedor?: (p: ProveedorRef) => void;
   onAbrirRecepcion?: (orden: OrdenCompra) => void;
   onNuevaOrden: () => void;
+  onVerDetalle?: (orden: OrdenCompra) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1479,7 +1840,7 @@ interface Props {
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onNuevaOrden,
+  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onNuevaOrden, onVerDetalle,
   canCreate = true, canEdit = true,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -1511,13 +1872,17 @@ export function OrdenCompraScreen({
   const facturasDeOrden = (oid: string) => gestiones.filter((g) => g.ordenId === oid);
 
   const handleGuardarOrden = (data: OrdenFormData) => {
+    const today = new Date().toLocaleDateString("en-CA");
     if (modal?.mode === "create") {
+      const estadoInicial = data.estado as EstadoOrden;
       const n: OrdenCompra = {
         id: nextOrdenId(ordenes),
         proveedor: data.proveedor,
         fecha: data.fecha,
-        estado: data.estado as EstadoOrden,
+        estado: estadoInicial,
         items: data.items,
+        fechaCambioEstado: today,
+        historialEstados: [{ estado: estadoInicial, fecha: today }],
       };
       setOrdenes(p => [n, ...p]);
       toast.success(`OC ${n.id} guardada como ${n.estado}`);
@@ -1539,13 +1904,23 @@ export function OrdenCompraScreen({
   };
 
   const handleEnviarOrden = (o: OrdenCompra) => {
-    setOrdenes(p => p.map(x => x.id === o.id ? { ...x, estado: "Enviado" as EstadoOrden } : x));
+    const today = new Date().toLocaleDateString("en-CA");
+    setOrdenes(p => p.map(x => {
+      if (x.id !== o.id) return x;
+      const historial = [...(x.historialEstados ?? []), { estado: "Enviado" as EstadoOrden, fecha: today }];
+      return { ...x, estado: "Enviado" as EstadoOrden, fechaCambioEstado: today, historialEstados: historial };
+    }));
     setSendConfirm(null);
     toast.success(`OC ${o.id} enviada al proveedor`);
   };
 
   const handleAnularOrden = (o: OrdenCompra) => {
-    setOrdenes(p => p.map(x => x.id === o.id ? { ...x, estado: "Anulado" as EstadoOrden } : x));
+    const today = new Date().toLocaleDateString("en-CA");
+    setOrdenes(p => p.map(x => {
+      if (x.id !== o.id) return x;
+      const historial = [...(x.historialEstados ?? []), { estado: "Anulado" as EstadoOrden, fecha: today }];
+      return { ...x, estado: "Anulado" as EstadoOrden, fechaCambioEstado: today, historialEstados: historial };
+    }));
 
     // Anular la orden anula también sus facturas: la compra queda cerrada y no
     // vuelve al estado "Recibido".
@@ -1565,13 +1940,23 @@ export function OrdenCompraScreen({
   };
 
   const handleCambiarEstado = (id: string, next: EstadoOrden) => {
-    setOrdenes(p => p.map(x => x.id === id ? { ...x, estado: next } : x));
+    const today = new Date().toLocaleDateString("en-CA");
+    setOrdenes(p => p.map(x => {
+      if (x.id !== id) return x;
+      const historial = [...(x.historialEstados ?? []), { estado: next, fecha: today }];
+      return { ...x, estado: next, fechaCambioEstado: today, historialEstados: historial };
+    }));
     setEstadoConfirm(null);
     toast.success(`Estado cambiado a: ${next}`);
   };
 
   const handleGuardarRecepcion = (o: OrdenCompra, rec: Recepcion) => {
-    setOrdenes(p => p.map(x => x.id === o.id ? { ...x, estado: "Completado" as EstadoOrden, recepcion: rec } : x));
+    const today = new Date().toLocaleDateString("en-CA");
+    setOrdenes(p => p.map(x => {
+      if (x.id !== o.id) return x;
+      const historial = [...(x.historialEstados ?? []), { estado: "Completado" as EstadoOrden, fecha: today }];
+      return { ...x, estado: "Completado" as EstadoOrden, recepcion: rec, fechaCambioEstado: today, historialEstados: historial };
+    }));
     const gc: GestionCompra = {
       id: nextGestionId(gestiones),
       ordenId: o.id,
@@ -1664,7 +2049,7 @@ export function OrdenCompraScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Proveedor", "Fecha", "N° Factura", "Total", "Estado", "Acciones"].map(h => (
+                {["Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -1673,7 +2058,7 @@ export function OrdenCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📋</p>
                       <p className="font-medium">No se encontraron órdenes</p>
                     </td>
@@ -1713,6 +2098,12 @@ export function OrdenCompraScreen({
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
                         {fmtCOP(calcTotal(o.items))}
                       </td>
+                      <td className="px-4 py-3.5 text-sm text-emerald-700 font-semibold">
+                        {fmtCOP(facturas.reduce((s, f) => s + f.valorTotal, 0))}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-amber-600 font-semibold">
+                        {fmtCOP(Math.max(0, calcTotal(o.items) - facturas.reduce((s, f) => s + f.valorTotal, 0)))}
+                      </td>
                       <td className="px-4 py-3.5">
                         <select
                           value={o.estado}
@@ -1728,12 +2119,14 @@ export function OrdenCompraScreen({
                             <>
                               <option value="Borrador">Borrador</option>
                               <option value="Enviado">Enviado</option>
+                              <option value="Completado">Completado</option>
                               <option value="Anulado">Anulado</option>
                             </>
                           )}
                           {o.estado === "Enviado" && (
                             <>
                               <option value="Enviado">Enviado</option>
+                              <option value="Completado">Completado</option>
                               <option value="Anulado">Anulado</option>
                             </>
                           )}
@@ -1744,11 +2137,36 @@ export function OrdenCompraScreen({
                             <option value="Completado">Completado</option>
                           )}
                         </select>
+
+                         {/* Punto 1: Fecha de cambio de estado debajo del badge */}
+                         {o.fechaCambioEstado && (
+                           <p className="text-[10px] text-muted-foreground mt-1">
+                             {o.fechaCambioEstado}
+                           </p>
+                         )}
+                         {/* Punto 3: Tooltip con historial de estados al hacer hover */}
+                         {o.historialEstados && o.historialEstados.length > 0 && (
+                           <div className="group relative">
+                             <p className="text-[10px] text-primary mt-1 cursor-help">
+                               Ver historial ({o.historialEstados.length})
+                             </p>
+                             <div className="absolute bottom-full left-0 mb-1 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-2 hidden group-hover:block">
+                               <p className="text-[10px] font-bold text-muted-foreground mb-1">Historial de estados:</p>
+                               {o.historialEstados.map((h, i) => (
+                                 <div key={i} className="flex items-center gap-1.5 text-[10px] py-0.5">
+                                   <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                                   <span className="font-semibold text-foreground">{h.estado}</span>
+                                   <span className="text-muted-foreground">{h.fecha}</span>
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         )}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
                           <button
-                            onClick={() => setModal({ mode: "view", orden: o })}
+                            onClick={() => onVerDetalle?.(o)}
                             title="Ver detalle"
                             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                           >
@@ -1775,7 +2193,7 @@ export function OrdenCompraScreen({
                               title="Registrar recepción"
                               className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" /> Recibido
+                              <ClipboardCheck className="w-3.5 h-3.5" /> OC
                             </button>
                           )}
                         </div>
@@ -1825,6 +2243,7 @@ export function OrdenCompraScreen({
             orden={modal.orden}
             proveedores={proveedores}
             insumos={insumos}
+            gestiones={gestiones}
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}
@@ -1894,6 +2313,281 @@ export function OrdenCompraScreen({
             onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
             onCancel={() => setEstadoConfirm(null)}
           />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── ORDEN DETALLE — PANTALLA COMPLETA (Punto 8) ─────────────────────────────
+
+export function OrdenDetallePage({
+  orden, gestiones, onBack,
+}: {
+  orden: OrdenCompra;
+  gestiones: GestionCompra[];
+  onBack: () => void;
+}) {
+  const [facturaSeleccionada, setFacturaSeleccionada] = useState<string | null>(null);
+  const [showHistorial, setShowHistorial] = useState(false);
+
+  const facturas = gestiones.filter(g => g.ordenId === orden.id);
+  const totalOrden = calcTotal(orden.items);
+  const totalFacturado = facturas.reduce((s, g) => s + g.valorTotal, 0);
+  const porFacturar = Math.max(0, totalOrden - totalFacturado);
+
+  const facturaActual = facturaSeleccionada
+    ? facturas.find(f => f.id === facturaSeleccionada)
+    : facturas[0];
+
+  return (
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
+        <button
+          onClick={onBack}
+          className="p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          title="Volver"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
+            Orden de Compra {orden.id}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {orden.proveedor} · {orden.fecha}
+          </p>
+        </div>
+        <div className="ml-auto">
+          <EstadoBadge e={orden.estado} />
+        </div>
+      </div>
+
+      {/* Contenido principal — dos columnas */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 overflow-hidden">
+        {/* Columna izquierda — Información general */}
+        <div className="w-full lg:w-1/3 overflow-y-auto pr-1 space-y-5">
+          {/* Información */}
+          <div className="bg-card border border-border rounded-xl p-4">
+            <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: SERIF }}>
+              Información general
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Proveedor:</span>
+                <span className="font-semibold text-foreground">{orden.proveedor}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fecha:</span>
+                <span className="font-semibold text-foreground">{orden.fecha}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Estado:</span>
+                {/* Punto 3: Tooltip con historial de estados al hacer hover sobre el badge */}
+                {orden.historialEstados && orden.historialEstados.length > 0 ? (
+                  <div className="group relative">
+                    <div className="cursor-help">
+                      <EstadoBadge e={orden.estado} />
+                    </div>
+                    <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-30 p-3 hidden group-hover:block">
+                      <p className="text-[10px] font-bold text-muted-foreground mb-2">Historial de estados:</p>
+                      <div className="space-y-1.5">
+                        {orden.historialEstados.map((h, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                            <span className="font-semibold text-foreground">{h.estado}</span>
+                            <span className="text-muted-foreground">{h.fecha}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <EstadoBadge e={orden.estado} />
+                )}
+              </div>
+              {orden.fechaCambioEstado && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cambio estado:</span>
+                  <span className="font-semibold text-foreground">{orden.fechaCambioEstado}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Totales */}
+          <div className="bg-card border border-border rounded-xl p-4">
+            <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: SERIF }}>
+              Resumen financiero
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total orden:</span>
+                <span className="font-bold text-foreground">{fmtCOP(totalOrden)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total facturado:</span>
+                <span className="font-bold text-emerald-700">{fmtCOP(totalFacturado)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Por facturar:</span>
+                <span className={`font-bold ${porFacturar > 0 ? "text-amber-600" : "text-emerald-700"}`}>{fmtCOP(porFacturar)}</span>
+              </div>
+            </div>
+          </div>
+
+
+
+          {/* Insumos solicitados */}
+          <div className="bg-card border border-border rounded-xl p-4">
+            <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: SERIF }}>
+              Insumos solicitados
+            </h3>
+            <div className="space-y-2">
+              {orden.items.map(item => {
+                // Punto 5: Verificar si el insumo ya fue facturado
+                const facturado = facturas.some(f => 
+                  (f.items ?? []).some(fi => fi.idInsumo === item.idInsumo)
+                );
+                return (
+                  <div key={item.rowId} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">{item.nombre}</span>
+                      {facturado && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full whitespace-nowrap">
+                          Facturado
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground">{item.cantidad} {item.unidad}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Columna derecha — Facturas */}
+        <div className="w-full lg:w-2/3 overflow-y-auto pr-1">
+          <div className="bg-card border border-border rounded-xl overflow-hidden h-full flex flex-col">
+            <div className="px-4 py-3 border-b border-border bg-muted/30">
+              <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                Facturas asociadas
+              </h3>
+            </div>
+
+            {facturas.length > 0 ? (
+              <div className="flex-1 flex flex-col">
+                {/* Pestañas de facturas */}
+                <div className="border-b border-border bg-muted/20">
+                  <div className="flex items-center gap-1 px-3 py-2 overflow-x-auto">
+                    {facturas.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setFacturaSeleccionada(f.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                          (facturaSeleccionada ?? facturas[0]?.id) === f.id
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground hover:bg-border"
+                        }`}
+                      >
+                        {f.numeroFactura || `Factura ${f.id}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Detalle de la factura seleccionada */}
+                {facturaActual && (
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <div className="mb-4">
+                      <p className="text-xs text-muted-foreground">
+                        Fecha: {facturaActual.fechaFactura || "—"} · Total: {fmtCOP(facturaActual.valorTotal)}
+                      </p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          {["Insumo", "Cantidad", "Unidad", "P. unitario", "Subtotal"].map(h => (
+                            <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {(facturaActual.items ?? []).map(item => (
+                          <tr key={item.rowId}>
+                            <td className="px-3 py-2 font-medium text-foreground">{item.nombre}</td>
+                            <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidad}</td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
+                            <td className="px-3 py-2">{fmtCOP(item.precioUnitario)}</td>
+                            <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-muted/50 border-t border-border">
+                        <tr>
+                          <td colSpan={4} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
+                            Total factura
+                          </td>
+                          <td className="px-3 py-2 text-sm font-bold text-foreground">
+                            {fmtCOP(facturaActual.valorTotal)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <p className="text-sm text-muted-foreground">No hay facturas asociadas a esta orden.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de historial de estados */}
+      <AnimatePresence>
+        {showHistorial && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                  Historial de estados
+                </h3>
+                <button onClick={() => setShowHistorial(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                {orden.historialEstados && orden.historialEstados.length > 0 ? (
+                  <div className="space-y-3">
+                    {orden.historialEstados.map((h, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-foreground">{h.estado}</p>
+                          <p className="text-xs text-muted-foreground">{h.fecha}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No hay cambios de estado registrados.
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
