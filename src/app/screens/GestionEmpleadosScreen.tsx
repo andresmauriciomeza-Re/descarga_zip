@@ -283,14 +283,14 @@ export function GestionEmpleadosScreen({
     const e = editItem;
     const errs: Record<string, string> = {};
     if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(e.nombre) ?? undefined;
+    else { const v = validarNombre(e.nombre); if (v) errs.nombre = v; }
     if (!e.correo.trim()) errs.correo = "El correo es obligatorio";
-    else errs.correo = validarCorreo(e.correo) ?? undefined;
+    else { const v = validarCorreo(e.correo); if (v) errs.correo = v; }
     if (e.telefono.trim() && !/^[\d\s+()\-]+$/.test(e.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!e.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
-    else errs.numeroDocumento = validarDocumento(e.numeroDocumento, e.tipoDocumento) ?? undefined;
+    else { const v = validarDocumento(e.numeroDocumento, e.tipoDocumento); if (v) errs.numeroDocumento = v; }
     if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
@@ -336,16 +336,16 @@ export function GestionEmpleadosScreen({
   const handleCreate = () => {
     const errs: Record<string, string> = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(newNombre) ?? undefined;
+    else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) { errs.correo = "El correo es obligatorio"; }
     else if (validarCorreo(newCorreo)) { errs.correo = validarCorreo(newCorreo) as string; }
     if (newTelefono.trim() && !/^[\d\s+()\-]+$/.test(newTelefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
     if (!newDocumento.trim()) { errs.documento = "El número de documento es obligatorio"; }
-    else { errs.documento = validarDocumento(newDocumento, newTipoDoc) ?? undefined; }
+    else { const v = validarDocumento(newDocumento, newTipoDoc); if (v) errs.documento = v; }
     if (!newContrasena.trim()) { errs.contrasena = "La contraseña es obligatoria"; }
-    else { errs.contrasena = validarContrasena(newContrasena) ?? undefined; }
+    else { const v = validarContrasena(newContrasena); if (v) errs.contrasena = v; }
     if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
     else if (newContrasena !== newConfirmar) { errs.confirmar = "Las contraseñas no coinciden"; }
     if (!newRolId) errs.rol = "Selecciona un rol";
@@ -509,19 +509,7 @@ export function GestionEmpleadosScreen({
         </div>
       </div>
 
-      {/* Métricas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3 shrink-0">
-        {[
-          { label: "Total empleados", value: total,   cls: "text-foreground",       bg: "bg-card"       },
-          { label: "Activos",         value: activos, cls: "text-emerald-600",       bg: "bg-emerald-50" },
-          { label: "Inactivos",       value: inact,   cls: "text-muted-foreground", bg: "bg-muted"      },
-        ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
-            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
-            <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
-          </div>
-        ))}
-      </div>
+
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">

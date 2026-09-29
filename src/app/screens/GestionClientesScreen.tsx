@@ -151,10 +151,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     if (!editItem) return;
     const errs: { nombre?: string; correo?: string } = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(editItem.nombre) ?? undefined;
+    else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
     else {
-      errs.correo = validarCorreo(editItem.correo) ?? undefined;
+      const v = validarCorreo(editItem.correo);
+      if (v) errs.correo = v;
       if (!errs.correo) {
         const em = editItem.correo.trim().toLowerCase();
         const otro = (correo: string) => correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
@@ -197,7 +198,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const handleCreate = () => {
     const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(newNombre) ?? undefined;
+    else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
     } else if (validarCorreo(newCorreo)) {
@@ -268,19 +269,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         </div>
       </div>
 
-      {/* Métricas */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3 shrink-0">
-        {[
-          { label: "Total clientes", value: total,   cls: "text-foreground",       bg: "bg-card"       },
-          { label: "Activos",        value: activos, cls: "text-emerald-600",       bg: "bg-emerald-50" },
-          { label: "Inactivos",      value: inact,   cls: "text-muted-foreground", bg: "bg-muted"      },
-        ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
-            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
-            <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
-          </div>
-        ))}
-      </div>
+
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
