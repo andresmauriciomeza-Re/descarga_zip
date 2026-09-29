@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Eye, Pencil, Trash2, X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
+import { Eye, Pencil, Trash2, X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -582,8 +582,16 @@ export function GestionConfigScreen({
   const [editItem,   setEditItem]  = useState<Rol | null>(null);
   const [detailItem, setDetailItem]= useState<Rol | null>(null);
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
+  const [search,     setSearch]    = useState("");
 
-  const filtered = useMemo(() => roles, [roles]);
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return roles;
+    return roles.filter(r =>
+      r.nombre.toLowerCase().includes(q) ||
+      (r.descripcion ?? "").toLowerCase().includes(q)
+    );
+  }, [roles, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
@@ -637,10 +645,15 @@ export function GestionConfigScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{roles.length} roles registrados</p>
         </div>
          <div className="flex items-center gap-2">
-           <button onClick={() => setPage(1)}
-             className="px-4 py-3 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted transition-colors cursor-pointer">
-             Ver todos los roles
-           </button>
+           <div className="relative">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+             <input
+               value={search}
+               onChange={e => { setSearch(e.target.value); setPage(1); }}
+               placeholder="Buscar por nombre o descripción..."
+               className="w-64 pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+             />
+           </div>
            <button onClick={() => setShowCreate(true)}
              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
              <Plus className="w-4 h-4" /> Crear Rol
