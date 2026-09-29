@@ -101,7 +101,7 @@ const CATEGORIAS_PRODUCTO = [
 ];
 
 export const INITIAL_PRODUCTOS: Producto[] = [
-  // ── Pizzas (CAT-001) ──
+  // ── Pizzas (CAT-001): $14.000 pequeña, $16.000 grande ──
   {
     id: "PROD-001",
     imagen: "/src/imports/pizzaDefinitiva.png",
@@ -127,7 +127,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/pizzafondo-removebg-preview.png",
     nombre: "Pizza Hawai",
     idCategoria: "CAT-001",
-    costoUnitario: 15000, precioUnitario: 15000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 40,
     estado: "Disponible",
@@ -137,7 +137,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/image-1.png",
     nombre: "Pizza Pollo",
     idCategoria: "CAT-001",
-    costoUnitario: 15000, precioUnitario: 15000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 35,
     estado: "Disponible",
@@ -147,7 +147,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/image-2.png",
     nombre: "Pizza Cañon",
     idCategoria: "CAT-001",
-    costoUnitario: 16000, precioUnitario: 16000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 30,
     estado: "Disponible",
@@ -157,7 +157,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/image-3.png",
     nombre: "Pizza Maicitos",
     idCategoria: "CAT-001",
-    costoUnitario: 13000, precioUnitario: 13000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 60,
     estado: "Disponible",
@@ -167,7 +167,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/image-4.png",
     nombre: "Pizza Paisa",
     idCategoria: "CAT-001",
-    costoUnitario: 18000, precioUnitario: 18000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 25,
     estado: "Disponible",
@@ -177,7 +177,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
     imagen: "/src/imports/image-5.png",
     nombre: "Pizza Tocineta",
     idCategoria: "CAT-001",
-    costoUnitario: 15000, precioUnitario: 15000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 40,
     estado: "Disponible",
