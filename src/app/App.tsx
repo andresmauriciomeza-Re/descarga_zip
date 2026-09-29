@@ -110,6 +110,7 @@ import {
   INITIAL_ORDENES,
   NuevaOrdenCompraPage,
   OrdenCompraScreen,
+  OrdenDetallePage,
   PROVEEDORES_INIT,
 } from "./screens/OrdenCompraScreen";
 import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
@@ -168,6 +169,7 @@ type Screen =
   | "clientes"
   | "perecederos"
   | "orden-compra"
+  | "orden-detalle"
   | "nueva-orden-compra"
   | "recepcion-compra"
   | "gestion-compra"
@@ -647,6 +649,7 @@ const ADMIN_SCREENS: Screen[] = [
   "recepcion-compra",
   "gestion-compra",
   "nueva-compra",
+  "orden-detalle",
   "devoluciones",
   "empleados",
 ];
@@ -7213,6 +7216,7 @@ export default function App() {
     useState<OrdenCompra | null>(null);
   const [showNuevaOrden, setShowNuevaOrden] = useState(false);
   const [showNuevaCompra, setShowNuevaCompra] = useState(false);
+  const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -7515,7 +7519,7 @@ export default function App() {
     // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
     screen === "orden-compra" || screen === "nueva-orden-compra" ||
     screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra"
+    screen === "nueva-compra" || screen === "orden-detalle"
   );
 
   return (
@@ -7799,6 +7803,10 @@ export default function App() {
                       setScreen("recepcion-compra");
                     }}
                     onNuevaOrden={() => setShowNuevaOrden(true)}
+                    onVerDetalle={(orden) => {
+                      setOrdenDetalle(orden);
+                      setScreen("orden-detalle");
+                    }}
                   />
                   {showNuevaOrden && (
                     <NuevaOrdenCompraPage
@@ -7835,6 +7843,16 @@ export default function App() {
                   }}
                   onBack={() => {
                     setOrdenRecepcion(null);
+                    setScreen("orden-compra");
+                  }}
+                />
+              )}
+              {screen === "orden-detalle" && ordenDetalle && (
+                <OrdenDetallePage
+                  orden={ordenDetalle}
+                  gestiones={gestiones}
+                  onBack={() => {
+                    setOrdenDetalle(null);
                     setScreen("orden-compra");
                   }}
                 />
