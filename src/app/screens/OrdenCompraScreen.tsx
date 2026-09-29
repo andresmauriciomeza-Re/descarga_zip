@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
+import { filtrarCorreo, validarCorreo } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -343,11 +344,13 @@ export function NuevoProveedorModal({
     if (!nit.trim()) { toast.error("El NIT es obligatorio."); return; }
     if (!telefono.trim()) { toast.error("El teléfono es obligatorio."); return; }
     if (!email.trim()) { toast.error("El email es obligatorio."); return; }
+    const emailError = validarCorreo(email);
+    if (emailError) { toast.error(emailError); return; }
     onGuardar({
       nombre: nombre.trim(),
       nit: nit.trim(),
       telefono: telefono.trim(),
-      email: email.trim(),
+       email: email.trim().toLowerCase(),
       asesorComercial: asesorComercial.trim(),
       direccion: direccion.trim(),
       estado,
@@ -404,7 +407,7 @@ export function NuevoProveedorModal({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email *</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ventas@proveedor.co" className={iCls} />
+                 <input type="email" value={email} onChange={e => setEmail(filtrarCorreo(e.target.value))} placeholder="ventas@gmail.com" className={iCls} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>

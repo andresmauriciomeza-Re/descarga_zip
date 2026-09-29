@@ -84,7 +84,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filtrarDocumento, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarTelefono } from "./components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
@@ -97,7 +97,7 @@ import {
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
-import { GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
+import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import type {
@@ -652,7 +652,7 @@ const ADMIN_SCREENS: Screen[] = [
 ];
 
 // Named roles that belong to the public catalog (not the admin panel)
-const PUBLIC_ROLE_NAMES = ["Cliente", "Usuario"];
+const PUBLIC_ROLE_NAMES = ["Cliente"];
 
 const SCREEN_META: Partial<
   Record<Screen, { title: string; icon: string; desc: string }>
@@ -934,12 +934,14 @@ function Badge({
 function PrimaryBtn({
   children,
   onClick,
+  type = "button",
   size = "md",
   disabled = false,
   className = "",
 }: {
   children: React.ReactNode;
   onClick?: () => void;
+  type?: "button" | "submit" | "reset";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   className?: string;
@@ -951,6 +953,7 @@ function PrimaryBtn({
   }[size];
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-red-700 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md hover:shadow-lg ${s} ${className}`}
@@ -1157,6 +1160,7 @@ function PublicNav({
 }: {
   navigate: (s: Screen) => void;
   cart: CartItem[];
+  onLogin: () => void;
   isLoggedIn: boolean;
   isStaff: boolean;
   loggedInUser: { iniciales: string; avatarColor: string } | null;
@@ -3455,6 +3459,8 @@ function ClientProfileScreen({
     avatarColor: string;
     correo: string;
     telefono: string;
+    tipoDocumento: string;
+    numeroDocumento: string;
   } | null;
   loggedInRoleName: string;
   isStaff: boolean;
@@ -3484,10 +3490,12 @@ function ClientProfileScreen({
   const iCls = (err?: string) =>
     `w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
 
+  const tipoDocumento = DOC_TIPOS.find(t => t.code === loggedInUser?.tipoDocumento)?.label
+    ?? loggedInUser?.tipoDocumento
+    ?? "—";
+
   const handleGuardar = () => {
-    const ec = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())
-      ? "Formato de correo no válido"
-      : null;
+    const ec = validarCorreo(correo);
     const et = !/^\d{7,15}$/.test(telefono.replace(/\s/g, ""))
       ? "Solo números, entre 7 y 15 dígitos"
       : null;
@@ -3499,11 +3507,11 @@ function ClientProfileScreen({
       return;
     }
     setGuardado({
-      correo: correo.trim(),
+       correo: correo.trim().toLowerCase(),
       telefono: telefono.trim(),
     });
     if (loggedInUser)
-      onUpdateUser(loggedInUser.id, { correo: correo.trim(), telefono: telefono.trim() });
+       onUpdateUser(loggedInUser.id, { correo: correo.trim().toLowerCase(), telefono: telefono.trim() });
     setEditando(false);
     setErrores({});
     toast.success("Perfil actualizado correctamente");
@@ -3553,19 +3561,49 @@ function ClientProfileScreen({
             </button>
           )}
         </div>
-        {/* Fields */}
-        <div className="px-6 py-6 space-y-5">
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-              <User className="w-3.5 h-3.5" /> Nombre
-            </label>
-            <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
-              {loggedInUser?.nombre ?? "Sebastián"}
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Este campo no es editable
-            </p>
-          </div>
+         {/* Fields */}
+         <div className="px-6 py-6 space-y-5">
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div>
+               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                 <FileText className="w-3.5 h-3.5" /> Tipo de documento
+               </label>
+               <input
+                 type="text"
+                 value={tipoDocumento}
+                 readOnly
+                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+               />
+               <p className="text-[11px] text-muted-foreground mt-1">
+                 Este campo no es editable
+               </p>
+             </div>
+             <div>
+               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                 <FileText className="w-3.5 h-3.5" /> Número de documento
+               </label>
+               <input
+                 type="text"
+                 value={loggedInUser?.numeroDocumento ?? "—"}
+                 readOnly
+                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+               />
+               <p className="text-[11px] text-muted-foreground mt-1">
+                 Este campo no es editable
+               </p>
+             </div>
+           </div>
+           <div>
+             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+               <User className="w-3.5 h-3.5" /> Nombre
+             </label>
+             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
+               {loggedInUser?.nombre ?? "Sebastián"}
+             </div>
+             <p className="text-[11px] text-muted-foreground mt-1">
+               Este campo no es editable
+             </p>
+           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
               <Mail className="w-3.5 h-3.5" /> Correo
@@ -3577,11 +3615,9 @@ function ClientProfileScreen({
                   type="email"
                   value={correo}
                   onChange={(e) => {
-                    setCorreo(e.target.value);
-                    setErrores((p) => ({
-                      ...p,
-                      correo: undefined,
-                    }));
+                     const value = filtrarCorreo(e.target.value);
+                     setCorreo(value);
+                     setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
                   }}
                   className={iCls(errores.correo)}
                   autoFocus
@@ -3827,7 +3863,7 @@ function LoginScreen({
   loginNotice,
 }: {
   navigate: (s: Screen) => void;
-  onLogin: (role: string, email: string) => void;
+  onLogin: (user: Usuario) => void;
   usuarios: Usuario[];
   darkMode: boolean;
   loginNotice?: boolean;
@@ -3843,36 +3879,38 @@ function LoginScreen({
 
   const validate = () => {
     const e: typeof errors = {};
-    if (!email.includes("@"))
-      e.email = "Correo electrónico no válido";
-    if (password.length < 6)
-      e.password =
-        "La contraseña debe tener mínimo 6 caracteres";
+    e.email = validarCorreo(email) ?? undefined;
+    e.password = password ? undefined : "La contraseña es obligatoria";
+    console.log("[login] resultado de validación", {
+      email: email.trim().toLowerCase(),
+      valido: !e.email && !e.password,
+      errores: e,
+    });
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return !e.email && !e.password;
   };
 
   const handleLogin = () => {
-    if (!validate()) return;
-
-    const trimmedEmail = email.trim().toLowerCase();
-
-    // Legacy customer account (not in the employee directory)
-    if (trimmedEmail === "sebas@gmail.com" && password === "1234567") {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        onLogin("Usuario", "sebas@gmail.com");
-        toast.success("¡Bienvenido, Sebas! 👋", { description: "Has ingresado correctamente." });
-        navigate("catalog");
-      }, 1500);
+    console.log("[login] inicio del submit", { email, passwordPresent: Boolean(password) });
+    if (!validate()) {
+      console.log("[login] submit detenido por validación");
       return;
     }
 
-    // Look up against the employee directory
-    const user = usuarios.find(u => u.correo.toLowerCase() === trimmedEmail);
+    const trimmedEmail = email.trim().toLowerCase();
+    console.log("[login] correo normalizado", trimmedEmail);
+
+    // Look up against the local user directory.
+    const user = usuarios.find(u => u.correo.trim().toLowerCase() === trimmedEmail);
+    console.log("[login] usuario encontrado", user ? {
+      id: user.id,
+      correo: user.correo,
+      rolId: user.rolId,
+      activo: user.activo,
+    } : null);
 
     if (!user) {
+      console.log("[login] credenciales inválidas: usuario no encontrado");
       setErrors({
         email: "Credenciales incorrectas",
         password: "Verifica tu correo y contraseña",
@@ -3881,12 +3919,18 @@ function LoginScreen({
     }
 
     if (!user.activo) {
+      console.log("[login] credenciales rechazadas: cuenta inactiva");
+      setErrors({
+        email: "Credenciales incorrectas",
+        password: "Verifica tu correo y contraseña",
+      });
       toast.error("Tu cuenta está inactiva. Contacta al administrador.");
       return;
     }
 
     // All system users share the password "123456"
     if (password !== "123456") {
+      console.log("[login] credenciales inválidas: contraseña incorrecta");
       setErrors({
         email: "Credenciales incorrectas",
         password: "Verifica tu correo y contraseña",
@@ -3897,9 +3941,13 @@ function LoginScreen({
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      // Navigation is handled by the onLogin callback in App.tsx,
-      // which resolves the named role and picks catalog vs dashboard.
-      onLogin("Administrador", user.correo);
+      console.log("[login] credenciales correctas; llamando a onLogin", {
+        id: user.id,
+        correo: user.correo,
+        rolId: user.rolId,
+      });
+      // Navigation and session state are handled by App.tsx.
+      onLogin(user);
       const firstName = user.nombre.split(" ")[0];
       toast.success(`¡Bienvenid${user.nombre.split(" ")[0].endsWith("a") ? "a" : "o"}, ${firstName}!`, {
         description: "Has ingresado correctamente.",
@@ -3964,6 +4012,12 @@ function LoginScreen({
           </p>
         </div>
 
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleLogin();
+          }}
+        >
         <div className="space-y-2.5 mb-3">
           <div>
             <label className="block text-sm font-semibold text-foreground mb-1">
@@ -3972,8 +4026,9 @@ function LoginScreen({
             <input
               value={email}
               onChange={(e) => {
-                setEmail(e.target.value);
-                if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+                 const value = filtrarCorreo(e.target.value);
+                 setEmail(value);
+                 setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
               }}
               type="email"
               placeholder="gloria@lasirena.com"
@@ -3991,10 +4046,13 @@ function LoginScreen({
             </label>
             <PasswordField
               value={password}
-              onChange={(v) => {
-                setPassword(v);
-                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
-              }}
+               onChange={(v) => {
+                 setPassword(v);
+                 setErrors((p) => ({
+                   ...p,
+                   password: v ? undefined : "La contraseña es obligatoria",
+                 }));
+               }}
               placeholder="••••••••"
               autoComplete="current-password"
               cls={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
@@ -4007,6 +4065,7 @@ function LoginScreen({
           </div>
           <div className="text-right">
             <button
+              type="button"
               onClick={() => setShowForgot(true)}
               className="text-sm text-primary font-medium hover:underline cursor-pointer"
             >
@@ -4016,7 +4075,7 @@ function LoginScreen({
         </div>
 
         <PrimaryBtn
-          onClick={handleLogin}
+          type="submit"
           size="md"
           className="w-full mb-3"
           disabled={loading}
@@ -4026,6 +4085,7 @@ function LoginScreen({
           ) : null}
           {loading ? "Ingresando..." : "Iniciar sesión"}
         </PrimaryBtn>
+        </form>
 
         {loginNotice && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
@@ -4085,9 +4145,7 @@ function ForgotPasswordModal({
   };
 
   const sendCode = () => {
-    const err = !forgotEmail.includes("@")
-      ? "Ingresa un correo electrónico válido (ej: nombre@dominio.com)"
-      : null;
+    const err = validarCorreo(forgotEmail);
     setErrores(err ? { forgotEmail: err } : {});
     if (err) return;
     setLoading(true);
@@ -4125,8 +4183,8 @@ function ForgotPasswordModal({
 
   const changePassword = () => {
     const errs: Record<string, string> = {};
-    if (newPass.length < 6)
-      errs.newPass = "La contraseña debe tener al menos 6 caracteres";
+    const passwordError = validarContrasena(newPass);
+    if (passwordError) errs.newPass = passwordError;
     if (newPass !== confirm) errs.confirm = "Las contraseñas no coinciden";
     setErrores(errs);
     if (Object.values(errs).some(Boolean)) return;
@@ -4201,9 +4259,9 @@ function ForgotPasswordModal({
               <input
                 value={forgotEmail}
                 onChange={(e) => {
-                  setForgotEmail(e.target.value);
-                  if (errores.forgotEmail)
-                    setErrores((p) => ({ ...p, forgotEmail: "" }));
+                   const value = filtrarCorreo(e.target.value);
+                   setForgotEmail(value);
+                   setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
                 }}
                 type="email"
                 placeholder="gloria@lasirena.com"
@@ -4296,12 +4354,6 @@ function ForgotPasswordModal({
             >
               ← Ingresar otro correo
             </button>
-            <button
-              onClick={onClose}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-            >
-              Volver a iniciar sesión
-            </button>
           </>
         )}
 
@@ -4334,7 +4386,7 @@ function ForgotPasswordModal({
                     if (errores.newPass)
                       setErrores((p) => ({ ...p, newPass: "" }));
                   }}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   autoComplete="new-password"
                   cls={inputCls(errores.newPass)}
                 />
@@ -4454,15 +4506,16 @@ function RegisterScreen({
   const setVal =
     (k: keyof typeof form) =>
     (v: string) => {
-      setForm((p) => ({ ...p, [k]: v }));
+      const value = k === "email" ? filtrarCorreo(v) : k === "name" ? filtrarNombre(v) : v;
+      setForm((p) => ({ ...p, [k]: value }));
       setErrores((prev) => {
         const next = { ...prev };
-        if (k === "email" && v) next.email = validarCorreo(v) ?? "";
-        if (k === "phone" && v) next.phone = validarTelefono(v) ?? "";
-        if (k === "docNum" && v) next.docNum = validarDocumento(v, form.docType) ?? "";
-        if (k === "password" && v) next.password = validarContrasena(v) ?? "";
-        if (k === "confirm" && v) next.confirm = v === form.password ? "" : "Las contraseñas no coinciden";
-        if (k === "name" && v) next.name = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ]{2,}$/.test(v.trim()) ? "" : "Usa solo letras y espacios";
+        if (k === "email") next.email = validarCorreo(value) ?? "";
+        if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
+        if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
+        if (k === "password") next.password = value ? validarContrasena(value) ?? "" : "";
+        if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
+        if (k === "name") next.name = validarNombre(value) ?? "";
         return next;
       });
     };
@@ -4481,11 +4534,9 @@ function RegisterScreen({
     const errs: Record<string, string> = {};
 
     if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
-    else if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]{2,}$/.test(form.name.trim()))
-      errs.name = "Usa solo letras y espacios";
+    else errs.name = validarNombre(form.name) ?? undefined;
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      errs.email = "Ingresa un correo electrónico válido (ej: nombre@dominio.com)";
+    else errs.email = validarCorreo(form.email) ?? undefined;
     if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
     else if (!/^3\d{9}$/.test(form.phone)) errs.phone = "Debe tener 10 dígitos y comenzar por 3";
     if (!form.docType) errs.docType = "Selecciona el tipo de documento";
@@ -4494,8 +4545,7 @@ function RegisterScreen({
     if (!docTrim) errs.docNum = "El número de documento es obligatorio";
     else if (form.docType === "CC" && !/^\d{6,10}$/.test(docTrim))
       errs.docNum = "La CC debe tener entre 6 y 10 dígitos";
-    else if ((form.docType === "CE" || form.docType === "PP") && !/^[A-Za-z0-9]{6,12}$/.test(docTrim))
-      errs.docNum = "Debe tener entre 6 y 12 caracteres alfanuméricos";
+    else errs.docNum = validarDocumento(docTrim, form.docType) ?? undefined;
 
     if (!errs.docNum) {
       const clave = `${form.docType}||${docTrim}`.toLowerCase();
@@ -4542,22 +4592,31 @@ function RegisterScreen({
         nombre: form.name.trim(),
         iniciales,
         avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
-        correo: form.email.trim(),
+        correo: form.email.trim().toLowerCase(),
         telefono: form.phone.trim(),
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
         rolId: "ROL-002",
         activo: true,
       };
-      setUsuarios(p => [...p, nuevoUsuario]);
-      toast.success(
+       setUsuarios(p => [...p, nuevoUsuario]);
+       toast.success(
         "¡Cuenta creada exitosamente! Ya puedes ingresar.",
       );
       navigate("login");
-    }, 1500);
-  };
+     }, 1500);
+   };
 
-  return (
+   const registerInvalid =
+     Boolean(validarNombre(form.name)) ||
+     Boolean(validarCorreo(form.email)) ||
+     Boolean(validarTelefono(form.phone)) ||
+     Boolean(validarDocumento(form.docNum, form.docType)) ||
+     Boolean(validarContrasena(form.password)) ||
+     !form.confirm ||
+     form.password !== form.confirm;
+
+   return (
     <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -4596,7 +4655,7 @@ function RegisterScreen({
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
-                    setErrores((p) => ({ ...p, docNum: validarDocumento(form.docNum, e.target.value) ?? "" }));
+                     setErrores((p) => ({ ...p, docNum: form.docNum ? validarDocumento(form.docNum, e.target.value) ?? "" : "" }));
                   }
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
@@ -4616,13 +4675,10 @@ function RegisterScreen({
               </label>
               <input
                 value={form.docNum}
-                onChange={(e) => {
-                  setForm((p) => ({ ...p, docNum: filtrarDocumento(e.target.value, form.docType) }));
-                  if (errores.docNum) setErrores((p) => ({ ...p, docNum: "" }));
-                }}
+                 onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
                 type="text"
-                inputMode={form.docType === "PP" ? "text" : "numeric"}
-                placeholder={form.docType === "PP" ? "AB123456" : "Ej: 12345678"}
+                 inputMode="numeric"
+                 placeholder="Ej: 12345678"
                 className={inputCls(errores.docNum)}
               />
               <MensajeError err={errores.docNum} />
@@ -4653,7 +4709,7 @@ function RegisterScreen({
             {
               label: "Contraseña",
               key: "password" as const,
-              placeholder: "Mínimo 6 caracteres",
+               placeholder: "Mínimo 8 caracteres",
               type: "password",
               full: true,
             },
@@ -4696,7 +4752,7 @@ function RegisterScreen({
           onClick={register}
           size="md"
           className="w-full mb-1"
-          disabled={loading || Object.values(errores).some(Boolean)}
+           disabled={loading || registerInvalid || Object.values(errores).some(Boolean)}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -6910,7 +6966,11 @@ const leerRolesPersistidos = (): Rol[] => {
     if (!raw) return INITIAL_ROLES;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
-      return parsed as Rol[];
+      return (parsed as Rol[]).map(rol =>
+        rol.id === "ROL-003" && rol.nombre === "Usuario"
+          ? { ...rol, nombre: "Empleado", descripcion: "Acceso operativo al sistema." }
+          : rol,
+      );
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -6929,6 +6989,7 @@ const leerRolesPersistidos = (): Rol[] => {
 // y los interruptores de Activo/Inactivo de la pantalla de Usuarios.
 // Para volver a la semilla: localStorage.removeItem(USUARIOS_STORAGE_KEY).
 const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
+const CUENTAS_PRUEBA_IDS = new Set(["USR-001", "USR-002", "USR-010"]);
 
 const esUsuarioValido = (u: unknown): u is Usuario => {
   if (!u || typeof u !== "object") return false;
@@ -6956,7 +7017,22 @@ const leerUsuariosPersistidos = (): Usuario[] => {
     if (!raw) return INIT_USUARIOS;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esUsuarioValido)) {
-      return parsed as Usuario[];
+      const persistidos = parsed as Usuario[];
+      const porId = new Map(persistidos.map((usuario) => [usuario.id, usuario]));
+      const cuentasPrueba = INIT_USUARIOS
+        .filter((usuario) => CUENTAS_PRUEBA_IDS.has(usuario.id))
+        .map((semilla) => ({
+          ...semilla,
+          // Las cuentas de prueba siempre conservan sus credenciales y rol.
+          ...(porId.get(semilla.id) ?? {}),
+          correo: semilla.correo,
+          rolId: semilla.rolId,
+          activo: semilla.activo,
+        }));
+      const otrosUsuarios = persistidos
+        .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
+        .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
+      return [...cuentasPrueba, ...otrosUsuarios];
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -7235,13 +7311,95 @@ export default function App() {
   const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
+
+  // Mantiene el listado general como la union de las cuentas de empleados y
+  // clientes. Los perfiles que comparten correo siguen siendo una sola cuenta.
+  useEffect(() => {
+    setUsuarios(prev => {
+      const next = [...prev];
+      const porCorreo = new Map(next.map(usuario => [usuario.correo.trim().toLowerCase(), usuario]));
+      let changed = false;
+      const siguienteId = () => {
+        const max = next.reduce((value, usuario) => {
+          const numero = parseInt(usuario.id.replace("USR-", ""), 10) || 0;
+          return Math.max(value, numero);
+        }, 0);
+        return `USR-${String(max + 1).padStart(3, "0")}`;
+      };
+
+      empleados.forEach(empleado => {
+        const correo = empleado.correo.trim().toLowerCase();
+        const base = {
+          nombre: empleado.nombre,
+          iniciales: empleado.iniciales,
+          avatarColor: empleado.avatarColor,
+          correo: empleado.correo,
+          telefono: empleado.telefono,
+          tipoDocumento: empleado.tipoDocumento,
+          numeroDocumento: empleado.numeroDocumento,
+          rolId: empleado.rolId,
+          activo: empleado.activo,
+        };
+        const existente = porCorreo.get(correo);
+        if (existente) {
+          const actualizado = { ...existente, ...base };
+          if (JSON.stringify(actualizado) !== JSON.stringify(existente)) {
+            const indice = next.findIndex(usuario => usuario.id === existente.id);
+            next[indice] = actualizado;
+            porCorreo.set(correo, actualizado);
+            changed = true;
+          }
+        } else {
+          const nuevo = { id: siguienteId(), ...base };
+          next.push(nuevo);
+          porCorreo.set(correo, nuevo);
+          changed = true;
+        }
+      });
+
+      const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
+      clientes.forEach(cliente => {
+        const correo = cliente.correo.trim().toLowerCase();
+        if (correosEmpleado.has(correo)) return;
+        const existente = porCorreo.get(correo);
+        const base = {
+          nombre: cliente.nombre,
+          iniciales: cliente.iniciales,
+          avatarColor: cliente.avatarColor,
+          correo: cliente.correo,
+          telefono: existente?.telefono ?? "",
+          tipoDocumento: cliente.tipoDocumento,
+          numeroDocumento: cliente.numeroDocumento,
+          rolId: "ROL-002",
+          activo: cliente.activo,
+        };
+        if (existente) {
+          const actualizado = { ...existente, ...base };
+          if (JSON.stringify(actualizado) !== JSON.stringify(existente)) {
+            const indice = next.findIndex(usuario => usuario.id === existente.id);
+            next[indice] = actualizado;
+            porCorreo.set(correo, actualizado);
+            changed = true;
+          }
+        } else {
+          const nuevo = { id: siguienteId(), ...base };
+          next.push(nuevo);
+          porCorreo.set(correo, nuevo);
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [empleados, clientes]);
+
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
   // Nombre con el que se guardan y se buscan los pedidos del usuario en sesión
   const pedidosUsuarioNombre =
     loggedInUser?.nombre ??
-    (userRole === "Usuario" ? "Sebastián Gómez" : "Gloria Inés Vargas");
+    (userRole === "Cliente" ? "Sebastián Gómez" : "Gloria Inés Vargas");
   // Un rol DESACTIVADO no concede permisos. El formulario de empleados ya
   // respetaba este flag al ofrecer roles (`roles.find(r => r.activo)`); el acceso
   // no, y por eso un rol desactivado seguía dando lo mismo que antes de apagarlo.
@@ -7264,7 +7422,10 @@ export default function App() {
     isNamedAdmin || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
   // True when the logged-in user has a back-office role (not a pure public customer)
-  const isStaff = isLoggedIn && loggedInUser !== null && !PUBLIC_ROLE_NAMES.includes(loggedInRoleName);
+  const isStaff = isLoggedIn && loggedInUser !== null && (
+    empleados.some(e => e.correo.trim().toLowerCase() === loggedInUser.correo.trim().toLowerCase()) ||
+    !PUBLIC_ROLE_NAMES.includes(loggedInRoleName)
+  );
 
   // El usuario de la sesión puede tener ficha de empleado además de la de
   // usuario. El vínculo entre ambas listas es el correo (ver `upsertUsuario` en
@@ -7336,6 +7497,66 @@ export default function App() {
   const openLogin = () => {
     setLoginNotice(false);
     navigate("login");
+  };
+
+  const handleLogin = (user: Usuario) => {
+    console.log("[login] handleLogin recibió usuario", {
+      id: user.id,
+      correo: user.correo,
+      rolId: user.rolId,
+    });
+    setIsLoggedIn(true);
+    setLoginNotice(false);
+
+    const orderToResume = pendingOrder;
+    if (orderToResume) {
+      registrarPedido(
+        orderToResume.metodoPago,
+        orderToResume.comprobante,
+        orderToResume.items,
+        orderToResume.horaRecogida,
+        orderToResume.nombre,
+      );
+      setCart([]);
+      setOrderConfirmation(orderToResume.horaRecogida);
+      window.setTimeout(() => {
+        setPendingOrder(null);
+        navigate("cart");
+      }, 0);
+    }
+
+    setLoggedInUserId(user.id);
+    const guardado = leerCarritosDeUsuarios()[user.id] ?? [];
+    setCart((prev) => fusionarCarritos(prev, guardado));
+
+    const namedRol = roles.find(r => r.id === user.rolId) ?? null;
+    const isEmployee = empleados.some(
+      e => e.correo.trim().toLowerCase() === user.correo.trim().toLowerCase(),
+    );
+    const goPublic = namedRol ? !isEmployee && PUBLIC_ROLE_NAMES.includes(namedRol.nombre) : false;
+    const loginHasDashboard =
+      namedRol?.id === "ROL-001" ||
+      (namedRol?.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
+    const nextRole = goPublic ? "Cliente" : (namedRol?.nombre ?? "Empleado");
+    const nextScreen = goPublic
+      ? "catalog"
+      : loginHasDashboard
+        ? "dashboard"
+        : "inicio";
+
+    console.log("[login] rol y navegación", {
+      rol: namedRol?.nombre ?? "sin rol",
+      isEmployee,
+      isStaff: isEmployee || !PUBLIC_ROLE_NAMES.includes(namedRol?.nombre ?? ""),
+      nextRole,
+      nextScreen,
+    });
+
+    setUserRole(nextRole);
+    if (!orderToResume) {
+      console.log("[login] navegando", nextScreen);
+      navigate(nextScreen);
+    }
   };
 
   const quickAdd = (product: Product) => {
@@ -7460,7 +7681,7 @@ export default function App() {
   // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
   // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
   const hasValidSession = isLoggedIn && (
-    userRole === "Usuario" || (loggedInUser !== null && loggedInRol !== null)
+    userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
   );
 
   // Only admin role can access admin screens; clients are redirected
@@ -7641,7 +7862,7 @@ export default function App() {
                   onRequireLogin={(order) => {
                     setPendingOrder(order);
                     setLoginNotice(true);
-                    onLogin();
+                    openLogin();
                   }}
                   confirmationHora={orderConfirmation ?? undefined}
                 />
@@ -7659,63 +7880,7 @@ export default function App() {
                     usuarios={usuarios}
                     darkMode={darkMode}
                     loginNotice={loginNotice}
-                  onLogin={(role: string, loginEmail: string) => {
-                    setIsLoggedIn(true);
-                    setLoginNotice(false);
-                    const orderToResume = pendingOrder;
-                    if (orderToResume) {
-                      registrarPedido(
-                        orderToResume.metodoPago,
-                        orderToResume.comprobante,
-                        orderToResume.items,
-                        orderToResume.horaRecogida,
-                        orderToResume.nombre,
-                      );
-                      setCart([]);
-                      setOrderConfirmation(orderToResume.horaRecogida);
-                      window.setTimeout(() => {
-                        setPendingOrder(null);
-                        navigate("cart");
-                      }, 0);
-                    }
-                    const u = usuarios.find(x => x.correo.toLowerCase() === loginEmail.toLowerCase());
-                    const userId = u?.id ?? null;
-                    setLoggedInUserId(userId);
-                    // El carrito NO se reinicia al iniciar sesión. Lo que el
-                    // cliente armó sin sesión se fusiona con lo que ya tenía
-                    // guardado en la cuenta —sumando cantidades cuando es el
-                    // mismo producto con la misma configuración— y el resultado
-                    // pasa a vivir en la cuenta. Aplica igual para Cliente,
-                    // Empleado y Administrador: los tres entran por aquí.
-                    // El cliente legacy sebas@gmail.com no está en `usuarios`,
-                    // así que no tiene registro: su carrito sigue en la clave de
-                    // invitado, intacto.
-                    if (userId) {
-                      const guardado = leerCarritosDeUsuarios()[userId] ?? [];
-                      setCart((prev) => fusionarCarritos(prev, guardado));
-                    }
-
-                    if (role === "Usuario") {
-                      // Legacy public customer (sebas@gmail.com) — LoginScreen already navigates to catalog
-                      setUserRole("Usuario");
-                      return;
-                    }
-
-                    // Employee login: resolve named role to decide admin panel vs catalog
-                    const namedRol = u ? roles.find(r => r.id === u.rolId) ?? null : null;
-                    const goPublic = namedRol ? PUBLIC_ROLE_NAMES.includes(namedRol.nombre) : false;
-                    const loginHasDashboard =
-                      namedRol?.id === "ROL-001" ||
-                      (namedRol?.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
-                    setUserRole(goPublic ? "Usuario" : "Administrador");
-                    navigate(
-                      goPublic
-                        ? "catalog"
-                        : loginHasDashboard
-                          ? "dashboard"
-                          : "inicio",
-                    );
-                  }}
+                   onLogin={handleLogin}
                 />
               )}
               {screen === "register" && (
@@ -7739,6 +7904,8 @@ export default function App() {
                     avatarColor: loggedInUser.avatarColor,
                     correo: loggedInUser.correo,
                     telefono: loggedInUser.telefono,
+                    tipoDocumento: loggedInUser.tipoDocumento,
+                    numeroDocumento: loggedInUser.numeroDocumento,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   isStaff={isStaff}
