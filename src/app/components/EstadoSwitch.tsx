@@ -3,7 +3,7 @@ export function EstadoSwitch({
   onToggle,
 }: {
   activo: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
 }) {
   return (
     <button

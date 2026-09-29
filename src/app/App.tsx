@@ -8273,6 +8273,16 @@ export default function App() {
                     setOrdenDetalle(null);
                     setScreen("orden-compra");
                   }}
+                  onEditar={(orden) => {
+                    setOrdenDetalle(null);
+                    setScreen("orden-compra");
+                    // TODO: Implementar edición
+                  }}
+                  onAbrirRecepcion={(orden) => {
+                    setOrdenDetalle(null);
+                    setScreen("orden-compra");
+                    // TODO: Implementar apertura de recepción
+                  }}
                 />
               )}
               {screen === "gestion-compra" && (

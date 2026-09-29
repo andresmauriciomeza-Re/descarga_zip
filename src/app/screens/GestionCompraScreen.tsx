@@ -11,6 +11,7 @@ import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import {
   NuevoProveedorModal,
+  NuevoInsumoModal,
   ConfirmModal,
   FORM_MAXW,
   type GestionCompra,
@@ -60,6 +61,7 @@ type ItemFactura = {
   nombre: string;
   unidad: string;
   cantidad: number;
+  costoUnitario: number;
   precioUnitario: number;
   iva: number;
 };
@@ -103,12 +105,22 @@ function CompraForm({
   const [numeroFactura, setNumeroFactura] = useState(compra?.numeroFactura ?? "");
   const [fechaFactura, setFechaFactura] = useState(compra?.fechaFactura || today);
   const [estado, setEstado] = useState<EstadoGestion>(compra?.estado ?? "Recibido");
-  const [items, setItems] = useState<ItemFactura[]>(compra?.items ?? []);
+  const [items, setItems] = useState<ItemFactura[]>((compra?.items ?? []).map(item => ({
+    rowId: item.rowId,
+    idInsumo: item.idInsumo,
+    nombre: item.nombre,
+    unidad: item.unidad,
+    cantidad: item.cantidad,
+    costoUnitario: item.costoUnitario,
+    precioUnitario: item.precioUnitario,
+    iva: item.iva,
+  })));
 
   const [itemNombre, setItemNombre] = useState("");
   const [itemCantidad, setItemCantidad] = useState(1);
   const [itemUnidad, setItemUnidad] = useState(UNIDADES[0]);
   const [itemPrecio, setItemPrecio] = useState(0);
+  const [itemIva, setItemIva] = useState(0);
   const [itemId, setItemId] = useState("");
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
@@ -214,6 +226,7 @@ function CompraForm({
     setItemNombre(ins.nombre);
     setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setItemPrecio(ins.precioUnitario);
+    setItemIva(ins.iva);
     setItemSugAbierto(false);
   };
 
@@ -243,13 +256,16 @@ function CompraForm({
         nombre: itemNombre.trim(),
         unidad: itemUnidad,
         cantidad: itemCantidad,
+        costoUnitario: itemPrecio,
         precioUnitario: itemPrecio,
+        iva: itemIva,
       },
     ]);
 
     setItemNombre("");
     setItemCantidad(1);
     setItemPrecio(0);
+    setItemIva(0);
     setItemId("");
     setItemSugAbierto(false);
   };
@@ -521,6 +537,8 @@ function CompraForm({
                     onUnidadChange={setItemUnidad}
                     precio={itemPrecio}
                     onPrecioChange={setItemPrecio}
+                    iva={itemIva}
+                    onIvaChange={setItemIva}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}

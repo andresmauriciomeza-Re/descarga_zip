@@ -6,8 +6,8 @@ const SERIF = "var(--font-titulo)";
 interface ConfirmDeleteModalProps {
   title: string;
   message: React.ReactNode;
-  onConfirm: () => void;
-  onCancel: () => void;
+  onConfirm?: () => void;
+  onCancel?: () => void;
   confirmLabel?: string;
 }
 
