@@ -3,7 +3,8 @@ import { motion } from "motion/react";
 import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "./GestionEmpleadosScreen";
-import { validarCorreo, validarTelefono } from "../components/campo";
+import { DOC_TIPOS } from "./GestionUsuariosScreen";
+import { filtrarCorreo, validarCorreo, validarTelefono } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -77,7 +78,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
     const ec = validarCorreo(correo);
     const et = validarTelefono(telefono);
     if (ec || et) { setErrores({ correo: ec ?? undefined, telefono: et ?? undefined }); return; }
-    const newCorreo   = correo.trim();
+    const newCorreo   = correo.trim().toLowerCase();
     const newTelefono = telefono.trim();
     setGuardado({ correo: newCorreo, telefono: newTelefono });
     if (loggedInUser) {
@@ -91,6 +92,9 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
   const nombre    = loggedInUser?.nombre    ?? "—";
   const iniciales = loggedInUser?.iniciales ?? "?";
   const avatarBg  = loggedInUser?.avatarColor ?? "bg-primary";
+  const tipoDocumento = DOC_TIPOS.find(t => t.code === loggedInUser?.tipoDocumento)?.label
+    ?? loggedInUser?.tipoDocumento
+    ?? "—";
 
   const rolColor = loggedInRoleName === "Administrador"
     ? "bg-primary/10 text-primary"
@@ -140,27 +144,34 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
         {/* Datos */}
         <div className="px-6 py-6 space-y-5">
           {/* Documento — solo lectura */}
-          <div className="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
                 <FileText className="w-3.5 h-3.5" />
                 Tipo de documento
               </label>
-              <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-mono text-muted-foreground select-none">
-                {loggedInUser?.tipoDocumento ?? "—"}
-              </div>
+              <input
+                type="text"
+                value={tipoDocumento}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
             </div>
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
                 <FileText className="w-3.5 h-3.5" />
                 Número de documento
               </label>
-              <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-mono text-muted-foreground select-none">
-                {loggedInUser?.numeroDocumento ?? "—"}
-              </div>
+              <input
+                type="text"
+                value={loggedInUser?.numeroDocumento ?? "—"}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground -mt-2 ml-0.5">El documento no es editable</p>
 
           {/* Nombre — solo lectura */}
           <div>
@@ -185,7 +196,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 <input
                   type="email"
                   value={correo}
-                  onChange={e => { setCorreo(e.target.value); if (errores.correo) setErrores(p => ({ ...p, correo: undefined })); }}
+                   onChange={e => { const value = filtrarCorreo(e.target.value); setCorreo(value); setErrores(p => ({ ...p, correo: validarCorreo(value) ?? undefined })); }}
                   placeholder="correo@ejemplo.com"
                   className={iCls(errores.correo)}
                   autoFocus

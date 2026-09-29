@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { EstadoSwitch } from "../components/EstadoSwitch";
-import { PasswordField, soloDigitos, filtrarDocumento } from "../components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
 import { type Rol } from "./GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Cliente } from "./GestionClientesScreen";
@@ -283,21 +283,21 @@ export function GestionEmpleadosScreen({
     const e = editItem;
     const errs: Record<string, string> = {};
     if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(e.nombre) ?? undefined;
     if (!e.correo.trim()) errs.correo = "El correo es obligatorio";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.correo.trim())) errs.correo = "Formato de correo no válido";
+    else errs.correo = validarCorreo(e.correo) ?? undefined;
     if (e.telefono.trim() && !/^[\d\s+()\-]+$/.test(e.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!e.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
-    else if (e.tipoDocumento !== "PP" && !/^\d+$/.test(e.numeroDocumento.trim()))
-      errs.numeroDocumento = "El número de documento solo debe contener números";
+    else errs.numeroDocumento = validarDocumento(e.numeroDocumento, e.tipoDocumento) ?? undefined;
     if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
     if (!e.rolId) errs.rol = "Selecciona un rol";
     if (!e.cargo.trim()) errs.cargo = "El cargo es obligatorio";
 
-    if (Object.keys(errs).length) { setEditErrors(errs); return; }
+    if (Object.values(errs).some(Boolean)) { setEditErrors(errs); return; }
 
     const em = e.correo.trim().toLowerCase();
     const dm = e.numeroDocumento.trim();
@@ -336,15 +336,16 @@ export function GestionEmpleadosScreen({
   const handleCreate = () => {
     const errs: Record<string, string> = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(newNombre) ?? undefined;
     if (!newCorreo.trim()) { errs.correo = "El correo es obligatorio"; }
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) { errs.correo = "Formato de correo no válido"; }
+    else if (validarCorreo(newCorreo)) { errs.correo = validarCorreo(newCorreo) as string; }
     if (newTelefono.trim() && !/^[\d\s+()\-]+$/.test(newTelefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
     if (!newDocumento.trim()) { errs.documento = "El número de documento es obligatorio"; }
-    else if (newTipoDoc !== "PP" && !/^\d+$/.test(newDocumento.trim())) { errs.documento = "El número de documento solo debe contener números"; }
+    else { errs.documento = validarDocumento(newDocumento, newTipoDoc) ?? undefined; }
     if (!newContrasena.trim()) { errs.contrasena = "La contraseña es obligatoria"; }
-    else if (newContrasena.length < 6) { errs.contrasena = "Mínimo 6 caracteres"; }
+    else { errs.contrasena = validarContrasena(newContrasena) ?? undefined; }
     if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
     else if (newContrasena !== newConfirmar) { errs.confirmar = "Las contraseñas no coinciden"; }
     if (!newRolId) errs.rol = "Selecciona un rol";
@@ -560,6 +561,9 @@ export function GestionEmpleadosScreen({
                 </td></tr>
               ) : paged.map(e => {
                 const rol = rolInfo(e.rolId);
+                const tienePerfilCliente = clientes.some(c =>
+                  c.correo.trim().toLowerCase() === e.correo.trim().toLowerCase()
+                );
                 return (
                   <tr key={e.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-1.5">
@@ -572,7 +576,7 @@ export function GestionEmpleadosScreen({
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-xs font-mono text-muted-foreground">{fmtDoc(e.tipoDocumento, e.numeroDocumento)}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 ${rol && !rol.activo ? "opacity-50" : ""}`}>
-                              Empleado/{rolNombre(e.rolId)}
+                              {tienePerfilCliente ? "Cliente/Empleado" : "Empleado"}
                             </span>
                           </div>
                         </div>
@@ -858,7 +862,7 @@ export function GestionEmpleadosScreen({
                     <div className="w-32 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                       <select value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                       onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
                         {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
                       </select>
@@ -868,9 +872,9 @@ export function GestionEmpleadosScreen({
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Número de documento <span className="text-primary">*</span>
                       </label>
-                      <input type="text" inputMode={newTipoDoc === "PP" ? "text" : "numeric"} value={newDocumento}
-                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.documento) setCreateErrors(p => ({ ...p, documento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                       <input type="text" inputMode="numeric" value={newDocumento}
+                         onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, documento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
+                         placeholder="12345678"
                         className={fCls(createErrors.documento)} />
                       {createErrors.documento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.documento}</p>}
                     </div>
@@ -880,7 +884,7 @@ export function GestionEmpleadosScreen({
                       Nombre completo <span className="text-primary">*</span>
                     </label>
                     <input type="text" value={newNombre} autoFocus
-                      onChange={e => { setNewNombre(e.target.value); if (createErrors.nombre) setCreateErrors(p => ({ ...p, nombre: undefined })); }}
+                       onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
                       placeholder="Ej: Laura Martínez"
                       className={fCls(createErrors.nombre)} />
                     {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
@@ -890,7 +894,7 @@ export function GestionEmpleadosScreen({
                       Correo electrónico <span className="text-primary">*</span>
                     </label>
                     <input type="email" value={newCorreo}
-                      onChange={e => { setNewCorreo(e.target.value); if (createErrors.correo) setCreateErrors(p => ({ ...p, correo: undefined })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={fCls(createErrors.correo)} />
                     {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
@@ -912,7 +916,7 @@ export function GestionEmpleadosScreen({
                     <PasswordField
                       value={newContrasena}
                       onChange={v => { setNewContrasena(v); if (createErrors.contrasena) setCreateErrors(p => ({ ...p, contrasena: undefined })); }}
-                      placeholder="Mínimo 6 caracteres"
+                       placeholder="Mínimo 8 caracteres"
                       cls={fCls(createErrors.contrasena)} />
                     {createErrors.contrasena && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.contrasena}</p>}
                   </div>
@@ -1038,8 +1042,8 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
-                    <input readOnly type="text" inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"} value={editItem.numeroDocumento}
-                      placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
+                    <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento}
+                      placeholder="12345678"
                       className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
@@ -1052,7 +1056,7 @@ export function GestionEmpleadosScreen({
                   <div key={field} className={full ? "col-span-2" : ""}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]}
-                      onChange={e => { const v = numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>

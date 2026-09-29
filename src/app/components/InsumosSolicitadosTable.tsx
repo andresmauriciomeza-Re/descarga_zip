@@ -7,7 +7,8 @@ export interface InsumoSolicitadoRow {
   nombre: string;
   cantidad: number;
   unidad: string;
-  costoUnitario: number;
+  precioUnitario: number;
+  iva: number;
 }
 
 function fmtCOP(n: number) {
@@ -21,7 +22,7 @@ function fmtCOP(n: number) {
 const cellInputCls =
   "px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30";
 
-type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "costoUnitario">;
+type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario">;
 
 function mergeRow(item: InsumoSolicitadoRow, draft: DraftRow): InsumoSolicitadoRow {
   return { ...item, ...draft };
@@ -52,7 +53,7 @@ export function InsumosSolicitadosTable({
     setDraft({
       cantidad: item.cantidad,
       unidad: item.unidad,
-      costoUnitario: item.costoUnitario,
+      precioUnitario: item.precioUnitario,
     });
   };
 
@@ -66,23 +67,30 @@ export function InsumosSolicitadosTable({
       onUpdate?.(editId, {
         cantidad: Math.max(0, draft.cantidad),
         unidad: draft.unidad,
-        costoUnitario: Math.max(0, draft.costoUnitario),
+        precioUnitario: Math.max(0, draft.precioUnitario),
       });
     }
 
     cancelEdit();
   };
 
-  const total = items.reduce((sum, item) => {
+  // Punto 1: El Subtotal de cada fila es cantidad × precio (sin IVA).
+  // El IVA se suma aparte en el Total general.
+  const subtotalGeneral = items.reduce((sum, item) => {
     const d = editId === item.rowId ? draft : null;
-
-    return (
-      sum +
-      (d ? d.cantidad : item.cantidad) *
-        (d ? d.costoUnitario : item.costoUnitario)
-    );
+    const cantidad = d ? d.cantidad : item.cantidad;
+    const precio = d ? d.precioUnitario : item.precioUnitario;
+    return sum + cantidad * precio;
   }, 0);
-  const columnCount = showActions ? 6 : 5;
+  const ivaGeneral = items.reduce((sum, item) => {
+    const d = editId === item.rowId ? draft : null;
+    const cantidad = d ? d.cantidad : item.cantidad;
+    const precio = d ? d.precioUnitario : item.precioUnitario;
+    const subtotal = cantidad * precio;
+    return sum + subtotal * (item.iva / 100);
+  }, 0);
+  const total = subtotalGeneral + ivaGeneral;
+  const columnCount = showActions ? 7 : 6;
 
   return (
     <div
@@ -97,7 +105,7 @@ export function InsumosSolicitadosTable({
         <table className="w-full text-sm">
         <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
           <tr>
-            {["Nombre", "Cantidad", "Unidad", "C. unitario", "Subtotal"].map((h) => (
+            {["Nombre", "Cantidad", "Unidad", "P. unitario", "IVA", "Subtotal"].map((h) => (
               <th key={h} className="px-3 py-2.5 text-left font-semibold">
                 {h}
               </th>
@@ -171,22 +179,26 @@ export function InsumosSolicitadosTable({
                       <input
                         type="number"
                         min={0}
-                        value={draftRow.costoUnitario}
+                        value={draftRow.precioUnitario}
                         onChange={(e) =>
                           setDraft({
                             ...draftRow,
-                            costoUnitario: Number(e.target.value),
+                            precioUnitario: Number(e.target.value),
                           })
                         }
                         className={`${cellInputCls} w-24`}
                       />
                     ) : (
-                      fmtCOP(row.costoUnitario)
+                      fmtCOP(row.precioUnitario)
                     )}
                   </td>
 
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {row.iva}%
+                  </td>
+
                   <td className="px-3 py-2.5 text-sm font-semibold">
-                    {fmtCOP(row.cantidad * row.costoUnitario)}
+                    {fmtCOP(row.cantidad * row.precioUnitario)}
                   </td>
 
                   {showActions && (
@@ -243,7 +255,31 @@ export function InsumosSolicitadosTable({
           <tfoot className="bg-muted/50 border-t border-border">
             <tr>
               <td
-                colSpan={showActions ? 5 : 4}
+                colSpan={showActions ? 6 : 5}
+                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+              >
+                Subtotal
+              </td>
+              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(subtotalGeneral)}
+              </td>
+              {showActions && <td />}
+            </tr>
+            <tr>
+              <td
+                colSpan={showActions ? 6 : 5}
+                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+              >
+                IVA
+              </td>
+              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(ivaGeneral)}
+              </td>
+              {showActions && <td />}
+            </tr>
+            <tr>
+              <td
+                colSpan={showActions ? 6 : 5}
                 className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
               >
                 {totalLabel}

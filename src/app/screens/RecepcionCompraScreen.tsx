@@ -64,10 +64,10 @@ export function RecepcionCompraScreen({
   onGuardar,
   onBack,
 }: Props) {
-  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) después de las
-  // 19:00 devolvía el día siguiente, así que la recepción de hoy quedaba
+  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) despu+�s de las
+  // 19:00 devolv+�a el d+�a siguiente, as+� que la recepci+�n de hoy quedaba
   // bloqueada por el `max` del date-picker. Se usa la fecha local, que es la
-  // convención del proyecto.
+  // convenci+�n del proyecto.
   const today = new Date().toLocaleDateString("en-CA");
 
   const registrados = useMemo(
@@ -75,8 +75,8 @@ export function RecepcionCompraScreen({
     [gestiones, orden.id]
   );
 
-  // Los insumos no solicitados se guardan con un id propio, así que también se
-  // comparan por nombre para no ofrecer lo que ya llegó en otra factura.
+  // Los insumos no solicitados se guardan con un id propio, as+� que tambi+�n se
+  // comparan por nombre para no ofrecer lo que ya lleg+� en otra factura.
   const nombresRegistrados = useMemo(() => {
     const set = new Set<string>();
 
@@ -89,7 +89,7 @@ export function RecepcionCompraScreen({
     return set;
   }, [gestiones, orden.id]);
 
-  // Solo se ofrecen los insumos que aún no se han facturado en esta OC.
+  // Solo se ofrecen los insumos que a+�n no se han facturado en esta OC.
   const [items, setItems] = useState<ItemRecibido[]>(() => {
     const previos = registradosEnOrden(gestiones, orden.id);
 
@@ -103,7 +103,7 @@ export function RecepcionCompraScreen({
         cantidadRecibida: i.cantidad,
         unidad: i.unidad,
         precioReferencia: i.costoUnitario,
-        costoUnitario: i.costoUnitario,
+        costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario, iva: 0
       }));
   });
 
@@ -119,23 +119,25 @@ export function RecepcionCompraScreen({
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
-  // ── Edición en línea de insumos adicionales ────────────────────────────────
+  // ������ Edici+�n en l+�nea de insumos adicionales ������������������������������������������������������������������������������������������������
   const [editExtraId, setEditExtraId] = useState<string | null>(null);
   const [editExtraDraft, setEditExtraDraft] = useState<{
     cantidad: number;
     unidad: string;
     costoUnitario: number;
+    precioUnitario: number;
+    iva: number;
   } | null>(null);
 
   const exRef = useRef<HTMLDivElement>(null);
 
-  // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
+  // ������ Validaci+�n en tiempo real (patr+�n de MiPerfilScreen) ������������������������������������������������������
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
   const errorNumeroFactura = numeroFactura.trim()
     ? undefined
-    : "Ingresa el número de factura.";
+    : "Ingresa el n+�mero de factura.";
   const errorFechaFactura = fechaFactura
     ? undefined
     : "Selecciona la fecha de la factura.";
@@ -157,7 +159,7 @@ export function RecepcionCompraScreen({
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
-  /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
+  /** Clase del input: resalta en rojo cuando el campo visible es inv+�lido. */
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
@@ -209,7 +211,7 @@ export function RecepcionCompraScreen({
 
   /**
    * Quita el insumo de esta factura. Solo afecta a la lista local: el pedido de
-   * la OC no cambia, así que el insumo sigue pendiente para una factura futura.
+   * la OC no cambia, as+� que el insumo sigue pendiente para una factura futura.
    */
   const quitarItem = (rowId: string, nombre: string) => {
     setItems((prev) => prev.filter((item) => item.rowId !== rowId));
@@ -253,7 +255,7 @@ export function RecepcionCompraScreen({
         cantidadRecibida: exCant,
         unidad: exUnidad,
         precioReferencia: exPrecio,
-        costoUnitario: exPrecio,
+        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: 0
       },
     ]);
 
@@ -270,7 +272,7 @@ export function RecepcionCompraScreen({
     setEditExtraDraft({
       cantidad: item.cantidadRecibida,
       unidad: item.unidad,
-      costoUnitario: item.costoUnitario,
+      costoUnitario: item.costoUnitario, precioUnitario: item.costoUnitario, iva: 0
     });
   };
 
@@ -310,7 +312,7 @@ export function RecepcionCompraScreen({
 
   /** Suma una factura al acumulado de lo recibido en la OC. */
   const acumular = (
-    mapa: Map<string, { nombre: string; unidad: string; cantidad: number; costoUnitario: number }>,
+    mapa: Map<string, { nombre: string; unidad: string; cantidad: number; costoUnitario: number; precioUnitario: number; iva: number }>,
     item: OrdenItem
   ) => {
     const previo = mapa.get(item.idInsumo);
@@ -318,12 +320,16 @@ export function RecepcionCompraScreen({
     if (previo) {
       previo.cantidad += item.cantidad;
       previo.costoUnitario = item.costoUnitario;
+      previo.precioUnitario = item.precioUnitario;
+      previo.iva = item.iva;
     } else {
       mapa.set(item.idInsumo, {
         nombre: item.nombre,
         unidad: item.unidad,
         cantidad: item.cantidad,
         costoUnitario: item.costoUnitario,
+        precioUnitario: item.precioUnitario,
+        iva: item.iva,
       });
     }
   };
@@ -332,7 +338,7 @@ export function RecepcionCompraScreen({
     setIntentoGuardar(true);
 
     if (!numeroFactura.trim()) {
-      toast.error("Ingresa el número de factura.");
+      toast.error("Ingresa el n+�mero de factura.");
       return;
     }
 
@@ -361,7 +367,7 @@ export function RecepcionCompraScreen({
 
     const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
-    // Esta factura: solo lo que trae, con su número, fecha y total propios.
+    // Esta factura: solo lo que trae, con su n+�mero, fecha y total propios.
     const itemsFactura: OrdenItem[] = [...filasRecibidas, ...itemsExtra].map(
       (item) => ({
         rowId: item.rowId,
@@ -370,6 +376,8 @@ export function RecepcionCompraScreen({
         cantidad: item.cantidadRecibida,
         unidad: item.unidad,
         costoUnitario: item.costoUnitario,
+        precioUnitario: item.costoUnitario,
+        iva: 0,
       })
     );
 
@@ -400,7 +408,7 @@ export function RecepcionCompraScreen({
     // 2) Acumulado de la OC: facturas anteriores + esta.
     const acum = new Map<
       string,
-      { nombre: string; unidad: string; cantidad: number; costoUnitario: number }
+      { nombre: string; unidad: string; cantidad: number; costoUnitario: number; precioUnitario: number; iva: number }
     >();
 
     for (const g of gestiones) {
@@ -437,7 +445,7 @@ export function RecepcionCompraScreen({
             cantidadRecibida: a.cantidad,
             unidad: pedido.unidad,
             precioReferencia: pedido.costoUnitario,
-            costoUnitario: a.costoUnitario,
+            costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: 0
           } as ItemRecibido;
         })
         .filter((x): x is ItemRecibido => x !== null),
@@ -451,7 +459,7 @@ export function RecepcionCompraScreen({
           cantidadRecibida: a.cantidad,
           unidad: a.unidad,
           precioReferencia: a.costoUnitario,
-          costoUnitario: a.costoUnitario,
+          costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: 0
         })),
       usarLotes: false,
       fechaRecepcion: today,
@@ -462,8 +470,8 @@ export function RecepcionCompraScreen({
 
     toast.success(
       pendientes.length === 0
-        ? `Factura ${numeroFactura.trim()} guardada · OC ${orden.id} completada`
-        : `Factura ${numeroFactura.trim()} guardada · ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
+        ? `Factura ${numeroFactura.trim()} guardada -� OC ${orden.id} completada`
+        : `Factura ${numeroFactura.trim()} guardada -� ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
     );
 
     onBack();
@@ -486,34 +494,34 @@ export function RecepcionCompraScreen({
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: SERIF }}
           >
-            Recepción de compra
+            Recepci+�n de compra
           </h1>
 
           <p className="text-sm text-muted-foreground mt-0.5">
-            OC {orden.id} · {orden.proveedor} · {today}
+            OC {orden.id} -� {orden.proveedor} -� {today}
           </p>
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL — dos columnas (mismo patrón que "Crear Producto") */}
+      {/* CONTENIDO PRINCIPAL ��� dos columnas (mismo patr+�n que "Crear Producto") */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border">
           {/* =========================================================
-              COLUMNA IZQUIERDA — ORDEN DE COMPRA (solo lectura)
+              COLUMNA IZQUIERDA ��� ORDEN DE COMPRA (solo lectura)
           ========================================================= */}
           <div className="w-full lg:w-1/2 overflow-y-auto pr-1">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Orden de compra
             </p>
             <p className="text-xs text-muted-foreground mb-4">
-              Insumos pedidos · solo lectura
+              Insumos pedidos -� solo lectura
             </p>
 
             <div className="space-y-5">
-              {/* Información */}
+              {/* Informaci+�n */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    N° Orden
+                    N-� Orden
                   </p>
                   <p className="text-sm font-bold mt-1">
                     {orden.id}
@@ -554,7 +562,7 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              {/* Tabla — insumos pedidos (solo lectura) */}
+              {/* Tabla ��� insumos pedidos (solo lectura) */}
               <div>
                 <h3 className="text-sm font-bold text-foreground mb-3">
                   Insumos solicitados
@@ -626,7 +634,7 @@ export function RecepcionCompraScreen({
           </div>
 
           {/* =========================================================
-              COLUMNA DERECHA — COMPRA (factura del proveedor)
+              COLUMNA DERECHA ��� COMPRA (factura del proveedor)
           ========================================================= */}
           <div className="w-full lg:w-1/2 overflow-y-auto pr-1">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
@@ -641,7 +649,7 @@ export function RecepcionCompraScreen({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    Número de factura <span className="text-red-500">*</span>
+                    N+�mero de factura <span className="text-red-500">*</span>
                   </label>
 
                   <input
@@ -708,7 +716,7 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              {/* Recibido según factura */}
+              {/* Recibido seg+�n factura */}
               <div>
                 {errorItems && (algunoTocado || intentoGuardar) && (
                   <p className="text-xs text-red-500 mb-2 ml-0.5">
@@ -717,7 +725,7 @@ export function RecepcionCompraScreen({
                 )}
 
                 <h3 className="text-sm font-bold text-foreground mb-3">
-                  Recibido según factura
+                  Recibido seg+�n factura
                 </h3>
 
                 <div className="border border-border rounded-xl overflow-hidden">
@@ -948,7 +956,7 @@ export function RecepcionCompraScreen({
                                     onChange={(e) =>
                                       setEditExtraDraft({
                                         ...draft,
-                                        costoUnitario: Number(e.target.value),
+                                        costoUnitario: Number(e.target.value), precioUnitario: Number(e.target.value), iva: 0
                                       })
                                     }
                                     className="w-20 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -1064,7 +1072,7 @@ export function RecepcionCompraScreen({
                             >
                               <p className="text-sm font-semibold">{ins.nombre}</p>
                               <p className="text-xs text-muted-foreground">
-                                {ins.unidadMedida} · {fmtCOP(ins.costoUnitario)}
+                                {ins.unidadMedida} -� {fmtCOP(ins.costoUnitario)}
                               </p>
                             </button>
                           ))}
@@ -1131,10 +1139,10 @@ export function RecepcionCompraScreen({
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
 
                 <p className="text-xs text-emerald-800">
-                  Al guardar se creará la factura{" "}
+                  Al guardar se crear+� la factura{" "}
                   {numeroFactura.trim() ? `${numeroFactura.trim()} ` : ""}
-                  en Gestión de Compras con lo recibido aquí. La OC{" "}
-                  {orden.id} seguirá Enviada hasta registrar todos los
+                  en Gesti+�n de Compras con lo recibido aqu+�. La OC{" "}
+                  {orden.id} seguir+� Enviada hasta registrar todos los
                   insumos.
                 </p>
               </div>
@@ -1160,8 +1168,8 @@ export function RecepcionCompraScreen({
               <AnimatePresence>
                 {showGuardarConf && (
                   <ConfirmModal
-                    title="¿Está seguro de los cambios?"
-                    detail="Una vez guardado no se podrá modificar."
+                    title="-+Est+� seguro de los cambios?"
+                    detail="Una vez guardado no se podr+� modificar."
                     confirmLabel="Confirmar"
                     icon={
                       <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
