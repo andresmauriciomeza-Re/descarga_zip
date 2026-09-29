@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { soloLetras, soloDigitos } from "../components/campo";
+import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -178,6 +178,8 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
       toast.error("NIT, nombre, teléfono y email son obligatorios");
       return;
     }
+    const emailError = validarCorreo(form.email);
+    if (emailError) { toast.error(emailError); return; }
     // `length + 1` reutilizaba un id existente si se había borrado un proveedor
     // del medio: quedaban dos filas con la misma clave y editar/borrar una
     // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
@@ -194,6 +196,8 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
 
   const handleEdit = () => {
     if (!editItem) return;
+    const emailError = validarCorreo(editItem.email);
+    if (emailError) { toast.error(emailError); return; }
     setSuppliers(p => p.map(s => s.id === editItem.id ? editItem : s));
     setEditItem(null);
     toast.success("Proveedor editado exitosamente");
@@ -259,7 +263,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Email *</label>
-            <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+            <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: filtrarCorreo(e.target.value) }))}
               placeholder="ventas@proveedor.co" className={inputCls} />
           </div>
           <div>
@@ -324,7 +328,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Email</label>
-            <input type="email" value={editItem.email} onChange={e => setEditItem(x => x && { ...x, email: e.target.value })}
+            <input type="email" value={editItem.email} onChange={e => setEditItem(x => x && { ...x, email: filtrarCorreo(e.target.value) })}
               className={inputCls} />
           </div>
           <div>

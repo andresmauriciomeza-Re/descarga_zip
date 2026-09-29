@@ -526,20 +526,9 @@ function CompraForm({
                     showSuggestions={itemSugAbierto}
                     onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
                     onCrearInsumo={() => setShowNuevoInsumo(true)}
-                  />
-                  {/* Punto 2: Botón para crear insumo desde el formulario */}
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setShowNuevoInsumo(true)}
-                      className="text-[11px] text-primary hover:underline cursor-pointer inline-flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Crear insumo
-                    </button>
-                  </div>
-                </div>
-              )}
+                   />
+                 </div>
+               )}
 
               {!isView && (errorItems || errorTotal) && (algunoTocado || intentoGuardar) && (
                 <p className="text-xs text-red-500 ml-0.5 shrink-0">

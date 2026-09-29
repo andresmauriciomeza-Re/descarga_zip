@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
-import { soloLetras, soloDigitos } from "../components/campo";
+import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -347,11 +347,13 @@ export function NuevoProveedorModal({
     if (!nit.trim()) { toast.error("El NIT es obligatorio."); return; }
     if (!telefono.trim()) { toast.error("El teléfono es obligatorio."); return; }
     if (!email.trim()) { toast.error("El email es obligatorio."); return; }
+    const emailError = validarCorreo(email);
+    if (emailError) { toast.error(emailError); return; }
     onGuardar({
       nombre: nombre.trim(),
       nit: nit.trim(),
       telefono: telefono.trim(),
-      email: email.trim(),
+       email: email.trim().toLowerCase(),
       asesorComercial: asesorComercial.trim(),
       direccion: direccion.trim(),
       estado,
@@ -408,7 +410,7 @@ export function NuevoProveedorModal({
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email *</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ventas@proveedor.co" className={iCls} />
+                 <input type="email" value={email} onChange={e => setEmail(filtrarCorreo(e.target.value))} placeholder="ventas@gmail.com" className={iCls} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>
@@ -691,8 +693,6 @@ export function OrdenModal({
       : undefined;
   const errorItems = form.items.length > 0 ? undefined : "Agrega al menos un insumo a la orden.";
 
-  const formValido =
-    !errorProveedor && !errorFecha && !errorNumeroFactura && !errorItems && !!form.estado;
   const algunoTocado = tocado.proveedor || tocado.fecha;
   const marcarTocado = (campo: "proveedor" | "fecha") =>
     setTocado((t) => ({ ...t, [campo]: true }));
@@ -781,6 +781,7 @@ export function OrdenModal({
 
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
+    if (!form.estado) { toast.error("Selecciona el estado de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un insumo."); return; }
     if (!isCompra && form.estado === "Enviado") { setShowSendConf(true); return; }
@@ -1007,8 +1008,8 @@ export function OrdenModal({
                     {/* Punto 1: Fecha de cambio de estado y botón ver historial */}
                     {/* En modo creación, mostrar la fecha actual como fecha de cambio de estado inicial */}
                     {(() => {
-                      const fechaMostrar = orden?.fechaCambioEstado ?? (modal?.mode === "create" ? new Date().toLocaleDateString("en-CA") : undefined);
-                      const historialMostrar = orden?.historialEstados ?? (modal?.mode === "create" ? [{ estado: form.estado as EstadoOrden, fecha: new Date().toLocaleDateString("en-CA") }] : []);
+                       const fechaMostrar = orden?.fechaCambioEstado ?? (mode === "create" ? new Date().toLocaleDateString("en-CA") : undefined);
+                       const historialMostrar = orden?.historialEstados ?? (mode === "create" ? [{ estado: form.estado as EstadoOrden, fecha: new Date().toLocaleDateString("en-CA") }] : []);
                       return (
                         <>
                           {fechaMostrar && (
@@ -1239,8 +1240,7 @@ export function OrdenModal({
                 </button>
                 <button
                   onClick={handleGuardar}
-                  disabled={!formValido}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95"
                 >
                   Guardar
                 </button>

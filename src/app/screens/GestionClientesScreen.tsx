@@ -6,7 +6,7 @@ import { EstadoSwitch } from "../components/EstadoSwitch";
 import { DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Usuario } from "./GestionUsuariosScreen";
-import { soloDigitos, filtrarDocumento } from "../components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -151,16 +151,19 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     if (!editItem) return;
     const errs: { nombre?: string; correo?: string } = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(editItem.nombre) ?? undefined;
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editItem.correo.trim())) errs.correo = "Formato de correo no válido";
     else {
-      const em = editItem.correo.trim().toLowerCase();
-      const otro = (correo: string) => correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
-      const duplicado =
-        clientes.some(c => c.id !== editItem.id && otro(c.correo) && c.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
-        usuarios.some(u => otro(u.correo) && u.correo.trim().toLowerCase() === em);
-      if (duplicado) errs.correo = "Este correo ya está registrado";
+      errs.correo = validarCorreo(editItem.correo) ?? undefined;
+      if (!errs.correo) {
+        const em = editItem.correo.trim().toLowerCase();
+        const otro = (correo: string) => correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
+        const duplicado =
+          clientes.some(c => c.id !== editItem.id && otro(c.correo) && c.correo.trim().toLowerCase() === em) ||
+          empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
+          usuarios.some(u => otro(u.correo) && u.correo.trim().toLowerCase() === em);
+        if (duplicado) errs.correo = "Este correo ya está registrado";
+      }
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
     const nuevasIniciales = editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
@@ -194,10 +197,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const handleCreate = () => {
     const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(newNombre) ?? undefined;
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) {
-      errs.correo = "Formato de correo no válido";
+    } else if (validarCorreo(newCorreo)) {
+      errs.correo = validarCorreo(newCorreo) as string;
     } else {
       const em = newCorreo.trim().toLowerCase();
       const duplicado =
@@ -212,8 +216,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     const dm = newDocumento.trim();
     if (!dm) {
       errs.numeroDocumento = "El número de documento es obligatorio";
-    } else if (newTipoDoc !== "PP" && !/^\d+$/.test(dm)) {
-      errs.numeroDocumento = "El número de documento solo debe contener números";
+    } else if (validarDocumento(dm, newTipoDoc)) {
+      errs.numeroDocumento = validarDocumento(dm, newTipoDoc) as string;
     } else {
       const clave = `${newTipoDoc}||${dm}`.toLowerCase();
       const docDup =
@@ -455,7 +459,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       </label>
                       <select
                         value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                         onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       >
                         {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
@@ -468,10 +472,10 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       </label>
                       <input
                         type="text"
-                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                         inputMode="numeric"
                         value={newDocumento}
-                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                         onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
+                         placeholder="12345678"
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       />
                       {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
@@ -486,7 +490,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     <input
                       type="text"
                       value={newNombre}
-                      onChange={e => { setNewNombre(e.target.value); if (createErrors.nombre) setCreateErrors(p => ({ ...p, nombre: undefined })); }}
+                       onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
                       placeholder="Ej: Laura Martínez"
                       autoFocus
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -502,7 +506,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     <input
                       type="email"
                       value={newCorreo}
-                      onChange={e => { setNewCorreo(e.target.value); if (createErrors.correo) setCreateErrors(p => ({ ...p, correo: undefined })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
@@ -606,7 +610,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} value={editItem[field]}
-                      onChange={e => { setEditItem(x => x && ({ ...x, [field]: e.target.value })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
