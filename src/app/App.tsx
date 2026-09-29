@@ -195,7 +195,7 @@ interface Product {
   category: string;
   sizes: { label: string; price: number }[];
   extras: { label: string; price: number }[];
-  status: "activo" | "agotado" | "pausado";
+  status: "disponible" | "no disponible";
   rating: number;
   sales: number;
 }
@@ -273,6 +273,7 @@ const SECCIONES_MENU: { categoria: string; titulo: string }[] = [
 ];
 
 const PRODUCTS: Product[] = [
+  // ── Pizzas (CAT-001) ──
   {
     id: 1,
     name: "Cañón",
@@ -282,7 +283,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
@@ -295,7 +296,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
@@ -308,7 +309,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
@@ -321,7 +322,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
@@ -334,7 +335,7 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
@@ -347,12 +348,12 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
   {
-    id: 14,
+    id: 7,
     name: "Pollo",
     description: "Pizza con pollo.",
     price: 14000,
@@ -360,12 +361,12 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
   {
-    id: 15,
+    id: 8,
     name: "Tocineta",
     description: "Pizza con tocineta.",
     price: 14000,
@@ -373,102 +374,102 @@ const PRODUCTS: Product[] = [
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
-    status: "activo",
+    status: "disponible",
     rating: 0,
     sales: 0,
   },
-  // ── Lasañas (CAT-002): precio único $20.000, presentación única "Normal" ──
-  {
-    id: 7,
-    name: "Lasaña de Carne",
-    description: "Lasaña de carne.",
-    price: 20000,
-    image: lasanaCarne,
-    category: "Lasaña",
-    sizes: SIZES_LASANA,
-    extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
-  },
-  {
-    id: 8,
-    name: "Lasaña Mixta",
-    description: "Lasaña mixta.",
-    price: 20000,
-    image: lasanaMixta,
-    category: "Lasaña",
-    sizes: SIZES_LASANA,
-    extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
-  },
+  // ── Lasañas (CAT-002): precio único, presentación única "Normal" ──
   {
     id: 9,
-    name: "Lasaña de Pollo",
-    description: "Lasaña de pollo.",
+    name: "Lasaña Carne",
+    description: "Lasaña de carne con salsa boloñesa, bechamel y queso gratinado.",
     price: 20000,
-    image: lasanaPollo,
+    image: "/src/imports/lasaña_carne.png",
     category: "Lasaña",
     sizes: SIZES_LASANA,
     extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
+    status: "disponible",
+    rating: 4.8,
+    sales: 450,
   },
-  // ── Bebidas (CAT-003): botella 2.5 L, precio único $8.000, sin tamaños ──
   {
     id: 10,
-    name: "Quatro",
-    description: "Botella de 2.5 L.",
-    price: 8000,
-    image: imgQuatro,
-    category: "Bebidas",
-    sizes: [],
+    name: "Lasaña Pollo",
+    description: "Lasaña de pollo con salsa blanca, bechamel y queso gratinado.",
+    price: 20000,
+    image: "/src/imports/lasaña_pollo.png",
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
     extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
+    status: "disponible",
+    rating: 4.7,
+    sales: 380,
   },
   {
     id: 11,
-    name: "Premio Rojo",
-    description: "Botella de 2.5 L.",
-    price: 8000,
-    image: imgPremio,
-    category: "Bebidas",
-    sizes: [],
+    name: "Lasaña Mixta",
+    description: "Lasaña mixta con carne y pollo, salsa boloñesa y queso gratinado.",
+    price: 22000,
+    image: "/src/imports/lasaña_mixta.png",
+    category: "Lasaña",
+    sizes: SIZES_LASANA,
     extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
+    status: "disponible",
+    rating: 4.9,
+    sales: 520,
   },
+  // ── Bebidas (CAT-003): botella 2.5 L, sin tamaños ──
   {
     id: 12,
-    name: "Pepsi",
-    description: "Botella de 2.5 L.",
-    price: 8000,
-    image: imgPepsi,
+    name: "Gaseosa Cuatro",
+    description: "Botella de 2.5 L. Sabor cítrico y refrescante.",
+    price: 3000,
+    image: "/src/imports/Quatro.png",
     category: "Bebidas",
     sizes: [],
     extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
+    status: "disponible",
+    rating: 4.5,
+    sales: 2100,
   },
   {
     id: 13,
-    name: "Coca-Cola",
-    description: "Botella de 2.5 L.",
-    price: 8000,
-    image: imgCocaCola,
+    name: "Gaseosa Premiun",
+    description: "Botella de 2.5 L. Sabor frutal y refrescante.",
+    price: 3500,
+    image: "/src/imports/Premio.png",
     category: "Bebidas",
     sizes: [],
     extras: [],
-    status: "activo",
-    rating: 0,
-    sales: 0,
+    status: "disponible",
+    rating: 4.4,
+    sales: 1800,
+  },
+  {
+    id: 14,
+    name: "Gaseosa Coca-Cola",
+    description: "Botella de 2.5 L. El sabor clásico de siempre.",
+    price: 2500,
+    image: "/src/imports/Coca-Cola.png",
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "disponible",
+    rating: 4.8,
+    sales: 3200,
+  },
+  {
+    id: 15,
+    name: "Gaseosa Pepsi",
+    description: "Botella de 2.5 L. Sabor cola y refrescante.",
+    price: 2500,
+    image: "/src/imports/Pepsi.png",
+    category: "Bebidas",
+    sizes: [],
+    extras: [],
+    status: "disponible",
+    rating: 4.6,
+    sales: 2800,
   },
 ];
 
@@ -632,9 +633,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const PROD_STATUS_COLOR: Record<string, string> = {
-  activo: "bg-emerald-100 text-emerald-800",
-  agotado: "bg-red-100 text-red-700",
-  pausado: "bg-yellow-100 text-yellow-800",
+  disponible: "bg-emerald-100 text-emerald-800",
+  "no disponible": "bg-red-100 text-red-700",
 };
 
 const ADMIN_SCREENS: Screen[] = [
@@ -1625,7 +1625,7 @@ function LandingScreen({
   onCategoryNavigate: (cat: string) => void;
 }) {
   const featured = PRODUCTS.filter(
-    (p) => p.status === "activo",
+    (p) => p.status === "disponible",
   ).slice(0, 3);
   return (
     <div>
@@ -2242,11 +2242,9 @@ function ProductCard({
         />
         <div className="absolute top-3 right-3">
           <Badge className={PROD_STATUS_COLOR[p.status]}>
-            {p.status === "activo"
+            {p.status === "disponible"
               ? "Disponible"
-              : p.status === "agotado"
-                ? "Agotado"
-                : "Pausado"}
+              : "No disponible"}
           </Badge>
         </div>
       </button>
@@ -2278,7 +2276,7 @@ function ProductCard({
             </button>
             <button
               onClick={() => onQuickAdd(p)}
-              disabled={p.status !== "activo"}
+              disabled={p.status !== "disponible"}
               className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -2297,6 +2295,7 @@ function CatalogScreen({
   initialCat = "Todas",
   page,
   setPage,
+  productos,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -2305,6 +2304,8 @@ function CatalogScreen({
   /** Página del catálogo, controlada por App para que sobreviva al detalle. */
   page: number;
   setPage: (p: number | ((prev: number) => number)) => void;
+  /** Productos del panel de administrador. */
+  productos: Product[];
 }) {
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState(initialCat);
@@ -2314,7 +2315,7 @@ function CatalogScreen({
 
   const filtered = useMemo(
     () =>
-      PRODUCTS.filter(
+      productos.filter(
         (p) =>
           (cat === "Todas" || p.category === cat) &&
           (search === "" ||
@@ -2325,7 +2326,7 @@ function CatalogScreen({
               .toLowerCase()
               .includes(search.toLowerCase())),
       ),
-    [search, cat],
+    [search, cat, productos],
   );
 
   // Sin paginado el menú volcaba los 13 productos de una vez, así que al
@@ -2448,32 +2449,6 @@ function CatalogScreen({
             No encontramos pizzas con ese nombre. ¡Intenta con
             otro!
           </p>
-        </div>
-      ) : cat === "Todas" ? (
-        /* "space-y-10" deja el mismo aire entre el final de una sección y el
-           título de la siguiente, y el "mb-5" del título el de título a grid. */
-        <div className="space-y-10">
-          {secciones.map(({ titulo, productos }) => (
-            <section key={titulo}>
-              <h2
-                className="text-2xl font-bold text-foreground mb-5"
-                style={{ fontFamily: SERIF }}
-              >
-                {titulo}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {productos.map((p, i) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    index={i}
-                    onOpen={abrirDetalle}
-                    onQuickAdd={agregarAlCarrito}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -5429,7 +5404,7 @@ function ManageProductsScreen() {
         },
       ],
       extras: [],
-      status: "activo",
+      status: "disponible",
       rating: 0,
       sales: 0,
     };
@@ -6451,8 +6426,7 @@ function DevolucionesScreen({
                                 : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                             }`}
                           >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            Gestionar
+                            <RefreshCw className="w-4 h-4" />
                           </button>
                           <button
                             type="button"
@@ -6460,8 +6434,7 @@ function DevolucionesScreen({
                             title="Visualizar devolución"
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted text-foreground hover:bg-border transition-colors cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
-                            Visualizar
+                            <Eye className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -6705,7 +6678,7 @@ function DevolucionesScreen({
                     ) : null}
 
                     <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {PRODUCTS.filter((p) => p.status === "activo").map((prod) => {
+                      {PRODUCTS.filter((p) => p.status === "disponible").map((prod) => {
                         const cant = activa.compensacion.find((r) => r.id === prod.id)?.cantidad ?? 0;
                         return (
                           <div
@@ -8117,6 +8090,19 @@ export default function App() {
                   initialCat={catalogCat}
                   page={catalogPage}
                   setPage={setCatalogPage}
+                  productos={productos.map((p) => ({
+                    id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
+                    name: p.nombre,
+                    description: `${p.idCategoria} · ${p.unidadVenta}`,
+                    price: p.precioUnitario,
+                    image: p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+                    category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
+                    sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+                    extras: [],
+                    status: p.estado === "Disponible" ? "disponible" : "no disponible",
+                    rating: 4.5,
+                    sales: 0,
+                  }))}
                 />
               )}
               {screen === "product-detail" && (

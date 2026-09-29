@@ -91,7 +91,7 @@ export interface Producto {
   precioUnitario: number;
   unidadVenta: string;
   stockDisponible: number;
-  estado: "Activo" | "Inactivo";
+  estado: "Disponible" | "No disponible";
 }
 
 const CATEGORIAS_PRODUCTO = [
@@ -101,60 +101,158 @@ const CATEGORIAS_PRODUCTO = [
 ];
 
 export const INITIAL_PRODUCTOS: Producto[] = [
+  // ── Pizzas (CAT-001): $14.000 pequeña, $16.000 grande ──
   {
     id: "PROD-001",
-    imagen:
-      "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=300&h=300&fit=crop&auto=format",
-    nombre: "Margarita Clásica",
+    imagen: "/src/imports/pizzaDefinitiva.png",
+    nombre: "Pizza Peperoni",
     idCategoria: "CAT-001",
-    costoUnitario: 24000, precioUnitario: 24000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
     stockDisponible: 50,
-    estado: "Activo",
+    estado: "Disponible",
   },
   {
     id: "PROD-002",
-    imagen:
-      "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=300&h=300&fit=crop&auto=format",
-    nombre: "Pepperoni Premium",
+    imagen: "/src/imports/pizzaDefinitivaCompleta.png",
+    nombre: "Pizza Jamon",
     idCategoria: "CAT-001",
-    costoUnitario: 28000, precioUnitario: 28000,
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
-    stockDisponible: 40,
-    estado: "Activo",
+    stockDisponible: 45,
+    estado: "Disponible",
   },
   {
     id: "PROD-003",
-    imagen:
-      "https://images.unsplash.com/photo-1571407970349-bc81e71e5080?w=300&h=300&fit=crop&auto=format",
-    nombre: "Cuatro Quesos",
-    idCategoria: "CAT-002",
-    costoUnitario: 30000, precioUnitario: 30000,
+    imagen: "/src/imports/pizzafondo-removebg-preview.png",
+    nombre: "Pizza Hawai",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
-    stockDisponible: 30,
-    estado: "Activo",
+    stockDisponible: 40,
+    estado: "Disponible",
   },
   {
     id: "PROD-004",
-    imagen:
-      "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=300&h=300&fit=crop&auto=format",
-    nombre: "Especial La Sirena",
-    idCategoria: "CAT-002",
-    costoUnitario: 32000, precioUnitario: 32000,
+    imagen: "/src/imports/image-1.png",
+    nombre: "Pizza Pollo",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
     unidadVenta: "und",
-    stockDisponible: 25,
-    estado: "Activo",
+    stockDisponible: 35,
+    estado: "Disponible",
   },
   {
     id: "PROD-005",
-    imagen:
-      "https://images.unsplash.com/photo-1702716059239-385baacdabdc?w=300&h=300&fit=crop&auto=format",
-    nombre: "Veggie Mediterránea",
-    idCategoria: "CAT-003",
-    costoUnitario: 26000, precioUnitario: 26000,
+    imagen: "/src/imports/image-2.png",
+    nombre: "Pizza Cañon",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 30,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-006",
+    imagen: "/src/imports/image-3.png",
+    nombre: "Pizza Maicitos",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 60,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-007",
+    imagen: "/src/imports/image-4.png",
+    nombre: "Pizza Paisa",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 25,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-008",
+    imagen: "/src/imports/image-5.png",
+    nombre: "Pizza Tocineta",
+    idCategoria: "CAT-001",
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 40,
+    estado: "Disponible",
+  },
+  // ── Lasañas (CAT-002) ──
+  {
+    id: "PROD-009",
+    imagen: "/src/imports/lasaña_carne.png",
+    nombre: "Lasaña Carne",
+    idCategoria: "CAT-002",
+    costoUnitario: 20000, precioUnitario: 20000,
+    unidadVenta: "und",
+    stockDisponible: 30,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-010",
+    imagen: "/src/imports/lasaña_pollo.png",
+    nombre: "Lasaña Pollo",
+    idCategoria: "CAT-002",
+    costoUnitario: 20000, precioUnitario: 20000,
+    unidadVenta: "und",
+    stockDisponible: 25,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-011",
+    imagen: "/src/imports/lasaña_mixta.png",
+    nombre: "Lasaña Mixta",
+    idCategoria: "CAT-002",
+    costoUnitario: 22000, precioUnitario: 22000,
     unidadVenta: "und",
     stockDisponible: 20,
-    estado: "Inactivo",
+    estado: "Disponible",
+  },
+  // ── Bebidas (CAT-003) ──
+  {
+    id: "PROD-012",
+    imagen: "/src/imports/Quatro.png",
+    nombre: "Gaseosa Cuatro",
+    idCategoria: "CAT-003",
+    costoUnitario: 3000, precioUnitario: 3000,
+    unidadVenta: "und",
+    stockDisponible: 100,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-013",
+    imagen: "/src/imports/Premio.png",
+    nombre: "Gaseosa Premiun",
+    idCategoria: "CAT-003",
+    costoUnitario: 3500, precioUnitario: 3500,
+    unidadVenta: "und",
+    stockDisponible: 80,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-014",
+    imagen: "/src/imports/Coca-Cola.png",
+    nombre: "Gaseosa Coca-Cola",
+    idCategoria: "CAT-003",
+    costoUnitario: 2500, precioUnitario: 2500,
+    unidadVenta: "und",
+    stockDisponible: 120,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-015",
+    imagen: "/src/imports/Pepsi.png",
+    nombre: "Gaseosa Pepsi",
+    idCategoria: "CAT-003",
+    costoUnitario: 2500, precioUnitario: 2500,
+    unidadVenta: "und",
+    stockDisponible: 100,
+    estado: "Disponible",
   },
 ];
 
@@ -316,7 +414,7 @@ export function GestionProductosScreen({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [confirmFichaSave, setConfirmFichaSave] = useState(false);
   const [confirmEstado, setConfirmEstado] = useState<{
-    id: string; nombre: string; current: "Activo" | "Inactivo"; next: "Activo" | "Inactivo";
+    id: string; nombre: string; current: "Disponible" | "No disponible"; next: "Disponible" | "No disponible";
   } | null>(null);
 
   const emptyForm = (): Omit<Producto, "id"> => ({
@@ -326,7 +424,7 @@ export function GestionProductosScreen({
     costoUnitario: 0, precioUnitario: 0,
     unidadVenta: "und",
     stockDisponible: 0,
-    estado: "Activo",
+    estado: "Disponible",
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -531,8 +629,8 @@ export function GestionProductosScreen({
       nombreArchivo: "Gestion_Productos",
       fecha,
       coloresEstado: {
-        Activo: { texto: "FFFFFFFF", fondo: "FF2E7D32" },
-        Inactivo: { texto: "FFFFFFFF", fondo: "FFC62828" },
+        Disponible: { texto: "FFFFFFFF", fondo: "FF2E7D32" },
+        "No disponible": { texto: "FFFFFFFF", fondo: "FFC62828" },
       },
       columnas: [
         { header: "ID Producto", valor: (p) => p.id },
@@ -1108,6 +1206,49 @@ export function GestionProductosScreen({
               onChange: () => {},
               readOnly: true,
             })}
+            
+            {/* Stock por Tamaño */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Stock por Tamaño</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                  <span className="text-sm font-medium text-foreground">Stock total</span>
+                  <span className={`text-sm font-bold ${detailItem.stockDisponible <= 5 ? "text-red-600" : detailItem.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}>
+                    {detailItem.stockDisponible} unidades
+                  </span>
+                </div>
+                {detailItem.idCategoria === "CAT-001" && (
+                  <>
+                    <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                      <span className="text-sm font-medium text-foreground">Pequeñas (P)</span>
+                      <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible * 8} porciones</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                      <span className="text-sm font-medium text-foreground">Grandes (G)</span>
+                      <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible * 6} porciones</span>
+                    </div>
+                  </>
+                )}
+                {detailItem.idCategoria === "CAT-002" && (
+                  <>
+                    <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                      <span className="text-sm font-medium text-foreground">Pequeñas (P)</span>
+                      <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible * 4} porciones</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                      <span className="text-sm font-medium text-foreground">Grandes (G)</span>
+                      <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible * 3} porciones</span>
+                    </div>
+                  </>
+                )}
+                {detailItem.idCategoria === "CAT-003" && (
+                  <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
+                    <span className="text-sm font-medium text-foreground">Stock</span>
+                    <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible} unidades</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* COLUMNA DERECHA: ficha técnica */}
@@ -1503,11 +1644,23 @@ export function GestionProductosScreen({
                       {fmtCOP(p.costoUnitario)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <span
-                        className={`text-sm font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
-                      >
-                        {p.stockDisponible}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`text-sm font-bold text-center ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
+                        >
+                          {p.stockDisponible}
+                        </span>
+                        {p.idCategoria === "CAT-001" && (
+                          <span className="text-xs text-muted-foreground">
+                            {p.stockDisponible * 8}P · {p.stockDisponible * 6}G
+                          </span>
+                        )}
+                        {p.idCategoria === "CAT-002" && (
+                          <span className="text-xs text-muted-foreground">
+                            {p.stockDisponible * 4}P · {p.stockDisponible * 3}G
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <button
@@ -1515,10 +1668,10 @@ export function GestionProductosScreen({
                           id: p.id,
                           nombre: p.nombre,
                           current: p.estado,
-                          next: p.estado === "Activo" ? "Inactivo" : "Activo",
+                          next: p.estado === "Disponible" ? "No disponible" : "Disponible",
                         })}
                         className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity"
-                        style={{ backgroundColor: p.estado === "Activo" ? "#2E7D32" : "#C62828" }}
+                        style={{ backgroundColor: p.estado === "Disponible" ? "#2E7D32" : "#C62828" }}
                         title="Cambiar estado"
                       >
                         {p.estado}
@@ -1632,11 +1785,11 @@ export function GestionProductosScreen({
                 El producto <strong className="text-foreground">{confirmEstado.nombre}</strong> pasará de:
               </p>
               <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
-                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.current === "Activo" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.current === "Disponible" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
                   {confirmEstado.current}
                 </span>
                 <span className="text-muted-foreground text-sm">→</span>
-                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.next === "Activo" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+                <span className={`font-semibold px-2.5 py-1 rounded-full text-xs ${confirmEstado.next === "Disponible" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
                   {confirmEstado.next}
                 </span>
               </div>
