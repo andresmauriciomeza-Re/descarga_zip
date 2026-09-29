@@ -69,6 +69,14 @@ import lasanaPollo from "@/imports/lasaña_pollo.png";
 import logoBlanco from "@/imports/logo-blanco.png";
 import logoClaro from "@/imports/logoclaro2.png";
 import imgPepsi from "@/imports/Pepsi.png";
+import pizzaCarnes from "@/imports/pizza_carnes.png";
+import pizzaCañon from "@/imports/pizza_cañon.png";
+import pizzaHawaii from "@/imports/pizza_hawaii.png";
+import pizzaJamonQueso from "@/imports/pizza_jamon_queso.png";
+import pizzaMaicitos from "@/imports/pizza_maicitos.png";
+import pizzaPeperoni from "@/imports/pizza_peperoni.png";
+import pizzaPollo from "@/imports/pizza_pollo.png";
+import pizzaTocineta from "@/imports/pizza_tocineta.png";
 import pizzaDefinitivaCompleta from "@/imports/pizzaDefinitivaCompleta.png";
 import imgPremio from "@/imports/Premio.png";
 import imgQuatro from "@/imports/Quatro.png";
@@ -267,93 +275,107 @@ const SECCIONES_MENU: { categoria: string; titulo: string }[] = [
 const PRODUCTS: Product[] = [
   {
     id: 1,
-    name: "Margarita Clásica",
-    description:
-      "Salsa de tomate casera, mozzarella fresca y albahaca del jardín. La pizza que nos hizo famosos en Medellín desde 1994.",
+    name: "Cañón",
+    description: "Pizza de la casa.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1664309641932-0e03e0771b97?w=600&h=600&fit=crop&auto=format",
+    image: pizzaCañon,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.9,
-    sales: 1240,
+    rating: 0,
+    sales: 0,
   },
   {
     id: 2,
-    name: "Pepperoni Suprema",
-    description:
-      "Generosa porción de pepperoni importado, queso mozzarella derretido y la salsa secreta de La Sirena.",
+    name: "Carnes",
+    description: "Pizza con carnes.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1573821663912-6df460f9c684?w=600&h=600&fit=crop&auto=format",
+    image: pizzaCarnes,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.8,
-    sales: 980,
+    rating: 0,
+    sales: 0,
   },
   {
     id: 3,
-    name: "La Sirena Especial",
-    description:
-      "Nuestra pizza insignia. Camarones al ajillo, queso crema, mozzarella, tomate cherry y rúcula fresca.",
+    name: "Hawaii",
+    description: "Pizza con jamón y piña.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=600&h=600&fit=crop&auto=format",
+    image: pizzaHawaii,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.95,
-    sales: 756,
+    rating: 0,
+    sales: 0,
   },
   {
     id: 4,
-    name: "Cuatro Quesos",
-    description:
-      "Mozzarella, provolone, queso azul y parmesano reggiano. Para los verdaderos amantes del queso.",
+    name: "Jamón y Queso",
+    description: "Pizza con jamón y queso.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1680405620826-83b0f0f61b28?w=600&h=600&fit=crop&auto=format",
+    image: pizzaJamonQueso,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.7,
-    sales: 620,
+    rating: 0,
+    sales: 0,
   },
   {
     id: 5,
-    name: "Hawaiana Tropical",
-    description:
-      "Piña caramelizada, jamón serrano, mozzarella y salsa BBQ. Dulce y salada en perfecta armonía.",
+    name: "Maicitos",
+    description: "Pizza con maíz.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1607811253515-57ef7723099d?w=600&h=600&fit=crop&auto=format",
+    image: pizzaMaicitos,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.6,
-    sales: 540,
+    rating: 0,
+    sales: 0,
   },
   {
     id: 6,
-    name: "Veggie Mediterránea",
-    description:
-      "Pimentones de colores, aceitunas kalamata, queso feta, espinaca fresca y tomates cherry.",
+    name: "Peperoni",
+    description: "Pizza con peperoni.",
     price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1702716059239-385baacdabdc?w=600&h=600&fit=crop&auto=format",
+    image: pizzaPeperoni,
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "activo",
-    rating: 4.5,
-    sales: 380,
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 14,
+    name: "Pollo",
+    description: "Pizza con pollo.",
+    price: 14000,
+    image: pizzaPollo,
+    category: "Pizzas",
+    sizes: SIZES_DEFAULT,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
+  },
+  {
+    id: 15,
+    name: "Tocineta",
+    description: "Pizza con tocineta.",
+    price: 14000,
+    image: pizzaTocineta,
+    category: "Pizzas",
+    sizes: SIZES_DEFAULT,
+    extras: [],
+    status: "activo",
+    rating: 0,
+    sales: 0,
   },
   // ── Lasañas (CAT-002): precio único $20.000, presentación única "Normal" ──
   {
