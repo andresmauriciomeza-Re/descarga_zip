@@ -6,7 +6,7 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { type Rol, PermissionCategoryAccordion, countAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
-import { soloDigitos, filtrarDocumento } from "../components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -71,14 +71,9 @@ function rolColor(rolId: string) {
   return ROL_PALETTE[idx >= 0 ? idx % ROL_PALETTE.length : 0];
 }
 
-const SPECIAL_ROLES = ["ROL-001", "ROL-002", "ROL-003"];
-
-function rolLabel(u: Usuario, roles: Rol[], esEmpleado: boolean): string {
+function rolLabel(u: Usuario, roles: Rol[]): string {
   const rol = roles.find(r => r.id === u.rolId);
-  const nombre = rol?.nombre ?? u.rolId;
-  if (esEmpleado) return nombre;
-  if (!SPECIAL_ROLES.includes(u.rolId)) return `Cliente/${nombre}`;
-  return nombre;
+  return rol?.nombre ?? u.rolId;
 }
 
 export function GestionUsuariosScreen({
@@ -123,13 +118,12 @@ export function GestionUsuariosScreen({
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
 
-  const esEmpleado = (u: Usuario) =>
-    empleados.some(e => e.correo.trim().toLowerCase() === u.correo.trim().toLowerCase());
-
   // Métricas
   const total = usuarios.length;
-  const nCli  = usuarios.filter(u => u.rolId === "ROL-002").length;
+  const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
   const nAdm  = usuarios.filter(u => u.rolId === "ROL-001").length;
+  const nEmp  = usuarios.filter(u => correosEmpleado.has(u.correo.trim().toLowerCase()) && u.rolId !== "ROL-001").length;
+  const nCli  = usuarios.filter(u => !correosEmpleado.has(u.correo.trim().toLowerCase()) && u.rolId === "ROL-002").length;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -224,12 +218,12 @@ export function GestionUsuariosScreen({
     if (!editItem) return;
     const errs: Record<string, string> = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(editItem.nombre) ?? undefined;
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editItem.correo.trim())) errs.correo = "Formato de correo no válido";
+    else errs.correo = validarCorreo(editItem.correo) ?? undefined;
     if (!editItem.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!editItem.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
-    else if (editItem.tipoDocumento !== "PP" && !/^\d+$/.test(editItem.numeroDocumento.trim()))
-      errs.numeroDocumento = "El número de documento solo debe contener números";
+    else errs.numeroDocumento = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento) ?? undefined;
     if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (editItem.nombre.trim() && editItem.correo.trim() && editItem.numeroDocumento.trim()) {
@@ -294,11 +288,12 @@ export function GestionUsuariosScreen({
     const errs: Record<string, string> = {};
 
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
+    else errs.nombre = validarNombre(newNombre) ?? undefined;
 
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCorreo.trim())) {
-      errs.correo = "Formato de correo no válido";
+    } else if (validarCorreo(newCorreo)) {
+      errs.correo = validarCorreo(newCorreo) as string;
     } else {
       const em = newCorreo.trim().toLowerCase();
       const dupCorreo =
@@ -410,10 +405,11 @@ export function GestionUsuariosScreen({
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-3 shrink-0">
         {[
           { label: "Total usuarios",  value: total, cls: "text-foreground", bg: "bg-card"      },
           { label: "Clientes",        value: nCli,  cls: "text-gray-600",   bg: "bg-gray-50"   },
+          { label: "Empleados",       value: nEmp,  cls: "text-blue-700",   bg: "bg-blue-50"   },
           { label: "Administradores", value: nAdm,  cls: "text-primary",    bg: "bg-primary/5" },
         ].map(({ label, value, cls, bg }) => (
           <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
@@ -481,7 +477,7 @@ export function GestionUsuariosScreen({
                     <td className="px-4 py-1.5">
                       <div className="flex items-center gap-1.5">
                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId)} ${rolInactivo ? "opacity-50" : ""}`}>
-                         {rolLabel(u, roles, esEmpleado(u))}
+                         {rolLabel(u, roles)}
                        </span>
                         {rolInactivo && (
                           <span title="Rol inactivo" className="flex items-center shrink-0">
@@ -574,7 +570,7 @@ export function GestionUsuariosScreen({
                       <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
                       <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId)} ${rolInactivo ? "opacity-60" : ""}`}>
-                         {rolLabel(detail, roles, esEmpleado(detail))}
+                          {rolLabel(detail, roles)}
                        </span>
                         {rolInactivo && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
@@ -616,7 +612,7 @@ export function GestionUsuariosScreen({
                           Permisos del rol
                         </p>
                         <span className="text-xs text-primary font-semibold">
-                          {countAccesos(rol.accesos)} sub-opciones
+                          {countAccesos(rol.accesos)} permisos
                         </span>
                       </div>
                       <div className="px-4 py-2 space-y-2">
@@ -699,10 +695,10 @@ export function GestionUsuariosScreen({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento <span className="text-primary">*</span></label>
                     <input
                       type="text"
-                      inputMode={editItem.tipoDocumento === "PP" ? "text" : "numeric"}
+                       inputMode="numeric"
                       value={editItem.numeroDocumento}
                       readOnly
-                      placeholder={editItem.tipoDocumento === "PP" ? "AB123456" : "12345678"}
+                       placeholder="12345678"
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed"
                     />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
@@ -721,7 +717,7 @@ export function GestionUsuariosScreen({
                       type={type}
                       inputMode={numeric ? "numeric" : undefined}
                       value={editItem[field]}
-                      onChange={e => { const v = numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); if (editErrors[field]) setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
@@ -810,7 +806,7 @@ export function GestionUsuariosScreen({
                       </label>
                       <select
                         value={newTipoDoc}
-                        onChange={e => { setNewTipoDoc(e.target.value); if (createErrors.tipoDocumento) setCreateErrors(p => ({ ...p, tipoDocumento: undefined })); }}
+                         onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       >
                         {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
@@ -823,10 +819,10 @@ export function GestionUsuariosScreen({
                       </label>
                       <input
                         type="text"
-                        inputMode={newTipoDoc === "PP" ? "text" : "numeric"}
+                         inputMode="numeric"
                         value={newDocumento}
-                        onChange={e => { setNewDocumento(filtrarDocumento(e.target.value, newTipoDoc)); if (createErrors.numeroDocumento) setCreateErrors(p => ({ ...p, numeroDocumento: undefined })); }}
-                        placeholder={newTipoDoc === "PP" ? "AB123456" : "12345678"}
+                         onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
+                         placeholder="12345678"
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       />
                       {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
@@ -842,7 +838,7 @@ export function GestionUsuariosScreen({
                     <input
                       type="text"
                       value={newNombre}
-                      onChange={e => { setNewNombre(e.target.value); if (createErrors.nombre) setCreateErrors(p => ({ ...p, nombre: undefined })); }}
+                       onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
                       placeholder="Ej: Laura Martínez"
                       autoFocus
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -857,7 +853,7 @@ export function GestionUsuariosScreen({
                     <input
                       type="email"
                       value={newCorreo}
-                      onChange={e => { setNewCorreo(e.target.value); if (createErrors.correo) setCreateErrors(p => ({ ...p, correo: undefined })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />

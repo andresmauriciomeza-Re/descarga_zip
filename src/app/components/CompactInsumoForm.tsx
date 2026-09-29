@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Minus } from "lucide-react";
 
 const SERIF = "var(--font-titulo)";
 
@@ -37,10 +37,13 @@ export interface CompactInsumoFormProps {
   unidadDisabled?: boolean;
   precio: number;
   onPrecioChange: (value: number) => void;
+  iva: number;
+  onIvaChange: (value: number) => void;
   onAgregar: () => void;
   suggestions: InsumoSuggestion[];
   showSuggestions: boolean;
   onSelectSuggestion: (suggestion: InsumoSuggestion) => void;
+  onCrearInsumo?: () => void;
   containerRef?: React.Ref<HTMLDivElement>;
   readOnly?: boolean;
   placeholder?: string;
@@ -59,10 +62,13 @@ export function CompactInsumoForm({
   unidadDisabled = false,
   precio,
   onPrecioChange,
+  iva,
+  onIvaChange,
   onAgregar,
   suggestions,
   showSuggestions,
   onSelectSuggestion,
+  onCrearInsumo,
   containerRef,
   readOnly = false,
   placeholder = "Buscar insumo...",
@@ -97,7 +103,7 @@ export function CompactInsumoForm({
             />
           </div>
 
-          {!readOnly && showSuggestions && suggestions.length > 0 && (
+          {!readOnly && showSuggestions && (
             <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
               {suggestions.map((ins) => (
                 <button
@@ -112,24 +118,53 @@ export function CompactInsumoForm({
                   </p>
                 </button>
               ))}
+              {/* Punto 2: Mostrar "Crear insumo" cuando el input está vacío o no hay resultados */}
+              {(suggestions.length === 0 || nombre.trim() === "") && (
+                <button
+                  type="button"
+                  onMouseDown={onCrearInsumo ? () => onCrearInsumo() : undefined}
+                  className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Cantidad */}
-        <div className="w-[72px]">
+        {/* Cantidad — stepper con botones +/- */}
+        <div className="w-[108px]">
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
             Cantidad
           </label>
 
-          <input
-            type="number"
-            min={1}
-            value={cantidad}
-            onChange={(e) => onCantidadChange(Number(e.target.value))}
-            disabled={readOnly}
-            className={readOnly ? readOnlyInputCls : compactInputCls}
-          />
+          <div className="flex items-stretch">
+            <button
+              type="button"
+              onClick={() => onCantidadChange(Math.max(1, cantidad - 1))}
+              disabled={readOnly}
+              className="flex items-center justify-center w-8 bg-muted border border-border rounded-l-lg text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <input
+              type="number"
+              min={1}
+              value={cantidad}
+              onChange={(e) => onCantidadChange(Math.max(1, Number(e.target.value)))}
+              disabled={readOnly}
+              className="w-full min-w-0 px-1 py-2 bg-muted border-y border-border text-xs text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+              type="button"
+              onClick={() => onCantidadChange(cantidad + 1)}
+              disabled={readOnly}
+              className="flex items-center justify-center w-8 bg-muted border border-border rounded-r-lg text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         {/* Medida */}
@@ -155,7 +190,7 @@ export function CompactInsumoForm({
         {/* Precio */}
         <div className="w-[112px]">
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-            Precio unitario
+            Monto unitario
           </label>
 
           <input
@@ -163,6 +198,24 @@ export function CompactInsumoForm({
             min={0}
             value={precio || ""}
             onChange={(e) => onPrecioChange(Number(e.target.value))}
+            placeholder="0"
+            disabled={readOnly}
+            className={readOnly ? readOnlyInputCls : compactInputCls}
+          />
+        </div>
+
+        {/* IVA */}
+        <div className="w-[72px]">
+          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+            IVA (%)
+          </label>
+
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={iva}
+            onChange={(e) => onIvaChange(Math.min(100, Math.max(0, Number(e.target.value))))}
             placeholder="0"
             disabled={readOnly}
             className={readOnly ? readOnlyInputCls : compactInputCls}

@@ -99,7 +99,7 @@ export const INITIAL_ROLES: Rol[] = [
     accesos: { [KEY("Ventas","Ventas")]: ["Ver","Crear"] },
   },
   {
-    id: "ROL-003", nombre: "Usuario", descripcion: "Acceso básico al sistema.", activo: true,
+    id: "ROL-003", nombre: "Empleado", descripcion: "Acceso operativo al sistema.", activo: true,
     accesos: { [KEY("Ventas","Clientes")]: ["Ver"] },
   },
 ];
@@ -120,7 +120,11 @@ export const accionColors: Record<Accion, string> = {
 };
 
 export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }) {
-  const [expandedModules, setExpandedModules] = useState<string[]>([]);
+  const [expandedModules, setExpandedModules] = useState<string[]>(() =>
+    MENU_TREE
+      .filter(({ modulo, subs }) => subs.some(sub => (accesos[KEY(modulo, sub)] ?? []).length > 0))
+      .map(({ modulo }) => modulo)
+  );
 
   return (
     <>
@@ -185,24 +189,21 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const [activo,     setActivo]     = useState(initialActivo);
   const [accesos,    setAccesos]    = useState<AccesosMap>({ ...initialAccesos });
   const [moduloActivo, setModuloActivo] = useState<string | null>(null);
+  const [mostrarResumen, setMostrarResumen] = useState(false);
+  const [moduloResumen, setModuloResumen] = useState<string | null>(null);
   const [errors,     setErrors]     = useState<{ nombre?: string; modulos?: string }>({});
 
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-
-  // OJO: los permisos SOLO se conceden desde el panel derecho, con
-  // toggleAccion o el botón "Todos". Esta grilla es un visor: hacer clic en un
-  // módulo solo cambia `moduloActivo` y jamás escribe en `accesos`. Por eso un
-  // clic no puede alterar el contador "X seleccionadas" ni el rol guardado.
-  // Antes `toggleModule` y `toggleSub` vivían aquí y escribían ["Ver"] al
-  // activar, lo que dejaba "Ver" preseleccionado en azul sin que nadie lo
-  // pidiera; se eliminaron por ese motivo.
 
   const isSubOn = (m: string, s: string) => {
     const k = KEY(m, s);
     return k in accesos && accesos[k].length > 0;
   };
-  const isAllMod = (m: string, subs: string[]) => subs.every(s => isSubOn(m, s));
+  const isAllMod = (m: string, subs: string[]) =>
+    subs.every(s => accionesDe(m).every(a => (accesos[KEY(m, s)] ?? []).includes(a)));
   const isSomeMod = (m: string, subs: string[]) => subs.some(s => isSubOn(m, s));
+  const countAssignedPermissions = (celda: Celda) =>
+    subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub)).length;
 
   const toggleAccion = (m: string, s: string, accion: Accion) => {
     const k = KEY(m, s);
@@ -213,12 +214,29 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     });
   };
 
-  const allPermissionsSelected = MENU_TREE.every(({ modulo, subs }) =>
-    subs.every(sub => accionesDe(modulo).every(a => (accesos[KEY(modulo, sub)] ?? []).includes(a))),
+  const permisoBadge = (m: string, s: string, accion: Accion, compacto = false) => (
+    <button
+      key={accion}
+      type="button"
+      onClick={() => toggleAccion(m, s, accion)}
+      aria-pressed={(accesos[KEY(m, s)] ?? []).includes(accion)}
+      title={`${(accesos[KEY(m, s)] ?? []).includes(accion) ? "Desactivar" : "Activar"} privilegio ${accion}`}
+      className={`${compacto ? "text-[10px] px-1.5 py-0" : "text-xs px-2.5 py-1"} inline-flex items-center font-semibold rounded-lg border cursor-pointer transition-all active:scale-95 ${(accesos[KEY(m, s)] ?? []).includes(accion) ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"}`}
+    >
+      {accion}
+    </button>
   );
 
-  const toggleAllPermissions = () => {
-    setAccesos(allPermissionsSelected ? {} : fullAccesos());
+  const toggleCelda = (celda: Celda) => {
+    const subs = subsDeCelda(celda);
+    const allOn = isAllMod(celda.modulo, subs);
+    setAccesos(prev => {
+      const next = { ...prev };
+      subs.forEach(sub => {
+        next[KEY(celda.modulo, sub)] = allOn ? [] : [...accionesDe(celda.modulo)];
+      });
+      return next;
+    });
     setErrors(p => ({ ...p, modulos: undefined }));
   };
 
@@ -235,6 +253,97 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     if (selectedSubs.length === 0) errs.modulos = "Selecciona al menos un módulo o sub-opción";
     if (Object.keys(errs).length) { setErrors(errs); return; }
     onSave(nombre.trim(), desc.trim(), activo, accesos);
+  };
+
+  const renderPermissionDetails = (celda: Celda) => {
+    const subs = subsDeCelda(celda);
+    const disponibles = accionesDe(celda.modulo);
+    return (
+      <div className="space-y-2">
+        {subs.map(sub => {
+          const k = KEY(celda.modulo, sub);
+          const selAcc = accesos[k] ?? [];
+          const allSel = disponibles.every(a => selAcc.includes(a));
+          return (
+            <div key={sub} className="border border-border rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
+                <span className="text-sm font-semibold text-foreground">{sub}</span>
+                {disponibles.length > 1 && (
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={allSel}
+                    onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? [] : [...disponibles] }))}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
+                      allSel
+                        ? "bg-red-100 text-red-700 border-red-200"
+                        : "bg-muted text-muted-foreground border-border hover:bg-primary/30"
+                    }`}
+                  >
+                    <Check className={`w-4 h-4 ${allSel ? "" : "opacity-0"}`} />
+                    Todos
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
+                {disponibles.map(accion => {
+                  const on = selAcc.includes(accion);
+                  return (
+                    <button key={accion} type="button" onClick={() => toggleAccion(celda.modulo, sub, accion)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer active:scale-95 ${
+                        on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
+                      }`}
+                    >
+                      {on && <Check className="w-3 h-3" />}{accion}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderAssignedSummary = (celda: Celda) => {
+    const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
+    const disponibles = accionesDe(celda.modulo);
+    return (
+      <div className="divide-y divide-border px-2">
+        {assignedSubs.map(sub => {
+          return (
+            <div key={sub} className="flex items-center justify-between gap-3 py-2">
+              <span className="text-xs font-medium text-foreground">{sub}</span>
+              <div className="flex gap-1 flex-wrap justify-end">
+                {disponibles.map(accion => permisoBadge(celda.modulo, sub, accion, true))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderAssignedDetails = (celda: Celda) => {
+    const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
+    const disponibles = accionesDe(celda.modulo);
+    return (
+      <div className="divide-y divide-border px-2">
+        {assignedSubs.map(sub => {
+          return (
+            <div key={sub} className="py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-foreground">{sub}</span>
+                <div className="flex gap-1.5 flex-wrap justify-end">
+                  {disponibles.map(accion => permisoBadge(celda.modulo, sub, accion))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -288,9 +397,20 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
             <div className="flex flex-col flex-1 min-h-0 px-5 py-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
                 Módulos y sub-opciones
-                <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} seleccionadas</span>
+                 <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} permisos seleccionados</span>
               </p>
               {errors.modulos && <p className="text-xs text-red-500 mb-2">{errors.modulos}</p>}
+              <button
+                type="button"
+                onClick={() => { setMostrarResumen(true); setModuloResumen(null); setModuloActivo(null); }}
+                className={`w-full mb-3 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
+                  mostrarResumen
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-muted text-foreground"
+                }`}
+              >
+                Ver permisos
+              </button>
               <div className="grid grid-cols-3 gap-2 pr-1">
                 {CELDAS.map(celda => {
                   const modulo = celda.nombre;
@@ -300,10 +420,19 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                   const allOn = isAllMod(celda.modulo, subs);
                   const someOn = isSomeMod(celda.modulo, subs);
                   return (
-                    <button
+                    <div
                       key={modulo}
-                      type="button"
-                      onClick={() => setModuloActivo(modulo)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { setMostrarResumen(false); setModuloResumen(null); setModuloActivo(modulo); }}
+                      onKeyDown={event => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setMostrarResumen(false);
+                          setModuloResumen(null);
+                          setModuloActivo(modulo);
+                        }
+                      }}
                       aria-pressed={activo}
                       className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border transition-all cursor-pointer active:scale-95 ${
                         activo
@@ -311,10 +440,12 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                           : "border-border bg-card hover:bg-muted hover:border-primary/30"
                       }`}
                     >
-                      {/* Indicador de permisos: informativo, sin onClick. Refleja
-                          >=1 acción marcada en el panel derecho. */}
-                      <span
-                        aria-hidden
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-label={`${allOn ? "Quitar" : "Asignar"} todos los permisos de ${modulo}`}
+                        aria-checked={allOn}
+                        onClick={event => { event.stopPropagation(); toggleCelda(celda); }}
                         className={`absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-[5px] border flex items-center justify-center transition-colors ${
                           allOn
                             ? "bg-primary border-primary"
@@ -325,14 +456,14 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                       >
                         {allOn && <Check className="w-2.5 h-2.5 text-white" />}
                         {someOn && !allOn && <span className="w-1.5 h-0.5 rounded-full bg-primary" />}
-                      </span>
+                      </button>
                       {Icon
                         ? <Icon className={`w-5 h-5 ${activo ? "text-primary" : "text-muted-foreground"}`} />
                         : <span className="w-5 h-5" />}
                       <span className={`text-[11px] font-semibold text-center leading-tight ${activo ? "text-primary" : "text-foreground"}`}>
                         {modulo}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -344,17 +475,52 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
              Asignar permisos al rol
            </p>
-            <button
-              type="button"
-              onClick={toggleAllPermissions}
-              className={`w-full mb-3 flex items-center justify-between px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${allPermissionsSelected ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted text-foreground"}`}
-            >
-              <span>Todos los permisos y privilegios</span>
-              <Check className={`w-4 h-4 ${allPermissionsSelected ? "" : "opacity-20"}`} />
-            </button>
-
-            {moduloActivo === null ? (
-              <div className="flex flex-col items-center justify-center text-center flex-1">
+             {mostrarResumen ? (
+               (() => {
+                 const asignados = CELDAS.filter(celda =>
+                   isSomeMod(celda.modulo, subsDeCelda(celda))
+                 );
+                 return (
+                    <div className="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
+                     {asignados.length === 0 ? (
+                       <div className="flex flex-col items-center justify-center text-center min-h-40">
+                         <p className="text-sm font-semibold text-foreground mb-1">Sin permisos asignados</p>
+                         <p className="text-xs text-muted-foreground max-w-52">
+                           Selecciona un módulo o un privilegio para comenzar a configurar el rol.
+                         </p>
+                       </div>
+                     ) : (
+                       <>
+                         <p className="text-xs text-muted-foreground">
+                           Resumen de los permisos asignados. Selecciona un módulo para ver todas sus opciones.
+                         </p>
+                         <div className="space-y-2">
+                           {asignados.map(celda => {
+                             const abierto = celda.nombre === moduloResumen;
+                             return (
+                               <div key={celda.nombre} className="border border-border rounded-xl overflow-hidden">
+                                 <button
+                                   type="button"
+                                   onClick={() => setModuloResumen(abierto ? null : celda.nombre)}
+                                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 bg-muted/40 hover:bg-muted text-left cursor-pointer"
+                                 >
+                                    <span className="text-sm font-semibold text-foreground">{celda.nombre}</span>
+                                    <span className="text-xs font-semibold text-primary">
+                                      {countAssignedPermissions(celda)} permisos
+                                    </span>
+                                  </button>
+                                  {abierto ? renderAssignedDetails(celda) : renderAssignedSummary(celda)}
+                                </div>
+                             );
+                           })}
+                         </div>
+                       </>
+                     )}
+                   </div>
+                 );
+               })()
+             ) : moduloActivo === null ? (
+               <div className="flex flex-col items-center justify-center text-center flex-1">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                   <span className="text-2xl">🔒</span>
                 </div>
@@ -364,8 +530,8 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {(() => {
+               <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+                 {(() => {
                   // Solo la celda abierta. Antes se iteraba todo MENU_TREE
                   // filtrando por isSubOn, así que un módulo sin permisos no
                   // mostraba nada; ahora se listan TODAS sus sub-opciones para
@@ -373,60 +539,15 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                   // Se resuelve por celda (no por módulo) para que "Usuarios",
                   // que comparte módulo con Configuración, muestre las suyas.
                   const celda = CELDAS.find(c => c.nombre === moduloActivo);
-                  if (!celda) return null;
-                  const mod = { modulo: celda.modulo, subs: subsDeCelda(celda) };
-                  return (
-                    <>
+                   if (!celda) return null;
+                   return (
+                     <>
                       <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                         {celda.nombre}
                       </p>
-                      <div className="space-y-2">
-                        {mod.subs.map(sub => {
-                          const k = KEY(mod.modulo, sub);
-                          const selAcc = accesos[k] ?? [];
-                          const disponibles = accionesDe(mod.modulo);
-                          const allSel = disponibles.every(a => selAcc.includes(a));
-                          return (
-                            <div key={sub} className="border border-border rounded-xl overflow-hidden">
-                              <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
-                                <span className="text-sm font-semibold text-foreground">{sub}</span>
-                                {disponibles.length > 1 && (
-                                <button
-                                  type="button"
-                                  role="checkbox"
-                                  aria-checked={allSel}
-                                  onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? ["Ver"] : [...disponibles] }))}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
-                                    allSel
-                                      ? "bg-red-100 text-red-700 border-red-200"
-                                      : "bg-muted text-muted-foreground border-border hover:bg-primary/30"
-                                  }`}
-                                >
-                                  <Check className={`w-4 h-4 ${allSel ? "" : "opacity-0"}`} />
-                                  Todos
-                                </button>
-                                )}
-                              </div>
-                              <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
-                                {disponibles.map(accion => {
-                                  const on = selAcc.includes(accion);
-                                  return (
-                                    <button key={accion} onClick={() => toggleAccion(mod.modulo, sub, accion)}
-                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer active:scale-95 ${
-                                        on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
-                                      }`}
-                                    >
-                                      {on && <Check className="w-3 h-3" />}{accion}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  );
+                       {renderPermissionDetails(celda)}
+                     </>
+                   );
                 })()}
               </div>
             )}
@@ -636,7 +757,7 @@ export function GestionConfigScreen({
               <div className="px-5 pb-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground pt-1 pb-1.5 border-b border-border sticky top-0 bg-card">
                   Accesos configurados
-                  <span className="ml-2 text-primary normal-case font-semibold">{countAccesos(detailItem.accesos)} sub-opciones</span>
+                   <span className="ml-2 text-primary normal-case font-semibold">{countAccesos(detailItem.accesos)} permisos</span>
                 </p>
                 {countAccesos(detailItem.accesos) === 0 ? (
                   <p className="text-sm text-muted-foreground italic">Sin accesos configurados</p>
