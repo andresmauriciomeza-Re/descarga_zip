@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { exportToExcel } from "../utils/exportExcel";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -251,19 +253,18 @@ export const INITIAL_VENTAS: Venta[] = [
     id: "1",
     usuario: "María González",
     fecha: "2024-01-15",
-    productos: "Margarita Clásica x2",
+    productos: "Pizza Peperoni x2",
     cantidad: 2,
-    total: 56000,
+    total: 28000,
     estado: "venta",
     metodoPago: "Nequi",
     historial: [{ estado: "por-verificar", hora: "4:10 PM" }, { estado: "venta", hora: "4:15 PM" }],
     detalle: [
       {
-        nombre: "Margarita Clásica",
-        precio: 28000,
+        nombre: "Pizza Peperoni",
+        precio: 14000,
         cantidad: 2,
-        imagen:
-          "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/pizzaDefinitiva.png",
       },
     ],
   },
@@ -272,18 +273,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "venta" as VentaStatus, hora: "5:02 PM" }],
     usuario: "Carlos Martínez",
     fecha: "2024-01-15",
-    productos: "Pepperoni Premium x1",
+    productos: "Pizza Jamon x1",
     cantidad: 1,
-    total: 28000,
+    total: 14000,
     estado: "venta",
     metodoPago: "Bancolombia",
     detalle: [
       {
-        nombre: "Pepperoni Premium",
-        precio: 28000,
+        nombre: "Pizza Jamon",
+        precio: 14000,
         cantidad: 1,
-        imagen:
-          "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/pizzaDefinitivaCompleta.png",
       },
     ],
   },
@@ -292,18 +292,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "por-verificar" as VentaStatus, hora: "6:30 PM" }, { estado: "venta" as VentaStatus, hora: "6:45 PM" }],
     usuario: "Ana Rodríguez",
     fecha: "2024-01-16",
-    productos: "Cuatro Quesos x3",
+    productos: "Pizza Hawai x3",
     cantidad: 3,
-    total: 90000,
+    total: 45000,
     estado: "venta",
     metodoPago: "Nequi",
     detalle: [
       {
-        nombre: "Cuatro Quesos",
-        precio: 30000,
+        nombre: "Pizza Hawai",
+        precio: 15000,
         cantidad: 3,
-        imagen:
-          "https://images.unsplash.com/photo-1571407970349-bc81e71e5080?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/pizzafondo-removebg-preview.png",
       },
     ],
   },
@@ -312,18 +311,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "por-verificar" as VentaStatus, hora: "7:00 PM" }, { estado: "perdida" as VentaStatus, hora: "7:20 PM" }],
     usuario: "Jorge Vargas",
     fecha: "2024-01-16",
-    productos: "Especial La Sirena x1",
+    productos: "Pizza Pollo x1",
     cantidad: 1,
-    total: 32000,
+    total: 15000,
     estado: "perdida",
     metodoPago: "Bancolombia",
     detalle: [
       {
-        nombre: "Especial La Sirena",
-        precio: 32000,
+        nombre: "Pizza Pollo",
+        precio: 15000,
         cantidad: 1,
-        imagen:
-          "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/image-1.png",
       },
     ],
   },
@@ -332,25 +330,23 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "venta" as VentaStatus, hora: "8:05 PM" }],
     usuario: "Patricia Soto",
     fecha: "2024-01-17",
-    productos: "Hawaiana x2, Pepperoni x1",
+    productos: "Pizza Cañon x2, Gaseosa Cuatro x1",
     cantidad: 3,
-    total: 54000,
+    total: 31000,
     estado: "venta",
     metodoPago: "Nequi",
     detalle: [
       {
-        nombre: "Hawaiana",
-        precio: 26000,
+        nombre: "Pizza Cañon",
+        precio: 16000,
         cantidad: 2,
-        imagen:
-          "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/image-2.png",
       },
       {
-        nombre: "Pepperoni Premium",
-        precio: 28000,
+        nombre: "Gaseosa Cuatro",
+        precio: 3000,
         cantidad: 1,
-        imagen:
-          "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/Quatro.png",
       },
     ],
   },
@@ -359,18 +355,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "perdida" as VentaStatus, hora: "9:10 PM" }],
     usuario: "Luis Herrera",
     fecha: "2024-01-17",
-    productos: "Cuatro Quesos x2",
+    productos: "Lasaña Carne x2",
     cantidad: 2,
-    total: 70000,
+    total: 40000,
     estado: "perdida",
     metodoPago: "Bancolombia",
     detalle: [
       {
-        nombre: "Cuatro Quesos",
-        precio: 35000,
+        nombre: "Lasaña Carne",
+        precio: 20000,
         cantidad: 2,
-        imagen:
-          "https://images.unsplash.com/photo-1571407970349-bc81e71e5080?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/lasaña_carne.png",
       },
     ],
   },
@@ -379,18 +374,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "perdida" as VentaStatus, hora: "9:45 PM" }],
     usuario: "Sandra Ríos",
     fecha: "2024-01-18",
-    productos: "Pepperoni Premium x1",
+    productos: "Pizza Maicitos x1",
     cantidad: 1,
-    total: 28000,
+    total: 13000,
     estado: "perdida",
     metodoPago: "Nequi",
     detalle: [
       {
-        nombre: "Pepperoni Premium",
-        precio: 28000,
+        nombre: "Pizza Maicitos",
+        precio: 13000,
         cantidad: 1,
-        imagen:
-          "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/image-3.png",
       },
     ],
   },
@@ -399,18 +393,17 @@ export const INITIAL_VENTAS: Venta[] = [
     historial: [{ estado: "perdida" as VentaStatus, hora: "8:30 PM" }],
     usuario: "Jorge Vargas",
     fecha: "2024-01-16",
-    productos: "Especial La Sirena x1",
+    productos: "Pizza Paisa x1",
     cantidad: 1,
-    total: 32000,
+    total: 18000,
     estado: "perdida",
     metodoPago: "Bancolombia",
     detalle: [
       {
-        nombre: "Especial La Sirena",
-        precio: 32000,
+        nombre: "Pizza Paisa",
+        precio: 18000,
         cantidad: 1,
-        imagen:
-          "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=80&h=80&fit=crop&auto=format",
+        imagen: "/src/imports/image-4.png",
       },
     ],
   },
@@ -418,9 +411,9 @@ export const INITIAL_VENTAS: Venta[] = [
     id: "9",
     usuario: "Sebastián Gómez",
     fecha: "2024-01-14",
-    productos: "Pepperoni Premium x1",
+    productos: "Pizza Tocineta x1",
     cantidad: 1,
-    total: 28000,
+    total: 15000,
     estado: "completado",
     metodoPago: "Nequi",
     horaRecogida: "18:30",
@@ -430,7 +423,7 @@ export const INITIAL_VENTAS: Venta[] = [
       { estado: "completado", hora: "6:35 PM" },
     ],
     detalle: [
-      { nombre: "Pepperoni Premium — Mediano", precio: 28000, cantidad: 1 },
+      { nombre: "Pizza Tocineta — Mediano", precio: 15000, cantidad: 1, imagen: "/src/imports/image-5.png" },
     ],
   },
 ];
@@ -475,6 +468,33 @@ export function VentasScreen({
   };
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
+
+  const exportExcel = () => {
+    exportToExcel(
+      pedidos.map((p) => ({
+        id: p.id,
+        cliente: p.usuario,
+        fecha: p.fecha,
+        productos: p.productos,
+        cantidad: p.cantidad,
+        total: fmtCOP(p.total),
+        estado: VENTA_STATUS_LABEL[p.estado],
+        metodoPago: p.metodoPago,
+      })),
+      [
+        { key: "id", label: "ID" },
+        { key: "cliente", label: "Cliente" },
+        { key: "fecha", label: "Fecha" },
+        { key: "productos", label: "Productos" },
+        { key: "cantidad", label: "Cantidad" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+        { key: "metodoPago", label: "Método de Pago" },
+      ],
+      "ventas"
+    );
+    toast.success("Excel descargado");
+  };
 
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
@@ -1140,15 +1160,18 @@ export function VentasScreen({
             {pedidos.length} ventas registradas
           </p>
         </div>
-        {_canCreate && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
-          >
-            <span className="text-lg leading-none">+</span>
-            Nuevo pedido
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <BotonDescargarExcel onClick={exportExcel} />
+          {_canCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+            >
+              <span className="text-lg leading-none">+</span>
+              Nuevo pedido
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Banner — pagos por verificar */}

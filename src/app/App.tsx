@@ -296,7 +296,7 @@ const PRODUCTS: Product[] = [
     id: 3,
     name: "Pizza Hawai",
     description: "Pizza con piña, jamón, queso mozzarella y salsa BBQ.",
-    price: 15000,
+    price: 14000,
     image: "/src/imports/pizzafondo-removebg-preview.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -309,7 +309,7 @@ const PRODUCTS: Product[] = [
     id: 4,
     name: "Pizza Pollo",
     description: "Pizza con pollo desmechado, queso mozzarella y salsa de tomate.",
-    price: 15000,
+    price: 14000,
     image: "/src/imports/image-1.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -322,7 +322,7 @@ const PRODUCTS: Product[] = [
     id: 5,
     name: "Pizza Cañon",
     description: "Pizza con chorizo, pepperoni, queso mozzarella y salsa de tomate.",
-    price: 16000,
+    price: 14000,
     image: "/src/imports/image-2.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -335,7 +335,7 @@ const PRODUCTS: Product[] = [
     id: 6,
     name: "Pizza Maicitos",
     description: "Pizza con trozos de maíz dulce, queso mozzarella y salsa de tomate.",
-    price: 13000,
+    price: 14000,
     image: "/src/imports/image-3.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -348,7 +348,7 @@ const PRODUCTS: Product[] = [
     id: 7,
     name: "Pizza Paisa",
     description: "Pizza con carne desmechada, frijoles, chicharrón y queso mozzarella.",
-    price: 18000,
+    price: 14000,
     image: "/src/imports/image-4.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -361,7 +361,7 @@ const PRODUCTS: Product[] = [
     id: 8,
     name: "Pizza Tocineta",
     description: "Pizza con tocineta crujiente, queso mozzarella y salsa de tomate.",
-    price: 15000,
+    price: 14000,
     image: "/src/imports/image-5.png",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
@@ -2441,32 +2441,6 @@ function CatalogScreen({
             No encontramos pizzas con ese nombre. ¡Intenta con
             otro!
           </p>
-        </div>
-      ) : cat === "Todas" ? (
-        /* "space-y-10" deja el mismo aire entre el final de una sección y el
-           título de la siguiente, y el "mb-5" del título el de título a grid. */
-        <div className="space-y-10">
-          {secciones.map(({ titulo, productos }) => (
-            <section key={titulo}>
-              <h2
-                className="text-2xl font-bold text-foreground mb-5"
-                style={{ fontFamily: SERIF }}
-              >
-                {titulo}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {productos.map((p, i) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    index={i}
-                    onOpen={abrirDetalle}
-                    onQuickAdd={agregarAlCarrito}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
