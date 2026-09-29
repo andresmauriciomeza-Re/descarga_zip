@@ -66,12 +66,18 @@ const ROL_PALETTE = [
   "bg-teal-100 text-teal-800",
 ];
 
-function rolColor(rolId: string) {
+function rolColor(rolId: string, esCliente: boolean, esEmpleado: boolean) {
+  if (rolId === "ROL-001") return "bg-red-100 text-red-800";
+  if (esEmpleado || rolId === "ROL-003") return "bg-emerald-100 text-emerald-800";
+  if (esCliente) return "bg-gray-100 text-gray-700";
   const idx = parseInt(rolId.replace("ROL-",""), 10) - 1;
   return ROL_PALETTE[idx >= 0 ? idx % ROL_PALETTE.length : 0];
 }
 
-function rolLabel(u: Usuario, roles: Rol[]): string {
+function rolLabel(u: Usuario, roles: Rol[], esCliente: boolean, esEmpleado: boolean): string {
+  if (u.rolId === "ROL-001") return "Administrador";
+  if (esEmpleado || u.rolId === "ROL-003") return "Cliente/Empleado";
+  if (esCliente) return "Cliente";
   const rol = roles.find(r => r.id === u.rolId);
   return rol?.nombre ?? u.rolId;
 }
@@ -118,24 +124,42 @@ export function GestionUsuariosScreen({
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
 
+  const usuariosUnicos = useMemo(() => {
+    const unicos = new Map<string, Usuario>();
+    usuarios.forEach(usuario => {
+      const tipoDocumento = usuario.tipoDocumento.trim().toLowerCase();
+      const numeroDocumento = usuario.numeroDocumento.trim();
+      const correo = usuario.correo.trim().toLowerCase();
+      const clave = numeroDocumento
+        ? `doc:${tipoDocumento}||${numeroDocumento}`
+        : correo
+          ? `correo:${correo}`
+          : `id:${usuario.id}`;
+      if (!unicos.has(clave)) unicos.set(clave, usuario);
+    });
+    return Array.from(unicos.values());
+  }, [usuarios]);
+
   // Métricas
-  const total = usuarios.length;
-  const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
-  const nAdm  = usuarios.filter(u => u.rolId === "ROL-001").length;
-  const nEmp  = usuarios.filter(u => correosEmpleado.has(u.correo.trim().toLowerCase()) && u.rolId !== "ROL-001").length;
-  const nCli  = usuarios.filter(u => !correosEmpleado.has(u.correo.trim().toLowerCase()) && u.rolId === "ROL-002").length;
+  const total = usuariosUnicos.length;
+  const nAdm  = usuariosUnicos.filter(u => u.rolId === "ROL-001").length;
+  const nEmp  = empleados.length;
+  const nCli  = clientes.length;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return usuarios.filter(u => {
+    return usuariosUnicos.filter(u => {
       const rol = rolInfo(u.rolId);
-      const rolNombre = rol?.nombre ?? u.rolId;
+      const correo = u.correo.trim().toLowerCase();
+      const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
+      const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
+      const rolNombre = rolLabel(u, roles, esCliente, esEmpleado);
       const matchQ = !q || u.nombre.toLowerCase().includes(q) || u.correo.toLowerCase().includes(q) || u.numeroDocumento.toLowerCase().includes(q) || `${u.tipoDocumento} ${u.numeroDocumento}`.toLowerCase().includes(q) || rolNombre.toLowerCase().includes(q);
       const matchR = filterRol === "todos" || u.rolId === filterRol;
       const matchE = filterEst === "todos" || (filterEst === "activo" ? u.activo : !u.activo);
       return matchQ && matchR && matchE;
     });
-  }, [usuarios, search, filterRol, filterEst, roles]);
+  }, [usuariosUnicos, search, filterRol, filterEst, roles, clientes, empleados]);
 
   // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
   // interno, así que el paginador es la única forma de ver más usuarios.
@@ -460,6 +484,9 @@ export function GestionUsuariosScreen({
               ) : paged.map(u => {
                 const rol = rolInfo(u.rolId);
                 const rolInactivo = rol && !rol.activo;
+                const correo = u.correo.trim().toLowerCase();
+                const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
+                const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
                 return (
                   <tr key={u.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-1.5">
@@ -476,8 +503,8 @@ export function GestionUsuariosScreen({
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo}</td>
                     <td className="px-4 py-1.5">
                       <div className="flex items-center gap-1.5">
-                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId)} ${rolInactivo ? "opacity-50" : ""}`}>
-                         {rolLabel(u, roles)}
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId, esCliente, esEmpleado)} ${rolInactivo ? "opacity-50" : ""}`}>
+                          {rolLabel(u, roles, esCliente, esEmpleado)}
                        </span>
                         {rolInactivo && (
                           <span title="Rol inactivo" className="flex items-center shrink-0">
@@ -545,6 +572,9 @@ export function GestionUsuariosScreen({
         {detail && (() => {
           const rol = rolInfo(detail.rolId);
           const rolInactivo = rol && !rol.activo;
+          const correo = detail.correo.trim().toLowerCase();
+          const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
+          const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
           return (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
               <div className="flex min-h-full items-center justify-center p-4">
@@ -569,8 +599,8 @@ export function GestionUsuariosScreen({
                     <div>
                       <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
                       <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
-                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId)} ${rolInactivo ? "opacity-60" : ""}`}>
-                          {rolLabel(detail, roles)}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId, esCliente, esEmpleado)} ${rolInactivo ? "opacity-60" : ""}`}>
+                          {rolLabel(detail, roles, esCliente, esEmpleado)}
                        </span>
                         {rolInactivo && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
