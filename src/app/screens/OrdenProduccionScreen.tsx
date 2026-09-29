@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, type Dispatch, type SetStateAction, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock, Download, PackageX } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle, Clock, PackageX } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 import type { Producto } from "./GestionProductosScreen";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -247,38 +248,37 @@ export function calcularStockProducido(orden: OrdenProduccion): Map<string, numb
   return producido.size > 0 ? producido : null;
 }
 
-function exportExcel(ordenes: OrdenProduccion[]) {
-  const headers = [
-    "ID Orden", "Producto(s)", "Detalle", "Cantidad Total",
-    "Fecha solicitada", "Hora solicitada", "Inicio Producción",
-    "Entrega Estimada", "Estado", "Observación",
-  ];
-  const rows = ordenes.map(o => [
-    o.id,
-    nombresDeLineas(o.lineas).join(", "),
-    o.lineas.map(l => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join("; "),
-    totalCantidad(o.lineas),
-    o.fechaSolicitada || "",
-    o.horaSolicitada || "",
-    o.inicioProduccion ? fmtDT(o.inicioProduccion) : "",
-    o.entregaEstimada ? fmtDT(o.entregaEstimada) : "",
-    ESTADO_LABEL[o.estadoOrden],
-    o.observacion,
-  ]);
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = [
-    { wch: 10 }, { wch: 26 }, { wch: 36 }, { wch: 12 },
-    { wch: 15 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
-    { wch: 12 }, { wch: 32 },
-  ];
-  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
-  XLSX.utils.book_append_sheet(wb, ws, "Ordenes");
-  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
-  // fechaba la orden con el día siguiente.
-  const date = new Date().toLocaleDateString("en-CA");
-  XLSX.writeFile(wb, `ordenes-produccion-${date}.xlsx`);
-  toast.success("Archivo Excel descargado");
+async function exportExcel(ordenes: OrdenProduccion[]) {
+  const fecha = new Date();
+  const archivo = await exportarExcelEstilizado({
+    datos: ordenes,
+    titulo: "Orden Producción",
+    nombreHoja: "Ordenes",
+    nombreArchivo: "Ordenes_Produccion",
+    fecha,
+    coloresEstado: {
+      Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
+      "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
+      Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
+      Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
+    },
+    columnas: [
+      { header: "ID Orden", valor: (o) => o.id },
+      { header: "Producto(s)", valor: (o) => nombresDeLineas(o.lineas).join(", ") },
+      {
+        header: "Detalle",
+        valor: (o) => o.lineas.map((l) => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join("; "),
+      },
+      { header: "Cantidad Total", valor: (o) => totalCantidad(o.lineas), numFmt: "#,##0" },
+      { header: "Fecha solicitada", valor: (o) => o.fechaSolicitada || "" },
+      { header: "Hora solicitada", valor: (o) => o.horaSolicitada || "" },
+      { header: "Inicio Producción", valor: (o) => (o.inicioProduccion ? fmtDT(o.inicioProduccion) : "") },
+      { header: "Entrega Estimada", valor: (o) => (o.entregaEstimada ? fmtDT(o.entregaEstimada) : "") },
+      { header: "Estado", valor: (o) => ESTADO_LABEL[o.estadoOrden], esEstado: true },
+      { header: "Observación", valor: (o) => o.observacion },
+    ],
+  });
+  toast.success(`Archivo Excel descargado (${archivo})`);
 }
 
 export function OrdenProduccionScreen({
@@ -652,10 +652,7 @@ export function OrdenProduccionScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => exportExcel(ordenes)}
-            className="inline-flex items-center gap-2 px-5 py-3 border border-border font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer text-sm text-foreground">
-            <Download className="w-4 h-4" /> Descargar Excel
-          </button>
+          <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />
           {canCreate && (
             <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">

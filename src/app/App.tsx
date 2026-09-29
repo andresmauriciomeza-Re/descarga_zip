@@ -2273,15 +2273,22 @@ function CatalogScreen({
   setProduct,
   quickAdd,
   initialCat = "Todas",
+  page,
+  setPage,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
   quickAdd: (p: Product) => void;
   initialCat?: string;
+  /** Página del catálogo, controlada por App para que sobreviva al detalle. */
+  page: number;
+  setPage: (p: number | ((prev: number) => number)) => void;
 }) {
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState(initialCat);
   const cats = ["Todas", "Pizzas", "Bebidas", "Lasaña"];
+  // 9 = 3 columnas del grid, así cada página cierra en filas completas.
+  const PER_PAGE = 9;
 
   const filtered = useMemo(
     () =>
@@ -2299,15 +2306,37 @@ function CatalogScreen({
     [search, cat],
   );
 
+  // Sin paginado el menú volcaba los 13 productos de una vez, así que al
+  // llegar a la última categoría había que hacer scroll largo para volver
+  // arriba. Se corta
+  // `filtered` ANTES de agrupar por secciones: de ese modo una página nunca
+  // parte una sección a la mitad y los títulos siguen correspondiendo a lo que
+  // hay debajo.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paged = useMemo(
+    () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filtered, page],
+  );
+
+  // Al cambiar la búsqueda o la categoría, la página actual puede quedar más
+  // allá del último resultado y el grid salía vacío; se reajusta sola.
+  useEffect(() => {
+    setPage(1);
+  }, [search, cat]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
   // Con el filtro "Todas" el grid se parte en las secciones tituladas de
   // SECCIONES_MENU; al elegir una sola categoría se deja el grid único de antes,
-  // sin encabezados. Se agrupa sobre `filtered`, no sobre PRODUCTS, para que la
+  // sin encabezados. Se agrupa sobre `paged`, no sobre PRODUCTS, para que la
   // búsqueda también se reparta por secciones, y las categorías sin resultados
   // se omiten en vez de dejar un título colgado sobre un grid vacío.
   const secciones = useMemo(() => {
     if (cat !== "Todas") return [];
     const porCategoria = new Map<string, Product[]>();
-    for (const p of filtered) {
+    for (const p of paged) {
       const lista = porCategoria.get(p.category);
       if (lista) lista.push(p);
       else porCategoria.set(p.category, [p]);
@@ -2325,7 +2354,7 @@ function CatalogScreen({
       .filter(([categoria]) => !conocidas.has(categoria))
       .map(([titulo, productos]) => ({ titulo, productos }));
     return [...declaradas, ...nuevas];
-  }, [filtered, cat]);
+  }, [paged, cat]);
 
   const abrirDetalle = (p: Product) => {
     setProduct(p);
@@ -2337,9 +2366,22 @@ function CatalogScreen({
     toast.success(`¡${p.name} agregada!`);
   };
 
+  const irAPagina = (n: number) => {
+    setPage(n);
+    // El grid arranca justo debajo del buscador: sin esto el número de página
+    // quedaba pegado al borde superior de la ventana y el título del menú
+    // quedaba fuera de vista al cambiar de página.
+    window.requestAnimationFrame(() =>
+      window.scrollTo({
+        top: document.getElementById("catalogo-inicio")?.offsetTop ?? 0,
+        behavior: "smooth",
+      }),
+    );
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="mb-8">
+      <div className="mb-8" id="catalogo-inicio">
         <h1
           className="text-3xl font-bold text-foreground"
           style={{ fontFamily: SERIF }}
@@ -2413,7 +2455,7 @@ function CatalogScreen({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((p, i) => (
+          {paged.map((p, i) => (
             <ProductCard
               key={p.id}
               product={p}
@@ -2422,6 +2464,41 @@ function CatalogScreen({
               onQuickAdd={agregarAlCarrito}
             />
           ))}
+        </div>
+      )}
+
+      {filtered.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center mt-8">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => irAPagina(Math.max(1, page - 1))}
+              disabled={page === 1}
+              aria-label="Página anterior"
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+              (n) => (
+                <button
+                  key={n}
+                  onClick={() => irAPagina(n)}
+                  aria-current={n === page ? "page" : undefined}
+                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
+                >
+                  {n}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() => irAPagina(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+              aria-label="Página siguiente"
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -2436,7 +2513,7 @@ function ProductDetailScreen({
   addDetailed,
 }: {
   product: Product;
-  navigate: (s: Screen) => void;
+  navigate: (s: Screen, options?: { restaurar?: boolean }) => void;
   addDetailed: (item: CartItem) => void;
 }) {
   const [sizeIdx, setSizeIdx] = useState(0);
@@ -2479,7 +2556,7 @@ function ProductDetailScreen({
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate("catalog")}
+          onClick={() => navigate("catalog", { restaurar: true })}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Volver al menú
@@ -2674,6 +2751,7 @@ function CartScreen({
   clear,
   onOrder,
   isLoggedIn,
+  clienteSesion,
   onRequireLogin,
   confirmationHora,
 }: {
@@ -2688,8 +2766,11 @@ function CartScreen({
     items: CartItem[],
     horaRecogida: string,
     clienteNombre?: string,
+    clienteDocumento?: string,
   ) => void;
   isLoggedIn: boolean;
+  /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
+  clienteSesion?: string;
   onRequireLogin: (order: PendingOrder) => void;
   confirmationHora?: string;
 }) {
@@ -2707,11 +2788,21 @@ function CartScreen({
   const [horaConfirmada, setHoraConfirmada] = useState(
     confirmationHora ?? "",
   );
+  // El nombre que se acabó registrando, para mostrarlo ya en la pantalla de
+  // confirmación (donde `guestName` puede seguir editable hacia atrás).
+  const [nombreConfirmado, setNombreConfirmado] = useState("");
+  const [documentoConfirmado, setDocumentoConfirmado] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cartTotal = (item: CartItem) =>
     (item.sizePrice + item.extrasPrice) * item.quantity;
   const subtotal = cart.reduce((s, i) => s + cartTotal(i), 0);
+  // Quién está haciendo el pedido. El nombre sí se guardaba en la venta, pero
+  // el checkout no lo mostraba en ningún paso ni en la confirmación, así que el
+  // cliente no tenía forma de confirmar a nombre de quién estaba comprando.
+  const nombreCliente = isLoggedIn
+    ? clienteSesion?.trim() || ""
+    : guestName.trim();
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -2739,11 +2830,12 @@ function CartScreen({
     }
     setLoading(true);
     setTimeout(() => {
-      onOrder(payment, comprobante, [...cart], horaRecogida);
+      onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
       clear();
       setLoading(false);
       setCheckoutStep(0);
       setHoraConfirmada(horaRecogida);
+      setNombreConfirmado(nombreCliente);
       setPedidoConfirmado(true);
     }, 1400);
   };
@@ -2755,11 +2847,23 @@ function CartScreen({
     }
     setLoading(true);
     setTimeout(() => {
-      onOrder(payment, comprobante, [...cart], horaRecogida, guestName.trim());
+      // El documento se enviaba pero se quedaba en el formulario: la venta
+      // guardaba solo el nombre, así que un pedido de invitado quedaba sin
+      // identificación.
+      onOrder(
+        payment,
+        comprobante,
+        [...cart],
+        horaRecogida,
+        guestName.trim(),
+        guestDocument.trim(),
+      );
       clear();
       setLoading(false);
       setCheckoutStep(0);
       setHoraConfirmada(horaRecogida);
+      setNombreConfirmado(guestName.trim());
+      setDocumentoConfirmado(guestDocument.trim());
       setPedidoConfirmado(true);
     }, 1400);
   };
@@ -2780,11 +2884,29 @@ function CartScreen({
          <p className="text-muted-foreground mb-6 text-sm">
            Esto tardará unos pocos minutos; te confirmaremos cuando tu pedido esté listo.
          </p>
+         {/* El nombre con el que quedó registrado el pedido, para que el
+             cliente confirme a nombre de quién compró. */}
+         {nombreConfirmado && (
+           <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+             <h3 className="font-bold text-foreground mb-2 flex items-center gap-2">
+               <ShoppingBag className="w-4 h-4 text-primary" /> Pedido
+               realizado por
+             </h3>
+             <p className="text-foreground font-semibold">
+               {nombreConfirmado}
+             </p>
+             {documentoConfirmado && (
+               <p className="text-sm text-muted-foreground mt-0.5">
+                 Documento: {documentoConfirmado}
+               </p>
+             )}
+           </div>
+         )}
          <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-           <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
-             <MapPin className="w-4 h-4 text-primary" /> Dónde
-             recoger tu pedido
-           </h3>
+            <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-primary" /> Dónde
+              recoger tu pedido
+            </h3>
            <p className="text-sm text-muted-foreground mb-4">
              Podrás pasar por tu pedido
              {horaConfirmada ? ` a las ${horaConfirmada}` : ""}.
@@ -2961,10 +3083,14 @@ function CartScreen({
                 <ShoppingBag className="w-4 h-4 text-primary" />{" "}
                 Resumen
               </h3>
+              {/* "Subtotal" y "Total" muestran hoy la misma cifra porque el
+                  pedido no tiene envío ni impuestos; se mantienen las dos
+                  filas para que, cuando se agreguen esos conceptos, el
+                  desglose ya tenga dónde mostrarlos sin tocar el layout. */}
               <div className="space-y-2 mb-4 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>
-                    Total (
+                    Subtotal (
                     {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
                     productos)
                   </span>
@@ -2973,7 +3099,7 @@ function CartScreen({
                   </span>
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between font-bold text-base text-foreground">
-                   <span>Total</span>
+                  <span>Total</span>
                   <span style={{ fontFamily: MONO }}>
                     {fmt(subtotal)}
                   </span>
@@ -3026,6 +3152,14 @@ function CartScreen({
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
                     Descripción del pedido
                   </p>
+                  {nombreCliente && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Cliente:{" "}
+                      <span className="font-semibold text-foreground">
+                        {nombreCliente}
+                      </span>
+                    </p>
+                  )}
                   <div className="space-y-3">
                     {cart.map((item) => (
                       <div
@@ -3072,16 +3206,30 @@ function CartScreen({
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-border flex justify-between items-center">
-                    <span className="text-sm font-bold text-foreground">
-                      Total
-                    </span>
-                    <span
-                      className="text-base font-bold text-primary"
-                      style={{ fontFamily: MONO }}
-                    >
-                      {fmt(subtotal)}
-                    </span>
+                  {/* Mismas dos filas que el panel "Resumen" del carrito, para
+                      que el cliente lea el mismo desglose en las dos vistas. */}
+                  <div className="mt-4 pt-3 border-t border-border space-y-2 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>
+                        Subtotal (
+                        {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
+                        productos)
+                      </span>
+                      <span style={{ fontFamily: MONO }}>
+                        {fmt(subtotal)}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-border flex justify-between items-center">
+                      <span className="font-bold text-foreground text-base">
+                        Total
+                      </span>
+                      <span
+                        className="text-base font-bold text-primary"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {fmt(subtotal)}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {/* RIGHT: payment method + pickup time */}
@@ -7526,6 +7674,11 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
   const [catalogCat, setCatalogCat] = useState("Todas");
+  // La página del catálogo vive aquí, igual que la categoría: si viviera dentro
+  // de CatalogScreen se perdería al abrir el detalle de un producto (la pantalla
+  // se desmonta) y al volver se restauraría el scroll guardado de la página 2
+  // sobre el grid de la página 1, que es otra tanda de productos.
+  const [catalogPage, setCatalogPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
   const [ordenes, setOrdenes] =
@@ -7559,12 +7712,34 @@ export default function App() {
     escribirCarritoGuardado(cart);
   }, [cart, loggedInUserId]);
 
-  const navigate = (s: Screen, options?: { replace?: boolean }) => {
+  // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
+  // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
+  // arriba (el `scrollTo(0)` de más abajo) y el cliente perdía la sección y el
+  // producto que estaba mirando. Se guarda por pantalla y se restaura al
+  // regresar, sin tocar el resto de navegaciones que sí deben ir arriba.
+  const scrollPorPantalla = useRef<Partial<Record<Screen, number>>>({});
+
+  const navigate = (
+    s: Screen,
+    options?: { replace?: boolean; restaurar?: boolean },
+  ) => {
+    if (!options?.restaurar) {
+      scrollPorPantalla.current[screen] = window.scrollY;
+    }
     setScreen(s);
     if (options?.replace) {
       window.history.replaceState(null, "", "/");
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (options?.restaurar) {
+      const top = scrollPorPantalla.current[s] ?? 0;
+      // La pantalla entrante todavía no está pintada cuando corre este efecto,
+      // así que se espera un frame para que el alto del documento sea real.
+      requestAnimationFrame(() =>
+        window.scrollTo({ top, behavior: "auto" }),
+      );
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setDrawerOpen(false);
   };
 
@@ -7590,6 +7765,7 @@ export default function App() {
         orderToResume.items,
         orderToResume.horaRecogida,
         orderToResume.nombre,
+        orderToResume.documento,
       );
       setCart([]);
       setOrderConfirmation(orderToResume.horaRecogida);
@@ -7673,10 +7849,12 @@ export default function App() {
     items: CartItem[],
     horaRecogida: string,
     clienteNombre?: string,
+    clienteDocumento?: string,
   ) => {
     const newVenta: Venta = {
       id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
       usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
+      documento: clienteDocumento?.trim() || undefined,
       fecha: new Date().toLocaleDateString("en-CA"),
       productos: items
         .map((i) => `${i.product.name} x${i.quantity}`)
@@ -7915,6 +8093,8 @@ export default function App() {
                   setProduct={setSelectedProduct}
                   quickAdd={quickAdd}
                   initialCat={catalogCat}
+                  page={catalogPage}
+                  setPage={setCatalogPage}
                 />
               )}
               {screen === "product-detail" && (
@@ -7939,6 +8119,7 @@ export default function App() {
                     openLogin();
                   }}
                   confirmationHora={orderConfirmation ?? undefined}
+                  clienteSesion={loggedInUser?.nombre}
                 />
               )}
               {screen === "mis-pedidos" && (
@@ -7954,7 +8135,7 @@ export default function App() {
                     usuarios={usuarios}
                     darkMode={darkMode}
                     loginNotice={loginNotice}
-                   onLogin={handleLogin}
+                    onLogin={handleLogin}
                 />
               )}
               {screen === "register" && (

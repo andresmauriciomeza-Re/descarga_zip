@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { InsumoSearchField, resolverInsumo } from "../components/InsumoSearchField";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import type { Insumo } from "./GestionInsumosScreen";
 
@@ -519,6 +521,30 @@ export function GestionProductosScreen({
   const catName = (id: string) =>
     CATEGORIAS_PRODUCTO.find((c) => c.id === id)?.nombre ?? id;
 
+  const exportExcel = async () => {
+    const fecha = new Date();
+    const archivo = await exportarExcelEstilizado({
+      datos: productos,
+      titulo: "Gestión Producto",
+      nombreHoja: "Productos",
+      nombreArchivo: "Gestion_Productos",
+      fecha,
+      coloresEstado: {
+        Activo: { texto: "FFFFFFFF", fondo: "FF2E7D32" },
+        Inactivo: { texto: "FFFFFFFF", fondo: "FFC62828" },
+      },
+      columnas: [
+        { header: "ID Producto", valor: (p) => p.id },
+        { header: "Nombre", valor: (p) => p.nombre },
+        { header: "ID Categoría", valor: (p) => p.idCategoria },
+        { header: "Precio Unit.", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
+        { header: "Stock", valor: (p) => p.stockDisponible, numFmt: "#,##0" },
+        { header: "Estado", valor: (p) => p.estado, esEstado: true },
+      ],
+    });
+    toast.success(`Archivo Excel descargado (${archivo})`);
+  };
+
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
 
@@ -787,9 +813,15 @@ export function GestionProductosScreen({
     const activeV = fichaVersiones[fichaVIdx];
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
     return (
-      <div className="h-screen bg-background flex flex-col overflow-hidden">
-        {/* Sticky top bar */}
-        <div className="shrink-0 bg-card border-b border-border px-6 py-3 flex items-center justify-between">
+      /* La pantalla vive dentro de `<main>`, que ya está bajado por el
+         AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
+         que el alto se calcula sobre el viewport menos ambos: con `h-screen`
+         la pantalla medía 56px más que la ventana (scroll de página) y el
+         footer la empujaba fuera del viewport. Cada columna scrollea por
+         dentro, nunca la página. */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+        {/* Cabecera fija: no crece ni genera scroll */}
+        <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Producto</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
@@ -806,13 +838,16 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        {/* Two columns */}
-        <div className="flex-1 min-h-0 flex divide-x divide-border">
+        {/* Two columns: cada columna scrollea por dentro, nunca la página */}
+        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
 
           {/* ── COLUMNA IZQUIERDA: datos del producto ── */}
-          <div className="w-1/2 px-6 py-4 overflow-y-auto">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
-            <div className="space-y-4">
+          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+            <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
+            {/* Los campos reparten el espacio libre de la columna (`justify-between`)
+                hasta `27rem`; más allá el sobrante queda abajo para no abrir huecos
+                exagerados entre los campos ni obligar a scroll con la imagen puesta. */}
+            <div className="flex-1 min-h-0 max-h-[27rem] overflow-y-auto flex flex-col justify-between gap-4">
               {/* Nombre */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
@@ -873,140 +908,146 @@ export function GestionProductosScreen({
           </div>
 
           {/* ── COLUMNA DERECHA: ficha técnica ── */}
-          <div className="w-1/2 px-6 py-4 overflow-y-auto flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
-              <div className="flex items-center gap-1">
-                {fichaVersiones.map((v, i) => (
-                  <span key={v.version}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                      i === fichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground"
-                    }`}>
-                    v{v.version}
-                  </span>
-                ))}
+          {/* La ficha técnica scrollea por dentro (nowrap) y el footer
+              "Guardar Ficha Técnica" vive FUERA de esa área, en flujo normal:
+              así queda siempre visible y nunca superpuesto a los pasos ni al
+              campo para agregar uno. */}
+          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
+                <div className="flex items-center gap-1">
+                  {fichaVersiones.map((v, i) => (
+                    <span key={v.version}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                        i === fichaVIdx ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                      }`}>
+                      v{v.version}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {fichaVersiones.length > 1 && (
+                <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                  Versión activa: <span className="font-bold text-foreground">v{activeV.version}</span> — El historial de versiones se conserva al guardar.
+                </p>
+              )}
+
+              <div className="space-y-4">
+                {/* ID Ficha Técnica + Tiempo + Porciones */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
+                  <input value={activeV.idReceta} readOnly tabIndex={-1}
+                    className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación (min)</label>
+                    <input type="number" min={0} value={activeV.tiempoPreparacion}
+                      onChange={e => updateFichaField("tiempoPreparacion", Number(e.target.value))} className={iCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Porciones</label>
+                    <input type="number" min={1} value={activeV.porciones}
+                      onChange={e => updateFichaField("porciones", Number(e.target.value))} className={iCls} />
+                  </div>
+                </div>
+
+                {/* Insumos */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
+                  {activeV.insumos.length > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      {activeV.insumos.map((ins, idx) => (
+                        <InsumoAgregadoRow
+                          key={idx}
+                          ins={ins}
+                          editando={fichaEditando?.idx === idx ? fichaEditando.campo : null}
+                          onEdit={campo => setFichaEditando(campo ? { idx, campo } : null)}
+                          onChange={patch => updateFichaInsumo(idx, patch)}
+                          onRemove={() => removeFichaInsumo(idx)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {activeV.insumos.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
+                  )}
+                  {/* Add insumo row */}
+                  <div className="flex items-end gap-2">
+                    <InsumoSearchField
+                      insumos={insumos}
+                      valor={fichaInsumoNombre}
+                      onValorChange={v => { setFichaInsumoNombre(v); setFichaInsumoSel(null); }}
+                      onSelect={seleccionarFichaInsumo}
+                    />
+                    <div className="w-20">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                      <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
+                        onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    </div>
+                    <div className="w-24">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                      <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
+                        className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
+                        {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={addFichaInsumo} title="Agregar insumo"
+                      className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Pasos de elaboración */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
+                  {activeV.pasos.length > 0 && (
+                    <ol className="space-y-1.5 mb-3">
+                      {activeV.pasos.map((paso, idx) => (
+                        <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+                          <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                          <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => moverFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
+                              className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => moverFichaPaso(idx, 1)} disabled={idx === activeV.pasos.length - 1} title="Bajar paso"
+                              className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <button onClick={() => removeFichaPaso(idx)} title="Eliminar paso"
+                            className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {activeV.pasos.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
+                  )}
+                  <div className="flex gap-2">
+                    <input value={fichaPaso} onChange={e => setFichaPaso(e.target.value)}
+                      placeholder="Describe un paso de la elaboración"
+                      onKeyDown={e => e.key === "Enter" && addFichaPaso()}
+                      className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    <button onClick={addFichaPaso}
+                      className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {fichaVersiones.length > 1 && (
-              <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
-                Versión activa: <span className="font-bold text-foreground">v{activeV.version}</span> — El historial de versiones se conserva al guardar.
-              </p>
-            )}
-
-            <div className="space-y-4 flex-1">
-              {/* ID Ficha Técnica + Tiempo + Porciones */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
-                <input value={activeV.idReceta} readOnly tabIndex={-1}
-                  className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación (min)</label>
-                  <input type="number" min={0} value={activeV.tiempoPreparacion}
-                    onChange={e => updateFichaField("tiempoPreparacion", Number(e.target.value))} className={iCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Porciones</label>
-                  <input type="number" min={1} value={activeV.porciones}
-                    onChange={e => updateFichaField("porciones", Number(e.target.value))} className={iCls} />
-                </div>
-              </div>
-
-              {/* Insumos */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
-                {activeV.insumos.length > 0 && (
-                  <div className="space-y-1.5 mb-3">
-                    {activeV.insumos.map((ins, idx) => (
-                      <InsumoAgregadoRow
-                        key={idx}
-                        ins={ins}
-                        editando={fichaEditando?.idx === idx ? fichaEditando.campo : null}
-                        onEdit={campo => setFichaEditando(campo ? { idx, campo } : null)}
-                        onChange={patch => updateFichaInsumo(idx, patch)}
-                        onRemove={() => removeFichaInsumo(idx)}
-                      />
-                    ))}
-                  </div>
-                )}
-                {activeV.insumos.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
-                )}
-                {/* Add insumo row */}
-                <div className="flex items-end gap-2">
-                  <InsumoSearchField
-                    insumos={insumos}
-                    valor={fichaInsumoNombre}
-                    onValorChange={v => { setFichaInsumoNombre(v); setFichaInsumoSel(null); }}
-                    onSelect={seleccionarFichaInsumo}
-                  />
-                  <div className="w-20">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
-                    <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
-                      onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
-                    <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
-                      className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                      {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-                    </select>
-                  </div>
-                  <button onClick={addFichaInsumo} title="Agregar insumo"
-                    className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Pasos de elaboración */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
-                {activeV.pasos.length > 0 && (
-                  <ol className="space-y-1.5 mb-3">
-                    {activeV.pasos.map((paso, idx) => (
-                      <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                        <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
-                        <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button onClick={() => moverFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
-                            className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => moverFichaPaso(idx, 1)} disabled={idx === activeV.pasos.length - 1} title="Bajar paso"
-                            className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <button onClick={() => removeFichaPaso(idx)} title="Eliminar paso"
-                          className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-                {activeV.pasos.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
-                )}
-                <div className="flex gap-2">
-                  <input value={fichaPaso} onChange={e => setFichaPaso(e.target.value)}
-                    placeholder="Describe un paso de la elaboración"
-                    onKeyDown={e => e.key === "Enter" && addFichaPaso()}
-                    className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  <button onClick={addFichaPaso}
-                    className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer sticky: Guardar ficha técnica */}
-            <div className="sticky bottom-0 pt-3 pb-1 bg-gradient-to-t from-background via-background to-transparent">
+            {/* Footer de la columna: fuera del área scrolleable, nunca tapa contenido */}
+            <div className="shrink-0 pt-3 pb-1 bg-background">
               <button onClick={() => setConfirmFichaSave(true)}
                 className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                 Guardar Ficha Técnica
@@ -1354,17 +1395,20 @@ export function GestionProductosScreen({
             {productos.length} productos registrados
           </p>
         </div>
-        {canCreate && (
-          <button
-            onClick={() => {
-              setForm(emptyForm());
-              setShowCreate(true);
-            }}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
-          >
-            <Plus className="w-4 h-4" /> Crear Producto
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <BotonDescargarExcel onClick={exportExcel} />
+          {canCreate && (
+            <button
+              onClick={() => {
+                setForm(emptyForm());
+                setShowCreate(true);
+              }}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
+            >
+              <Plus className="w-4 h-4" /> Crear Producto
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
