@@ -94,6 +94,7 @@ import {
 } from "recharts";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
+import { VolverArriba } from "./components/VolverArriba";
 import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
@@ -492,6 +493,50 @@ const imagenDeProducto = (id: Product["id"]): string =>
 // aparece si un id no existe en PRODUCTS.
 const precioDeProducto = (id: Product["id"]): number =>
   PRODUCTS.find((p) => p.id === id)?.price ?? 0;
+
+// La pantalla de catálogo no se arma con `PRODUCTS` sino con el estado
+// `productos` (App.tsx, `useState(INITIAL_PRODUCTOS)`), que comparte con
+// Gestión de Productos. Su campo `imagen` venía apuntando a material que no
+// corresponde a cada pizza: `pizzaDefinitiva.png` y
+// `pizzafondo-removebg-preview.png` son el mismo archivo byte a byte, así que
+// Peperoni y Hawai salían con la misma foto, y Pollo, Cañon, Maicitos y
+// Tocineta usaban `image-1..5.png`, que son capturas de otras pantallas. Esta
+// tabla asocia el nombre real del producto con su foto; la clave es
+// `Producto["nombre"]` tal cual viene en `INITIAL_PRODUCTOS` ("Pizza Jamon",
+// "Pizza Cañon"), no el nombre de archivo. Lo que no esté aquí sigue usando el
+// `imagen` que trae el producto.
+const IMAGENES_PIZZA: Record<string, string> = {
+  "Pizza Peperoni": pizzaPeperoni,
+  "Pizza Jamon": pizzaJamonQueso,
+  "Pizza Hawai": pizzaHawaii,
+  "Pizza Pollo": pizzaPollo,
+  "Pizza Cañon": pizzaCañon,
+  "Pizza Maicitos": pizzaMaicitos,
+  "Pizza Paisa": pizzaCarnes,
+  "Pizza Tocineta": pizzaTocineta,
+};
+
+// Descripciones temporales de pizzas, bebidas y lasañas, mientras el catálogo
+// no traiga una real. La clave es el `nombre` del producto tal cual viene en
+// `INITIAL_PRODUCTOS`. Si un producto no aparece aquí ni trae descripción, la
+// tarjeta no muestra esa línea.
+const DESCRIPCIONES: Record<string, string> = {
+  "Pizza Peperoni": "Rodajas de peperoni sobre queso derretido.",
+  "Pizza Jamon": "Peperoni y hierbas sobre queso derretido.",
+  "Pizza Hawai": "Jamón y trozos de piña sobre queso derretido.",
+  "Pizza Pollo": "Tiras de pollo y queso derretido con hierbas.",
+  "Pizza Cañon": "Trozos de jamón sobre queso derretido.",
+  "Pizza Maicitos": "Granos de maíz sobre queso derretido con hierbas.",
+  "Pizza Paisa": "Carne molida, trozos de carne y peperoni sobre queso derretido.",
+  "Pizza Tocineta": "Trozos de tocineta sobre queso derretido.",
+  "Gaseosa Cuatro": "Gaseosa Cuatro en botella, ideal para acompañar tu pizza.",
+  "Gaseosa Premiun": "Gaseosa Premiun en botella, ideal para acompañar tu pizza.",
+  "Gaseosa Coca-Cola": "Gaseosa Coca-Cola en botella, ideal para acompañar tu pizza.",
+  "Gaseosa Pepsi": "Gaseosa Pepsi en botella, ideal para acompañar tu pizza.",
+  "Lasaña Carne": "Capas de pasta con carne molida y queso gratinado.",
+  "Lasaña Pollo": "Lasaña de pollo con capas de pasta, salsa y queso gratinado.",
+  "Lasaña Mixta": "Lasaña mixta con capas de pasta, salsa y queso gratinado.",
+};
 
 const ORDERS: Order[] = [
   {
@@ -1872,30 +1917,26 @@ function LandingScreen({
             {[
               {
                 productoId: 1,
-                name: "Margarita Clásica",
-                description:
-                  "La reina de las pizzas. Salsa de tomate casera, mozzarella fresca y albahaca.",
+                name: "Cañón",
+                description: "Pizza de la casa.",
                 rating: 4.8,
               },
               {
                 productoId: 2,
-                name: "Pepperoni Premium",
-                description:
-                  "Generosa capa de pepperoni importado, mozzarella abundante y salsa secreta.",
+                name: "Carnes",
+                description: "Pizza con carnes.",
                 rating: 4.9,
               },
               {
                 productoId: 4,
-                name: "Cuatro Quesos",
-                description:
-                  "Mozzarella, cheddar, parmesano y gorgonzola en perfecta armonía.",
+                name: "Jamón y Queso",
+                description: "Pizza con jamón y queso.",
                 rating: 4.7,
               },
               {
                 productoId: 3,
-                name: "Especial La Sirena",
-                description:
-                  "Nuestra pizza insignia desde 1994. Pollo a la plancha y tocineta crocante.",
+                name: "Hawaii",
+                description: "Pizza con jamón y piña.",
                 rating: 5.0,
               },
             ].map((p, i) => (
@@ -2498,6 +2539,8 @@ function CatalogScreen({
           </div>
         </div>
       )}
+
+      <VolverArriba />
     </div>
   );
 }
@@ -8093,9 +8136,9 @@ export default function App() {
                   productos={productos.map((p) => ({
                     id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
                     name: p.nombre,
-                    description: `${p.idCategoria} · ${p.unidadVenta}`,
+                    description: DESCRIPCIONES[p.nombre] ?? "",
                     price: p.precioUnitario,
-                    image: p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+                    image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
                     category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
                     sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
                     extras: [],
