@@ -120,6 +120,7 @@ export function GestionUsuariosScreen({
   const [newRolId,     setNewRolId]     = useState("");
   const [newActivo,    setNewActivo]    = useState(true);
   const [createErrors, setCreateErrors] = useState<Record<string, string | undefined>>({});
+  const [rolSearch,    setRolSearch]    = useState("");
 
   const rolInfo = (rolId: string): Rol | null =>
     roles.find(r => r.id === rolId) ?? null;
@@ -242,12 +243,12 @@ export function GestionUsuariosScreen({
     if (!editItem) return;
     const errs: Record<string, string> = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(editItem.nombre) ?? undefined;
+    else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
-    else errs.correo = validarCorreo(editItem.correo) ?? undefined;
+    else { const v = validarCorreo(editItem.correo); if (v) errs.correo = v; }
     if (!editItem.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!editItem.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
-    else errs.numeroDocumento = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento) ?? undefined;
+    else { const v = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento); if (v) errs.numeroDocumento = v; }
     if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (editItem.nombre.trim() && editItem.correo.trim() && editItem.numeroDocumento.trim()) {
@@ -312,7 +313,7 @@ export function GestionUsuariosScreen({
     const errs: Record<string, string> = {};
 
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else errs.nombre = validarNombre(newNombre) ?? undefined;
+    else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
 
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
@@ -415,32 +416,6 @@ export function GestionUsuariosScreen({
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
         </div>
-        {/* Sin control de permiso: la pantalla ya está bloqueada para quien no
-            sea Administrador más abajo, así que un chequeo extra sería código
-            muerto. */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => { resetCreate(); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
-          >
-            <UserPlus className="w-4 h-4" /> Crear usuario
-          </button>
-        </div>
-      </div>
-
-      {/* Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-3 shrink-0">
-        {[
-          { label: "Total usuarios",  value: total, cls: "text-foreground", bg: "bg-card"      },
-          { label: "Clientes",        value: nCli,  cls: "text-gray-600",   bg: "bg-gray-50"   },
-          { label: "Empleados",       value: nEmp,  cls: "text-blue-700",   bg: "bg-blue-50"   },
-          { label: "Administradores", value: nAdm,  cls: "text-primary",    bg: "bg-primary/5" },
-        ].map(({ label, value, cls, bg }) => (
-          <div key={label} className={`${bg} border border-border rounded-2xl p-2.5`}>
-            <p className={`text-2xl font-bold ${cls}`}>{value}</p>
-            <p className="text-xs text-muted-foreground font-medium mt-1">{label}</p>
-          </div>
-        ))}
       </div>
 
       {/* Filtros */}
@@ -909,13 +884,22 @@ export function GestionUsuariosScreen({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Rol <span className="text-primary">*</span>
                     </label>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        value={rolSearch}
+                        onChange={e => setRolSearch(e.target.value)}
+                        placeholder="Buscar rol por nombre..."
+                        className="w-full pl-10 pr-4 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
                     <select
                       value={newRolId}
                       onChange={e => { setNewRolId(e.target.value); if (createErrors.rolId) setCreateErrors(p => ({ ...p, rolId: undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.rolId ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     >
                       <option value="">Selecciona un rol…</option>
-                      {roles.filter(r => r.activo).map(r => (
+                      {roles.filter(r => r.activo && r.nombre.toLowerCase().includes(rolSearch.toLowerCase())).map(r => (
                         <option key={r.id} value={r.id}>{r.nombre}</option>
                       ))}
                     </select>
