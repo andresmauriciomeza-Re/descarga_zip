@@ -184,7 +184,17 @@ export function soloDigitos(valor: string): string {
 }
 
 /**
- * Numero de documento al escribir. CE y PP solo admiten digitos.
+ * Deja solo letras (incluyendo acentos), espacios y algunos caracteres comunes
+ * en nombres propios (guion, punto, apóstrofo). Se usa en campos como Nombre,
+ * Asesor Comercial, Dirección, etc.
+ */
+export function soloLetras(valor: string): string {
+  return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-'.]/g, "");
+}
+
+/**
+ * Numero de documento al escribir. CC, CE y PP solo admiten digitos.
+ * NIT conserva digitos y guiones; los demas caracteres se descartan.
  */
 export function filtrarDocumento(valor: string, tipoDocumento: string): string {
   if (tipoDocumento === "CC") return soloDigitos(valor).slice(0, 10);

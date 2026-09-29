@@ -8,6 +8,7 @@ export interface InsumoSolicitadoRow {
   cantidad: number;
   unidad: string;
   precioUnitario: number;
+  iva: number;
 }
 
 function fmtCOP(n: number) {
@@ -73,16 +74,23 @@ export function InsumosSolicitadosTable({
     cancelEdit();
   };
 
-  const total = items.reduce((sum, item) => {
+  // Punto 1: El Subtotal de cada fila es cantidad × precio (sin IVA).
+  // El IVA se suma aparte en el Total general.
+  const subtotalGeneral = items.reduce((sum, item) => {
     const d = editId === item.rowId ? draft : null;
-
-    return (
-      sum +
-      (d ? d.cantidad : item.cantidad) *
-        (d ? d.precioUnitario : item.precioUnitario)
-    );
+    const cantidad = d ? d.cantidad : item.cantidad;
+    const precio = d ? d.precioUnitario : item.precioUnitario;
+    return sum + cantidad * precio;
   }, 0);
-  const columnCount = showActions ? 6 : 5;
+  const ivaGeneral = items.reduce((sum, item) => {
+    const d = editId === item.rowId ? draft : null;
+    const cantidad = d ? d.cantidad : item.cantidad;
+    const precio = d ? d.precioUnitario : item.precioUnitario;
+    const subtotal = cantidad * precio;
+    return sum + subtotal * (item.iva / 100);
+  }, 0);
+  const total = subtotalGeneral + ivaGeneral;
+  const columnCount = showActions ? 7 : 6;
 
   return (
     <div
@@ -97,7 +105,7 @@ export function InsumosSolicitadosTable({
         <table className="w-full text-sm">
         <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
           <tr>
-            {["Nombre", "Cantidad", "Unidad", "P. unitario", "Subtotal"].map((h) => (
+            {["Nombre", "Cantidad", "Unidad", "P. unitario", "IVA", "Subtotal"].map((h) => (
               <th key={h} className="px-3 py-2.5 text-left font-semibold">
                 {h}
               </th>
@@ -185,6 +193,10 @@ export function InsumosSolicitadosTable({
                     )}
                   </td>
 
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {row.iva}%
+                  </td>
+
                   <td className="px-3 py-2.5 text-sm font-semibold">
                     {fmtCOP(row.cantidad * row.precioUnitario)}
                   </td>
@@ -243,7 +255,31 @@ export function InsumosSolicitadosTable({
           <tfoot className="bg-muted/50 border-t border-border">
             <tr>
               <td
-                colSpan={showActions ? 5 : 4}
+                colSpan={showActions ? 6 : 5}
+                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+              >
+                Subtotal
+              </td>
+              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(subtotalGeneral)}
+              </td>
+              {showActions && <td />}
+            </tr>
+            <tr>
+              <td
+                colSpan={showActions ? 6 : 5}
+                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+              >
+                IVA
+              </td>
+              <td className="px-3 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(ivaGeneral)}
+              </td>
+              {showActions && <td />}
+            </tr>
+            <tr>
+              <td
+                colSpan={showActions ? 6 : 5}
                 className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
               >
                 {totalLabel}

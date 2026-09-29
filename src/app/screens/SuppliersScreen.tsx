@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { filtrarCorreo, validarCorreo } from "../components/campo";
+import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -234,12 +234,12 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT *</label>
-            <input value={form.nit} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))}
+            <input value={form.nit} onChange={e => setForm(p => ({ ...p, nit: e.target.value.replace(/[^\d-]/g, "") }))}
               placeholder="900.123.456-1" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-            <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
+            <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: soloLetras(e.target.value) }))}
               placeholder="Distribuidora La Cosecha" className={inputCls} />
           </div>
         </div>
@@ -253,12 +253,12 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input value={form.asesorComercial} onChange={e => setForm(p => ({ ...p, asesorComercial: e.target.value }))}
+            <input value={form.asesorComercial} onChange={e => setForm(p => ({ ...p, asesorComercial: soloLetras(e.target.value) }))}
               placeholder="Carlos Mejía" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono *</label>
-            <input type="tel" value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
+            <input type="tel" value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: soloDigitos(e.target.value) }))}
               placeholder="604 321 0001" className={inputCls} />
           </div>
           <div>
@@ -268,7 +268,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección</label>
-            <input value={form.direccion} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))}
+            <input value={form.direccion} onChange={e => setForm(p => ({ ...p, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") }))}
               placeholder="Cra 50 #30-10, Medellín" className={inputCls} />
           </div>
         </div>
@@ -318,12 +318,12 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input value={editItem.asesorComercial} onChange={e => setEditItem(x => x && { ...x, asesorComercial: e.target.value })}
+            <input value={editItem.asesorComercial} onChange={e => setEditItem(x => x && { ...x, asesorComercial: soloLetras(e.target.value) })}
               placeholder="Carlos Mejía" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono</label>
-            <input type="tel" value={editItem.telefono} onChange={e => setEditItem(x => x && { ...x, telefono: e.target.value })}
+            <input type="tel" value={editItem.telefono} onChange={e => setEditItem(x => x && { ...x, telefono: soloDigitos(e.target.value) })}
               className={inputCls} />
           </div>
           <div>
@@ -333,7 +333,7 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección</label>
-            <input value={editItem.direccion} onChange={e => setEditItem(x => x && { ...x, direccion: e.target.value })}
+            <input value={editItem.direccion} onChange={e => setEditItem(x => x && { ...x, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") })}
               className={inputCls} />
           </div>
         </div>
