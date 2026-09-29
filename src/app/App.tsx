@@ -7397,6 +7397,76 @@ export default function App() {
     });
   }, [empleados, clientes]);
 
+  // Fuente de lectura del listado general: combina cualquier cuenta existente
+  // con los perfiles de Clientes y Empleados, sin repetir personas por correo.
+  const usuariosUnificados = useMemo(() => {
+    const next = [...usuarios];
+    const porCorreo = new Map(next.map(usuario => [usuario.correo.trim().toLowerCase(), usuario]));
+    const siguienteId = () => {
+      const max = next.reduce((value, usuario) => {
+        const numero = parseInt(usuario.id.replace("USR-", ""), 10) || 0;
+        return Math.max(value, numero);
+      }, 0);
+      return `USR-${String(max + 1).padStart(3, "0")}`;
+    };
+
+    empleados.forEach(empleado => {
+      const correo = empleado.correo.trim().toLowerCase();
+      const base = {
+        nombre: empleado.nombre,
+        iniciales: empleado.iniciales,
+        avatarColor: empleado.avatarColor,
+        correo: empleado.correo,
+        telefono: empleado.telefono,
+        tipoDocumento: empleado.tipoDocumento,
+        numeroDocumento: empleado.numeroDocumento,
+        rolId: empleado.rolId,
+        activo: empleado.activo,
+      };
+      const existente = porCorreo.get(correo);
+      if (existente) {
+        const actualizado = { ...existente, ...base };
+        const indice = next.findIndex(usuario => usuario.id === existente.id);
+        next[indice] = actualizado;
+        porCorreo.set(correo, actualizado);
+      } else {
+        const nuevo = { id: siguienteId(), ...base };
+        next.push(nuevo);
+        porCorreo.set(correo, nuevo);
+      }
+    });
+
+    const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
+    clientes.forEach(cliente => {
+      const correo = cliente.correo.trim().toLowerCase();
+      const existente = porCorreo.get(correo);
+      if (correosEmpleado.has(correo)) return;
+      const base = {
+        nombre: cliente.nombre,
+        iniciales: cliente.iniciales,
+        avatarColor: cliente.avatarColor,
+        correo: cliente.correo,
+        telefono: existente?.telefono ?? "",
+        tipoDocumento: cliente.tipoDocumento,
+        numeroDocumento: cliente.numeroDocumento,
+        rolId: "ROL-002",
+        activo: cliente.activo,
+      };
+      if (existente) {
+        const actualizado = { ...existente, ...base };
+        const indice = next.findIndex(usuario => usuario.id === existente.id);
+        next[indice] = actualizado;
+        porCorreo.set(correo, actualizado);
+      } else {
+        const nuevo = { id: siguienteId(), ...base };
+        next.push(nuevo);
+        porCorreo.set(correo, nuevo);
+      }
+    });
+
+    return next;
+  }, [usuarios, empleados, clientes]);
+
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
@@ -8098,11 +8168,11 @@ export default function App() {
                   usuarios={usuarios}
                 />
               )}
-              {screen === "users" && (
-                <GestionUsuariosScreen
-                  userRole={userRole}
-                  roles={roles}
-                  usuarios={usuarios}
+               {screen === "users" && (
+                 <GestionUsuariosScreen
+                   userRole={userRole}
+                   roles={roles}
+                   usuarios={usuariosUnificados}
                   setUsuarios={setUsuarios}
                   empleados={empleados}
                   setEmpleados={setEmpleados}
