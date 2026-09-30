@@ -359,11 +359,17 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
 
-        {/* Two-column body — fills remaining height */}
-        <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0">
+        {/* Two-column body — fills remaining height.
+            `min-w-0` en las dos columnas: sin él, el `min-content` de la
+            grilla de 3 columnas empujaba a la columna izquierda más allá del
+            50% y el desborde partía el modal en dos. */}
+        <div
+          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pb-4"
+          style={{ maxHeight: "calc(100vh - 160px)" }}
+        >
 
           {/* ── LEFT 50%: split into top (info) + bottom (modules) ── */}
-          <div className="md:w-1/2 flex flex-col divide-y divide-border shrink-0">
+          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border shrink-0">
 
             {/* TOP: Información del rol */}
             <div className="px-5 py-3 space-y-2.5 shrink-0">
@@ -393,8 +399,11 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
             {/* BOTTOM: Grilla de módulos. El scroll vive DENTRO de la grilla;
                 `min-h-0` evita que el contenedor flex la recorte (antes usaba
-                overflow-hidden y "Ventas" quedaba inalcanzable). */}
-            <div className="flex flex-col flex-1 min-h-0 px-5 py-3">
+                overflow-hidden y "Ventas" quedaba inalcanzable). `px-5` es el
+                mismo padding que los campos de arriba, así la grilla queda
+                alineada con el input de Nombre; `min-w-0` y el grid con
+                minmax(0, 1fr) evitan que las tarjetas la desborden. */}
+            <div className="flex flex-col flex-1 min-h-0 min-w-0 px-5 py-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
                 Módulos y sub-opciones
                  <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} permisos seleccionados</span>
@@ -411,7 +420,10 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               >
                 Ver permisos
               </button>
-              <div className="grid grid-cols-3 gap-2 pr-1">
+              <div
+                className="grid grid-cols-2 md:grid-cols-3"
+                style={{ display: "grid", gap: "12px", gridAutoRows: "1fr", boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
+              >
                 {CELDAS.map(celda => {
                   const modulo = celda.nombre;
                   const Icon = CELDA_ICONOS[modulo];
@@ -434,7 +446,8 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                         }
                       }}
                       aria-pressed={activo}
-                      className={`relative flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                      style={{ boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
+                      className={`relative h-full min-w-0 flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border transition-all cursor-pointer active:scale-95 ${
                         activo
                           ? "border-primary bg-primary/10"
                           : "border-border bg-card hover:bg-muted hover:border-primary/30"
@@ -446,7 +459,8 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                         aria-label={`${allOn ? "Quitar" : "Asignar"} todos los permisos de ${modulo}`}
                         aria-checked={allOn}
                         onClick={event => { event.stopPropagation(); toggleCelda(celda); }}
-                        className={`absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-[5px] border flex items-center justify-center transition-colors ${
+                        style={{ position: "absolute", top: "8px", right: "8px" }}
+                        className={`w-3.5 h-3.5 rounded-[5px] border flex items-center justify-center transition-colors ${
                           allOn
                             ? "bg-primary border-primary"
                             : someOn
@@ -471,7 +485,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
           </div>
 
           {/* ── RIGHT 50%: Permisos CRUD ── */}
-          <div className="md:w-1/2 flex flex-col min-h-0 px-5 py-4">
+          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4">
            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
              Asignar permisos al rol
            </p>

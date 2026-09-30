@@ -95,7 +95,7 @@ import {
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { VolverArriba } from "./components/VolverArriba";
-import { CategoriaProductoScreen } from "./screens/CategoriaProductoScreen";
+import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
@@ -922,6 +922,12 @@ const NAV_SECTIONS = [
     Icon: Layers,
     items: [
       {
+        screen: "empleados" as Screen,
+        label: "Empleados",
+        Icon: IdCard,
+        permKey: KEY("Producción", "Empleados"),
+      },
+      {
         screen: "cat-producto" as Screen,
         label: "Categoría Productos",
         Icon: Tag,
@@ -938,12 +944,6 @@ const NAV_SECTIONS = [
         label: "Orden de Producción",
         Icon: FileText,
         permKey: KEY("Producción", "Orden de Producción"),
-      },
-      {
-        screen: "empleados" as Screen,
-        label: "Empleados",
-        Icon: IdCard,
-        permKey: KEY("Producción", "Empleados"),
       },
       {
         screen: "perecederos" as Screen,
@@ -1664,10 +1664,15 @@ function LandingScreen({
   navigate,
   setProduct,
   onCategoryNavigate,
+  categorias,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
   onCategoryNavigate: (cat: string) => void;
+  /** Categorías creadas en el módulo del admin. Las tres originales NO entran
+      acá: su ícono y su nombre están en las tarjetas de arriba. Solo se suman
+      las que trae su propio ícono, es decir las nuevas. */
+  categorias: CategoriaProducto[];
 }) {
   const featured = PRODUCTS.filter(
     (p) => p.status === "disponible",
@@ -1883,6 +1888,26 @@ function LandingScreen({
                 </p>
               </button>
             ))}
+            {/* Categorías creadas desde Producción > Categoría Productos. Se
+                pintan con el mismo diseño de tarjeta y con el nombre exacto
+                que se escribió en el admin. El filtro del catálogo es una lista
+                fija, así que su clic abre el catálogo completo en "Todas". */}
+            {categorias
+              .filter((c) => c.icono)
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => onCategoryNavigate("Todas")}
+                  className="group flex-shrink-0 w-40 md:w-auto bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                >
+                  <span className="text-4xl leading-none">
+                    {c.icono}
+                  </span>
+                  <p className="text-foreground text-sm font-semibold text-center leading-snug">
+                    {c.nombre}
+                  </p>
+                </button>
+              ))}
           </div>
         </div>
       </section>
@@ -7628,6 +7653,45 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
   return INITIAL_EMPLEADOS;
 };
 
+// ── Persistencia de categorías (TEMPORAL) ──────────────────────────────
+// Mismo criterio que la de roles, usuarios y empleados: las categorías vivían
+// solo en el `useState` de la pantalla de Categoría Producto, así que el alta se
+// perdía al salir del módulo y el landing no tenía forma de leerlas. Ahora la
+// lista vive en App y se guarda en localStorage, que es la única fuente que el
+// landing público (mismo origen, sin sesión) puede leer sin backend.
+//
+// AVISO DE ALCANCE: es una persistencia por navegador, no compartida entre
+// equipos. Al guardar el array entero también sobreviven al F5 las ediciones y
+// los borrados. Para volver a la semilla:
+// localStorage.removeItem(CATEGORIAS_STORAGE_KEY).
+const CATEGORIAS_STORAGE_KEY = "sivpro.categorias.v1";
+
+const esCategoriaValida = (c: unknown): c is CategoriaProducto => {
+  if (!c || typeof c !== "object") return false;
+  const cat = c as CategoriaProducto;
+  // `icono` se acepta ausente: las tres categorías originales no lo llevan,
+  // porque su ícono está escrito en el landing.
+  return (
+    typeof cat.id === "string" &&
+    typeof cat.nombre === "string" &&
+    (cat.icono === undefined || typeof cat.icono === "string")
+  );
+};
+
+const leerCategoriasPersistidas = (): CategoriaProducto[] => {
+  try {
+    const raw = localStorage.getItem(CATEGORIAS_STORAGE_KEY);
+    if (!raw) return INITIAL_CATEGORIAS;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esCategoriaValida)) {
+      return parsed as CategoriaProducto[];
+    }
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_CATEGORIAS;
+};
+
 // ── Persistencia del carrito ───────────────────────────────────────────
 // El carrito vivía solo en el `useState` de App: cualquier recarga, cambio de
 // categoría o ida al detalle de otro producto lo borraba, y con él todo lo que
@@ -7845,6 +7909,10 @@ export default function App() {
   // `Producto` quedaron importados y sin usar, y App reventaba con
   // "ReferenceError: productos is not defined" al renderizar el dashboard.
   const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
+  // Categorías de producto. Las consume el módulo de Categoría Producto (que
+  // las crea, edita y borra) y el landing público, que pinta una tarjeta por
+  // cada categoría nueva. Ver `leerCategoriasPersistidas`.
+  const [categorias, setCategorias] = useState<CategoriaProducto[]>(leerCategoriasPersistidas);
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
@@ -8099,6 +8167,18 @@ export default function App() {
     }
     escribirCarritoGuardado(cart);
   }, [cart, loggedInUserId]);
+
+  // Cada alta, edición o borrado de categoría se guarda en localStorage: es lo
+  // que permite que la tarjeta nueva del landing siga ahí después del F5. En la
+  // primera carga se escribe la semilla, que es la misma que trae el módulo.
+  useEffect(() => {
+    try {
+      localStorage.setItem(CATEGORIAS_STORAGE_KEY, JSON.stringify(categorias));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
+      // en memoria durante la sesión.
+    }
+  }, [categorias]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8497,6 +8577,7 @@ export default function App() {
                     setCatalogCat(cat);
                     navigate("catalog");
                   }}
+                  categorias={categorias}
                 />
               )}
               {screen === "catalog" && (
@@ -8763,7 +8844,11 @@ export default function App() {
                 />
               )}
               {screen === "cat-producto" && (
-                <CategoriaProductoScreen {...getPerms("cat-producto")} />
+                <CategoriaProductoScreen
+                  categorias={categorias}
+                  setCategorias={setCategorias}
+                  {...getPerms("cat-producto")}
+                />
               )}
                {screen === "gestion-roles" && (
                 <GestionConfigScreen
