@@ -8780,15 +8780,11 @@ export default function App() {
                     setOrdenDetalle(null);
                     setScreen("orden-compra");
                   }}
-                  onEditar={(orden) => {
+                  onVerFactura={(gestion) => {
+                    // Navegar al detalle de la factura en Gestión de Compras
                     setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                    // TODO: Implementar edición
-                  }}
-                  onAbrirRecepcion={(orden) => {
-                    setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                    // TODO: Implementar apertura de recepción
+                    setScreen("gestion-compra");
+                    // TODO: Seleccionar la factura específica
                   }}
                 />
               )}
