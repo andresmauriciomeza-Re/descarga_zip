@@ -8080,8 +8080,15 @@ export default function App() {
     userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
   );
 
-  // Only admin role can access admin screens; clients are redirected
-  const isAdminRole = hasValidSession && userRole === "Administrador";
+  // Un cliente público (rol "Cliente" y sin ficha de empleado) es el único que no
+  // entra al panel. Cualquier otro rol —incluidos los ROL-00X personalizados—
+  // entra según SUS permisos, sin programarlos nombre por nombre: antes esta
+  // línea comparaba `userRole === "Administrador"`, así que un rol personalizado
+  // caía en `false` y el guard de abajo lo expulsaba a la landing. Es el mismo
+  // criterio de "cliente público" que ya usa el `goPublic` del login.
+  const esClientePublico =
+    PUBLIC_ROLE_NAMES.includes(loggedInRoleName) && loggedInEmpleado === null;
+  const isAdminRole = hasValidSession && !esClientePublico;
   const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
   const isAuth = screen === "login" || screen === "register";
 
