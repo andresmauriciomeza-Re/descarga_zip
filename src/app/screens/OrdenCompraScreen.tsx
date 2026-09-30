@@ -84,11 +84,11 @@ export interface ProveedorRef {
 }
 
 export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mej+�a", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medell+�n", estado: "activo" },
-  { nombre: "L+�cteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge R+�os", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medell+�n", estado: "activo" },
-  { nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itag+++�", estado: "activo" },
-  { nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medell+�n", estado: "activo" },
+  { nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
 ];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
@@ -99,8 +99,8 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
 };
 
 /**
- * Ancho compartido por los formularios de Orden de Compra y de Gesti+�n de Compras,
- * para que ambos m+�dulos se vean igual de compactos.
+ * Ancho compartido por los formularios de Orden de Compra y de Gestión de Compras,
+ * para que ambos módulos se vean igual de compactos.
  */
 export const FORM_MAXW = "max-w-4xl";
 
@@ -119,7 +119,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
   },
   {
     id: "002",
-    proveedor: "L+�cteos La Esperanza",
+    proveedor: "Lácteos La Esperanza",
     fecha: "2024-02-08",
     estado: "Enviado",
     items: [
@@ -143,13 +143,13 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-02-01",
     estado: "Completado",
     items: [
-      { rowId: "r7", idInsumo: "INS-008", nombre: "Jam+�n serrano", cantidad: 10, unidad: "kg", costoUnitario: 28000, precioUnitario: 28000, iva: 0 },
+      { rowId: "r7", idInsumo: "INS-008", nombre: "Jamón serrano", cantidad: 10, unidad: "kg", costoUnitario: 28000, precioUnitario: 28000, iva: 0 },
     ],
     recepcion: {
       fechaRecepcion: "2024-02-02",
       usarLotes: false,
       items: [
-        { rowId: "rr1", idInsumo: "INS-008", nombre: "Jam+�n serrano", cantidadSolicitada: 10, cantidadRecibida: 10, unidad: "kg", precioReferencia: 28000, costoUnitario: 28000, precioUnitario: 28000, iva: 0 },
+        { rowId: "rr1", idInsumo: "INS-008", nombre: "Jamón serrano", cantidadSolicitada: 10, cantidadRecibida: 10, unidad: "kg", precioReferencia: 28000, costoUnitario: 28000, precioUnitario: 28000, iva: 0 },
       ],
       itemsExtra: [],
     },
@@ -160,7 +160,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     fecha: "2024-01-28",
     estado: "Anulado",
     items: [
-      { rowId: "r8", idInsumo: "INS-007", nombre: "Champi+�ones", cantidad: 25, unidad: "kg", costoUnitario: 12000, precioUnitario: 12000, iva: 0 },
+      { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", costoUnitario: 12000, precioUnitario: 12000, iva: 0 },
     ],
   },
 ];
@@ -208,7 +208,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
   {
     id: "004",
     ordenId: "",
-    proveedor: "Bebidas y M+�s",
+    proveedor: "Bebidas y Más",
     numeroFactura: "FAC-2026-0347",
     fechaFactura: "2026-09-12",
     valorTotal: 275500,
@@ -228,7 +228,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     estado: "Recibido",
     items: [
       { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", costoUnitario: 6000, precioUnitario: 6000, iva: 0 },
-      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Az+�car rubia", cantidad: 25, unidad: "kg", costoUnitario: 5200, precioUnitario: 5200, iva: 0 },
+      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", costoUnitario: 5200, precioUnitario: 5200, iva: 0 },
       { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", costoUnitario: 10000, precioUnitario: 10000, iva: 0 },
     ],
   },
@@ -261,8 +261,8 @@ function nextGestionId(items: GestionCompra[]) {
 function addDays(d: string, days: number) {
   const dt = new Date(d);
   dt.setDate(dt.getDate() + days);
-  // Fecha local, no UTC: `dt` se movi+� en hora local, as+� que `toISOString()`
-  // lo convert+�a a UTC y en Colombia (UTC-5) devolv+�a el d+�a anterior.
+  // Fecha local, no UTC: `dt` se movió en hora local, así que `toISOString()`
+  // lo convertía a UTC y en Colombia (UTC-5) devolvía el día anterior.
   return dt.toLocaleDateString("en-CA");
 }
 
@@ -282,13 +282,14 @@ const sCls = `${iCls} appearance-none`;
 // ��������� CONFIRM MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 export function ConfirmModal({
-  title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel,
+  title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel, showMotivo = false, motivo, onMotivoChange,
 }: {
   // `body` es opcional: hay confirmaciones que solo llevan `detail` como
-  // advertencia (p. ej. "-+Est+� seguro de los cambios?"). Antes era obligatorio y
-  // esas 3 llamadas fallaban el typecheck mientras en runtime pintaban un <p> vac+�o.
+  // advertencia (p. ej. "¿Está seguro de los cambios?"). Antes era obligatorio y
+  // esas 3 llamadas fallaban el typecheck mientras en runtime pintaban un <p> vacío.
   title: string; body?: string; detail?: string; confirmLabel?: string;
   danger?: boolean; icon?: React.ReactNode; onConfirm: () => void; onCancel: () => void;
+  showMotivo?: boolean; motivo?: string; onMotivoChange?: (value: string) => void;
 }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -306,6 +307,18 @@ export function ConfirmModal({
           <p className={`text-sm font-semibold mb-5 ${danger ? "text-red-600" : "text-amber-600"}`}>{detail}</p>
         )}
         {!detail && <div className="mb-5" />}
+        {showMotivo && (
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Motivo de anulación</label>
+            <textarea
+              value={motivo || ""}
+              onChange={e => onMotivoChange?.(e.target.value)}
+              placeholder="Escribe el motivo de la anulación..."
+              className="w-full px-3 py-2 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              rows={3}
+            />
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             onClick={onCancel}
@@ -345,7 +358,7 @@ export function NuevoProveedorModal({
   const submit = () => {
     if (!nombre.trim()) { toast.error("El nombre es obligatorio."); return; }
     if (!nit.trim()) { toast.error("El NIT es obligatorio."); return; }
-    if (!telefono.trim()) { toast.error("El tel+�fono es obligatorio."); return; }
+    if (!telefono.trim()) { toast.error("El teléfono es obligatorio."); return; }
     if (!email.trim()) { toast.error("El email es obligatorio."); return; }
     onGuardar({
       nombre: nombre.trim(),
@@ -370,7 +383,7 @@ export function NuevoProveedorModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Completa la informaci+�n de contacto del proveedor.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
             <X className="w-4 h-4" />
@@ -379,7 +392,7 @@ export function NuevoProveedorModal({
         <div className="px-6 py-5 space-y-6">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-              Identificaci+�n del proveedor
+              Identificación del proveedor
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -400,10 +413,10 @@ export function NuevoProveedorModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Asesor comercial</label>
-                <input value={asesorComercial} onChange={e => setAsesorComercial(e.target.value)} placeholder="Ej: Carlos Mej+�a" className={iCls} />
+                <input value={asesorComercial} onChange={e => setAsesorComercial(e.target.value)} placeholder="Ej: Carlos Mejía" className={iCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tel+�fono *</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Teléfono *</label>
                 <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="604 321 0001" className={iCls} />
               </div>
               <div>
@@ -411,15 +424,15 @@ export function NuevoProveedorModal({
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ventas@proveedor.co" className={iCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Direcci+�n</label>
-                <input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Cra 50 #30-10, Medell+�n" className={iCls} />
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>
+                <input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Cra 50 #30-10, Medellín" className={iCls} />
               </div>
             </div>
           </div>
 
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-              Configuraci+�n
+              Configuración
             </p>
             <div className="w-full sm:w-1/2">
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
@@ -460,9 +473,9 @@ export function OrdenModal({
   orden?: OrdenCompra;
   proveedores: ProveedorRef[];
   insumos: Insumo[];
-  /** "orden" = Orden de Compra -� "compra" = Compra (Gesti+�n de Compra) */
+  /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
   tipo?: "orden" | "compra";
-  /** Renderiza el formulario como una p+�gina independiente en vez de modal. */
+  /** Renderiza el formulario como una página independiente en vez de modal. */
   fullPage?: boolean;
   onClose: () => void;
   onGuardar: (d: OrdenFormData) => void;
@@ -471,12 +484,12 @@ export function OrdenModal({
   const isView = mode === "view";
   const isCompra = tipo === "compra";
   const isPage = fullPage;
-  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) despu+�s de las 19:00
-  // daba el d+�a siguiente, y `today` es el `max` del date-picker de vencimiento.
+  // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
+  // daba el día siguiente, y `today` es el `max` del date-picker de vencimiento.
   const today = new Date().toLocaleDateString("en-CA");
 
   const [form, setForm] = useState<OrdenFormData>({
-    proveedor: orden?.proveedor ?? (proveedores[0]?.nombre ?? ""),
+    proveedor: orden?.proveedor ?? "",
     fecha: orden?.fecha ?? today,
     estado: isCompra
       ? "Recibido"
@@ -489,8 +502,16 @@ export function OrdenModal({
   const [showNuevoProv, setShowNuevoProv] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
 
-  // ������ Buscador de proveedor (autocomplete por nombre, NIT, asesor o email) ������
-  const [provQuery, setProvQuery] = useState(orden?.proveedor ?? (proveedores[0]?.nombre ?? ""));
+  // Historial de cambios de estado
+  const [estadoHistorial, setEstadoHistorial] = useState<{ estado: EstadoOrden; fecha: string }[]>(() => {
+    if (orden?.estado) {
+      return [{ estado: orden.estado, fecha: orden.fecha }];
+    }
+    return [{ estado: "Borrador" as EstadoOrden, fecha: today }];
+  });
+
+  // Buscador de proveedor (autocomplete por nombre, NIT, asesor o email)
+  const [provQuery, setProvQuery] = useState(mode === "create" ? "" : (orden?.proveedor ?? ""));
   const [showProvSug, setShowProvSug] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
@@ -518,15 +539,15 @@ export function OrdenModal({
   const [aPrecio, setAPrecio] = useState(0);
   const [aIva, setAIva] = useState(0);
   const [aFromCat, setAFromCat] = useState(false);
-  // Id del insumo elegido del cat+�logo. Antes `addItem` fabricaba
-  // `idInsumo: INS-${Date.now()}`, un id que no exist+�a en el cat+�logo: se perd+�a
-  // el enlace que Recepci+�n usa para no volver a ofrecer un insumo ya recibido y
-  // para agrupar las l+�neas por insumo.
+  // Id del insumo elegido del catálogo. Antes `addItem` fabricaba
+  // `idInsumo: INS-${Date.now()}`, un id que no existía en el catálogo: se perdía
+  // el enlace que Recepción usa para no volver a ofrecer un insumo ya recibido y
+  // para agrupar las líneas por insumo.
   const [aInsumoId, setAInsumoId] = useState("");
   const [aShowSug, setAShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
 
-  // ������ Validaci+�n en tiempo real (patr+�n de MiPerfilScreen) ������������������������������������������������������
+  // ������ Validación en tiempo real (patrón de MiPerfilScreen) ������������������������������������������������������
   const [tocado, setTocado] = useState({ proveedor: false, fecha: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
@@ -537,7 +558,7 @@ export function OrdenModal({
   const errorFecha = form.fecha ? undefined : "Selecciona la fecha de la orden.";
   const errorNumeroFactura =
     isCompra && !form.numeroFactura?.trim()
-      ? "El n+�mero de factura es obligatorio."
+      ? "El número de factura es obligatorio."
       : undefined;
   const errorItems = form.items.length > 0 ? undefined : "Agrega al menos un insumo a la orden.";
 
@@ -547,15 +568,15 @@ export function OrdenModal({
   const marcarTocado = (campo: "proveedor" | "fecha") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
-  /** Clase del input: resalta en rojo cuando el campo visible es inv+�lido. */
+  /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
-  const suggestions = useMemo(() =>
-    aNombre.trim().length >= 1
-      ? insumos.filter(i => i.nombre.toLowerCase().includes(aNombre.toLowerCase())).slice(0, 6)
-      : [],
-    [insumos, aNombre]);
+  const suggestions = useMemo(() => {
+    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo");
+    if (aNombre.trim().length === 0) return soloInsumos.slice(0, 6);
+    return soloInsumos.filter(i => i.nombre.toLowerCase().includes(aNombre.toLowerCase())).slice(0, 6);
+  }, [insumos, aNombre]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -586,11 +607,11 @@ export function OrdenModal({
   const addItem = () => {
     if (!aNombre.trim()) { toast.error("Ingresa el nombre del insumo."); return; }
     if (form.items.some(i => i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
-      toast.error("Este insumo ya est+� en la orden.");
+      toast.error("Este insumo ya está en la orden.");
       return;
     }
-    // Se conserva el id del cat+�logo cuando la l+�nea viene de una sugerencia; si
-    // el nombre se escribi+� a mano se genera uno secuencial. `Date.now()` no sirve
+    // Se conserva el id del catálogo cuando la línea viene de una sugerencia; si
+    // el nombre se escribió a mano se genera uno secuencial. `Date.now()` no sirve
     // como id de fila: dos additions en el mismo milisegundo colisionaban.
     const nextRow = form.items.reduce((max, i) => {
       const n = parseInt(i.rowId.replace(/^r/, ""), 10);
@@ -630,9 +651,8 @@ export function OrdenModal({
 
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
-    if (isCompra && !form.numeroFactura?.trim()) { toast.error("El n+�mero de factura es obligatorio."); return; }
+    if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un insumo."); return; }
-    if (!isCompra && form.estado === "Enviado") { setShowSendConf(true); return; }
     onGuardar(form);
   };
 
@@ -672,7 +692,7 @@ export function OrdenModal({
                     : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
                 </h3>
                 {orden && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{orden.proveedor} -� {orden.fecha}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{orden.proveedor} · {orden.fecha}</p>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -700,13 +720,13 @@ export function OrdenModal({
               {isView && orden?.estado === "Completado" && orden.recepcion && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  Recepci+�n guardada el <strong className="ml-1">{orden.recepcion.fechaRecepcion}</strong>. Esta orden ya no es editable.
+                  Recepción guardada el <strong className="ml-1">{orden.recepcion.fechaRecepcion}</strong>. Esta orden ya no es editable.
                 </div>
               )}
               {isView && orden?.estado === "Enviado" && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  Orden enviada al proveedor. Pendiente de recepci+�n.
+                  Orden enviada al proveedor. Pendiente de Recepción.
                 </div>
               )}
               {isView && orden?.estado === "Anulado" && (
@@ -720,9 +740,9 @@ export function OrdenModal({
               <div className="grid grid-cols-2 gap-4 shrink-0">
                 {isCompra && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N+�mero de factura <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura <span className="text-red-500">*</span></label>
                     {isView
-                      ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "���"}</p>
+                      ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "—"}</p>
                       : (
                         <input
                           value={form.numeroFactura ?? ""}
@@ -740,7 +760,7 @@ export function OrdenModal({
                 )}
                 {orden?.id && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N-� Orden</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N· Orden</label>
                     <input value={orden.id} readOnly className={`${iCls} opacity-60 cursor-default`} />
                   </div>
                 )}
@@ -779,20 +799,18 @@ export function OrdenModal({
                                 </p>
                                 <p className="text-muted-foreground">
                                   NIT {p.nit}
-                                  {p.asesorComercial && <> -� Asesor: {p.asesorComercial}</>}
+                                  {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
                                 </p>
                               </button>
                             ))}
-                            {!provExiste && provQuery.trim() !== "" && (
-                              <button
-                                type="button"
-                                onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
-                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                Crear proveedor {provQuery.trim() && `�ǣ${provQuery.trim()}���`}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
+                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Crear proveedor {provQuery.trim() && `"${provQuery.trim()}"`}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -811,6 +829,7 @@ export function OrdenModal({
                         value={form.fecha}
                         onChange={e => pf({ fecha: e.target.value })}
                         onBlur={() => marcarTocado("fecha")}
+                        readOnly
                         className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
                         aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
                       />
@@ -825,7 +844,11 @@ export function OrdenModal({
                     {isCompra ? (
                       <select
                         value={form.estado}
-                        onChange={e => pf({ estado: e.target.value as EstadoGestion })}
+                        onChange={e => {
+                          const nuevoEstado = e.target.value as EstadoGestion;
+                          setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as unknown as EstadoOrden, fecha: today }]);
+                          pf({ estado: nuevoEstado });
+                        }}
                         className={sCls}
                       >
                         <option value="Recibido">Recibido</option>
@@ -834,13 +857,35 @@ export function OrdenModal({
                     ) : (
                       <select
                         value={form.estado}
-                        onChange={e => pf({ estado: e.target.value as EstadoOrden })}
+                        onChange={e => {
+                          const nuevoEstado = e.target.value as EstadoOrden;
+                          setEstadoHistorial(prev => [...prev, { estado: nuevoEstado, fecha: today }]);
+                          pf({ estado: nuevoEstado });
+                        }}
                         className={sCls}
                       >
                         <option value="Borrador">Borrador</option>
                         <option value="Enviado">Enviado</option>
+                        <option value="Completado">Completado</option>
                         <option value="Anulado">Anulado</option>
                       </select>
+                    )}
+                    {estadoHistorial.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {estadoHistorial[estadoHistorial.length - 1].fecha}
+                      </p>
+                    )}
+                    {mode !== "create" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Mostrar historial completo
+                          alert(estadoHistorial.map(h => `${h.estado} - ${h.fecha}`).join('\n'));
+                        }}
+                        className="text-[11px] text-primary hover:underline mt-0.5"
+                      >
+                        Ver historial
+                      </button>
                     )}
                   </div>
                 )}
@@ -856,8 +901,8 @@ export function OrdenModal({
                     onNombreChange={(value) => {
                       setANombre(value);
                       setAFromCat(false);
-                      // El nombre ya no coincide con la sugerencia elegida, as+� que
-                      // la l+�nea deja de estar ligada a ese insumo del cat+�logo.
+                      // El nombre ya no coincide con la sugerencia elegida, así que
+                      // la línea deja de estar ligada a ese insumo del catálogo.
                       setAInsumoId("");
                       setAShowSug(true);
                     }}
@@ -917,7 +962,7 @@ export function OrdenModal({
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "���"}</td>
+                          <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
                           <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
                           <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
@@ -942,7 +987,7 @@ export function OrdenModal({
               )}
             </div>
 
-            {/* Footer ��� solo en creaci+�n; en detalle se cierra con la X del encabezado */}
+            {/* Footer ��� solo en creación; en detalle se cierra con la X del encabezado */}
             {!isView && (
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
@@ -976,9 +1021,9 @@ export function OrdenModal({
       <AnimatePresence>
         {showSendConf && (
           <ConfirmModal
-            title="-+Confirmas el env+�o?"
+            title="¿Confirmas el envío?"
             body={`Enviar OC a ${form.proveedor}.`}
-            detail="No podr+�s editarla despu+�s del env+�o."
+            detail="No podrás editarla después del envío."
             confirmLabel="Enviar"
             icon={
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -994,7 +1039,7 @@ export function OrdenModal({
   );
 }
 
-// ��������� NUEVA ORDEN COMPRA ��� P+�GINA INDEPENDIENTE ���������������������������������������������������������������������������������������������
+// ��������� NUEVA ORDEN COMPRA ��� PÁGINA INDEPENDIENTE ���������������������������������������������������������������������������������������������
 
 interface NuevaOrdenCompraPageProps {
   ordenes: OrdenCompra[];
@@ -1061,7 +1106,7 @@ function RecepcionModal({
   onAnular: () => void;
   onClose: () => void;
 }) {
-  // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba ma+�ana).
+  // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
   const today = new Date().toLocaleDateString("en-CA");
 
   type ItemRow = ItemRecibido & { malEstado: boolean };
@@ -1157,10 +1202,10 @@ function RecepcionModal({
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
                 <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Formulario de Recepci+�n
+                  Formulario de Recepción
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  OC {orden.id} -� {orden.proveedor} -� Fecha: {today}
+                  OC {orden.id} · {orden.proveedor} · Fecha: {today}
                 </p>
               </div>
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
@@ -1174,7 +1219,7 @@ function RecepcionModal({
                 <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>
-                    Hay insumos marcados en <strong>mal estado</strong>. Puede anular la OC o continuar con recepci+�n parcial.
+                    Hay insumos marcados en <strong>mal estado</strong>. Puede anular la OC o continuar con Recepción parcial.
                   </span>
                   <button
                     onClick={() => setShowAnularConf(true)}
@@ -1324,7 +1369,7 @@ function RecepcionModal({
                           >
                             <p className="font-semibold text-foreground">{ins.nombre}</p>
                             <p className="text-muted-foreground">
-                              {ins.unidadMedida} -� ${ins.costoUnitario.toLocaleString("es-CO")}
+                              {ins.unidadMedida} · ${ins.costoUnitario.toLocaleString("es-CO")}
                             </p>
                           </button>
                         ))}
@@ -1364,7 +1409,7 @@ function RecepcionModal({
                 <div>
                   <p className="text-sm font-semibold text-foreground">Usar lotes</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Asigna fecha de vencimiento autom+�tica (recepci+�n + 7 d+�as)
+                    Asigna fecha de vencimiento automática (Recepción + 7 días)
                   </p>
                 </div>
                 <button
@@ -1384,13 +1429,13 @@ function RecepcionModal({
                 >
                   <div className="px-4 py-2 bg-amber-100/60 border-b border-amber-200">
                     <p className="text-xs font-semibold text-amber-800">
-                      Fechas de vencimiento asignadas autom+�ticamente
+                      Fechas de vencimiento asignadas automáticamente
                     </p>
                   </div>
                   <table className="w-full text-sm">
                     <thead className="text-xs text-muted-foreground">
                       <tr>
-                        {["Insumo", "Cant. recibida", "Fecha recepci+�n", "Fecha vencimiento"].map(h => (
+                        {["Insumo", "Cant. recibida", "Fecha Recepción", "Fecha vencimiento"].map(h => (
                           <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
                         ))}
                       </tr>
@@ -1424,7 +1469,7 @@ function RecepcionModal({
                 onClick={() => setShowGuardarConf(true)}
                 className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 inline-flex items-center justify-center gap-2"
               >
-                <Check className="w-4 h-4" /> Guardar Recepci+�n
+                <Check className="w-4 h-4" /> Guardar Recepción
               </button>
             </div>
           </motion.div>
@@ -1434,8 +1479,8 @@ function RecepcionModal({
       <AnimatePresence>
         {showGuardarConf && (
           <ConfirmModal
-            title="-+Est+� seguro de los cambios?"
-            detail="Una vez guardado no se podr+� modificar."
+            title="¿Está seguro de los cambios?"
+            detail="Una vez guardado no se podrá modificar."
             confirmLabel="Confirmar"
             icon={
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -1451,8 +1496,8 @@ function RecepcionModal({
         {showAnularConf && (
           <ConfirmModal
             title="-+Anular Orden de Compra?"
-            body="Se anular+� la OC por insumos en mal estado (devoluci+�n al proveedor)."
-            detail="Esta acci+�n no puede revertirse."
+            body="Se anulará la OC por insumos en mal estado (devolución al proveedor)."
+            detail="Esta acción no puede revertirse."
             confirmLabel="Anular OC"
             danger={true}
             icon={
@@ -1503,17 +1548,18 @@ export function OrdenCompraScreen({
   const [anularConfirm, setAnularConfirm] = useState<OrdenCompra | null>(null);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
-  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && g.numeroFactura);
+  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
 
   const filtered = useMemo(() =>
     ordenes.filter(o => {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
       const facturasTexto = facturas.map(f => f.numeroFactura ?? "").join(" ");
       return (o.proveedor ?? "").toLowerCase().includes(q)
         || facturasTexto.toLowerCase().includes(q)
-        || (o.estado ?? "").toLowerCase().includes(q);
+        || (o.estado ?? "").toLowerCase().includes(q)
+        || (o.fecha ?? "").toLowerCase().includes(q);
     }),
     [ordenes, search, gestiones]);
 
@@ -1560,7 +1606,7 @@ export function OrdenCompraScreen({
   const handleAnularOrden = (o: OrdenCompra) => {
     setOrdenes(p => p.map(x => x.id === o.id ? { ...x, estado: "Anulado" as EstadoOrden } : x));
 
-    // Anular la orden anula tambi+�n sus facturas: la compra queda cerrada y no
+    // Anular la orden anula también sus facturas: la compra queda cerrada y no
     // vuelve al estado "Recibido".
     const anuladas = facturasDeOrden(o.id);
 
@@ -1608,7 +1654,7 @@ export function OrdenCompraScreen({
       });
     }
     setRecepcionOrden(null);
-    toast.success(`OC ${o.id} completada -� Registra la factura en Gesti+�n de Compras`);
+    toast.success(`OC ${o.id} completada · Registra la factura en Gestión de Compras`);
   };
 
   const handleDownload = () => {
@@ -1637,10 +1683,10 @@ export function OrdenCompraScreen({
       <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            +�rdenes de Compra
+            Órdenes de Compra
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Crea y gestiona las +�rdenes de compra a proveedores
+            Crea y gestiona las Órdenes de compra a proveedores
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1667,7 +1713,7 @@ export function OrdenCompraScreen({
         <input
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por N-� o proveedor..."
+          placeholder="Buscar por proveedor, fecha, N° factura o estado..."
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
@@ -1677,7 +1723,7 @@ export function OrdenCompraScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Proveedor", "Fecha", "N-� Factura", "Total", "Estado", "Acciones"].map(h => (
+                {["Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -1686,14 +1732,17 @@ export function OrdenCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
-                      <p className="text-4xl mb-3">����</p>
-                      <p className="font-medium">No se encontraron +�rdenes</p>
+                    <td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
+                      <p className="text-4xl mb-3">📋</p>
+                      <p className="font-medium">No se encontraron órdenes</p>
                     </td>
                   </tr>
                 )
                 : paged.map(o => {
                   const facturas = getFacturas(o.id);
+                  const totalOrden = calcTotal(o.items);
+                  const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
+                  const porFacturar = Math.max(0, totalOrden - totalFacturado);
                   return (
                     <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3.5 text-sm text-foreground">{o.proveedor}</td>
@@ -1720,11 +1769,17 @@ export function OrdenCompraScreen({
                         ) : o.estado === "Completado" ? (
                           <span className="text-amber-600 font-medium">Pendiente</span>
                         ) : (
-                          <span className="text-muted-foreground">���</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
-                        {fmtCOP(calcTotal(o.items))}
+                        {fmtCOP(totalOrden)}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-emerald-700 font-semibold">
+                        {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-amber-700 font-semibold">
+                        {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                       </td>
                       <td className="px-4 py-3.5">
                         <select
@@ -1741,12 +1796,14 @@ export function OrdenCompraScreen({
                             <>
                               <option value="Borrador">Borrador</option>
                               <option value="Enviado">Enviado</option>
+                              <option value="Completado">Completado</option>
                               <option value="Anulado">Anulado</option>
                             </>
                           )}
                           {o.estado === "Enviado" && (
                             <>
                               <option value="Enviado">Enviado</option>
+                              <option value="Completado">Completado</option>
                               <option value="Anulado">Anulado</option>
                             </>
                           )}
@@ -1757,6 +1814,22 @@ export function OrdenCompraScreen({
                             <option value="Completado">Completado</option>
                           )}
                         </select>
+                        <p className="text-[11px] text-muted-foreground mt-1">{o.fecha}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const historial = [
+                              { estado: "Borrador" as EstadoOrden, fecha: o.fecha },
+                              ...(o.estado !== "Borrador" ? [{ estado: "Enviado" as EstadoOrden, fecha: o.fecha }] : []),
+                              ...(o.estado === "Completado" && o.recepcion ? [{ estado: "Completado" as EstadoOrden, fecha: o.recepcion.fechaRecepcion }] : []),
+                              ...(o.estado === "Anulado" ? [{ estado: "Anulado" as EstadoOrden, fecha: o.fecha }] : []),
+                            ];
+                            alert(historial.map(h => `${h.estado} - ${h.fecha}`).join("\n"));
+                          }}
+                          className="text-[11px] text-primary hover:underline mt-0.5"
+                        >
+                          Ver historial
+                        </button>
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
@@ -1767,28 +1840,13 @@ export function OrdenCompraScreen({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {o.estado === "Borrador" && canEdit && (
-                            <button
-                              onClick={() => setModal({ mode: "edit", orden: o })}
-                              title="Editar"
-                              className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 cursor-pointer transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {o.estado === "Completado" && (
-                            <span className="p-1.5 text-muted-foreground/40" title="Orden bloqueada">
-                              <Lock className="w-4 h-4" />
-                            </span>
-                          )}
                           {o.estado === "Enviado" && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
-                              title="Registrar recepci+�n"
+                              title="Registrar recepción"
                               className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" /> Recibido
+                              <ClipboardCheck className="w-3.5 h-3.5" /> OC
                             </button>
                           )}
                         </div>
@@ -1849,7 +1907,7 @@ export function OrdenCompraScreen({
           <ConfirmModal
             title="-+Enviar Orden de Compra?"
             body={`Enviar OC ${sendConfirm.id} a ${sendConfirm.proveedor}.`}
-            detail="No podr+�s editarla despu+�s del env+�o."
+            detail="No podrás editarla después del envío."
             confirmLabel="Enviar"
             icon={
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -1868,8 +1926,8 @@ export function OrdenCompraScreen({
             body={`-+Deseas anular la OC ${anularConfirm.id}?`}
             detail={
               facturasDeOrden(anularConfirm.id).length > 0
-                ? `Tambi+�n se anular+�n sus ${facturasDeOrden(anularConfirm.id).length} factura(s) registradas en Gesti+�n de Compras.`
-                : "Esta acci+�n no puede revertirse."
+                ? `También se anularán sus ${facturasDeOrden(anularConfirm.id).length} factura(s) registradas en Gestión de Compras.`
+                : "Esta acción no puede revertirse."
             }
             confirmLabel="Anular"
             danger={true}
@@ -1885,11 +1943,11 @@ export function OrdenCompraScreen({
         {estadoConfirm && (
           <ConfirmModal
             title={`-+Cambiar el estado a ${estadoConfirm.next}?`}
-            body={`La orden ${estadoConfirm.id} pasar+� de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
+            body={`La orden ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
             detail={
               estadoConfirm.next === "Anulado"
                 ? "Una orden anulada no puede volver a un estado anterior."
-                : "La orden avanzar+� en el flujo de estados."
+                : "La orden avanzará en el flujo de estados."
             }
             confirmLabel={estadoConfirm.next === "Anulado" ? "Anular" : `Cambiar a ${estadoConfirm.next}`}
             danger={estadoConfirm.next === "Anulado"}
@@ -2063,9 +2121,11 @@ export function OrdenDetallePage({
   orden,
   gestiones,
   onBack,
-  onEditar,
-  onAbrirRecepcion,
-}: OrdenDetallePageProps) {
+  onVerFactura,
+}: OrdenDetallePageProps & { onVerFactura?: (gestion: GestionCompra) => void }) {
+  const facturas = gestiones.filter(g => g.ordenId === orden.id && (g.numeroFactura ?? "") !== "");
+  const insumosFacturados = new Set(facturas.flatMap(g => (g.items ?? []).map(i => i.idInsumo)));
+
   return (
     <div className="px-6 pt-5 pb-4 max-w-5xl mx-auto h-full flex flex-col overflow-hidden">
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
@@ -2084,10 +2144,58 @@ export function OrdenDetallePage({
             {orden.proveedor} · {orden.fecha}
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto relative group">
           <EstadoBadge e={orden.estado} />
+          {/* Historial de estados al hover */}
+          <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-xl shadow-xl z-30 p-3 hidden group-hover:block">
+            <p className="text-xs font-bold text-muted-foreground mb-2">Historial de estados</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold">Borrador</span>
+                <span className="text-muted-foreground">{orden.fecha}</span>
+              </div>
+              {orden.estado !== "Borrador" && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold">Enviado</span>
+                  <span className="text-muted-foreground">{orden.fecha}</span>
+                </div>
+              )}
+              {orden.estado === "Completado" && orden.recepcion && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold">Completado</span>
+                  <span className="text-muted-foreground">{orden.recepcion.fechaRecepcion}</span>
+                </div>
+              )}
+              {orden.estado === "Anulado" && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-red-600">Anulado</span>
+                  <span className="text-muted-foreground">{orden.fecha}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Facturas asociadas */}
+      {facturas.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <p className="text-xs font-bold text-blue-800 mb-2">Facturas registradas</p>
+          <div className="flex flex-wrap gap-2">
+            {facturas.map(f => (
+              <button
+                key={f.id}
+                onClick={() => onVerFactura?.(f)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors"
+              >
+                <span className="font-mono">{f.numeroFactura}</span>
+                <span className="text-blue-500">·</span>
+                <span>{f.fechaFactura}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -2099,22 +2207,34 @@ export function OrdenDetallePage({
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Insumo", "Cantidad", "Unidad", "P. unitario", "IVA", "Subtotal"].map(h => (
+                {["Insumo", "Cantidad", "Unidad", "Monto unitario", "IVA", "Subtotal", "Facturado"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {orden.items.map(item => (
-                <tr key={item.rowId} className="hover:bg-muted/20">
-                  <td className="px-4 py-3 font-medium text-foreground">{item.nombre}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
-                  <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{item.iva}%</td>
-                  <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
-                </tr>
-              ))}
+              {orden.items.map(item => {
+                const facturado = insumosFacturados.has(item.idInsumo);
+                return (
+                  <tr key={item.rowId} className="hover:bg-muted/20">
+                    <td className="px-4 py-3 font-medium text-foreground">{item.nombre}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
+                    <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{item.iva}%</td>
+                    <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
+                    <td className="px-4 py-3">
+                      {facturado ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                          <Check className="w-3.5 h-3.5" /> Sí
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot className="bg-muted/50 border-t border-border">
               <tr>
@@ -2124,35 +2244,11 @@ export function OrdenDetallePage({
                 <td className="px-4 py-2 text-sm font-bold text-foreground">
                   {fmtCOP(calcTotal(orden.items))}
                 </td>
+                <td />
               </tr>
             </tfoot>
           </table>
         </div>
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button
-          onClick={onBack}
-          className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-        >
-          Volver
-        </button>
-        {orden.estado === "Borrador" && (
-          <button
-            onClick={() => onEditar(orden)}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-all"
-          >
-            Editar
-          </button>
-        )}
-        {orden.estado === "Enviado" && (
-          <button
-            onClick={() => onAbrirRecepcion(orden)}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-all"
-          >
-            Registrar recepción
-          </button>
-        )}
       </div>
     </div>
   );

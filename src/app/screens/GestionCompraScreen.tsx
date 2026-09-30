@@ -712,6 +712,7 @@ export function GestionCompraScreen({
   const [page, setPage]       = useState(1);
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion; next: EstadoGestion } | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
   // Se declara antes del `useMemo` de abajo porque la fábrica lo invoca durante
   // el render; como `const`, usarla desde allí la lanzaba en TDZ
@@ -750,9 +751,9 @@ export function GestionCompraScreen({
     setEstadoConfirm({ id, from: actual, next });
   };
 
-  const handleCambiarEstado = (id: string, next: EstadoGestion) => {
+  const handleCambiarEstado = (id: string, next: EstadoGestion, motivo?: string) => {
     // Solo se actualiza el estado de la Compra puntual (por su ID).
-    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
+    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next, motivoAnulacion: motivo } : x)));
     setEstadoConfirm(null);
 
     // Caso 2 — Orden de Compra con SOLO una Compra asociada:
@@ -844,7 +845,7 @@ export function GestionCompraScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Proveedor", "Fecha de factura", "N° Factura", "Total", "Estado", "Acciones"].map(h => (
+                {["N° Factura", "Fecha", "Nombre", "Total", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -866,16 +867,16 @@ export function GestionCompraScreen({
                   const orden = getOrden(g.ordenId);
                   return (
                     <tr key={g.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 text-sm text-foreground">
-                        {(orden?.proveedor ?? g.proveedor) || "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
-                        {g.fechaFactura || "—"}
-                      </td>
                       <td className="px-4 py-3.5 text-xs">
                         {g.numeroFactura
                           ? <span className="font-mono font-semibold text-foreground">{g.numeroFactura}</span>
                           : <span className="text-amber-600 font-medium italic">Pendiente</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
+                        {g.fechaFactura || "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-foreground">
+                        {(orden?.proveedor ?? g.proveedor) || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0
@@ -994,8 +995,14 @@ export function GestionCompraScreen({
                 </div>
               )
             }
-            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
-            onCancel={() => setEstadoConfirm(null)}
+            showMotivo={estadoConfirm.next === "Anulado"}
+            motivo={motivoAnulacion}
+            onMotivoChange={setMotivoAnulacion}
+            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next, motivoAnulacion)}
+            onCancel={() => {
+              setEstadoConfirm(null);
+              setMotivoAnulacion("");
+            }}
           />
         )}
       </AnimatePresence>
