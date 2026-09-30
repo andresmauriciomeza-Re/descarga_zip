@@ -10,15 +10,20 @@ import {
   Clock,
   Eye,
   AlertCircle,
+  RefreshCw,
   ShieldCheck,
   ShieldX,
+  Printer,
+  FileText,
+  Download,
   ImageIcon,
-  Trash2,
+  Ban,
   Undo2,
   CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { descargarFactura, imprimirFactura } from "../utils/facturaVenta";
 import { exportToExcel } from "../utils/exportExcel";
 
 const SERIF = "var(--font-titulo)";
@@ -159,6 +164,8 @@ export interface Venta {
   devolucionMonto?: number;
   /** Motivo por el que el cliente devuelve, escrito al gestionar la devolución. */
   devolucionMotivo?: string;
+  /** Motivo de cada línea devuelta, indexado por posición del detalle. */
+  devolucionMotivos?: Record<string, { motivo: string; descripcion: string }>;
 }
 
 const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
@@ -413,12 +420,15 @@ export function VentasScreen({
   pedidos,
   setPedidos,
   productos,
+  onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
   productos: ProductoMenu[];
+  /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
+  onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
   canEdit?: boolean;
 }) {
@@ -437,6 +447,8 @@ export function VentasScreen({
     id: string;
     accion: "anular" | "devolucion";
   } | null>(null);
+  /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
+  const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
 
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
@@ -1377,7 +1389,9 @@ export function VentasScreen({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {/* Anular venta: la deja en estado "anulado". */}
+                        {/* Anular venta: la deja en estado "anulado". Un círculo con
+                            la línea en diagonal dice "anular" mejor que una papelera,
+                            que parecía borrar el pedido. */}
                         {p.estado !== "anulado" && p.estado !== "perdida" && (
                           <button
                             onClick={() =>
@@ -1386,7 +1400,7 @@ export function VentasScreen({
                             title="Anular venta"
                             className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Ban className="w-4 h-4" />
                           </button>
                         )}
                         {/* Registrar devolución: pasa la venta a "Devolución". */}
@@ -1399,6 +1413,38 @@ export function VentasScreen({
                             className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors cursor-pointer"
                           >
                             <Undo2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Imprimir factura: electrónica (se descarga el documento)
+                            o física (sale por la impresora del sistema). */}
+                        {p.estado !== "anulado" && (
+                          <button
+                            onClick={() => setFacturaVenta(p)}
+                            title="Imprimir factura"
+                            className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors cursor-pointer"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Ya en "Devolución" no tiene sentido volver a registrarla:
+                            en su lugar se ofrece gestionar la que ya existe, que es
+                            donde se decide el canje o la devolución del dinero.
+                            Solo el icono, como las demás acciones de la fila. */}
+                        {p.estado === "perdida" && (
+                          <button
+                            onClick={() => onGestionarDevolucion(p.id)}
+                            title={
+                              p.devolucionResuelta
+                                ? "Ver la devolución resuelta"
+                                : "Gestionar devolución"
+                            }
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              p.devolucionResuelta
+                                ? "text-muted-foreground hover:bg-muted"
+                                : "text-muted-foreground hover:bg-orange-50 hover:text-orange-600"
+                            }`}
+                          >
+                            <RefreshCw className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -1733,6 +1779,91 @@ export function VentasScreen({
             }}
             onCancel={() => setConfirmAccionV(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Elegir cómo emitir la factura ── */}
+      <AnimatePresence>
+        {facturaVenta && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center shrink-0">
+                    <Printer className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">Imprimir factura</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      Pedido #{facturaVenta.id} · {facturaVenta.usuario}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setFacturaVenta(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    descargarFactura(facturaVenta);
+                    toast.success("Factura electrónica descargada");
+                    setFacturaVenta(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-violet-400 hover:bg-violet-500/5 transition-colors cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Factura electrónica</p>
+                    <p className="text-xs text-muted-foreground">
+                      Descarga el documento con los datos de la venta
+                    </p>
+                  </div>
+                  <Download className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    imprimirFactura(facturaVenta);
+                    toast.success("Enviando a la impresora");
+                    setFacturaVenta(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-emerald-400 hover:bg-emerald-500/5 transition-colors cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <Printer className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">Factura física</p>
+                    <p className="text-xs text-muted-foreground">
+                      Ticket de 80 mm para la impresora del sistema
+                    </p>
+                  </div>
+                </button>
+
+                <p className="pt-1 text-[11px] text-muted-foreground text-center">
+                  Total a facturar:{" "}
+                  <span className="font-bold text-foreground">
+                    {fmtCOP(facturaVenta.total)}
+                  </span>
+                </p>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
