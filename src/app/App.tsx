@@ -6147,12 +6147,59 @@ const nowHoraDev = () =>
 // tamaño tiene su propio precio.
 type Reemplazo = { id: number; nombre: string; precio: number; cantidad: number; imagen?: string; tamaño?: string };
 
+/** Motivo por el que se devuelve un producto. Va por línea del pedido: cada
+    producto que entra puede tener una razón distinta. */
+type MotivoDevolucion = { motivo: string; descripcion: string };
+
+/** Opciones del selector "Por qué". "Otro" habilita el campo de descripción. */
+const MOTIVOS_DEVOLUCION = [
+  "Producto malo",
+  "Producto incorrecto",
+  "Cambio de sabor",
+  "Otro",
+] as const;
+
+/** Estado del formulario mientras se resuelve una devolución. */
+type EstadoDevolucion = {
+  id: string;
+  paso: "producto" | "dinero" | null;
+  notaDinero: string;
+  /** Motivo por producto, indexado igual que `devueltos`. */
+  motivos: Record<number, MotivoDevolucion>;
+  /** Línea del pedido con el formulario de motivo abierto, o `null`. */
+  editandoMotivo: number | null;
+  devueltos: Record<number, number>;
+  compensacion: Reemplazo[];
+};
+
+/** Estado inicial al abrir una devolución pendiente. Si ya tenía motivos
+    guardados de un intento anterior, se recuperan por línea. */
+const nuevaDevolucion = (dev: Venta): EstadoDevolucion => ({
+  id: dev.id,
+  paso: null,
+  notaDinero: "",
+  motivos: dev.devolucionMotivos
+    ? Object.fromEntries(
+        Object.entries(dev.devolucionMotivos).map(([k, v]) => [Number(k), v]),
+      )
+    : {},
+  editandoMotivo: null,
+  devueltos: {},
+  compensacion: [],
+});
+
 function DevolucionesScreen({
   pedidos,
   setPedidos,
+  abrirDevolucionId,
+  onAbierta,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
+  /** Venta a gestionar al entrar. La tabla de ventas la pasa para no obligar a
+      buscarla de nuevo entre las pendientes. */
+  abrirDevolucionId?: string | null;
+  onAbierta?: () => void;
 }) {
   const devoluciones = pedidos.filter((p) => p.estado === "perdida");
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
@@ -6162,20 +6209,28 @@ function DevolucionesScreen({
   // por productos del menú y las unidades que sobren se devuelven en dinero.
   // `paso` es solo qué panel está abierto — no decide nada, porque ninguna
   // elección se confirma hasta que se pulsa el botón "Confirmar".
-  const [activa, setActiva] = useState<{
-    id: string;
-    paso: "producto" | "dinero" | null;
-    reembolsoDinero: boolean;
-    notaDinero: string;
-    /** Motivo por el que el cliente devuelve: se guarda con la resolución. */
-    motivo: string;
-    devueltos: Record<number, number>;
-    compensacion: Reemplazo[];
-  } | null>(null);
+  const [activa, setActiva] = useState<EstadoDevolucion | null>(null);
   const [detalleDevolucion, setDetalleDevolucion] = useState<Venta | null>(null);
   // Categoría activa en el selector de canje. Filtrar por categoría es lo que
-  // permite ver todos los productos de una vez, sin barra de desplazamiento.
+  // permite ver todos los productos a la vez, sin barra de desplazamiento.
   const [catCanje, setCatCanje] = useState("Todas");
+
+  // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
+  // devolución indicada: el modal de gestión si sigue pendiente, o la vista de
+  // solo lectura si ya se resolvió. Se limpia el id para no reabrirla al
+  // cambiar de pantalla más adelante.
+  useEffect(() => {
+    if (!abrirDevolucionId) return;
+    const dev = pedidos.find((p) => p.id === abrirDevolucionId);
+    onAbierta?.();
+    if (!dev) return;
+    if (dev.devolucionResuelta) {
+      setDetalleDevolucion(dev);
+    } else {
+      setActiva(nuevaDevolucion(dev));
+    }
+  }, [abrirDevolucionId, pedidos, onAbierta]);
+
   // Resumen que se muestra al confirmar, una vez la devolución ya quedó cerrada.
   const [resumen, setResumen] = useState<{
     unidadesDevueltas: number;
@@ -6186,7 +6241,12 @@ function DevolucionesScreen({
     dineroARecibir: number;
   } | null>(null);
 
-  const resolverDev = (id: string, tipo: DevolucionTipo, nota: string, motivo?: string) => {
+  const resolverDev = (
+    id: string,
+    tipo: DevolucionTipo,
+    nota: string,
+    motivos?: Record<number, MotivoDevolucion>,
+  ) => {
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
@@ -6195,7 +6255,11 @@ function DevolucionesScreen({
               devolucionTipo: tipo,
               devolucionResuelta: true,
               devolucionNota: nota,
-              ...(motivo ? { devolucionMotivo: motivo } : {}),
+              ...(motivos && Object.keys(motivos).length > 0
+                ? { devolucionMotivos: Object.fromEntries(
+                    Object.entries(motivos).map(([k, v]) => [String(k), v]),
+                  ) }
+                : {}),
               historial: [...(x.historial ?? []), { estado: "perdida" as VentaStatus, hora: nowHoraDev() }],
             }
           : x,
@@ -6225,6 +6289,19 @@ function DevolucionesScreen({
         compTotal -= drop;
       }
       return { ...prev, devueltos, compensacion: comp };
+    });
+  };
+
+  // Motivo de una línea devuelta. Se guarda por índice igual que `devueltos`,
+  // para que la razón viaje junto a la cantidad que se pidió de ese producto.
+  const setMotivo = (idx: number, patch: Partial<MotivoDevolucion>) => {
+    setActiva((prev) => {
+      if (!prev) return prev;
+      const actual = prev.motivos[idx] ?? { motivo: "", descripcion: "" };
+      return {
+        ...prev,
+        motivos: { ...prev.motivos, [idx]: { ...actual, ...patch } },
+      };
     });
   };
 
@@ -6292,7 +6369,6 @@ function DevolucionesScreen({
     ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0) * d.precio, 0)
     : 0;
 
-  const conDinero = activa?.reembolsoDinero ?? false;
   // Unitarios que se suman en el bloque inferior izquierdo.
   const preciosSumados = activa
     ? detalleAct
@@ -6307,19 +6383,20 @@ function DevolucionesScreen({
   //   > 0 → le debemos dinero al cliente
   //   < 0 → el cliente nos debe un extra
   const saldo = valorDevuelto - valorComp;
-  // Magnitud que se muestra en vivo, con o sin la opción "Dinero" activada: así el
-  // monto reacciona a cada producto que se añade al canje.
+  // Magnitud que se muestra en vivo: el monto reacciona a cada producto que se
+  // añade al canje.
   const montoSaldo = Math.abs(saldo);
-  const dineroADar = conDinero && saldo > 0 ? saldo : 0;
+  const dineroADar = saldo > 0 ? saldo : 0;
   const dineroARecibir = saldo < 0 ? -saldo : 0;
-  // Etiqueta única para el bloque de dinero: cambia con el signo del saldo.
+  // El rótulo dice a favor de quién queda el saldo. Antes decía "por la
+  // devolución", que no era claro para saber si tocaba pagar o cobrar.
   const rotuloDinero =
-    saldo < 0 ? "Dinero a recibir por la devolución" : "Dinero a dar por la devolución";
+    saldo < 0 ? "Dinero a favor de La Sirena:" : "Dinero a favor del cliente:";
 
   const textoComp =
     activa?.compensacion.map((c) => `${c.cantidad}x ${c.nombre}${c.tamaño ? ` (${c.tamaño})` : ""}`).join(", ") ??
     "";
-  const puedeConfirmar = !!activa && totalDevueltos > 0 && (totalComp > 0 || conDinero);
+  const puedeConfirmar = !!activa && totalDevueltos > 0;
   const modoGlobal: DevolucionTipo =
     totalComp > 0 && (dineroADar > 0 || dineroARecibir > 0)
       ? "mixto"
@@ -6327,12 +6404,11 @@ function DevolucionesScreen({
         ? "producto"
         : "dinero";
 
-  // "Aún puedes hacer…": lo que todavía falta decidir de cada opción.
+  // "Aún puedes hacer…": solo queda decidir qué entra, porque la liquidación
+  // en dinero ya está siempre activa.
   const faltan: string[] = [];
   if (totalDevueltos === 0) {
     faltan.push("Marca las unidades que devuelve el cliente.");
-  } else if (!conDinero && saldo > 0) {
-    faltan.push("Activa Dinero para devolver el saldo al cliente.");
   }
 
   const confirmarDevolucion = () => {
@@ -6362,7 +6438,7 @@ function DevolucionesScreen({
       dineroADar,
       dineroARecibir,
     });
-    resolverDev(devActiva.id, modoGlobal, nota, activa.motivo.trim());
+    resolverDev(devActiva.id, modoGlobal, nota, activa.motivos);
     import("sonner").then(({ toast }) =>
       toast.success(
         modoGlobal === "mixto"
@@ -6495,16 +6571,7 @@ function DevolucionesScreen({
                             type="button"
                             disabled={!pendiente}
                             onClick={() =>
-                              pendiente &&
-                                setActiva({
-                                  id: dev.id,
-                                  paso: null,
-                                  reembolsoDinero: false,
-                                  notaDinero: "",
-                                  motivo: dev.devolucionMotivo ?? "",
-                                  devueltos: {},
-                                  compensacion: [],
-                                })
+                              pendiente && setActiva(nuevaDevolucion(dev))
                             }
                             title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
@@ -6534,16 +6601,18 @@ function DevolucionesScreen({
         </div>
       )}
 
-      {/* Modal de gestión */}
+      {/* Gestión de la devolución: ventana completa en vez de modal. La
+          resolución mueve varias listas a la vez —productos que entran,
+          canje y saldo— y en un modal encima quedaban demasiado apretadas. */}
       <AnimatePresence>
         {activa && devActiva && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 bg-background flex flex-col">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-7xl shadow-2xl border border-border flex flex-col max-h-[92vh]"
+              className="w-full h-full flex flex-col overflow-hidden"
             >
               {/* Header modal */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -6593,6 +6662,12 @@ function DevolucionesScreen({
                       detalleAct.map((d, i) => {
                         const q = activa.devueltos[i] ?? 0;
                         const [nombre, ...resto] = d.nombre.split(" — ");
+                        const mv = activa.motivos[i];
+                        // Resumen del motivo ya registrado: se muestra en la fila
+                        // para no tener que abrir el formulario a revisar.
+                        const motivoLinea = mv
+                          ? [mv.motivo, mv.descripcion].filter(Boolean).join(": ")
+                          : "";
                         return (
                           <div
                             key={i}
@@ -6611,9 +6686,41 @@ function DevolucionesScreen({
                               <p className="text-xs font-semibold text-foreground truncate">{nombre}</p>
                               <p className="text-xs text-muted-foreground truncate">
                                 {resto.length > 0 ? `${resto.join(" — ")} · ` : ""}
-                                {fmtCOPDev(d.precio)} c/u
+                                {/* Cantidad pedida. Va antes del unitario y un punto
+                                    más grande que él, porque al lado del precio se
+                                    confundía con el valor de la línea. */}
+                                <span className="text-sm font-bold text-foreground">{d.cantidad} ped.</span>
+                                <span> · {fmtCOPDev(d.precio)} c/u</span>
                               </p>
+                              {motivoLinea && (
+                                <p className="text-[11px] text-orange-700 dark:text-orange-400 truncate mt-0.5">
+                                  {motivoLinea}
+                                </p>
+                              )}
                             </div>
+                            {/* Motivo de la línea. Solo tiene sentido si el
+                                producto entra. El texto acompaña al icono para
+                                que se entienda sin pasar el mouse por encima. */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiva((p) => (p ? { ...p, editandoMotivo: i } : p))
+                              }
+                              disabled={q === 0}
+                              title={
+                                motivoLinea
+                                  ? `Motivo: ${motivoLinea}`
+                                  : "Registrar el motivo de la devolución"
+                              }
+                              className={`flex items-center gap-1 px-2 h-6 rounded-lg text-[11px] font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-40 ${
+                                motivoLinea
+                                  ? "bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-300"
+                                  : "bg-card border border-border text-muted-foreground hover:bg-muted"
+                              }`}
+                            >
+                              <FileText className="w-3 h-3 shrink-0" />
+                              Motivo
+                            </button>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
@@ -6855,20 +6962,16 @@ function DevolucionesScreen({
                       )}
                     </div>
 
-                    {/* Opción 2: Dinero. El monto sigue al saldo, así que cambia en
-                        tiempo real con cada producto que se elige en el canje.
-                        `shrink-0` la mantiene siempre visible, con el catálogo de
-                        canje abierto. */}
-                    <div
-                      className={`shrink-0 rounded-2xl border-2 transition-all ${
-                        conDinero || dineroARecibir > 0
-                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15"
-                          : "border-border bg-card"
-                      }`}
-                    >
+                    {/* Opción 2: Dinero. Siempre activa: el saldo se liquida
+                        en dinero pase lo que pase con el canje, así que exigir
+                        marcarla a mano solo dejaba Lugar a olvidos. El botón
+                        sigue siendo clicable para abrir la nota, pero ya no
+                        alterna el estado. `shrink-0` la mantiene siempre
+                        visible, con el catálogo de canje abierto. */}
+                    <div className="shrink-0 rounded-2xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15 transition-all">
                       <button
                         onClick={() =>
-                          setActiva((p) => (p ? { ...p, paso: p.paso === "dinero" ? null : "dinero", reembolsoDinero: p.paso === "dinero" ? false : true } : p))
+                          setActiva((p) => (p ? { ...p, paso: p.paso === "dinero" ? null : "dinero" } : p))
                         }
                         className="w-full flex items-center gap-3 p-3.5 text-left cursor-pointer"
                       >
@@ -6879,20 +6982,47 @@ function DevolucionesScreen({
                           <p className="text-sm font-bold text-foreground">Dinero</p>
                           <p className="text-xs text-muted-foreground">
                             {dineroARecibir > 0
-                              ? `Extra a cobrar: ${fmtCOPDev(dineroARecibir)}`
-                              : `A devolver: ${fmtCOPDev(montoSaldo)}`}
+                              ? `A favor de La Sirena: ${fmtCOPDev(dineroARecibir)}`
+                              : `A favor del cliente: ${fmtCOPDev(montoSaldo)}`}
                           </p>
                         </div>
-                        {conDinero && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3" strokeWidth={3} />
-                          </span>
-                        )}
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3" strokeWidth={3} />
+                        </span>
                       </button>
 
-                      {/* El saldo se muestra siempre: el rótulo cambia entre dar y
-                          recibir según lo que reste del canje. */}
-                      <div className="px-3.5 pb-3.5">
+                      {/* El dinero se explica en tres pasos: cuánto entra por
+                          lo que devuelve, cuánto sale por el canje y qué saldo
+                          queda. Antes solo se veía el saldo final y no se
+                          entendía de dónde salía. */}
+                      <div className="px-3.5 pb-3.5 space-y-1.5">
+                        <div className="rounded-xl border border-border bg-card divide-y divide-border">
+                          <div className="flex items-center justify-between gap-3 px-3 py-1.5">
+                            <p className="text-[11px] text-muted-foreground">
+                              Total de los productos devueltos
+                            </p>
+                            <p
+                              className="text-xs font-bold text-foreground whitespace-nowrap"
+                              style={{ fontFamily: MONO_DEV }}
+                            >
+                              {fmtCOPDev(valorDevuelto)}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 px-3 py-1.5">
+                            <p className="text-[11px] text-muted-foreground">
+                              Total del cambio de producto
+                            </p>
+                            <p
+                              className="text-xs font-bold text-foreground whitespace-nowrap"
+                              style={{ fontFamily: MONO_DEV }}
+                            >
+                              {fmtCOPDev(valorComp)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* El saldo se muestra siempre: el rótulo cambia entre dar y
+                            recibir según lo que reste del canje. */}
                         <div className="flex items-center justify-between gap-3 bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2">
                           <p className="text-xs text-muted-foreground truncate">{rotuloDinero}</p>
                           <p
@@ -6920,25 +7050,11 @@ function DevolucionesScreen({
                     </div>
                   </div>
 
-                  {/* Cierre: motivo, avisos y único botón. Los cuadros de "Cambio de
-                      producto" y "Dinero" quedan arriba, siempre visibles. */}
+                  {/* Cierre: avisos y único botón. El motivo ya no va aquí: se
+                      registra por producto con el botón "Motivo" de cada línea.
+                      Los cuadros de "Cambio de producto" y "Dinero" quedan
+                      arriba, siempre visibles. */}
                   <div className="shrink-0 border-t border-border bg-muted/30 p-4 space-y-2.5">
-                    {/* Motivo de la devolución: queda registrado con la resolución. */}
-                    <div className="rounded-xl border border-border bg-card px-3 py-2.5">
-                      <label className="block text-xs font-semibold text-foreground mb-1">
-                        ¿Por qué devuelve el cliente?
-                      </label>
-                      <textarea
-                        value={activa.motivo}
-                        onChange={(e) =>
-                          setActiva((p) => (p ? { ...p, motivo: e.target.value } : p))
-                        }
-                        rows={2}
-                        placeholder="Ej: llegó fría, producto equivocado, no le gustó el tamaño..."
-                        className="w-full px-2.5 py-2 bg-muted/40 rounded-lg border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                      />
-                    </div>
-
                     {faltan.length > 0 && (
                       <div className="space-y-0.5">
                         {faltan.map((f) => (
@@ -6962,6 +7078,107 @@ function DevolucionesScreen({
                 </div>
               </div>
             </motion.div>
+
+            {/* Motivo de una línea devuelta. Va por encima de la ventana y no
+                detrás: se abre desde el botón de cada producto y se cierra sin
+                perder lo que ya se había seleccionado. */}
+            {activa.editandoMotivo !== null && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <motion.div
+                  initial={{ scale: 0.96, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.96, opacity: 0 }}
+                  transition={{ duration: 0.14 }}
+                  className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border"
+                >
+                  {(() => {
+                    const idx = activa.editandoMotivo as number;
+                    const linea = detalleAct[idx];
+                    const mv = activa.motivos[idx] ?? { motivo: "", descripcion: "" };
+                    const esOtro = mv.motivo === "Otro";
+                    return (
+                      <>
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground">
+                              ¿Por qué devuelve este producto?
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {linea ? linea.nombre : "Producto"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiva((p) => (p ? { ...p, editandoMotivo: null } : p))
+                            }
+                            className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-foreground mb-1.5">
+                              Por qué
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {MOTIVOS_DEVOLUCION.map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => setMotivo(idx, { motivo: m })}
+                                  className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                                    mv.motivo === m
+                                      ? "bg-orange-100 border-orange-300 text-orange-800 dark:bg-orange-500/20 dark:border-orange-500/40 dark:text-orange-300"
+                                      : "bg-card border-border text-muted-foreground hover:bg-muted"
+                                  }`}
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* La descripción solo se abre con "Otro": en los otros
+                              casos el motivo ya dice suficiente. */}
+                          <div>
+                            <label className="block text-xs font-semibold text-foreground mb-1.5">
+                              Descripción de la situación
+                            </label>
+                            <textarea
+                              value={mv.descripcion}
+                              onChange={(e) => setMotivo(idx, { descripcion: e.target.value })}
+                              disabled={!esOtro}
+                              rows={3}
+                              placeholder={
+                                esOtro
+                                  ? "Ej: el cliente pidió sin cebolla y llegó con cebolla"
+                                  : "Elige “Otro” para escribir la situación"
+                              }
+                              className="w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-500/40 resize-none disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiva((p) => (p ? { ...p, editandoMotivo: null } : p))
+                            }
+                            className="w-full py-2.5 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                          >
+                            Listo
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </motion.div>
+              </div>
+            )}
           </div>
         )}
       </AnimatePresence>
@@ -7197,16 +7414,37 @@ function DevolucionesScreen({
                   )}
                 </div>
 
-                {devolucionDetalle.devolucionMotivo && (
-                  <div className="rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-500/30 dark:bg-orange-500/10 px-3 py-2.5">
-                    <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">
-                      Motivo de la devolución
-                    </p>
-                    <p className="text-sm text-foreground italic">
-                      “{devolucionDetalle.devolucionMotivo}”
-                    </p>
-                  </div>
-                )}
+                {/* Motivo de cada línea devuelta. Es lo que registró el botón
+                    que hay junto a la cantidad de cada producto. */}
+                {devolucionDetalle.devolucionMotivos &&
+                  Object.keys(devolucionDetalle.devolucionMotivos).length > 0 && (
+                    <div className="rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-500/30 dark:bg-orange-500/10 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1.5">
+                        Motivo por producto
+                      </p>
+                      <div className="space-y-1">
+                        {Object.entries(devolucionDetalle.devolucionMotivos)
+                          .sort((a, b) => Number(a[0]) - Number(b[0]))
+                          .map(([k, m]) => {
+                            const linea = devolucionDetalle.detalle?.[Number(k)];
+                            return (
+                              <div
+                                key={k}
+                                className="flex items-start justify-between gap-3"
+                              >
+                                <p className="text-xs text-foreground truncate">
+                                  {linea?.nombre ?? `Línea ${Number(k) + 1}`}
+                                </p>
+                                <p className="text-xs text-muted-foreground text-right shrink-0">
+                                  {m.motivo}
+                                  {m.descripcion ? `: ${m.descripcion}` : ""}
+                                </p>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
 
                 {devolucionDetalle.devolucionNota && (
                   <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
@@ -7583,6 +7821,9 @@ const fusionarCarritos = (
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
+  /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
+      de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
+  const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
   const [showNuevaOrden, setShowNuevaOrden] = useState(false);
@@ -7888,6 +8129,13 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     setDrawerOpen(false);
+  };
+
+  /** Desde la tabla de ventas, "Gestionar" salta al módulo de devoluciones con el
+      modal de esa venta ya abierto. */
+  const abrirGestionDevolucion = (id: string) => {
+    setDevolucionAAbrir(id);
+    navigate("devoluciones");
   };
 
   const openLogin = () => {
@@ -8495,12 +8743,15 @@ export default function App() {
                   pedidos={ventas}
                   setPedidos={setVentas}
                   productos={PRODUCTS}
+                  onGestionarDevolucion={abrirGestionDevolucion}
                 />
               )}
               {screen === "devoluciones" && (
                 <DevolucionesScreen
                   pedidos={ventas}
                   setPedidos={setVentas}
+                  abrirDevolucionId={devolucionAAbrir}
+                  onAbierta={() => setDevolucionAAbrir(null)}
                 />
               )}
               {screen === "gestion-productos" && (
