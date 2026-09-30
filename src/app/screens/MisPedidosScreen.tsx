@@ -40,6 +40,11 @@ const ESTADO: Record<
     color: "bg-orange-100 text-orange-800",
     mensaje: "Este pedido tiene una devolución registrada.",
   },
+  anulado: {
+    label: "Anulado",
+    color: "bg-red-100 text-red-700",
+    mensaje: "Este pedido fue anulado y no se tiene en cuenta.",
+  },
 };
 
 function Dato({

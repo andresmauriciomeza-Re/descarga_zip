@@ -1616,14 +1616,14 @@ export function OrdenCompraScreen({
       filtered.map(o => ({
         proveedor: o.proveedor,
         fecha: o.fecha,
-        numeroFactura: getFacturas(o.id).map(f => f.numeroFactura).join(", ") || "���",
+        numeroFactura: getFacturas(o.id).map(f => f.numeroFactura).join(", ") || "—",
         total: fmtCOP(calcTotal(o.items)),
         estado: o.estado,
       })),
       [
         { key: "proveedor", label: "Proveedor" },
         { key: "fecha", label: "Fecha" },
-        { key: "numeroFactura", label: "N-� Factura" },
+        { key: "numeroFactura", label: "N° Factura" },
         { key: "total", label: "Total" },
         { key: "estado", label: "Estado" },
       ],
