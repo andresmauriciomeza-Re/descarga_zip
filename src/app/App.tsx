@@ -6167,6 +6167,8 @@ function DevolucionesScreen({
     paso: "producto" | "dinero" | null;
     reembolsoDinero: boolean;
     notaDinero: string;
+    /** Motivo por el que el cliente devuelve: se guarda con la resolución. */
+    motivo: string;
     devueltos: Record<number, number>;
     compensacion: Reemplazo[];
   } | null>(null);
@@ -6184,7 +6186,7 @@ function DevolucionesScreen({
     dineroARecibir: number;
   } | null>(null);
 
-  const resolverDev = (id: string, tipo: DevolucionTipo, nota: string) => {
+  const resolverDev = (id: string, tipo: DevolucionTipo, nota: string, motivo?: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
@@ -6193,6 +6195,7 @@ function DevolucionesScreen({
               devolucionTipo: tipo,
               devolucionResuelta: true,
               devolucionNota: nota,
+              ...(motivo ? { devolucionMotivo: motivo } : {}),
               historial: [...(x.historial ?? []), { estado: "perdida" as VentaStatus, hora: nowHoraDev() }],
             }
           : x,
@@ -6359,7 +6362,7 @@ function DevolucionesScreen({
       dineroADar,
       dineroARecibir,
     });
-    resolverDev(devActiva.id, modoGlobal, nota);
+    resolverDev(devActiva.id, modoGlobal, nota, activa.motivo.trim());
     import("sonner").then(({ toast }) =>
       toast.success(
         modoGlobal === "mixto"
@@ -6498,6 +6501,7 @@ function DevolucionesScreen({
                                   paso: null,
                                   reembolsoDinero: false,
                                   notaDinero: "",
+                                  motivo: dev.devolucionMotivo ?? "",
                                   devueltos: {},
                                   compensacion: [],
                                 })
@@ -6563,8 +6567,11 @@ function DevolucionesScreen({
               </div>
 
               {/* Cuerpo modal: dos columnas. Izquierda, lo que entra de vuelta.
-                  Derecha, cómo se compensa. */}
-              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] divide-y lg:divide-y-0 lg:divide-x divide-border">
+                  Derecha, cómo se compensa. `lg:grid-rows-1` es lo que mantiene
+                  cada mitad dentro del alto del modal: sin él la fila del grid se
+                  mide por su contenido y el catálogo de canje se desborda hacia
+                  abajo en vez de quedarse en la columna derecha. */}
+              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:grid-rows-1 divide-y lg:divide-y-0 lg:divide-x divide-border">
                 {/* ================= Columna izquierda ================= */}
                 <div className="flex flex-col min-h-0">
                   <div className="px-5 py-3 border-b border-border shrink-0 flex items-center justify-between">
@@ -6589,16 +6596,16 @@ function DevolucionesScreen({
                         return (
                           <div
                             key={i}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-colors ${
                               q > 0
                                 ? "border-orange-300 bg-orange-50/40 dark:border-orange-500/40 dark:bg-orange-500/10"
                                 : "border-border bg-card"
                             }`}
                           >
                             {d.imagen ? (
-                              <img src={d.imagen} alt={d.nombre} className="w-9 h-9 rounded-lg object-cover bg-muted shrink-0" />
+                              <img src={d.imagen} alt={d.nombre} className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0" />
                             ) : (
-                              <div className="w-9 h-9 rounded-lg bg-muted shrink-0" />
+                              <div className="w-8 h-8 rounded-lg bg-muted shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-foreground truncate">{nombre}</p>
@@ -6607,23 +6614,23 @@ function DevolucionesScreen({
                                 {fmtCOPDev(d.precio)} c/u
                               </p>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => setDevQty(i, d.cantidad, -1)}
                                 disabled={q === 0}
-                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-6 h-6 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
-                                <Minus className="w-3.5 h-3.5" />
+                                <Minus className="w-3 h-3" />
                               </button>
-                              <span className="w-8 text-center text-sm font-bold text-foreground">{q}</span>
+                              <span className="w-7 text-center text-sm font-bold text-foreground">{q}</span>
                               <button
                                 type="button"
                                 onClick={() => setDevQty(i, d.cantidad, 1)}
                                 disabled={q >= d.cantidad}
-                                className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-6 h-6 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <Plus className="w-3 h-3" />
                               </button>
                             </div>
                           </div>
@@ -6661,10 +6668,18 @@ function DevolucionesScreen({
                     <p className="text-sm font-bold text-foreground">Tipo de devolución</p>
                   </div>
 
-                  <div className="flex-1 min-h-0 lg:overflow-y-auto p-4 space-y-3">
+                  {/* Este bloque no scrollea como una unidad: la tarjeta de "Dinero"
+                      queda siempre visible y es el catálogo de canje el que se
+                      encoge y scrollea por dentro. Si scrolls toda la columna,
+                      abrir "Cambio de producto" empuja el monto fuera de vista. */}
+                  <div className="flex-1 min-h-0 flex flex-col gap-3 p-4">
                     {/* Opción 1: Cambio de producto */}
                     <div
                       className={`rounded-2xl border-2 transition-all ${
+                        activa.paso === "producto"
+                          ? "flex-1 min-h-0 flex flex-col"
+                          : "shrink-0"
+                      } ${
                         totalComp > 0
                           ? "border-blue-500 bg-blue-50 dark:bg-blue-500/15"
                           : "border-border bg-card"
@@ -6695,9 +6710,9 @@ function DevolucionesScreen({
                       </button>
 
                       {activa.paso === "producto" && (
-                        <div className="px-3.5 pb-3.5 space-y-2.5">
+                        <div className="px-3.5 pb-3.5 flex flex-col flex-1 min-h-0 space-y-2.5">
                           {activa.compensacion.length > 0 && (
-                            <div className="bg-card border border-blue-200 dark:border-blue-500/30 rounded-xl px-3 py-2">
+                            <div className="shrink-0 bg-card border border-blue-200 dark:border-blue-500/30 rounded-xl px-3 py-2">
                               {activa.compensacion.map((r) => (
                                 <div key={`${r.id}-${r.tamaño ?? ""}`} className="flex justify-between gap-2 text-xs text-blue-900 dark:text-blue-200 py-0.5">
                                   <span className="truncate">
@@ -6728,7 +6743,7 @@ function DevolucionesScreen({
                           {/* Filtro por categoría: en vez de una lista larga con
                               scroll, se elige una categoría y caben todos sus
                               productos a la vez. */}
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="shrink-0 flex flex-wrap items-center gap-1.5">
                             {categoriasCanje.map((c) => (
                               <button
                                 key={c}
@@ -6748,7 +6763,11 @@ function DevolucionesScreen({
                           {/* Cada producto es una tarjeta; si tiene tamaños, cada
                               tamaño es una celda con su propio precio y su propio
                               contador, porque el canje es por unidad y tamaño. */}
-                          <div className="grid grid-cols-4 gap-2">
+                          {/* Solo la rejilla scrollea. Al ser el único elemento
+                              flexible del panel, se encoge para dejarle sitio
+                              siempre a la tarjeta de "Dinero" de abajo. */}
+                          <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+                            <div className="grid grid-cols-3 gap-2">
                             {productosCanje.map((prod) => {
                               const variantes =
                                 prod.sizes.length > 0
@@ -6830,15 +6849,18 @@ function DevolucionesScreen({
                                 </div>
                               );
                             })}
+                            </div>
                           </div>
                         </div>
                       )}
                     </div>
 
                     {/* Opción 2: Dinero. El monto sigue al saldo, así que cambia en
-                        tiempo real con cada producto que se elige en el canje. */}
+                        tiempo real con cada producto que se elige en el canje.
+                        `shrink-0` la mantiene siempre visible, con el catálogo de
+                        canje abierto. */}
                     <div
-                      className={`rounded-2xl border-2 transition-all ${
+                      className={`shrink-0 rounded-2xl border-2 transition-all ${
                         conDinero || dineroARecibir > 0
                           ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15"
                           : "border-border bg-card"
@@ -6870,11 +6892,11 @@ function DevolucionesScreen({
 
                       {/* El saldo se muestra siempre: el rótulo cambia entre dar y
                           recibir según lo que reste del canje. */}
-                      <div className="px-3.5 pb-3.5 space-y-2.5">
-                        <div className="bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2.5">
-                          <p className="text-xs text-muted-foreground">{rotuloDinero}</p>
+                      <div className="px-3.5 pb-3.5">
+                        <div className="flex items-center justify-between gap-3 bg-card border border-emerald-200 dark:border-emerald-500/30 rounded-xl px-3 py-2">
+                          <p className="text-xs text-muted-foreground truncate">{rotuloDinero}</p>
                           <p
-                            className={`text-2xl font-bold ${
+                            className={`text-lg font-bold whitespace-nowrap ${
                               dineroARecibir > 0
                                 ? "text-orange-600 dark:text-orange-400"
                                 : "text-emerald-700 dark:text-emerald-300"
@@ -6883,57 +6905,38 @@ function DevolucionesScreen({
                           >
                             {fmtCOPDev(montoSaldo)}
                           </p>
-                          {totalDevueltos > 0 && (
-                            <p className="text-xs text-muted-foreground mt-0.5" style={{ fontFamily: MONO_DEV }}>
-                              {fmtCOPDev(valorDevuelto)} devueltos − {fmtCOPDev(valorComp)} canje
-                            </p>
-                          )}
                         </div>
 
                         {activa.paso === "dinero" && (
-                          <div>
-                            <input
-                              type="text"
-                              value={activa.notaDinero}
-                              onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
-                              placeholder="Nota del reembolso (opcional)"
-                              className="w-full px-3 py-2.5 bg-card rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 dark:focus:ring-emerald-500/40"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            value={activa.notaDinero}
+                            onChange={(e) => setActiva((p) => (p ? { ...p, notaDinero: e.target.value } : p))}
+                            placeholder="Nota del reembolso (opcional)"
+                            className="w-full mt-2.5 px-3 py-2.5 bg-card rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 dark:focus:ring-emerald-500/40"
+                          />
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Cierre: resumen de lo que se aplicará y único botón */}
+                  {/* Cierre: motivo, avisos y único botón. Los cuadros de "Cambio de
+                      producto" y "Dinero" quedan arriba, siempre visibles. */}
                   <div className="shrink-0 border-t border-border bg-muted/30 p-4 space-y-2.5">
-                    <div className="bg-card border border-border rounded-xl divide-y divide-border">
-                      <div className="flex items-center justify-between gap-2 px-3 py-2">
-                        <p className="text-xs font-semibold text-foreground">Cambio de producto</p>
-                        <p className="text-xs font-semibold text-right truncate pl-2">
-                          {totalComp > 0 ? (
-                            <span className="text-blue-700 dark:text-blue-300">{fmtCOPDev(valorComp)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">No se canjeó nada</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 px-3 py-2">
-                        <p className="text-xs font-semibold text-foreground">Dinero</p>
-                        <p className="text-xs font-semibold text-right pl-2">
-                          {dineroARecibir > 0 ? (
-                            <span className="text-orange-600 dark:text-orange-400" style={{ fontFamily: MONO_DEV }}>
-                              +{fmtCOPDev(dineroARecibir)}
-                            </span>
-                          ) : dineroADar > 0 ? (
-                            <span className="text-emerald-700 dark:text-emerald-300" style={{ fontFamily: MONO_DEV }}>
-                              −{fmtCOPDev(dineroADar)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">$0</span>
-                          )}
-                        </p>
-                      </div>
+                    {/* Motivo de la devolución: queda registrado con la resolución. */}
+                    <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+                      <label className="block text-xs font-semibold text-foreground mb-1">
+                        ¿Por qué devuelve el cliente?
+                      </label>
+                      <textarea
+                        value={activa.motivo}
+                        onChange={(e) =>
+                          setActiva((p) => (p ? { ...p, motivo: e.target.value } : p))
+                        }
+                        rows={2}
+                        placeholder="Ej: llegó fría, producto equivocado, no le gustó el tamaño..."
+                        className="w-full px-2.5 py-2 bg-muted/40 rounded-lg border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                      />
                     </div>
 
                     {faltan.length > 0 && (
@@ -7193,6 +7196,17 @@ function DevolucionesScreen({
                     <p className="text-sm text-muted-foreground">{devolucionDetalle.productos || "Sin detalle de productos"}</p>
                   )}
                 </div>
+
+                {devolucionDetalle.devolucionMotivo && (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-500/30 dark:bg-orange-500/10 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                      Motivo de la devolución
+                    </p>
+                    <p className="text-sm text-foreground italic">
+                      “{devolucionDetalle.devolucionMotivo}”
+                    </p>
+                  </div>
+                )}
 
                 {devolucionDetalle.devolucionNota && (
                   <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5">
@@ -8473,6 +8487,7 @@ export default function App() {
                   {...getPerms("ventas-pedidos")}
                   pedidos={ventas}
                   setPedidos={setVentas}
+                  productos={PRODUCTS}
                 />
               )}
               {screen === "devoluciones" && (

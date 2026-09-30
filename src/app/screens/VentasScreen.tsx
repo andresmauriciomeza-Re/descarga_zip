@@ -15,18 +15,22 @@ import {
   ImageIcon,
   Trash2,
   Undo2,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CalendarDropdown } from "../components/CalendarDropdown";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportToExcel } from "../utils/exportExcel";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
 
-// ─────────────────────────── LOCAL PRODUCT TYPE + DATA ───────────────────────────
+// ─────────────────────────── CATÁLOGO DEL SISTEMA ───────────────────────────
 
-interface Product {
+// El pedido nuevo usa el mismo catálogo que el resto de la aplicación, recibido
+// por prop desde `App.tsx`. Antes esta pantalla traía su propia copia local con
+// seis pizzas inventadas, así que era imposible pedir una lasaña o una bebida
+// aunque el menú ya las tuviera.
+interface ProductoMenu {
   id: number;
   name: string;
   description: string;
@@ -35,108 +39,10 @@ interface Product {
   category: string;
   sizes: { label: string; price: number }[];
   extras: { label: string; price: number }[];
-  status: "activo" | "agotado" | "pausado";
+  status: "disponible" | "no disponible";
   rating: number;
   sales: number;
 }
-
-const SIZES_DEFAULT = [
-  { label: "Mediano", price: 14000 },
-  { label: "Grande", price: 16000 },
-];
-
-const PRODUCTS: Product[] = [
-  {
-    id: 1,
-    name: "Margarita Clásica",
-    description:
-      "Salsa de tomate casera, mozzarella fresca y albahaca del jardín. La pizza que nos hizo famosos en Medellín desde 1994.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1664309641932-0e03e0771b97?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "activo",
-    rating: 4.9,
-    sales: 1240,
-  },
-  {
-    id: 2,
-    name: "Pepperoni Suprema",
-    description:
-      "Generosa porción de pepperoni importado, queso mozzarella derretido y la salsa secreta de La Sirena.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1573821663912-6df460f9c684?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "activo",
-    rating: 4.8,
-    sales: 980,
-  },
-  {
-    id: 3,
-    name: "La Sirena Especial",
-    description:
-      "Nuestra pizza insignia. Camarones al ajillo, queso crema, mozzarella, tomate cherry y rúcula fresca.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "activo",
-    rating: 4.95,
-    sales: 756,
-  },
-  {
-    id: 4,
-    name: "Cuatro Quesos",
-    description:
-      "Mozzarella, provolone, queso azul y parmesano reggiano. Para los verdaderos amantes del queso.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1680405620826-83b0f0f61b28?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "activo",
-    rating: 4.7,
-    sales: 620,
-  },
-  {
-    id: 5,
-    name: "Hawaiana Tropical",
-    description:
-      "Piña caramelizada, jamón serrano, mozzarella y salsa BBQ. Dulce y salada en perfecta armonía.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1607811253515-57ef7723099d?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "activo",
-    rating: 4.6,
-    sales: 540,
-  },
-  {
-    id: 6,
-    name: "Veggie Mediterránea",
-    description:
-      "Pimentones de colores, aceitunas kalamata, queso feta, espinaca fresca y tomates cherry.",
-    price: 14000,
-    image:
-      "https://images.unsplash.com/photo-1702716059239-385baacdabdc?w=600&h=600&fit=crop&auto=format",
-    category: "Pizzas",
-    sizes: SIZES_DEFAULT,
-    extras: [],
-    status: "pausado",
-    rating: 4.5,
-    sales: 380,
-  },
-];
 
 // ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
 
@@ -251,6 +157,8 @@ export interface Venta {
   devolucionResuelta?: boolean;
   devolucionNota?: string;
   devolucionMonto?: number;
+  /** Motivo por el que el cliente devuelve, escrito al gestionar la devolución. */
+  devolucionMotivo?: string;
 }
 
 const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
@@ -504,11 +412,13 @@ export const INITIAL_VENTAS: Venta[] = [
 export function VentasScreen({
   pedidos,
   setPedidos,
+  productos,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
+  productos: ProductoMenu[];
   canCreate?: boolean;
   canEdit?: boolean;
 }) {
@@ -683,8 +593,9 @@ export function VentasScreen({
   }) => {
     const [documento, setDocumento] = useState("");
     const [usuario, setUsuario] = useState("");
-    // El pedido se genera hoy: la fecha se autocompleta y queda editable.
-    const [fecha, setFecha] = useState(hoyFecha());
+    // La fecha no es un campo: el pedido se toma hoy, así que se calcula al
+    // guardar. Sin estado no hay forma de editarla.
+    const fecha = hoyFecha();
     const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
@@ -705,24 +616,37 @@ export function VentasScreen({
     // Product picker state
     const [showPicker, setShowPicker] = useState(false);
     const [prodSearch, setProdSearch] = useState("");
-    const filteredProds = PRODUCTS.filter(
+    // Categoría activa del selector. Filtrar por categoría es lo que deja ver
+    // todos los productos de una vez, sin barra de desplazamiento.
+    const [catPicker, setCatPicker] = useState("Todas");
+
+    // Las bebidas del menú llegan sin tamaños: se venden de una sola
+    // presentación. Sin esto, el picker leería `sizes[0]` de un arreglo vacío
+    // y reventaría al pedir una gaseosa.
+    const variantesDe = (p: ProductoMenu) =>
+      p.sizes.length > 0 ? p.sizes : [{ label: "Única", price: p.price }];
+
+    const disponiblesMenu = useMemo(
+      () => productos.filter((p) => p.status === "disponible"),
+      [productos],
+    );
+    const categoriasPicker = useMemo(
+      () => ["Todas", ...new Set(disponiblesMenu.map((p) => p.category))],
+      [disponiblesMenu],
+    );
+    const filteredProds = disponiblesMenu.filter(
       (p) =>
         p.name
           .toLowerCase()
           .includes(prodSearch.toLowerCase()) &&
-        p.status === "activo",
+        (catPicker === "Todas" || p.category === catPicker),
     );
 
-    const TAMAÑOS = PRODUCTS[0]?.sizes ?? [
-      { label: "Mediano", price: 14000 },
-      { label: "Grande", price: 16000 },
-    ];
-
-    const toggleProduct = (p: (typeof PRODUCTS)[number]) => {
+    const toggleProduct = (p: ProductoMenu) => {
       setSelProductos((prev) => {
         const exists = prev.find((x) => x.id === p.id);
         if (exists) return prev.filter((x) => x.id !== p.id);
-        const defaultSize = p.sizes[0];
+        const defaultSize = variantesDe(p)[0];
         return [
           ...prev,
           {
@@ -749,10 +673,10 @@ export function VentasScreen({
     };
 
     const updateTamaño = (id: number, tamaño: string) => {
-      const prod = PRODUCTS.find((p) => p.id === id);
-      const sizeObj = prod?.sizes.find(
-        (s) => s.label === tamaño,
-      );
+      const prod = productos.find((p) => p.id === id);
+      const sizeObj = prod
+        ? variantesDe(prod).find((s) => s.label === tamaño)
+        : undefined;
       setSelProductos((p) =>
         p.map((x) =>
           x.id === id
@@ -787,10 +711,6 @@ export function VentasScreen({
         toast.error("El documento del cliente es obligatorio");
         return;
       }
-      if (!fecha) {
-        toast.error("La fecha es obligatoria");
-        return;
-      }
       if (selProductos.length === 0) {
         toast.error("Agrega al menos un producto");
         return;
@@ -805,7 +725,7 @@ export function VentasScreen({
         nombre: `${p.nombre} — ${p.tamaño}`,
         precio: p.precio,
         cantidad: p.cantidad,
-        imagen: PRODUCTS.find((x) => x.id === p.id)?.image,
+                        imagen: productos.find((x) => x.id === p.id)?.image,
       }));
       onConfirm({
         usuario: usuario.trim(),
@@ -832,7 +752,9 @@ export function VentasScreen({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           transition={{ duration: 0.16 }}
-          className="bg-card rounded-2xl w-full max-w-5xl shadow-2xl border border-border my-4 flex flex-col max-h-[90vh]"
+          className={`bg-card rounded-2xl w-full shadow-2xl border border-border flex flex-col my-4 transition-all ${
+            showPicker ? "max-w-7xl max-h-[92vh]" : "max-w-5xl max-h-[90vh]"
+          }`}
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3
@@ -849,7 +771,7 @@ export function VentasScreen({
             </button>
           </div>
 
-          <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 overflow-y-auto">
+          <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 flex-1 min-h-0 overflow-y-auto">
           {/* ── Izquierda: datos del pedido ── */}
           <div className="space-y-4">
             {/* Documento del cliente */}
@@ -914,15 +836,25 @@ export function VentasScreen({
               )}
             </div>
 
-            {/* Fecha */}
+            {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Fecha del pedido *
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                Fecha del pedido
               </label>
-              <CalendarDropdown
-                value={fecha}
-                onChange={setFecha}
-              />
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/50 rounded-xl border border-dashed border-border">
+                <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-semibold text-foreground">
+                  {new Date(`${fecha}T00:00:00`).toLocaleDateString("es-CO", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+                <span className="ml-auto text-[11px] text-muted-foreground shrink-0">
+                  Automática
+                </span>
+              </div>
             </div>
 
             {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
@@ -967,9 +899,9 @@ export function VentasScreen({
 
               {/* Productos seleccionados */}
               {selProductos.length > 0 && (
-                <div className="mb-2 space-y-2 max-h-56 overflow-y-auto">
+                <div className="mb-2 space-y-2 max-h-72 overflow-y-auto">
                   {selProductos.map((p) => {
-                    const prodData = PRODUCTS.find(
+                    const prodData = productos.find(
                       (x) => x.id === p.id,
                     );
                     return (
@@ -998,8 +930,11 @@ export function VentasScreen({
                         {/* Fila 2: tamaño + cantidad + precio */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* Selector de tamaño */}
+                          {/* Selector de tamaño. Los productos de una sola
+                              presentación (bebidas) no muestran este grupo. */}
+                          {prodData && prodData.sizes.length > 0 && (
                           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
-                            {(prodData?.sizes ?? TAMAÑOS).map(
+                            {prodData.sizes.map(
                               (s) => (
                                 <button
                                   key={s.label}
@@ -1014,6 +949,7 @@ export function VentasScreen({
                               ),
                             )}
                           </div>
+                          )}
                           {/* Cantidad */}
                           <div className="flex items-center gap-1 shrink-0">
                             <button
@@ -1063,7 +999,8 @@ export function VentasScreen({
                 </div>
               )}
 
-              {/* Botón abrir picker */}
+              {/* Botón abrir picker. El catálogo se muestra aparte, a todo el
+                  ancho del modal, para que quepan los productos sin scroll. */}
               <button
                 type="button"
                 onClick={() => {
@@ -1082,82 +1019,125 @@ export function VentasScreen({
                 />
               </button>
 
-              {/* Lista de productos */}
+              {/* Catálogo: vive dentro de la columna derecha para que el modal
+                  siga teniendo sus dos mitades. La rejilla scrollea por dentro
+                  para no empujar nada hacia abajo. */}
               {showPicker && (
-                <div className="mt-1 border border-border rounded-xl overflow-hidden shadow-sm">
-                  <div className="px-3 py-2 border-b border-border">
-                    <div className="relative">
+                <div className="mt-2 border border-border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-3 py-2.5 border-b border-border bg-muted/30 flex flex-wrap items-center gap-2">
+                    <div className="relative flex-1 min-w-32">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <input
                         value={prodSearch}
-                        onChange={(e) =>
-                          setProdSearch(e.target.value)
-                        }
+                        onChange={(e) => setProdSearch(e.target.value)}
                         placeholder="Buscar producto..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-muted rounded-lg border border-border text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        className="w-full pl-8 pr-3 py-1.5 bg-card rounded-lg border border-border text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
                     </div>
-                  </div>
-                  <div className="max-h-52 overflow-y-auto">
-                    {filteredProds.map((p) => {
-                      const selItem = selProductos.find((x) => x.id === p.id);
-                      const sel = !!selItem;
-                      return (
-                        <div
-                          key={p.id}
-                          className={`flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-0 transition-colors ${sel ? "bg-primary/5" : "hover:bg-muted/50"}`}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {categoriasPicker.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCatPicker(c)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                            catPicker === c
+                              ? "bg-primary text-white border-transparent"
+                              : "bg-card text-foreground border-border hover:border-primary/40"
+                          }`}
                         >
-                          {/* Checkbox */}
-                          <button
-                            type="button"
-                            onClick={() => toggleProduct(p)}
-                            className="shrink-0 cursor-pointer"
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
+                      {filteredProds.map((p) => {
+                        const selItem = selProductos.find((x) => x.id === p.id);
+                        const sel = !!selItem;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${
+                              sel
+                                ? "border-primary/40 bg-primary/5"
+                                : "border-border bg-card"
+                            }`}
                           >
-                            <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${sel ? "bg-primary border-primary" : "border-border"}`}>
-                              {sel && <Check className="w-3 h-3 text-white" />}
-                            </div>
-                          </button>
-                          {/* Imagen + nombre */}
-                          <img src={p.image} alt={p.name} className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-foreground truncate">{p.name}</p>
-                            <p className="text-xs text-muted-foreground">{p.category}</p>
-                          </div>
-                          {/* Botones de tamaño */}
-                          <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
-                            {p.sizes.map((s) => {
-                              const active = sel && selItem?.tamaño === s.label;
-                              return (
-                                <button
-                                  key={s.label}
-                                  type="button"
-                                  onClick={() => {
-                                    if (!sel) {
-                                      // Agregar con este tamaño
-                                      setSelProductos((prev) => [
-                                        ...prev,
-                                        { id: p.id, nombre: p.name, precio: s.price, cantidad: 1, tamaño: s.label },
-                                      ]);
-                                    } else {
-                                      // Cambiar tamaño
-                                      updateTamaño(p.id, s.label);
-                                    }
-                                  }}
-                                  className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                                    active
-                                      ? "bg-primary text-white"
-                                      : "bg-muted text-muted-foreground hover:bg-border"
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => toggleProduct(p)}
+                                className="shrink-0 cursor-pointer"
+                              >
+                                <div
+                                  className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
+                                    sel ? "bg-primary border-primary" : "border-border"
                                   }`}
                                 >
-                                  {s.label}
-                                  <span className="ml-1 opacity-70">${(s.price / 1000).toFixed(0)}k</span>
-                                </button>
-                              );
-                            })}
+                                  {sel && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                              </button>
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0"
+                              />
+                              <p className="text-[11px] font-semibold text-foreground leading-tight line-clamp-2">
+                                {p.name}
+                              </p>
+                            </div>
+
+                            <div className="flex gap-1.5">
+                              {variantesDe(p).map((s) => {
+                                const active = sel && selItem?.tamaño === s.label;
+                                return (
+                                  <button
+                                    key={s.label}
+                                    type="button"
+                                    onClick={() => {
+                                      if (!sel) {
+                                        setSelProductos((prev) => [
+                                          ...prev,
+                                          { id: p.id, nombre: p.name, precio: s.price, cantidad: 1, tamaño: s.label },
+                                        ]);
+                                      } else {
+                                        updateTamaño(p.id, s.label);
+                                      }
+                                    }}
+                                    className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
+                                      active
+                                        ? "border-primary bg-primary text-white"
+                                        : "border-border bg-muted/40 hover:border-primary/40"
+                                    }`}
+                                  >
+                                    <span className="block text-[10px] font-semibold truncate">
+                                      {s.label}
+                                    </span>
+                                    <span
+                                      className={`block text-[10px] truncate ${
+                                        active ? "opacity-80" : "text-muted-foreground"
+                                      }`}
+                                      style={{ fontFamily: MONO }}
+                                    >
+                                      ${(s.price / 1000).toFixed(0)}k
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+
+                    {filteredProds.length === 0 && (
+                      <p className="px-3 py-4 text-xs text-muted-foreground italic">
+                        Sin productos en esta categoría.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -1165,7 +1145,7 @@ export function VentasScreen({
 
             {/* Resumen total */}
             {selProductos.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border mt-3">
+              <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border">
                 <span className="text-sm text-muted-foreground font-medium">
                   {cantidadTotal} producto
                   {cantidadTotal !== 1 ? "s" : ""} · Total
@@ -1187,8 +1167,7 @@ export function VentasScreen({
               className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
             >
               Cancelar
-            </button>
-            <button
+            </button>            <button
               onClick={handleSave}
               className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
             >
