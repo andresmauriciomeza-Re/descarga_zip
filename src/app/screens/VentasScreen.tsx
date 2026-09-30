@@ -7,11 +7,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
+  Clock,
   Eye,
   AlertCircle,
   ShieldCheck,
   ShieldX,
   ImageIcon,
+  Trash2,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
@@ -142,12 +145,17 @@ function ConfirmModal({
   message,
   onConfirm,
   onCancel,
+  tone = "peligro",
 }: {
   title: string;
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** "aviso" pinza el botón en naranja, para acciones que no son destructivas
+      (p. ej. registrar una devolución). */
+  tone?: "peligro" | "aviso";
 }) {
+  const esAviso = tone === "aviso";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <motion.div
@@ -158,8 +166,14 @@ function ConfirmModal({
         className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border"
       >
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-            <AlertCircle className="w-5 h-5 text-red-600" />
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+              esAviso ? "bg-orange-100" : "bg-red-100"
+            }`}
+          >
+            <AlertCircle
+              className={`w-5 h-5 ${esAviso ? "text-orange-600" : "text-red-600"}`}
+            />
           </div>
           <h3
             className="text-xl font-bold text-foreground"
@@ -180,7 +194,11 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer"
+            className={`flex-1 py-3 text-white rounded-xl font-semibold transition-colors active:scale-95 cursor-pointer ${
+              esAviso
+                ? "bg-orange-600 hover:bg-orange-700"
+                : "bg-red-600 hover:bg-red-700"
+            }`}
           >
             Sí, confirmar
           </button>
@@ -192,7 +210,11 @@ function ConfirmModal({
 
 // ─────────────────────────── VENTAS TYPES & DATA ───────────────────────────
 
-export type VentaStatus = "venta" | "perdida" | "por-verificar" | "completado";
+export type VentaStatus = "venta" | "perdida" | "por-verificar" | "completado" | "anulado";
+
+/** "anulado" y "perdida" ya no se eligen desde el desplegable de estado de la
+    tabla: se aplican con los botones de acción (anular / devolución). */
+export const VENTA_STATUS_MANUALES: VentaStatus[] = ["perdida", "anulado"];
 
 export interface HistorialEntry { estado: VentaStatus; hora: string; }
 
@@ -212,8 +234,8 @@ export type DevolucionTipo = "producto" | "dinero" | "mixto";
 export interface Venta {
   id: string;
   usuario: string;
-  /** Documento del cliente. Solo lo llenan los pedidos hechos como invitado:
-      el checkout lo pedía y lo validaba, pero se perdía antes de guardarse. */
+  /** Documento del cliente. Lo piden tanto el checkout del invitado como el
+      pedido que crea el administrador, así que en la práctica siempre llega. */
   documento?: string;
   fecha: string;
   productos: string;
@@ -236,6 +258,7 @@ const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
   perdida:         "bg-orange-100 text-orange-800",
   "por-verificar": "bg-amber-100 text-amber-800",
   completado:      "bg-emerald-100 text-emerald-800",
+  anulado:         "bg-red-100 text-red-700",
 };
 
 const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
@@ -243,10 +266,58 @@ const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
   perdida:         "Devolución",
   "por-verificar": "Por verificar",
   completado:      "Completado",
+  anulado:         "Anulado",
+};
+
+/** Estados ofrecidos por el desplegable de la tabla: los anulados y las
+    devoluciones se aplican con sus botones de acción, no eligiéndolos a mano. */
+export const VENTA_STATUS_SELECCIONABLES: VentaStatus[] = (
+  Object.keys(VENTA_STATUS_LABEL) as VentaStatus[]
+).filter((s) => !VENTA_STATUS_MANUALES.includes(s));
+
+/** Métodos de pago. "Efectivo" solo existe para los pedidos que genera el
+    administrador (pedidos tomados en el local). */
+export const METODO_PAGO_BASE = ["Nequi", "Bancolombia"] as const;
+export const METODO_PAGO_ADMIN = [...METODO_PAGO_BASE, "Efectivo"] as const;
+
+export type MetodoPago = (typeof METODO_PAGO_ADMIN)[number] | "";
+
+const METODO_PAGO_ESTILO: Record<
+  Exclude<MetodoPago, "">,
+  { pill: string; btn: string; icono: string }
+> = {
+  Nequi:       { pill: "bg-purple-100 text-purple-800", btn: "bg-purple-600 border-purple-600", icono: "💜" },
+  Bancolombia: { pill: "bg-yellow-100 text-yellow-800",  btn: "bg-yellow-500 border-yellow-500",  icono: "🏦" },
+  Efectivo:    { pill: "bg-emerald-100 text-emerald-800", btn: "bg-emerald-600 border-emerald-600", icono: "💵" },
 };
 
 const nowHora = () =>
   new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+
+/** Etiqueta del método de pago con su color. "Efectivo" es exclusivo de los
+    pedidos que crea el administrador. Se exporta para que Devoluciones muestre
+    el mismo icono y color sin duplicar la tabla de métodos. */
+export function PagoPill({ metodo }: { metodo?: string }) {
+  const est = METODO_PAGO_ESTILO[metodo as Exclude<MetodoPago, "">];
+  if (!est) {
+    return (
+      <span className="text-xs text-muted-foreground italic">—</span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${est.pill}`}
+    >
+      {est.icono} {metodo}
+    </span>
+  );
+}
+
+/** Fecha local en formato YYYY-MM-DD (el que espera CalendarDropdown). */
+const hoyFecha = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 export const INITIAL_VENTAS: Venta[] = [
   {
@@ -443,7 +514,6 @@ export function VentasScreen({
 }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [editItem, setEditItem] = useState<Venta | null>(null);
   const [detailItem, setDetailItem] = useState<Venta | null>(
     null,
   );
@@ -453,7 +523,15 @@ export function VentasScreen({
     current: VentaStatus;
     next: VentaStatus;
   } | null>(null);
+  const [confirmAccionV, setConfirmAccionV] = useState<{
+    id: string;
+    accion: "anular" | "devolucion";
+  } | null>(null);
 
+  /** Última hora registrada en el historial: es la hora en que se colocó el
+      estado actual y la que se muestra a la derecha de la columna Estado. */
+  const horaEstado = (p: Venta) =>
+    p.historial?.[p.historial.length - 1]?.hora ?? "—";
 
   const applyEstadoVenta = (id: string, next: VentaStatus) => {
     const entry: HistorialEntry = { estado: next, hora: nowHora() };
@@ -467,6 +545,41 @@ export function VentasScreen({
     toast.success(`Estado cambiado a: ${VENTA_STATUS_LABEL[next]}`);
   };
 
+  /** Anular una venta: el pedido queda en el estado "anulado" y deja de contar
+      como venta, sin tocar el módulo de devoluciones. */
+  const anularVenta = (id: string) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado: "anulado" as VentaStatus,
+              historial: [...(x.historial ?? []), { estado: "anulado" as VentaStatus, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.success("Venta anulada");
+  };
+
+  /** Registrar una devolución: la venta pasa a "Devolución" y queda disponible
+      en el módulo de devoluciones para resolverla. */
+  const registrarDevolucion = (id: string) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado: "perdida" as VentaStatus,
+              devolucionResuelta: false,
+              historial: [...(x.historial ?? []), { estado: "perdida" as VentaStatus, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.success("Devolución registrada");
+  };
+
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
   const exportExcel = () => {
@@ -474,21 +587,27 @@ export function VentasScreen({
       pedidos.map((p) => ({
         id: p.id,
         cliente: p.usuario,
+        documento: p.documento ?? "",
         fecha: p.fecha,
+        horaRecogida: p.horaRecogida ?? "",
         productos: p.productos,
         cantidad: p.cantidad,
         total: fmtCOP(p.total),
         estado: VENTA_STATUS_LABEL[p.estado],
+        horaEstado: horaEstado(p),
         metodoPago: p.metodoPago,
       })),
       [
         { key: "id", label: "ID" },
         { key: "cliente", label: "Cliente" },
-        { key: "fecha", label: "Fecha" },
+        { key: "documento", label: "Documento" },
+        { key: "fecha", label: "Fecha del pedido" },
+        { key: "horaRecogida", label: "Hora de recogida" },
         { key: "productos", label: "Productos" },
         { key: "cantidad", label: "Cantidad" },
         { key: "total", label: "Total" },
         { key: "estado", label: "Estado" },
+        { key: "horaEstado", label: "Hora del estado" },
         { key: "metodoPago", label: "Método de Pago" },
       ],
       "ventas"
@@ -552,45 +671,27 @@ export function VentasScreen({
     tamaño: string;
   }
 
+  /** Modal exclusivo del panel de administrador: el pedido se toma en el local,
+      frente al cliente, así que no se pide estado, comprobante ni hora de
+      recogida. La fecha se carga sola con el día en que se hace el pedido. */
   const VentaModal = ({
-    title,
-    initial,
     onClose,
     onConfirm,
-    mode = "edit",
   }: {
-    title: string;
-    initial: Omit<Venta, "id">;
     onClose: () => void;
     onConfirm: (v: Omit<Venta, "id">) => void;
-    mode?: "create" | "edit";
   }) => {
-    const [usuario, setUsuario] = useState(initial.usuario);
-    const [fecha, setFecha] = useState(initial.fecha);
-    const [estado, setEstado] = useState<VentaStatus>(
-      initial.estado,
+    const [documento, setDocumento] = useState("");
+    const [usuario, setUsuario] = useState("");
+    // El pedido se genera hoy: la fecha se autocompleta y queda editable.
+    const [fecha, setFecha] = useState(hoyFecha());
+    const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
+    const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
+      [],
     );
-    const [metodoPago, setMetodoPago] = useState<"Nequi" | "Bancolombia" | "">(
-      (initial.metodoPago as "Nequi" | "Bancolombia" | "") ?? "",
-    );
-    const [comprobante, setComprobante] = useState<string>(initial.comprobante ?? "");
-    const [horaRecogida, setHoraRecogida] = useState<string>(initial.horaRecogida ?? "");
-    const [selProductos, setSelProductos] = useState<
-      ProductoSeleccionado[]
-    >(() => {
-      return PRODUCTS.filter((p) =>
-        initial.productos.includes(p.name),
-      ).map((p) => ({
-        id: p.id,
-        nombre: p.name,
-        precio: 14000,
-        cantidad: 1,
-        tamaño: "Mediano",
-      }));
-    });
 
     // Autocomplete state
-    const [uQuery, setUQuery] = useState(initial.usuario);
+    const [uQuery, setUQuery] = useState("");
     const [showSugg, setShowSugg] = useState(false);
     const suggestions =
       uQuery.length > 0
@@ -678,8 +779,16 @@ export function VentasScreen({
       .join(", ");
 
     const handleSave = () => {
-      if (!usuario || !fecha) {
-        toast.error("Usuario y fecha son obligatorios");
+      if (!usuario.trim()) {
+        toast.error("El nombre del cliente es obligatorio");
+        return;
+      }
+      if (!documento.trim()) {
+        toast.error("El documento del cliente es obligatorio");
+        return;
+      }
+      if (!fecha) {
+        toast.error("La fecha es obligatoria");
         return;
       }
       if (selProductos.length === 0) {
@@ -690,7 +799,8 @@ export function VentasScreen({
         toast.error("Selecciona el método de pago");
         return;
       }
-      const finalEstado: VentaStatus = mode === "create" ? "por-verificar" : estado;
+      // El pago se recibe en el momento, así que el pedido nace verificado.
+      const finalEstado: VentaStatus = "venta";
       const detalle: DetalleProd[] = selProductos.map((p) => ({
         nombre: `${p.nombre} — ${p.tamaño}`,
         precio: p.precio,
@@ -698,7 +808,8 @@ export function VentasScreen({
         imagen: PRODUCTS.find((x) => x.id === p.id)?.image,
       }));
       onConfirm({
-        usuario,
+        usuario: usuario.trim(),
+        documento: documento.trim(),
         fecha,
         estado: finalEstado,
         productos: productosStr,
@@ -706,8 +817,6 @@ export function VentasScreen({
         total: totalCalculado,
         detalle,
         metodoPago,
-        comprobante,
-        horaRecogida,
         historial: [{ estado: finalEstado, hora: nowHora() }],
       });
     };
@@ -723,14 +832,14 @@ export function VentasScreen({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           transition={{ duration: 0.16 }}
-          className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4"
+          className="bg-card rounded-2xl w-full max-w-5xl shadow-2xl border border-border my-4 flex flex-col max-h-[90vh]"
         >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3
               className="text-lg font-bold text-foreground"
               style={{ fontFamily: SERIF }}
             >
-              {title}
+              Nuevo pedido
             </h3>
             <button
               onClick={onClose}
@@ -740,11 +849,28 @@ export function VentasScreen({
             </button>
           </div>
 
-          <div className="px-5 py-4 space-y-4">
+          <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 overflow-y-auto">
+          {/* ── Izquierda: datos del pedido ── */}
+          <div className="space-y-4">
+            {/* Documento del cliente */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                Documento del cliente *
+              </label>
+              <input
+                value={documento}
+                onChange={(e) => setDocumento(e.target.value)}
+                placeholder="CC o cédula"
+                inputMode="numeric"
+                className={iCls}
+                autoComplete="off"
+              />
+            </div>
+
             {/* Usuario con autocomplete */}
             <div className="relative">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Usuario *
+                Nombre del cliente *
               </label>
               <input
                 value={uQuery}
@@ -757,7 +883,7 @@ export function VentasScreen({
                 onBlur={() =>
                   setTimeout(() => setShowSugg(false), 150)
                 }
-                placeholder="Escribe el nombre del usuario..."
+                placeholder="Escribe el nombre del cliente..."
                 className={iCls}
                 autoComplete="off"
               />
@@ -791,7 +917,7 @@ export function VentasScreen({
             {/* Fecha */}
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Fecha *
+                Fecha del pedido *
               </label>
               <CalendarDropdown
                 value={fecha}
@@ -799,6 +925,33 @@ export function VentasScreen({
               />
             </div>
 
+            {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                Método de pago *
+              </label>
+              <div className="flex gap-2">
+                {METODO_PAGO_ADMIN.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMetodoPago(m)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+                      metodoPago === m
+                        ? `${METODO_PAGO_ESTILO[m].btn} text-white`
+                        : "bg-muted border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    <span>{METODO_PAGO_ESTILO[m].icono}</span>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Derecha: productos del pedido ── */}
+          <div className="space-y-4">
             {/* Selector de productos */}
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -814,7 +967,7 @@ export function VentasScreen({
 
               {/* Productos seleccionados */}
               {selProductos.length > 0 && (
-                <div className="mb-2 space-y-2 max-h-48 overflow-y-auto">
+                <div className="mb-2 space-y-2 max-h-56 overflow-y-auto">
                   {selProductos.map((p) => {
                     const prodData = PRODUCTS.find(
                       (x) => x.id === p.id,
@@ -883,15 +1036,25 @@ export function VentasScreen({
                               +
                             </button>
                           </div>
-                          {/* Precio */}
+                          {/* Precio unitario + total */}
                           <span
-                            className="ml-auto text-xs font-bold text-primary"
-                            style={{ fontFamily: MONO }}
+                            className="ml-auto flex items-baseline gap-1.5"
                           >
-                            $
-                            {(
-                              p.precio * p.cantidad
-                            ).toLocaleString("es-CO")}
+                            <span
+                              className="text-[11px] text-muted-foreground"
+                              style={{ fontFamily: MONO }}
+                            >
+                              ${p.precio.toLocaleString("es-CO")} c/u
+                            </span>
+                            <span
+                              className="text-xs font-bold text-primary"
+                              style={{ fontFamily: MONO }}
+                            >
+                              $
+                              {(
+                                p.precio * p.cantidad
+                              ).toLocaleString("es-CO")}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -1000,117 +1163,9 @@ export function VentasScreen({
               )}
             </div>
 
-            {/* Estado */}
-            {mode === "create" ? (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                  <span className="text-sm font-semibold text-amber-800">Por verificar</span>
-                  <span className="ml-auto text-xs text-amber-600">Se asigna automáticamente</span>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                <select
-                  value={estado}
-                  onChange={(e) => setEstado(e.target.value as VentaStatus)}
-                  className={iCls + " cursor-pointer"}
-                >
-                  {(Object.keys(VENTA_STATUS_LABEL) as VentaStatus[]).map((s) => (
-                    <option key={s} value={s}>{VENTA_STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Método de pago */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Método de pago *
-              </label>
-              <div className="flex gap-2">
-                {(["Nequi", "Bancolombia"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMetodoPago(m)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
-                      metodoPago === m
-                        ? m === "Nequi"
-                          ? "bg-purple-600 border-purple-600 text-white"
-                          : "bg-yellow-500 border-yellow-500 text-white"
-                        : "bg-muted border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    <span>{m === "Nequi" ? "💜" : "🏦"}</span>
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Hora de recogida */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Hora de recogida
-              </label>
-              <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 mb-2 w-fit">
-                <span>🟢</span>
-                Atendemos de <strong>4:00 PM</strong> a <strong>10:00 PM</strong>
-              </div>
-              <input
-                type="time"
-                value={horaRecogida}
-                onChange={(e) => setHoraRecogida(e.target.value)}
-                className={iCls}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Ej: <span className="font-semibold text-foreground">06:30 PM</span> — opcional
-              </p>
-            </div>
-
-            {/* Comprobante de pago */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Comprobante de transferencia
-              </label>
-              {comprobante ? (
-                <div className="relative rounded-xl overflow-hidden border border-border bg-muted">
-                  <img src={comprobante} alt="Comprobante" className="w-full max-h-48 object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setComprobante("")}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center gap-2 py-7 rounded-xl border-2 border-dashed border-border bg-muted/30 cursor-pointer hover:border-primary/40 hover:bg-muted/50 transition-colors">
-                  <ImageIcon className="w-7 h-7 text-muted-foreground/40" />
-                  <span className="text-sm text-muted-foreground font-medium">Subir imagen del comprobante</span>
-                  <span className="text-xs text-muted-foreground/60">PNG, JPG, WEBP</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setComprobante(ev.target?.result as string);
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-
             {/* Resumen total */}
             {selProductos.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border">
+              <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border mt-3">
                 <span className="text-sm text-muted-foreground font-medium">
                   {cantidadTotal} producto
                   {cantidadTotal !== 1 ? "s" : ""} · Total
@@ -1124,8 +1179,9 @@ export function VentasScreen({
               </div>
             )}
           </div>
+          </div>
 
-          <div className="flex gap-3 px-5 py-4 border-t border-border">
+          <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
             <button
               onClick={onClose}
               className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
@@ -1224,10 +1280,11 @@ export function VentasScreen({
                 {[
                   "ID",
                   "Cliente",
-                  "Fecha",
+                  "Hora de recogida",
                   "Método de Pago",
                   "Total",
                   "Estado",
+                  "Hora de estado",
                   "Acciones",
                 ].map((h) => (
                   <th
@@ -1243,7 +1300,7 @@ export function VentasScreen({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-14 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">📋</p>
@@ -1267,18 +1324,11 @@ export function VentasScreen({
                     <td className="px-4 py-3.5 text-sm font-medium text-foreground">
                       {p.usuario}
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">
-                      {p.fecha}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {p.metodoPago ? (
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${p.metodoPago === "Nequi" ? "bg-purple-100 text-purple-800" : "bg-yellow-100 text-yellow-800"}`}
-                        >
-                          {p.metodoPago === "Nequi"
-                            ? "💜"
-                            : "🏦"}{" "}
-                          {p.metodoPago}
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                      {p.horaRecogida ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
+                          {p.horaRecogida}
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">
@@ -1286,35 +1336,48 @@ export function VentasScreen({
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3.5">
+                      <PagoPill metodo={p.metodoPago} />
+                    </td>
                     <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <select
-                        value={p.estado}
-                        onChange={(e) => {
-                          const next = e.target
-                            .value as VentaStatus;
-                          if (next === p.estado) return;
-                          e.target.value = p.estado;
-                          setConfirmEstadoV({
-                            id: p.id,
-                            current: p.estado,
-                            next,
-                          });
-                        }}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${VENTA_STATUS_COLOR[p.estado]}`}
-                      >
-                        {(
-                          Object.keys(
-                            VENTA_STATUS_LABEL,
-                          ) as VentaStatus[]
-                        ).map((s) => (
-                          <option key={s} value={s}>
-                            {VENTA_STATUS_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
+                      {p.estado === "anulado" || p.estado === "perdida" ? (
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-block ${VENTA_STATUS_COLOR[p.estado]}`}
+                        >
+                          {VENTA_STATUS_LABEL[p.estado]}
+                        </span>
+                      ) : (
+                        <select
+                          value={p.estado}
+                          onChange={(e) => {
+                            const next = e.target
+                              .value as VentaStatus;
+                            if (next === p.estado) return;
+                            e.target.value = p.estado;
+                            setConfirmEstadoV({
+                              id: p.id,
+                              current: p.estado,
+                              next,
+                            });
+                          }}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${VENTA_STATUS_COLOR[p.estado]}`}
+                        >
+                          {VENTA_STATUS_SELECCIONABLES.map((s) => (
+                            <option key={s} value={s}>
+                              {VENTA_STATUS_LABEL[s]}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td
+                      className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {horaEstado(p)}
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -1335,6 +1398,30 @@ export function VentasScreen({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+                        {/* Anular venta: la deja en estado "anulado". */}
+                        {p.estado !== "anulado" && p.estado !== "perdida" && (
+                          <button
+                            onClick={() =>
+                              setConfirmAccionV({ id: p.id, accion: "anular" })
+                            }
+                            title="Anular venta"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Registrar devolución: pasa la venta a "Devolución". */}
+                        {p.estado !== "anulado" && p.estado !== "perdida" && (
+                          <button
+                            onClick={() =>
+                              setConfirmAccionV({ id: p.id, accion: "devolucion" })
+                            }
+                            title="Registrar devolución"
+                            className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors cursor-pointer"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1426,7 +1513,10 @@ export function VentasScreen({
                       {[
                         { label: "ID Venta", value: detailItem.id },
                         { label: "Cliente",  value: detailItem.usuario },
-                        { label: "Fecha",    value: detailItem.fecha },
+                        ...(detailItem.documento
+                          ? [{ label: "Documento", value: detailItem.documento }]
+                          : []),
+                        { label: "Fecha del pedido", value: detailItem.fecha },
                       ].map(({ label, value }) => (
                         <div key={label}>
                           <p className="text-xs text-muted-foreground font-medium mb-0.5">{label}</p>
@@ -1442,9 +1532,7 @@ export function VentasScreen({
                       <div>
                         <p className="text-xs text-muted-foreground font-medium mb-0.5">Método de pago</p>
                         {detailItem.metodoPago ? (
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${detailItem.metodoPago === "Nequi" ? "bg-purple-100 text-purple-800" : "bg-yellow-100 text-yellow-800"}`}>
-                            {detailItem.metodoPago === "Nequi" ? "💜" : "🏦"} {detailItem.metodoPago}
-                          </span>
+                          <PagoPill metodo={detailItem.metodoPago} />
                         ) : (
                           <p className="text-sm text-muted-foreground italic">No registrado</p>
                         )}
@@ -1610,12 +1698,6 @@ export function VentasScreen({
       <AnimatePresence>
         {showCreate && (
           <VentaModal
-            title="Nuevo pedido"
-            mode="create"
-            initial={{
-              usuario: "", fecha: "", productos: "", cantidad: 0, total: 0,
-              estado: "por-verificar", detalle: [], metodoPago: "", comprobante: "", horaRecogida: "",
-            }}
             onClose={() => setShowCreate(false)}
             onConfirm={(v) => {
               const maxId = Math.max(0, ...pedidos.map((p) => parseInt(p.id) || 0));
@@ -1643,6 +1725,34 @@ export function VentasScreen({
               setConfirmEstadoV(null);
             }}
             onCancel={() => setConfirmEstadoV(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Confirmar anulación / devolución ── */}
+      <AnimatePresence>
+        {confirmAccionV && (
+          <ConfirmModal
+            title={
+              confirmAccionV.accion === "anular"
+                ? "Anular venta"
+                : "Registrar devolución"
+            }
+            tone={confirmAccionV.accion === "anular" ? "peligro" : "aviso"}
+            message={
+              confirmAccionV.accion === "anular"
+                ? "¿Estás seguro de anular esta venta? El pedido quedará marcado como Anulado y dejará de contar como venta."
+                : "¿Estás seguro de registrar la devolución? La venta pasará a estado Devolución y quedará en el módulo de devoluciones."
+            }
+            onConfirm={() => {
+              if (confirmAccionV.accion === "anular") {
+                anularVenta(confirmAccionV.id);
+              } else {
+                registrarDevolucion(confirmAccionV.id);
+              }
+              setConfirmAccionV(null);
+            }}
+            onCancel={() => setConfirmAccionV(null)}
           />
         )}
       </AnimatePresence>
