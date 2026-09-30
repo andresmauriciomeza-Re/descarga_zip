@@ -304,7 +304,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               </button>
               {inStore && isStaff && (
               <button
-                onClick={() => navigate(inStore ? adminHomeScreen : "users")}
+                onClick={() => navigate(adminHomeScreen)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
               >
                 <ShieldCheck className="w-4 h-4" />

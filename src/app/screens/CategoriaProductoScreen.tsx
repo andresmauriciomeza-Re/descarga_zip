@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MensajeError } from "../components/campo";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const SERIF = "var(--font-titulo)";
@@ -73,16 +74,74 @@ function ConfirmModal({
 
 // ─────────────────────────── CATEGORÍA PRODUCTO ───────────────────────────
 
-interface CategoriaProducto {
+export interface CategoriaProducto {
   id: string;
   nombre: string;
+  /**
+   * Emoji con el que la categoría aparece en el landing. Es opcional a
+   * propósito: solo lo llevan las categorías creadas desde acá. Las tres
+   * originales conservan su ícono fijo, escrito en App.tsx.
+   */
+  icono?: string;
 }
 
-const INITIAL_CATEGORIAS: CategoriaProducto[] = [
+export const INITIAL_CATEGORIAS: CategoriaProducto[] = [
   { id: "CAT-001", nombre: "Pizzas" },
   { id: "CAT-002", nombre: "Lasañas" },
   { id: "CAT-003", nombre: "Bebidas" },
 ];
+
+/**
+ * Las tres originales no son editables: su nombre está escrito en el catálogo
+ * público y su ícono en el landing, así que cambiarlos aquí dejaría la tarjeta
+ * y el filtro del catálogo mostrando cosas distintas. Se pueden borrar, como
+ * hoy, pero no renombrar.
+ */
+const CATEGORIAS_FIJAS = new Set(["CAT-001", "CAT-002", "CAT-003"]);
+
+/**
+ * Íconos que se pueden elegir al crear o renombrar una categoría: los mismos
+ * de las tres originales, para que el emoji del selector y el del landing no
+ * puedan divergir.
+ *
+ * Una categoría ya guardada con otro ícono no se altera al guardar: el modal
+ * solo la cambia si se elige uno de estos tres.
+ */
+const ICONOS_CATEGORIA = [
+  { icono: "🍕", nombre: "Pizzas" },
+  { icono: "🥤", nombre: "Bebidas" },
+  { icono: "🍝", nombre: "Lasañas" },
+];
+
+const MAX_NOMBRE = 30;
+
+/**
+ * Emoji con el que se pinta una categoría en la tabla y en el detalle. Las tres
+ * originales no llevan `icono` en los datos —el suyo vive en el landing—, así
+ * que aquí se repiten los mismos literales solo para mostrarlos, sin tocar la
+ * semilla ni lo que está guardado. Las nuevas usan el que se les eligió al
+ * crearlas, y si alguna no tuviera ícono ni equivalente se queda sin pintar.
+ */
+const ICONOS_FIJOS: Record<string, string> = {
+  "CAT-001": "🍕",
+  "CAT-002": "🍝",
+  "CAT-003": "🥤",
+};
+
+const iconoDe = (c: CategoriaProducto) =>
+  c.icono || ICONOS_FIJOS[c.id] || "";
+
+/**
+ * Clave de comparación de nombres: sin mayúsculas, sin tildes y sin espacios
+ * sobrantes, para que "PARRILLADA" y "Parrillada " no se cuelen como dos
+ * categorías distintas.
+ */
+const claveNombre = (valor: string) =>
+  valor
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 function SmModal({
   title,
@@ -140,10 +199,7 @@ function SmModal({
   );
 }
 
-export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
-  const [categorias, setCategorias] = useState<
-    CategoriaProducto[]
-  >(INITIAL_CATEGORIAS);
+export function CategoriaProductoScreen({ categorias, setCategorias, canCreate = true, canEdit = true, canDelete = true }: { categorias: CategoriaProducto[]; setCategorias: React.Dispatch<React.SetStateAction<CategoriaProducto[]>>; canCreate?: boolean; canEdit?: boolean; canDelete?: boolean }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] =
@@ -152,9 +208,39 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
     useState<CategoriaProducto | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
+  const [formIcono, setFormIcono] = useState("");
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const inputCls =
     "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+  /** El mismo input de arriba, pero en el estado de error de los formularios. */
+  const campoCls = (err?: string) =>
+    "w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
+    (err ? "border-red-400 bg-red-50/30" : "bg-muted border-border");
+
+  /** Valida nombre e ícono contra el resto de categorías. `ignorarId` deja
+      fuera al propio registro para que al editar no se detecte a sí mismo. */
+  const validarCategoria = (
+    nombre: string,
+    icono: string,
+    ignorarId?: string,
+  ): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    const limpio = nombre.trim();
+    if (!limpio) errs.nombre = "El nombre es obligatorio";
+    else if (limpio.length > MAX_NOMBRE)
+      errs.nombre = `El nombre no puede superar ${MAX_NOMBRE} caracteres`;
+    else if (
+      categorias.some(
+        (c) => c.id !== ignorarId && claveNombre(c.nombre) === claveNombre(limpio),
+      )
+    )
+      errs.nombre = "Ese nombre ya está registrado";
+    if (!icono) errs.icono = "Selecciona un ícono";
+    return errs;
+  };
 
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
@@ -183,10 +269,9 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
   }, [totalPages]);
 
   const handleCreate = () => {
-    if (!formNombre.trim()) {
-      toast.error("El nombre es obligatorio");
-      return;
-    }
+    const errs = validarCategoria(formNombre, formIcono);
+    setCreateErrors(errs);
+    if (Object.keys(errs).length) return;
     // `length + 1` reutilizaba un id existente si se había borrado una categoría
     // del medio: quedaban dos filas con la misma clave y editar/borrar una
     // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
@@ -197,20 +282,29 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
     const newId = `CAT-${String(nextNum).padStart(3, "0")}`;
     setCategorias((p) => [
       ...p,
-      { id: newId, nombre: formNombre.trim() },
+      { id: newId, nombre: formNombre.trim(), icono: formIcono },
     ]);
     setShowCreate(false);
     setFormNombre("");
+    setFormIcono("");
     toast.success("Categoría creada correctamente");
   };
 
   const handleEdit = () => {
-    if (!editItem || !editItem.nombre.trim()) {
-      toast.error("El nombre es obligatorio");
+    if (!editItem) return;
+    // Las originales conservan nombre e ícono: el guardado no las toca.
+    if (CATEGORIAS_FIJAS.has(editItem.id)) {
+      setEditItem(null);
       return;
     }
+    const errs = validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
+    setEditErrors(errs);
+    if (Object.keys(errs).length) return;
+    const nombre = editItem.nombre.trim();
     setCategorias((p) =>
-      p.map((x) => (x.id === editItem.id ? editItem : x)),
+      p.map((x) =>
+        x.id === editItem.id ? { ...x, nombre, icono: editItem.icono } : x,
+      ),
     );
     setEditItem(null);
     toast.success("Categoría actualizada");
@@ -240,7 +334,9 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
         {canCreate && (
           <button
             onClick={() => {
-              setFormNombre("Pizzas");
+              setFormNombre("");
+              setFormIcono("");
+              setCreateErrors({});
               setShowCreate(true);
             }}
             className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
@@ -302,7 +398,12 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                       {c.id}
                     </td>
                     <td className="px-4 py-3.5 text-sm font-medium text-foreground">
-                      {c.nombre}
+                      <span className="inline-flex items-center gap-1.5">
+                        {iconoDe(c) && (
+                          <span aria-hidden="true">{iconoDe(c)}</span>
+                        )}
+                        {c.nombre}
+                      </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -315,7 +416,10 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                         </button>
                         {canEdit && (
                           <button
-                            onClick={() => setEditItem({ ...c })}
+                            onClick={() => {
+                              setEditErrors({});
+                              setEditItem({ ...c });
+                            }}
                             title="Editar"
                             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                           >
@@ -417,17 +521,50 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
                   Nombre Categoría *
                 </label>
-                <select
+                <input
+                  type="text"
                   value={formNombre}
-                  onChange={(e) =>
-                    setFormNombre(e.target.value)
-                  }
-                  className={inputCls + " cursor-pointer"}
-                >
-                  <option value="Pizzas">Pizzas</option>
-                  <option value="Lasañas">Lasañas</option>
-                  <option value="Bebidas">Bebidas</option>
-                </select>
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormNombre(v);
+                    setCreateErrors((p) => ({
+                      ...p,
+                      nombre: validarCategoria(v, formIcono).nombre,
+                    }));
+                  }}
+                  placeholder="Ej. Parrilladas"
+                  maxLength={MAX_NOMBRE}
+                  className={campoCls(createErrors.nombre)}
+                />
+                <MensajeError err={createErrors.nombre} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Ícono *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {ICONOS_CATEGORIA.map(({ icono, nombre }) => (
+                    <button
+                      key={nombre}
+                      type="button"
+                      title={nombre}
+                      aria-label={nombre}
+                      aria-pressed={formIcono === icono}
+                      onClick={() => {
+                        setFormIcono(icono);
+                        setCreateErrors((p) => ({ ...p, icono: "" }));
+                      }}
+                      className={`aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
+                        formIcono === icono
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-muted hover:bg-border"
+                      }`}
+                    >
+                      {icono}
+                    </button>
+                  ))}
+                </div>
+                <MensajeError err={createErrors.icono} />
               </div>
             </div>
           </SmModal>
@@ -461,21 +598,67 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
                   Nombre Categoría *
                 </label>
-                <select
+                <input
+                  type="text"
                   value={editItem.nombre}
-                  onChange={(e) =>
-                    setEditItem(
-                      (x) =>
-                        x && { ...x, nombre: e.target.value },
-                    )
+                  disabled={CATEGORIAS_FIJAS.has(editItem.id)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEditItem((x) => (x ? { ...x, nombre: v } : x));
+                    setEditErrors((p) => ({
+                      ...p,
+                      nombre: validarCategoria(
+                        v,
+                        editItem.icono ?? "",
+                        editItem.id,
+                      ).nombre,
+                    }));
+                  }}
+                  placeholder="Ej. Parrilladas"
+                  maxLength={MAX_NOMBRE}
+                  className={
+                    campoCls(
+                      CATEGORIAS_FIJAS.has(editItem.id)
+                        ? undefined
+                        : editErrors.nombre,
+                    ) +
+                    (CATEGORIAS_FIJAS.has(editItem.id)
+                      ? " bg-muted/60 text-muted-foreground cursor-not-allowed"
+                      : "")
                   }
-                  className={inputCls + " cursor-pointer"}
-                >
-                  <option value="Pizzas">Pizzas</option>
-                  <option value="Lasañas">Lasañas</option>
-                  <option value="Bebidas">Bebidas</option>
-                </select>
+                />
+                <MensajeError err={editErrors.nombre} />
               </div>
+              {!CATEGORIAS_FIJAS.has(editItem.id) && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Ícono *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {ICONOS_CATEGORIA.map(({ icono, nombre }) => (
+                      <button
+                        key={nombre}
+                        type="button"
+                        title={nombre}
+                        aria-label={nombre}
+                        aria-pressed={editItem.icono === icono}
+                        onClick={() => {
+                          setEditItem((x) => (x ? { ...x, icono } : x));
+                          setEditErrors((p) => ({ ...p, icono: "" }));
+                        }}
+                        className={`aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
+                          editItem.icono === icono
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-muted hover:bg-border"
+                        }`}
+                      >
+                        {icono}
+                      </button>
+                    ))}
+                  </div>
+                  <MensajeError err={editErrors.icono} />
+                </div>
+              )}
             </div>
           </SmModal>
         )}
@@ -516,6 +699,14 @@ export function CategoriaProductoScreen({ canCreate = true, canEdit = true, canD
                     label: "Nombre Categoría",
                     value: detailItem.nombre,
                   },
+                  ...(iconoDe(detailItem)
+                    ? [
+                        {
+                          label: "Ícono",
+                          value: iconoDe(detailItem),
+                        },
+                      ]
+                    : []),
                 ].map(({ label, value }) => (
                   <div
                     key={label}
