@@ -8262,7 +8262,8 @@ export default function App() {
   const [gestiones, setGestiones] = useState<GestionCompra[]>(
     INITIAL_GESTIONES,
   );
-  const [insumos, setInsumos] = useState<Insumo[]>(leerInsumosPersistidos);
+  const [insumos, setInsumos] =
+    useState<Insumo[]>(INITIAL_INSUMOS);
   const [proveedores, setProveedores] = useState<ProveedorRef[]>(
     PROVEEDORES_INIT,
   );
@@ -8947,15 +8948,21 @@ export default function App() {
                   setGestiones={setGestiones}
                   onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
-                      prev.map((o) =>
-                        o.id === ordenRecepcion.id
-                          ? {
-                              ...o,
-                              estado,
-                              recepcion,
-                            }
-                          : o
-                      )
+                      prev.map((o) => {
+                        if (o.id !== ordenRecepcion.id) return o;
+                        const base = { ...o, estado, recepcion };
+                        // Deja fecha y hora del cambio: es la que muestra el
+                        // detalle de la orden al lado del badge de estado.
+                        return estado === o.estado
+                          ? base
+                          : {
+                              ...base,
+                              historialEstados: [
+                                ...(o.historialEstados ?? []),
+                                { estado, fechaHora: new Date().toISOString() },
+                              ],
+                            };
+                      })
                     );
 
                     setOrdenRecepcion(null);
@@ -8974,12 +8981,8 @@ export default function App() {
                     setOrdenDetalle(null);
                     setScreen("orden-compra");
                   }}
-                  onVerFactura={(gestion) => {
-                    // Navegar al detalle de la factura en Gestión de Compras
-                    setOrdenDetalle(null);
-                    setScreen("gestion-compra");
-                    // TODO: Seleccionar la factura específica
-                  }}
+                  onEditar={() => {}}
+                  onAbrirRecepcion={() => {}}
                 />
               )}
               {screen === "gestion-compra" && (

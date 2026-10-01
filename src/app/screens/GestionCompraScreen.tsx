@@ -83,6 +83,7 @@ function CompraForm({
   mode = "create",
   compra,
   fullPage = false,
+  ordenes,
   onClose,
   onGuardar,
 }: {
@@ -92,6 +93,8 @@ function CompraForm({
   mode?: "create" | "view";
   compra?: GestionCompra;
   fullPage?: boolean;
+  /** Órdenes de compra: necesarias para separar solicitados / no solicitados. */
+  ordenes?: OrdenCompra[];
   onClose: () => void;
   onGuardar: (data: NuevaCompraData) => void;
 }) {
@@ -133,6 +136,27 @@ function CompraForm({
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
+  // ── Separación solicitados / no solicitados (solo detalle) ─────────────────
+  // Regla del módulo: es "solicitado" el insumo cuyo id está en el detalle de
+  // la Orden de Compra; todo lo demás llegó de más en la recepción.
+  const orden = useMemo(
+    () => ordenes?.find((o) => o.id === compra?.ordenId),
+    [ordenes, compra?.ordenId]
+  );
+  const idsOrden = useMemo(
+    () => new Set((orden?.items ?? []).map((i) => i.idInsumo)),
+    [orden]
+  );
+  const solicitados = useMemo(
+    () => (orden ? items.filter((i) => idsOrden.has(i.idInsumo)) : []),
+    [orden, items, idsOrden]
+  );
+  const noSolicitados = useMemo(
+    () => (orden ? items.filter((i) => !idsOrden.has(i.idInsumo)) : []),
+    [orden, items, idsOrden]
+  );
+  const totalPagado = items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
+
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
@@ -164,15 +188,15 @@ function CompraForm({
           p.email.toLowerCase().includes(q)
         )
       : proveedores;
-    return base.slice(0, 6);
+    return base.slice(0, 3);
   }, [proveedores, provQuery]);
 
   const itemSugs = useMemo(() => {
-    // Punto 6: filtrar solo por tipo "Insumo" (excluye "Insumo producto", etc.)
-    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo");
-    // Punto 6: si el campo está vacío, mostrar todos los insumos disponibles
-    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 6);
-    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 6);
+    // Filtrar solo por tipo "Insumo" y estado "activo"
+    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
+    // Si el campo está vacío, mostrar los primeros 3 insumos disponibles
+    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 3);
+    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 3);
   }, [insumos, itemNombre]);
 
   useEffect(() => {
@@ -444,7 +468,22 @@ function CompraForm({
                       />
                       {provSugAbierto && (
                         <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                          {provSugs.map((p) => (
+                          {/* Opción "+ Crear proveedor" PRIMERA */}
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setProvSugAbierto(false);
+                              setMostrarNuevoProveedor(true);
+                            }}
+                            className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Crear proveedor {provQuery.trim() && `“${provQuery.trim()}”`}
+                          </button>
+                          <hr className="my-0.5 border-border" />
+                          {/* Resultados - máximo 3 */}
+                          {provSugs.slice(0, 3).map((p) => (
                             <button
                               key={p.nit}
                               type="button"
@@ -458,19 +497,15 @@ function CompraForm({
                               </p>
                             </button>
                           ))}
-                          {(provSugs.length === 0 || provQuery.trim() === "") && (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setProvSugAbierto(false);
-                                setMostrarNuevoProveedor(true);
-                              }}
-                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Crear proveedor “{provQuery.trim()}”
-                            </button>
+                          {provSugs.length === 0 && (
+                            <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
+                              Sin resultados
+                            </div>
+                          )}
+                          {provSugs.length > 3 && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              +{provSugs.length - 3} más...
+                            </div>
                           )}
                         </div>
                       )}
@@ -555,14 +590,63 @@ function CompraForm({
                 </p>
               )}
 
-              <InsumosSolicitadosTable
-                items={items}
-                showActions={!isView}
-                onRemove={!isView ? eliminarItem : undefined}
-                onUpdate={!isView ? actualizarItem : undefined}
-                totalLabel="Total recibido"
-                className={isPage ? "flex-1 min-h-0" : ""}
-              />
+              {isView ? (
+                <div className="flex flex-col gap-4">
+                  {orden ? (
+                    <>
+                      <InsumosSolicitadosTable
+                        items={solicitados}
+                        showActions={false}
+                        titulo="Insumos solicitados"
+                        subtotalLabel="Subtotal solicitados"
+                        mostrarIva={false}
+                        mostrarTotal={false}
+                        className={isPage ? "flex-1 min-h-0" : ""}
+                      />
+                      {noSolicitados.length > 0 && (
+                        <InsumosSolicitadosTable
+                          items={noSolicitados}
+                          showActions={false}
+                          tono="amber"
+                          titulo="Insumos no solicitados"
+                          subtotalLabel="Subtotal no solicitados"
+                          mostrarIva={false}
+                          mostrarTotal={false}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <InsumosSolicitadosTable
+                      items={items}
+                      showActions={false}
+                      titulo="Insumos recibidos"
+                      subtotalLabel="Subtotal"
+                      mostrarIva={false}
+                      mostrarTotal={false}
+                      className={isPage ? "flex-1 min-h-0" : ""}
+                    />
+                  )}
+
+                  {/* Total pagado */}
+                  <div className="flex justify-between items-center px-1 pt-1 border-t border-border shrink-0">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Total pagado
+                    </span>
+                    <span className="text-lg font-bold text-foreground">
+                      {fmtCOP(totalPagado)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <InsumosSolicitadosTable
+                  items={items}
+                  showActions
+                  onRemove={eliminarItem}
+                  onUpdate={actualizarItem}
+                  totalLabel="Total recibido"
+                  className={isPage ? "flex-1 min-h-0" : ""}
+                />
+              )}
             </div>
 
             {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
@@ -721,6 +805,26 @@ export function GestionCompraScreen({
   // el render; como `const`, usarla desde allí la lanzaba en TDZ
   // ("Cannot access 'getOrden' before initialization") al escribir en el buscador.
   const getOrden = (oid: string) => ordenes.find(o => o.id === oid);
+
+  // Depuración (solo DEV): imprime el JSON que recibe el detalle de la compra
+  // (lo mismo que "devolvería" el GET del detalle) al abrir el ojo.
+  useEffect(() => {
+    if (import.meta.env.DEV && detail) {
+      console.log(
+        "[detalle-compra] JSON recibido por CompraForm mode=view:",
+        JSON.stringify(
+          {
+            ...detail,
+            proveedor: detail.proveedor ?? getOrden(detail.ordenId)?.proveedor ?? "",
+            orden: getOrden(detail.ordenId) ?? null,
+          },
+          null,
+          2
+        )
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
 
   const filtered = useMemo(() =>
     gestiones.filter(g => {
@@ -959,6 +1063,7 @@ export function GestionCompraScreen({
             proveedores={proveedores}
             setProveedores={setProveedores}
             insumos={insumos}
+            ordenes={ordenes}
             onClose={() => setDetail(null)}
             onGuardar={() => {}}
           />
