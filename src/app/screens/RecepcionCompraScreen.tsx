@@ -89,6 +89,15 @@ export function RecepcionCompraScreen({
     return set;
   }, [gestiones, orden.id]);
 
+  // Si todos los insumos ya están registrados, redirigir al listado
+  useEffect(() => {
+    const todosRegistrados = orden.items.every(item => registrados.has(item.idInsumo));
+    if (todosRegistrados) {
+      toast.info(`La OC ${orden.id} ya tiene todos sus insumos registrados`);
+      onBack();
+    }
+  }, [orden.id, registrados, onBack]);
+
   // Solo se ofrecen los insumos que aún no se han facturado en esta OC.
   const [items, setItems] = useState<ItemRecibido[]>(() => {
     const previos = registradosEnOrden(gestiones, orden.id);
@@ -169,11 +178,13 @@ export function RecepcionCompraScreen({
         ? insumos
             .filter(
               (i) =>
+                (i.tipo ?? "Insumo") === "Insumo" &&
+                i.estado === "activo" &&
                 !registrados.has(i.id) &&
                 !nombresRegistrados.has(i.nombre.toLowerCase().trim()) &&
                 i.nombre.toLowerCase().includes(exNombre.toLowerCase())
             )
-            .slice(0, 6)
+            .slice(0, 3)
         : [],
     [insumos, exNombre, registrados, nombresRegistrados]
   );
@@ -367,6 +378,10 @@ export function RecepcionCompraScreen({
 
     const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
+    // Un insumo es "no solicitado" si su id no está en el detalle de la OC:
+    // así queda marcado en el guardado y además sirve para comparar después.
+    const idsOrdenFactura = new Set(orden.items.map((item) => item.idInsumo));
+
     // Esta factura: solo lo que trae, con su número, fecha y total propios.
     const itemsFactura: OrdenItem[] = [...filasRecibidas, ...itemsExtra].map(
       (item) => ({
@@ -378,6 +393,7 @@ export function RecepcionCompraScreen({
         costoUnitario: item.costoUnitario,
         precioUnitario: item.costoUnitario,
         iva: 0,
+        esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
       })
     );
 
