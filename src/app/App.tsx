@@ -105,7 +105,7 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto } from "./screens/GestionProductosScreen";
 import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -122,7 +122,14 @@ import {
   OrdenDetallePage,
   PROVEEDORES_INIT,
 } from "./screens/OrdenCompraScreen";
-import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
+import {
+  OrdenProduccionScreen,
+  INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
+  crearOrdenPedido,
+  siguienteOrdenId,
+  normalizarNombre,
+  type OrdenProduccion,
+} from "./screens/OrdenProduccionScreen";
 import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
 import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
 import {
@@ -7722,6 +7729,77 @@ const leerCategoriasPersistidas = (): CategoriaProducto[] => {
   return INITIAL_CATEGORIAS;
 };
 
+// ── Persistencia de producción (cocina) ─────────────────────────────────
+// Las órdenes de producción, los insumos, las ventas y las fichas técnicas
+// vivían solo en el `useState` del módulo: al salir y volver se perdía todo, y
+// en el caso de las órdenes tampoco había forma de que el pedido se creara
+// solo. Ahora cada lista se guarda entera en localStorage.
+//
+// Igual que categorías: es por navegador, no compartida entre equipos, y basta
+// con quitar la clave para volver a la semilla.
+//   sivpro.ordenesProduccion.v1 → órdenes de producción
+//   sivpro.insumos.v1          → catálogo de insumos (con Producto Insumo)
+//   sivpro.ventas.v1           → ventas, con su detalle y estado
+//   sivpro.fichasProductos.v1  → fichas técnicas por producto
+const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
+const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
+const VENTAS_STORAGE_KEY = "sivpro.ventas.v1";
+const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
+
+/** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
+    forma, se usa la semilla en vez de romper el arranque. */
+const leerListaPersistida = <T,>(clave: string, semilla: T[], esValida: (x: unknown) => boolean): T[] => {
+  try {
+    const raw = localStorage.getItem(clave);
+    if (!raw) return semilla;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every(esValida)) return parsed as T[];
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return semilla;
+};
+
+const esObjeto = (x: unknown): x is Record<string, unknown> =>
+  !!x && typeof x === "object" && !Array.isArray(x);
+
+/** Las órdenes guardadas pueden ser de una versión anterior del rediseño: solo
+    se acepta lo que tiene la forma nueva, así que una lista vieja se descarta
+    entera y vuelve la semilla en vez de mezclar modelos. */
+const esOrdenProduccionValida = (x: unknown) =>
+  esObjeto(x) &&
+  typeof x.id === "string" &&
+  typeof x.tipo === "string" &&
+  typeof x.estadoOrden === "string" &&
+  Array.isArray(x.lineas) &&
+  Array.isArray(x.insumosRequeridos);
+
+const esInsumoValido = (x: unknown) =>
+  esObjeto(x) && typeof x.id === "string" && typeof x.nombre === "string";
+
+const esVentaValida = (x: unknown) => esObjeto(x) && typeof x.id === "string";
+
+const esFichasValidas = (x: unknown) =>
+  esObjeto(x) && Object.values(x).every((v) => Array.isArray(v));
+
+const leerOrdenesPersistidas = () =>
+  leerListaPersistida<OrdenProduccion>(ORDENES_PRODUCCION_STORAGE_KEY, INITIAL_ORDENES_PRODUCCION, esOrdenProduccionValida);
+const leerInsumosPersistidos = () =>
+  leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
+const leerVentasPersistidas = () =>
+  leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
+const leerFichasPersistidas = () => {
+  try {
+    const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
+    if (!raw) return INITIAL_FICHAS;
+    const parsed: unknown = JSON.parse(raw);
+    if (esFichasValidas(parsed)) return parsed as FichasPorProducto;
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_FICHAS;
+};
+
 // ── Persistencia del carrito ───────────────────────────────────────────
 // El carrito vivía solo en el `useState` de App: cualquier recarga, cambio de
 // categoría o ida al detalle de otro producto lo borraba, y con él todo lo que
@@ -7929,7 +8007,7 @@ export default function App() {
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
+  const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
@@ -7939,6 +8017,15 @@ export default function App() {
   // `Producto` quedaron importados y sin usar, y App reventaba con
   // "ReferenceError: productos is not defined" al renderizar el dashboard.
   const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
+  // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
+  // Orden de Producción para saber qué insumos (y Productos Insumo) consume
+  // cada plato de un pedido.
+  const [fichasPorProducto, setFichasPorProducto] =
+    useState<FichasPorProducto>(leerFichasPersistidas);
+  // Órdenes de producción. Antes vivían dentro de OrdenProduccionScreen, así que
+  // se perdían al salir del módulo y no había forma de crear el pedido solo.
+  const [ordenesProduccion, setOrdenesProduccion] =
+    useState<OrdenProduccion[]>(leerOrdenesPersistidas);
   // Categorías de producto. Las consume el módulo de Categoría Producto (que
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
@@ -8175,8 +8262,7 @@ export default function App() {
   const [gestiones, setGestiones] = useState<GestionCompra[]>(
     INITIAL_GESTIONES,
   );
-  const [insumos, setInsumos] =
-    useState<Insumo[]>(INITIAL_INSUMOS);
+  const [insumos, setInsumos] = useState<Insumo[]>(leerInsumosPersistidos);
   const [proveedores, setProveedores] = useState<ProveedorRef[]>(
     PROVEEDORES_INIT,
   );
@@ -8212,6 +8298,75 @@ export default function App() {
       // en memoria durante la sesión.
     }
   }, [categorias]);
+
+  // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
+  // para que el trabajo de cocina sobreviva al F5: en la cocina se entra y sale
+  // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
+  // a rehacerlas a mano.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORDENES_PRODUCCION_STORAGE_KEY, JSON.stringify(ordenesProduccion));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
+      // en memoria durante la sesión.
+    }
+  }, [ordenesProduccion]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(insumos));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [insumos]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VENTAS_STORAGE_KEY, JSON.stringify(ventas));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [ventas]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [fichasPorProducto]);
+
+  // Creación automática de la orden de producción (§3a): cuando una venta PASA a
+  // estado "venta" —o sea, el pago quedó verificado— se le crea sola una orden
+  // tipo "Pedido" en Pendiente. Mientras la venta está "por-verificar" no se
+  // crea nada, que es justo cuando NO se prepara.
+  //
+  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas
+  // "verificadas" de la semilla y de lo que se cargó de localStorage, y no es un
+  // cambio de estado sino el arranque. A partir de ahí, cada venta que aparece
+  // en "venta" sin orden genera la suya. Los ids se calculan FUERA del updater
+  // de setState, así que crearlas dos veces en modo estricto no duplica nada.
+  const vigilaVentasRef = useRef(false);
+  useEffect(() => {
+    if (!vigilaVentasRef.current) {
+      vigilaVentasRef.current = true;
+      return;
+    }
+    const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
+    const nuevas = ventas.filter((v) => v.estado === "venta" && !conOrden.has(v.id));
+    if (nuevas.length === 0) return;
+
+    const creada: OrdenProduccion[] = [];
+    let id = siguienteOrdenId(ordenesProduccion);
+    for (const v of nuevas) {
+      creada.push(crearOrdenPedido(v, { productos, fichas: fichasPorProducto, insumos }, id));
+      id = `OP-${String(parseInt(id.replace("OP-", ""), 10) + 1).padStart(3, "0")}`;
+    }
+    setOrdenesProduccion((p) => [...creada, ...p]);
+    creada.forEach((o) =>
+      toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
+    );
+  }, [ventas, ordenesProduccion, productos, fichasPorProducto, insumos]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8393,6 +8548,12 @@ export default function App() {
         cantidad: i.quantity,
         imagen: i.product.image,
         extras: i.selectedExtras,
+        tamaño: i.size,
+        // El id del producto del catálogo de Productos. Se guarda para que la
+        // Orden de Producción no tenga que deducir el producto del nombre
+        // ("Pizza Peperoni — Mediano"); si el nombre no está en el catálogo
+        // queda sin id y se resuelve por nombre.
+        productoId: productos.find((p) => normalizarNombre(p.nombre) === normalizarNombre(i.product.name))?.id,
       })),
     };
     setVentas((prev) => [newVenta, ...prev]);
@@ -8870,6 +9031,8 @@ export default function App() {
                   productos={productos}
                   setProductos={setProductos}
                   insumos={insumos}
+                  fichas={fichasPorProducto}
+                  setFichas={setFichasPorProducto}
                 />
               )}
               {screen === "cat-producto" && (
@@ -8928,7 +9091,12 @@ export default function App() {
                 <OrdenProduccionScreen
                   {...getPerms("production-orders")}
                   productos={productos}
-                  setProductos={setProductos}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  ventas={ventas}
+                  fichasPorProducto={fichasPorProducto}
+                  ordenes={ordenesProduccion}
+                  setOrdenes={setOrdenesProduccion}
                 />
               )}
               {screen === "finished-products" && (

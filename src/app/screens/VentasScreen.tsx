@@ -136,6 +136,9 @@ interface DetalleProd {
   imagen?: string;
   tamaño?: string;
   extras?: string[];
+  /** Id del producto en el catálogo de Productos. Lo guarda `registrarPedido`
+      (App) para que la Orden de Producción no dependa del nombre. */
+  productoId?: string;
 }
 
 // "mixto" es una devolución donde cada producto se compensó de forma distinta:

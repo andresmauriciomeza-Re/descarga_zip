@@ -256,8 +256,8 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
 ];
 
-interface RInsumo { nombre: string; cantidad: number; unidad: string; }
-interface FichaVersion {
+export interface RInsumo { nombre: string; cantidad: number; unidad: string; }
+export interface FichaVersion {
   version: number;
   idReceta: string;
   tiempoPreparacion: number;
@@ -267,6 +267,37 @@ interface FichaVersion {
   fechaInicio: string;
   fechaFin: string | null;
 }
+/** Fichas técnicas por id de producto, indexadas por producto. Vive en App
+    (lo consume OrdenProduccionScreen para calcular qué se consume en un pedido). */
+export type FichasPorProducto = Record<string, FichaVersion[]>;
+
+/** Ficha de ejemplo para que un pedido tenga insumos que descontar desde el
+    primer arranque. Apunta a insumos REALES del catálogo: las fichas guardan el
+    nombre del insumo (no su id) y ese nombre es el que se busca después. */
+export const INITIAL_FICHAS: FichasPorProducto = {
+  "PROD-001": [
+    {
+      version: 1,
+      idReceta: "REC-001",
+      tiempoPreparacion: 12,
+      porciones: 8,
+      insumos: [
+        { nombre: "Masa Pre-elaborada", cantidad: 1, unidad: "und" },
+        { nombre: "Salsa de Tomate", cantidad: 0.2, unidad: "lt" },
+        { nombre: "Queso Mozzarella", cantidad: 0.25, unidad: "kg" },
+        { nombre: "Pepperoni", cantidad: 0.15, unidad: "kg" },
+      ],
+      pasos: [
+        "Calentar la Masa Pre-elaborada al horno o a la plancha.",
+        "Extender la salsa de tomate.",
+        "Espolvorear mozzarella y pepperoni.",
+        "Hornear 12 minutos a 350 °C.",
+      ],
+      fechaInicio: "2024-01-01",
+      fechaFin: null,
+    },
+  ],
+};
 const UNIDADES_FICHA = ["kg", "g", "lt", "ml", "und", "paq", "caja"];
 
 /** Mueve un elemento de una lista una posicion. Funcion pura: no muta la entrada. */
@@ -391,6 +422,8 @@ export function GestionProductosScreen({
   productos,
   setProductos,
   insumos,
+  fichas: fichasExternas,
+  setFichas: setFichasExternas,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -400,6 +433,10 @@ export function GestionProductosScreen({
   setProductos: React.Dispatch<React.SetStateAction<Producto[]>>;
   /** Catálogo real del módulo Compras > Insumos: solo lectura, para el buscador. */
   insumos: Insumo[];
+  /** Fichas técnicas. Las guarda App porque Orden de Producción las necesita
+      para saber qué insumos consume cada plato de un pedido. */
+  fichas: FichasPorProducto;
+  setFichas: React.Dispatch<React.SetStateAction<FichasPorProducto>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -431,7 +468,8 @@ export function GestionProductosScreen({
   const [form, setForm] = useState(emptyForm());
 
   // Ficha técnica state
-  const [fichas, setFichas] = useState<Record<string, FichaVersion[]>>({});
+  const fichas = fichasExternas;
+  const setFichas = setFichasExternas;
   const [fichaVersiones, setFichaVersiones] = useState<FichaVersion[]>([emptyFichaVersion(1)]);
   const [fichaVIdx, setFichaVIdx] = useState(0);
   const [fichaInsumoNombre, setFichaInsumoNombre] = useState("");
