@@ -287,12 +287,14 @@ export function OrdenProduccionScreen({
   canCreate = true,
   canEdit = true,
   canDelete = true,
+  canExportExcel = true,
 }: {
   productos: Producto[];
   setProductos: Dispatch<SetStateAction<Producto[]>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }) {
   const [ordenes,       setOrdenes]    = useState<OrdenProduccion[]>(INITIAL_ORDENES);
   const [search,        setSearch]     = useState("");
@@ -652,7 +654,7 @@ export function OrdenProduccionScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
         <div className="flex items-center gap-3">
-          <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />
+          {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
           {canCreate && (
             <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">

@@ -57,26 +57,60 @@ const CELDA_ICONOS: Record<string, typeof Home> = {
 };
 
 export const ACCIONES = ["Ver", "Crear", "Editar", "Eliminar"] as const;
-export type Accion = typeof ACCIONES[number];
 
-// Dashboard es configurable, pero solo admite el permiso de lectura. Inicio
-// sigue siendo universal y no depende de esta entrada del editor de roles.
-export const MODULOS_SOLO_LECTURA = ["Dashboard"];
+// Privilegio aparte de los CRUD: habilita el botón "Descargar Excel" del módulo.
+// No es una acción más del CRUD porque no crea ni edita nada, y porque solo se
+// ofrece en los sub-módulos de `SUBS_CON_EXCEL` (en el resto no se puede
+// descargar nada, así que ofrecerlo sería un privilegio que no hace nada).
+export const ACCION_EXCEL = "Descargar Excel" as const;
 
-// Acciones disponibles para un módulo. Todo lo que asigne permisos debe pasar
-// por aquí en lugar de leer ACCIONES directamente.
-export const accionesDe = (modulo: string): readonly Accion[] =>
-  MODULOS_SOLO_LECTURA.includes(modulo) ? (["Ver"] as const) : ACCIONES;
+export type Accion = typeof ACCIONES[number] | typeof ACCION_EXCEL;
+
+// Todas las acciones, para leer de un `AccesosMap` sin usar solo ACCIONES: el
+// resumen de permisos debe sacar también el chip de "Descargar Excel".
+export const TODAS_ACCIONES: readonly Accion[] = [...ACCIONES, ACCION_EXCEL];
 
 // AccesosMap: "Módulo::SubOpcion" → Accion[]
 export type AccesosMap = Record<string, Accion[]>;
 
 export const KEY = (modulo: string, sub: string) => `${modulo}::${sub}`;
 
+// Dashboard es configurable, pero solo admite el permiso de lectura. Inicio
+// sigue siendo universal y no depende de esta entrada del editor de roles.
+export const MODULOS_SOLO_LECTURA = ["Dashboard"];
+
+// Sub-módulos cuyo listado se puede descargar a Excel, por `permKey` completo
+// ("Módulo::SubOpcion") porque el privilegio se asigna por sub-opción y no por
+// módulo. Son los 6 que hoy muestran el botón.
+export const SUBS_CON_EXCEL: readonly string[] = [
+  KEY("Compras", "Orden de Compra"),
+  KEY("Compras", "Compra"),
+  KEY("Producción", "Productos"),
+  KEY("Producción", "Orden de Producción"),
+  KEY("Producción", "Producto No Conforme"),
+  KEY("Ventas", "Ventas"),
+];
+
+// ¿Este sub-módulo admite "Descargar Excel"?
+export const tieneDescargaExcel = (modulo: string, sub: string) =>
+  SUBS_CON_EXCEL.includes(KEY(modulo, sub));
+
+// Acciones disponibles para un módulo. Todo lo que asigne permisos debe pasar
+// por aquí en lugar de leer ACCIONES directamente.
+export const accionesDe = (modulo: string): readonly Accion[] =>
+  MODULOS_SOLO_LECTURA.includes(modulo) ? (["Ver"] as const) : ACCIONES;
+
+// Igual que `accionesDe` pero por sub-opción, que es donde se decide si el
+// privilegio "Descargar Excel" tiene sentido. Las 4 del CRUD son las mismas en
+// todos los sub-módulos de un módulo; el Excel solo se suma en los de
+// `SUBS_CON_EXCEL`.
+export const accionesDeSub = (modulo: string, sub: string): readonly Accion[] =>
+  tieneDescargaExcel(modulo, sub) ? [...accionesDe(modulo), ACCION_EXCEL] : accionesDe(modulo);
+
 export const fullAccesos = (): AccesosMap => {
   const m: AccesosMap = {};
   MENU_TREE.forEach(({ modulo, subs }) =>
-    subs.forEach(sub => { m[KEY(modulo, sub)] = [...accionesDe(modulo)]; })
+    subs.forEach(sub => { m[KEY(modulo, sub)] = [...accionesDeSub(modulo, sub)]; })
   );
   return m;
 };
@@ -117,6 +151,9 @@ export const accionColors: Record<Accion, string> = {
   Crear:    "bg-emerald-100 text-emerald-700 border-emerald-200",
   Editar:   "bg-amber-100 text-amber-700 border-amber-200",
   Eliminar: "bg-red-100 text-red-700 border-red-200",
+  // Verde del botón "Descargar Excel" (`#2E7D32`), para que el chip del permiso
+  // y el botón que habilita se lean como la misma función.
+  [ACCION_EXCEL]: "bg-green-100 text-green-800 border-green-200",
 };
 
 export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }) {
@@ -159,7 +196,7 @@ export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }
                     <div key={sub} className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/30 rounded-xl">
                       <span className="text-sm font-medium text-foreground">{sub}</span>
                       <div className="flex gap-1 flex-wrap justify-end">
-                        {ACCIONES.filter(a => perms.includes(a)).map(a => (
+                        {TODAS_ACCIONES.filter(a => perms.includes(a)).map(a => (
                           <span key={a} className={`text-[10px] font-semibold px-1.5 py-0 rounded-full border ${accionColors[a]}`}>{a}</span>
                         ))}
                       </div>
@@ -199,8 +236,11 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     const k = KEY(m, s);
     return k in accesos && accesos[k].length > 0;
   };
+  // Un módulo está "completo" cuando cada sub-opción tiene TODAS las acciones
+  // que le tocan, y eso depende del sub-módulo: "Descargar Excel" solo existe en
+  // los 6 sub-módulos de `SUBS_CON_EXCEL`.
   const isAllMod = (m: string, subs: string[]) =>
-    subs.every(s => accionesDe(m).every(a => (accesos[KEY(m, s)] ?? []).includes(a)));
+    subs.every(s => accionesDeSub(m, s).every(a => (accesos[KEY(m, s)] ?? []).includes(a)));
   const isSomeMod = (m: string, subs: string[]) => subs.some(s => isSubOn(m, s));
   const countAssignedPermissions = (celda: Celda) =>
     subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub)).length;
@@ -233,7 +273,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     setAccesos(prev => {
       const next = { ...prev };
       subs.forEach(sub => {
-        next[KEY(celda.modulo, sub)] = allOn ? [] : [...accionesDe(celda.modulo)];
+        next[KEY(celda.modulo, sub)] = allOn ? [] : [...accionesDeSub(celda.modulo, sub)];
       });
       return next;
     });
@@ -257,12 +297,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const renderPermissionDetails = (celda: Celda) => {
     const subs = subsDeCelda(celda);
-    const disponibles = accionesDe(celda.modulo);
     return (
       <div className="space-y-2">
         {subs.map(sub => {
           const k = KEY(celda.modulo, sub);
           const selAcc = accesos[k] ?? [];
+          // Por sub-opción, no por módulo: aquí es donde aparece "Descargar Excel".
+          const disponibles = accionesDeSub(celda.modulo, sub);
           const allSel = disponibles.every(a => selAcc.includes(a));
           return (
             <div key={sub} className="border border-border rounded-xl overflow-hidden">
@@ -308,7 +349,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const renderAssignedSummary = (celda: Celda) => {
     const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
-    const disponibles = accionesDe(celda.modulo);
     return (
       <div className="divide-y divide-border px-2">
         {assignedSubs.map(sub => {
@@ -316,7 +356,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
             <div key={sub} className="flex items-center justify-between gap-3 py-2">
               <span className="text-xs font-medium text-foreground">{sub}</span>
               <div className="flex gap-1 flex-wrap justify-end">
-                {disponibles.map(accion => permisoBadge(celda.modulo, sub, accion, true))}
+                {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion, true))}
               </div>
             </div>
           );
@@ -327,7 +367,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const renderAssignedDetails = (celda: Celda) => {
     const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
-    const disponibles = accionesDe(celda.modulo);
     return (
       <div className="divide-y divide-border px-2">
         {assignedSubs.map(sub => {
@@ -336,7 +375,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-semibold text-foreground">{sub}</span>
                 <div className="flex gap-1.5 flex-wrap justify-end">
-                  {disponibles.map(accion => permisoBadge(celda.modulo, sub, accion))}
+                  {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion))}
                 </div>
               </div>
             </div>

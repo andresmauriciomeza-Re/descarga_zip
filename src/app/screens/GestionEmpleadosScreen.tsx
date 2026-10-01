@@ -141,13 +141,14 @@ export function GestionEmpleadosScreen({
   const [newRolId,        setNewRolId]        = useState<string>(
     () => roles.find(r => r.activo)?.id ?? "ROL-003",
   );
-  const [newCargo,        setNewCargo]        = useState("");
   const [newFechaInicio,  setNewFechaInicio]  = useState("");
   const [newFechaFinal,   setNewFechaFinal]   = useState("");
   const [createErrors,    setCreateErrors]    = useState<Record<string, string | undefined>>({});
 
   const rolInfo = (rolId: string) => roles.find(r => r.id === rolId) ?? null;
-  const rolNombre = (rolId: string) => rolInfo(rolId)?.nombre ?? rolId;
+  // Nombre del rol para mostrar. Un empleado sin rol (id vacío o de un rol que
+  // ya no existe) se muestra como "-", nunca como un id interno suelto.
+  const rolNombre = (rolId: string) => rolInfo(rolId)?.nombre ?? "-";
 
   // Historial del empleado abierto en el modal de detalle, de la contratación
   // más reciente a la más antigua. Un `empleado` leído de una build anterior
@@ -205,7 +206,6 @@ export function GestionEmpleadosScreen({
         !q ||
         e.nombre.toLowerCase().includes(q) ||
         e.correo.toLowerCase().includes(q) ||
-        e.cargo.toLowerCase().includes(q) ||
         e.numeroDocumento.toLowerCase().includes(q) ||
         `${e.tipoDocumento} ${e.numeroDocumento}`.toLowerCase().includes(q) ||
         rol.includes(q) ||
@@ -216,10 +216,14 @@ export function GestionEmpleadosScreen({
     // Ni "nombre" ni "cargo" dependen de `activo`: con el filtro en "Todos los
     // estados" los activos y los inactivos quedan intercalados. Se eliminó la
     // ordenación por estado, que solo servía para agruparlos en bloques.
-    if (sortBy === "cargo") r = [...r].sort((a,b) => a.cargo.localeCompare(b.cargo));
+    // "Cargo" es el nombre del rol asignado, así que la búsqueda y la ordenación
+    // por cargo leen de `rolNombre`. `roles` va en las dependencias porque de él
+    // salen esos nombres: sin él, editar o desactivar un rol dejaría la lista
+    // ordenada y filtrada por el nombre anterior.
+    if (sortBy === "cargo") r = [...r].sort((a,b) => rolNombre(a.rolId).localeCompare(rolNombre(b.rolId)));
     else                    r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
     return r;
-  }, [empleados, search, filterEstado, sortBy]);
+  }, [empleados, roles, search, filterEstado, sortBy]);
 
   // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
   // interno, así que el paginador es la única forma de ver más empleados.
@@ -294,8 +298,7 @@ export function GestionEmpleadosScreen({
     if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
-    if (!e.rolId) errs.rol = "Selecciona un rol";
-    if (!e.cargo.trim()) errs.cargo = "El cargo es obligatorio";
+    if (!e.rolId) errs.cargo = "Selecciona un cargo";
 
     if (Object.values(errs).some(Boolean)) { setEditErrors(errs); return; }
 
@@ -330,7 +333,7 @@ export function GestionEmpleadosScreen({
     setNewDocumento(""); setNewContrasena(""); setNewConfirmar("");
     setNewActivo(true);
     setNewRolId(roles.find(r => r.activo)?.id ?? "ROL-003");
-    setNewCargo(""); setNewFechaInicio(""); setNewFechaFinal(""); setCreateErrors({});
+    setNewFechaInicio(""); setNewFechaFinal(""); setCreateErrors({});
   };
 
   const handleCreate = () => {
@@ -348,8 +351,7 @@ export function GestionEmpleadosScreen({
     else { const v = validarContrasena(newContrasena); if (v) errs.contrasena = v; }
     if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
     else if (newContrasena !== newConfirmar) { errs.confirmar = "Las contraseñas no coinciden"; }
-    if (!newRolId) errs.rol = "Selecciona un rol";
-    if (!newCargo.trim()) errs.cargo = "El cargo es obligatorio";
+    if (!newRolId) errs.cargo = "Selecciona un cargo";
     if (!newFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (newFechaInicio && newFechaFinal && newFechaFinal < newFechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
@@ -401,14 +403,14 @@ export function GestionEmpleadosScreen({
       contrasena: newContrasena,
       rolId: newRolId,
       activo: newActivo,
-      cargo: newCargo.trim(),
+      cargo: rolInfo(newRolId)?.nombre ?? "",
       fechaInicio: newFechaInicio,
       fechaFinal: newFechaFinal,
       // El alta es en sí misma la primera contratación: se guarda como registro
       // del historial para que quede desde el mismo momento, no solo implícita.
       contrataciones: [{
         id: nuevoContratacionId(newId, []),
-        cargo: newCargo.trim(),
+        cargo: rolInfo(newRolId)?.nombre ?? "",
         rolId: newRolId,
         fechaInicio: newFechaInicio,
         fechaFinal: newFechaFinal,
@@ -571,7 +573,7 @@ export function GestionEmpleadosScreen({
                       </div>
                     </td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
-                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.cargo}</td>
+                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{rolNombre(e.rolId)}</td>
                     <td className="px-4 py-1.5">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
                         {e.activo ? "Activo" : "Inactivo"}
@@ -771,8 +773,7 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div className="space-y-2">
                     {[
-                      { l: "Cargo", v: detailItem.cargo },
-                      { l: "Rol asignado", v: rolNombre(detailItem.rolId) },
+                      { l: "Cargo", v: rolNombre(detailItem.rolId) },
                       { l: "Fecha inicio", v: detailItem.fechaInicio },
                       { l: "Fecha final", v: detailItem.fechaFinal || "Continúa activo" },
                       { l: "Estado", v: detailItem.activo ? "Activo" : "Inactivo" },
@@ -933,32 +934,22 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Rol <span className="text-primary">*</span>
+                      Cargo <span className="text-primary">*</span>
                     </label>
                     <select value={newRolId}
-                      onChange={e => { setNewRolId(e.target.value); if (createErrors.rol) setCreateErrors(p => ({ ...p, rol: undefined })); }}
-                      className={`${fCls(createErrors.rol)} cursor-pointer`}>
+                      onChange={e => { setNewRolId(e.target.value); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
+                      className={`${fCls(createErrors.cargo)} cursor-pointer`}>
                       {roles.map(r => (
                         <option key={r.id} value={r.id}>
                           {r.nombre}{!r.activo ? " (Inactivo)" : ""}
                         </option>
                       ))}
                     </select>
-                    {createErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.rol}</p>}
+                    {createErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.cargo}</p>}
                   </div>
 
                   {/* Datos de Contratacion_empleado */}
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratacion_empleado</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Cargo <span className="text-primary">*</span>
-                    </label>
-                    <input type="text" value={newCargo}
-                      onChange={e => { setNewCargo(e.target.value); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
-                      placeholder="Ej: Cajero"
-                      className={fCls(createErrors.cargo)} />
-                    {createErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.cargo}</p>}
-                  </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha de inicio <span className="text-primary">*</span>
@@ -968,7 +959,7 @@ export function GestionEmpleadosScreen({
                       className={fCls(createErrors.fechaInicio)} />
                     {createErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.fechaInicio}</p>}
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha final <span className="text-muted-foreground font-normal">(opcional)</span>
                     </label>
@@ -1051,9 +1042,15 @@ export function GestionEmpleadosScreen({
                 ))}
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Cargo</label>
-                  <input type="text" value={editItem.cargo}
-                    onChange={e => { setEditItem(x => x && ({ ...x, cargo: e.target.value })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
-                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.cargo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                  <select value={editItem.rolId}
+                    onChange={e => { setEditItem(x => x && ({ ...x, rolId: e.target.value })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
+                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.cargo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre}{!r.activo ? " (Inactivo)" : ""}
+                      </option>
+                    ))}
+                  </select>
                   {editErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.cargo}</p>}
                 </div>
                 <div>
@@ -1072,25 +1069,12 @@ export function GestionEmpleadosScreen({
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
                   <input type="date" value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
-                  <select value={editItem.rolId}
-                    onChange={e => { setEditItem(x => x && ({ ...x, rolId: e.target.value })); if (editErrors.rol) setEditErrors(p => ({ ...p, rol: undefined })); }}
-                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.rol ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.nombre}{!r.activo ? " (Inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {editErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.rol}</p>}
                 </div>
               </div>
               <div className="flex gap-3 px-4 py-3 border-t border-border">

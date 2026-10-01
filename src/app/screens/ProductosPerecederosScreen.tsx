@@ -2,11 +2,12 @@ import React, { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Eye, Trash2, X, ChevronLeft, ChevronRight,
-  Upload, ShoppingCart, Download, BarChart2, ChevronDown,
+  Upload, ShoppingCart, BarChart2, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -336,9 +337,10 @@ interface Props {
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }
 
-export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCreate = true, canDelete = true }: Props) {
+export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
   const [items, setItems] = useState<NoConformidad[]>(INITIAL);
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
@@ -807,13 +809,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => downloadXLSX(allItems)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-muted border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted/80 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap"
-          >
-            <Download className="w-4 h-4" />
-            Descargar Excel
-          </button>
+          {canExportExcel && <BotonDescargarExcel onClick={() => downloadXLSX(allItems)} />}
           {_canCreate && (
             <button
               onClick={() => { setForm(emptyForm()); setShowCreate(true); }}

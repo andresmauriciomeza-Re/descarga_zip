@@ -2,13 +2,14 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  FileDown, Plus, Check, Ban, CheckCircle2, Lock,
+  Plus, Check, Ban, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
   NuevoInsumoModal,
@@ -701,12 +702,14 @@ interface Props {
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }
 
 export function GestionCompraScreen({
   gestiones, setGestiones, ordenes, setOrdenes, insumos, proveedores, setProveedores,
   onNuevaCompra,
   canCreate = true,
+  canExportExcel = true,
 }: Props) {
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
@@ -810,13 +813,7 @@ export function GestionCompraScreen({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownload}
-            title="Descargar Excel"
-            className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
-          >
-            <FileDown className="w-4 h-4" /> Excel
-          </button>
+          {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
           {canCreate && (
             <button
               onClick={onNuevaCompra}
