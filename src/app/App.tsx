@@ -98,7 +98,7 @@ import { VolverArriba } from "./components/VolverArriba";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, KEY, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
+import { GestionConfigScreen, INITIAL_ROLES, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Empleado } from "./screens/GestionEmpleadosScreen";
 import type { Insumo } from "./screens/GestionInsumosScreen";
 import {
@@ -7521,17 +7521,47 @@ const esRolValido = (r: unknown): r is Rol => {
   );
 };
 
+// Migración de roles ya guardados: al añadir el privilegio "Descargar Excel",
+// el Administrador que ya estuviera en localStorage se quedó con los 4 CRUD y
+// sin la acción nueva, y perdería el botón que sí ve uno recién creado (que sale
+// de `fullAccesos()`, ya con la acción). Se le devuelve.
+//
+// Va anclada al rol SEMILLA `ROL-001`, igual que `isNamedAdmin`, y NO se aplica
+// a los demás roles a propósito. Los que alguien configuró a mano se guardaron
+// sin esta acción porque aún no existía, así que su configuración se respeta
+// tal cual: si el privilegio se añadiera a cualquier rol, recargar la página
+// repondría en secreto una acción que ese usuario había quitado, y el permiso
+// "Descargar Excel" no serviría para nada.
+const RESTAURAR_EXCEL_AL_ADMIN = "ROL-001";
+
+const restaurarDescargaExcel = (rol: Rol): Rol => {
+  if (rol.id !== RESTAURAR_EXCEL_AL_ADMIN) return rol;
+  const accesos: AccesosMap = {};
+  let cambio = false;
+  (Object.keys(rol.accesos) as string[]).forEach(k => {
+    const actuales = rol.accesos[k] ?? [];
+    if (SUBS_CON_EXCEL.includes(k) && !actuales.includes(ACCION_EXCEL)) {
+      accesos[k] = [...actuales, ACCION_EXCEL];
+      cambio = true;
+    } else {
+      accesos[k] = actuales;
+    }
+  });
+  return cambio ? { ...rol, accesos } : rol;
+};
+
 const leerRolesPersistidos = (): Rol[] => {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
     if (!raw) return INITIAL_ROLES;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
-      return (parsed as Rol[]).map(rol =>
-        rol.id === "ROL-003" && rol.nombre === "Usuario"
+      return (parsed as Rol[]).map(rol => {
+        const renombrado = rol.id === "ROL-003" && rol.nombre === "Usuario"
           ? { ...rol, nombre: "Empleado", descripcion: "Acceso operativo al sistema." }
-          : rol,
-      );
+          : rol;
+        return restaurarDescargaExcel(renombrado);
+      });
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -8115,12 +8145,15 @@ export default function App() {
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
     const key = SCREEN_PERM_KEY[s];
-    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true };
+    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
       canEdit:   acts.includes("Editar"),
       canDelete: acts.includes("Eliminar"),
+      // Aparte del CRUD: sin este permiso no se monta el botón "Descargar
+      // Excel", así que el `.xlsx` no se puede generar desde la interfaz.
+      canExportExcel: acts.includes(ACCION_EXCEL),
     };
   };
 

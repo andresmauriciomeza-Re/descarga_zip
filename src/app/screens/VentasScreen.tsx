@@ -423,6 +423,7 @@ export function VentasScreen({
   onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
+  canExportExcel = true,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
@@ -431,6 +432,7 @@ export function VentasScreen({
   onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
   canEdit?: boolean;
+  canExportExcel?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -1208,7 +1210,7 @@ export function VentasScreen({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <BotonDescargarExcel onClick={exportExcel} />
+          {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
           {_canCreate && (
             <button
               onClick={() => setShowCreate(true)}

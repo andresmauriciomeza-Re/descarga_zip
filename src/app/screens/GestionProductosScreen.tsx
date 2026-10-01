@@ -394,6 +394,7 @@ export function GestionProductosScreen({
   canCreate = true,
   canEdit = true,
   canDelete = true,
+  canExportExcel = true,
 }: {
   productos: Producto[];
   setProductos: React.Dispatch<React.SetStateAction<Producto[]>>;
@@ -402,6 +403,7 @@ export function GestionProductosScreen({
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -1538,7 +1540,7 @@ export function GestionProductosScreen({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <BotonDescargarExcel onClick={exportExcel} />
+          {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
           {canCreate && (
             <button
               onClick={() => {

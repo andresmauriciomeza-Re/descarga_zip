@@ -5,11 +5,12 @@ import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
-  AlertCircle, Send, Ban, Check, FileDown, ClipboardCheck,
+  AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -1532,6 +1533,7 @@ interface Props {
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }
 
 export function OrdenCompraScreen({
@@ -1539,6 +1541,7 @@ export function OrdenCompraScreen({
   proveedores, setProveedores,
   insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden,
   canCreate = true, canEdit = true,
+  canExportExcel = true,
 }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -1690,13 +1693,7 @@ export function OrdenCompraScreen({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownload}
-            title="Descargar Excel"
-            className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
-          >
-            <FileDown className="w-4 h-4" /> Excel
-          </button>
+          {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
           {canCreate && (
             <button
               onClick={onNuevaOrden}
