@@ -138,8 +138,29 @@ export const INITIAL_ROLES: Rol[] = [
   },
 ];
 
+// "Permisos" = sub-módulos con al menos un privilegio asignado.
 export const countAccesos = (accesos: AccesosMap) =>
   Object.values(accesos).filter(v => v.length > 0).length;
+
+// "Módulos" = los que tienen al menos un permiso, para el contador
+// "N permisos en M módulos" de la vista de detalle.
+const countModulosConAcceso = (accesos: AccesosMap) =>
+  MENU_TREE.filter(({ modulo, subs }) =>
+    subs.some(sub => (accesos[KEY(modulo, sub)] ?? []).length > 0)
+  ).length;
+
+// Texto de usuarios asignados, en singular y plural.
+const textoUsuariosAsignados = (n: number) =>
+  n === 0
+    ? "Sin usuarios asignados"
+    : `${n} usuario${n === 1 ? "" : "s"} asignado${n === 1 ? "" : "s"}`;
+
+// "15 permisos en 5 módulos".
+const textoPermisosModulos = (accesos: AccesosMap) => {
+  const permisos = countAccesos(accesos);
+  const modulos = countModulosConAcceso(accesos);
+  return `${permisos} permiso${permisos === 1 ? "" : "s"} en ${modulos} módulo${modulos === 1 ? "" : "s"}`;
+};
 
 export function nextRolId(roles: Rol[]) {
   const nums = roles.map(r => parseInt(r.id.replace("ROL-",""),10)).filter(n => !isNaN(n));
@@ -155,6 +176,80 @@ export const accionColors: Record<Accion, string> = {
   // y el botón que habilita se lean como la misma función.
   [ACCION_EXCEL]: "bg-green-100 text-green-800 border-green-200",
 };
+
+// Vista de SOLO LECTURA de los permisos de un rol. A diferencia del acordeón
+// (`PermissionCategoryAccordion`), que es para editar, esto no tiene nada
+// desplegable: todos los módulos, sub-módulos y privilegios se ven de una vez,
+// sin un solo clic, y solo se hace scroll en el contenedor que la envuelve.
+// Una fila de título por módulo y una fila por sub-módulo; las columnas de
+// privilegio quedan alineadas para poder comparar de arriba abajo.
+export function PermisosTablaDetalle({ accesos }: { accesos: AccesosMap }) {
+  // Solo los módulos con al menos un sub-módulo con privilegios, y dentro de
+  // ellos solo los sub-módulos con privilegios: lo demás no se lista.
+  const grupos = MENU_TREE
+    .map(({ modulo, subs }) => ({
+      modulo,
+      subs: subs
+        .map(sub => ({ sub, perms: accesos[KEY(modulo, sub)] ?? [] }))
+        .filter(({ perms }) => perms.length > 0),
+    }))
+    .filter(({ subs }) => subs.length > 0);
+
+  if (grupos.length === 0) {
+    return <p className="text-sm text-muted-foreground italic">Sin accesos configurados</p>;
+  }
+
+  return (
+    <table className="w-full border-separate border-spacing-0">
+      <thead>
+        <tr>
+          <th className="sticky top-0 z-10 bg-card px-2 py-2 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+            Permiso
+          </th>
+          {ACCIONES.map(accion => (
+            <th key={accion} className="sticky top-0 z-10 bg-card w-20 px-1 py-2 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+              {accion}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      {grupos.map(({ modulo, subs }) => (
+        <tbody key={modulo}>
+          <tr>
+            <td colSpan={ACCIONES.length + 1} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground bg-muted border-y border-border">
+              {modulo}
+            </td>
+          </tr>
+          {subs.map(({ sub, perms }) => (
+            <tr key={sub} className="hover:bg-muted/20">
+              <td className="px-2 py-2 text-sm font-medium text-foreground">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {sub}
+                  {/* "Descargar Excel" no es una columna: viaja con el
+                      sub-módulo para que el privilegio siga siendo visible. */}
+                  {perms.includes(ACCION_EXCEL) && (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${accionColors[ACCION_EXCEL]}`}>
+                      {ACCION_EXCEL}
+                    </span>
+                  )}
+                </span>
+              </td>
+              {ACCIONES.map(accion => (
+                <td key={accion} className="w-20 px-1 py-2 text-center">
+                  {perms.includes(accion) ? (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${accionColors[accion]}`}>{accion}</span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground/60">—</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      ))}
+    </table>
+  );
+}
 
 export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }) {
   const [expandedModules, setExpandedModules] = useState<string[]>(() =>
@@ -800,34 +895,42 @@ export function GestionConfigScreen({
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale:.95,opacity:0 }} animate={{ scale:1,opacity:1 }}
               exit={{ scale:.95,opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
+              className="bg-card rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
+                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
-              <div className="px-5 py-3 space-y-1.5 shrink-0">
-                {[
-                  { l: "ID Rol",      v: detailItem.id },
-                  { l: "Nombre",      v: detailItem.nombre },
-                  { l: "Descripción", v: detailItem.descripcion || "—" },
-                  { l: "Estado",      v: detailItem.activo ? "Activo" : "Inactivo" },
-                  { l: "Usuarios",    v: `${rolUserCounts[detailItem.id] ?? 0} asignados` },
-                ].map(({ l, v }) => (
-                  <div key={l} className="flex items-center justify-between py-1.5 border-b border-border last:border-0 gap-4">
-                    <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                    <span className="text-sm font-semibold text-foreground text-right">{v}</span>
+              {/* Todo el cuerpo (datos + tabla) vive en el área con scroll
+                  interno; el pie queda fuera, así "Editar rol" y "Cerrar"
+                  siempre se ven aunque la lista sea larga. */}
+              <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+                {/* Datos del rol en cuadrícula de 2 columnas: Nombre | Estado /
+                    Usuarios asignados | (Descripción ocupa las 2 columnas). */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  {[
+                    { l: "Nombre",            v: detailItem.nombre,                     ancho: false },
+                    { l: "Estado",            v: detailItem.activo ? "Activo" : "Inactivo", ancho: false },
+                    { l: "Usuarios",          v: textoUsuariosAsignados(rolUserCounts[detailItem.id] ?? 0), ancho: false },
+                    { l: "Descripción",       v: detailItem.descripcion || "—",            ancho: true },
+                  ].map(({ l, v, ancho }) => (
+                    <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "col-span-2" : ""}`}>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</span>
+                      <span className="text-sm font-semibold text-foreground break-words">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Contador + tabla de permisos. */}
+                <div>
+                  <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Accesos configurados
+                    </p>
+                    <span className="text-xs text-primary font-semibold">
+                      {textoPermisosModulos(detailItem.accesos)}
+                    </span>
                   </div>
-                ))}
-              </div>
-              {/* Accesos configurados con badges */}
-              <div className="px-5 pb-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground pt-1 pb-1.5 border-b border-border sticky top-0 bg-card">
-                  Accesos configurados
-                   <span className="ml-2 text-primary normal-case font-semibold">{countAccesos(detailItem.accesos)} permisos</span>
-                </p>
-                {countAccesos(detailItem.accesos) === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">Sin accesos configurados</p>
-                ) : <PermissionCategoryAccordion accesos={detailItem.accesos} />}
+                  <PermisosTablaDetalle accesos={detailItem.accesos} />
+                </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
@@ -848,9 +951,11 @@ export function GestionConfigScreen({
       <AnimatePresence>
         {deleteId && (() => {
           const count = rolUserCounts[deleteId] ?? 0;
+          // Por nombre, nunca por el ID técnico: "eliminar el rol Administrador".
+          const nombreRol = roles.find(r => r.id === deleteId)?.nombre ?? "";
           const message = count > 0
             ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios quedarán SIN ACCESO hasta que les asignes otro rol.`
-            : `¿Seguro que deseas eliminar el rol ${deleteId}? Se eliminan también sus accesos configurados.`;
+            : `¿Seguro que deseas eliminar el rol ${nombreRol}? Se eliminan también sus accesos configurados.`;
           return (
             <ConfirmDeleteModal
               title="Eliminar rol"

@@ -78,17 +78,6 @@ function EstadoOrdenSelect({
   );
 }
 
-// Catálogo de productos (mismos IDs y nombres del módulo Productos).
-// El sistema carga internamente el tiempo de preparación de la última
-// versión de la ficha técnica de cada producto (nunca se muestra un ID externo).
-const PRODUCTOS = [
-  { id: "PROD-001", nombre: "Margarita Clásica",   tiempoPrep: 20 },
-  { id: "PROD-002", nombre: "Pepperoni Premium",   tiempoPrep: 25 },
-  { id: "PROD-003", nombre: "Cuatro Quesos",       tiempoPrep: 30 },
-  { id: "PROD-004", nombre: "Especial La Sirena",  tiempoPrep: 35 },
-  { id: "PROD-005", nombre: "Veggie Mediterránea", tiempoPrep: 20 },
-];
-
 const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
 const MOTIVOS = [
   "Defecto de calidad",
@@ -136,10 +125,13 @@ interface OrdenForm {
   observacion: string;
 }
 
+// Las órdenes de ejemplo apuntan a IDs reales de INITIAL_PRODUCTOS y solo a
+// productos que se producen (pizzas / lasañas). Así, al abrir la pantalla
+// ninguna fila muestra un id suelto ni un nombre inventado.
 const INITIAL_ORDENES: OrdenProduccion[] = [
   {
     id: "ORD-001",
-    lineas: [{ idProducto: "PROD-001", cantidad: 20 }],
+    lineas: [{ idProducto: "PROD-001", cantidad: 20 }], // Pizza Peperoni
     fechaSolicitada: "2024-01-15", horaSolicitada: "19:00",
     estadoOrden: "completada", observacion: "Turno mañana sin novedades.",
     inicioProduccion: "2024-01-15T06:00:00", entregaEstimada: "2024-01-15T06:20:00",
@@ -150,7 +142,7 @@ const INITIAL_ORDENES: OrdenProduccion[] = [
   },
   {
     id: "ORD-002",
-    lineas: [{ idProducto: "PROD-002", cantidad: 15 }],
+    lineas: [{ idProducto: "PROD-003", cantidad: 15 }], // Pizza Hawai
     fechaSolicitada: "2024-01-15", horaSolicitada: "20:30",
     estadoOrden: "en-proceso", observacion: "Pendiente revisión de calidad.",
     inicioProduccion: "2024-01-15T08:10:00", entregaEstimada: "2024-01-15T08:35:00",
@@ -160,14 +152,17 @@ const INITIAL_ORDENES: OrdenProduccion[] = [
   },
   {
     id: "ORD-003",
-    lineas: [{ idProducto: "PROD-003", cantidad: 10 }],
+    lineas: [
+      { idProducto: "PROD-009", cantidad: 10 }, // Lasaña Carne
+      { idProducto: "PROD-010", cantidad: 6 },  // Lasaña Pollo
+    ],
     fechaSolicitada: "2024-01-16", horaSolicitada: "18:00",
     estadoOrden: "pendiente", observacion: "",
     inicioProduccion: null, entregaEstimada: null, historial: [],
   },
   {
     id: "ORD-004",
-    lineas: [{ idProducto: "PROD-004", cantidad: 12 }],
+    lineas: [{ idProducto: "PROD-011", cantidad: 12 }], // Lasaña Mixta
     fechaSolicitada: "2024-01-16", horaSolicitada: "21:00",
     estadoOrden: "cancelada", observacion: "Falta mozzarella.",
     inicioProduccion: "2024-01-16T11:00:00", entregaEstimada: null,
@@ -178,7 +173,7 @@ const INITIAL_ORDENES: OrdenProduccion[] = [
   },
   {
     id: "ORD-005",
-    lineas: [{ idProducto: "PROD-005", cantidad: 8 }],
+    lineas: [{ idProducto: "PROD-008", cantidad: 8 }], // Pizza Tocineta
     fechaSolicitada: "2024-01-17", horaSolicitada: "19:30",
     estadoOrden: "en-proceso", observacion: "",
     inicioProduccion: "2024-01-17T09:00:00", entregaEstimada: "2024-01-17T09:20:00",
@@ -191,17 +186,22 @@ const INITIAL_ORDENES: OrdenProduccion[] = [
 const PER_PAGE = 5;
 
 const emptyForm = (): OrdenForm => ({
-  lineas: [{ idProducto: "PROD-001", cantidad: 1 }],
+  lineas: [{ idProducto: "", cantidad: 1 }],
   fechaSolicitada: "",
   horaSolicitada: "",
   estadoOrden: "pendiente",
   observacion: "",
 });
 
-const productById = (id: string) => PRODUCTOS.find(p => p.id === id);
 const totalCantidad = (lineas: LineaProducto[]) => lineas.reduce((s, l) => s + (l.cantidad || 0), 0);
+// TODO P4 (requiere ítem 56 / `fichasPorProducto` en App): leer el tiempo de
+// preparación de la versión VIGENTE de la ficha técnica del producto. Mientras
+// las fichas no vivan fuera de GestionProductosScreen no hay fuente de datos,
+// así que se devuelve 0 en vez de inventar un valor.
+const tiempoPrepFicha = (_pid: string): number => 0;
+
 const totalTiempoPrep = (lineas: LineaProducto[]) =>
-  lineas.reduce((s, l) => s + ((productById(l.idProducto)?.tiempoPrep ?? 0) * (l.cantidad || 0)), 0);
+  lineas.reduce((s, l) => s + (tiempoPrepFicha(l.idProducto) * (l.cantidad || 0)), 0);
 
 function fmtMinutos(min: number): string {
   if (min <= 0) return "0 min";
@@ -225,7 +225,144 @@ const nowISO = () => new Date().toISOString();
 const addMinutesISO = (iso: string, min: number) =>
   new Date(new Date(iso).getTime() + min * 60000).toISOString();
 
-const nombresDeLineas = (lineas: LineaProducto[]) => lineas.map(l => productById(l.idProducto)?.nombre ?? l.idProducto);
+/** Nombre real de un producto desde el catálogo que llega de App. Nunca el id. */
+const nombreProducto = (productos: Producto[], id: string): string =>
+  productos.find(p => p.id === id)?.nombre ?? "Producto eliminado";
+
+const nombresDeLineas = (lineas: LineaProducto[], productos: Producto[]) =>
+  lineas.map(l => nombreProducto(productos, l.idProducto));
+
+// ── Campos compartidos del formulario de orden (crear / editar) ─────────
+// Componente de NIVEL DE MÓDULO, no una función declarada dentro del render de
+// OrdenProduccionScreen. Antes se definía dentro del render, así que React la
+// veía como un tipo nuevo en cada tecla: el input de cantidad se desmontaba y
+// remontaba, y el usuario perdía el foco al escribir un número de varios
+// dígitos. Ahora la identidad del componente es estable entre renders.
+function OrdenFormFields({ v, set, productosProducibles }: {
+  v: OrdenForm;
+  set: (f: OrdenForm) => void;
+  productosProducibles: Producto[];
+}) {
+  const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  const sCls = iCls + " cursor-pointer";
+  const tCls = iCls + " resize-none";
+
+  const prepTotal = totalTiempoPrep(v.lineas);
+  const cantTotal = totalCantidad(v.lineas);
+  const sinProductos = productosProducibles.length === 0;
+
+  const updateLinea = (idx: number, patch: Partial<LineaProducto>) =>
+    set({ ...v, lineas: v.lineas.map((l, i) => i === idx ? { ...l, ...patch } : l) });
+
+  // Cada línea nueva arranca vacía: se elige el producto, no se hereda el
+  // primero de la lista.
+  const addLinea = () =>
+    set({ ...v, lineas: [...v.lineas, { idProducto: "", cantidad: 1 }] });
+
+  const removeLinea = (idx: number) =>
+    set({ ...v, lineas: v.lineas.filter((_, i) => i !== idx) });
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Líneas de producto */}
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-semibold text-muted-foreground mb-2">Producto(s) de la orden</label>
+        {sinProductos ? (
+          <p className="px-3 py-3 bg-muted/60 rounded-xl border border-border text-sm text-muted-foreground">
+            No hay productos con ficha técnica. Créalos en Productos.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {v.lineas.map((l, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <select
+                  value={l.idProducto}
+                  onChange={e => updateLinea(idx, { idProducto: e.target.value })}
+                  aria-label={`Producto de la línea ${idx + 1}`}
+                  className={sCls + " flex-1" + (l.idProducto ? "" : " text-muted-foreground")}
+                >
+                  <option value="">Selecciona un producto</option>
+                  {productosProducibles.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                  ))}
+                </select>
+                <input
+                  type="number" min={1} value={l.cantidad}
+                  onChange={e => updateLinea(idx, { cantidad: Number(e.target.value) })}
+                  title="Cantidad"
+                  aria-label={`Cantidad de la línea ${idx + 1}`}
+                  className={iCls + " w-24"}
+                />
+                {v.lineas.length > 1 && (
+                  <button type="button" onClick={() => removeLinea(idx)} title="Quitar producto"
+                    className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!sinProductos && (
+          <button type="button" onClick={addLinea}
+            className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+            <Plus className="w-3.5 h-3.5" /> Agregar producto
+          </button>
+        )}
+      </div>
+
+      {/* Fecha/hora solicitada por el cliente (opcional, referencial) */}
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-1">
+          Fecha/hora solicitada por el cliente <span className="text-muted-foreground/60">(opcional, referencial)</span>
+        </label>
+        <CalendarDropdown value={v.fechaSolicitada} onChange={f => set({ ...v, fechaSolicitada: f })} />
+      </div>
+      <div className="flex flex-col justify-end">
+        <label className="block text-xs font-semibold text-muted-foreground mb-1">Hora (HH:MM) — opcional</label>
+        <input
+          type="time"
+          value={v.horaSolicitada}
+          onChange={e => set({ ...v, horaSolicitada: e.target.value })}
+          className={iCls}
+        />
+      </div>
+
+      {/* Tiempo estimado (readonly) */}
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo estimado / Entrega estimada</label>
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-foreground">
+          <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="font-semibold">{prepTotal > 0 ? fmtMinutos(prepTotal) : "Sin ficha técnica"}</span>
+          {prepTotal > 0 && (
+            <span className="text-xs text-muted-foreground">
+              (suma del tiempo de preparación × cantidad de cada producto — se fija como entrega real al iniciar producción)
+            </span>
+          )}
+        </div>
+        {prepTotal === 0 && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Sin tiempo de preparación en la ficha técnica
+          </p>
+        )}
+      </div>
+
+      {/* Cantidad producida (resumen) */}
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad Producida (resumen)</label>
+        <input value={cantTotal} readOnly className={iCls + " opacity-70 cursor-default"} />
+      </div>
+
+      {/* Observación */}
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
+        <textarea value={v.observacion} onChange={e => set({ ...v, observacion: e.target.value })}
+          rows={3} placeholder="Notas adicionales sobre esta orden..."
+          className={tCls} />
+      </div>
+    </div>
+  );
+}
 
 // ── Regla contable: stock que aporta una orden al completarse ──────────
 // Función pura: recibe la orden en su estado ANTERIOR a la transición y
@@ -248,7 +385,7 @@ export function calcularStockProducido(orden: OrdenProduccion): Map<string, numb
   return producido.size > 0 ? producido : null;
 }
 
-async function exportExcel(ordenes: OrdenProduccion[]) {
+async function exportExcel(ordenes: OrdenProduccion[], productos: Producto[]) {
   const fecha = new Date();
   const archivo = await exportarExcelEstilizado({
     datos: ordenes,
@@ -264,10 +401,10 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
     },
     columnas: [
       { header: "ID Orden", valor: (o) => o.id },
-      { header: "Producto(s)", valor: (o) => nombresDeLineas(o.lineas).join(", ") },
+      { header: "Producto(s)", valor: (o) => nombresDeLineas(o.lineas, productos).join(", ") },
       {
         header: "Detalle",
-        valor: (o) => o.lineas.map((l) => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join("; "),
+        valor: (o) => o.lineas.map((l) => `${l.cantidad} × ${nombreProducto(productos, l.idProducto)}`).join("; "),
       },
       { header: "Cantidad Total", valor: (o) => totalCantidad(o.lineas), numFmt: "#,##0" },
       { header: "Fecha solicitada", valor: (o) => o.fechaSolicitada || "" },
@@ -303,7 +440,16 @@ export function OrdenProduccionScreen({
   const [editItem,      setEditItem]   = useState<OrdenProduccion | null>(null);
   const [detailItem,    setDetailItem] = useState<OrdenProduccion | null>(null);
   const [deleteId,      setDeleteId]   = useState<string | null>(null);
-  const [form,          setForm]       = useState<OrdenForm>(emptyForm());
+  const [form,          setForm]       = useState<OrdenForm>(emptyForm);
+
+  // Productos que se pueden producir en una orden.
+  // TODO P3: sustituir el filtro por categoría + estado por
+  // `p.tipo === "Producto insumo" && p.estado !== "Descontinuado"` (ítem 47/56).
+  const productosProducibles = useMemo(
+    () => productos.filter(p =>
+      p.estado === "Disponible" && (p.idCategoria === "CAT-001" || p.idCategoria === "CAT-002")),
+    [productos],
+  );
   const [darBajaItem,   setDarBajaItem] = useState<OrdenProduccion | null>(null);
   const [confirmEstado, setConfirmEstado] = useState<{
     id: string; current: EstadoOrden; next: EstadoOrden;
@@ -364,8 +510,8 @@ export function OrdenProduccionScreen({
   const filtered = useMemo(() =>
     ordenes.filter(o =>
       o.id.toLowerCase().includes(search.toLowerCase()) ||
-      nombresDeLineas(o.lineas).some(n => n.toLowerCase().includes(search.toLowerCase()))
-    ), [ordenes, search]);
+      nombresDeLineas(o.lineas, productos).some(n => n.toLowerCase().includes(search.toLowerCase()))
+    ), [ordenes, search, productos]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -379,8 +525,7 @@ export function OrdenProduccionScreen({
     const producido = calcularStockProducido(orden);
     if (!producido) return false;
 
-    const nombreDe = (pid: string) =>
-      productos.find(p => p.id === pid)?.nombre ?? productById(pid)?.nombre ?? pid;
+    const nombreDe = (pid: string) => nombreProducto(productos, pid);
 
     setProductos(prev => prev.map(p => {
       const cant = producido.get(p.id);
@@ -427,9 +572,12 @@ export function OrdenProduccionScreen({
     return patched;
   };
 
+  const sinLineasValidas = (lineas: LineaProducto[]) =>
+    lineas.length === 0 || lineas.some(l => !l.idProducto || l.cantidad <= 0);
+
   const handleCreate = () => {
-    if (form.lineas.length === 0 || form.lineas.every(l => !l.idProducto || l.cantidad <= 0)) {
-      toast.error("Agrega al menos un producto con cantidad");
+    if (sinLineasValidas(form.lineas)) {
+      toast.error("Cada línea necesita un producto y una cantidad mayor a 0");
       return;
     }
     // `length + 1` reutilizaba un id existente si se había borrado una orden del
@@ -461,8 +609,8 @@ export function OrdenProduccionScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
-    if (editItem.lineas.length === 0 || editItem.lineas.every(l => !l.idProducto || l.cantidad <= 0)) {
-      toast.error("Agrega al menos un producto con cantidad");
+    if (sinLineasValidas(editItem.lineas)) {
+      toast.error("Cada línea necesita un producto y una cantidad mayor a 0");
       return;
     }
     // Se parte de la orden ya guardada (estado previo real) y se le aplican los
@@ -530,99 +678,6 @@ export function OrdenProduccionScreen({
     });
   };
 
-  // ── Campos compartidos del formulario de orden (crear / editar) ──
-  const OrdenFormFields = ({ v, set }: { v: OrdenForm; set: (f: OrdenForm) => void }) => {
-    const prepTotal = totalTiempoPrep(v.lineas);
-    const cantTotal = totalCantidad(v.lineas);
-
-    const updateLinea = (idx: number, patch: Partial<LineaProducto>) =>
-      set({ ...v, lineas: v.lineas.map((l, i) => i === idx ? { ...l, ...patch } : l) });
-
-    const addLinea = () =>
-      set({ ...v, lineas: [...v.lineas, { idProducto: PRODUCTOS[0].id, cantidad: 1 }] });
-
-    const removeLinea = (idx: number) =>
-      set({ ...v, lineas: v.lineas.filter((_, i) => i !== idx) });
-
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Líneas de producto */}
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-2">Producto(s) de la orden</label>
-          <div className="space-y-2">
-            {v.lineas.map((l, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <select value={l.idProducto} onChange={e => updateLinea(idx, { idProducto: e.target.value })}
-                  className={sCls + " flex-1"}>
-                  {PRODUCTOS.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
-                <input
-                  type="number" min={1} value={l.cantidad}
-                  onChange={e => updateLinea(idx, { cantidad: Number(e.target.value) })}
-                  title="Cantidad"
-                  className={iCls + " w-24"}
-                />
-                {v.lineas.length > 1 && (
-                  <button type="button" onClick={() => removeLinea(idx)} title="Quitar producto"
-                    className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer shrink-0">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={addLinea}
-            className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-            <Plus className="w-3.5 h-3.5" /> Agregar producto
-          </button>
-        </div>
-
-        {/* Fecha/hora solicitada por el cliente (opcional, referencial) */}
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">
-            Fecha/hora solicitada por el cliente <span className="text-muted-foreground/60">(opcional, referencial)</span>
-          </label>
-          <CalendarDropdown value={v.fechaSolicitada} onChange={f => set({ ...v, fechaSolicitada: f })} />
-        </div>
-        <div className="flex flex-col justify-end">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Hora (HH:MM) — opcional</label>
-          <input
-            type="time"
-            value={v.horaSolicitada}
-            onChange={e => set({ ...v, horaSolicitada: e.target.value })}
-            className={iCls}
-          />
-        </div>
-
-        {/* Tiempo estimado (readonly) */}
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo estimado / Entrega estimada</label>
-          <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-foreground">
-            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span className="font-semibold">{fmtMinutos(prepTotal)}</span>
-            <span className="text-xs text-muted-foreground">
-              (suma del tiempo de preparación × cantidad de cada producto — se fija como entrega real al iniciar producción)
-            </span>
-          </div>
-        </div>
-
-        {/* Cantidad producida (resumen) */}
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad Producida (resumen)</label>
-          <input value={cantTotal} readOnly className={iCls + " opacity-70 cursor-default"} />
-        </div>
-
-        {/* Observación */}
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
-          <textarea value={v.observacion} onChange={e => set({ ...v, observacion: e.target.value })}
-            rows={3} placeholder="Notas adicionales sobre esta orden..."
-            className={tCls} />
-        </div>
-      </div>
-    );
-  };
-
   // Modal wrapper
   const Modal = ({ title, onClose, onConfirm, label, children }: {
     title: string; onClose: () => void; onConfirm: () => void; label: string; children: React.ReactNode;
@@ -654,7 +709,7 @@ export function OrdenProduccionScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
         <div className="flex items-center gap-3">
-          {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
+          {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes, productos)} />}
           {canCreate && (
             <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
@@ -689,7 +744,7 @@ export function OrdenProduccionScreen({
                   <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
                 </td></tr>
               ) : paged.map(o => {
-                const nombres = nombresDeLineas(o.lineas);
+                const nombres = nombresDeLineas(o.lineas, productos);
                 const soloPendiente = o.estadoOrden === "pendiente";
                 const puedeBaja = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 return (
@@ -700,11 +755,13 @@ export function OrdenProduccionScreen({
                       onMouseEnter={e => abrirTip(e, o.lineas)}
                       onMouseLeave={() => setTip(null)}
                     >
-                      <p className="text-sm font-medium text-foreground">
-                        {nombres.length === 1 ? nombres[0] : `${nombres.length} productos`}
+<p className="text-sm font-medium text-foreground">
+                        {nombres.length === 0 ? "—"
+                          : nombres.length === 1 ? nombres[0]
+                          : `${nombres[0]} +${nombres.length - 1} más`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {o.lineas.map(l => `${l.cantidad} × ${productById(l.idProducto)?.nombre ?? l.idProducto}`).join(", ")}
+                        {o.lineas.map(l => `${l.cantidad} × ${nombreProducto(productos, l.idProducto)}`).join(", ")}
                       </p>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">
@@ -797,7 +854,7 @@ export function OrdenProduccionScreen({
             {tip.lineas.map((l, idx) => (
               <li key={`${l.idProducto}-${idx}`} className="flex items-baseline gap-2 leading-snug">
                 <span className="font-bold tabular-nums shrink-0">{l.cantidad} ×</span>
-                <span className="opacity-90">{productById(l.idProducto)?.nombre ?? l.idProducto}</span>
+                <span className="opacity-90">{nombreProducto(productos, l.idProducto)}</span>
               </li>
             ))}
           </ul>
@@ -843,7 +900,7 @@ export function OrdenProduccionScreen({
                   onChange={e => setForm(p => ({ ...p, estadoOrden: e }))}
                 />
               </div>
-              <OrdenFormFields v={form} set={setForm} />
+              <OrdenFormFields v={form} set={setForm} productosProducibles={productosProducibles} />
             </>
           )
         })}
@@ -880,6 +937,7 @@ export function OrdenProduccionScreen({
                   horaSolicitada: nv.horaSolicitada,
                   observacion: nv.observacion,
                 }))}
+                productosProducibles={productosProducibles}
               />
             </>
           )
@@ -917,7 +975,7 @@ export function OrdenProduccionScreen({
                   <div className="space-y-1">
                     {detailItem.lineas.map((l, i) => (
                       <div key={i} className="flex items-center justify-between text-sm bg-muted rounded-xl px-3 py-2">
-                        <span className="font-semibold text-foreground">{productById(l.idProducto)?.nombre ?? l.idProducto}</span>
+                        <span className="font-semibold text-foreground">{nombreProducto(productos, l.idProducto)}</span>
                         <span className="text-muted-foreground">{l.cantidad} und.</span>
                       </div>
                     ))}
@@ -997,7 +1055,7 @@ export function OrdenProduccionScreen({
                       }}
                       className={sCls}>
                       {darBajaItem.lineas.map(l => (
-                        <option key={l.idProducto} value={l.idProducto}>{productById(l.idProducto)?.nombre ?? l.idProducto}</option>
+                        <option key={l.idProducto} value={l.idProducto}>{nombreProducto(productos, l.idProducto)}</option>
                       ))}
                     </select>
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Producto terminado</span>
