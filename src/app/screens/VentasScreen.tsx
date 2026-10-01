@@ -1843,6 +1843,30 @@ export function VentasScreen({
                 <button
                   type="button"
                   onClick={() => {
+                    setFacturaParaEnviar(facturaVenta);
+                    setCorreoEnviar("");
+                    setErrorCorreo("");
+                    setEnviarFacturaModal(true);
+                    setFacturaVenta(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-sky-400 hover:bg-sky-500/5 transition-colors cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-500/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Enviar factura a correo
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Descarga y envía la factura al correo electrónico
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
                     imprimirFactura(facturaVenta);
                     toast.success("Enviando a la impresora");
                     setFacturaVenta(null);
