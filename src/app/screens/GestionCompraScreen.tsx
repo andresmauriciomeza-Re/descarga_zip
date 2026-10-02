@@ -50,7 +50,6 @@ function fmtCOP(n: number) {
 
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-const sCls = `${iCls} appearance-none`;
 
 // Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
 const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
@@ -109,7 +108,6 @@ function CompraForm({
 
   const [numeroFactura, setNumeroFactura] = useState(compra?.numeroFactura ?? "");
   const [fechaFactura, setFechaFactura] = useState(compra?.fechaFactura || today);
-  const [estado, setEstado] = useState<EstadoGestion>(compra?.estado ?? "Recibido");
   const [items, setItems] = useState<ItemFactura[]>((compra?.items ?? []).map(item => ({
     rowId: item.rowId,
     idInsumo: item.idInsumo,
@@ -248,11 +246,15 @@ function CompraForm({
   };
 
   const seleccionarInsumo = (ins: Insumo) => {
+    // Punto 2: el precio del catálogo viene en `costoUnitario` (number), que es
+    // el mismo que muestra la lista desplegable. `precioUnitario` es null en las
+    // semillas, por eso el Monto unitario quedaba en 0.
+    console.log("[Punto 2] onSelect insumo:", ins);
     setItemId(ins.id);
     setItemNombre(ins.nombre);
     setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setItemPrecio(ins.precioUnitario);
-    setItemIva(ins.iva);
+    setItemPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
+    setItemIva(Number(ins.iva ?? 0));
     setItemSugAbierto(false);
   };
 
@@ -340,7 +342,8 @@ function CompraForm({
       numeroFactura: numeroFactura.trim(),
       fechaFactura,
       valorTotal: total,
-      estado,
+      // Punto 4: la compra se guarda siempre con estado "Recibido".
+      estado: "Recibido",
       items: items.map((item) => ({ ...item })),
     });
   };
@@ -410,12 +413,6 @@ function CompraForm({
               }
             >
               {/* Banners de estado */}
-              {isView && compra?.estado === "Recibido" && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  Compra registrada. Recibida el <strong className="ml-1">{compra.fechaFactura}</strong>.
-                </div>
-              )}
               {isView && compra?.estado === "Anulado" && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <Ban className="w-4 h-4 shrink-0" />
@@ -467,8 +464,9 @@ function CompraForm({
                         placeholder="Buscar por nombre, NIT, asesor o email..."
                         className={`${iCls} pl-10`}
                       />
+                      {/* Punto 6: el desplegable va por encima de todo el formulario. */}
                       {provSugAbierto && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                           {/* Opción "+ Crear proveedor" PRIMERA */}
                           <button
                             type="button"
@@ -543,14 +541,10 @@ function CompraForm({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                       Estado
                     </label>
-                    <select
-                      value={estado}
-                      onChange={(e) => setEstado(e.target.value as EstadoGestion)}
-                      className={`${sCls} cursor-pointer`}
-                    >
-                      <option value="Recibido">Recibido</option>
-                      <option value="Anulado">Anulado</option>
-                    </select>
+                    {/* Punto 4: badge fijo con el mismo estilo del listado; sin
+                        select, sin flecha y sin poder cambiarlo. La compra se
+                        guarda siempre en "Recibido". */}
+                    <EstadoBadge e="Recibido" />
                   </div>
                 )}
               </div>
@@ -677,6 +671,7 @@ function CompraForm({
         {mostrarNuevoProveedor && (
           <NuevoProveedorModal
             nombreInicial={provQuery.trim()}
+            existentes={proveedores}
             onGuardar={crearProveedor}
             onClose={() => setMostrarNuevoProveedor(false)}
           />

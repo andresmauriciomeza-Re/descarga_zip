@@ -4,7 +4,8 @@ import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertC
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
-import { useProveedorForm, filtrarNit } from "../components/useProveedorForm";
+import { useProveedorForm } from "../components/useProveedorForm";
+import { ProveedorFormCampos } from "../components/ProveedorForm";
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 
@@ -242,130 +243,6 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
     toast.success(`Estado cambiado a ${nuevoEstado}`);
     setConfirmToggleId(null);
   };
-
-  // Campos para CREAR — layout 2 columnas con secciones
-  const CreateFields = () => (
-    <div className="space-y-6">
-      {/* Sección: Identificación */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Identificación del proveedor
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT *</label>
-            <input
-              value={proveedorForm.values.nit}
-              onChange={e => proveedorForm.setCampo("nit", filtrarNit(e.target.value))}
-              onBlur={() => proveedorForm.marcarTocado("nit")}
-              placeholder="1234567890"
-              maxLength={10}
-              className={`${inputCls} ${proveedorForm.campoCls("nit")}`}
-            />
-            {proveedorForm.obtenerError("nit") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("nit")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-            <input
-              value={proveedorForm.values.nombre}
-              onChange={e => proveedorForm.setCampo("nombre", soloLetras(e.target.value))}
-              onBlur={() => proveedorForm.marcarTocado("nombre")}
-              placeholder="Distribuidora La Cosecha"
-              className={`${inputCls} ${proveedorForm.campoCls("nombre")}`}
-            />
-            {proveedorForm.obtenerError("nombre") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("nombre")}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Sección: Contacto */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Contacto
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input
-              value={proveedorForm.values.asesorComercial}
-              onChange={e => proveedorForm.setCampo("asesorComercial", soloLetras(e.target.value))}
-              onBlur={() => proveedorForm.marcarTocado("asesorComercial")}
-              placeholder="Carlos Mejía"
-              className={`${inputCls} ${proveedorForm.campoCls("asesorComercial")}`}
-            />
-            {proveedorForm.obtenerError("asesorComercial") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("asesorComercial")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono *</label>
-            <input
-              type="tel"
-              value={proveedorForm.values.telefono}
-              onChange={e => proveedorForm.setCampo("telefono", soloDigitos(e.target.value))}
-              onBlur={() => proveedorForm.marcarTocado("telefono")}
-              placeholder="6043210001"
-              className={`${inputCls} ${proveedorForm.campoCls("telefono")}`}
-            />
-            {proveedorForm.obtenerError("telefono") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("telefono")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Email *</label>
-            <input
-              type="email"
-              value={proveedorForm.values.email}
-              onChange={e => proveedorForm.setCampo("email", filtrarCorreo(e.target.value))}
-              onBlur={() => proveedorForm.marcarTocado("email")}
-              placeholder="ventas@proveedor.co"
-              className={`${inputCls} ${proveedorForm.campoCls("email")}`}
-            />
-            {proveedorForm.obtenerError("email") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("email")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección *</label>
-            <input
-              value={proveedorForm.values.direccion}
-              onChange={e => proveedorForm.setCampo("direccion", e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, ""))}
-              onBlur={() => proveedorForm.marcarTocado("direccion")}
-              placeholder="Cra 50 #30-10, Medellín"
-              className={`${inputCls} ${proveedorForm.campoCls("direccion")}`}
-            />
-            {proveedorForm.obtenerError("direccion") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{proveedorForm.obtenerError("direccion")}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Sección: Configuración */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Configuración
-        </p>
-        <div className="w-1/2 pr-1.5">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-          <EstadoSelect
-            value={proveedorForm.values.estado}
-            onChange={(nuevoEstado) => {
-              proveedorForm.setCampo("estado", nuevoEstado);
-            }}
-            options={[
-              { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-              { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
-            ]}
-          />
-        </div>
-      </div>
-    </div>
-  );
 
   // Campos para EDITAR — mismo layout 2 columnas, NIT y Nombre bloqueados
   const editForm = useProveedorForm(
@@ -628,11 +505,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
                   <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5">
-                  {CreateFields()}
+                  {/* Punto 1: mismo formulario de proveedor que el de Orden de
+                      Compra y el de Compra (mismas reglas y validación en vivo). */}
+                  <ProveedorFormCampos form={proveedorForm} />
                 </div>
                 <div className="flex gap-3 px-6 py-4 border-t border-border">
                   <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-                  <button onClick={handleCreate} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">Crear</button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!proveedorForm.formValido}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  >Crear</button>
                 </div>
               </motion.div>
             </div>
