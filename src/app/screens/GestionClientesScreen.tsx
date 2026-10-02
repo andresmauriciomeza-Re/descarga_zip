@@ -463,6 +463,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                         type="text"
                          inputMode="numeric"
                         value={newDocumento}
+                        autoComplete="off"
                          onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
                          placeholder="12345678"
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -495,6 +496,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     <input
                       type="email"
                       value={newCorreo}
+                      autoComplete="off"
                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -511,6 +513,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       type="tel"
                       inputMode="numeric"
                       value={newTelefono}
+                      autoComplete="off"
                       onChange={e => setNewTelefono(soloDigitos(e.target.value))}
                       placeholder="3001234567"
                       className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -587,6 +590,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       type="text"
                       value={editItem.numeroDocumento}
                       disabled
+                      autoComplete="off"
                       className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
                     />
                   </div>
@@ -598,7 +602,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                 ].map(({ label, field, type }) => (
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} value={editItem[field]}
+                    <input type={type} value={editItem[field]} autoComplete="off"
                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}

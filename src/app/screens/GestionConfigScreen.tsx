@@ -904,7 +904,8 @@ export function GestionConfigScreen({
               {/* Todo el cuerpo (datos + tabla) vive en el área con scroll
                   interno; el pie queda fuera, así "Editar rol" y "Cerrar"
                   siempre se ven aunque la lista sea larga. */}
-              <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+              <div className="px-5 pb-4 flex-1 min-h-0 overflow-y-auto">
+                <div className="pt-4 space-y-4">
                 {/* Datos del rol en cuadrícula de 2 columnas: Nombre | Estado /
                     Usuarios asignados | (Descripción ocupa las 2 columnas). */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -931,6 +932,7 @@ export function GestionConfigScreen({
                     </span>
                   </div>
                   <PermisosTablaDetalle accesos={detailItem.accesos} />
+                </div>
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">

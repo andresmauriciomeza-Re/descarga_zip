@@ -660,8 +660,8 @@ export function GestionEmpleadosScreen({
                     {ctrErrors.empleado && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.empleado}</p>}
                   </div>
 
-                  {/* Datos de Tb_Empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Tb_Empleado</p>
+                  {/* Datos del empleado */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     <select value={ctrActivo ? "activo" : "inactivo"}
@@ -685,8 +685,8 @@ export function GestionEmpleadosScreen({
                     {ctrErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.rol}</p>}
                   </div>
 
-                  {/* Datos de Contratacion_empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratacion_empleado</p>
+                  {/* Datos de Contratación */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Cargo <span className="text-primary">*</span>
@@ -861,7 +861,7 @@ export function GestionEmpleadosScreen({
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Número de documento <span className="text-primary">*</span>
                       </label>
-                       <input type="text" inputMode="numeric" value={newDocumento}
+                       <input type="text" inputMode="numeric" value={newDocumento} autoComplete="off"
                          onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, documento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
                          placeholder="12345678"
                         className={fCls(createErrors.documento)} />
@@ -882,7 +882,7 @@ export function GestionEmpleadosScreen({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Correo electrónico <span className="text-primary">*</span>
                     </label>
-                    <input type="email" value={newCorreo}
+                    <input type="email" value={newCorreo} autoComplete="off"
                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={fCls(createErrors.correo)} />
@@ -892,7 +892,7 @@ export function GestionEmpleadosScreen({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
                     </label>
-                    <input type="tel" inputMode="numeric" value={newTelefono}
+                    <input type="tel" inputMode="numeric" value={newTelefono} autoComplete="off"
                       onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
                       placeholder="3001234567"
                       className={fCls(createErrors.telefono)} />
@@ -906,6 +906,7 @@ export function GestionEmpleadosScreen({
                       value={newContrasena}
                       onChange={v => { setNewContrasena(v); if (createErrors.contrasena) setCreateErrors(p => ({ ...p, contrasena: undefined })); }}
                        placeholder="Mínimo 8 caracteres"
+                       autoComplete="new-password"
                       cls={fCls(createErrors.contrasena)} />
                     {createErrors.contrasena && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.contrasena}</p>}
                   </div>
@@ -917,12 +918,13 @@ export function GestionEmpleadosScreen({
                       value={newConfirmar}
                       onChange={v => { setNewConfirmar(v); if (createErrors.confirmar) setCreateErrors(p => ({ ...p, confirmar: undefined })); }}
                       placeholder="Repite la contraseña"
+                      autoComplete="new-password"
                       cls={fCls(createErrors.confirmar)} />
                     {createErrors.confirmar && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.confirmar}</p>}
                   </div>
 
-                  {/* Datos de Tb_Empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Tb_Empleado</p>
+                  {/* Datos del empleado */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     <select value={newActivo ? "activo" : "inactivo"}
@@ -948,8 +950,8 @@ export function GestionEmpleadosScreen({
                     {createErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.cargo}</p>}
                   </div>
 
-                  {/* Datos de Contratacion_empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratacion_empleado</p>
+                  {/* Datos de Contratación */}
+                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha de inicio <span className="text-primary">*</span>
@@ -1021,7 +1023,7 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
-                    <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento}
+                    <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento} autoComplete="off"
                       placeholder="12345678"
                       className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
@@ -1034,7 +1036,7 @@ export function GestionEmpleadosScreen({
                 ].map(({ label, field, type, numeric, full }) => (
                   <div key={field} className={full ? "col-span-2" : ""}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]}
+                    <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
                        onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
