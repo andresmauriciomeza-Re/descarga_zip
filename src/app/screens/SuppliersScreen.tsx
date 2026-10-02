@@ -367,7 +367,10 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
     {
       nombre: editItem?.nombre ?? "",
       nit: editItem?.nit ?? "",
-      telefono: editItem?.telefono ?? "",
+      // Las semillas guardan el teléfono con espacios ("604 321 0001") pero la
+      // validación exige solo dígitos: se normaliza aquí, igual que hace el
+      // filtro del propio campo, o el guardado quedaba bloqueado.
+      telefono: soloDigitos(editItem?.telefono ?? ""),
       email: editItem?.email ?? "",
       asesorComercial: editItem?.asesorComercial ?? "",
       direccion: editItem?.direccion ?? "",
@@ -376,6 +379,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
     suppliers.map(s => ({ nit: s.nit, nombre: s.nombre })),
     { bloquearNombre: true, bloquearNit: true },
   );
+
+  // `useProveedorForm` guarda los valores en un useState que SOLO se inicializa
+  // al montar, es decir con editItem = null (todo vacío). Sin este re-sellado el
+  // modal Editar abría los campos de contacto en blanco y la validación
+  // bloqueaba el guardado ("El asesor comercial es obligatorio", etc.), así que
+  // no se guardaba ni el estado. Se re-sella cuando cambia el proveedor a editar
+  // (nunca mientras se edita, o se perderían los cambios en curso).
+  useEffect(() => {
+    if (editItem) editForm.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItem?.id]);
 
   const EditFields = () => editItem ? (
     <div className="space-y-6">
