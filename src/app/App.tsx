@@ -1996,7 +1996,7 @@ function LandingScreen({
                   .toLowerCase()
                   .trim()
                   .replace(/^pizza\s+/, "");
-              const favoritas = ["Cañón", "Hawaii", "Jamón y Queso"];
+              const favoritas = ["Cañón", "Hawaii", "Jamón y Queso", "Maicitos"];
               const lista = productos ?? [];
               return favoritas.map((nombre, i) => {
                 const objetivo = normalizar(nombre);
@@ -2328,15 +2328,15 @@ function ProductCard({
   index,
   onOpen,
   onQuickAdd,
-  cart,
-  updateQty,
 }: {
   product: Product;
   index: number;
   onOpen: (p: Product) => void;
   onQuickAdd: (p: Product) => void;
+  /** Siguen llegando desde CatalogScreen; ya no se usan acá porque la tarjeta
+      dejó de tener el stepper [− cantidad +]. */
   cart: CartItem[];
-  updateQty: (id: string, delta: number) => void;
+  updateQty: (id: string, qty: number) => void;
 }) {
   return (
     <motion.div
@@ -2396,54 +2396,19 @@ function ProductCard({
             >
               Ver más
             </button>
-            {p.sizes.length > 1 ? (
-              <button
-                onClick={() => onOpen(p)}
-                disabled={p.status !== "disponible"}
-                className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Elegir tamaño
-              </button>
-            ) : (
-              (() => {
-                const linea = cart.find(
-                  (i) => i.product.id === p.id && i.selectedExtras.length === 0,
-                );
-                if (linea) {
-                  return (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => updateQty(linea.id, -1)}
-                        disabled={p.status !== "disponible"}
-                        className="w-8 h-8 text-sm font-semibold border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        −
-                      </button>
-                      <span className="w-6 text-center text-sm font-bold text-foreground">
-                        {linea.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQty(linea.id, 1)}
-                        disabled={p.status !== "disponible"}
-                        className="w-8 h-8 text-sm font-semibold border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        +
-                      </button>
-                    </div>
-                  );
-                }
-                return (
-                  <button
-                    onClick={() => onQuickAdd(p)}
-                    disabled={p.status !== "disponible"}
-                    className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    Agregar
-                  </button>
-                );
-              })()
-            )}
+            {/* Solo ícono: el botón nunca se transforma. Cada clic suma 1
+                unidad (quickAdd deduplica dentro de setCart) y dispara el
+                toast, sin abrir el carrito. El tamaño se elige en el detalle
+                ("Ver más" o la imagen). */}
+            <button
+              onClick={() => onQuickAdd(p)}
+              disabled={p.status !== "disponible"}
+              title="Agregar al carrito"
+              aria-label={`Agregar ${p.name} al carrito`}
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ShoppingCart className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -2530,7 +2495,10 @@ function CatalogScreen({
 
   const agregarAlCarrito = (p: Product) => {
     quickAdd(p);
-    toast.success(`${p.name} agregada al carrito`, {
+    // Una pizza se agrega con su tamaño por defecto (Mediano) y eso se dice en
+    // el toast; las lasañas y bebidas conservan su mensaje original.
+    const tamano = p.sizes.length > 1 ? ` ${sizeDe(p, 0).label}` : "";
+    toast.success(`${p.name}${tamano} agregada al carrito`, {
       action: {
         label: "Ver carrito",
         onClick: () => navigate("cart"),
