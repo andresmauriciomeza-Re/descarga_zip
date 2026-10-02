@@ -547,6 +547,24 @@ const DESCRIPCIONES: Record<string, string> = {
   "Lasaña Mixta": "Lasaña mixta con capas de pasta, salsa y queso gratinado.",
 };
 
+// Convierte un `Producto` del panel al `Product` que consumen el catálogo, el
+// detalle y el carrito. Es la misma conversión que se hace al pasarle
+// `productos` a CatalogScreen, para que una favorita de la landing abra el
+// detalle con la foto, la descripción y los tamaños reales.
+const productoACatalogo = (p: Producto): Product => ({
+  id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
+  name: p.nombre,
+  description: DESCRIPCIONES[p.nombre] ?? "",
+  price: p.precioUnitario,
+  image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+  category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
+  sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+  extras: [],
+  status: p.estado === "Disponible" ? "disponible" : "no disponible",
+  rating: 4.5,
+  sales: 0,
+});
+
 const ORDERS: Order[] = [
   {
     id: "VEN-2024-0156",
@@ -1696,8 +1714,9 @@ function LandingScreen({
       acá: su ícono y su nombre están en las tarjetas de arriba. Solo se suman
       las que trae su propio ícono, es decir las nuevas. */
   categorias: CategoriaProducto[];
-  /** Productos reales del catálogo (ya filtra "Descontinuado"). */
-  productos: Product[];
+  /** Productos del panel de administración: es el mismo estado `Producto[]`
+      de Gestión de Productos, así que el nombre real vive en `nombre`. */
+  productos: Producto[];
   /** Abre el detalle guardando la pantalla de origen. */
   onOpenDetail: (p: Product) => void;
 }) {
@@ -1970,28 +1989,44 @@ function LandingScreen({
             }}
           >
             {(() => {
-              const normalizar = (s: string) =>
-                s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^pizza\s+/, "");
+              const normalizar = (valor: string | undefined) =>
+                (valor ?? "")
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .toLowerCase()
+                  .trim()
+                  .replace(/^pizza\s+/, "");
               const favoritas = ["Cañón", "Hawaii", "Jamón y Queso"];
+              const lista = productos ?? [];
               return favoritas.map((nombre, i) => {
-                const producto = productos.find(
-                  (p) => normalizar(p.name) === normalizar(nombre),
-                );
+                const objetivo = normalizar(nombre);
+                // Prefijo en ambos sentidos: el catálogo trae "Pizza Hawai" y
+                // "Pizza Jamon", mientras la tarjeta habla de "Hawaii" y
+                // "Jamón y Queso". Un nombre vacío nunca empareja.
+                const producto = lista.find((p) => {
+                  const actual = normalizar(p.nombre);
+                  return (
+                    actual !== "" &&
+                    objetivo !== "" &&
+                    (actual.startsWith(objetivo) || objetivo.startsWith(actual))
+                  );
+                });
                 if (!producto) return null;
+                const favorita = productoACatalogo(producto);
                 return (
                   <motion.div
                     key={producto.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
-                    onClick={() => onOpenDetail(producto)}
+                    onClick={() => onOpenDetail(favorita)}
                     className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
                   >
                     {/* Image */}
                     <div className="relative h-52 bg-muted overflow-hidden">
                       <img
-                        src={producto.image}
-                        alt={producto.name}
+                        src={favorita.image}
+                        alt={favorita.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       {/* Badge */}
@@ -2007,10 +2042,10 @@ function LandingScreen({
                         className="text-foreground font-bold text-base mb-1.5 leading-snug"
                         style={{ fontFamily: SERIF }}
                       >
-                        {producto.name}
+                        {favorita.name}
                       </h3>
                       <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
-                        {producto.description}
+                        {favorita.description}
                       </p>
 
                       {/* Price + Rating */}
@@ -2019,7 +2054,7 @@ function LandingScreen({
                           className="text-[#DC2626] text-lg font-semibold"
                           style={{ fontFamily: MONO }}
                         >
-                          $ {producto.price.toLocaleString("es-CO")}
+                          $ {favorita.price.toLocaleString("es-CO")}
                         </span>
                       </div>
                     </div>
