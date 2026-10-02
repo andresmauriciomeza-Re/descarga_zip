@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { MensajeError } from "../components/campo";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { GRUPOS_ICONOS } from "../constants/iconosCategoria";
 
 const SERIF = "var(--font-titulo)";
 
@@ -209,6 +210,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
   const [formIcono, setFormIcono] = useState("");
+  const [grupoIconoSeleccionado, setGrupoIconoSeleccionado] = useState(0);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
@@ -542,19 +544,35 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
                   Ícono *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {ICONOS_CATEGORIA.map(({ icono, nombre }) => (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {GRUPOS_ICONOS.map((grupo, idx) => (
                     <button
-                      key={nombre}
+                      key={grupo.nombre}
                       type="button"
-                      title={nombre}
-                      aria-label={nombre}
+                      onClick={() => setGrupoIconoSeleccionado(idx)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                        grupoIconoSeleccionado === idx
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-border"
+                      }`}
+                    >
+                      {grupo.nombre}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
+                  {GRUPOS_ICONOS[grupoIconoSeleccionado].iconos.map((icono) => (
+                    <button
+                      key={icono}
+                      type="button"
+                      title={icono}
+                      aria-label={icono}
                       aria-pressed={formIcono === icono}
                       onClick={() => {
                         setFormIcono(icono);
                         setCreateErrors((p) => ({ ...p, icono: "" }));
                       }}
-                      className={`aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
+                      className={`shrink-0 aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
                         formIcono === icono
                           ? "border-primary bg-primary/10"
                           : "border-border bg-muted hover:bg-border"

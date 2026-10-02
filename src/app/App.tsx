@@ -57,6 +57,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
+import { useIsMobile } from "./components/ui/use-mobile";
 
 import imgCocaCola from "@/imports/Coca-Cola.png";
 import fondoDefinitivo from "@/imports/fondoDefinitivo.png";
@@ -105,7 +106,8 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
+import { ESTADO_COLORES } from "./components/EstadoProducto";
 import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -995,12 +997,15 @@ const canViewPermission = (accesos: AccesosMap, permKey: string, isNamedAdmin: b
 function Badge({
   children,
   className = "",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <span
+      style={style}
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${className}`}
     >
       {children}
@@ -1318,9 +1323,15 @@ function PublicNav({
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
             {count > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm">
+              <motion.span
+                key={count}
+                initial={{ scale: 0.5 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
+              >
                 {count}
-              </span>
+              </motion.span>
             )}
           </button>
 
@@ -1479,50 +1490,53 @@ function BottomNav({
   cart,
   current,
   onMore,
+  isLoggedIn,
 }: {
   navigate: (s: Screen) => void;
   cart: CartItem[];
   current: Screen;
   onMore: () => void;
+  isLoggedIn: boolean;
 }) {
   const count = cart.reduce((s, i) => s + i.quantity, 0);
   const items = [
     { s: "landing" as Screen, Icon: Home, label: "Inicio" },
-    {
-      s: "mis-pedidos" as Screen,
-      Icon: ShoppingBag,
-      label: "Pedidos",
-    },
+    ...(isLoggedIn
+      ? [{ s: "mis-pedidos" as Screen, Icon: ShoppingBag, label: "Mis pedidos" }]
+      : []),
     { s: "catalog" as Screen, Icon: Grid, label: "Menú" },
     {
-      s: "supplies" as Screen,
-      Icon: Package,
-      label: "Inventario",
+      s: "cart" as Screen,
+      Icon: ShoppingCart,
+      label: "Carrito",
+      badge: count,
     },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border md:hidden">
       <div className="flex items-center justify-around h-16">
-        {items.map(({ s, Icon, label }) => (
+        {items.map(({ s, Icon, label, badge }) => (
           <button
             key={s}
             onClick={() => navigate(s)}
             className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === s ? "text-primary" : "text-muted-foreground"}`}
           >
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {badge != null && badge > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {badge}
+                </span>
+              )}
+            </div>
             <span className="text-xs font-medium">{label}</span>
           </button>
         ))}
         <button
           onClick={onMore}
-          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground relative"
+          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
         >
-          <div className="relative">
-            <MoreHorizontal className="w-5 h-5" />
-            {count > 0 && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full" />
-            )}
-          </div>
+          <MoreHorizontal className="w-5 h-5" />
           <span className="text-xs font-medium">Más</span>
         </button>
       </div>
@@ -1672,6 +1686,8 @@ function LandingScreen({
   setProduct,
   onCategoryNavigate,
   categorias,
+  productos,
+  onOpenDetail,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -1680,6 +1696,10 @@ function LandingScreen({
       acá: su ícono y su nombre están en las tarjetas de arriba. Solo se suman
       las que trae su propio ícono, es decir las nuevas. */
   categorias: CategoriaProducto[];
+  /** Productos reales del catálogo (ya filtra "Descontinuado"). */
+  productos: Product[];
+  /** Abre el detalle guardando la pantalla de origen. */
+  onOpenDetail: (p: Product) => void;
 }) {
   const featured = PRODUCTS.filter(
     (p) => p.status === "disponible",
@@ -1869,9 +1889,12 @@ function LandingScreen({
             </p>
           </div>
 
-          {/* Cards — horizontal scroll on mobile, grid on md+ */}
+          {/* Cards — una sola fila con scroll horizontal en todos los
+              tamaños. La barra se oculta (scrollbarWidth / webkit) pero el
+              scroll sigue funcionando con mouse, trackpad y táctil; el
+              scroll-snap alinea las tarjetas al desplazarse. */}
           <div
-            className="flex gap-4 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible pb-2 md:pb-0 max-w-2xl mx-auto w-full"
+            className="flex flex-nowrap gap-4 overflow-x-auto pb-2 max-w-2xl mx-auto w-full snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
             style={{
               scrollbarWidth: "none",
               WebkitOverflowScrolling: "touch",
@@ -1885,7 +1908,7 @@ function LandingScreen({
               <button
                 key={label}
                 onClick={() => onCategoryNavigate(label)}
-                className="group flex-shrink-0 w-40 md:w-auto bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
               >
                 <span className="text-4xl leading-none">
                   {emoji}
@@ -1905,7 +1928,7 @@ function LandingScreen({
                 <button
                   key={c.id}
                   onClick={() => onCategoryNavigate("Todas")}
-                  className="group flex-shrink-0 w-40 md:w-auto bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                  className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
                 >
                   <span className="text-4xl leading-none">
                     {c.icono}
@@ -1946,85 +1969,64 @@ function LandingScreen({
               WebkitOverflowScrolling: "touch",
             }}
           >
-            {[
-              {
-                productoId: 1,
-                name: "Cañón",
-                description: "Pizza de la casa.",
-                rating: 4.8,
-              },
-              {
-                productoId: 2,
-                name: "Carnes",
-                description: "Pizza con carnes.",
-                rating: 4.9,
-              },
-              {
-                productoId: 4,
-                name: "Jamón y Queso",
-                description: "Pizza con jamón y queso.",
-                rating: 4.7,
-              },
-              {
-                productoId: 3,
-                name: "Hawaii",
-                description: "Pizza con jamón y piña.",
-                rating: 5.0,
-              },
-            ].map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08, duration: 0.45 }}
-                onClick={() => {
-                  const producto = PRODUCTS.find(
-                    (item) => item.id === p.productoId,
-                  );
-                  if (!producto) return;
-                  setProduct(producto);
-                  navigate("product-detail");
-                }}
-                className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
-              >
-                {/* Image */}
-                <div className="relative h-52 bg-muted overflow-hidden">
-                  <img
-                    src={imagenDeProducto(p.productoId)}
-                    alt={p.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {/* Badge */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
-                    <Star className="w-3 h-3 fill-white text-white" />
-                    Favorita
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="p-5 flex flex-col flex-1">
-                  <h3
-                    className="text-foreground font-bold text-base mb-1.5 leading-snug"
-                    style={{ fontFamily: SERIF }}
+            {(() => {
+              const normalizar = (s: string) =>
+                s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^pizza\s+/, "");
+              const favoritas = ["Cañón", "Hawaii", "Jamón y Queso"];
+              return favoritas.map((nombre, i) => {
+                const producto = productos.find(
+                  (p) => normalizar(p.name) === normalizar(nombre),
+                );
+                if (!producto) return null;
+                return (
+                  <motion.div
+                    key={producto.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08, duration: 0.45 }}
+                    onClick={() => onOpenDetail(producto)}
+                    className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
                   >
-                    {p.name}
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
-                    {p.description}
-                  </p>
+                    {/* Image */}
+                    <div className="relative h-52 bg-muted overflow-hidden">
+                      <img
+                        src={producto.image}
+                        alt={producto.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      {/* Badge */}
+                      <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
+                        <Star className="w-3 h-3 fill-white text-white" />
+                        Favorita
+                      </div>
+                    </div>
 
-                  {/* Price + Rating */}
-                  <div className="flex items-center justify-between mt-auto">
-                    <span
-                      className="text-[#DC2626] text-lg font-semibold"
-                      style={{ fontFamily: MONO }}
-                    >
-                      $ {precioDeProducto(p.productoId).toLocaleString("es-CO")}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                    {/* Body */}
+                    <div className="p-5 flex flex-col flex-1">
+                      <h3
+                        className="text-foreground font-bold text-base mb-1.5 leading-snug"
+                        style={{ fontFamily: SERIF }}
+                      >
+                        {producto.name}
+                      </h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
+                        {producto.description}
+                      </p>
+
+                      {/* Price + Rating */}
+                      <div className="flex items-center justify-between mt-auto">
+                        <span
+                          className="text-[#DC2626] text-lg font-semibold"
+                          style={{ fontFamily: MONO }}
+                        >
+                          $ {producto.price.toLocaleString("es-CO")}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              });
+            })()}
           </div>
         </div>
       </section>
@@ -2291,14 +2293,19 @@ function ProductCard({
   index,
   onOpen,
   onQuickAdd,
+  cart,
+  updateQty,
 }: {
   product: Product;
   index: number;
   onOpen: (p: Product) => void;
   onQuickAdd: (p: Product) => void;
+  cart: CartItem[];
+  updateQty: (id: string, delta: number) => void;
 }) {
   return (
     <motion.div
+      data-producto-id={p.id}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
@@ -2314,7 +2321,14 @@ function ProductCard({
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         <div className="absolute top-3 right-3">
-          <Badge className={PROD_STATUS_COLOR[p.status]}>
+          {/* Mismos colores de estado que el panel (ESTADO_COLORES). */}
+          <Badge
+            className="border-0"
+            style={{
+              backgroundColor: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"] + "1A",
+              color: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"],
+            }}
+          >
             {p.status === "disponible"
               ? "Disponible"
               : "No disponible"}
@@ -2347,13 +2361,54 @@ function ProductCard({
             >
               Ver más
             </button>
-            <button
-              onClick={() => onQuickAdd(p)}
-              disabled={p.status !== "disponible"}
-              className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ShoppingCart className="w-4 h-4" />
-            </button>
+            {p.sizes.length > 1 ? (
+              <button
+                onClick={() => onOpen(p)}
+                disabled={p.status !== "disponible"}
+                className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Elegir tamaño
+              </button>
+            ) : (
+              (() => {
+                const linea = cart.find(
+                  (i) => i.product.id === p.id && i.selectedExtras.length === 0,
+                );
+                if (linea) {
+                  return (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateQty(linea.id, -1)}
+                        disabled={p.status !== "disponible"}
+                        className="w-8 h-8 text-sm font-semibold border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold text-foreground">
+                        {linea.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQty(linea.id, 1)}
+                        disabled={p.status !== "disponible"}
+                        className="w-8 h-8 text-sm font-semibold border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => onQuickAdd(p)}
+                    disabled={p.status !== "disponible"}
+                    className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    Agregar
+                  </button>
+                );
+              })()
+            )}
           </div>
         </div>
       </div>
@@ -2368,7 +2423,12 @@ function CatalogScreen({
   initialCat = "Todas",
   page,
   setPage,
+  search,
+  setSearch,
   productos,
+  onOpenDetail,
+  cart,
+  updateQty,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -2377,14 +2437,22 @@ function CatalogScreen({
   /** Página del catálogo, controlada por App para que sobreviva al detalle. */
   page: number;
   setPage: (p: number | ((prev: number) => number)) => void;
+  /** Búsqueda del catálogo, controlada por App para que sobreviva al detalle. */
+  search: string;
+  setSearch: (s: string) => void;
   /** Productos del panel de administrador. */
   productos: Product[];
+  /** Abre el detalle guardando la pantalla de origen. */
+  onOpenDetail: (p: Product) => void;
+  cart: CartItem[];
+  updateQty: (id: string, delta: number) => void;
 }) {
-  const [search, setSearch] = useState("");
   const [cat, setCat] = useState(initialCat);
   const cats = ["Todas", "Pizzas", "Bebidas", "Lasaña"];
+  const isMobile = useIsMobile();
   // 9 = 3 columnas del grid, así cada página cierra en filas completas.
-  const PER_PAGE = 9;
+  // En móvil: 6 por página (2 columnas de 3).
+  const PER_PAGE = isMobile ? 6 : 9;
 
   const filtered = useMemo(
     () =>
@@ -2414,52 +2482,25 @@ function CatalogScreen({
     [filtered, page],
   );
 
-  // Al cambiar la búsqueda o la categoría, la página actual puede quedar más
-  // allá del último resultado y el grid salía vacío; se reajusta sola.
-  useEffect(() => {
-    setPage(1);
-  }, [search, cat]);
-
+  // La página vuelve a 1 solo en los handlers de categoría y búsqueda, no en un
+  // efecto de montaje: al montar, `page` puede ser 2 (guardada de una visita
+  // anterior) y este efecto la borraba antes de que el usuario viera nada.
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  // Con el filtro "Todas" el grid se parte en las secciones tituladas de
-  // SECCIONES_MENU; al elegir una sola categoría se deja el grid único de antes,
-  // sin encabezados. Se agrupa sobre `paged`, no sobre PRODUCTS, para que la
-  // búsqueda también se reparta por secciones, y las categorías sin resultados
-  // se omiten en vez de dejar un título colgado sobre un grid vacío.
-  const secciones = useMemo(() => {
-    if (cat !== "Todas") return [];
-    const porCategoria = new Map<string, Product[]>();
-    for (const p of paged) {
-      const lista = porCategoria.get(p.category);
-      if (lista) lista.push(p);
-      else porCategoria.set(p.category, [p]);
-    }
-    const declaradas = SECCIONES_MENU.map(
-      ({ categoria, titulo }) => ({
-        titulo,
-        productos: porCategoria.get(categoria) ?? [],
-      }),
-    ).filter((s) => s.productos.length > 0);
-    const conocidas = new Set(
-      SECCIONES_MENU.map((s) => s.categoria),
-    );
-    const nuevas = [...porCategoria.entries()]
-      .filter(([categoria]) => !conocidas.has(categoria))
-      .map(([titulo, productos]) => ({ titulo, productos }));
-    return [...declaradas, ...nuevas];
-  }, [paged, cat]);
-
   const abrirDetalle = (p: Product) => {
-    setProduct(p);
-    navigate("product-detail");
+    onOpenDetail(p);
   };
 
   const agregarAlCarrito = (p: Product) => {
     quickAdd(p);
-    toast.success(`¡${p.name} agregada!`);
+    toast.success(`${p.name} agregada al carrito`, {
+      action: {
+        label: "Ver carrito",
+        onClick: () => navigate("cart"),
+      },
+    });
   };
 
   const irAPagina = (n: number) => {
@@ -2494,7 +2535,10 @@ function CatalogScreen({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Buscar pizza..."
             className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
           />
@@ -2503,7 +2547,10 @@ function CatalogScreen({
           {cats.map((c) => (
             <button
               key={c}
-              onClick={() => setCat(c)}
+              onClick={() => {
+                setCat(c);
+                setPage(1);
+              }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}
             >
               {c}
@@ -2532,21 +2579,27 @@ function CatalogScreen({
               index={i}
               onOpen={abrirDetalle}
               onQuickAdd={agregarAlCarrito}
+              cart={cart}
+              updateQty={updateQty}
             />
           ))}
         </div>
       )}
 
-      {filtered.length > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-center mt-8">
-          <div className="flex items-center gap-1">
+      <div className="mt-8 pb-20 md:pb-4">
+        <p className="text-sm text-muted-foreground text-center mb-3">
+          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} productos
+        </p>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => irAPagina(Math.max(1, page - 1))}
               disabled={page === 1}
               aria-label="Página anterior"
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
               <ChevronLeft className="w-4 h-4" />
+              Anterior
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(
               (n) => (
@@ -2554,7 +2607,11 @@ function CatalogScreen({
                   key={n}
                   onClick={() => irAPagina(n)}
                   aria-current={n === page ? "page" : undefined}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
+                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${
+                    n === page
+                      ? "bg-primary text-white"
+                      : "border border-border text-muted-foreground hover:bg-muted"
+                  }`}
                 >
                   {n}
                 </button>
@@ -2564,13 +2621,14 @@ function CatalogScreen({
               onClick={() => irAPagina(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               aria-label="Página siguiente"
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
+              Siguiente
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <VolverArriba />
     </div>
@@ -2583,10 +2641,14 @@ function ProductDetailScreen({
   product,
   navigate,
   addDetailed,
+  onBack,
+  backLabel,
 }: {
   product: Product;
   navigate: (s: Screen, options?: { restaurar?: boolean }) => void;
   addDetailed: (item: CartItem) => void;
+  onBack: () => void;
+  backLabel: string;
 }) {
   const [sizeIdx, setSizeIdx] = useState(0);
   const [extras, setExtras] = useState<string[]>([]);
@@ -2619,8 +2681,12 @@ function ProductDetailScreen({
       selectedExtras: extras,
       extrasPrice,
     });
-    toast.success(`¡${product.name} agregada al carrito!`, {
-      description: size.label ? `${size.label} × ${qty}` : `× ${qty}`,
+    setQty(1);
+    toast.success(`${product.name} ${size.label} × ${qty} agregada al carrito`, {
+      action: {
+        label: "Ver carrito",
+        onClick: () => navigate("cart"),
+      },
     });
   };
 
@@ -2628,16 +2694,10 @@ function ProductDetailScreen({
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate("catalog", { restaurar: true })}
+          onClick={onBack}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Volver al menú
-        </button>
-        <button
-          onClick={() => navigate("landing")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-        >
-          <Home className="w-4 h-4" /> Volver al inicio
+          <ArrowLeft className="w-4 h-4" /> {backLabel}
         </button>
       </div>
 
@@ -3124,23 +3184,19 @@ function CartScreen({
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="text-sm text-muted-foreground"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(item.sizePrice + item.extrasPrice)}{" "}
-                        <span className="text-[11px] font-sans">unitario</span>
-                      </span>
-                      <span
-                        className="font-bold text-foreground"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(cartTotal(item))}{" "}
-                        <span className="text-[11px] font-sans font-normal text-muted-foreground">
-                          subtotal
-                        </span>
-                      </span>
+                    <div className="flex items-center justify-end gap-6">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Precio unitario</p>
+                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                          {fmt(item.sizePrice + item.extrasPrice)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Subtotal</p>
+                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                          {fmt(cartTotal(item))}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3258,21 +3314,14 @@ function CartScreen({
                           )}
                         </div>
                         <div className="flex flex-col items-end shrink-0 text-right">
-                          <span
-                            className="text-xs text-muted-foreground"
-                            style={{ fontFamily: MONO }}
-                          >
-                            {fmt(item.sizePrice + item.extrasPrice)}{" "}
-                            <span className="font-sans text-[10px]">unitario</span>
+                          <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
+                            {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
                           </span>
                           <span
                             className="text-sm font-bold text-foreground"
                             style={{ fontFamily: MONO }}
                           >
-                            {fmt(cartTotal(item))}{" "}
-                            <span className="font-sans text-[10px] font-normal text-muted-foreground">
-                              subtotal
-                            </span>
+                            {fmt(cartTotal(item))}
                           </span>
                         </div>
                       </div>
@@ -8255,6 +8304,8 @@ export default function App() {
   // se desmonta) y al volver se restauraría el scroll guardado de la página 2
   // sobre el grid de la página 1, que es otra tanda de productos.
   const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
   const [ordenes, setOrdenes] =
@@ -8300,7 +8351,7 @@ export default function App() {
   }, [categorias]);
 
   // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
-  // para que el trabajo de cocina sobreviva al F5: en la cocina se entra y sale
+  // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
   // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
   // a rehacerlas a mano.
   useEffect(() => {
@@ -8473,23 +8524,22 @@ export default function App() {
   };
 
   const quickAdd = (product: Product) => {
-    const existing = cart.find(
-      (i) =>
-        i.product.id === product.id &&
-        i.selectedExtras.length === 0,
-    );
-    if (existing) {
-      setCart((p) =>
-        p.map((i) =>
+    const size = sizeDe(product, 0);
+    setCart((prev) => {
+      const existing = prev.find(
+        (i) =>
+          i.product.id === product.id &&
+          i.selectedExtras.length === 0,
+      );
+      if (existing) {
+        return prev.map((i) =>
           i.id === existing.id
             ? { ...i, quantity: i.quantity + 1 }
             : i,
-        ),
-      );
-    } else {
-      const size = sizeDe(product, 0);
-      setCart((p) => [
-        ...p,
+        );
+      }
+      return [
+        ...prev,
         {
           id: `${product.id}-${Date.now()}`,
           product,
@@ -8499,8 +8549,8 @@ export default function App() {
           selectedExtras: [],
           extrasPrice: 0,
         },
-      ]);
-    }
+      ];
+    });
   };
 
   const addDetailed = (item: CartItem) =>
@@ -8772,18 +8822,37 @@ export default function App() {
                     navigate("catalog");
                   }}
                   categorias={categorias}
+                  productos={productos}
+                  onOpenDetail={(p) => {
+                    setDetalleOrigen("landing");
+                    setSelectedProduct(p);
+                    navigate("product-detail");
+                  }}
                 />
               )}
               {screen === "catalog" && (
                 <CatalogScreen
-                  key={catalogCat}
                   navigate={navigate}
                   setProduct={setSelectedProduct}
                   quickAdd={quickAdd}
                   initialCat={catalogCat}
                   page={catalogPage}
                   setPage={setCatalogPage}
-                  productos={productos.map((p) => ({
+                  search={catalogSearch}
+                  setSearch={setCatalogSearch}
+                  onOpenDetail={(p) => {
+                    setDetalleOrigen("catalog");
+                    setSelectedProduct(p);
+                    navigate("product-detail");
+                  }}
+                  cart={cart}
+                  updateQty={updateQty}
+                  productos={productos
+                    // Un producto "Descontinuado" no aparece en el catálogo
+                    // público; "No disponible" sí aparece pero no se puede
+                    // agregar (el botón queda deshabilitado en ProductCard).
+                    .filter((p) => p.estado !== "Descontinuado")
+                    .map((p) => ({
                     id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
                     name: p.nombre,
                     description: DESCRIPCIONES[p.nombre] ?? "",
@@ -8803,6 +8872,18 @@ export default function App() {
                   product={selectedProduct}
                   navigate={navigate}
                   addDetailed={addDetailed}
+                  onBack={() => {
+                    navigate(detalleOrigen, { restaurar: true });
+                    // Al volver al catálogo, hace scroll a la tarjeta del producto
+                    // que se abrió (data-producto-id en ProductCard).
+                    if (detalleOrigen === "catalog") {
+                      requestAnimationFrame(() => {
+                        const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
+                        el?.scrollIntoView({ block: "center" });
+                      });
+                    }
+                  }}
+                  backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
                 />
               )}
               {screen === "cart" && (
@@ -9236,6 +9317,7 @@ export default function App() {
             cart={cart}
             current={screen}
             onMore={() => setDrawerOpen(true)}
+            isLoggedIn={isLoggedIn}
           />
         )}
       </div>
