@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { type Rol, PermissionCategoryAccordion, countAccesos } from "./GestionConfigScreen";
+import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
@@ -81,6 +81,38 @@ function rolLabel(u: Usuario, roles: Rol[], esCliente: boolean, esEmpleado: bool
   const rol = roles.find(r => r.id === u.rolId);
   return rol?.nombre ?? u.rolId;
 }
+
+// Id con el que se guardan las fichas de Clientes: es el que `usuariosUnificados`
+// (App.tsx) le asigna al unir los listados de Usuarios, Empleados y Clientes.
+const ROL_CLIENTE = "ROL-002";
+
+// Roles reales de una persona para la vista de detalle: el que tiene asignado y,
+// si además está registrada como empleado o como cliente, el que le corresponde
+// por esa ficha. Siempre se leen de `roles` —la lista guardada, no una semilla—
+// y se dedupican por id, así que quien solo tiene un rol, que es el caso normal,
+// ve una sola tabla de permisos.
+const rolesDeUsuario = (
+  usuario: Usuario,
+  roles: Rol[],
+  empleados: Empleado[],
+  clientes: Cliente[],
+): Rol[] => {
+  const correo = usuario.correo.trim().toLowerCase();
+  const ids: string[] = [usuario.rolId];
+  const fichaEmpleado = empleados.find(e => e.correo.trim().toLowerCase() === correo);
+  if (fichaEmpleado) ids.push(fichaEmpleado.rolId);
+  if (clientes.some(c => c.correo.trim().toLowerCase() === correo)) ids.push(ROL_CLIENTE);
+
+  const unicos: Rol[] = [];
+  const vistos = new Set<string>();
+  for (const id of ids) {
+    const rol = roles.find(r => r.id === id);
+    if (!rol || vistos.has(rol.id)) continue;
+    vistos.add(rol.id);
+    unicos.push(rol);
+  }
+  return unicos;
+};
 
 export function GestionUsuariosScreen({
   userRole,
@@ -542,91 +574,106 @@ export function GestionUsuariosScreen({
         </div>
       )}
 
-      {/* ── Modal: Ver detalle ── */}
+      {/* ── Modal: Ver detalle ──
+          Misma estructura que "Detalle — {rol}" de Configuración > Roles: título
+          con el nombre de la persona (nunca el id técnico), datos en cuadrícula de
+          2 columnas, cuerpo con scroll interno para la tabla de permisos y pie
+          siempre visible con los dos botones. */}
       <AnimatePresence>
         {detail && (() => {
-          const rol = rolInfo(detail.rolId);
-          const rolInactivo = rol && !rol.activo;
+          const rolPrincipal = rolInfo(detail.rolId);
+          const rolInactivo = !!rolPrincipal && !rolPrincipal.activo;
           const correo = detail.correo.trim().toLowerCase();
           const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
           const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
+          const rolesDetalle = rolesDeUsuario(detail, roles, empleados, clientes);
           return (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
               <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{scale:.95,opacity:0}} animate={{scale:1,opacity:1}}
                 exit={{scale:.95,opacity:0}} transition={{duration:.15}}
-                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border">
+                className="bg-card rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
 
-                <div className="flex items-start justify-between px-5 py-3 border-b border-border shrink-0">
-                  <span className="text-base font-bold text-foreground" style={{fontFamily:SERIF}}>Detalle Usuario</span>
+                <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border shrink-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-full ${detail.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+                      {detail.iniciales}
+                    </div>
+                    {/* Solo el nombre: el id técnico (USR-00X) no se muestra. */}
+                    <h3 className="text-lg font-bold text-foreground truncate" style={{fontFamily:SERIF}}>Detalle — {detail.nombre}</h3>
+                  </div>
                   <button onClick={() => setDetail(null)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0">
                     <X className="w-4 h-4"/>
                   </button>
                 </div>
 
-                <div className="px-5 py-4 space-y-1.5 overflow-visible">
-                  {/* Avatar */}
-                  <div className="flex flex-col items-center text-center gap-2">
-                    <div className={`w-20 h-20 rounded-full ${detail.avatarColor} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
-                      {detail.iniciales}
-                    </div>
-                    <div>
-                      <p className="text-xl font-bold text-foreground" style={{fontFamily:SERIF}}>{detail.nombre}</p>
-                      <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${rolColor(detail.rolId, esCliente, esEmpleado)} ${rolInactivo ? "opacity-60" : ""}`}>
-                          {rolLabel(detail, roles, esCliente, esEmpleado)}
-                       </span>
-                        {rolInactivo && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                            <AlertTriangle className="w-3 h-3" /> Rol inactivo
+                {/* Todo el cuerpo (datos + tablas) vive en el área con scroll
+                    interno; el pie queda fuera, así "Editar usuario" y "Cerrar"
+                    siempre se ven aunque la lista de permisos sea larga. */}
+                <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+                  {/* Datos en cuadrícula de 2 columnas: Tipo de documento | Número
+                      de documento / Nombre completo | Teléfono / Rol | Estado /
+                      (Correo, el único dato de texto libre y largo, ocupa las 2). */}
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    {[
+                      { l: "Tipo de documento",   v: detail.tipoDocumento,   ancho: false, chip: undefined },
+                      { l: "Número de documento", v: detail.numeroDocumento, ancho: false, chip: undefined },
+                      { l: "Nombre completo",     v: detail.nombre,           ancho: false, chip: undefined },
+                      { l: "Teléfono",            v: detail.telefono,         ancho: false, chip: undefined },
+                      {
+                        l: "Rol", v: rolLabel(detail, roles, esCliente, esEmpleado), ancho: false,
+                        // Gris para Cliente, verde para Cliente/Empleado y rojo
+                        // para Administrador, el mismo badge del listado.
+                        chip: { color: rolColor(detail.rolId, esCliente, esEmpleado), aviso: rolInactivo },
+                      },
+                      {
+                        l: "Estado", v: detail.activo ? "Activo" : "Inactivo", ancho: false,
+                        chip: { color: detail.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600", aviso: false },
+                      },
+                      { l: "Correo", v: detail.correo, ancho: true, chip: undefined },
+                    ].map(({ l, v, ancho, chip }) => (
+                      <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "col-span-2" : ""}`}>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</span>
+                        {chip ? (
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${chip.color} ${chip.aviso ? "opacity-60" : ""}`}>{v || "—"}</span>
+                            {chip.aviso && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                <AlertTriangle className="w-3 h-3" /> Rol inactivo
+                              </span>
+                            )}
                           </span>
+                        ) : (
+                          <span className="text-sm font-semibold text-foreground break-words">{v || "—"}</span>
                         )}
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${detail.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
-                          {detail.activo ? "Activo" : "Inactivo"}
-                        </span>
                       </div>
-                    </div>
+                    ))}
                   </div>
 
-                  {/* Info */}
-                  <div className="border border-border rounded-xl overflow-hidden">
-                    <div className="px-4 py-2 bg-muted/50 border-b border-border">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Información del usuario</p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 px-4 py-2">
-                      {[
-                        { l: "Correo",    v: detail.correo },
-                        { l: "Teléfono",  v: detail.telefono },
-                        { l: "Tipo de documento",   v: detail.tipoDocumento },
-                        { l: "Número de documento", v: detail.numeroDocumento },
-                      ].map(({ l, v }) => (
-                        <div key={l} className="flex items-center justify-between py-2 border-b border-border gap-4 min-w-0">
-                          <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                          <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Permisos del rol */}
-                  {rol && (
-                    <div className="border border-border rounded-xl overflow-hidden">
-                      <div className="px-4 py-2 bg-muted/50 border-b border-border flex items-center justify-between">
+                  {/* Permisos de los roles reales de la persona. Se reutiliza tal
+                      cual `PermisosTablaDetalle`, la misma tabla de solo lectura
+                      del detalle de rol: sin acordeón y sin un solo clic, con
+                      todos los módulos, sub-módulos y privilegios a la vista. Si
+                      la persona tiene más de un rol, se dibuja una tabla por
+                      cada uno, con su propio título y su propio contador. */}
+                  {rolesDetalle.map(rol => (
+                    <div key={rol.id}>
+                      <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Permisos del rol
+                          Permisos del rol {rol.nombre}
                         </p>
-                        <span className="text-xs text-primary font-semibold">
-                          {countAccesos(rol.accesos)} permisos
+                        <span className="text-xs text-primary font-semibold shrink-0">
+                          {textoPermisosModulos(rol.accesos)}
                         </span>
                       </div>
-                      <div className="px-4 py-2 space-y-2">
-                        {countAccesos(rol.accesos) === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">Sin accesos configurados</p>
-                        ) : <PermissionCategoryAccordion accesos={rol.accesos} />}
-                      </div>
+                      {countAccesos(rol.accesos) === 0 ? (
+                        <p className="pt-2 text-sm text-muted-foreground italic">Este rol no tiene permisos asignados</p>
+                      ) : (
+                        <PermisosTablaDetalle accesos={rol.accesos} />
+                      )}
                     </div>
-                  )}
+                  ))}
 
                   {/* Cambiar estado */}
                   <button onClick={cambiarEstado}
@@ -640,9 +687,13 @@ export function GestionUsuariosScreen({
                   </button>
                 </div>
 
-                <div className="px-5 py-3 border-t border-border shrink-0">
+                <div className="flex gap-3 px-5 py-3 border-t border-border shrink-0">
+                  <button onClick={() => { setDetail(null); setEditItem({ ...detail }); setEditPrevCorreo(detail.correo); setEditErrors({}); }}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    Editar usuario
+                  </button>
                   <button onClick={() => setDetail(null)}
-                    className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                     Cerrar
                   </button>
                 </div>

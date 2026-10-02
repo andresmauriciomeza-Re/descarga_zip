@@ -155,8 +155,9 @@ const textoUsuariosAsignados = (n: number) =>
     ? "Sin usuarios asignados"
     : `${n} usuario${n === 1 ? "" : "s"} asignado${n === 1 ? "" : "s"}`;
 
-// "15 permisos en 5 módulos".
-const textoPermisosModulos = (accesos: AccesosMap) => {
+// "15 permisos en 5 módulos". Exportado porque el detalle de usuario rotula cada
+// tabla de permisos con el mismo contador que el detalle de rol.
+export const textoPermisosModulos = (accesos: AccesosMap) => {
   const permisos = countAccesos(accesos);
   const modulos = countModulosConAcceso(accesos);
   return `${permisos} permiso${permisos === 1 ? "" : "s"} en ${modulos} módulo${modulos === 1 ? "" : "s"}`;
