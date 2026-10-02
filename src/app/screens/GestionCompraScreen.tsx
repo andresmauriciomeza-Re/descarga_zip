@@ -57,6 +57,9 @@ const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
 const campoMedioCls = "max-w-[240px]"; // Número de factura
 const campoLargoCls = "max-w-xs"; // Proveedor (búsqueda)
 
+/** Tooltip de la opción de IVA no elegida, bloqueada con insumos en la tabla. */
+const MSJ_IVA_BLOQUEADO = "Elimina los insumos agregados para cambiar esta opción";
+
 type ItemFactura = {
   rowId: string;
   idInsumo: string;
@@ -134,10 +137,22 @@ function CompraForm({
     montoIva: item.montoIva,
   })));
 
-  // Punto 1: "¿Los montos de la factura incluyen IVA?".
-  // Las compras antiguas, sin el campo, se leen como "Sí, IVA incluido"
+  // "¿Los montos de la factura incluyen IVA?".
+  // Al CREAR ninguna opción viene seleccionada: hay que elegir una antes de
+  // poder agregar insumos o guardar. En DETALLE se lee el valor guardado y las
+  // compras antiguas, sin el campo, se leen como "Sí, IVA incluido"
   // (con IVA 0 % se ven exactamente igual que antes).
-  const [ivaIncluido, setIvaIncluido] = useState(compra?.ivaIncluido ?? true);
+  const [ivaIncluido, setIvaIncluido] = useState<boolean | null>(
+    compra ? compra.ivaIncluido ?? true : null
+  );
+
+  /**
+   * Con al menos un insumo en la tabla, la opción de IVA NO elegida queda
+   * bloqueada (deshabilitada y en gris). Si se borran todos los insumos, la
+   * otra opción vuelve a desbloquearse.
+   */
+  const ivaBloqueada = (opcion: boolean) =>
+    items.length > 0 && ivaIncluido !== null && ivaIncluido !== opcion;
 
   const [itemNombre, setItemNombre] = useState("");
   const [itemCantidad, setItemCantidad] = useState(1);
@@ -182,7 +197,9 @@ function CompraForm({
       cantidad: item.cantidad,
       montoUnitario: item.precioUnitario,
       porcentajeIva: item.iva,
-      ivaIncluido,
+      // Mientras no se elija ninguna opción no hay ítems, así que el `?? true`
+      // solo evita el `null` del estado (nunca altera un cálculo real).
+      ivaIncluido: ivaIncluido ?? true,
     })
   );
   const subtotalSinIva = lineasIva.reduce((s, l) => s + l.baseSinIva, 0);
@@ -252,9 +269,11 @@ function CompraForm({
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  // Requiere al menos un insumo y que el total sea mayor que cero.
+  // Requiere al menos un insumo, que el total sea mayor que cero y haber
+  // elegido si los montos de la factura incluyen IVA.
   const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
   const formValido =
+    ivaIncluido !== null &&
     !errorNumeroFactura && !errorFechaFactura && !errorItems && !errorTotal;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
@@ -377,7 +396,7 @@ function CompraForm({
         baseSinIva: lineasIva[i].baseSinIva,
         montoIva: lineasIva[i].montoIva,
       })),
-      ivaIncluido,
+      ivaIncluido: ivaIncluido ?? true,
       subtotalSinIva,
       totalIva,
       totalPagado,
@@ -458,10 +477,12 @@ function CompraForm({
 
               {/* Detalle (vista): Número de factura · Proveedor · Fecha de
                   factura en UNA fila de 3 columnas; en pantallas pequeñas,
-                  2 columnas. El formulario de creación conserva su grid. */}
+                  2 columnas. El formulario de creación va en 3 columnas
+                  (fila 1: Número · Proveedor · Fecha; fila 2: Estado · IVA)
+                  y en pantallas pequeñas todo baja a 1 columna. */}
               <div
                 className={`grid gap-4 shrink-0 ${
-                  isView ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"
+                  isView ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1 md:grid-cols-3"
                 }`}
               >
                 <div className={campoMedioCls}>
@@ -591,45 +612,62 @@ function CompraForm({
                   </div>
                 )}
 
-                {/* Punto 1: ¿Los montos de la factura incluyen IVA?
-                    ("Sí, IVA incluido" por defecto). Cambia cómo se calculan
-                    todas las líneas y los totales: ver `calcularLineaIva`. */}
+                {/* ¿Los montos de la factura incluyen IVA? — segunda fila,
+                    junto al Estado. Reglas:
+                    · Al crear, NINGUNA opción viene seleccionada: hasta elegir
+                      una no se pueden agregar insumos ni guardar.
+                    · Con la tabla vacía se cambia libremente; si ya hay al
+                      menos un insumo, la opción no elegida queda bloqueada
+                      (y al borrarlos vuelve a desbloquearse).
+                    · La ayuda inferior depende de la opción elegida. */}
                 {!isView && (
-                  <div className="col-span-2">
+                  <div className="md:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                       ¿Los montos de la factura incluyen IVA?
                     </label>
+
                     <div className="inline-flex gap-1 p-1 bg-muted border border-border rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setIvaIncluido(true)}
-                        aria-pressed={ivaIncluido}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
-                          ivaIncluido
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-background"
-                        }`}
-                      >
-                        Sí, IVA incluido
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIvaIncluido(false)}
-                        aria-pressed={!ivaIncluido}
-                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
-                          !ivaIncluido
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-background"
-                        }`}
-                      >
-                        No, sin IVA
-                      </button>
+                      {([true, false] as const).map((opcion) => {
+                        const elegida = ivaIncluido === opcion;
+                        const bloqueada = ivaBloqueada(opcion);
+
+                        return (
+                          <span
+                            key={String(opcion)}
+                            className={`inline-flex ${bloqueada ? "cursor-not-allowed" : ""}`}
+                            title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setIvaIncluido(opcion)}
+                              aria-pressed={elegida}
+                              disabled={bloqueada}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                elegida
+                                  ? "bg-primary text-white shadow-sm"
+                                  : bloqueada
+                                    ? "bg-background text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+                                    : "text-muted-foreground hover:bg-background cursor-pointer"
+                              }`}
+                            >
+                              {opcion ? "Sí, IVA incluido" : "No, sin IVA"}
+                            </button>
+                          </span>
+                        );
+                      })}
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      {ivaIncluido
-                        ? "El monto unitario de cada línea ya trae el IVA adentro."
-                        : "El monto unitario de cada línea es base y el IVA se suma aparte."}
-                    </p>
+
+                    {ivaIncluido === null ? (
+                      <p className="text-xs text-red-500 mt-1.5">
+                        Selecciona si los montos de la factura incluyen IVA
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        {ivaIncluido
+                          ? "El monto unitario de cada línea ya trae el IVA adentro."
+                          : "El monto unitario de cada línea es base y el IVA se suma aparte."}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -651,6 +689,7 @@ function CompraForm({
                     onCantidadChange={setItemCantidad}
                     unidad={itemUnidad}
                     onUnidadChange={setItemUnidad}
+                    disabled={ivaIncluido === null}
                     precio={itemPrecio}
                     onPrecioChange={setItemPrecio}
                     iva={itemIva}
@@ -689,7 +728,7 @@ function CompraForm({
                         mostrarIva
                         mostrarTotal={false}
                         modoIva
-                        ivaIncluido={ivaIncluido}
+                        ivaIncluido={ivaIncluido ?? true}
                         className={isPage ? "flex-1 min-h-0" : ""}
                       />
                       {noSolicitados.length > 0 && (
@@ -702,7 +741,7 @@ function CompraForm({
                           mostrarIva
                           mostrarTotal={false}
                           modoIva
-                          ivaIncluido={ivaIncluido}
+                          ivaIncluido={ivaIncluido ?? true}
                         />
                       )}
                     </>
@@ -715,7 +754,7 @@ function CompraForm({
                       mostrarIva
                       mostrarTotal={false}
                       modoIva
-                      ivaIncluido={ivaIncluido}
+                      ivaIncluido={ivaIncluido ?? true}
                       className={isPage ? "flex-1 min-h-0" : ""}
                     />
                   )}
@@ -738,7 +777,7 @@ function CompraForm({
                   onUpdate={actualizarItem}
                   totalLabel="Total pagado"
                   modoIva
-                  ivaIncluido={ivaIncluido}
+                  ivaIncluido={ivaIncluido ?? true}
                   className={isPage ? "flex-1 min-h-0" : ""}
                 />
               )}

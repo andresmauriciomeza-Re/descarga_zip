@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import { UnidadSelect } from "../components/UnidadSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock, ChevronDown,
+  AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
@@ -379,7 +380,6 @@ function EstadoBadge({ e }: { e: EstadoOrden }) {
 }
 
 const iCls = "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-const sCls = `${iCls} appearance-none`;
 
 // ��������� CONFIRM MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -2225,19 +2225,16 @@ export function NuevoInsumoModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
-              {/* Punto 5: `sCls` trae appearance-none (sin flecha nativa), así
-                  que la agrega el icono, con el mismo estilo de los demás selects. */}
-              <div className="relative">
-                <select
-                  value={unidad}
-                  onChange={e => setUnidad(e.target.value)}
-                  onBlur={() => marcarTocado("unidad")}
-                  className={`${sCls} cursor-pointer pr-8`}
-                >
-                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              </div>
+              {/* Select personalizado (Radix, igual que los estados): el
+                  `<select>` nativo desplegaba la lista CUADRADA y con el azul
+                  del navegador. */}
+              <UnidadSelect
+                value={unidad}
+                onChange={(v) => {
+                  setUnidad(v);
+                  marcarTocado("unidad");
+                }}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">IVA (%)</label>
