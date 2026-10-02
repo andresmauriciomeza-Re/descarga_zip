@@ -129,8 +129,10 @@ export function RecepcionCompraScreen({
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
 
-  // Punto 1/2: ¿los montos de la factura incluyen IVA? (por defecto "Sí").
-  const [ivaIncluido, setIvaIncluido] = useState(true);
+  // Esta pantalla NO tiene selector de IVA general: los cálculos trabajan
+  // SIEMPRE como factura con IVA incluido (regla general), usando el IVA (%)
+  // de cada insumo. Ver `calcularLineaIva` con `ivaIncluido: true`.
+  const ivaIncluido = true;
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
 
   const [exNombre, setExNombre] = useState("");
@@ -786,46 +788,6 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              {/* Punto 1/2: ¿los montos de la factura incluyen IVA?
-                  ("Sí, IVA incluido" por defecto). Cambia la etiqueta del
-                  Monto unitario y cómo se calculan líneas y totales. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  ¿Los montos de la factura incluyen IVA?
-                </label>
-                <div className="inline-flex gap-1 p-1 bg-muted border border-border rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setIvaIncluido(true)}
-                    aria-pressed={ivaIncluido}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
-                      ivaIncluido
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-muted-foreground hover:bg-background"
-                    }`}
-                  >
-                    Sí, IVA incluido
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIvaIncluido(false)}
-                    aria-pressed={!ivaIncluido}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer transition-colors ${
-                      !ivaIncluido
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-muted-foreground hover:bg-background"
-                    }`}
-                  >
-                    No, sin IVA
-                  </button>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5">
-                  {ivaIncluido
-                    ? "El monto unitario de cada línea ya trae el IVA adentro."
-                    : "El monto unitario de cada línea es base y el IVA se suma aparte."}
-                </p>
-              </div>
-
               {/* Recibido según factura */}
               <div>
                 {errorItems && (algunoTocado || intentoGuardar) && (
@@ -1247,12 +1209,10 @@ export function RecepcionCompraScreen({
                       </select>
                     </div>
 
-                    {/* Precio — etiqueta dinámica según el IVA de la factura */}
+                    {/* Precio — la factura siempre se trabaja con IVA incluido */}
                     <div className="w-32 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        {ivaIncluido
-                          ? "Monto unitario (con IVA)"
-                          : "Monto unitario (sin IVA)"}
+                        Monto unitario (con IVA)
                       </label>
                       <input
                         type="number"

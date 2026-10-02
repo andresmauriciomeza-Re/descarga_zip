@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Plus, Pencil, Trash2, X, Check, Package, Eye, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { UnidadSelect } from "../components/UnidadSelect";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -831,18 +832,19 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida</label>
-                    <select
+                    {/* Select personalizado (Radix, igual que los estados): el
+                        `<select>` nativo desplegaba la lista CUADRADA y con el
+                        azul del navegador. */}
+                    <UnidadSelect
                       value={unidad}
-                      onChange={e => setUnidad(e.target.value)}
+                      onChange={setUnidad}
                       disabled={!!editingId}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
+                      fieldClassName={
                         editingId
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground cursor-pointer"
-                      }`}
-                    >
-                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
+                          : "bg-muted dark:bg-input text-foreground"
+                      }
+                    />
                   </div>
                 </div>
                 {/* Stock Actual + Stock Mínimo */}
