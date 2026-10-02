@@ -9029,6 +9029,7 @@ export default function App() {
                 <RecepcionCompraScreen
                   orden={ordenRecepcion}
                   insumos={insumos}
+                  setInsumos={setInsumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   onGuardar={(recepcion, estado) => {
