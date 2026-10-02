@@ -2,13 +2,14 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  Plus, Check, Ban, CheckCircle2, Lock,
+  Plus, Check, Ban, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
+import { EstadoSelect } from "../components/EstadoSelect";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
@@ -985,24 +986,18 @@ export function GestionCompraScreen({
                           : <span className="text-muted-foreground font-normal">—</span>}
                       </td>
                       <td className="px-4 py-3.5">
-                        <button
-                          type="button"
-                          onClick={() => pedirCambiarEstado(g.id, "Anulado")}
+                        <EstadoSelect
+                          value={g.estado}
+                          onChange={(nuevoEstado) => {
+                            if (nuevoEstado === g.estado) return;
+                            pedirCambiarEstado(g.id, nuevoEstado);
+                          }}
+                          options={[
+                            { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
+                            { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
+                          ]}
                           disabled={g.estado === "Anulado"}
-                          title={
-                            g.estado === "Anulado"
-                              ? "Una compra anulada no puede volver al estado Recibido"
-                              : "Marcar como Anulado"
-                          }
-                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-all ${
-                            g.estado === "Anulado"
-                              ? `${ESTADO_CONFIG[g.estado]} opacity-80 cursor-not-allowed`
-                              : `${ESTADO_CONFIG[g.estado]} cursor-pointer hover:brightness-95 active:scale-95`
-                          }`}
-                        >
-                          {g.estado === "Anulado" && <Lock className="w-3 h-3" />}
-                          {g.estado}
-                        </button>
+                        />
                       </td>
                       <td className="px-4 py-3.5">
                         <button

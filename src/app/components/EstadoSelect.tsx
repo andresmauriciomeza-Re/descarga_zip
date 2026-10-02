@@ -1,7 +1,6 @@
 import React from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { createPortal } from "react-dom";
 
 export interface EstadoOption<T extends string> {
   value: T;
@@ -17,12 +16,6 @@ interface EstadoSelectProps<T extends string> {
   className?: string;
 }
 
-const colorBg = (color: string) => {
-  // Extraer el color base (ej. "bg-emerald-100" -> "emerald")
-  const match = color.match(/bg-(\w+)-\d+/);
-  return match ? match[1] : "gray";
-};
-
 export function EstadoSelect<T extends string>({
   value,
   onChange,
@@ -34,37 +27,39 @@ export function EstadoSelect<T extends string>({
 
   return (
     <Select.Root value={value} onValueChange={onChange} disabled={disabled}>
-      <Select.Trigger className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none transition-colors ${
-        seleccionada?.color || "bg-gray-100 text-gray-700"
-      } ${disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${className}`}>
+      <Select.Trigger
+        aria-label="Estado"
+        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors ${
+          seleccionada?.color || "bg-gray-100 text-gray-700"
+        } ${disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${className}`}
+      >
         <Select.Value placeholder={seleccionada?.label || value} />
-        {!disabled && <ChevronDown className="w-3 h-3" />}
+        {!disabled && <ChevronDown className="w-3 h-3 shrink-0" />}
       </Select.Trigger>
       <Select.Portal>
+        {/* z-[100]: el menú va en un portal al <body>, por encima de los overlays
+            de los modales (z-50), de ConfirmModal (z-[70]) y de NuevoProveedorModal
+            (z-[80]). Con z-50 quedaba DETRÁS del fondo y los clics no llegaban. */}
         <Select.Content
-          className="bg-white rounded-xl shadow-lg border border-border py-1 min-w-[140px] z-50"
-          sideOffset={4}
+          className="z-[100] bg-white rounded-xl shadow-xl border border-border overflow-hidden min-w-[150px]"
+          sideOffset={6}
           position="popper"
         >
-          <Select.Viewport>
+          <Select.Viewport className="p-1">
             {options.map((opt) => {
               const esSeleccionada = opt.value === value;
-              const colorBase = colorBg(opt.color);
+              const puntoColor = opt.color.match(/bg-[\w-]+/)?.[0] ?? "bg-gray-300";
               return (
                 <Select.Item
                   key={opt.value}
                   value={opt.value}
-                  className={`relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs font-medium outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary ${
-                    esSeleccionada ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"
+                  className={`relative flex w-full select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 ${
+                    esSeleccionada ? "bg-primary/10 text-primary" : "text-foreground"
                   }`}
                 >
-                  <span className={`absolute left-2 flex h-3.5 w-3.5 items-center justify-center ${opt.color.split(" ")[0].replace("bg-", "bg-").replace("text-", "text-")}`}>
-                    <span className={`w-2 h-2 rounded-full ${opt.color.split(" ")[0].replace("bg-", "bg-")}`} />
-                  </span>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${puntoColor}`} />
                   <Select.ItemText>{opt.label}</Select.ItemText>
-                  <Select.ItemIndicator>
-                    <span className={`inline-block w-2 h-2 rounded-full mr-2 ${opt.color.split(" ")[0]}`} />
-                  </Select.ItemIndicator>
+                  {esSeleccionada && <Check className="w-3.5 h-3.5 ml-auto shrink-0 text-primary" />}
                 </Select.Item>
               );
             })}
