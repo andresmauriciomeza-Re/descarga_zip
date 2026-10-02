@@ -8,12 +8,14 @@
 -- =============================================================
 
 -- 1. Tabla: Historial de estados de Órdenes de Compra
+-- EstadoAnterior es anulable: el registro inicial creado al nacer la orden no
+-- tiene estado previo (así lo inserta migracion_historial_estados_bootstrap.sql).
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Tb_HistorialEstadoOrdenCompra')
 BEGIN
   CREATE TABLE dbo.Tb_HistorialEstadoOrdenCompra (
     IdHistorial INT IDENTITY(1,1) PRIMARY KEY,
     IdOrdenCompra INT NOT NULL,
-    EstadoAnterior VARCHAR(20) NOT NULL,
+    EstadoAnterior VARCHAR(20) NULL,
     EstadoNuevo VARCHAR(20) NOT NULL,
     FechaHora DATETIME NOT NULL DEFAULT GETDATE(),
     CONSTRAINT FK_HistorialOC_OrdenCompra FOREIGN KEY (IdOrdenCompra)
@@ -25,7 +27,23 @@ BEGIN
 END
 GO
 
+-- Compatibilidad: si la tabla se creó con la versión anterior, EstadoAnterior
+-- era NOT NULL y el registro inicial del bootstrap (NULL) fallaría.
+IF EXISTS (
+  SELECT 1 FROM sys.columns
+  WHERE object_id = OBJECT_ID('dbo.Tb_HistorialEstadoOrdenCompra')
+    AND name = 'EstadoAnterior' AND is_nullable = 0
+)
+BEGIN
+  ALTER TABLE dbo.Tb_HistorialEstadoOrdenCompra
+    ALTER COLUMN EstadoAnterior VARCHAR(20) NULL;
+END
+GO
+
 -- 2. Tabla: Anulación de compras (Gestión de Compras)
+-- Punto 6: el motivo es obligatorio. No basta con NOT NULL: también se rechazan
+-- cadenas vacías o de solo espacios, igual que el formulario del frontend
+-- (el botón "Anular" permanece deshabilitado mientras el motivo esté vacío).
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Tb_AnulacionCompra')
 BEGIN
   CREATE TABLE dbo.Tb_AnulacionCompra (
@@ -34,10 +52,22 @@ BEGIN
     Motivo VARCHAR(500) NOT NULL,
     FechaHora DATETIME NOT NULL DEFAULT GETDATE(),
     CONSTRAINT FK_AnulacionCompra_Compra FOREIGN KEY (IdCompra)
-      REFERENCES dbo.Tb_Compra(IdCompra)
+      REFERENCES dbo.Tb_Compra(IdCompra),
+    CONSTRAINT CK_AnulacionCompra_Motivo CHECK (LEN(LTRIM(RTRIM(Motivo))) > 0)
   );
 
   CREATE INDEX IX_AnulacionCompra_IdCompra ON dbo.Tb_AnulacionCompra(IdCompra);
+END
+GO
+
+-- Si la tabla venía de una versión anterior, se agrega la misma validación.
+-- NOTA: fallará si ya existen anulaciones con motivo vacío; corregirlas primero.
+IF EXISTS (SELECT * FROM sys.tables WHERE name = 'Tb_AnulacionCompra')
+   AND NOT EXISTS (SELECT * FROM sys.check_constraints WHERE name = 'CK_AnulacionCompra_Motivo')
+BEGIN
+  ALTER TABLE dbo.Tb_AnulacionCompra
+    ADD CONSTRAINT CK_AnulacionCompra_Motivo
+    CHECK (LEN(LTRIM(RTRIM(Motivo))) > 0);
 END
 GO
 
