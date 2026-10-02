@@ -3,6 +3,8 @@ import type { Insumo } from "./GestionInsumosScreen";
 import { motion, AnimatePresence } from "motion/react";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
+import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
@@ -101,6 +103,22 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Completado: "bg-emerald-100 text-emerald-800",
   Anulado: "bg-red-100 text-red-800",
 };
+
+/**
+ * La Orden de Compra solo avanza: desde cada estado se ofrecen los siguientes.
+ * Los estados finales (Completado/Anulado) quedan con una única opción y el
+ * selector deshabilitado.
+ */
+const ESTADOS_ADELANTE: Record<EstadoOrden, EstadoOrden[]> = {
+  Borrador: ["Borrador", "Enviado", "Completado", "Anulado"],
+  Enviado: ["Enviado", "Completado", "Anulado"],
+  Completado: ["Completado"],
+  Anulado: ["Anulado"],
+};
+
+/** Opciones del selector de estado de una orden, con el color de su badge. */
+const opcionesEstado = (estado: EstadoOrden): EstadoOption<EstadoOrden>[] =>
+  ESTADOS_ADELANTE[estado].map((e) => ({ value: e, label: e, color: ESTADO_CONFIG[e] }));
 
 /**
  * Ancho compartido por los formularios de Orden de Compra y de Gestión de Compras,
@@ -310,6 +328,17 @@ function conHistorial(o: OrdenCompra, estado: EstadoOrden): OrdenCompra {
   };
 }
 
+/**
+ * Fecha CON hora del último cambio de estado (01/10/2026 8:35 p. m.), la que se
+ * muestra bajo el badge en el listado. Las órdenes sin historial caen en su
+ * fecha de creación.
+ */
+function fechaUltimoCambio(o: OrdenCompra): string {
+  const historial = o.historialEstados ?? [];
+  const ultimo = historial[historial.length - 1];
+  return formatearFechaHora(ultimo ? ultimo.fechaHora : o.fecha);
+}
+
 // ��������� SHARED UI ��������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 function EstadoBadge({ e }: { e: EstadoOrden }) {
@@ -480,10 +509,14 @@ export function NuevoProveedorModal({
             </p>
             <div className="w-full sm:w-1/2">
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
-              <select value={estado} onChange={e => setEstado(e.target.value as ProveedorRef["estado"])} className={`${sCls} cursor-pointer`}>
-                <option value="activo">Activo</option>
-                <option value="inactivo">Inactivo</option>
-              </select>
+              <EstadoSelect<ProveedorRef["estado"]>
+                value={estado}
+                onChange={setEstado}
+                options={[
+                  { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
+                  { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -896,37 +929,27 @@ export function OrdenModal({
                   )}
                 </div>
                 {!isView && (
-                  <div>
+                  <div onMouseDown={() => setShowProvSug(false)}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
-                    {isCompra ? (
-                      <select
-                        value={form.estado}
-                        onChange={e => {
-                          const nuevoEstado = e.target.value as EstadoGestion;
-                          setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as unknown as EstadoOrden, fecha: today }]);
-                          pf({ estado: nuevoEstado });
-                        }}
-                        className={sCls}
-                      >
-                        <option value="Recibido">Recibido</option>
-                        <option value="Anulado">Anulado</option>
-                      </select>
-                    ) : (
-                      <select
-                        value={form.estado}
-                        onChange={e => {
-                          const nuevoEstado = e.target.value as EstadoOrden;
-                          setEstadoHistorial(prev => [...prev, { estado: nuevoEstado, fecha: today }]);
-                          pf({ estado: nuevoEstado });
-                        }}
-                        className={sCls}
-                      >
-                        <option value="Borrador">Borrador</option>
-                        <option value="Enviado">Enviado</option>
-                        <option value="Completado">Completado</option>
-                        <option value="Anulado">Anulado</option>
-                      </select>
-                    )}
+                    {/* z-40: el desplegable de autocompletar del Proveedor (z-30) se
+                        despliega hacia abajo y cubre este campo; sin este z-index el
+                        clic lo absorbía ese desplegable y el menú no se abría. */}
+                    <EstadoSelect
+                      value={form.estado}
+                      onChange={(nuevoEstado) => {
+                        setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as EstadoOrden, fecha: today }]);
+                        pf({ estado: nuevoEstado });
+                      }}
+                      options={(
+                        isCompra
+                          ? [
+                              { value: "Recibido" as EstadoGestion, label: "Recibido", color: "bg-emerald-100 text-emerald-800" },
+                              { value: "Anulado" as EstadoGestion, label: "Anulado", color: "bg-red-100 text-red-800" },
+                            ]
+                          : opcionesEstado(form.estado as EstadoOrden)
+                      )}
+                      className="relative z-40"
+                    />
                     {estadoHistorial.length > 0 && (
                       <p className="text-[11px] text-muted-foreground mt-1">
                         {estadoHistorial[estadoHistorial.length - 1].fecha}
@@ -1862,54 +1885,30 @@ export function OrdenCompraScreen({
                         {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                       </td>
                       <td className="px-4 py-3.5">
-                        <select
+                        <EstadoSelect
                           value={o.estado}
-                          onChange={(e) => {
-                            const nuevoEstado = e.target.value as EstadoOrden;
+                          onChange={(nuevoEstado) => {
                             if (nuevoEstado === o.estado) return;
                             setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
                           }}
+                          options={opcionesEstado(o.estado)}
                           disabled={o.estado === "Anulado" || o.estado === "Completado"}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none ${o.estado === "Anulado" || o.estado === "Completado" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${ESTADO_CONFIG[o.estado]}`}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">{fechaUltimoCambio(o)}</p>
+                        {/* El tooltip envuelve SOLO el botón: el selector de estado (menú
+                            en portal con z-[100]) queda fuera, así que el desplegable
+                            nunca queda tapado por el cuadro del historial. */}
+                        <EstadoHistorialTooltip
+                          historial={o.historialEstados ?? []}
+                          estadoColors={ESTADO_CONFIG}
                         >
-                          {o.estado === "Borrador" && (
-                            <>
-                              <option value="Borrador">Borrador</option>
-                              <option value="Enviado">Enviado</option>
-                              <option value="Completado">Completado</option>
-                              <option value="Anulado">Anulado</option>
-                            </>
-                          )}
-                          {o.estado === "Enviado" && (
-                            <>
-                              <option value="Enviado">Enviado</option>
-                              <option value="Completado">Completado</option>
-                              <option value="Anulado">Anulado</option>
-                            </>
-                          )}
-                          {o.estado === "Anulado" && (
-                            <option value="Anulado">Anulado</option>
-                          )}
-                          {o.estado === "Completado" && (
-                            <option value="Completado">Completado</option>
-                          )}
-                        </select>
-                        <p className="text-[11px] text-muted-foreground mt-1">{o.fecha}</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const historial = [
-                              { estado: "Borrador" as EstadoOrden, fecha: o.fecha },
-                              ...(o.estado !== "Borrador" ? [{ estado: "Enviado" as EstadoOrden, fecha: o.fecha }] : []),
-                              ...(o.estado === "Completado" && o.recepcion ? [{ estado: "Completado" as EstadoOrden, fecha: o.recepcion.fechaRecepcion }] : []),
-                              ...(o.estado === "Anulado" ? [{ estado: "Anulado" as EstadoOrden, fecha: o.fecha }] : []),
-                            ];
-                            alert(historial.map(h => `${h.estado} - ${h.fecha}`).join("\n"));
-                          }}
-                          className="text-[11px] text-primary hover:underline mt-0.5"
-                        >
-                          Ver historial
-                        </button>
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary hover:underline mt-0.5"
+                          >
+                            Ver historial
+                          </button>
+                        </EstadoHistorialTooltip>
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
