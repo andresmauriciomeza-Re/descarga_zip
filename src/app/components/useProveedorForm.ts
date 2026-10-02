@@ -31,6 +31,11 @@ export function soloDigitos(valor: string): string {
   return valor.replace(/\D/g, "");
 }
 
+/** Filtra dirección: letras, números, espacios y los símbolos # - . , ° /. */
+export function soloDireccion(valor: string): string {
+  return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s#\-.,°\/]/g, "");
+}
+
 /** Valida formato de correo. */
 export function validarCorreo(email: string): string | null {
   if (!email.trim()) return "El correo es obligatorio.";
@@ -78,7 +83,10 @@ export function useProveedorForm(
       e.nit = "El NIT es obligatorio.";
     } else if (values.nit.trim().length !== NIT_LENGTH) {
       e.nit = `El NIT debe tener exactamente ${NIT_LENGTH} dígitos.`;
-    } else if (existentes.some(x => x.nit === values.nit.trim())) {
+    } else if (existentes.some(x => filtrarNit(x.nit) === values.nit.trim())) {
+      // Se compara solo dígitos: las semillas guardan el NIT con formato
+      // ("830.115.220-1") y el campo siempre trae 10 dígitos ("8301152201"),
+      // por lo que la comparación literal nunca detectaba el duplicado.
       e.nit = "Ya existe un proveedor con este NIT.";
     }
 
@@ -153,3 +161,6 @@ export function useProveedorForm(
     intentoGuardar,
   };
 }
+
+/** API del hook: la usan los componentes que renderizan los campos. */
+export type ProveedorFormApi = ReturnType<typeof useProveedorForm>;

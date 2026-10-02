@@ -5,10 +5,12 @@ import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
+import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
+import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock,
+  AlertTriangle, CheckCircle2, Lock, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
@@ -441,33 +443,42 @@ export function ConfirmModal({
 // ��������� NUEVO PROVEEDOR MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 export function NuevoProveedorModal({
-  onGuardar, onClose, nombreInicial = "",
+  onGuardar, onClose, nombreInicial = "", existentes = [],
 }: {
   onGuardar: (p: ProveedorRef) => void;
   onClose: () => void;
   nombreInicial?: string;
+  /** Punto 1: proveedores ya existentes, para detectar NIT repetido con las
+      mismas reglas del módulo Proveedores. */
+  existentes?: { nit: string; nombre: string }[];
 }) {
-  const [nombre, setNombre] = useState(nombreInicial);
-  const [nit, setNit] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [email, setEmail] = useState("");
-  const [asesorComercial, setAsesorComercial] = useState("");
-  const [direccion, setDireccion] = useState("");
-  const [estado, setEstado] = useState<ProveedorRef["estado"]>("activo");
+  // Punto 1: mismas validaciones que el formulario del módulo Proveedores
+  // (useProveedorForm). El nombre llega del buscador y se filtra con las
+  // reglas del formulario para no arrancar con un valor inválido.
+  const form = useProveedorForm(
+    {
+      nombre: soloLetras(nombreInicial),
+      nit: "",
+      telefono: "",
+      email: "",
+      asesorComercial: "",
+      direccion: "",
+      estado: "activo",
+    },
+    existentes,
+  );
 
   const submit = () => {
-    if (!nombre.trim()) { toast.error("El nombre es obligatorio."); return; }
-    if (!nit.trim()) { toast.error("El NIT es obligatorio."); return; }
-    if (!telefono.trim()) { toast.error("El teléfono es obligatorio."); return; }
-    if (!email.trim()) { toast.error("El email es obligatorio."); return; }
+    form.setIntentoGuardar(true);
+    if (!form.formValido) return;
     onGuardar({
-      nombre: nombre.trim(),
-      nit: nit.trim(),
-      telefono: telefono.trim(),
-      email: email.trim(),
-      asesorComercial: asesorComercial.trim(),
-      direccion: direccion.trim(),
-      estado,
+      nombre: form.values.nombre.trim(),
+      nit: form.values.nit.trim(),
+      telefono: form.values.telefono.trim(),
+      email: form.values.email.trim(),
+      asesorComercial: form.values.asesorComercial.trim(),
+      direccion: form.values.direccion.trim(),
+      estado: form.values.estado,
     });
   };
 
@@ -489,69 +500,19 @@ export function NuevoProveedorModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-6 py-5 space-y-6">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-              Identificación del proveedor
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">NIT *</label>
-                <input value={nit} onChange={e => setNit(e.target.value)} placeholder="900.123.456-1" className={iCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)} autoFocus placeholder="Nombre del proveedor" className={iCls} />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-              Contacto
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Asesor comercial</label>
-                <input value={asesorComercial} onChange={e => setAsesorComercial(e.target.value)} placeholder="Ej: Carlos Mejía" className={iCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Teléfono *</label>
-                <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="604 321 0001" className={iCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email *</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ventas@proveedor.co" className={iCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Dirección</label>
-                <input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Cra 50 #30-10, Medellín" className={iCls} />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-              Configuración
-            </p>
-            <div className="w-full sm:w-1/2">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
-              <EstadoSelect<ProveedorRef["estado"]>
-                value={estado}
-                onChange={setEstado}
-                options={[
-                  { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-                  { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
-                ]}
-              />
-            </div>
-          </div>
+        <div className="px-6 py-5">
+          {/* Punto 1: mismo formulario de proveedor que el módulo Proveedores. */}
+          <ProveedorFormCampos form={form} />
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-border">
           <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
-          <button onClick={submit} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all">
+          <button
+            onClick={submit}
+            disabled={!form.formValido}
+            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+          >
             Crear Proveedor
           </button>
         </div>
@@ -734,10 +695,14 @@ export function OrdenModal({
   }, []);
 
   const selectSug = (ins: Insumo) => {
+    // Punto 2: el precio del catálogo viene en `costoUnitario` (number), que es
+    // el mismo que muestra la lista desplegable. `precioUnitario` es null en las
+    // semillas, por eso el Monto unitario quedaba en 0.
+    console.log("[Punto 2] onSelect insumo:", ins);
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setAPrecio(ins.precioUnitario);
-    setAIva(ins.iva);
+    setAPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
+    setAIva(Number(ins.iva ?? 0));
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -939,8 +904,11 @@ export function OrdenModal({
                           className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} pl-10`}
                           aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
                         />
+                        {/* Punto 6: el desplegable va por encima de todo el
+                            formulario (z-50), para que el badge de Estado no
+                            se monte sobre la lista. */}
                         {showProvSug && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                          <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                             {/* Opción "+ Crear proveedor" PRIMERA */}
                             <button
                               type="button"
@@ -1009,9 +977,10 @@ export function OrdenModal({
                 {!isView && (
                   <div onMouseDown={() => setShowProvSug(false)}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
-                    {/* z-40: el desplegable de autocompletar del Proveedor (z-30) se
-                        despliega hacia abajo y cubre este campo; sin este z-index el
-                        clic lo absorbía ese desplegable y el menú no se abría. */}
+                    {/* Punto 6: el trigger va SIN z-index ni position con z. Con
+                        `relative z-40` el badge "Borrador" se montaba sobre el
+                        desplegable del Proveedor (z-50) y tapaba los resultados.
+                        El menú va en portal (z-[100]) y sigue por encima de todo. */}
                     <EstadoSelect
                       value={form.estado}
                       onChange={(nuevoEstado) => {
@@ -1026,7 +995,6 @@ export function OrdenModal({
                             ]
                           : opcionesEstado(form.estado as EstadoOrden)
                       )}
-                      className="relative z-40"
                     />
                     {estadoHistorial.length > 0 && (
                       <p className="text-[11px] text-muted-foreground mt-1">
@@ -1172,6 +1140,7 @@ export function OrdenModal({
         {showNuevoProv && (
           <NuevoProveedorModal
             nombreInicial={provQuery.trim()}
+            existentes={proveedores}
             onGuardar={handleNuevoProv}
             onClose={() => setShowNuevoProv(false)}
           />
@@ -2239,14 +2208,19 @@ export function NuevoInsumoModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
-              <select
-                value={unidad}
-                onChange={e => setUnidad(e.target.value)}
-                onBlur={() => marcarTocado("unidad")}
-                className={`${sCls} cursor-pointer`}
-              >
-                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              {/* Punto 5: `sCls` trae appearance-none (sin flecha nativa), así
+                  que la agrega el icono, con el mismo estilo de los demás selects. */}
+              <div className="relative">
+                <select
+                  value={unidad}
+                  onChange={e => setUnidad(e.target.value)}
+                  onBlur={() => marcarTocado("unidad")}
+                  className={`${sCls} cursor-pointer pr-8`}
+                >
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">IVA (%)</label>
@@ -2265,7 +2239,7 @@ export function NuevoInsumoModal({
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Precio unitario *</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Monto unitario *</label>
             <input
               type="number"
               min={0}

@@ -104,7 +104,7 @@ export function CompactInsumoForm({
           </div>
 
           {!readOnly && showSuggestions && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+            <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
               {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera opción, estén o no
                   resultados de búsqueda, y va separado del resto de la lista. */}
               <button
