@@ -63,32 +63,21 @@ export interface ProductoInsumo {
 
 export const INITIAL_INSUMOS: Insumo[] = [
   { id: "INS-001", nombre: "Queso Mozzarella", unidadMedida: "kg", costoUnitario: 18000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 25, stockMinimo: 10, stockMaximo: 50, categoriaId: "CINS-001", estado: "activo" },
-  { id: "INS-002", nombre: "Salsa de Tomate", unidadMedida: "lt", costoUnitario: 8000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 30, stockMinimo: 15, stockMaximo: 60, categoriaId: "CINS-005", estado: "activo" },
   { id: "INS-003", nombre: "Pepperoni", unidadMedida: "kg", costoUnitario: 25000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 8, stockMinimo: 5, stockMaximo: 20, categoriaId: "CINS-002", estado: "activo" },
-  // Productos Insumo: lo que Gloria prepara en lote, refrigera y consume la
-  // cocina. Cada uno lleva su receta (`composicion`, cantidades POR 1 unidad),
-  // su descripción de preparación y su tiempo. Son los únicos que una orden
-  // "Preparación en lote" puede producir.
-  {
-    id: "INS-004", nombre: "Masa Pre-elaborada", unidadMedida: "und", costoUnitario: 3500,
-    precioUnitario: null, iva: null, tipo: "ProductoInsumo",
-    stockActual: 4, stockMinimo: 20, stockMaximo: 100, categoriaId: "CINS-004", estado: "activo",
-    composicion: [
-      { id: "INS-006", categoriaId: "CINS-004", nombre: "Harina", cantidad: 0.5, unidadMedida: "kg" },
-      { id: "INS-007", categoriaId: "CINS-004", nombre: "Agua", cantidad: 0.3, unidadMedida: "lt" },
-      { id: "INS-008", categoriaId: "CINS-004", nombre: "Aceite", cantidad: 0.05, unidadMedida: "lt" },
-      { id: "INS-009", categoriaId: "CINS-004", nombre: "Levadura", cantidad: 0.01, unidadMedida: "kg" },
-    ],
-    descripcion: "1. Mezclar harina, agua, aceite y levadura hasta que quede homogénea.\n2. Amasar 10 minutos.\n3. Reposar 30 minutos tapada en refrigeración.\n4. Formar discos de 250 g de yogur.\n5. Refrigerar. Rinde 1 unidad por preparación.",
-    tiempoPreparacion: 60,
-  },
   { id: "INS-005", nombre: "Champiñones", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 5, stockMaximo: 15, categoriaId: "CINS-003", estado: "activo" },
   { id: "INS-006", nombre: "Harina", unidadMedida: "kg", costoUnitario: 4500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 40, stockMinimo: 20, stockMaximo: 120, categoriaId: "CINS-004", estado: "activo" },
   { id: "INS-007", nombre: "Agua", unidadMedida: "lt", costoUnitario: 400, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 120, stockMinimo: 40, stockMaximo: 300, categoriaId: "CINS-004", estado: "activo" },
   { id: "INS-008", nombre: "Aceite", unidadMedida: "lt", costoUnitario: 9000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 12, stockMinimo: 4, stockMaximo: 30, categoriaId: "CINS-004", estado: "activo" },
   { id: "INS-009", nombre: "Levadura", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 2, stockMinimo: 1, stockMaximo: 6, categoriaId: "CINS-004", estado: "activo" },
+  { id: "INS-010", nombre: "Aguacate", unidadMedida: "kg", costoUnitario: 9500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 18, stockMinimo: 8, stockMaximo: 40, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-011", nombre: "Cebolla", unidadMedida: "kg", costoUnitario: 3500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 6, stockMinimo: 3, stockMaximo: 15, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-012", nombre: "Limón", unidadMedida: "lt", costoUnitario: 5000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 2, stockMaximo: 10, categoriaId: "CINS-003", estado: "activo" },
+  // Productos Insumo: lo que Gloria prepara en lote, refrigera y consume la
+  // cocina. Cada uno lleva su receta (`composicion`, cantidades POR 1 unidad),
+  // su descripción de preparación y su tiempo. Son los únicos que una orden
+  // "Preparación en lote" puede producir.
   {
-    id: "PIN-001", nombre: "Guacamole", unidadMedida: "lt", costoUnitario: 18000,
+    id: "PIN-001", nombre: "Guacamole", unidadMedida: "lt", costoUnitario: 0,
     precioUnitario: null, iva: null, tipo: "ProductoInsumo",
     stockActual: 8, stockMinimo: 5, stockMaximo: 20, categoriaId: "-", estado: "activo",
     composicion: [
@@ -99,9 +88,29 @@ export const INITIAL_INSUMOS: Insumo[] = [
     descripcion: "1. Triturar aguacate con limón para que no se oxide.\n2. Agregar cebolla picada fina.\n3. Ajustar sal y cilantro al gusto.\n4. Guardar en recipiente cerrado, en refrigeración.",
     tiempoPreparacion: 25,
   },
-  { id: "INS-010", nombre: "Aguacate", unidadMedida: "kg", costoUnitario: 9500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 18, stockMinimo: 8, stockMaximo: 40, categoriaId: "CINS-003", estado: "activo" },
-  { id: "INS-011", nombre: "Cebolla", unidadMedida: "kg", costoUnitario: 3500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 6, stockMinimo: 3, stockMaximo: 15, categoriaId: "CINS-003", estado: "activo" },
-  { id: "INS-012", nombre: "Limón", unidadMedida: "lt", costoUnitario: 5000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 2, stockMaximo: 10, categoriaId: "CINS-003", estado: "activo" },
+  {
+    id: "PIN-002", nombre: "Salsa de Tomate", unidadMedida: "lt", costoUnitario: 0,
+    precioUnitario: null, iva: null, tipo: "ProductoInsumo",
+    stockActual: 30, stockMinimo: 15, stockMaximo: 60, categoriaId: "-", estado: "activo",
+    composicion: [
+      { id: "INS-005", categoriaId: "CINS-003", nombre: "Champiñones", cantidad: 1, unidadMedida: "kg" },
+    ],
+    descripcion: "Cocinar a fuego lento y triturar",
+    tiempoPreparacion: 45,
+  },
+  {
+    id: "PIN-003", nombre: "Masa Pre-elaborada", unidadMedida: "und", costoUnitario: 0,
+    precioUnitario: null, iva: null, tipo: "ProductoInsumo",
+    stockActual: 4, stockMinimo: 20, stockMaximo: 100, categoriaId: "-", estado: "activo",
+    composicion: [
+      { id: "INS-006", categoriaId: "CINS-004", nombre: "Harina", cantidad: 0.5, unidadMedida: "kg" },
+      { id: "INS-007", categoriaId: "CINS-004", nombre: "Agua", cantidad: 0.3, unidadMedida: "lt" },
+      { id: "INS-008", categoriaId: "CINS-004", nombre: "Aceite", cantidad: 0.05, unidadMedida: "lt" },
+      { id: "INS-009", categoriaId: "CINS-004", nombre: "Levadura", cantidad: 0.01, unidadMedida: "kg" },
+    ],
+    descripcion: "1. Mezclar harina, agua, aceite y levadura hasta que quede homogénea.\n2. Amasar 10 minutos.\n3. Reposar 30 minutos tapada en refrigeración.\n4. Formar discos de 250 g de yogur.\n5. Refrigerar. Rinde 1 unidad por preparación.",
+    tiempoPreparacion: 60,
+  },
 ];
 
 const UNIDADES = ["kg", "lt", "und"];
@@ -557,7 +566,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         <div className="flex items-center gap-2">
           <button
             onClick={openCreateProducto}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-card border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4" /> Crear Producto Insumo
           </button>
@@ -578,14 +587,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar por nombre, ID o categoría..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full pl-10 pr-4 py-2.5 bg-muted dark:bg-input rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
         <select
           value={filtroEstado}
           onChange={e => { setFiltroEstado(e.target.value as "todos" | "activos" | "inactivos"); setPage(1); }}
           aria-label="Filtrar por estado"
-          className="px-4 py-2.5 bg-muted rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
+          className="px-4 py-2.5 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
         >
           <option value="todos">Todos los estados</option>
           <option value="activos">Activo</option>
@@ -595,7 +604,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
           value={filtroTipo}
           onChange={e => { setFiltroTipo(e.target.value as "todos" | "insumos" | "productos"); setPage(1); }}
           aria-label="Filtrar por tipo"
-          className="px-4 py-2.5 bg-muted rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
+          className="px-4 py-2.5 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
         >
           <option value="todos">Todos los tipos</option>
           <option value="insumos">Insumos</option>
@@ -604,7 +613,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-border rounded-2xl overflow-hidden mb-3">
+      <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <table className="w-full table-fixed">
           <colgroup>
             <col style={{ width: "8%" }} />
@@ -618,7 +627,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
             <col style={{ width: "12%" }} />
             <col style={{ width: "10%" }} />
           </colgroup>
-          <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <thead className="bg-muted/50 dark:bg-muted/30 text-[10px] text-muted-foreground uppercase tracking-wider">
             <tr>
               {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "STOCK MÁX.", "COSTO UNIT.", "ESTADO", "ACCIONES"].map(h => (
                 <th key={h} className="px-2 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
@@ -639,7 +648,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
               const excede = insumo.estado === "activo" && excedeMaximo(insumo);
               const inactivo = insumo.estado === "inactivo";
               return (
-                <tr key={insumo.id} className={`hover:bg-muted/20 transition-colors ${inactivo ? "opacity-50" : ""}`}>
+                <tr key={insumo.id} className={`hover:bg-muted/20 dark:hover:bg-muted/10 transition-colors ${inactivo ? "opacity-50" : ""}`}>
                   <td className="px-2 py-3 text-xs font-mono font-bold text-foreground">{formatearId(insumo.id)}</td>
                   <td className="px-2 py-3 text-xs text-foreground break-words">
                     {esProductoInsumo ? "-" : categoriaNombre(insumo.categoriaId)}
@@ -647,7 +656,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   <td className="px-2 py-3 text-sm text-foreground break-words">
                     <div>{insumo.nombre}</div>
                     {esProductoInsumo && (
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300 whitespace-nowrap">
                         Producto insumo
                       </span>
                     )}
@@ -657,17 +666,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
                       {stockBajo && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
                           Stock bajo
                         </span>
                       )}
                       {excede && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
                           Excede máx.
                         </span>
                       )}
                       {!stockBajo && !excede && insumo.estado === "activo" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
                           OK
                         </span>
                       )}
@@ -681,14 +690,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       <button
                         onClick={() => toggleEstado(insumo.id)}
                         className={`relative w-10 h-[22px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${
-                          insumo.estado === "activo" ? "bg-emerald-500" : "bg-gray-300"
+                          insumo.estado === "activo" ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
                         }`}
                       >
                         <span className={`absolute left-[2px] top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${
                           insumo.estado === "activo" ? "translate-x-[18px]" : "translate-x-0"
                         }`} />
                       </button>
-                      <span className={`text-xs ${insumo.estado === "activo" ? "text-emerald-700" : "text-gray-500"}`}>
+                      <span className={`text-xs ${insumo.estado === "activo" ? "text-emerald-700 dark:text-emerald-300" : "text-gray-500 dark:text-gray-400"}`}>
                         {insumo.estado === "activo" ? "Activo" : "Inactivo"}
                       </span>
                     </div>
@@ -707,7 +716,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                         title={inactivo ? "Activa el insumo para editarlo" : "Editar"}
                         className={`p-1.5 rounded-lg transition-colors ${
                           inactivo
-                            ? "text-gray-300 cursor-not-allowed"
+                            ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
                             : "hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
                         }`}
                       >
@@ -716,7 +725,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       <button
                         onClick={() => handleDelete(insumo.id)}
                         title="Eliminar"
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -737,7 +746,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -753,7 +762,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -765,12 +774,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       {/* ─────────────────────────── Modal Crear/Editar Insumo ─────────────────────────── */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-border"
+              className="bg-white dark:bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border"
             >
               <div className="px-6 py-4 border-b border-border">
                 <div className="flex items-center justify-between">
@@ -796,8 +805,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     disabled={!!editingId}
                     className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                       editingId
-                        ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted text-foreground focus:ring-2 focus:ring-primary/30"
+                        ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                        : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
                     }`}
                   />
                 </div>
@@ -811,8 +820,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={!!editingId}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editingId
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground cursor-pointer"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground cursor-pointer"
                       }`}
                     >
                       {CATEGORIAS_INSUMO.map(c => (
@@ -828,8 +837,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={!!editingId}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editingId
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground cursor-pointer"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground cursor-pointer"
                       }`}
                     >
                       {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
@@ -847,7 +856,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       onChange={e => setStockActual(Number(e.target.value))}
                       disabled={!!editingId}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        editingId ? "bg-muted/50 text-muted-foreground cursor-not-allowed" : "bg-muted"
+                        editingId ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed" : "bg-muted dark:bg-input"
                       }`}
                     />
                   </div>
@@ -861,8 +870,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={!!editingId}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editingId
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground focus:ring-2 focus:ring-primary/30"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
                       }`}
                     />
                     {!editingId && stockMinimo > stockMaximo && stockMaximo > 0 && (
@@ -878,7 +887,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     min={1}
                     value={stockMaximo}
                     onChange={e => setStockMaximo(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   {stockActual > stockMaximo && stockMaximo > 0 && (
                     <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
@@ -892,7 +901,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     min={0}
                     value={costoUnitario || ""}
                     onChange={e => setCostoUnitario(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
               </div>
@@ -919,12 +928,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       {/* ─────────────────────────── Modal Crear Producto Insumo ─────────────────────────── */}
       <AnimatePresence>
         {showProductoModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col"
+              className="bg-white dark:bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col"
             >
               <div className="px-6 py-4 border-b border-border shrink-0">
                 <div className="flex items-center justify-between">
@@ -950,8 +959,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     disabled={editandoProducto}
                     className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                       editandoProducto
-                        ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted text-foreground focus:ring-2 focus:ring-primary/30"
+                        ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                        : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
                     }`}
                   />
                 </div>
@@ -969,8 +978,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={editandoProducto}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editandoProducto
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground focus:ring-2 focus:ring-primary/30"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
                       }`}
                     />
                     {!editandoProducto && piStockActual > piStockMaximo && piStockMaximo > 0 && (
@@ -987,8 +996,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={editandoProducto}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editandoProducto
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground focus:ring-2 focus:ring-primary/30"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
                       }`}
                     />
                     {!editandoProducto && piStockMinimo > piStockMaximo && piStockMaximo > 0 && (
@@ -1002,7 +1011,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       min={1}
                       value={piStockMaximo}
                       onChange={e => setPiStockMaximo(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                     {editandoProducto && piStockActual > piStockMaximo && piStockMaximo > 0 && (
                       <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
@@ -1016,8 +1025,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       disabled={editandoProducto}
                       className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                         editandoProducto
-                          ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted text-foreground cursor-pointer"
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground cursor-pointer"
                       }`}
                     >
                       {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
@@ -1026,14 +1035,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                 </div>
 
                 {/* Bloque de agregar insumo - siempre visible */}
-                <div className="p-4 bg-muted/40 border border-border rounded-xl">
+                <div className="p-4 bg-muted/40 dark:bg-muted/20 border border-border rounded-xl">
                   <div className="grid grid-cols-5 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría de Insumo</label>
                       <select
                         value={piCategoriaId}
                         onChange={e => { setPiCategoriaId(e.target.value); setPiInsumoId(""); }}
-                        className="w-full px-3 py-2 bg-muted rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
+                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
                       >
                         {CATEGORIAS_INSUMO.map(c => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
@@ -1045,7 +1054,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       <select
                         value={piInsumoId}
                         onChange={e => setPiInsumoId(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
+                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
                       >
                         <option value="">Seleccionar...</option>
                         {insumosFiltradosPorCategoria.map(i => (
@@ -1062,7 +1071,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                         value={piCantidad}
                         onChange={e => setPiCantidad(Number(e.target.value))}
                         placeholder="0"
-                        className="w-full px-3 py-2 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                     <div>
@@ -1070,7 +1079,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       <select
                         value={piUnidad}
                         onChange={e => setPiUnidad(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
+                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
                       >
                         {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
@@ -1090,7 +1099,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   {piInsumos.length > 0 && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       {piInsumos.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-muted/30 border border-border rounded-xl">
+                        <div key={idx} className="flex items-center justify-between p-3 bg-muted/30 dark:bg-muted/20 border border-border rounded-xl">
                           <div>
                             <div className="text-sm font-semibold text-foreground">{item.nombre}</div>
                             <div className="text-xs text-muted-foreground">{categoriaNombre(item.categoriaId)} · {item.cantidad} {item.unidadMedida}</div>
@@ -1106,7 +1115,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                             <button
                               onClick={() => eliminarInsumoProducto(idx)}
                               title="Eliminar"
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1125,7 +1134,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     onChange={e => setPiDescripcion(e.target.value)}
                     placeholder="Describe cómo se prepara este producto insumo..."
                     rows={3}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                   />
                 </div>
 
@@ -1169,12 +1178,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       {/* ─────────────────────────── Modal Detalle ─────────────────────────── */}
       <AnimatePresence>
         {showDetalleModal && detalleItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-border flex flex-col max-h-[90vh]"
+              className="bg-white dark:bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border flex flex-col max-h-[90vh]"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
@@ -1339,12 +1348,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       {/* ─────────────────────────── Modal Confirmación ─────────────────────────── */}
       <AnimatePresence>
         {confirmState.tipo && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
+              className="bg-white dark:bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
             >
               <p className="text-sm text-foreground mb-5">{confirmState.mensaje}</p>
               <div className="flex gap-3">
