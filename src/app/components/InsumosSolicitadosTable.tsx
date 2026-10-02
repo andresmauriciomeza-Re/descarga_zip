@@ -33,6 +33,11 @@ export function InsumosSolicitadosTable({
   onRemove,
   onUpdate,
   showActions = true,
+  titulo = "Insumos solicitados",
+  tono = "normal",
+  subtotalLabel = "Subtotal",
+  mostrarIva = true,
+  mostrarTotal = true,
   totalLabel = "Total estimado",
   className = "",
 }: {
@@ -41,12 +46,23 @@ export function InsumosSolicitadosTable({
   /** Habilita la edición en línea de cantidad, unidad y precio unitario. */
   onUpdate?: (rowId: string, patch: DraftRow) => void;
   showActions?: boolean;
+  /** Titulo de la tabla (p. ej. "Insumos recibidos"). */
+  titulo?: string;
+  /** "amber" pinta la tabla como insumos no solicitados. */
+  tono?: "normal" | "amber";
+  /** Etiqueta de la fila de subtotal del pie. */
+  subtotalLabel?: string;
+  /** Muestra la fila de IVA (los detalles de compra no lo usan). */
+  mostrarIva?: boolean;
+  /** Muestra la fila final con `totalLabel`. */
+  mostrarTotal?: boolean;
   totalLabel?: string;
   /** Clases del contenedor; usar "flex-1 min-h-0" para que la tabla scrollee sola. */
   className?: string;
 }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftRow | null>(null);
+  const esAmber = tono === "amber";
 
   const startEdit = (item: InsumoSolicitadoRow) => {
     setEditId(item.rowId);
@@ -90,22 +106,39 @@ export function InsumosSolicitadosTable({
     return sum + subtotal * (item.iva / 100);
   }, 0);
   const total = subtotalGeneral + ivaGeneral;
-  const columnCount = showActions ? 7 : 6;
+  const columnCount = (showActions ? 7 : 6) - (mostrarIva ? 0 : 1);
+  // El pie alinea la etiqueta bajo "Monto unitario"; el valor cae en "Subtotal"
+  // y, si hay acciones, la última columna queda para los botones.
+  const colSpanPie = mostrarIva ? 5 : 4;
 
   return (
     <div
-      className={`bg-muted/30 rounded-xl border border-border overflow-hidden flex flex-col ${className}`}
+      className={`rounded-xl border overflow-hidden flex flex-col ${
+        esAmber ? "bg-amber-50/40 border-amber-200" : "bg-muted/30 border-border"
+      } ${className}`}
     >
-      <div className="px-3 py-2 border-b border-border bg-muted/30 shrink-0">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Insumos solicitados
+      <div
+        className={`px-3 py-2 border-b shrink-0 ${
+          esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30"
+        }`}
+      >
+        <p
+          className={`text-xs font-bold uppercase tracking-wider ${
+            esAmber ? "text-amber-700" : "text-muted-foreground"
+          }`}
+        >
+          {titulo}
         </p>
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+        <thead
+          className={`text-xs uppercase tracking-wider ${
+            esAmber ? "bg-amber-50 text-amber-700" : "bg-muted/50 text-muted-foreground"
+          }`}
+        >
           <tr>
-            {["Nombre", "Cantidad", "Unidad", "P. unitario", "IVA", "Subtotal"].map((h) => (
+            {["Nombre", "Cantidad", "Unidad", "Monto unitario", ...(mostrarIva ? ["IVA"] : []), "Subtotal"].map((h) => (
               <th key={h} className="px-3 py-2.5 text-left font-semibold">
                 {h}
               </th>
@@ -113,7 +146,7 @@ export function InsumosSolicitadosTable({
             {showActions && <th className="px-3 py-2.5" />}
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody className={`divide-y ${esAmber ? "divide-amber-100" : "divide-border"}`}>
           {items.length === 0 ? (
             <tr>
               <td
@@ -193,9 +226,11 @@ export function InsumosSolicitadosTable({
                     )}
                   </td>
 
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                    {row.iva}%
-                  </td>
+                  {mostrarIva && (
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {row.iva}%
+                    </td>
+                  )}
 
                   <td className="px-3 py-2.5 text-sm font-semibold">
                     {fmtCOP(row.cantidad * row.precioUnitario)}
@@ -252,43 +287,53 @@ export function InsumosSolicitadosTable({
           )}
         </tbody>
         {items.length > 0 && (
-          <tfoot className="bg-muted/50 border-t border-border">
+          <tfoot
+            className={`border-t ${
+              esAmber ? "bg-amber-50 border-amber-200" : "bg-muted/50 border-border"
+            }`}
+          >
             <tr>
               <td
-                colSpan={showActions ? 6 : 5}
-                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                colSpan={colSpanPie}
+                className={`px-3 py-2 text-xs font-bold text-right uppercase tracking-wider ${
+                  esAmber ? "text-amber-700" : "text-muted-foreground"
+                }`}
               >
-                Subtotal
+                {subtotalLabel}
               </td>
-              <td className="px-3 py-2 text-sm font-bold text-foreground">
+              <td className={`px-3 py-2 text-sm font-bold ${esAmber ? "text-amber-700" : "text-foreground"}`}>
                 {fmtCOP(subtotalGeneral)}
               </td>
               {showActions && <td />}
             </tr>
-            <tr>
-              <td
-                colSpan={showActions ? 6 : 5}
-                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
-              >
-                IVA
-              </td>
-              <td className="px-3 py-2 text-sm font-bold text-foreground">
-                {fmtCOP(ivaGeneral)}
-              </td>
-              {showActions && <td />}
-            </tr>
-            <tr>
-              <td
-                colSpan={showActions ? 6 : 5}
-                className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
-              >
-                {totalLabel}
-              </td>
-              <td className="px-3 py-2 text-sm font-bold text-foreground">
-                {fmtCOP(total)}
-              </td>
-              {showActions && <td />}
-            </tr>
+            {mostrarIva && (
+              <tr>
+                <td
+                  colSpan={colSpanPie}
+                  className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                >
+                  IVA
+                </td>
+                <td className="px-3 py-2 text-sm font-bold text-foreground">
+                  {fmtCOP(ivaGeneral)}
+                </td>
+                {showActions && <td />}
+              </tr>
+            )}
+            {mostrarTotal && (
+              <tr>
+                <td
+                  colSpan={colSpanPie}
+                  className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                >
+                  {totalLabel}
+                </td>
+                <td className="px-3 py-2 text-sm font-bold text-foreground">
+                  {fmtCOP(total)}
+                </td>
+                {showActions && <td />}
+              </tr>
+            )}
           </tfoot>
         )}
         </table>

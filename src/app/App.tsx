@@ -57,6 +57,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
+import { useIsMobile } from "./components/ui/use-mobile";
 
 import imgCocaCola from "@/imports/Coca-Cola.png";
 import fondoDefinitivo from "@/imports/fondoDefinitivo.png";
@@ -98,14 +99,15 @@ import { VolverArriba } from "./components/VolverArriba";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, KEY, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
+import { GestionConfigScreen, INITIAL_ROLES, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Empleado } from "./screens/GestionEmpleadosScreen";
 import type { Insumo } from "./screens/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, type Producto } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
+import { ESTADO_COLORES } from "./components/EstadoProducto";
 import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -122,7 +124,14 @@ import {
   OrdenDetallePage,
   PROVEEDORES_INIT,
 } from "./screens/OrdenCompraScreen";
-import { OrdenProduccionScreen } from "./screens/OrdenProduccionScreen";
+import {
+  OrdenProduccionScreen,
+  INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
+  crearOrdenPedido,
+  siguienteOrdenId,
+  normalizarNombre,
+  type OrdenProduccion,
+} from "./screens/OrdenProduccionScreen";
 import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
 import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
 import {
@@ -537,6 +546,24 @@ const DESCRIPCIONES: Record<string, string> = {
   "Lasaña Pollo": "Lasaña de pollo con capas de pasta, salsa y queso gratinado.",
   "Lasaña Mixta": "Lasaña mixta con capas de pasta, salsa y queso gratinado.",
 };
+
+// Convierte un `Producto` del panel al `Product` que consumen el catálogo, el
+// detalle y el carrito. Es la misma conversión que se hace al pasarle
+// `productos` a CatalogScreen, para que una favorita de la landing abra el
+// detalle con la foto, la descripción y los tamaños reales.
+const productoACatalogo = (p: Producto): Product => ({
+  id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
+  name: p.nombre,
+  description: DESCRIPCIONES[p.nombre] ?? "",
+  price: p.precioUnitario,
+  image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+  category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
+  sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+  extras: [],
+  status: p.estado === "Disponible" ? "disponible" : "no disponible",
+  rating: 4.5,
+  sales: 0,
+});
 
 const ORDERS: Order[] = [
   {
@@ -988,12 +1015,15 @@ const canViewPermission = (accesos: AccesosMap, permKey: string, isNamedAdmin: b
 function Badge({
   children,
   className = "",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <span
+      style={style}
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${className}`}
     >
       {children}
@@ -1311,9 +1341,15 @@ function PublicNav({
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
             {count > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm">
+              <motion.span
+                key={count}
+                initial={{ scale: 0.5 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
+              >
                 {count}
-              </span>
+              </motion.span>
             )}
           </button>
 
@@ -1472,50 +1508,53 @@ function BottomNav({
   cart,
   current,
   onMore,
+  isLoggedIn,
 }: {
   navigate: (s: Screen) => void;
   cart: CartItem[];
   current: Screen;
   onMore: () => void;
+  isLoggedIn: boolean;
 }) {
   const count = cart.reduce((s, i) => s + i.quantity, 0);
   const items = [
     { s: "landing" as Screen, Icon: Home, label: "Inicio" },
-    {
-      s: "mis-pedidos" as Screen,
-      Icon: ShoppingBag,
-      label: "Pedidos",
-    },
+    ...(isLoggedIn
+      ? [{ s: "mis-pedidos" as Screen, Icon: ShoppingBag, label: "Mis pedidos" }]
+      : []),
     { s: "catalog" as Screen, Icon: Grid, label: "Menú" },
     {
-      s: "supplies" as Screen,
-      Icon: Package,
-      label: "Inventario",
+      s: "cart" as Screen,
+      Icon: ShoppingCart,
+      label: "Carrito",
+      badge: count,
     },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border md:hidden">
       <div className="flex items-center justify-around h-16">
-        {items.map(({ s, Icon, label }) => (
+        {items.map(({ s, Icon, label, badge }) => (
           <button
             key={s}
             onClick={() => navigate(s)}
             className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === s ? "text-primary" : "text-muted-foreground"}`}
           >
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {badge != null && badge > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {badge}
+                </span>
+              )}
+            </div>
             <span className="text-xs font-medium">{label}</span>
           </button>
         ))}
         <button
           onClick={onMore}
-          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground relative"
+          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
         >
-          <div className="relative">
-            <MoreHorizontal className="w-5 h-5" />
-            {count > 0 && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full" />
-            )}
-          </div>
+          <MoreHorizontal className="w-5 h-5" />
           <span className="text-xs font-medium">Más</span>
         </button>
       </div>
@@ -1665,6 +1704,8 @@ function LandingScreen({
   setProduct,
   onCategoryNavigate,
   categorias,
+  productos,
+  onOpenDetail,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -1673,6 +1714,11 @@ function LandingScreen({
       acá: su ícono y su nombre están en las tarjetas de arriba. Solo se suman
       las que trae su propio ícono, es decir las nuevas. */
   categorias: CategoriaProducto[];
+  /** Productos del panel de administración: es el mismo estado `Producto[]`
+      de Gestión de Productos, así que el nombre real vive en `nombre`. */
+  productos: Producto[];
+  /** Abre el detalle guardando la pantalla de origen. */
+  onOpenDetail: (p: Product) => void;
 }) {
   const featured = PRODUCTS.filter(
     (p) => p.status === "disponible",
@@ -1862,9 +1908,12 @@ function LandingScreen({
             </p>
           </div>
 
-          {/* Cards — horizontal scroll on mobile, grid on md+ */}
+          {/* Cards — una sola fila con scroll horizontal en todos los
+              tamaños. La barra se oculta (scrollbarWidth / webkit) pero el
+              scroll sigue funcionando con mouse, trackpad y táctil; el
+              scroll-snap alinea las tarjetas al desplazarse. */}
           <div
-            className="flex gap-4 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible pb-2 md:pb-0 max-w-2xl mx-auto w-full"
+            className="flex flex-nowrap gap-4 overflow-x-auto pb-2 max-w-2xl mx-auto w-full snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
             style={{
               scrollbarWidth: "none",
               WebkitOverflowScrolling: "touch",
@@ -1878,7 +1927,7 @@ function LandingScreen({
               <button
                 key={label}
                 onClick={() => onCategoryNavigate(label)}
-                className="group flex-shrink-0 w-40 md:w-auto bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
               >
                 <span className="text-4xl leading-none">
                   {emoji}
@@ -1898,7 +1947,7 @@ function LandingScreen({
                 <button
                   key={c.id}
                   onClick={() => onCategoryNavigate("Todas")}
-                  className="group flex-shrink-0 w-40 md:w-auto bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                  className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
                 >
                   <span className="text-4xl leading-none">
                     {c.icono}
@@ -1939,85 +1988,80 @@ function LandingScreen({
               WebkitOverflowScrolling: "touch",
             }}
           >
-            {[
-              {
-                productoId: 1,
-                name: "Cañón",
-                description: "Pizza de la casa.",
-                rating: 4.8,
-              },
-              {
-                productoId: 2,
-                name: "Carnes",
-                description: "Pizza con carnes.",
-                rating: 4.9,
-              },
-              {
-                productoId: 4,
-                name: "Jamón y Queso",
-                description: "Pizza con jamón y queso.",
-                rating: 4.7,
-              },
-              {
-                productoId: 3,
-                name: "Hawaii",
-                description: "Pizza con jamón y piña.",
-                rating: 5.0,
-              },
-            ].map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08, duration: 0.45 }}
-                onClick={() => {
-                  const producto = PRODUCTS.find(
-                    (item) => item.id === p.productoId,
+            {(() => {
+              const normalizar = (valor: string | undefined) =>
+                (valor ?? "")
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .toLowerCase()
+                  .trim()
+                  .replace(/^pizza\s+/, "");
+              const favoritas = ["Cañón", "Hawaii", "Jamón y Queso", "Maicitos"];
+              const lista = productos ?? [];
+              return favoritas.map((nombre, i) => {
+                const objetivo = normalizar(nombre);
+                // Prefijo en ambos sentidos: el catálogo trae "Pizza Hawai" y
+                // "Pizza Jamon", mientras la tarjeta habla de "Hawaii" y
+                // "Jamón y Queso". Un nombre vacío nunca empareja.
+                const producto = lista.find((p) => {
+                  const actual = normalizar(p.nombre);
+                  return (
+                    actual !== "" &&
+                    objetivo !== "" &&
+                    (actual.startsWith(objetivo) || objetivo.startsWith(actual))
                   );
-                  if (!producto) return;
-                  setProduct(producto);
-                  navigate("product-detail");
-                }}
-                className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
-              >
-                {/* Image */}
-                <div className="relative h-52 bg-muted overflow-hidden">
-                  <img
-                    src={imagenDeProducto(p.productoId)}
-                    alt={p.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {/* Badge */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
-                    <Star className="w-3 h-3 fill-white text-white" />
-                    Favorita
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="p-5 flex flex-col flex-1">
-                  <h3
-                    className="text-foreground font-bold text-base mb-1.5 leading-snug"
-                    style={{ fontFamily: SERIF }}
+                });
+                if (!producto) return null;
+                const favorita = productoACatalogo(producto);
+                return (
+                  <motion.div
+                    key={producto.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08, duration: 0.45 }}
+                    onClick={() => onOpenDetail(favorita)}
+                    className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
                   >
-                    {p.name}
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
-                    {p.description}
-                  </p>
+                    {/* Image */}
+                    <div className="relative h-52 bg-muted overflow-hidden">
+                      <img
+                        src={favorita.image}
+                        alt={favorita.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      {/* Badge */}
+                      <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
+                        <Star className="w-3 h-3 fill-white text-white" />
+                        Favorita
+                      </div>
+                    </div>
 
-                  {/* Price + Rating */}
-                  <div className="flex items-center justify-between mt-auto">
-                    <span
-                      className="text-[#DC2626] text-lg font-semibold"
-                      style={{ fontFamily: MONO }}
-                    >
-                      $ {precioDeProducto(p.productoId).toLocaleString("es-CO")}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                    {/* Body */}
+                    <div className="p-5 flex flex-col flex-1">
+                      <h3
+                        className="text-foreground font-bold text-base mb-1.5 leading-snug"
+                        style={{ fontFamily: SERIF }}
+                      >
+                        {favorita.name}
+                      </h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
+                        {favorita.description}
+                      </p>
+
+                      {/* Price + Rating */}
+                      <div className="flex items-center justify-between mt-auto">
+                        <span
+                          className="text-[#DC2626] text-lg font-semibold"
+                          style={{ fontFamily: MONO }}
+                        >
+                          $ {favorita.price.toLocaleString("es-CO")}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              });
+            })()}
           </div>
         </div>
       </section>
@@ -2289,9 +2333,14 @@ function ProductCard({
   index: number;
   onOpen: (p: Product) => void;
   onQuickAdd: (p: Product) => void;
+  /** Siguen llegando desde CatalogScreen; ya no se usan acá porque la tarjeta
+      dejó de tener el stepper [− cantidad +]. */
+  cart: CartItem[];
+  updateQty: (id: string, qty: number) => void;
 }) {
   return (
     <motion.div
+      data-producto-id={p.id}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
@@ -2307,7 +2356,14 @@ function ProductCard({
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         <div className="absolute top-3 right-3">
-          <Badge className={PROD_STATUS_COLOR[p.status]}>
+          {/* Mismos colores de estado que el panel (ESTADO_COLORES). */}
+          <Badge
+            className="border-0"
+            style={{
+              backgroundColor: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"] + "1A",
+              color: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"],
+            }}
+          >
             {p.status === "disponible"
               ? "Disponible"
               : "No disponible"}
@@ -2340,10 +2396,16 @@ function ProductCard({
             >
               Ver más
             </button>
+            {/* Solo ícono: el botón nunca se transforma. Cada clic suma 1
+                unidad (quickAdd deduplica dentro de setCart) y dispara el
+                toast, sin abrir el carrito. El tamaño se elige en el detalle
+                ("Ver más" o la imagen). */}
             <button
               onClick={() => onQuickAdd(p)}
               disabled={p.status !== "disponible"}
-              className="px-3 py-2 text-sm font-semibold bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Agregar al carrito"
+              aria-label={`Agregar ${p.name} al carrito`}
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <ShoppingCart className="w-4 h-4" />
             </button>
@@ -2361,7 +2423,12 @@ function CatalogScreen({
   initialCat = "Todas",
   page,
   setPage,
+  search,
+  setSearch,
   productos,
+  onOpenDetail,
+  cart,
+  updateQty,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -2370,14 +2437,22 @@ function CatalogScreen({
   /** Página del catálogo, controlada por App para que sobreviva al detalle. */
   page: number;
   setPage: (p: number | ((prev: number) => number)) => void;
+  /** Búsqueda del catálogo, controlada por App para que sobreviva al detalle. */
+  search: string;
+  setSearch: (s: string) => void;
   /** Productos del panel de administrador. */
   productos: Product[];
+  /** Abre el detalle guardando la pantalla de origen. */
+  onOpenDetail: (p: Product) => void;
+  cart: CartItem[];
+  updateQty: (id: string, delta: number) => void;
 }) {
-  const [search, setSearch] = useState("");
   const [cat, setCat] = useState(initialCat);
   const cats = ["Todas", "Pizzas", "Bebidas", "Lasaña"];
+  const isMobile = useIsMobile();
   // 9 = 3 columnas del grid, así cada página cierra en filas completas.
-  const PER_PAGE = 9;
+  // En móvil: 6 por página (2 columnas de 3).
+  const PER_PAGE = isMobile ? 6 : 9;
 
   const filtered = useMemo(
     () =>
@@ -2407,52 +2482,28 @@ function CatalogScreen({
     [filtered, page],
   );
 
-  // Al cambiar la búsqueda o la categoría, la página actual puede quedar más
-  // allá del último resultado y el grid salía vacío; se reajusta sola.
-  useEffect(() => {
-    setPage(1);
-  }, [search, cat]);
-
+  // La página vuelve a 1 solo en los handlers de categoría y búsqueda, no en un
+  // efecto de montaje: al montar, `page` puede ser 2 (guardada de una visita
+  // anterior) y este efecto la borraba antes de que el usuario viera nada.
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
-  // Con el filtro "Todas" el grid se parte en las secciones tituladas de
-  // SECCIONES_MENU; al elegir una sola categoría se deja el grid único de antes,
-  // sin encabezados. Se agrupa sobre `paged`, no sobre PRODUCTS, para que la
-  // búsqueda también se reparta por secciones, y las categorías sin resultados
-  // se omiten en vez de dejar un título colgado sobre un grid vacío.
-  const secciones = useMemo(() => {
-    if (cat !== "Todas") return [];
-    const porCategoria = new Map<string, Product[]>();
-    for (const p of paged) {
-      const lista = porCategoria.get(p.category);
-      if (lista) lista.push(p);
-      else porCategoria.set(p.category, [p]);
-    }
-    const declaradas = SECCIONES_MENU.map(
-      ({ categoria, titulo }) => ({
-        titulo,
-        productos: porCategoria.get(categoria) ?? [],
-      }),
-    ).filter((s) => s.productos.length > 0);
-    const conocidas = new Set(
-      SECCIONES_MENU.map((s) => s.categoria),
-    );
-    const nuevas = [...porCategoria.entries()]
-      .filter(([categoria]) => !conocidas.has(categoria))
-      .map(([titulo, productos]) => ({ titulo, productos }));
-    return [...declaradas, ...nuevas];
-  }, [paged, cat]);
-
   const abrirDetalle = (p: Product) => {
-    setProduct(p);
-    navigate("product-detail");
+    onOpenDetail(p);
   };
 
   const agregarAlCarrito = (p: Product) => {
     quickAdd(p);
-    toast.success(`¡${p.name} agregada!`);
+    // Una pizza se agrega con su tamaño por defecto (Mediano) y eso se dice en
+    // el toast; las lasañas y bebidas conservan su mensaje original.
+    const tamano = p.sizes.length > 1 ? ` ${sizeDe(p, 0).label}` : "";
+    toast.success(`${p.name}${tamano} agregada al carrito`, {
+      action: {
+        label: "Ver carrito",
+        onClick: () => navigate("cart"),
+      },
+    });
   };
 
   const irAPagina = (n: number) => {
@@ -2487,7 +2538,10 @@ function CatalogScreen({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Buscar pizza..."
             className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
           />
@@ -2496,7 +2550,10 @@ function CatalogScreen({
           {cats.map((c) => (
             <button
               key={c}
-              onClick={() => setCat(c)}
+              onClick={() => {
+                setCat(c);
+                setPage(1);
+              }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}
             >
               {c}
@@ -2525,21 +2582,27 @@ function CatalogScreen({
               index={i}
               onOpen={abrirDetalle}
               onQuickAdd={agregarAlCarrito}
+              cart={cart}
+              updateQty={updateQty}
             />
           ))}
         </div>
       )}
 
-      {filtered.length > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-center mt-8">
-          <div className="flex items-center gap-1">
+      <div className="mt-8 pb-20 md:pb-4">
+        <p className="text-sm text-muted-foreground text-center mb-3">
+          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} productos
+        </p>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => irAPagina(Math.max(1, page - 1))}
               disabled={page === 1}
               aria-label="Página anterior"
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
               <ChevronLeft className="w-4 h-4" />
+              Anterior
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(
               (n) => (
@@ -2547,7 +2610,11 @@ function CatalogScreen({
                   key={n}
                   onClick={() => irAPagina(n)}
                   aria-current={n === page ? "page" : undefined}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
+                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${
+                    n === page
+                      ? "bg-primary text-white"
+                      : "border border-border text-muted-foreground hover:bg-muted"
+                  }`}
                 >
                   {n}
                 </button>
@@ -2557,13 +2624,14 @@ function CatalogScreen({
               onClick={() => irAPagina(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               aria-label="Página siguiente"
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
+              Siguiente
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <VolverArriba />
     </div>
@@ -2576,10 +2644,14 @@ function ProductDetailScreen({
   product,
   navigate,
   addDetailed,
+  onBack,
+  backLabel,
 }: {
   product: Product;
   navigate: (s: Screen, options?: { restaurar?: boolean }) => void;
   addDetailed: (item: CartItem) => void;
+  onBack: () => void;
+  backLabel: string;
 }) {
   const [sizeIdx, setSizeIdx] = useState(0);
   const [extras, setExtras] = useState<string[]>([]);
@@ -2612,8 +2684,12 @@ function ProductDetailScreen({
       selectedExtras: extras,
       extrasPrice,
     });
-    toast.success(`¡${product.name} agregada al carrito!`, {
-      description: size.label ? `${size.label} × ${qty}` : `× ${qty}`,
+    setQty(1);
+    toast.success(`${product.name} ${size.label} × ${qty} agregada al carrito`, {
+      action: {
+        label: "Ver carrito",
+        onClick: () => navigate("cart"),
+      },
     });
   };
 
@@ -2621,16 +2697,10 @@ function ProductDetailScreen({
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate("catalog", { restaurar: true })}
+          onClick={onBack}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Volver al menú
-        </button>
-        <button
-          onClick={() => navigate("landing")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-        >
-          <Home className="w-4 h-4" /> Volver al inicio
+          <ArrowLeft className="w-4 h-4" /> {backLabel}
         </button>
       </div>
 
@@ -3117,23 +3187,19 @@ function CartScreen({
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="text-sm text-muted-foreground"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(item.sizePrice + item.extrasPrice)}{" "}
-                        <span className="text-[11px] font-sans">unitario</span>
-                      </span>
-                      <span
-                        className="font-bold text-foreground"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(cartTotal(item))}{" "}
-                        <span className="text-[11px] font-sans font-normal text-muted-foreground">
-                          subtotal
-                        </span>
-                      </span>
+                    <div className="flex items-center justify-end gap-6">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Precio unitario</p>
+                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                          {fmt(item.sizePrice + item.extrasPrice)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Subtotal</p>
+                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                          {fmt(cartTotal(item))}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3251,21 +3317,14 @@ function CartScreen({
                           )}
                         </div>
                         <div className="flex flex-col items-end shrink-0 text-right">
-                          <span
-                            className="text-xs text-muted-foreground"
-                            style={{ fontFamily: MONO }}
-                          >
-                            {fmt(item.sizePrice + item.extrasPrice)}{" "}
-                            <span className="font-sans text-[10px]">unitario</span>
+                          <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
+                            {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
                           </span>
                           <span
                             className="text-sm font-bold text-foreground"
                             style={{ fontFamily: MONO }}
                           >
-                            {fmt(cartTotal(item))}{" "}
-                            <span className="font-sans text-[10px] font-normal text-muted-foreground">
-                              subtotal
-                            </span>
+                            {fmt(cartTotal(item))}
                           </span>
                         </div>
                       </div>
@@ -7521,17 +7580,47 @@ const esRolValido = (r: unknown): r is Rol => {
   );
 };
 
+// Migración de roles ya guardados: al añadir el privilegio "Descargar Excel",
+// el Administrador que ya estuviera en localStorage se quedó con los 4 CRUD y
+// sin la acción nueva, y perdería el botón que sí ve uno recién creado (que sale
+// de `fullAccesos()`, ya con la acción). Se le devuelve.
+//
+// Va anclada al rol SEMILLA `ROL-001`, igual que `isNamedAdmin`, y NO se aplica
+// a los demás roles a propósito. Los que alguien configuró a mano se guardaron
+// sin esta acción porque aún no existía, así que su configuración se respeta
+// tal cual: si el privilegio se añadiera a cualquier rol, recargar la página
+// repondría en secreto una acción que ese usuario había quitado, y el permiso
+// "Descargar Excel" no serviría para nada.
+const RESTAURAR_EXCEL_AL_ADMIN = "ROL-001";
+
+const restaurarDescargaExcel = (rol: Rol): Rol => {
+  if (rol.id !== RESTAURAR_EXCEL_AL_ADMIN) return rol;
+  const accesos: AccesosMap = {};
+  let cambio = false;
+  (Object.keys(rol.accesos) as string[]).forEach(k => {
+    const actuales = rol.accesos[k] ?? [];
+    if (SUBS_CON_EXCEL.includes(k) && !actuales.includes(ACCION_EXCEL)) {
+      accesos[k] = [...actuales, ACCION_EXCEL];
+      cambio = true;
+    } else {
+      accesos[k] = actuales;
+    }
+  });
+  return cambio ? { ...rol, accesos } : rol;
+};
+
 const leerRolesPersistidos = (): Rol[] => {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
     if (!raw) return INITIAL_ROLES;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
-      return (parsed as Rol[]).map(rol =>
-        rol.id === "ROL-003" && rol.nombre === "Usuario"
+      return (parsed as Rol[]).map(rol => {
+        const renombrado = rol.id === "ROL-003" && rol.nombre === "Usuario"
           ? { ...rol, nombre: "Empleado", descripcion: "Acceso operativo al sistema." }
-          : rol,
-      );
+          : rol;
+        return restaurarDescargaExcel(renombrado);
+      });
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -7690,6 +7779,77 @@ const leerCategoriasPersistidas = (): CategoriaProducto[] => {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
   }
   return INITIAL_CATEGORIAS;
+};
+
+// ── Persistencia de producción (cocina) ─────────────────────────────────
+// Las órdenes de producción, los insumos, las ventas y las fichas técnicas
+// vivían solo en el `useState` del módulo: al salir y volver se perdía todo, y
+// en el caso de las órdenes tampoco había forma de que el pedido se creara
+// solo. Ahora cada lista se guarda entera en localStorage.
+//
+// Igual que categorías: es por navegador, no compartida entre equipos, y basta
+// con quitar la clave para volver a la semilla.
+//   sivpro.ordenesProduccion.v1 → órdenes de producción
+//   sivpro.insumos.v1          → catálogo de insumos (con Producto Insumo)
+//   sivpro.ventas.v1           → ventas, con su detalle y estado
+//   sivpro.fichasProductos.v1  → fichas técnicas por producto
+const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
+const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
+const VENTAS_STORAGE_KEY = "sivpro.ventas.v1";
+const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
+
+/** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
+    forma, se usa la semilla en vez de romper el arranque. */
+const leerListaPersistida = <T,>(clave: string, semilla: T[], esValida: (x: unknown) => boolean): T[] => {
+  try {
+    const raw = localStorage.getItem(clave);
+    if (!raw) return semilla;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every(esValida)) return parsed as T[];
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return semilla;
+};
+
+const esObjeto = (x: unknown): x is Record<string, unknown> =>
+  !!x && typeof x === "object" && !Array.isArray(x);
+
+/** Las órdenes guardadas pueden ser de una versión anterior del rediseño: solo
+    se acepta lo que tiene la forma nueva, así que una lista vieja se descarta
+    entera y vuelve la semilla en vez de mezclar modelos. */
+const esOrdenProduccionValida = (x: unknown) =>
+  esObjeto(x) &&
+  typeof x.id === "string" &&
+  typeof x.tipo === "string" &&
+  typeof x.estadoOrden === "string" &&
+  Array.isArray(x.lineas) &&
+  Array.isArray(x.insumosRequeridos);
+
+const esInsumoValido = (x: unknown) =>
+  esObjeto(x) && typeof x.id === "string" && typeof x.nombre === "string";
+
+const esVentaValida = (x: unknown) => esObjeto(x) && typeof x.id === "string";
+
+const esFichasValidas = (x: unknown) =>
+  esObjeto(x) && Object.values(x).every((v) => Array.isArray(v));
+
+const leerOrdenesPersistidas = () =>
+  leerListaPersistida<OrdenProduccion>(ORDENES_PRODUCCION_STORAGE_KEY, INITIAL_ORDENES_PRODUCCION, esOrdenProduccionValida);
+const leerInsumosPersistidos = () =>
+  leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
+const leerVentasPersistidas = () =>
+  leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
+const leerFichasPersistidas = () => {
+  try {
+    const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
+    if (!raw) return INITIAL_FICHAS;
+    const parsed: unknown = JSON.parse(raw);
+    if (esFichasValidas(parsed)) return parsed as FichasPorProducto;
+  } catch {
+    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_FICHAS;
 };
 
 // ── Persistencia del carrito ───────────────────────────────────────────
@@ -7899,7 +8059,7 @@ export default function App() {
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [ventas, setVentas] = useState<Venta[]>(INITIAL_VENTAS);
+  const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
@@ -7909,6 +8069,15 @@ export default function App() {
   // `Producto` quedaron importados y sin usar, y App reventaba con
   // "ReferenceError: productos is not defined" al renderizar el dashboard.
   const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
+  // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
+  // Orden de Producción para saber qué insumos (y Productos Insumo) consume
+  // cada plato de un pedido.
+  const [fichasPorProducto, setFichasPorProducto] =
+    useState<FichasPorProducto>(leerFichasPersistidas);
+  // Órdenes de producción. Antes vivían dentro de OrdenProduccionScreen, así que
+  // se perdían al salir del módulo y no había forma de crear el pedido solo.
+  const [ordenesProduccion, setOrdenesProduccion] =
+    useState<OrdenProduccion[]>(leerOrdenesPersistidas);
   // Categorías de producto. Las consume el módulo de Categoría Producto (que
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
@@ -8115,12 +8284,15 @@ export default function App() {
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
     const key = SCREEN_PERM_KEY[s];
-    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true };
+    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
       canEdit:   acts.includes("Editar"),
       canDelete: acts.includes("Eliminar"),
+      // Aparte del CRUD: sin este permiso no se monta el botón "Descargar
+      // Excel", así que el `.xlsx` no se puede generar desde la interfaz.
+      canExportExcel: acts.includes(ACCION_EXCEL),
     };
   };
 
@@ -8135,6 +8307,8 @@ export default function App() {
   // se desmonta) y al volver se restauraría el scroll guardado de la página 2
   // sobre el grid de la página 1, que es otra tanda de productos.
   const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
   const [ordenes, setOrdenes] =
@@ -8179,6 +8353,75 @@ export default function App() {
       // en memoria durante la sesión.
     }
   }, [categorias]);
+
+  // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
+  // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
+  // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
+  // a rehacerlas a mano.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORDENES_PRODUCCION_STORAGE_KEY, JSON.stringify(ordenesProduccion));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
+      // en memoria durante la sesión.
+    }
+  }, [ordenesProduccion]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(insumos));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [insumos]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VENTAS_STORAGE_KEY, JSON.stringify(ventas));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [ventas]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [fichasPorProducto]);
+
+  // Creación automática de la orden de producción (§3a): cuando una venta PASA a
+  // estado "venta" —o sea, el pago quedó verificado— se le crea sola una orden
+  // tipo "Pedido" en Pendiente. Mientras la venta está "por-verificar" no se
+  // crea nada, que es justo cuando NO se prepara.
+  //
+  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas
+  // "verificadas" de la semilla y de lo que se cargó de localStorage, y no es un
+  // cambio de estado sino el arranque. A partir de ahí, cada venta que aparece
+  // en "venta" sin orden genera la suya. Los ids se calculan FUERA del updater
+  // de setState, así que crearlas dos veces en modo estricto no duplica nada.
+  const vigilaVentasRef = useRef(false);
+  useEffect(() => {
+    if (!vigilaVentasRef.current) {
+      vigilaVentasRef.current = true;
+      return;
+    }
+    const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
+    const nuevas = ventas.filter((v) => v.estado === "venta" && !conOrden.has(v.id));
+    if (nuevas.length === 0) return;
+
+    const creada: OrdenProduccion[] = [];
+    let id = siguienteOrdenId(ordenesProduccion);
+    for (const v of nuevas) {
+      creada.push(crearOrdenPedido(v, { productos, fichas: fichasPorProducto, insumos }, id));
+      id = `OP-${String(parseInt(id.replace("OP-", ""), 10) + 1).padStart(3, "0")}`;
+    }
+    setOrdenesProduccion((p) => [...creada, ...p]);
+    creada.forEach((o) =>
+      toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
+    );
+  }, [ventas, ordenesProduccion, productos, fichasPorProducto, insumos]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8285,23 +8528,22 @@ export default function App() {
   };
 
   const quickAdd = (product: Product) => {
-    const existing = cart.find(
-      (i) =>
-        i.product.id === product.id &&
-        i.selectedExtras.length === 0,
-    );
-    if (existing) {
-      setCart((p) =>
-        p.map((i) =>
+    const size = sizeDe(product, 0);
+    setCart((prev) => {
+      const existing = prev.find(
+        (i) =>
+          i.product.id === product.id &&
+          i.selectedExtras.length === 0,
+      );
+      if (existing) {
+        return prev.map((i) =>
           i.id === existing.id
             ? { ...i, quantity: i.quantity + 1 }
             : i,
-        ),
-      );
-    } else {
-      const size = sizeDe(product, 0);
-      setCart((p) => [
-        ...p,
+        );
+      }
+      return [
+        ...prev,
         {
           id: `${product.id}-${Date.now()}`,
           product,
@@ -8311,8 +8553,8 @@ export default function App() {
           selectedExtras: [],
           extrasPrice: 0,
         },
-      ]);
-    }
+      ];
+    });
   };
 
   const addDetailed = (item: CartItem) =>
@@ -8360,6 +8602,12 @@ export default function App() {
         cantidad: i.quantity,
         imagen: i.product.image,
         extras: i.selectedExtras,
+        tamaño: i.size,
+        // El id del producto del catálogo de Productos. Se guarda para que la
+        // Orden de Producción no tenga que deducir el producto del nombre
+        // ("Pizza Peperoni — Mediano"); si el nombre no está en el catálogo
+        // queda sin id y se resuelve por nombre.
+        productoId: productos.find((p) => normalizarNombre(p.nombre) === normalizarNombre(i.product.name))?.id,
       })),
     };
     setVentas((prev) => [newVenta, ...prev]);
@@ -8578,18 +8826,37 @@ export default function App() {
                     navigate("catalog");
                   }}
                   categorias={categorias}
+                  productos={productos}
+                  onOpenDetail={(p) => {
+                    setDetalleOrigen("landing");
+                    setSelectedProduct(p);
+                    navigate("product-detail");
+                  }}
                 />
               )}
               {screen === "catalog" && (
                 <CatalogScreen
-                  key={catalogCat}
                   navigate={navigate}
                   setProduct={setSelectedProduct}
                   quickAdd={quickAdd}
                   initialCat={catalogCat}
                   page={catalogPage}
                   setPage={setCatalogPage}
-                  productos={productos.map((p) => ({
+                  search={catalogSearch}
+                  setSearch={setCatalogSearch}
+                  onOpenDetail={(p) => {
+                    setDetalleOrigen("catalog");
+                    setSelectedProduct(p);
+                    navigate("product-detail");
+                  }}
+                  cart={cart}
+                  updateQty={updateQty}
+                  productos={productos
+                    // Un producto "Descontinuado" no aparece en el catálogo
+                    // público; "No disponible" sí aparece pero no se puede
+                    // agregar (el botón queda deshabilitado en ProductCard).
+                    .filter((p) => p.estado !== "Descontinuado")
+                    .map((p) => ({
                     id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
                     name: p.nombre,
                     description: DESCRIPCIONES[p.nombre] ?? "",
@@ -8609,6 +8876,18 @@ export default function App() {
                   product={selectedProduct}
                   navigate={navigate}
                   addDetailed={addDetailed}
+                  onBack={() => {
+                    navigate(detalleOrigen, { restaurar: true });
+                    // Al volver al catálogo, hace scroll a la tarjeta del producto
+                    // que se abrió (data-producto-id en ProductCard).
+                    if (detalleOrigen === "catalog") {
+                      requestAnimationFrame(() => {
+                        const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
+                        el?.scrollIntoView({ block: "center" });
+                      });
+                    }
+                  }}
+                  backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
                 />
               )}
               {screen === "cart" && (
@@ -8740,6 +9019,7 @@ export default function App() {
                       proveedores={proveedores}
                       setProveedores={setProveedores}
                       insumos={insumos}
+                      setInsumos={setInsumos}
                       onBack={() => setShowNuevaOrden(false)}
                     />
                   )}
@@ -8753,15 +9033,21 @@ export default function App() {
                   setGestiones={setGestiones}
                   onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
-                      prev.map((o) =>
-                        o.id === ordenRecepcion.id
-                          ? {
-                              ...o,
-                              estado,
-                              recepcion,
-                            }
-                          : o
-                      )
+                      prev.map((o) => {
+                        if (o.id !== ordenRecepcion.id) return o;
+                        const base = { ...o, estado, recepcion };
+                        // Deja fecha y hora del cambio: es la que muestra el
+                        // detalle de la orden al lado del badge de estado.
+                        return estado === o.estado
+                          ? base
+                          : {
+                              ...base,
+                              historialEstados: [
+                                ...(o.historialEstados ?? []),
+                                { estado, fechaHora: new Date().toISOString() },
+                              ],
+                            };
+                      })
                     );
 
                     setOrdenRecepcion(null);
@@ -8780,16 +9066,8 @@ export default function App() {
                     setOrdenDetalle(null);
                     setScreen("orden-compra");
                   }}
-                  onEditar={(orden) => {
-                    setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                    // TODO: Implementar edición
-                  }}
-                  onAbrirRecepcion={(orden) => {
-                    setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                    // TODO: Implementar apertura de recepción
-                  }}
+                  onEditar={() => {}}
+                  onAbrirRecepcion={() => {}}
                 />
               )}
               {screen === "gestion-compra" && (
@@ -8841,6 +9119,8 @@ export default function App() {
                   productos={productos}
                   setProductos={setProductos}
                   insumos={insumos}
+                  fichas={fichasPorProducto}
+                  setFichas={setFichasPorProducto}
                 />
               )}
               {screen === "cat-producto" && (
@@ -8899,7 +9179,12 @@ export default function App() {
                 <OrdenProduccionScreen
                   {...getPerms("production-orders")}
                   productos={productos}
-                  setProductos={setProductos}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  ventas={ventas}
+                  fichasPorProducto={fichasPorProducto}
+                  ordenes={ordenesProduccion}
+                  setOrdenes={setOrdenesProduccion}
                 />
               )}
               {screen === "finished-products" && (
@@ -9039,6 +9324,7 @@ export default function App() {
             cart={cart}
             current={screen}
             onMore={() => setDrawerOpen(true)}
+            isLoggedIn={isLoggedIn}
           />
         )}
       </div>

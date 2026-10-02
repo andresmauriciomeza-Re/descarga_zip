@@ -4,6 +4,10 @@ import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertC
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
+import { useProveedorForm } from "../components/useProveedorForm";
+import { ProveedorFormCampos } from "../components/ProveedorForm";
+import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 
 const SERIF = "var(--font-titulo)";
 
@@ -173,32 +177,49 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   const inputCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const disabledCls = "w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
+  const proveedorForm = useProveedorForm(
+    form,
+    suppliers.map(s => ({ nit: s.nit, nombre: s.nombre })),
+  );
+
   const handleCreate = () => {
-    if (!form.nit || !form.nombre || !form.telefono || !form.email) {
-      toast.error("NIT, nombre, teléfono y email son obligatorios");
+    proveedorForm.setIntentoGuardar(true);
+    if (!proveedorForm.formValido) {
+      toast.error("Revisa los campos del formulario");
       return;
     }
-    const emailError = validarCorreo(form.email);
-    if (emailError) { toast.error(emailError); return; }
-    // `length + 1` reutilizaba un id existente si se había borrado un proveedor
-    // del medio: quedaban dos filas con la misma clave y editar/borrar una
-    // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
     const nextNum = suppliers.reduce((max, s) => {
       const n = parseInt(s.id.replace("PROV-", ""), 10) || 0;
       return Math.max(max, n);
     }, 0) + 1;
     const newId = `PROV-${String(nextNum).padStart(3, "0")}`;
-    setSuppliers(p => [{ id: newId, ...form }, ...p]);
+    setSuppliers(p => [{ id: newId, ...proveedorForm.values }, ...p]);
     setShowCreate(false);
     setForm(emptySupplier());
+    proveedorForm.reset();
     toast.success("Proveedor creado exitosamente");
   };
 
   const handleEdit = () => {
     if (!editItem) return;
-    const emailError = validarCorreo(editItem.email);
-    if (emailError) { toast.error(emailError); return; }
-    setSuppliers(p => p.map(s => s.id === editItem.id ? editItem : s));
+    editForm.setIntentoGuardar(true);
+    // Solo se validan los campos que este formulario realmente guarda (abajo):
+    // NIT y Nombre están bloqueados, no se actualizan, y sus datos semilla no
+    // cumplen la validación ("900.123.456-1" frente a 10 dígitos) — lo que
+    // dejaba el guardado bloqueado sin ningún error visible.
+    const camposGuardados = ["asesorComercial", "telefono", "email", "direccion", "estado"] as const;
+    if (!camposGuardados.every(c => !editForm.errors[c])) {
+      toast.error("Revisa los campos del formulario");
+      return;
+    }
+    setSuppliers(p => p.map(s => s.id === editItem.id ? {
+      ...s,
+      asesorComercial: editForm.values.asesorComercial,
+      telefono: editForm.values.telefono,
+      email: editForm.values.email,
+      direccion: editForm.values.direccion,
+      estado: editForm.values.estado,
+    } : s));
     setEditItem(null);
     toast.success("Proveedor editado exitosamente");
   };
@@ -223,75 +244,35 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
     setConfirmToggleId(null);
   };
 
-  // Campos para CREAR — layout 2 columnas con secciones
-  const CreateFields = () => (
-    <div className="space-y-6">
-      {/* Sección: Identificación */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Identificación del proveedor
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT *</label>
-            <input value={form.nit} onChange={e => setForm(p => ({ ...p, nit: e.target.value.replace(/[^\d-]/g, "") }))}
-              placeholder="900.123.456-1" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-            <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: soloLetras(e.target.value) }))}
-              placeholder="Distribuidora La Cosecha" className={inputCls} />
-          </div>
-        </div>
-      </div>
-
-      {/* Sección: Contacto */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Contacto
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input value={form.asesorComercial} onChange={e => setForm(p => ({ ...p, asesorComercial: soloLetras(e.target.value) }))}
-              placeholder="Carlos Mejía" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono *</label>
-            <input type="tel" value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: soloDigitos(e.target.value) }))}
-              placeholder="604 321 0001" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Email *</label>
-            <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: filtrarCorreo(e.target.value) }))}
-              placeholder="ventas@proveedor.co" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección</label>
-            <input value={form.direccion} onChange={e => setForm(p => ({ ...p, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") }))}
-              placeholder="Cra 50 #30-10, Medellín" className={inputCls} />
-          </div>
-        </div>
-      </div>
-
-      {/* Sección: Configuración */}
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Configuración
-        </p>
-        <div className="w-1/2 pr-1.5">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-          <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value as SupplierStatus }))}
-            className={inputCls + " cursor-pointer"}>
-            <option value="activo">Activo</option>
-            <option value="inactivo">Inactivo</option>
-          </select>
-        </div>
-      </div>
-    </div>
+  // Campos para EDITAR — mismo layout 2 columnas, NIT y Nombre bloqueados
+  const editForm = useProveedorForm(
+    {
+      nombre: editItem?.nombre ?? "",
+      nit: editItem?.nit ?? "",
+      // Las semillas guardan el teléfono con espacios ("604 321 0001") pero la
+      // validación exige solo dígitos: se normaliza aquí, igual que hace el
+      // filtro del propio campo, o el guardado quedaba bloqueado.
+      telefono: soloDigitos(editItem?.telefono ?? ""),
+      email: editItem?.email ?? "",
+      asesorComercial: editItem?.asesorComercial ?? "",
+      direccion: editItem?.direccion ?? "",
+      estado: editItem?.estado ?? "activo",
+    },
+    suppliers.map(s => ({ nit: s.nit, nombre: s.nombre })),
+    { bloquearNombre: true, bloquearNit: true },
   );
 
-  // Campos para EDITAR — mismo layout 2 columnas, NIT y Nombre bloqueados
+  // `useProveedorForm` guarda los valores en un useState que SOLO se inicializa
+  // al montar, es decir con editItem = null (todo vacío). Sin este re-sellado el
+  // modal Editar abría los campos de contacto en blanco y la validación
+  // bloqueaba el guardado ("El asesor comercial es obligatorio", etc.), así que
+  // no se guardaba ni el estado. Se re-sella cuando cambia el proveedor a editar
+  // (nunca mientras se edita, o se perderían los cambios en curso).
+  useEffect(() => {
+    if (editItem) editForm.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItem?.id]);
+
   const EditFields = () => editItem ? (
     <div className="space-y-6">
       <div>
@@ -318,23 +299,66 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input value={editItem.asesorComercial} onChange={e => setEditItem(x => x && { ...x, asesorComercial: soloLetras(e.target.value) })}
-              placeholder="Carlos Mejía" className={inputCls} />
+            <input
+              value={editForm.values.asesorComercial}
+              onChange={e => {
+                editForm.setCampo("asesorComercial", soloLetras(e.target.value));
+                setEditItem(x => x && { ...x, asesorComercial: soloLetras(e.target.value) });
+              }}
+              onBlur={() => editForm.marcarTocado("asesorComercial")}
+              placeholder="Carlos Mejía"
+              className={`${inputCls} ${editForm.campoCls("asesorComercial")}`}
+            />
+            {editForm.obtenerError("asesorComercial") && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("asesorComercial")}</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono</label>
-            <input type="tel" value={editItem.telefono} onChange={e => setEditItem(x => x && { ...x, telefono: soloDigitos(e.target.value) })}
-              className={inputCls} />
+            <input
+              type="tel"
+              value={editForm.values.telefono}
+              onChange={e => {
+                editForm.setCampo("telefono", soloDigitos(e.target.value));
+                setEditItem(x => x && { ...x, telefono: soloDigitos(e.target.value) });
+              }}
+              onBlur={() => editForm.marcarTocado("telefono")}
+              className={`${inputCls} ${editForm.campoCls("telefono")}`}
+            />
+            {editForm.obtenerError("telefono") && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("telefono")}</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Email</label>
-            <input type="email" value={editItem.email} onChange={e => setEditItem(x => x && { ...x, email: filtrarCorreo(e.target.value) })}
-              className={inputCls} />
+            <input
+              type="email"
+              value={editForm.values.email}
+              onChange={e => {
+                editForm.setCampo("email", filtrarCorreo(e.target.value));
+                setEditItem(x => x && { ...x, email: filtrarCorreo(e.target.value) });
+              }}
+              onBlur={() => editForm.marcarTocado("email")}
+              className={`${inputCls} ${editForm.campoCls("email")}`}
+            />
+            {editForm.obtenerError("email") && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("email")}</p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección</label>
-            <input value={editItem.direccion} onChange={e => setEditItem(x => x && { ...x, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") })}
-              className={inputCls} />
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección *</label>
+            <input
+              value={editForm.values.direccion}
+              onChange={e => {
+                editForm.setCampo("direccion", e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, ""));
+                setEditItem(x => x && { ...x, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") });
+              }}
+              onBlur={() => editForm.marcarTocado("direccion")}
+              className={`${inputCls} ${editForm.campoCls("direccion")}`}
+            />
+            {editForm.obtenerError("direccion") && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("direccion")}</p>
+            )}
           </div>
         </div>
       </div>
@@ -344,11 +368,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         </p>
         <div className="w-1/2 pr-1.5">
           <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-          <select value={editItem.estado} onChange={e => setEditItem(x => x && { ...x, estado: e.target.value as SupplierStatus })}
-            className={inputCls + " cursor-pointer"}>
-            <option value="activo">Activo</option>
-            <option value="inactivo">Inactivo</option>
-          </select>
+          <EstadoSelect
+            value={editForm.values.estado}
+            onChange={(nuevoEstado) => {
+              editForm.setCampo("estado", nuevoEstado);
+              setEditItem(x => x && { ...x, estado: nuevoEstado });
+            }}
+            options={[
+              { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
+              { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+            ]}
+          />
         </div>
       </div>
     </div>
@@ -404,10 +434,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
                   <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.email}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.asesorComercial || "—"}</td>
                   <td className="px-4 py-3.5">
-                    <button onClick={() => setConfirmToggleId(s.id)}
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all active:scale-95 hover:opacity-80 ${SUPPLIER_STATUS_COLOR[s.estado]}`}>
-                      {s.estado === "activo" ? "Activo" : "Inactivo"}
-                    </button>
+                    <EstadoSelect
+                      value={s.estado}
+                      onChange={(nuevoEstado) => {
+                        if (nuevoEstado === s.estado) return;
+                        setConfirmToggleId(s.id);
+                      }}
+                      options={[
+                        { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
+                        { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+                      ]}
+                    />
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
@@ -468,11 +505,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
                   <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5">
-                  {CreateFields()}
+                  {/* Punto 1: mismo formulario de proveedor que el de Orden de
+                      Compra y el de Compra (mismas reglas y validación en vivo). */}
+                  <ProveedorFormCampos form={proveedorForm} />
                 </div>
                 <div className="flex gap-3 px-6 py-4 border-t border-border">
                   <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-                  <button onClick={handleCreate} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">Crear</button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!proveedorForm.formValido}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  >Crear</button>
                 </div>
               </motion.div>
             </div>
@@ -587,12 +630,41 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           if (!sup) return null;
           const nuevoEstado = sup.estado === "activo" ? "Inactivo" : "Activo";
           return (
-            <ConfirmModal
-              title="Cambiar estado"
-              message={`¿Deseas cambiar el estado del proveedor "${sup.nombre}" a "${nuevoEstado}"?`}
-              onConfirm={() => applyToggleEstado(confirmToggleId)}
-              onCancel={() => setConfirmToggleId(null)}
-            />
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.94, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-border"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                    ¿Cambiar el estado a {nuevoEstado}?
+                  </h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                  El proveedor "{sup.nombre}" pasará de {sup.estado === "activo" ? "Activo" : "Inactivo"} a {nuevoEstado}.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConfirmToggleId(null)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => applyToggleEstado(confirmToggleId)}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           );
         })()}
       </AnimatePresence>

@@ -104,7 +104,17 @@ export function CompactInsumoForm({
           </div>
 
           {!readOnly && showSuggestions && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+            <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+              {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera opción, estén o no
+                  resultados de búsqueda, y va separado del resto de la lista. */}
+              <button
+                type="button"
+                onMouseDown={onCrearInsumo ? () => onCrearInsumo() : undefined}
+                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
+              </button>
               {suggestions.map((ins) => (
                 <button
                   key={ins.id}
@@ -118,17 +128,6 @@ export function CompactInsumoForm({
                   </p>
                 </button>
               ))}
-              {/* Punto 2: Mostrar "Crear insumo" cuando el input está vacío o no hay resultados */}
-              {(suggestions.length === 0 || nombre.trim() === "") && (
-                <button
-                  type="button"
-                  onMouseDown={onCrearInsumo ? () => onCrearInsumo() : undefined}
-                  className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
-                </button>
-              )}
             </div>
           )}
         </div>

@@ -136,6 +136,9 @@ interface DetalleProd {
   imagen?: string;
   tamaño?: string;
   extras?: string[];
+  /** Id del producto en el catálogo de Productos. Lo guarda `registrarPedido`
+      (App) para que la Orden de Producción no dependa del nombre. */
+  productoId?: string;
 }
 
 // "mixto" es una devolución donde cada producto se compensó de forma distinta:
@@ -423,6 +426,7 @@ export function VentasScreen({
   onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
+  canExportExcel = true,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
@@ -431,6 +435,7 @@ export function VentasScreen({
   onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
   canEdit?: boolean;
+  canExportExcel?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -1208,7 +1213,7 @@ export function VentasScreen({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <BotonDescargarExcel onClick={exportExcel} />
+          {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
           {_canCreate && (
             <button
               onClick={() => setShowCreate(true)}
@@ -1833,6 +1838,30 @@ export function VentasScreen({
                     </p>
                   </div>
                   <Download className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFacturaParaEnviar(facturaVenta);
+                    setCorreoEnviar("");
+                    setErrorCorreo("");
+                    setEnviarFacturaModal(true);
+                    setFacturaVenta(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-sky-400 hover:bg-sky-500/5 transition-colors cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-500/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Enviar factura a correo
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Descarga y envía la factura al correo electrónico
+                    </p>
+                  </div>
                 </button>
 
                 <button

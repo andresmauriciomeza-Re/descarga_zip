@@ -2,13 +2,15 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  FileDown, Plus, Check, Ban, CheckCircle2, Lock,
+  Plus, Check, Ban, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
   NuevoInsumoModal,
@@ -48,7 +50,6 @@ function fmtCOP(n: number) {
 
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-const sCls = `${iCls} appearance-none`;
 
 // Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
 const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
@@ -82,6 +83,7 @@ function CompraForm({
   mode = "create",
   compra,
   fullPage = false,
+  ordenes,
   onClose,
   onGuardar,
 }: {
@@ -91,6 +93,8 @@ function CompraForm({
   mode?: "create" | "view";
   compra?: GestionCompra;
   fullPage?: boolean;
+  /** Órdenes de compra: necesarias para separar solicitados / no solicitados. */
+  ordenes?: OrdenCompra[];
   onClose: () => void;
   onGuardar: (data: NuevaCompraData) => void;
 }) {
@@ -104,7 +108,6 @@ function CompraForm({
 
   const [numeroFactura, setNumeroFactura] = useState(compra?.numeroFactura ?? "");
   const [fechaFactura, setFechaFactura] = useState(compra?.fechaFactura || today);
-  const [estado, setEstado] = useState<EstadoGestion>(compra?.estado ?? "Recibido");
   const [items, setItems] = useState<ItemFactura[]>((compra?.items ?? []).map(item => ({
     rowId: item.rowId,
     idInsumo: item.idInsumo,
@@ -131,6 +134,27 @@ function CompraForm({
   const [showGuardarConf, setShowGuardarConf] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
+
+  // ── Separación solicitados / no solicitados (solo detalle) ─────────────────
+  // Regla del módulo: es "solicitado" el insumo cuyo id está en el detalle de
+  // la Orden de Compra; todo lo demás llegó de más en la recepción.
+  const orden = useMemo(
+    () => ordenes?.find((o) => o.id === compra?.ordenId),
+    [ordenes, compra?.ordenId]
+  );
+  const idsOrden = useMemo(
+    () => new Set((orden?.items ?? []).map((i) => i.idInsumo)),
+    [orden]
+  );
+  const solicitados = useMemo(
+    () => (orden ? items.filter((i) => idsOrden.has(i.idInsumo)) : []),
+    [orden, items, idsOrden]
+  );
+  const noSolicitados = useMemo(
+    () => (orden ? items.filter((i) => !idsOrden.has(i.idInsumo)) : []),
+    [orden, items, idsOrden]
+  );
+  const totalPagado = items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
 
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
@@ -163,15 +187,15 @@ function CompraForm({
           p.email.toLowerCase().includes(q)
         )
       : proveedores;
-    return base.slice(0, 6);
+    return base.slice(0, 3);
   }, [proveedores, provQuery]);
 
   const itemSugs = useMemo(() => {
-    // Punto 6: filtrar solo por tipo "Insumo" (excluye "Insumo producto", etc.)
-    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo");
-    // Punto 6: si el campo está vacío, mostrar todos los insumos disponibles
-    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 6);
-    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 6);
+    // Filtrar solo por tipo "Insumo" y estado "activo"
+    const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
+    // Si el campo está vacío, mostrar los primeros 3 insumos disponibles
+    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 3);
+    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 3);
   }, [insumos, itemNombre]);
 
   useEffect(() => {
@@ -222,11 +246,15 @@ function CompraForm({
   };
 
   const seleccionarInsumo = (ins: Insumo) => {
+    // Punto 2: el precio del catálogo viene en `costoUnitario` (number), que es
+    // el mismo que muestra la lista desplegable. `precioUnitario` es null en las
+    // semillas, por eso el Monto unitario quedaba en 0.
+    console.log("[Punto 2] onSelect insumo:", ins);
     setItemId(ins.id);
     setItemNombre(ins.nombre);
     setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setItemPrecio(ins.precioUnitario);
-    setItemIva(ins.iva);
+    setItemPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
+    setItemIva(Number(ins.iva ?? 0));
     setItemSugAbierto(false);
   };
 
@@ -314,7 +342,8 @@ function CompraForm({
       numeroFactura: numeroFactura.trim(),
       fechaFactura,
       valorTotal: total,
-      estado,
+      // Punto 4: la compra se guarda siempre con estado "Recibido".
+      estado: "Recibido",
       items: items.map((item) => ({ ...item })),
     });
   };
@@ -384,12 +413,6 @@ function CompraForm({
               }
             >
               {/* Banners de estado */}
-              {isView && compra?.estado === "Recibido" && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  Compra registrada. Recibida el <strong className="ml-1">{compra.fechaFactura}</strong>.
-                </div>
-              )}
               {isView && compra?.estado === "Anulado" && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <Ban className="w-4 h-4 shrink-0" />
@@ -441,9 +464,25 @@ function CompraForm({
                         placeholder="Buscar por nombre, NIT, asesor o email..."
                         className={`${iCls} pl-10`}
                       />
+                      {/* Punto 6: el desplegable va por encima de todo el formulario. */}
                       {provSugAbierto && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                          {provSugs.map((p) => (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+                          {/* Opción "+ Crear proveedor" PRIMERA */}
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setProvSugAbierto(false);
+                              setMostrarNuevoProveedor(true);
+                            }}
+                            className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Crear proveedor {provQuery.trim() && `“${provQuery.trim()}”`}
+                          </button>
+                          <hr className="my-0.5 border-border" />
+                          {/* Resultados - máximo 3 */}
+                          {provSugs.slice(0, 3).map((p) => (
                             <button
                               key={p.nit}
                               type="button"
@@ -457,19 +496,15 @@ function CompraForm({
                               </p>
                             </button>
                           ))}
-                          {(provSugs.length === 0 || provQuery.trim() === "") && (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setProvSugAbierto(false);
-                                setMostrarNuevoProveedor(true);
-                              }}
-                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Crear proveedor “{provQuery.trim()}”
-                            </button>
+                          {provSugs.length === 0 && (
+                            <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
+                              Sin resultados
+                            </div>
+                          )}
+                          {provSugs.length > 3 && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              +{provSugs.length - 3} más...
+                            </div>
                           )}
                         </div>
                       )}
@@ -506,14 +541,10 @@ function CompraForm({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                       Estado
                     </label>
-                    <select
-                      value={estado}
-                      onChange={(e) => setEstado(e.target.value as EstadoGestion)}
-                      className={`${sCls} cursor-pointer`}
-                    >
-                      <option value="Recibido">Recibido</option>
-                      <option value="Anulado">Anulado</option>
-                    </select>
+                    {/* Punto 4: badge fijo con el mismo estilo del listado; sin
+                        select, sin flecha y sin poder cambiarlo. La compra se
+                        guarda siempre en "Recibido". */}
+                    <EstadoBadge e="Recibido" />
                   </div>
                 )}
               </div>
@@ -554,14 +585,63 @@ function CompraForm({
                 </p>
               )}
 
-              <InsumosSolicitadosTable
-                items={items}
-                showActions={!isView}
-                onRemove={!isView ? eliminarItem : undefined}
-                onUpdate={!isView ? actualizarItem : undefined}
-                totalLabel="Total recibido"
-                className={isPage ? "flex-1 min-h-0" : ""}
-              />
+              {isView ? (
+                <div className="flex flex-col gap-4">
+                  {orden ? (
+                    <>
+                      <InsumosSolicitadosTable
+                        items={solicitados}
+                        showActions={false}
+                        titulo="Insumos solicitados"
+                        subtotalLabel="Subtotal solicitados"
+                        mostrarIva={false}
+                        mostrarTotal={false}
+                        className={isPage ? "flex-1 min-h-0" : ""}
+                      />
+                      {noSolicitados.length > 0 && (
+                        <InsumosSolicitadosTable
+                          items={noSolicitados}
+                          showActions={false}
+                          tono="amber"
+                          titulo="Insumos no solicitados"
+                          subtotalLabel="Subtotal no solicitados"
+                          mostrarIva={false}
+                          mostrarTotal={false}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <InsumosSolicitadosTable
+                      items={items}
+                      showActions={false}
+                      titulo="Insumos recibidos"
+                      subtotalLabel="Subtotal"
+                      mostrarIva={false}
+                      mostrarTotal={false}
+                      className={isPage ? "flex-1 min-h-0" : ""}
+                    />
+                  )}
+
+                  {/* Total pagado */}
+                  <div className="flex justify-between items-center px-1 pt-1 border-t border-border shrink-0">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Total pagado
+                    </span>
+                    <span className="text-lg font-bold text-foreground">
+                      {fmtCOP(totalPagado)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <InsumosSolicitadosTable
+                  items={items}
+                  showActions
+                  onRemove={eliminarItem}
+                  onUpdate={actualizarItem}
+                  totalLabel="Total recibido"
+                  className={isPage ? "flex-1 min-h-0" : ""}
+                />
+              )}
             </div>
 
             {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
@@ -591,6 +671,7 @@ function CompraForm({
         {mostrarNuevoProveedor && (
           <NuevoProveedorModal
             nombreInicial={provQuery.trim()}
+            existentes={proveedores}
             onGuardar={crearProveedor}
             onClose={() => setMostrarNuevoProveedor(false)}
           />
@@ -701,22 +782,45 @@ interface Props {
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExportExcel?: boolean;
 }
 
 export function GestionCompraScreen({
   gestiones, setGestiones, ordenes, setOrdenes, insumos, proveedores, setProveedores,
   onNuevaCompra,
   canCreate = true,
+  canExportExcel = true,
 }: Props) {
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion; next: EstadoGestion } | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
   // Se declara antes del `useMemo` de abajo porque la fábrica lo invoca durante
   // el render; como `const`, usarla desde allí la lanzaba en TDZ
   // ("Cannot access 'getOrden' before initialization") al escribir en el buscador.
   const getOrden = (oid: string) => ordenes.find(o => o.id === oid);
+
+  // Depuración (solo DEV): imprime el JSON que recibe el detalle de la compra
+  // (lo mismo que "devolvería" el GET del detalle) al abrir el ojo.
+  useEffect(() => {
+    if (import.meta.env.DEV && detail) {
+      console.log(
+        "[detalle-compra] JSON recibido por CompraForm mode=view:",
+        JSON.stringify(
+          {
+            ...detail,
+            proveedor: detail.proveedor ?? getOrden(detail.ordenId)?.proveedor ?? "",
+            orden: getOrden(detail.ordenId) ?? null,
+          },
+          null,
+          2
+        )
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
 
   const filtered = useMemo(() =>
     gestiones.filter(g => {
@@ -747,13 +851,24 @@ export function GestionCompraScreen({
       return;
     }
 
+    // Punto 6: el diálogo siempre arranca con el motivo vacío (si no, el botón
+    // "Anular" se habilitaría con el motivo de una anulación anterior).
+    setMotivoAnulacion("");
     setEstadoConfirm({ id, from: actual, next });
   };
 
-  const handleCambiarEstado = (id: string, next: EstadoGestion) => {
+  const handleCambiarEstado = (id: string, next: EstadoGestion, motivo?: string) => {
     // Solo se actualiza el estado de la Compra puntual (por su ID).
-    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
+    // Punto 6: al anular se guarda el motivo (obligatorio en el formulario) y
+    // la fecha/hora exacta en la que ocurrió; en los demás cambios se limpian.
+    setGestiones((prev) => prev.map((x) => (x.id === id ? {
+      ...x,
+      estado: next,
+      motivoAnulacion: next === "Anulado" ? motivo : undefined,
+      fechaAnulacion: next === "Anulado" ? new Date().toISOString() : undefined,
+    } : x)));
     setEstadoConfirm(null);
+    setMotivoAnulacion("");
 
     // Caso 2 — Orden de Compra con SOLO una Compra asociada:
     // Al anular esa única Compra, la Orden de Compra asociada también pasa a Anulado.
@@ -809,13 +924,7 @@ export function GestionCompraScreen({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownload}
-            title="Descargar Excel"
-            className="inline-flex items-center gap-2 px-3 py-2.5 border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted cursor-pointer transition-all"
-          >
-            <FileDown className="w-4 h-4" /> Excel
-          </button>
+          {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
           {canCreate && (
             <button
               onClick={onNuevaCompra}
@@ -844,7 +953,7 @@ export function GestionCompraScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Proveedor", "Fecha de factura", "N° Factura", "Total", "Estado", "Acciones"].map(h => (
+                {["N° Factura", "Fecha", "Nombre", "Total", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -866,16 +975,16 @@ export function GestionCompraScreen({
                   const orden = getOrden(g.ordenId);
                   return (
                     <tr key={g.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 text-sm text-foreground">
-                        {(orden?.proveedor ?? g.proveedor) || "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
-                        {g.fechaFactura || "—"}
-                      </td>
                       <td className="px-4 py-3.5 text-xs">
                         {g.numeroFactura
                           ? <span className="font-mono font-semibold text-foreground">{g.numeroFactura}</span>
                           : <span className="text-amber-600 font-medium italic">Pendiente</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
+                        {g.fechaFactura || "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-foreground">
+                        {(orden?.proveedor ?? g.proveedor) || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0
@@ -883,24 +992,18 @@ export function GestionCompraScreen({
                           : <span className="text-muted-foreground font-normal">—</span>}
                       </td>
                       <td className="px-4 py-3.5">
-                        <button
-                          type="button"
-                          onClick={() => pedirCambiarEstado(g.id, "Anulado")}
+                        <EstadoSelect
+                          value={g.estado}
+                          onChange={(nuevoEstado) => {
+                            if (nuevoEstado === g.estado) return;
+                            pedirCambiarEstado(g.id, nuevoEstado);
+                          }}
+                          options={[
+                            { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
+                            { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
+                          ]}
                           disabled={g.estado === "Anulado"}
-                          title={
-                            g.estado === "Anulado"
-                              ? "Una compra anulada no puede volver al estado Recibido"
-                              : "Marcar como Anulado"
-                          }
-                          className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-all ${
-                            g.estado === "Anulado"
-                              ? `${ESTADO_CONFIG[g.estado]} opacity-80 cursor-not-allowed`
-                              : `${ESTADO_CONFIG[g.estado]} cursor-pointer hover:brightness-95 active:scale-95`
-                          }`}
-                        >
-                          {g.estado === "Anulado" && <Lock className="w-3 h-3" />}
-                          {g.estado}
-                        </button>
+                        />
                       </td>
                       <td className="px-4 py-3.5">
                         <button
@@ -961,6 +1064,7 @@ export function GestionCompraScreen({
             proveedores={proveedores}
             setProveedores={setProveedores}
             insumos={insumos}
+            ordenes={ordenes}
             onClose={() => setDetail(null)}
             onGuardar={() => {}}
           />
@@ -994,8 +1098,14 @@ export function GestionCompraScreen({
                 </div>
               )
             }
-            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
-            onCancel={() => setEstadoConfirm(null)}
+            showMotivo={estadoConfirm.next === "Anulado"}
+            motivo={motivoAnulacion}
+            onMotivoChange={setMotivoAnulacion}
+            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next, motivoAnulacion)}
+            onCancel={() => {
+              setEstadoConfirm(null);
+              setMotivoAnulacion("");
+            }}
           />
         )}
       </AnimatePresence>

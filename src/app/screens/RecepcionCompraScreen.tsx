@@ -64,10 +64,10 @@ export function RecepcionCompraScreen({
   onGuardar,
   onBack,
 }: Props) {
-  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) despu+�s de las
-  // 19:00 devolv+�a el d+�a siguiente, as+� que la recepci+�n de hoy quedaba
+  // `toISOString()` devuelve la fecha en UTC: en Colombia (UTC-5) después de las
+  // 19:00 devolvía el día siguiente, así que la recepción de hoy quedaba
   // bloqueada por el `max` del date-picker. Se usa la fecha local, que es la
-  // convenci+�n del proyecto.
+  // convención del proyecto.
   const today = new Date().toLocaleDateString("en-CA");
 
   const registrados = useMemo(
@@ -75,8 +75,8 @@ export function RecepcionCompraScreen({
     [gestiones, orden.id]
   );
 
-  // Los insumos no solicitados se guardan con un id propio, as+� que tambi+�n se
-  // comparan por nombre para no ofrecer lo que ya lleg+� en otra factura.
+  // Los insumos no solicitados se guardan con un id propio, así que también se
+  // comparan por nombre para no ofrecer lo que ya llegó en otra factura.
   const nombresRegistrados = useMemo(() => {
     const set = new Set<string>();
 
@@ -89,7 +89,16 @@ export function RecepcionCompraScreen({
     return set;
   }, [gestiones, orden.id]);
 
-  // Solo se ofrecen los insumos que a+�n no se han facturado en esta OC.
+  // Si todos los insumos ya están registrados, redirigir al listado
+  useEffect(() => {
+    const todosRegistrados = orden.items.every(item => registrados.has(item.idInsumo));
+    if (todosRegistrados) {
+      toast.info(`La OC ${orden.id} ya tiene todos sus insumos registrados`);
+      onBack();
+    }
+  }, [orden.id, registrados, onBack]);
+
+  // Solo se ofrecen los insumos que aún no se han facturado en esta OC.
   const [items, setItems] = useState<ItemRecibido[]>(() => {
     const previos = registradosEnOrden(gestiones, orden.id);
 
@@ -119,7 +128,7 @@ export function RecepcionCompraScreen({
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
-  // ������ Edici+�n en l+�nea de insumos adicionales ������������������������������������������������������������������������������������������������
+  // ������ Edición en línea de insumos adicionales ������������������������������������������������������������������������������������������������
   const [editExtraId, setEditExtraId] = useState<string | null>(null);
   const [editExtraDraft, setEditExtraDraft] = useState<{
     cantidad: number;
@@ -131,13 +140,13 @@ export function RecepcionCompraScreen({
 
   const exRef = useRef<HTMLDivElement>(null);
 
-  // ������ Validaci+�n en tiempo real (patr+�n de MiPerfilScreen) ������������������������������������������������������
+  // ������ Validación en tiempo real (patrón de MiPerfilScreen) ������������������������������������������������������
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
   const errorNumeroFactura = numeroFactura.trim()
     ? undefined
-    : "Ingresa el n+�mero de factura.";
+    : "Ingresa el número de factura.";
   const errorFechaFactura = fechaFactura
     ? undefined
     : "Selecciona la fecha de la factura.";
@@ -159,7 +168,7 @@ export function RecepcionCompraScreen({
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
-  /** Clase del input: resalta en rojo cuando el campo visible es inv+�lido. */
+  /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
@@ -169,11 +178,13 @@ export function RecepcionCompraScreen({
         ? insumos
             .filter(
               (i) =>
+                (i.tipo ?? "Insumo") === "Insumo" &&
+                i.estado === "activo" &&
                 !registrados.has(i.id) &&
                 !nombresRegistrados.has(i.nombre.toLowerCase().trim()) &&
                 i.nombre.toLowerCase().includes(exNombre.toLowerCase())
             )
-            .slice(0, 6)
+            .slice(0, 3)
         : [],
     [insumos, exNombre, registrados, nombresRegistrados]
   );
@@ -211,7 +222,7 @@ export function RecepcionCompraScreen({
 
   /**
    * Quita el insumo de esta factura. Solo afecta a la lista local: el pedido de
-   * la OC no cambia, as+� que el insumo sigue pendiente para una factura futura.
+   * la OC no cambia, así que el insumo sigue pendiente para una factura futura.
    */
   const quitarItem = (rowId: string, nombre: string) => {
     setItems((prev) => prev.filter((item) => item.rowId !== rowId));
@@ -338,7 +349,7 @@ export function RecepcionCompraScreen({
     setIntentoGuardar(true);
 
     if (!numeroFactura.trim()) {
-      toast.error("Ingresa el n+�mero de factura.");
+      toast.error("Ingresa el número de factura.");
       return;
     }
 
@@ -367,7 +378,11 @@ export function RecepcionCompraScreen({
 
     const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
-    // Esta factura: solo lo que trae, con su n+�mero, fecha y total propios.
+    // Un insumo es "no solicitado" si su id no está en el detalle de la OC:
+    // así queda marcado en el guardado y además sirve para comparar después.
+    const idsOrdenFactura = new Set(orden.items.map((item) => item.idInsumo));
+
+    // Esta factura: solo lo que trae, con su número, fecha y total propios.
     const itemsFactura: OrdenItem[] = [...filasRecibidas, ...itemsExtra].map(
       (item) => ({
         rowId: item.rowId,
@@ -378,6 +393,7 @@ export function RecepcionCompraScreen({
         costoUnitario: item.costoUnitario,
         precioUnitario: item.costoUnitario,
         iva: 0,
+        esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
       })
     );
 
@@ -470,8 +486,8 @@ export function RecepcionCompraScreen({
 
     toast.success(
       pendientes.length === 0
-        ? `Factura ${numeroFactura.trim()} guardada -� OC ${orden.id} completada`
-        : `Factura ${numeroFactura.trim()} guardada -� ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
+        ? `Factura ${numeroFactura.trim()} guardada · OC ${orden.id} completada`
+        : `Factura ${numeroFactura.trim()} guardada · ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
     );
 
     onBack();
@@ -494,16 +510,16 @@ export function RecepcionCompraScreen({
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: SERIF }}
           >
-            Recepci+�n de compra
+            Recepción de compra
           </h1>
 
           <p className="text-sm text-muted-foreground mt-0.5">
-            OC {orden.id} -� {orden.proveedor} -� {today}
+            OC {orden.id} · {orden.proveedor} · {today}
           </p>
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL ��� dos columnas (mismo patr+�n que "Crear Producto") */}
+      {/* CONTENIDO PRINCIPAL ��� dos columnas (mismo patrón que "Crear Producto") */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border">
           {/* =========================================================
               COLUMNA IZQUIERDA ��� ORDEN DE COMPRA (solo lectura)
@@ -513,15 +529,15 @@ export function RecepcionCompraScreen({
               Orden de compra
             </p>
             <p className="text-xs text-muted-foreground mb-4">
-              Insumos pedidos -� solo lectura
+              Insumos pedidos · solo lectura
             </p>
 
             <div className="space-y-5">
-              {/* Informaci+�n */}
+              {/* Información */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    N-� Orden
+                    N· Orden
                   </p>
                   <p className="text-sm font-bold mt-1">
                     {orden.id}
@@ -596,6 +612,11 @@ export function RecepcionCompraScreen({
                           <tr key={item.rowId}>
                             <td className="px-3 py-3 font-semibold">
                               {item.nombre}
+                              {registrados.has(item.idInsumo) && (
+                                <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                                  Facturado
+                                </span>
+                              )}
                             </td>
 
                             <td className="px-3 py-3">
@@ -649,7 +670,7 @@ export function RecepcionCompraScreen({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    N+�mero de factura <span className="text-red-500">*</span>
+                    Número de factura <span className="text-red-500">*</span>
                   </label>
 
                   <input
@@ -716,7 +737,7 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              {/* Recibido seg+�n factura */}
+              {/* Recibido según factura */}
               <div>
                 {errorItems && (algunoTocado || intentoGuardar) && (
                   <p className="text-xs text-red-500 mb-2 ml-0.5">
@@ -725,7 +746,7 @@ export function RecepcionCompraScreen({
                 )}
 
                 <h3 className="text-sm font-bold text-foreground mb-3">
-                  Recibido seg+�n factura
+                  Recibido según factura
                 </h3>
 
                 <div className="border border-border rounded-xl overflow-hidden">
@@ -1072,7 +1093,7 @@ export function RecepcionCompraScreen({
                             >
                               <p className="text-sm font-semibold">{ins.nombre}</p>
                               <p className="text-xs text-muted-foreground">
-                                {ins.unidadMedida} -� {fmtCOP(ins.costoUnitario)}
+                                {ins.unidadMedida} · {fmtCOP(ins.costoUnitario)}
                               </p>
                             </button>
                           ))}
@@ -1135,18 +1156,6 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
-
-                <p className="text-xs text-emerald-800">
-                  Al guardar se crear+� la factura{" "}
-                  {numeroFactura.trim() ? `${numeroFactura.trim()} ` : ""}
-                  en Gesti+�n de Compras con lo recibido aqu+�. La OC{" "}
-                  {orden.id} seguir+� Enviada hasta registrar todos los
-                  insumos.
-                </p>
-              </div>
-
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={onBack}
@@ -1157,8 +1166,7 @@ export function RecepcionCompraScreen({
 
                 <button
                   onClick={guardarRecepcion}
-                  disabled={!formValido}
-                  className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer inline-flex items-center justify-center gap-2"
                 >
                   <Check className="w-4 h-4" />
                   Guardar
@@ -1168,8 +1176,8 @@ export function RecepcionCompraScreen({
               <AnimatePresence>
                 {showGuardarConf && (
                   <ConfirmModal
-                    title="-+Est+� seguro de los cambios?"
-                    detail="Una vez guardado no se podr+� modificar."
+                    title="¿Está seguro de los cambios?"
+                    detail="Una vez guardado no se podrá modificar."
                     confirmLabel="Confirmar"
                     icon={
                       <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
