@@ -32,7 +32,14 @@ export interface OrdenItem {
   unidad: string;
   costoUnitario: number;
   precioUnitario: number;
+  /** Porcentaje de IVA de la línea (0–100). */
   iva: number;
+  /** Compras (IVA): base imponible de la línea guardada al crear la factura.
+   *  Se recalcula en el backend con la misma fórmula (ver
+   *  `db/migracion_iva_compras.sql`). */
+  baseSinIva?: number;
+  /** Compras (IVA): valor del IVA de la línea en pesos. */
+  montoIva?: number;
   /** true = insumo agregado en recepción (no venía en la OC original) */
   esNoSolicitado?: boolean;
 }
@@ -77,6 +84,16 @@ export interface GestionCompra {
   estado: EstadoGestion;
   items?: OrdenItem[];
   compraCreada?: boolean;
+  /** Compras (IVA): true = los montos unitarios de la factura ya traen el IVA
+   *  incluido ("Sí, IVA incluido"). Las compras antiguas, sin el campo, se
+   *  leen como "Sí, IVA incluido" con IVA 0 % (se ven igual que antes). */
+  ivaIncluido?: boolean;
+  /** Compras (IVA): suma de las bases imponibles (sin IVA) de las líneas. */
+  subtotalSinIva?: number;
+  /** Compras (IVA): suma del IVA de las líneas. */
+  totalIva?: number;
+  /** Compras (IVA): total pagado = subtotalSinIva + totalIva (= valorTotal). */
+  totalPagado?: number;
   /** Punto 6: trazabilidad de la anulación. El motivo es obligatorio en la UI
    *  (botón "Anular" deshabilitado mientras esté vacío) y la fecha queda en el
    *  mismo instante del cambio de estado. */
