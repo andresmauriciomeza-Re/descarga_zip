@@ -202,7 +202,12 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   const handleEdit = () => {
     if (!editItem) return;
     editForm.setIntentoGuardar(true);
-    if (!editForm.formValido) {
+    // Solo se validan los campos que este formulario realmente guarda (abajo):
+    // NIT y Nombre están bloqueados, no se actualizan, y sus datos semilla no
+    // cumplen la validación ("900.123.456-1" frente a 10 dígitos) — lo que
+    // dejaba el guardado bloqueado sin ningún error visible.
+    const camposGuardados = ["asesorComercial", "telefono", "email", "direccion", "estado"] as const;
+    if (!camposGuardados.every(c => !editForm.errors[c])) {
       toast.error("Revisa los campos del formulario");
       return;
     }

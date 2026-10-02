@@ -75,6 +75,11 @@ export interface GestionCompra {
   estado: EstadoGestion;
   items?: OrdenItem[];
   compraCreada?: boolean;
+  /** Punto 6: trazabilidad de la anulación. El motivo es obligatorio en la UI
+   *  (botón "Anular" deshabilitado mientras esté vacío) y la fecha queda en el
+   *  mismo instante del cambio de estado. */
+  motivoAnulacion?: string;
+  fechaAnulacion?: string;
 }
 
 // ��������� CONSTANTS ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
@@ -134,6 +139,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     proveedor: "Molinos del Valle",
     fecha: "2024-02-05",
     estado: "Enviado",
+    historialEstados: [{ estado: "Enviado", fechaHora: "2024-02-05" }],
     items: [
       { rowId: "r1", idInsumo: "INS-001", nombre: "Harina de trigo", cantidad: 100, unidad: "kg", costoUnitario: 3500, precioUnitario: 3500, iva: 0 },
       { rowId: "r2", idInsumo: "INS-006", nombre: "Levadura", cantidad: 5000, unidad: "g", costoUnitario: 80, precioUnitario: 80, iva: 0 },
@@ -144,6 +150,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     proveedor: "Lácteos La Esperanza",
     fecha: "2024-02-08",
     estado: "Enviado",
+    historialEstados: [{ estado: "Enviado", fechaHora: "2024-02-08" }],
     items: [
       { rowId: "r3", idInsumo: "INS-002", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", costoUnitario: 18000, precioUnitario: 18000, iva: 0 },
       { rowId: "r4", idInsumo: "INS-005", nombre: "Aceite de oliva", cantidad: 10, unidad: "lt", costoUnitario: 15000, precioUnitario: 15000, iva: 0 },
@@ -154,6 +161,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     proveedor: "Distribuidora Sur",
     fecha: "2024-02-10",
     estado: "Borrador",
+    historialEstados: [{ estado: "Borrador", fechaHora: "2024-02-10" }],
     items: [
       { rowId: "r5", idInsumo: "INS-003", nombre: "Salsa de tomate", cantidad: 30, unidad: "lt", costoUnitario: 5000, precioUnitario: 5000, iva: 0 },
       { rowId: "r6", idInsumo: "INS-004", nombre: "Pepperoni", cantidad: 15, unidad: "kg", costoUnitario: 22000, precioUnitario: 22000, iva: 0 },
@@ -164,6 +172,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     proveedor: "Carnes Premium",
     fecha: "2024-02-01",
     estado: "Completado",
+    historialEstados: [{ estado: "Completado", fechaHora: "2024-02-01" }],
     items: [
       { rowId: "r7", idInsumo: "INS-008", nombre: "Jamón serrano", cantidad: 10, unidad: "kg", costoUnitario: 28000, precioUnitario: 28000, iva: 0 },
     ],
@@ -181,6 +190,7 @@ export const INITIAL_ORDENES: OrdenCompra[] = [
     proveedor: "Verduras Express",
     fecha: "2024-01-28",
     estado: "Anulado",
+    historialEstados: [{ estado: "Anulado", fechaHora: "2024-01-28" }],
     items: [
       { rowId: "r8", idInsumo: "INS-007", nombre: "Champiñones", cantidad: 25, unidad: "kg", costoUnitario: 12000, precioUnitario: 12000, iva: 0 },
     ],
@@ -364,6 +374,11 @@ export function ConfirmModal({
   danger?: boolean; icon?: React.ReactNode; onConfirm: () => void; onCancel: () => void;
   showMotivo?: boolean; motivo?: string; onMotivoChange?: (value: string) => void;
 }) {
+  // Punto 6: sin motivo no hay anulación. Mientras el campo esté vacío el botón
+  // de confirmación queda bloqueado y el aviso se mantiene visible (no aparece
+  // solo tras un clic fallido).
+  const motivoVacio = showMotivo && !(motivo ?? "").trim();
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div
@@ -390,6 +405,12 @@ export function ConfirmModal({
               className="w-full px-3 py-2 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
               rows={3}
             />
+            {/* Punto 6: aviso permanente mientras el motivo siga vacío. */}
+            {motivoVacio && (
+              <p className="text-xs font-semibold text-red-600 mt-1.5">
+                Debes escribir el motivo de la anulación
+              </p>
+            )}
           </div>
         )}
         <div className="flex gap-3">
@@ -401,7 +422,13 @@ export function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white cursor-pointer transition-colors active:scale-95 ${danger ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-red-700"}`}
+            disabled={motivoVacio}
+            aria-disabled={motivoVacio}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${
+              motivoVacio
+                ? "bg-red-300 cursor-not-allowed"
+                : "cursor-pointer active:scale-95 " + (danger ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-red-700")
+            }`}
           >
             {confirmLabel}
           </button>
@@ -543,8 +570,40 @@ export interface OrdenFormData {
   numeroFactura?: string;
 }
 
+/**
+ * Payload que emite `NuevoInsumoModal` al guardar: el insumo nace con tipo
+ * "Insumo" en el catálogo y se selecciona en "Agregar insumo".
+ */
+export type NuevoInsumoCreado = {
+  id: string;
+  nombre: string;
+  unidadMedida: string;
+  precioUnitario: number;
+  iva: number;
+};
+
+/** Construye el Insumo que nace desde "+ Crear insumo": entra al catálogo como
+ *  tipo "Insumo" con stocks en cero y sin categoría asignada todavía. */
+export function insumoDeAlta(ins: NuevoInsumoCreado): Insumo {
+  return {
+    id: ins.id,
+    nombre: ins.nombre,
+    unidadMedida: ins.unidadMedida,
+    costoUnitario: ins.precioUnitario,
+    precioUnitario: ins.precioUnitario,
+    iva: ins.iva,
+    tipo: "Insumo",
+    stockActual: 0,
+    stockMinimo: 0,
+    stockMaximo: 0,
+    categoriaId: "",
+    estado: "activo",
+  };
+}
+
 export function OrdenModal({
   mode, orden, proveedores, insumos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
+  onCrearInsumo,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
@@ -557,6 +616,8 @@ export function OrdenModal({
   onClose: () => void;
   onGuardar: (d: OrdenFormData) => void;
   onNuevoProveedor: (p: ProveedorRef) => string;
+  /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
+  onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -577,6 +638,7 @@ export function OrdenModal({
   const pf = (p: Partial<OrdenFormData>) => setForm(f => ({ ...f, ...p }));
 
   const [showNuevoProv, setShowNuevoProv] = useState(false);
+  const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
 
   // Historial de cambios de estado
@@ -679,6 +741,22 @@ export function OrdenModal({
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
+  };
+
+  // Punto 5: "+ Crear insumo" (primera opción del combo). Crea el insumo en el
+  // catálogo vía el padre y lo selecciona en "Agregar insumo" con su unidad,
+  // monto e IVA — igual que si se hubiera elegido una sugerencia existente.
+  const handleNuevoInsumo = (ins: NuevoInsumoCreado) => {
+    onCrearInsumo?.(ins);
+    setANombre(ins.nombre);
+    setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
+    setAPrecio(ins.precioUnitario);
+    setAIva(ins.iva);
+    setAInsumoId(ins.id);
+    setAFromCat(true);
+    setAShowSug(false);
+    setShowNuevoInsumo(false);
+    toast.success(`Insumo "${ins.nombre}" creado`);
   };
 
   const addItem = () => {
@@ -1000,6 +1078,7 @@ export function OrdenModal({
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
                     onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
+                    onCrearInsumo={() => setShowNuevoInsumo(true)}
                   />
                 </div>
               )}
@@ -1098,6 +1177,18 @@ export function OrdenModal({
           />
         )}
       </AnimatePresence>
+      {/* Punto 5: "+ Crear insumo" abre el modal de alta y, al guardar, el
+          insumo queda en el catálogo y seleccionado en "Agregar insumo". */}
+      <AnimatePresence>
+        {showNuevoInsumo && (
+          <NuevoInsumoModal
+            nombreInicial={aNombre.trim()}
+            insumosExistentes={insumos}
+            onGuardar={handleNuevoInsumo}
+            onClose={() => setShowNuevoInsumo(false)}
+          />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {showSendConf && (
           <ConfirmModal
@@ -1127,6 +1218,8 @@ interface NuevaOrdenCompraPageProps {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
+  setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
   onBack: () => void;
 }
@@ -1137,9 +1230,14 @@ export function NuevaOrdenCompraPage({
   proveedores,
   setProveedores,
   insumos,
+  setInsumos,
   onNuevoProveedor,
   onBack,
 }: NuevaOrdenCompraPageProps) {
+  // Punto 5: el insumo creado en el formulario pasa al catálogo global.
+  const handleCrearInsumo = (ins: NuevoInsumoCreado) =>
+    setInsumos(prev => [insumoDeAlta(ins), ...prev]);
+
   const handleGuardar = (data: OrdenFormData) => {
     const nueva: OrdenCompra = {
       id: nextOrdenId(ordenes),
@@ -1147,6 +1245,11 @@ export function NuevaOrdenCompraPage({
       fecha: data.fecha,
       estado: data.estado as EstadoOrden,
       items: data.items,
+      // El estado inicial se registra desde el nacimiento de la OC: el
+      // historial nunca queda vacío y el listado muestra su fecha/hora real.
+      historialEstados: [
+        { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
+      ],
     };
 
     setOrdenes(prev => [nueva, ...prev]);
@@ -1171,6 +1274,7 @@ export function NuevaOrdenCompraPage({
       onClose={onBack}
       onGuardar={handleGuardar}
       onNuevoProveedor={handleNuevoProveedor}
+      onCrearInsumo={handleCrearInsumo}
     />
   );
 }
@@ -1670,6 +1774,11 @@ export function OrdenCompraScreen({
         fecha: data.fecha,
         estado: data.estado as EstadoOrden,
         items: data.items,
+        // Estado inicial registrado en el historial al crear (véase
+        // NuevaOrdenCompraPage.handleGuardar).
+        historialEstados: [
+          { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
+        ],
       };
       setOrdenes(p => [n, ...p]);
       toast.success(`OC ${n.id} guardada como ${n.estado}`);
@@ -1978,6 +2087,7 @@ export function OrdenCompraScreen({
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}
+            onCrearInsumo={(ins) => setInsumos?.(prev => [insumoDeAlta(ins), ...prev])}
           />
         )}
       </AnimatePresence>

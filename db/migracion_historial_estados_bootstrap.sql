@@ -25,6 +25,8 @@ BEGIN
 END
 
 -- Insertar registro inicial para órdenes sin historial
+DECLARE @Insertados INT;
+
 INSERT INTO dbo.Tb_HistorialEstadoOrdenCompra (IdOrdenCompra, EstadoAnterior, EstadoNuevo, FechaHora)
 SELECT 
   oc.IdOrdenCompra,
@@ -38,10 +40,11 @@ WHERE NOT EXISTS (
   WHERE h.IdOrdenCompra = oc.IdOrdenCompra
 );
 
-PRINT '  ✓ Registros iniciales de historial insertados para órdenes sin historial';
+-- Se captura justo después del INSERT (@@ROWCOUNT se lee antes de cualquier
+-- otro Statement que pueda sobreescribirlo).
+SET @Insertados = @@ROWCOUNT;
 
--- Verificar cuántos se insertaron
-DECLARE @Insertados INT = @@ROWCOUNT;
+PRINT '  ✓ Registros iniciales de historial insertados para órdenes sin historial';
 PRINT '  → Filas insertadas: ' + CAST(@Insertados AS VARCHAR(10));
 
 PRINT '--- Bootstrap completado ---';

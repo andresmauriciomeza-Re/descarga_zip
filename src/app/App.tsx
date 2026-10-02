@@ -8935,6 +8935,7 @@ export default function App() {
                       proveedores={proveedores}
                       setProveedores={setProveedores}
                       insumos={insumos}
+                      setInsumos={setInsumos}
                       onBack={() => setShowNuevaOrden(false)}
                     />
                   )}

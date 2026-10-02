@@ -856,13 +856,24 @@ export function GestionCompraScreen({
       return;
     }
 
+    // Punto 6: el diálogo siempre arranca con el motivo vacío (si no, el botón
+    // "Anular" se habilitaría con el motivo de una anulación anterior).
+    setMotivoAnulacion("");
     setEstadoConfirm({ id, from: actual, next });
   };
 
   const handleCambiarEstado = (id: string, next: EstadoGestion, motivo?: string) => {
     // Solo se actualiza el estado de la Compra puntual (por su ID).
-    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next, motivoAnulacion: motivo } : x)));
+    // Punto 6: al anular se guarda el motivo (obligatorio en el formulario) y
+    // la fecha/hora exacta en la que ocurrió; en los demás cambios se limpian.
+    setGestiones((prev) => prev.map((x) => (x.id === id ? {
+      ...x,
+      estado: next,
+      motivoAnulacion: next === "Anulado" ? motivo : undefined,
+      fechaAnulacion: next === "Anulado" ? new Date().toISOString() : undefined,
+    } : x)));
     setEstadoConfirm(null);
+    setMotivoAnulacion("");
 
     // Caso 2 — Orden de Compra con SOLO una Compra asociada:
     // Al anular esa única Compra, la Orden de Compra asociada también pasa a Anulado.
