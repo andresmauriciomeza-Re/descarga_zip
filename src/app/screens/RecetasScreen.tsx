@@ -384,7 +384,7 @@ export function RecetasScreen() {
                   </div>
                 ))}
                 <div className="pt-2">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Insumos (Tb_Detalle_Recetas)</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Insumos</p>
                   <div className="space-y-1.5">
                     {detailItem.insumos.map((i, idx) => (
                       <div key={idx} className="flex items-center justify-between px-3 py-2 bg-muted rounded-xl text-sm">

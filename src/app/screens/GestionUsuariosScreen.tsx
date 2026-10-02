@@ -611,7 +611,8 @@ export function GestionUsuariosScreen({
                 {/* Todo el cuerpo (datos + tablas) vive en el área con scroll
                     interno; el pie queda fuera, así "Editar usuario" y "Cerrar"
                     siempre se ven aunque la lista de permisos sea larga. */}
-                <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+                <div className="px-5 pb-4 flex-1 min-h-0 overflow-y-auto">
+                  <div className="pt-4 space-y-4">
                   {/* Datos en cuadrícula de 2 columnas: Tipo de documento | Número
                       de documento / Nombre completo | Teléfono / Rol | Estado /
                       (Correo, el único dato de texto libre y largo, ocupa las 2). */}
@@ -685,6 +686,7 @@ export function GestionUsuariosScreen({
                     <RefreshCw className="w-4 h-4" />
                     {detail.activo ? "Desactivar usuario" : "Activar usuario"}
                   </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 px-5 py-3 border-t border-border shrink-0">
@@ -754,6 +756,7 @@ export function GestionUsuariosScreen({
                        inputMode="numeric"
                       value={editItem.numeroDocumento}
                       readOnly
+                      autoComplete="off"
                        placeholder="12345678"
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed"
                     />
@@ -773,6 +776,7 @@ export function GestionUsuariosScreen({
                       type={type}
                       inputMode={numeric ? "numeric" : undefined}
                       value={editItem[field]}
+                      autoComplete="off"
                        onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
@@ -877,6 +881,7 @@ export function GestionUsuariosScreen({
                         type="text"
                          inputMode="numeric"
                         value={newDocumento}
+                       autoComplete="off"
                          onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
                          placeholder="12345678"
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -909,6 +914,7 @@ export function GestionUsuariosScreen({
                     <input
                       type="email"
                       value={newCorreo}
+                      autoComplete="off"
                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -924,6 +930,7 @@ export function GestionUsuariosScreen({
                       type="tel"
                       inputMode="numeric"
                       value={newTelefono}
+                      autoComplete="off"
                       onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
                       placeholder="3001234567"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
