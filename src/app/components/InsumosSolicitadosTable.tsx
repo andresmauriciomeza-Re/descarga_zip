@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { UNIDADES } from "./CompactInsumoForm";
 import { calcularLineaIva } from "../utils/iva";
 
@@ -42,6 +42,7 @@ export function InsumosSolicitadosTable({
   totalLabel = "Total estimado",
   modoIva = false,
   ivaIncluido = false,
+  enPagina = false,
   className = "",
 }: {
   items: InsumoSolicitadoRow[];
@@ -66,6 +67,13 @@ export function InsumosSolicitadosTable({
   modoIva?: boolean;
   /** Compras: true = el monto unitario ya incluye el IVA. */
   ivaIncluido?: boolean;
+  /** Variante "pantalla completa" de Crear Orden / Crear Compra:
+   *  encabezado fijo (sticky), columna IVA en un solo bloque (porcentaje y
+   *  debajo el monto en gris), sin columna "Monto IVA", sin pie dentro del
+   *  scroll y estado vacío centrado. Los totales salen de la tabla para que
+   *  sigan visibles mientras la tabla hace scroll interno.
+   *  `false` (defecto) = tabla tal cual la usan Recepción y los detalles. */
+  enPagina?: boolean;
   /** Clases del contenedor; usar "flex-1 min-h-0" para que la tabla scrollee sola. */
   className?: string;
 }) {
@@ -155,20 +163,26 @@ export function InsumosSolicitadosTable({
 
   // Encabezados. En modo IVA las columnas son:
   // Nombre | Cantidad | Unidad | Monto unitario | IVA (%) | Monto IVA | Subtotal (con IVA)
+  // En `enPagina` el IVA se resume en UNA columna y se usan los textos
+  // cortos: Nombre | Cantidad | Unidad | Monto unitario | IVA | Subtotal.
   const mostrarColsIva = modoIva || mostrarIva;
-  const headers = [
-    "Nombre",
-    "Cantidad",
-    "Unidad",
-    "Monto unitario",
-    ...(mostrarColsIva ? (modoIva ? ["IVA (%)", "Monto IVA"] : ["IVA"]) : []),
-    modoIva ? "Subtotal (con IVA)" : "Subtotal",
-  ];
+  const colIvaSimple = mostrarColsIva && enPagina;
+  const headers: string[] = ["Nombre", "Cantidad", "Unidad", "Monto unitario"];
+  if (mostrarColsIva) {
+    if (colIvaSimple || !modoIva) headers.push("IVA");
+    else headers.push("IVA (%)", "Monto IVA");
+  }
+  headers.push(modoIva && !enPagina ? "Subtotal (con IVA)" : "Subtotal");
   const columnCount = headers.length + (showActions ? 1 : 0);
   // El pie alinea la etiqueta bajo la primera columna y el valor queda en la
   // última (Subtotal); con acciones, la última columna es para los botones.
   const colSpanPie = headers.length - 1;
-  const labelSubtotal = modoIva ? "Subtotal sin IVA" : subtotalLabel;
+  const labelSubtotal = modoIva && !enPagina ? "Subtotal sin IVA" : subtotalLabel;
+  /** IVA de la línea en pesos (misma fórmula que el pie de la tabla). */
+  const ivaDeLinea = (row: InsumoSolicitadoRow) =>
+    modoIva
+      ? calcularLinea(row).montoIva
+      : row.cantidad * row.precioUnitario * (row.iva / 100);
 
   return (
     <div
@@ -176,21 +190,29 @@ export function InsumosSolicitadosTable({
         esAmber ? "bg-amber-50/40 border-amber-200" : "bg-muted/30 border-border"
       } ${className}`}
     >
-      <div
-        className={`px-3 py-2 border-b shrink-0 ${
-          esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30"
-        }`}
-      >
-        <p
-          className={`text-xs font-bold uppercase tracking-wider ${
-            esAmber ? "text-amber-700" : "text-muted-foreground"
+      {/* En pantalla completa NO se pinta la barra de título: ya está el
+          título de la sección "Insumos" del propio formulario. */}
+      {!enPagina && (
+        <div
+          className={`px-3 py-2 border-b shrink-0 ${
+            esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30"
           }`}
         >
-          {titulo}
-        </p>
-      </div>
-      <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-full text-sm">
+          <p
+            className={`text-xs font-bold uppercase tracking-wider ${
+              esAmber ? "text-amber-700" : "text-muted-foreground"
+            }`}
+          >
+            {titulo}
+          </p>
+        </div>
+      )}
+      <div
+        className={`flex-1 min-h-0 overflow-auto ${
+          enPagina && items.length === 0 ? "flex items-center" : ""
+        }`}
+      >
+        <table className={`w-full text-sm ${enPagina ? "[&_td]:py-2" : ""}`}>
         <thead
           className={`text-xs uppercase tracking-wider ${
             esAmber ? "bg-amber-50 text-amber-700" : "bg-muted/50 text-muted-foreground"
@@ -198,11 +220,32 @@ export function InsumosSolicitadosTable({
         >
           <tr>
             {headers.map((h) => (
-              <th key={h} className="px-3 py-2.5 text-left font-semibold">
+              <th
+                key={h}
+                className={`px-3 ${enPagina ? "py-1.5" : "py-2.5"} text-left font-semibold ${
+                  // Sticky: con scroll interno el encabezado se queda fijo.
+                  // Fondo sólido (no /50) para que no se transparenten las filas.
+                  enPagina
+                    ? `sticky top-0 z-10 border-b border-border ${
+                        esAmber ? "bg-amber-50" : "bg-muted"
+                      }`
+                    : ""
+                }`}
+              >
                 {h}
               </th>
             ))}
-            {showActions && <th className="px-3 py-2.5" />}
+            {showActions && (
+              <th
+                className={`px-3 py-2.5 ${
+                  enPagina
+                    ? `sticky top-0 z-10 border-b border-border ${
+                        esAmber ? "bg-amber-50" : "bg-muted"
+                      }`
+                    : ""
+                }`}
+              />
+            )}
           </tr>
         </thead>
         <tbody className={`divide-y ${esAmber ? "divide-amber-100" : "divide-border"}`}>
@@ -210,9 +253,21 @@ export function InsumosSolicitadosTable({
             <tr>
               <td
                 colSpan={columnCount}
-                className="px-3 py-8 text-center text-xs text-muted-foreground"
+                className={`text-center text-xs text-muted-foreground px-3 ${
+                  enPagina ? "py-4" : "py-8"
+                }`}
               >
-                Sin insumos agregados
+                {enPagina ? (
+                  // Estado vacío de pantalla completa: ícono suave + texto en
+                  // una línea (altura moderada; el contenedor lo centra en la
+                  // tabla, que sin filas ocupa todo el alto disponible).
+                  <span className="inline-flex items-center gap-2">
+                    <Package className="w-5 h-5 text-muted-foreground/40" />
+                    Sin insumos agregados
+                  </span>
+                ) : (
+                  "Sin insumos agregados"
+                )}
               </td>
             </tr>
           ) : (
@@ -285,7 +340,34 @@ export function InsumosSolicitadosTable({
                     )}
                   </td>
 
-                  {modoIva && (
+                  {/* IVA en pantalla completa: porcentaje y, debajo, el monto
+                      del IVA de la fila en gris (una sola columna). */}
+                  {colIvaSimple && (
+                    <td className="px-3 py-2.5 text-xs">
+                      {draftRow ? (
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={draftRow.iva}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draftRow,
+                              iva: Math.min(100, Math.max(0, Number(e.target.value))),
+                            })
+                          }
+                          className={`${cellInputCls} w-16`}
+                        />
+                      ) : (
+                        <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                      )}
+                      <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">
+                        {fmtCOP(ivaDeLinea(row))}
+                      </p>
+                    </td>
+                  )}
+
+                  {!colIvaSimple && modoIva && (
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">
                       {draftRow ? (
                         <input
@@ -307,13 +389,13 @@ export function InsumosSolicitadosTable({
                     </td>
                   )}
 
-                  {modoIva && (
+                  {!colIvaSimple && modoIva && (
                     <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                       {fmtCOP(calcularLinea(row).montoIva)}
                     </td>
                   )}
 
-                  {!modoIva && mostrarColsIva && (
+                  {!colIvaSimple && !modoIva && mostrarColsIva && (
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">
                       {row.iva}%
                     </td>
@@ -375,7 +457,7 @@ export function InsumosSolicitadosTable({
             })
           )}
         </tbody>
-        {items.length > 0 && (
+        {items.length > 0 && !enPagina && (
           <tfoot
             className={`border-t ${
               esAmber ? "bg-amber-50 border-amber-200" : "bg-muted/50 border-border"
@@ -427,6 +509,40 @@ export function InsumosSolicitadosTable({
         )}
         </table>
       </div>
+
+      {/* Pantalla completa: totales FUERA del área con scroll, en UNA sola
+          línea (el alto de la tarjeta lo gana la tabla) y siempre visibles
+          mientras se agrega o quita insumo. */}
+      {enPagina && items.length > 0 && (
+        <div className="flex items-baseline justify-end gap-5 shrink-0 px-3 py-1.5 border-t border-border bg-muted/50">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            {labelSubtotal}
+          </span>
+          <span className="text-sm font-semibold text-foreground">
+            {fmtCOP(subtotalGeneral)}
+          </span>
+          {mostrarIva && (
+            <>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                IVA
+              </span>
+              <span className="text-sm font-semibold text-foreground">
+                {fmtCOP(ivaGeneral)}
+              </span>
+            </>
+          )}
+          {mostrarTotal && (
+            <>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                {totalLabel}
+              </span>
+              <span className="text-lg font-bold text-foreground">
+                {fmtCOP(total)}
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

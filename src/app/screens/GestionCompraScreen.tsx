@@ -57,6 +57,21 @@ const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
 const campoMedioCls = "max-w-[240px]"; // Número de factura
 const campoLargoCls = "max-w-xs"; // Proveedor (búsqueda)
 
+/** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
+ *  que el formulario Nuevo Proveedor. */
+const seccionCls =
+  "text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground pb-1.5 border-b border-border";
+
+/** Labels de las guías: 13px en gris oscuro (pantalla completa). */
+const labelPaginaCls = "block text-[13px] leading-tight font-medium text-foreground/70 mb-1";
+const labelModalCls = "block text-xs font-semibold text-muted-foreground mb-1.5";
+
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
+ *  (py-2.5 + border da 42px, y la fila de insumos y el selector de IVA van a
+ *  40px, así todos los controles del formulario miden lo mismo). */
+const iPaginaCls =
+  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+
 /** Tooltip de la opción de IVA no elegida, bloqueada con insumos en la tabla. */
 const MSJ_IVA_BLOQUEADO = "Elimina los insumos agregados para cambiar esta opción";
 
@@ -168,7 +183,33 @@ function CompraForm({
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
+  const [showSalirConf, setShowSalirConf] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
+
+  // Confirmación al salir (solo pantalla completa): guarda una foto del estado
+  // inicial del formulario para saber si el usuario llegó a escribir algo.
+  const inicialRef = useRef({
+    numeroFactura,
+    fechaFactura,
+    provQuery,
+    iva: ivaIncluido,
+    items: JSON.stringify(items),
+  });
+  const sucio =
+    numeroFactura !== inicialRef.current.numeroFactura ||
+    fechaFactura !== inicialRef.current.fechaFactura ||
+    provQuery !== inicialRef.current.provQuery ||
+    ivaIncluido !== inicialRef.current.iva ||
+    JSON.stringify(items) !== inicialRef.current.items;
+
+  /** Cerrar: si hay datos escritos pide confirmación antes de perderlos. */
+  const salir = () => {
+    if (isPage && sucio) {
+      setShowSalirConf(true);
+      return;
+    }
+    onClose();
+  };
 
   // ── Separación solicitados / no solicitados (solo detalle) ─────────────────
   // Regla del módulo: es "solicitado" el insumo cuyo id está en el detalle de
@@ -222,9 +263,12 @@ function CompraForm({
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
+  /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
+  const labelCls = isPage ? labelPaginaCls : labelModalCls;
+
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
-    `${iCls} transition-colors ${
+    `${isPage ? iPaginaCls : iCls} transition-colors ${
       error ? "border-red-400 focus:ring-red-300" : ""
     }`;
 
@@ -272,9 +316,12 @@ function CompraForm({
   // Requiere al menos un insumo, que el total sea mayor que cero y haber
   // elegido si los montos de la factura incluyen IVA.
   const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
-  const formValido =
-    ivaIncluido !== null &&
+  const camposOk =
     !errorNumeroFactura && !errorFechaFactura && !errorItems && !errorTotal;
+  const faltaIva = ivaIncluido === null;
+  // Guardar queda habilitado aunque falte elegir el IVA: en ese caso el clic
+  // muestra el mensaje rojo bajo el selector (y el toast) sin abrir el confirm.
+  const botonGuardarOk = camposOk;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
     setProvQuery(p.nombre);
@@ -376,6 +423,12 @@ function CompraForm({
       toast.error("El total recibido debe ser mayor que cero.");
       return;
     }
+    if (faltaIva) {
+      // Con el formulario completo pero sin elegir el IVA el botón está
+      // habilitado: aquí se avisa en rojo (intentoGuardar) y no se guarda.
+      toast.error("Selecciona si los montos de la factura incluyen IVA.");
+      return;
+    }
 
     setShowGuardarConf(true);
   };
@@ -403,12 +456,21 @@ function CompraForm({
     });
   };
 
+  /** Subtítulo de la cabecera (solo cuando aporta algo). */
+  const subtitulo = isView
+    ? compra
+      ? `Compra ${compra.id}`
+      : ""
+    : isPage
+      ? "Registra la factura de insumos recibidos de un proveedor"
+      : "";
+
   return (
     <>
       <div
         className={
           isPage
-            ? `w-full p-6 ${FORM_MAXW} mx-auto h-full flex flex-col`
+            ? "w-full p-3 max-w-5xl mx-auto h-full flex flex-col overflow-hidden"
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -424,34 +486,42 @@ function CompraForm({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${FORM_MAXW}${
+            className={`flex flex-col w-full ${isPage ? "max-w-5xl" : FORM_MAXW}${
               isPage
-                ? "h-full"
+                ? " h-full"
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-              <div>
-                <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {isView ? "Detalle de Compra" : "Nueva Compra"}
-                </h3>
-                {isView && compra && (
-                  <p className="text-xs text-muted-foreground mt-0.5">Compra {compra.id}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {isView && compra && <EstadoBadge e={compra.estado} />}
-                {isPage ? (
+            {/* Cabecera: ← + título + subtítulo en pantalla completa; X en el
+                modal. Volver pide confirmación si hay datos escritos. */}
+            <div className={`flex items-center justify-between gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
+              <div className="flex items-center gap-3 min-w-0">
+                {isPage && (
                   <button
-                    onClick={onClose}
+                    onClick={salir}
                     title="Volver"
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                ) : (
+                )}
+                <div className="min-w-0">
+                  <h3
+                    className={`${isPage ? "text-lg" : "text-base"} font-bold text-foreground`}
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {isView ? "Detalle de Compra" : "Nueva Compra"}
+                  </h3>
+                  {subtitulo && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {isView && compra && <EstadoBadge e={compra.estado} />}
+                {!isPage && (
                   <button
-                    onClick={onClose}
+                    onClick={salir}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
                     <X className="w-4 h-4" />
@@ -463,7 +533,7 @@ function CompraForm({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-4 flex flex-col gap-4 overflow-hidden"
+                  ? "flex-1 min-h-0 px-5 py-1 flex flex-col gap-6 overflow-hidden"
                   : "flex-1 min-h-0 px-5 py-5 space-y-5 overflow-y-auto"
               }
             >
@@ -475,6 +545,14 @@ function CompraForm({
                 </div>
               )}
 
+              {/* Sección 1 — "Datos de la factura" (el título solo existe en
+                  pantalla completa; en el modal el `<section>` solo agrupa
+                  para mantener el mismo espaciado de antes). */}
+              <section
+                className={`flex flex-col ${isPage ? "gap-2 shrink-0" : "gap-5"}`}
+              >
+                {isPage && <p className={seccionCls}>Datos de la factura</p>}
+
               {/* Detalle (vista): Número de factura · Proveedor · Fecha de
                   factura en UNA fila de 3 columnas; en pantallas pequeñas,
                   2 columnas. El formulario de creación va en 3 columnas
@@ -485,8 +563,8 @@ function CompraForm({
                   isView ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1 md:grid-cols-3"
                 }`}
               >
-                <div className={campoMedioCls}>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <div className={isPage ? "relative" : campoMedioCls}>
+                  <label className={labelCls}>
                     Número de factura {!isView && <span className="text-red-500">*</span>}
                   </label>
                   {isView ? (
@@ -505,12 +583,12 @@ function CompraForm({
                     />
                   )}
                   {!isView && (tocado.numeroFactura || intentoGuardar) && errorNumeroFactura && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNumeroFactura}</p>
+                    <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorNumeroFactura}</p>
                   )}
                 </div>
 
-                <div className={campoLargoCls}>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <div className={isPage ? "" : campoLargoCls}>
+                  <label className={labelCls}>
                     Proveedor <span className="text-muted-foreground/70 font-normal">(opcional)</span>
                   </label>
                   {isView ? (
@@ -526,7 +604,7 @@ function CompraForm({
                         }}
                         onFocus={() => setProvSugAbierto(true)}
                         placeholder="Buscar por nombre, NIT, asesor o email..."
-                        className={`${iCls} pl-10`}
+                        className={`${isPage ? iPaginaCls : iCls} pl-10`}
                       />
                       {/* Punto 6: el desplegable va por encima de todo el formulario. */}
                       {provSugAbierto && (
@@ -576,8 +654,8 @@ function CompraForm({
                   )}
                 </div>
 
-                <div className={campoCortoCls}>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <div className={isPage ? "relative" : campoCortoCls}>
+                  <label className={labelCls}>
                     Fecha de factura {!isView && <span className="text-red-500">*</span>}
                   </label>
                   {isView ? (
@@ -596,19 +674,24 @@ function CompraForm({
                     />
                   )}
                   {!isView && (tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
+                    <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorFechaFactura}</p>
                   )}
                 </div>
 
                 {!isView && (
-                  <div className={campoCortoCls}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Estado
-                    </label>
+                  <div className={isPage ? "" : campoCortoCls}>
+                    <label className={labelCls}>Estado</label>
                     {/* Punto 4: badge fijo con el mismo estilo del listado; sin
                         select, sin flecha y sin poder cambiarlo. La compra se
-                        guarda siempre en "Recibido". */}
-                    <EstadoBadge e="Recibido" />
+                        guarda siempre en "Recibido". En pantalla completa va
+                        centrado en una caja del mismo alto que los campos (40px). */}
+                    {isPage ? (
+                      <div className="h-10 flex items-center justify-center px-3 rounded-xl bg-muted border border-border">
+                        <EstadoBadge e="Recibido" />
+                      </div>
+                    ) : (
+                      <EstadoBadge e="Recibido" />
+                    )}
                   </div>
                 )}
 
@@ -619,62 +702,104 @@ function CompraForm({
                     · Con la tabla vacía se cambia libremente; si ya hay al
                       menos un insumo, la opción no elegida queda bloqueada
                       (y al borrarlos vuelve a desbloquearse).
-                    · La ayuda inferior depende de la opción elegida. */}
+                    · La ayuda inferior depende de la opción elegida y el
+                      mensaje en ROJO aparece solo tras intentar guardar. */}
                 {!isView && (
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <div className={`md:col-span-2 ${isPage ? "relative" : ""}`}>
+                    <label className={labelCls}>
                       ¿Los montos de la factura incluyen IVA?
                     </label>
 
-                    <div className="inline-flex gap-1 p-1 bg-muted border border-border rounded-xl">
-                      {([true, false] as const).map((opcion) => {
-                        const elegida = ivaIncluido === opcion;
-                        const bloqueada = ivaBloqueada(opcion);
+                    {isPage ? (
+                      // Segmentado a ancho completo y 40px: mitades iguales,
+                      // elegida en rojo/blanco y la bloqueada en gris.
+                      <div className="flex w-full h-10 p-1 gap-1 bg-muted border border-border rounded-xl">
+                        {([true, false] as const).map((opcion) => {
+                          const elegida = ivaIncluido === opcion;
+                          const bloqueada = ivaBloqueada(opcion);
 
-                        return (
-                          <span
-                            key={String(opcion)}
-                            className={`inline-flex ${bloqueada ? "cursor-not-allowed" : ""}`}
-                            title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
-                          >
+                          return (
                             <button
+                              key={String(opcion)}
                               type="button"
                               onClick={() => setIvaIncluido(opcion)}
                               aria-pressed={elegida}
                               disabled={bloqueada}
-                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                              title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
+                              className={`flex-1 h-full px-3 text-xs font-semibold rounded-lg transition-colors ${
                                 elegida
                                   ? "bg-primary text-white shadow-sm"
                                   : bloqueada
-                                    ? "bg-background text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+                                    ? "bg-background text-muted-foreground/50 cursor-not-allowed"
                                     : "text-muted-foreground hover:bg-background cursor-pointer"
                               }`}
                             >
                               {opcion ? "Sí, IVA incluido" : "No, sin IVA"}
                             </button>
-                          </span>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="inline-flex gap-1 p-1 bg-muted border border-border rounded-xl">
+                        {([true, false] as const).map((opcion) => {
+                          const elegida = ivaIncluido === opcion;
+                          const bloqueada = ivaBloqueada(opcion);
 
-                    {ivaIncluido === null ? (
-                      <p className="text-xs text-red-500 mt-1.5">
+                          return (
+                            <span
+                              key={String(opcion)}
+                              className={`inline-flex ${bloqueada ? "cursor-not-allowed" : ""}`}
+                              title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setIvaIncluido(opcion)}
+                                aria-pressed={elegida}
+                                disabled={bloqueada}
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                  elegida
+                                    ? "bg-primary text-white shadow-sm"
+                                    : bloqueada
+                                      ? "bg-background text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+                                      : "text-muted-foreground hover:bg-background cursor-pointer"
+                                }`}
+                              >
+                                {opcion ? "Sí, IVA incluido" : "No, sin IVA"}
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {ivaIncluido === null && intentoGuardar ? (
+                      <p className={`text-xs text-red-500 ${isPage ? "absolute left-0 top-full mt-1" : "mt-1"}`}>
                         Selecciona si los montos de la factura incluyen IVA
                       </p>
                     ) : (
-                      <p className="text-[11px] text-muted-foreground mt-1.5">
-                        {ivaIncluido
-                          ? "El monto unitario de cada línea ya trae el IVA adentro."
-                          : "El monto unitario de cada línea es base y el IVA se suma aparte."}
+                      <p className={`text-xs text-muted-foreground ${isPage ? "absolute left-0 top-full mt-1" : "mt-1"}`}>
+                        {ivaIncluido === null
+                          ? "Indica cómo vienen los montos en la factura"
+                          : ivaIncluido
+                            ? "El monto unitario de cada línea ya trae el IVA adentro."
+                            : "El monto unitario de cada línea es base y el IVA se suma aparte."}
                       </p>
                     )}
                   </div>
                 )}
               </div>
+              </section>
+
+              {/* Sección 2 — "Insumos": fila de agregar, aviso de errores y
+                  la tabla (que es la única que scrollea en pantalla completa). */}
+              <section
+                className={`flex flex-col ${isPage ? "gap-2 min-h-0 flex-1" : "gap-5"}`}
+              >
+                {isPage && <p className={seccionCls}>Insumos</p>}
 
               {/* Agregar insumo — solo en el formulario de creación */}
               {!isView && (
-                <div className="shrink-0">
+                <div className="shrink-0 relative">
                   <CompactInsumoForm
                     containerRef={itemRef}
                     titulo="Agregar insumo"
@@ -698,15 +823,24 @@ function CompraForm({
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
                     onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
-                    onCrearInsumo={() => setShowNuevoInsumo(true)}
-                   />
-                 </div>
-               )}
-
-              {!isView && (errorItems || errorTotal) && (algunoTocado || intentoGuardar) && (
-                <p className="text-xs text-red-500 ml-0.5 shrink-0">
-                  {errorItems ?? errorTotal}
-                </p>
+                    onCrearInsumo={() => {
+                      // Al abrir el modal se cierra el desplegable de
+                      // sugerencias: si queda abierto quedaría por encima del
+                      // formulario de "Nuevo Insumo" e interceptaría los clics.
+                      setItemSugAbierto(false);
+                      setShowNuevoInsumo(true);
+                    }}
+                    compacto={isPage}
+                  />
+                  {/* Aviso de insumos/total: en pantalla completa va justo
+                      debajo de la fila (solo empuja la tabla al aparecer); en
+                      el modal, con el mismo margen de 20px de antes. */}
+                  {(errorItems || errorTotal) && (algunoTocado || intentoGuardar) && (
+                    <p className={`text-xs text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
+                      {errorItems ?? errorTotal}
+                    </p>
+                  )}
+                </div>
               )}
 
               {isView ? (
@@ -778,23 +912,27 @@ function CompraForm({
                   totalLabel="Total pagado"
                   modoIva
                   ivaIncluido={ivaIncluido ?? true}
+                  // En pantalla completa la tabla scrollea sola y deja los
+                  // totales fuera del área con scroll.
+                  enPagina={isPage}
                   className={isPage ? "flex-1 min-h-0" : ""}
                 />
               )}
+              </section>
             </div>
 
             {/* Footer — solo en creación; en detalle se cierra con la X del encabezado */}
             {!isView && (
-              <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
+              <div className={`flex gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-t border-border shrink-0`}>
                 <button
-                  onClick={onClose}
+                  onClick={salir}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={guardar}
-                  disabled={!formValido}
+                  disabled={!botonGuardarOk}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
@@ -852,6 +990,28 @@ function CompraForm({
           />
         )}
       </AnimatePresence>
+
+      {/* Volver con datos escritos (solo pantalla completa): pide confirmación
+          antes de descartar lo que se escribió. */}
+      <AnimatePresence>
+        {showSalirConf && (
+          <ConfirmModal
+            title="¿Salir sin guardar?"
+            detail="Hay datos en esta compra que se perderán si sales ahora."
+            confirmLabel="Salir"
+            icon={
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-amber-600" />
+              </div>
+            }
+            onConfirm={() => {
+              setShowSalirConf(false);
+              onClose();
+            }}
+            onCancel={() => setShowSalirConf(false)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -904,6 +1064,8 @@ export function NuevaCompraPage({
 
   return (
     <CompraForm
+      // Pantalla completa dentro del panel (no modal).
+      fullPage
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}

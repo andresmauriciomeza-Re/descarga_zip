@@ -150,6 +150,16 @@ const opcionesEstado = (estado: EstadoOrden): EstadoOption<EstadoOrden>[] =>
  * para que ambos módulos se vean igual de compactos.
  */
 export const FORM_MAXW = "max-w-4xl";
+/** Ancho del contenido cuando el formulario va a pantalla completa (no modal). */
+const FORM_MAXW_PAGINA = "max-w-5xl";
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
+ *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */
+const iPaginaCls =
+  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+/** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
+ *  que el formulario Nuevo Proveedor. */
+const seccionCls =
+  "text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground pb-1.5 border-b border-border";
 
 // ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -618,6 +628,7 @@ export function OrdenModal({
   const [showNuevoProv, setShowNuevoProv] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
+  const [showSalirConf, setShowSalirConf] = useState(false);
 
   // Historial de cambios de estado
   const [estadoHistorial, setEstadoHistorial] = useState<{ estado: EstadoOrden; fecha: string }[]>(() => {
@@ -631,6 +642,31 @@ export function OrdenModal({
   const [provQuery, setProvQuery] = useState(mode === "create" ? "" : (orden?.proveedor ?? ""));
   const [showProvSug, setShowProvSug] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
+
+  // Confirmación al salir (solo pantalla completa): guarda una foto del estado
+  // inicial del formulario para saber si el usuario llegó a escribir algo.
+  const inicialRef = useRef({
+    proveedor: form.proveedor,
+    fecha: form.fecha,
+    estado: form.estado,
+    query: provQuery,
+    items: JSON.stringify(form.items),
+  });
+  const sucio =
+    form.proveedor !== inicialRef.current.proveedor ||
+    form.fecha !== inicialRef.current.fecha ||
+    form.estado !== inicialRef.current.estado ||
+    provQuery !== inicialRef.current.query ||
+    JSON.stringify(form.items) !== inicialRef.current.items;
+
+  /** Cerrar: si hay datos escritos pide confirmación antes de perderlos. */
+  const salir = () => {
+    if (isPage && sucio) {
+      setShowSalirConf(true);
+      return;
+    }
+    onClose();
+  };
 
   const provSugs = useMemo(() => {
     const q = provQuery.trim().toLowerCase();
@@ -685,9 +721,14 @@ export function OrdenModal({
   const marcarTocado = (campo: "proveedor" | "fecha") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
+  /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
+  const labelCls = isPage
+    ? "block text-[13px] leading-tight font-medium text-foreground/70 mb-1"
+    : "block text-xs font-semibold text-muted-foreground mb-1.5";
+
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
-    `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
+    `${isPage ? iPaginaCls : iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
   const suggestions = useMemo(() => {
     const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
@@ -793,12 +834,22 @@ export function OrdenModal({
     onGuardar(form);
   };
 
+  /** Subtítulo de la cabecera (solo cuando aporta algo). */
+  const subtitulo =
+    isView || mode === "edit"
+      ? orden
+        ? `${orden.proveedor} · ${orden.fecha}`
+        : ""
+      : isPage
+        ? "Solicita insumos a un proveedor"
+        : "";
+
   return (
     <>
       <div
         className={
           isPage
-            ? `w-full p-6 ${FORM_MAXW} mx-auto h-full flex flex-col`
+            ? `w-full p-3 ${FORM_MAXW_PAGINA} mx-auto h-full flex flex-col overflow-hidden`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -814,32 +865,43 @@ export function OrdenModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${FORM_MAXW}${
+            className={`flex flex-col w-full ${isPage ? FORM_MAXW_PAGINA : FORM_MAXW}${
               isPage
-                ? "h-full"
+                ? " h-full"
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-              <div>
-                <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {mode === "create"
-                    ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
-                    : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
-                </h3>
-                {orden && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{orden.proveedor} · {orden.fecha}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {isView && orden && <EstadoBadge e={orden.estado} />}
-                {isPage ? (
-                  <button onClick={onClose} title="Volver" className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+            {/* Cabecera: ← + título + subtítulo en pantalla completa; X en el
+                modal. Volver pide confirmación si hay datos escritos. */}
+            <div className={`flex items-center justify-between gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
+              <div className="flex items-center gap-3 min-w-0">
+                {isPage && (
+                  <button
+                    onClick={salir}
+                    title="Volver"
+                    className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                  >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                ) : (
-                  <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                )}
+                <div className="min-w-0">
+                  <h3
+                    className={`${isPage ? "text-lg" : "text-base"} font-bold text-foreground`}
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {mode === "create"
+                      ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
+                      : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
+                  </h3>
+                  {subtitulo && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {isView && orden && <EstadoBadge e={orden.estado} />}
+                {!isPage && (
+                  <button onClick={salir} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -849,7 +911,7 @@ export function OrdenModal({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-4 flex flex-col gap-4 overflow-hidden"
+                  ? "flex-1 min-h-0 px-5 py-1 flex flex-col gap-6 overflow-hidden"
                   : "flex-1 min-h-0 px-5 py-5 space-y-5 overflow-y-auto"
               }
             >
@@ -873,11 +935,22 @@ export function OrdenModal({
                 </div>
               )}
 
-              {/* Fields */}
-              <div className="grid grid-cols-2 gap-4 shrink-0">
+              {/* Sección 1 — "Datos de la orden" (el título solo existe en
+                  pantalla completa; en el modal el `<section>` solo agrupa
+                  para mantener el mismo espaciado de antes). */}
+              <section className={`flex flex-col ${isPage ? "gap-2 shrink-0" : "gap-5"}`}>
+                {isPage && <p className={seccionCls}>Datos de la orden</p>}
+
+              {/* Fields — pantalla completa: Proveedor · Fecha · Estado en
+                  TRES columnas iguales (fila única). */}
+              <div
+                className={`grid gap-4 shrink-0 ${
+                  isPage ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2"
+                }`}
+              >
                 {isCompra && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura <span className="text-red-500">*</span></label>
+                    <label className={labelCls}>Número de factura <span className="text-red-500">*</span></label>
                     {isView
                       ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "—"}</p>
                       : (
@@ -897,12 +970,12 @@ export function OrdenModal({
                 )}
                 {orden?.id && (
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N· Orden</label>
+                    <label className={labelCls}>N· Orden</label>
                     <input value={orden.id} readOnly className={`${iCls} opacity-60 cursor-default`} />
                   </div>
                 )}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Proveedor {!isView && <span className="text-red-500">*</span>}</label>
+                <div className={isPage ? "relative" : ""}>
+                  <label className={labelCls}>Proveedor {!isView && <span className="text-red-500">*</span>}</label>
                   {isView
                     ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
                     : (
@@ -969,11 +1042,11 @@ export function OrdenModal({
                       </div>
                     )}
                   {!isView && (tocado.proveedor || intentoGuardar) && errorProveedor && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorProveedor}</p>
+                    <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorProveedor}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Fecha {!isView && <span className="text-red-500">*</span>}</label>
+                <div className={isPage ? "relative" : ""}>
+                  <label className={labelCls}>Fecha {!isView && <span className="text-red-500">*</span>}</label>
                   {isView
                     ? <p className="text-sm font-semibold text-foreground py-2">{form.fecha}</p>
                     : (
@@ -988,12 +1061,12 @@ export function OrdenModal({
                       />
                     )}
                   {!isView && (tocado.fecha || intentoGuardar) && errorFecha && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFecha}</p>
+                    <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorFecha}</p>
                   )}
                 </div>
                 {!isView && (
                   <div onMouseDown={() => setShowProvSug(false)}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
+                    <label className={labelCls}>Estado <span className="text-red-500">*</span></label>
                     {/* Punto 6: el trigger va SIN z-index ni position con z. Con
                         `relative z-40` el badge "Borrador" se montaba sobre el
                         desplegable del Proveedor (z-50) y tapaba los resultados.
@@ -1033,10 +1106,16 @@ export function OrdenModal({
                   </div>
                 )}
               </div>
+              </section>
+
+              {/* Sección 2 — "Insumos": fila de agregar, aviso de errores y
+                  la tabla (que es la única que scrollea en pantalla completa). */}
+              <section className={`flex flex-col ${isPage ? "gap-2 min-h-0 flex-1" : "gap-5"}`}>
+                {isPage && <p className={seccionCls}>Insumos</p>}
 
               {/* Agregar insumo */}
               {!isView && (
-                <div className="shrink-0">
+                <div className="shrink-0 relative">
                   <CompactInsumoForm
                     containerRef={sugRef}
                     titulo="Agregar insumo"
@@ -1063,13 +1142,23 @@ export function OrdenModal({
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
                     onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
-                    onCrearInsumo={() => setShowNuevoInsumo(true)}
+                    onCrearInsumo={() => {
+                      // Idem Compra: el desplegable de sugerencias se cierra
+                      // para no quedar por encima del modal de "Nuevo Insumo".
+                      setAShowSug(false);
+                      setShowNuevoInsumo(true);
+                    }}
+                    compacto={isPage}
                   />
+                  {/* Aviso de insumos: en pantalla completa va justo debajo de
+                      la fila (solo empuja la tabla al aparecer); en el modal,
+                      con el mismo margen de 20px de antes. */}
+                  {!isView && errorItems && (algunoTocado || intentoGuardar) && (
+                    <p className={`text-xs text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
+                      {errorItems}
+                    </p>
+                  )}
                 </div>
-              )}
-
-              {!isView && errorItems && (algunoTocado || intentoGuardar) && (
-                <p className="text-xs text-red-500 ml-0.5 shrink-0">{errorItems}</p>
               )}
 
               {/* Items table */}
@@ -1078,6 +1167,9 @@ export function OrdenModal({
                 showActions={!isView}
                 onRemove={!isView ? (rowId) => pf({ items: form.items.filter((i) => i.rowId !== rowId) }) : undefined}
                 onUpdate={!isView ? (rowId, patch) => pf({ items: form.items.map(i => i.rowId === rowId ? { ...i, ...patch } : i) }) : undefined}
+                // En pantalla completa la tabla scrollea sola y deja los
+                // totales (Subtotal · IVA · Total estimado) fuera del scroll.
+                enPagina={isPage}
                 className={isPage ? "flex-1 min-h-0" : ""}
               />
 
@@ -1129,13 +1221,14 @@ export function OrdenModal({
                   </table>
                 </div>
               )}
+              </section>
             </div>
 
             {/* Footer ��� solo en creación; en detalle se cierra con la X del encabezado */}
             {!isView && (
-              <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
+              <div className={`flex gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-t border-border shrink-0`}>
                 <button
-                  onClick={onClose}
+                  onClick={salir}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
                 >
                   Cancelar
@@ -1189,6 +1282,25 @@ export function OrdenModal({
             }
             onConfirm={() => { onGuardar(form); setShowSendConf(false); }}
             onCancel={() => setShowSendConf(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Volver con datos escritos (solo pantalla completa): pide confirmación
+          antes de descartar lo que se escribió. */}
+      <AnimatePresence>
+        {showSalirConf && (
+          <ConfirmModal
+            title="¿Salir sin guardar?"
+            detail="Hay datos en esta orden que se perderán si sales ahora."
+            confirmLabel="Salir"
+            icon={
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-amber-600" />
+              </div>
+            }
+            onConfirm={() => { setShowSalirConf(false); onClose(); }}
+            onCancel={() => setShowSalirConf(false)}
           />
         )}
       </AnimatePresence>
@@ -1255,6 +1367,9 @@ export function NuevaOrdenCompraPage({
     <OrdenModal
       mode="create"
       tipo="orden"
+      // Pantalla completa dentro del panel (no modal): cabecera con ← y
+      // pie Cancelar/Guardar siempre visibles, sin scroll de página.
+      fullPage
       proveedores={proveedores}
       insumos={insumos}
       onClose={onBack}
