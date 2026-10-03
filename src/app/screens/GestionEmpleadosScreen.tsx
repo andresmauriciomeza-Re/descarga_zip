@@ -183,13 +183,28 @@ export function GestionEmpleadosScreen({
         activo: emp.activo,
       };
       if (target) {
+        // Actualizar NUNCA toca `contrasena`: si no, cada edición de ficha
+        // pisaría la clave que el usuario cambió en "Mi perfil" o en
+        // "Restablecer contraseña" y lo dejaría sin su clave nueva.
         return prev.map(u => u.id === target.id ? { ...u, ...base } : u);
       }
       const maxNum = prev.reduce((max, u) => {
         const n = parseInt(u.id.replace("USR-", ""), 10) || 0;
         return Math.max(max, n);
       }, 0);
-      return [...prev, { id: `USR-${String(maxNum + 1).padStart(3, "0")}`, ...base }];
+      // Al CREAR sí se copia la contraseña de la ficha: sin este campo el
+      // usuario nace con `contrasena` indefinida y el login exige "123456",
+      // con lo que la clave que se acabó de escribir en el alta no serviría.
+      // Ojo: este alta ocurre ANTES que el efecto de sincronización de App
+      // (mismo tick), por eso tiene que llevarla ella y no esperar a ese efecto.
+      return [
+        ...prev,
+        {
+          id: `USR-${String(maxNum + 1).padStart(3, "0")}`,
+          ...base,
+          contrasena: emp.contrasena,
+        },
+      ];
     });
   };
 
