@@ -1164,7 +1164,7 @@ export function OrdenProduccionScreen({
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Orden Producción</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
@@ -1181,7 +1181,7 @@ export function OrdenProduccionScreen({
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
@@ -1202,13 +1202,13 @@ export function OrdenProduccionScreen({
       </div>
 
       {/* Listado */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1224,31 +1224,31 @@ export function OrdenProduccionScreen({
                 const completada = o.estadoOrden === "completada";
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
+                    <td className="px-4 py-2">
+                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
                       {o.tipo === "pedido" && o.ventaNumero && (
                         <p className="text-[11px] text-muted-foreground">Venta {o.ventaNumero}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
                         o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
                       }`}>
                         {TIPO_LABEL[o.tipo]}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       <p className="text-sm font-medium text-foreground">{resumenProductos(o)}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {o.lineas.map((l) => `${l.cantidadEstimada} × ${l.nombre}`).join(", ")}
                       </p>
                     </td>
-                    <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
+                    <td className="px-4 py-2 text-sm font-semibold text-foreground whitespace-nowrap">
                       {o.lineas.length === 1
                         ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad)
                         : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
-                    <td className="px-4 py-3.5 text-sm whitespace-nowrap">
+                    <td className="px-4 py-2 text-sm whitespace-nowrap">
                       {!completada ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
@@ -1264,7 +1264,7 @@ export function OrdenProduccionScreen({
                         </>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       {VALID_TRANSITIONS[o.estadoOrden].length === 0 ? (
                         <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
                           {ESTADO_LABEL[o.estadoOrden]}
@@ -1285,10 +1285,10 @@ export function OrdenProduccionScreen({
                         </select>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                       {fmtDT(ultimoCambio(o))}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setDetailItem(o)} title="Ver detalle"
                           className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>

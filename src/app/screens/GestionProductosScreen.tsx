@@ -1669,8 +1669,12 @@ export function GestionProductosScreen({
   // ── Pantalla completa Editar Producto ─────────────────────────────
   if (editItem) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
+      /* Misma estructura que Crear Producto: alto fijo sobre el viewport
+         (AdminTopBar h-14 + footer del admin) y cada columna scrollea
+         por dentro; la página nunca scrollea. */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+        {/* Cabecera fija: no crece ni genera scroll */}
+        <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Modifica los datos del producto</p>
@@ -1696,13 +1700,16 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        <div className="flex divide-x divide-border" style={{ minHeight: "calc(100vh - 73px)" }}>
+        {/* Dos columnas: cada columna scrollea por dentro, nunca la página */}
+        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
 
-          {/* COLUMNA IZQUIERDA: datos editables. Con la ficha oculta ocupa el
-              ancho (max-w-2xl centrado) con animación de 0,2 s. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-1/2"} px-8 py-6 overflow-y-auto transition-all duration-200`}>
-            <div className={fichaOculta ? "max-w-2xl mx-auto" : ""}>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
+          {/* COLUMNA IZQUIERDA: datos editables. Con la ficha oculta ocupa
+              el ancho (max-w-2xl centrado) con animación de 0,2 s. Los
+              datos scrollean por dentro de la columna, nunca la página. */}
+          <div className={`${fichaOculta ? "flex-1" : "w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
+            <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
+            <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
             {/* ¿Tiene ficha técnica? — bloqueado si ya hay versiones guardadas */}
             {(() => {
               const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
@@ -1759,6 +1766,7 @@ export function GestionProductosScreen({
               lockNombre: true,
             })}
             </div>
+            </div>
           </div>
 
           {/* COLUMNA DERECHA: ficha técnica. Solo el borrador es editable;
@@ -1767,25 +1775,27 @@ export function GestionProductosScreen({
               deshabilitada con el mensaje correspondiente. Al ocultarla, la
               columna colapsa con animación de 0,2 s sin borrar los datos. */}
           {tipoDe(editItem) !== TIPOS_PRODUCTO[0] ? (
-            <div className={`py-6 overflow-y-auto flex flex-col transition-all duration-200 ${
-              fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-8 opacity-100"
+            <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
+              fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
             }`}>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
+              <div className="flex-1 min-h-0 flex flex-col">
+              <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
               <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/40 rounded-2xl border border-border p-6 select-none">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                   <span className="text-2xl">📋</span>
                 </div>
                 <p className="text-sm font-semibold text-muted-foreground">Este producto no lleva ficha técnica</p>
               </div>
+              </div>
             </div>
           ) : (() => {
             const activeEV = editFichaBorrador;
             const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
             return (
-              <div className={`py-6 overflow-y-auto flex flex-col transition-all duration-200 ${
-                fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-8 opacity-100"
+              <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
+                fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
               }`}>
-                <div className="flex items-center justify-between mb-2">
+                <div className="shrink-0 flex items-center justify-between mb-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
                   <div className="flex items-center gap-1 flex-wrap justify-end">
                     <VersionPills
@@ -1806,12 +1816,13 @@ export function GestionProductosScreen({
                 </div>
 
                 {editFichaVersiones.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                  <p className="shrink-0 text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
                     Esta ficha tiene {editFichaVersiones.length} {editFichaVersiones.length === 1 ? "versión" : "versiones"}. Las versiones anteriores no se pueden modificar.
                   </p>
                 )}
 
                 {vSel ? (
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="rounded-2xl border border-border bg-muted/50 p-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-muted-foreground">
@@ -1834,7 +1845,9 @@ export function GestionProductosScreen({
                       readCls="w-full px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-muted-foreground"
                     />
                   </div>
+                  </div>
                 ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
                 <div className="space-y-4 flex-1">
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
@@ -1937,8 +1950,9 @@ export function GestionProductosScreen({
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-                  </div>
-                </div>
+                   </div>
+                 </div>
+                 </div>
                 )}
 
                 {/* La ficha se guarda con el botón "Guardar" del encabezado. */}
