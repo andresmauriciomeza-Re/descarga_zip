@@ -2014,7 +2014,7 @@ export function GestionProductosScreen({
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-6 py-5 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -2083,31 +2083,31 @@ export function GestionProductosScreen({
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
                     Crear/Editar (aquí solo ocupaba ancho y alto). */}
                 {[
-                  "Nombre",
-                  "Tipo",
-                  "Ficha técnica",
-                  "Categoría",
-                  "Precio de venta",
-                  "Stock",
-                  "Estado",
-                  "Acciones",
-                ].map((h) => (
+                  { h: "Nombre", w: "w-[13%]" },
+                  { h: "Tipo", w: "w-[14%]" },
+                  { h: "Ficha técnica", w: "w-[10%]" },
+                  { h: "Categoría", w: "w-[8%]" },
+                  { h: "Precio de venta", w: "w-[10%]" },
+                  { h: "Stock", w: "w-[17%]", pl: "pl-10" },
+                  { h: "Estado", w: "w-[16%]" },
+                  { h: "Acciones", w: "w-[12%]" },
+                ].map(({ h, w, pl }) => (
                   <th
                     key={h}
-                    className="px-4 py-2 text-left font-semibold whitespace-nowrap"
+                    className={`px-4 py-2 text-left font-semibold whitespace-nowrap ${w} ${pl ?? ""}`}
                   >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className={`divide-y divide-border ${filtered.length > 0 ? "min-h-[305px]" : ""}`}>
               {filtered.length === 0 ? (
                 <tr>
                   <td
@@ -2122,9 +2122,9 @@ export function GestionProductosScreen({
                 paged.map((p) => (
                   <tr
                     key={p.id}
-                    className="hover:bg-muted/20 transition-colors"
+                    className="hover:bg-muted/20 transition-colors h-[61px]"
                   >
-                    <td className="px-4 py-2.5 text-sm font-medium text-foreground">
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground truncate" title={p.nombre}>
                       {p.nombre}
                     </td>
                     <td className="px-4 py-2.5">
@@ -2156,7 +2156,7 @@ export function GestionProductosScreen({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-sm text-foreground">
+                    <td className="px-4 py-2.5 text-sm text-foreground truncate" title={catName(p.idCategoria)}>
                       {catName(p.idCategoria)}
                     </td>
                     {/* Precio de venta al público (precioUnitario), NO el
@@ -2167,11 +2167,14 @@ export function GestionProductosScreen({
                     >
                       {fmtCOP(p.precioUnitario)}
                     </td>
-                    <td className="px-4 py-2.5" title={ayudaStock(p)}>
+                    <td className="pl-10 pr-4 py-2.5" title={ayudaStock(p)}>
                       {/* Stock en UNA sola línea: "50 pizzas · 400 porciones"
                           (el detalle por pizza queda solo en el tooltip del
                           título). Producto o sin ficha: solo unidades. */}
-                      <span className="text-sm whitespace-nowrap">
+                      <span
+                        className="text-sm block truncate"
+                        title={`${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}${tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) ? ` · ${p.stockDisponible * fichaVigente(p.id)!.porciones} porciones` : ""}`}
+                      >
                         <span
                           className={`font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
                         >
