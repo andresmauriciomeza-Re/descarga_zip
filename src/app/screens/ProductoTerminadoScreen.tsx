@@ -86,7 +86,7 @@ export function ProductoTerminadoScreen() {
             Producto Terminado
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {productos.length} productos · {listos} listos para entrega · {entregados} entregados
+            {productos.length} producto{productos.length === 1 ? "" : "s"} · {listos} listos para entrega · {entregados} entregados
           </p>
         </div>
       </div>

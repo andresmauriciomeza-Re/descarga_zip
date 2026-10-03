@@ -233,7 +233,7 @@ function ChartTooltip({ active, payload, label, isCOP }: { active?: boolean; pay
   return (
     <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
       <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      <p className="font-bold text-foreground">{isCOP ? fmtCOP(payload[0].value) : `${payload[0].value} productos`}</p>
+      <p className="font-bold text-foreground">{isCOP ? fmtCOP(payload[0].value) : `${payload[0].value} producto${payload[0].value === 1 ? "" : "s"}`}</p>
     </div>
   );
 }

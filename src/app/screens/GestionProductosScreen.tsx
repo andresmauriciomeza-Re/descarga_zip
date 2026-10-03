@@ -65,7 +65,14 @@ export interface Producto {
   nombre: string;
   idCategoria: string;
   tipo: TipoProducto;
+  /** Costo de producir el producto. NO se escribe desde el formulario: el
+      campo de precio escribe solo `precioUnitario` (costo y precio de venta
+      son conceptos distintos y aquí no se mezclan). */
+  // TODO: calcular desde los insumos de la ficha técnica vigente.
   costoUnitario: number;
+  /** Precio de venta al público: lo que paga el cliente. Es el que muestran
+      el listado, el Excel, Ver detalle y el menú público (tarjeta, detalle y
+      carrito). */
   precioUnitario: number;
   unidadVenta: string;
   stockDisponible: number;
@@ -586,47 +593,66 @@ function VersionPills({
 }
 
 /** Vista de solo lectura de una versión de la ficha: la usan Ver detalle y,
-    para las versiones históricas, la pantalla Editar. */
+    para las versiones históricas, la pantalla Editar.
+    En Ver detalle la columna derecha no tiene scroll: los bloques de arriba
+    son `shrink-0` y la LISTA DE PASOS (y solo ella) crece con el espacio
+    libre y desplaza dentro de su propio recuadro cuando la receta es larga. */
 function FichaReadOnly({ v, readCls }: { v: FichaVersion; readCls: string }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</p>
+    <div className="flex flex-col gap-2 min-h-0 flex-1">
+      <div className="shrink-0">
+        <p className="text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</p>
         <div className={readCls}>{v.idReceta}</div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      {/* Tiempo de preparación y Porciones en una sola fila (2 columnas). */}
+      <div className="shrink-0 grid grid-cols-2 gap-3">
         <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación (min)</p>
+          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</p>
           <div className={readCls}>{v.tiempoPreparacion}</div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Porciones</p>
+          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Porciones</p>
           <div className={readCls}>{v.porciones}</div>
         </div>
       </div>
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground mb-2">Insumos</p>
+      {/* Insumos: tabla compacta (Insumo | Cantidad | Unidad) con filas de
+          menor alto en lugar de las tarjetas apiladas. */}
+      <div className="shrink-0">
+        <p className="text-xs font-semibold text-muted-foreground mb-1">Insumos</p>
         {v.insumos.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">Sin insumos registrados</p>
         ) : (
-          <div className="space-y-1.5">
-            {v.insumos.map((ins, idx) => (
-              <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                <span className="flex-1 text-sm font-medium text-foreground">{ins.nombre}</span>
-                <span className="text-xs text-muted-foreground font-mono">{ins.cantidad} {ins.unidad}</span>
-              </div>
-            ))}
+          <div className="rounded-xl overflow-hidden border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider">
+                  <th className="px-3 py-1 text-left font-semibold">Insumo</th>
+                  <th className="px-3 py-1 text-right font-semibold">Cantidad</th>
+                  <th className="px-3 py-1 text-right font-semibold">Unidad</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border bg-muted/40">
+                {v.insumos.map((ins, idx) => (
+                  <tr key={idx}>
+                    <td className="px-3 py-1 font-medium text-foreground">{ins.nombre}</td>
+                    <td className="px-3 py-1 text-right text-xs text-muted-foreground font-mono">{ins.cantidad}</td>
+                    <td className="px-3 py-1 text-right text-xs text-muted-foreground font-mono">{ins.unidad}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</p>
+      {/* Pasos: lista numerada compacta. Es el ÚNICO scroller del detalle. */}
+      <div className="flex flex-col min-h-0 flex-1">
+        <p className="shrink-0 text-xs font-semibold text-muted-foreground mb-1">Preparación (pasos de elaboración)</p>
         {(v.pasos ?? []).length === 0 ? (
           <p className="text-xs text-muted-foreground italic">Sin pasos registrados</p>
         ) : (
-          <ol className="space-y-1.5">
+          <ol className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1">
             {(v.pasos ?? []).map((paso, idx) => (
-              <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
+              <li key={idx} className="flex items-start gap-2 px-3 py-1 bg-muted/40 rounded-xl border border-border">
                 <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
               </li>
@@ -874,7 +900,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const catName = (id: string) =>
     CATEGORIAS_PRODUCTO.find((c) => c.id === id)?.nombre ?? id;
 
@@ -1060,7 +1086,7 @@ export function GestionProductosScreen({
     toast.success("Producto eliminado");
   };
 
-  const roCls = "w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
+  const roCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
   const FormFields = ({
     values,
     onChange,
@@ -1074,10 +1100,10 @@ export function GestionProductosScreen({
     readOnly?: boolean;
     lockNombre?: boolean;
   }) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       {/* Nombre */}
       <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
           Nombre *
         </label>
         <input
@@ -1088,31 +1114,37 @@ export function GestionProductosScreen({
           className={readOnly || lockNombre ? roCls : inputCls}
         />
       </div>
-      {/* Tipo (solo lectura aquí; en Crear/Editar se define con "¿Tiene ficha técnica?") */}
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
+      {/* Tipo (solo lectura aquí; en Crear/Editar se define con "¿Tiene ficha
+          técnica?"). Comparte fila con Estado en la cuadrícula de 2 columnas. */}
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
           Tipo
         </label>
         <div>
-          <span className={`inline-flex px-3 py-1.5 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(values))}`}>
+          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(values))}`}>
             {tipoDe(values)}
           </span>
         </div>
       </div>
-      {/* Estado (solo lectura; se cambia desde la lista del index) */}
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
+      {/* Estado (solo lectura; se cambia desde la lista del index). Comparte
+          fila con Tipo. */}
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
           Estado
         </label>
         <div>
           <EstadoBadge estado={values.estado} />
         </div>
       </div>
-      {/* Imagen */}
+      {/* Imagen. En Ver detalle (solo lectura) la etiqueta no se muestra: la
+          foto ya es evidente y el requisito de ese diseño separa la imagen
+          (fija, 160 px) de la cuadrícula de datos. */}
       <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
-          Imagen del producto
-        </label>
+        {!readOnly && (
+          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+            Imagen del producto
+          </label>
+        )}
         {!readOnly && (
           <div className="flex gap-2 mb-2">
             <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
@@ -1154,7 +1186,7 @@ export function GestionProductosScreen({
       </div>
       {/* Categoría (se muestra solo el nombre; el id queda interno) */}
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
           Categoría *
         </label>
         <select
@@ -1168,15 +1200,17 @@ export function GestionProductosScreen({
           ))}
         </select>
       </div>
-      {/* Precio unitario */}
+      {/* Precio de venta al público (precioUnitario): es el precio que
+          muestran el listado, el Excel y el menú público. El costo
+          (costoUnitario) no se edita aquí: ver el TODO de la interfaz. */}
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-1">
-          Precio unitario (COP)
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+          Precio de venta (COP)
         </label>
         <input
           type="number"
-          value={values.costoUnitario}
-          onChange={(e) => onChange("costoUnitario", Number(e.target.value))}
+          value={values.precioUnitario}
+          onChange={(e) => onChange("precioUnitario", Number(e.target.value))}
           readOnly={readOnly}
           className={readOnly ? roCls : inputCls}
         />
@@ -1184,7 +1218,7 @@ export function GestionProductosScreen({
       {/* Unidad de venta */}
       {!hideUnidad && (
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">
+          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
             Unidad de venta
           </label>
           <select
@@ -1315,7 +1349,7 @@ export function GestionProductosScreen({
             <div className="flex-1 min-h-0 max-h-[27rem] overflow-y-auto flex flex-col justify-between gap-4">
               {/* ¿Tiene ficha técnica? — obligatorio, define el tipo */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">¿Tiene ficha técnica? *</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
                 <div className="flex items-center gap-2 flex-wrap">
                   {(["si", "no"] as const).map((op) => (
                     <button
@@ -1353,13 +1387,13 @@ export function GestionProductosScreen({
               </div>
               {/* Nombre */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Nombre *</label>
                 <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
                   placeholder="Ej: Margarita Clásica" className={iCls} />
               </div>
               {/* Imagen */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Imagen del producto</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Imagen del producto</label>
                 <div className="flex gap-2 mb-2">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                     <Plus className="w-3.5 h-3.5" /> Subir archivo
@@ -1386,7 +1420,7 @@ export function GestionProductosScreen({
               </div>
               {/* Categoría (se muestra solo el nombre; el id queda interno) */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría *</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
                 <select value={form.idCategoria} onChange={e => setForm(p => ({ ...p, idCategoria: e.target.value }))}
                   className={iCls + " cursor-pointer"}>
                   {CATEGORIAS_PRODUCTO.map(c => (
@@ -1394,12 +1428,13 @@ export function GestionProductosScreen({
                   ))}
                 </select>
               </div>
-              {/* Precio (el stock NO se escribe aquí: todo producto nuevo
-                  empieza en 0 y lo actualiza el sistema) */}
+              {/* Precio de venta (precioUnitario; el stock NO se escribe aquí:
+                  todo producto nuevo empieza en 0 y lo actualiza el sistema).
+                  El costo no se toca: ver el TODO de la interfaz Producto. */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Precio unitario (COP)</label>
-                <input type="number" value={form.costoUnitario}
-                  onChange={e => setForm(p => ({ ...p, costoUnitario: Number(e.target.value) }))} className={iCls} />
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Precio de venta (COP)</label>
+                <input type="number" value={form.precioUnitario}
+                  onChange={e => setForm(p => ({ ...p, precioUnitario: Number(e.target.value) }))} className={iCls} />
               </div>
             </div>
             </div>
@@ -1444,18 +1479,18 @@ export function GestionProductosScreen({
               <div className="space-y-4">
                 {/* ID Ficha Técnica + Tiempo + Porciones */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</label>
                   <input value={activeV.idReceta} readOnly tabIndex={-1}
                     className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación (min)</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
                     <input type="number" min={0} value={activeV.tiempoPreparacion}
                       onChange={e => updateFichaField("tiempoPreparacion", Number(e.target.value))} className={iCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Porciones</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones</label>
                     <input type="number" min={1} value={activeV.porciones}
                       onChange={e => updateFichaField("porciones", Number(e.target.value))} className={iCls} />
                   </div>
@@ -1488,13 +1523,13 @@ export function GestionProductosScreen({
                       onSelect={seleccionarFichaInsumo}
                     />
                     <div className="w-20">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
                       <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
                         onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
                         className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
                     </div>
                     <div className="w-24">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
                       <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
                         className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
                         {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
@@ -1564,10 +1599,15 @@ export function GestionProductosScreen({
     // cambió mientras el detalle estaba abierto.
     const vIdx = ficha ? Math.min(detailVIdx, ficha.length - 1) : 0;
     const fichaV = ficha ? ficha[vIdx] : null;
-    const readCls = "w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
+    const readCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
     return (
-      <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
+      /* Igual que Crear: altura fija sobre el viewport menos el AdminTopBar
+         (h-14) y el footer del admin. La pantalla ocupa exactamente el alto de
+         la ventana y la página NUNCA desplaza; las columnas tienen su propio
+         espacio: la izquierda scrollea solo como respaldo y en la derecha la
+         única barra posible es la de la lista de pasos (recetas largas). */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+        <div className="shrink-0 bg-card border-b border-border px-6 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Información del producto y su ficha técnica</p>
@@ -1586,56 +1626,57 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        <div className="flex divide-x divide-border" style={{ minHeight: "calc(100vh - 73px)" }}>
+        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
 
-          {/* COLUMNA IZQUIERDA: datos del producto */}
-          <div className={tipoDe(detailItem) === TIPOS_PRODUCTO[0] ? "w-1/2 px-8 py-6 overflow-y-auto" : "w-full max-w-2xl mx-auto px-8 py-6 overflow-y-auto"}>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
+          {/* COLUMNA IZQUIERDA: datos del producto. `overflow-y-auto` es solo
+              respaldo: con los datos compactados caben sin barra en las dos
+              resoluciones objetivo; si algo no cupiera, desplaza la columna
+              (nunca la página). */}
+          <div className={`${tipoDe(detailItem) === TIPOS_PRODUCTO[0] ? "w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Datos del producto</p>
             {FormFields({
               values: detailItem,
               onChange: () => {},
               readOnly: true,
             })}
             
-            {/* Stock: unidades, porciones por unidad (según la ficha VIGENTE)
-                y total de porciones. Solo lectura: lo actualiza el sistema. */}
+            {/* Stock: unidades, total de porciones y porciones por unidad
+                (según la ficha VIGENTE), en líneas cortas para que el bloque
+                quepa en 1366×768 sin barra en la columna. */}
             {(() => {
               const vigente = fichaVigente(detailItem.id);
               const conFicha = tipoDe(detailItem) === TIPOS_PRODUCTO[0] && vigente;
               return (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Stock</p>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
-                      <span className="text-sm font-medium text-foreground">Unidades</span>
-                      <span className={`text-sm font-bold ${detailItem.stockDisponible <= 5 ? "text-red-600" : detailItem.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}>
-                        {detailItem.stockDisponible} {palabraStock(detailItem, detailItem.stockDisponible)}
-                      </span>
-                    </div>
+                <div className="mt-3 pt-3 border-t border-border">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Stock</p>
+                  <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                    <span className={`font-bold ${detailItem.stockDisponible <= 5 ? "text-red-600" : detailItem.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}>
+                      {detailItem.stockDisponible} {palabraStock(detailItem, detailItem.stockDisponible)}
+                    </span>
                     {conFicha && (
                       <>
-                        <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
-                          <span className="text-sm font-medium text-foreground">Porciones por unidad (según ficha v{vigente.version})</span>
-                          <span className="text-sm font-bold text-foreground">{vigente.porciones}</span>
-                        </div>
-                        <div className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border">
-                          <span className="text-sm font-medium text-foreground">Total de porciones</span>
-                          <span className="text-sm font-bold text-foreground">{detailItem.stockDisponible * vigente.porciones}</span>
-                        </div>
+                        <span className="text-muted-foreground">
+                          · {detailItem.stockDisponible * vigente.porciones} porciones
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          ({vigente.porciones} porciones por unidad, ficha v{vigente.version})
+                        </span>
                       </>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3">{ayudaStock(detailItem)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{ayudaStock(detailItem)}</p>
                 </div>
               );
             })()}
           </div>
 
           {/* COLUMNA DERECHA: ficha técnica (solo Producto insumo; un
-              "Producto" de reventa no lleva ficha y no se muestra la sección) */}
+              "Producto" de reventa no lleva ficha y no se muestra la sección).
+              Sin scroll propio: la única barra posible es la de la lista de
+              pasos, dentro de su recuadro, cuando la receta es larga. */}
           {tipoDe(detailItem) === TIPOS_PRODUCTO[0] && (
-          <div className="w-1/2 px-8 py-6 overflow-y-auto flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+          <div className="w-1/2 px-8 py-4 min-h-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between mb-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
               {ficha && ficha.length > 0 && (
                 <VersionPills versiones={ficha} activo={vIdx} onSelect={setDetailVIdx} />
@@ -1650,8 +1691,8 @@ export function GestionProductosScreen({
                 <p className="text-xs text-muted-foreground">Este producto no tiene ficha técnica registrada</p>
               </div>
             ) : (
-              <div>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold mb-3 ${
+              <div className="flex-1 min-h-0 flex flex-col">
+                <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold mb-2 ${
                   fichaV.fechaFin ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-800"
                 }`}>
                   {fichaV.fechaFin ? "Versión histórica" : "Versión vigente"}
@@ -1715,7 +1756,7 @@ export function GestionProductosScreen({
               const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
               return (
                 <div className="mb-4">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">¿Tiene ficha técnica? *</label>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
                   <div className="flex items-center gap-2 flex-wrap">
                     {(["si", "no"] as const).map((op) => {
                       const activo = (tipoDe(editItem) === TIPOS_PRODUCTO[0]) === (op === "si");
@@ -1850,18 +1891,18 @@ export function GestionProductosScreen({
                 <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
                 <div className="space-y-4 flex-1">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Ficha Técnica</label>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</label>
                     <input value={activeEV.idReceta} readOnly tabIndex={-1}
                       className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación (min)</label>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
                       <input type="number" min={0} value={activeEV.tiempoPreparacion}
                         onChange={e => updateEditFichaField("tiempoPreparacion", Number(e.target.value))} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Porciones</label>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones</label>
                       <input type="number" min={1} value={activeEV.porciones}
                         onChange={e => updateEditFichaField("porciones", Number(e.target.value))} className={inputCls} />
                     </div>
@@ -1891,13 +1932,13 @@ export function GestionProductosScreen({
                         onSelect={seleccionarEditFichaInsumo}
                       />
                       <div className="w-20">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
                         <input type="number" min={0.1} step={0.1} value={editFichaInsumoCantidad}
                           onChange={e => setEditFichaInsumoCantidad(Number(e.target.value))}
                           className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
                       </div>
                       <div className="w-24">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
                         <select value={editFichaInsumoUnidad} onChange={e => setEditFichaInsumoUnidad(e.target.value)}
                           className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
                           {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
@@ -1976,7 +2017,7 @@ export function GestionProductosScreen({
             Gestión Producto
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {productos.length} productos registrados
+            {productos.length} producto{productos.length === 1 ? "" : "s"} registrado{productos.length === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -2040,8 +2081,9 @@ export function GestionProductosScreen({
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
+                {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
+                    Crear/Editar (aquí solo ocupaba ancho y alto). */}
                 {[
-                  "Imagen",
                   "Nombre",
                   "Tipo",
                   "Ficha técnica",
@@ -2053,7 +2095,7 @@ export function GestionProductosScreen({
                 ].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-3 text-left font-semibold whitespace-nowrap"
+                    className="px-4 py-2 text-left font-semibold whitespace-nowrap"
                   >
                     {h}
                   </th>
@@ -2064,7 +2106,7 @@ export function GestionProductosScreen({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={8}
                     className="px-4 py-14 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">📦</p>
@@ -2077,30 +2119,15 @@ export function GestionProductosScreen({
                     key={p.id}
                     className="hover:bg-muted/20 transition-colors"
                   >
-                    <td className="px-4 py-3.5">
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted shrink-0">
-                        {p.imagen ? (
-                          <img
-                            src={p.imagen}
-                            alt={p.nombre}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-foreground">
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground">
                       {p.nombre}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p))}`}>
                         {tipoDe(p)}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       {tipoDe(p) === TIPOS_PRODUCTO[0] ? (
                         (fichas[p.id]?.length ?? 0) > 0 ? (
                           <button
@@ -2124,35 +2151,36 @@ export function GestionProductosScreen({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-foreground">
+                    <td className="px-4 py-2.5 text-sm text-foreground">
                       {catName(p.idCategoria)}
                     </td>
                     {/* Precio de venta al público (precioUnitario), NO el
                         costo: antes esta columna pintaba costoUnitario. */}
                     <td
-                      className="px-4 py-3.5 text-sm font-bold text-foreground"
+                      className="px-4 py-2.5 text-sm font-bold text-foreground"
                       style={{ fontFamily: MONO }}
                     >
                       {fmtCOP(p.precioUnitario)}
                     </td>
-                    <td className="px-4 py-3.5" title={ayudaStock(p)}>
-                      <div className="flex flex-col gap-0.5">
+                    <td className="px-4 py-2.5" title={ayudaStock(p)}>
+                      {/* Stock en UNA sola línea: "50 pizzas · 400 porciones"
+                          (el detalle por pizza queda solo en el tooltip del
+                          título). Producto o sin ficha: solo unidades. */}
+                      <span className="text-sm whitespace-nowrap">
                         <span
-                          className={`text-sm font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
+                          className={`font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
                         >
                           {p.stockDisponible} {palabraStock(p, p.stockDisponible)}
                         </span>
-                        {/* Producto insumo con ficha: total de porciones según
-                            la versión VIGENTE. Producto o sin ficha: solo
-                            unidades (no se muestra nada más). */}
                         {tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) && (
-                          <span className="text-xs text-muted-foreground">
-                            {p.stockDisponible * fichaVigente(p.id)!.porciones} porciones ({fichaVigente(p.id)!.porciones} por {palabraStock(p, 1)})
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {p.stockDisponible * fichaVigente(p.id)!.porciones} porciones
                           </span>
                         )}
-                      </div>
+                      </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       {/* El estado se elige de una lista redondeada (ya no
                           alterna); al elegir, se confirma en el modal
                           "pasará de X a Y". Sin permiso de edición solo se ve
@@ -2165,7 +2193,7 @@ export function GestionProductosScreen({
                         }
                       />
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => {
