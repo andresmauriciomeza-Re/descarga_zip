@@ -9301,7 +9301,6 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
-                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   isStaff={isStaff}
