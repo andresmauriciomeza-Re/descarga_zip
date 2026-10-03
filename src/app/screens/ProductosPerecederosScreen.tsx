@@ -1,21 +1,26 @@
 import React, { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Eye, Trash2, X, ChevronLeft, ChevronRight,
-  Upload, ShoppingCart, BarChart2, ChevronDown,
+  Plus, X, ChevronLeft, ChevronRight,
+  Upload, ShoppingCart, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import type { Insumo } from "./GestionInsumosScreen";
+import type { Producto } from "./GestionProductosScreen";
+import type { OrdenProduccion } from "./OrdenProduccionScreen";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 
-type Tipo = "Producto" | "Insumo" | "Venta";
-type EstadoNC = "Pendiente" | "En análisis" | "En proceso" | "Cerrado";
+type Tipo = "Producto" | "Producto insumo" | "Venta";
+type EstadoNC = "Pendiente" | "Completado";
 
-interface NoConformidad {
+export interface NoConformidad {
   id: string;
   tipo: Tipo;
   nombre: string;
@@ -53,52 +58,19 @@ interface VentaPerdida {
 }
 
 const ESTADO_CONFIG: Record<EstadoNC, string> = {
-  Pendiente:     "bg-red-100 text-red-800",
-  "En análisis": "bg-amber-100 text-amber-800",
-  "En proceso":  "bg-blue-100 text-blue-800",
-  Cerrado:       "bg-emerald-100 text-emerald-800",
+  Pendiente:  "bg-amber-100 text-amber-800",
+  Completado: "bg-emerald-100 text-emerald-800",
 };
-
-const TIPOS_NC = [
-  "Defecto de calidad",
-  "Daño físico",
-  "Vencimiento",
-  "Contaminación",
-  "Mal almacenamiento",
-  "Incumplimiento de proveedor",
-  "Pérdida en venta",
-  "Otro",
-];
 
 const AREAS = ["Producción", "Compras", "Almacén", "Distribución", "Cocina", "Ventas"];
 const TIPOS_SOLUCION = [
-  "Reposición del producto", "Reproceso", "Devolución al proveedor",
-  "Descarte / baja del producto", "Reembolso al cliente",
-  "Ajuste de proceso / capacitación", "Otra",
+  "Reposición del producto", "Reproceso", "Reembolso al cliente",
 ];
-type SolucionNC = { tipoSolucion: string; solucion: string; estado: EstadoNC; fechaCierre?: string };
-const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
 const CATEGORIAS = ["Pizzas", "Bebidas", "Lasaña", "Insumo seco", "Insumo fresco", "Ventas", "Otro"];
 
-const PRODUCT_CATALOG: Array<{ pattern: RegExp; tipo: Tipo; unidad: string; categoria: string; area: string }> = [
-  { pattern: /pizza|margarita|pepperoni|cuatro quesos|hawai|vegetal|especial/i, tipo: "Producto", unidad: "und", categoria: "Pizzas", area: "Producción" },
-  { pattern: /lasaña|lasagna/i, tipo: "Producto", unidad: "und", categoria: "Lasaña", area: "Producción" },
-  { pattern: /gaseosa|bebida|agua|jugo|refresco|cerveza/i, tipo: "Producto", unidad: "und", categoria: "Bebidas", area: "Distribución" },
-  { pattern: /harina|azucar|sal|aceite|vinagre|levadura|condimento|especia/i, tipo: "Insumo", unidad: "kg", categoria: "Insumo seco", area: "Almacén" },
-  { pattern: /queso|mozzarella|parmesano/i, tipo: "Insumo", unidad: "kg", categoria: "Insumo fresco", area: "Compras" },
-  { pattern: /tomate|cebolla|ajo|piment|champi|albahaca|orégano/i, tipo: "Insumo", unidad: "kg", categoria: "Insumo fresco", area: "Compras" },
-  { pattern: /pollo|carne|res|jam[oó]n|salchicha/i, tipo: "Insumo", unidad: "kg", categoria: "Insumo fresco", area: "Compras" },
-  { pattern: /leche|crema|mantequilla|yogur/i, tipo: "Insumo", unidad: "litros", categoria: "Insumo fresco", area: "Compras" },
-];
 
-function autoDetect(nombre: string) {
-  for (const e of PRODUCT_CATALOG) {
-    if (e.pattern.test(nombre)) return { tipo: e.tipo, unidad: e.unidad, categoria: e.categoria, areaProceso: e.area };
-  }
-  return {};
-}
 
-const INITIAL: NoConformidad[] = [
+export const INITIAL_NO_CONFORMIDADES: NoConformidad[] = [
   {
     id: "1", tipo: "Producto", nombre: "Pizza Pepperoni", categoria: "Pizzas",
     fechaRegistro: "2024-01-15", cantidadAfectada: 4, unidadMedida: "und",
@@ -111,13 +83,13 @@ const INITIAL: NoConformidad[] = [
     fechaLimite: "2024-01-20", responsableAccion: "María López",
   },
   {
-    id: "2", tipo: "Insumo", nombre: "Harina de trigo", categoria: "Insumo seco",
+    id: "2", tipo: "Producto insumo", nombre: "Harina de trigo", categoria: "Insumo seco",
     fechaRegistro: "2024-01-18", cantidadAfectada: 50, unidadMedida: "kg",
     tipoNoConformidad: "Mal almacenamiento",
     descripcionProblema: "Sacos de harina con humedad excesiva al abrir. La masa elaborada presenta grumos y no desarrolla bien la fermentación.",
     causa: "Filtración de humedad por goteras en zona de almacén",
     areaProceso: "Almacén", proveedor: "Molinos del Valle", lote: "L-2024-042", responsable: "Ana Torres",
-    estado: "En análisis", accionTomada: "Sacos afectados separados; muestra enviada a cocina para prueba",
+    estado: "Pendiente", accionTomada: "Sacos afectados separados; muestra enviada a cocina para prueba",
     accionCorrectiva: "Reparación de techo en bodega y reubicación del almacenamiento",
     fechaLimite: "2024-01-25", responsableAccion: "Juan Ríos",
   },
@@ -128,8 +100,10 @@ const INITIAL: NoConformidad[] = [
     descripcionProblema: "Botellas de gaseosa vencidas encontradas en la nevera de exhibición. Fecha de vencimiento: 05/01/2024.",
     causa: "Falla en revisión periódica de fechas en nevera de exhibición",
     areaProceso: "Distribución", lote: "L-2023-210", responsable: "Pedro Salazar",
-    estado: "Cerrado", accionTomada: "Producto dado de baja y destruido",
+    estado: "Completado", accionTomada: "Producto dado de baja y destruido",
     accionCorrectiva: "Revisión diaria de fechas de vencimiento en nevera de exhibición",
+    tipoSolucion: "Reposición del producto",
+    solucion: "Producto dado de baja y destruido por fecha vencida; se repuso el stock.",
     fechaLimite: "2024-01-12", responsableAccion: "Pedro Salazar", fechaCierre: "2024-01-12",
   },
   {
@@ -139,12 +113,12 @@ const INITIAL: NoConformidad[] = [
     descripcionProblema: "Dos lasañas devueltas por clientes por presencia de carne mal cocida en el centro. Temperatura interna insuficiente al servir.",
     causa: "Tiempo de cocción insuficiente por horno con falla de temperatura",
     areaProceso: "Cocina", lote: "L-2024-022", responsable: "Luis Herrera",
-    estado: "En proceso", accionTomada: "Producto retirado; se ofreció reposición al cliente",
+    estado: "Pendiente", accionTomada: "Producto retirado; se ofreció reposición al cliente",
     accionCorrectiva: "Calibración del horno y protocolo de verificación de temperatura interna",
     fechaLimite: "2024-01-27", responsableAccion: "Luis Herrera",
   },
   {
-    id: "5", tipo: "Insumo", nombre: "Queso mozzarella", categoria: "Insumo fresco",
+    id: "5", tipo: "Producto insumo", nombre: "Queso mozzarella", categoria: "Insumo fresco",
     fechaRegistro: "2024-01-25", cantidadAfectada: 8, unidadMedida: "kg",
     tipoNoConformidad: "Incumplimiento de proveedor",
     descripcionProblema: "Queso recibido con empaque roto y signos de inicio de deterioro. Presenta olor ácido fuera de lo normal para el producto.",
@@ -161,7 +135,7 @@ const INITIAL: NoConformidad[] = [
     descripcionProblema: "Cliente reportó presencia de cuerpo extraño (trozo de plástico) dentro de la pizza al momento de servirla.",
     causa: "Residuo de empaque de ingrediente no retirado antes del proceso",
     areaProceso: "Producción", lote: "L-2024-028", responsable: "Luis Herrera",
-    estado: "En análisis", accionTomada: "Producto separado para análisis; cliente informado y compensado",
+    estado: "Pendiente", accionTomada: "Producto separado para análisis; cliente informado y compensado",
     accionCorrectiva: "Reforzar inspección visual de ingredientes antes del ensamble de pizzas",
     fechaLimite: "2024-02-03", responsableAccion: "María López",
   },
@@ -175,7 +149,7 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
       fechaRegistro: new Date().toLocaleDateString("en-CA"),
   cantidadAfectada: 1,
   unidadMedida: "und",
-  tipoNoConformidad: TIPOS_NC[0],
+  tipoNoConformidad: "",
   descripcionProblema: "",
   causa: "",
   evidencia: undefined,
@@ -195,7 +169,7 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
   ordenRef: "",
 });
 
-function nextId(items: NoConformidad[]) {
+export function nextNoConformidadId(items: NoConformidad[]) {
   const nums = items
     .filter(i => /^\d+$/.test(i.id))
     .map(i => parseInt(i.id, 10))
@@ -209,11 +183,11 @@ function downloadXLSX(data: NoConformidad[]) {
 
   // ── Sheet 1: Resumen general ──
   const resumenHeaders = [
-    "ID", "Tipo", "Producto / Insumo", "Categoría", "Fecha Registro",
-    "Cantidad", "Unidad", "Motivo principal", "Descripción detallada",
+    "N.º", "Tipo", "Producto / Insumo", "Categoría", "Fecha Registro",
+    "Cantidad", "Unidad", "Motivo", "Descripción detallada",
     "Área de proceso", "Proveedor", "Lote", "Responsable", "Estado",
     "Acción tomada", "Acción correctiva", "Fecha límite",
-    "Responsable acción", "Fecha cierre", "Referencia venta", "Referencia orden producción",
+    "Responsable acción", "Fecha cierre", "Venta relacionada", "Orden de producción relacionada",
     "Tipo de solución", "Solución",
   ];
   const resumenRows = data.map(i => [
@@ -235,14 +209,14 @@ function downloadXLSX(data: NoConformidad[]) {
   ws1["!freeze"] = { xSplit: 0, ySplit: 1 };
   XLSX.utils.book_append_sheet(wb, ws1, "Todas las NC");
 
-  // ── Sheet 2: Solo pendientes / en análisis ──
-  const activos = data.filter(i => i.estado === "Pendiente" || i.estado === "En análisis");
+  // ── Sheet 2: Solo pendientes ──
+  const activos = data.filter(i => i.estado === "Pendiente");
   const activosRows = activos.map(i => [
     i.id, i.tipo, i.nombre, i.fechaRegistro, i.tipoNoConformidad,
     i.descripcionProblema, i.responsable, i.estado, i.fechaLimite || "",
   ]);
   const ws2 = XLSX.utils.aoa_to_sheet([
-    ["ID", "Tipo", "Producto / Insumo", "Fecha", "Motivo", "Descripción", "Responsable", "Estado", "Fecha límite"],
+    ["N.º", "Tipo", "Producto / Insumo", "Fecha", "Motivo", "Descripción", "Responsable", "Estado", "Fecha límite"],
     ...activosRows,
   ]);
   ws2["!cols"] = [
@@ -253,17 +227,15 @@ function downloadXLSX(data: NoConformidad[]) {
   XLSX.utils.book_append_sheet(wb, ws2, "Pendientes");
 
   // ── Sheet 3: Por tipo ──
-  const tipoMap: Record<Tipo, NoConformidad[]> = { Producto: [], Insumo: [], Venta: [] };
+  const tipoMap: Record<Tipo, NoConformidad[]> = { Producto: [], "Producto insumo": [], Venta: [] };
   data.forEach(i => tipoMap[i.tipo].push(i));
   const tipoResumen: (string | number)[][] = [
-    ["Tipo", "Total registros", "Pendientes", "En análisis", "En proceso", "Cerrados"],
+    ["Tipo", "Total registros", "Pendientes", "Completados"],
     ...Object.entries(tipoMap).map(([tipo, arr]) => [
       tipo,
       arr.length,
       arr.filter(i => i.estado === "Pendiente").length,
-      arr.filter(i => i.estado === "En análisis").length,
-      arr.filter(i => i.estado === "En proceso").length,
-      arr.filter(i => i.estado === "Cerrado").length,
+      arr.filter(i => i.estado === "Completado").length,
     ]),
   ];
   const motivoCount: Record<string, number> = {};
@@ -277,7 +249,7 @@ function downloadXLSX(data: NoConformidad[]) {
     ["Motivo más frecuente", "Ocurrencias"],
     ...motivoRows,
   ]);
-  ws3["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+  ws3["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 12 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, ws3, "Resumen por tipo");
 
   // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
@@ -285,26 +257,6 @@ function downloadXLSX(data: NoConformidad[]) {
   const date = new Date().toLocaleDateString("en-CA");
   XLSX.writeFile(wb, `no-conformidades-${date}.xlsx`);
   toast.success("Archivo Excel descargado");
-}
-
-function weekOfMonth(dateStr: string): number {
-  const d = new Date(dateStr + "T12:00:00");
-  const firstDow = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
-  return Math.ceil((d.getDate() + firstDow) / 7);
-}
-
-function monthLabel(ym: string): string {
-  const [year, month] = ym.split("-");
-  const d = new Date(parseInt(year), parseInt(month) - 1, 1);
-  return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
-    .replace(/^\w/, c => c.toUpperCase());
-}
-
-function topMotive(entries: NoConformidad[]): string | null {
-  if (!entries.length) return null;
-  const counts: Record<string, number> = {};
-  entries.forEach(e => { counts[e.tipoNoConformidad] = (counts[e.tipoNoConformidad] || 0) + 1; });
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
 }
 
 function EstadoBadge({ e }: { e: EstadoNC }) {
@@ -318,7 +270,7 @@ function EstadoBadge({ e }: { e: EstadoNC }) {
 function TipoBadge({ tipo }: { tipo: Tipo }) {
   const cfg: Record<Tipo, string> = {
     Producto: "bg-blue-100 text-blue-800",
-    Insumo:   "bg-amber-100 text-amber-800",
+    "Producto insumo":   "bg-amber-100 text-amber-800",
     Venta:    "bg-red-100 text-red-700",
   };
   return (
@@ -328,20 +280,24 @@ function TipoBadge({ tipo }: { tipo: Tipo }) {
   );
 }
 
-const iCls = "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
+const iCls = "w-full px-3 py-2.5 bg-muted dark:bg-input border border-transparent rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
 const sCls = `${iCls} appearance-none cursor-pointer`;
 const tCls = `${iCls} resize-y`;
 
 interface Props {
   ventasPerdidas: VentaPerdida[];
+  insumos: Insumo[];
+  productos: Producto[];
+  ordenesProduccion: OrdenProduccion[];
+  noConformidades: NoConformidad[];
+  setNoConformidades: React.Dispatch<React.SetStateAction<NoConformidad[]>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
 }
 
-export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
-  const [items, setItems] = useState<NoConformidad[]>(INITIAL);
+export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos, ordenesProduccion, noConformidades, setNoConformidades, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
   const [page, setPage] = useState(1);
@@ -350,15 +306,29 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<NoConformidad | null>(null);
   const [form, setForm] = useState<Omit<NoConformidad, "id">>(emptyForm());
-  const [soluciones, setSoluciones] = useState<Record<string, SolucionNC>>({});
-  const [solForm, setSolForm] = useState<SolucionNC>({ tipoSolucion: "", solucion: "", estado: "Pendiente" });
 
   // Autocomplete state for ventaRef
   const [showVentaSugg, setShowVentaSugg] = useState(false);
+  const [showOrdenSugg, setShowOrdenSugg] = useState(false);
 
-  // Analytics
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [analyticsMonthIdx, setAnalyticsMonthIdx] = useState(0);
+  // Buscador de ventas: número de venta + nombre del cliente.
+  const ventaSuggestions = useMemo(() => {
+    const q = (form.ventaRef || "").toLowerCase();
+    return ventasPerdidas
+      .map(v => ({ id: String(v.id), label: `${v.id} · ${v.usuario}` }))
+      .filter(s => !q || s.id.includes(q) || s.label.toLowerCase().includes(q));
+  }, [ventasPerdidas, form.ventaRef]);
+
+  // Buscador de órdenes: solo las del tipo que corresponde a la no conformidad.
+  const tipoOrdenBuscado = form.tipo === "Producto insumo" ? "preparacion" : "pedido";
+  const ordenSuggestions = useMemo(() => {
+    const q = (form.ordenRef || "").toLowerCase();
+    return ordenesProduccion
+      .filter(o => o.tipo === tipoOrdenBuscado)
+      .map(o => ({ id: o.id, label: `${o.id} · ${o.lineas[0]?.nombre ?? o.cliente ?? "Orden"}` }))
+      .filter(s => !q || s.id.includes(q) || s.label.toLowerCase().includes(q));
+  }, [ordenesProduccion, form.ordenRef, tipoOrdenBuscado]);
+
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -382,13 +352,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   [ventasPerdidas]);
 
   const allItems = useMemo(() =>
-    [...ventasNC, ...items]
-      .map(i => (soluciones[i.id] ? { ...i, ...soluciones[i.id] } : i))
+    [...ventasNC, ...noConformidades]
       .sort((a, b) => {
         if (b.fechaRegistro !== a.fechaRegistro) return b.fechaRegistro.localeCompare(a.fechaRegistro);
         return parseInt(b.id, 10) - parseInt(a.id, 10);
       }),
-  [ventasNC, items, soluciones]);
+  [ventasNC, noConformidades]);
 
   const filtered = useMemo(() =>
     allItems.filter(i => {
@@ -408,164 +377,197 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
   const set = (patch: Partial<Omit<NoConformidad, "id">>) =>
     setForm(f => ({ ...f, ...patch }));
 
-  const handleNombreChange = (nombre: string) => {
-    const detected = autoDetect(nombre);
-    set({ nombre, ...detected });
-  };
-
   const handleCreate = () => {
-    if (!form.nombre.trim()) { toast.error("El nombre es obligatorio."); return; }
-    const newItem: NoConformidad = { id: nextId(items), ...form };
-    setItems(prev => [newItem, ...prev]);
+    if (!form.nombre.trim()) { toast.error("Selecciona un producto."); return; }
+    if (!form.tipoNoConformidad.trim()) { toast.error("El motivo es obligatorio."); return; }
+    const hoy = new Date().toLocaleDateString("en-CA");
+    if (form.fechaRegistro > hoy) { toast.error("La fecha de registro no puede ser futura."); return; }
+    const newItem: NoConformidad = { id: nextNoConformidadId(noConformidades), ...form };
+    setNoConformidades(prev => [newItem, ...prev]);
     setShowCreate(false);
     setForm(emptyForm());
     setShowVentaSugg(false);
+    setShowOrdenSugg(false);
     toast.success(`No conformidad ${newItem.id} registrada`);
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
-    setItems(prev => prev.filter(i => i.id !== deleteTarget.id));
+    setNoConformidades(prev => prev.filter(i => i.id !== deleteTarget.id));
     setDeleteTarget(null);
     toast.success(`${deleteTarget.id} eliminado`);
   };
 
-  const guardarSolucion = () => {
-    if (!viewItem) return;
-    if (solForm.estado === "Cerrado" && !solForm.solucion.trim()) {
-      toast.error("Para cerrar la no conformidad debes registrar la solución aplicada.");
-      return;
-    }
-    const hoy = new Date().toLocaleDateString("en-CA");
-    setSoluciones(prev => ({
-      ...prev,
-      [viewItem.id]: { ...solForm, fechaCierre: solForm.estado === "Cerrado" ? (viewItem.fechaCierre || hoy) : undefined },
-    }));
-    toast.success(`Solución registrada en ${viewItem.id}`);
-    setViewItem(null);
-  };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const esImagenValida = ["image/jpeg", "image/jpg", "image/png"].includes(file.type);
+    if (!esImagenValida) {
+      toast.error("Solo se permiten imágenes JPG o PNG.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no puede superar los 5 MB.");
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = ev => set({ evidencia: ev.target?.result as string });
     reader.readAsDataURL(file);
   };
 
-  // Venta suggestions for autocomplete
-  const ventaSuggestions = useMemo(() => {
-    const q = (form.ventaRef || "").toLowerCase();
-    return ventasPerdidas
-      .map(v => ({ id: String(v.id), label: `${v.id} — ${v.productos}` }))
-      .filter(s => !q || s.id.includes(q) || s.label.toLowerCase().includes(q));
-  }, [ventasPerdidas, form.ventaRef]);
-
-  // Analytics
-  const analytics = useMemo(() => {
-    const monthMap: Record<string, Record<number, NoConformidad[]>> = {};
-    allItems.forEach(item => {
-      const ym = item.fechaRegistro.slice(0, 7);
-      if (!monthMap[ym]) monthMap[ym] = {};
-      const w = weekOfMonth(item.fechaRegistro);
-      if (!monthMap[ym][w]) monthMap[ym][w] = [];
-      monthMap[ym][w].push(item);
-    });
-    return Object.entries(monthMap)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([ym, weeks]) => ({
-        ym,
-        label: monthLabel(ym),
-        weeks: Object.entries(weeks)
-          .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([wk, wItems]) => ({
-            week: Number(wk),
-            total: wItems.length,
-            byTipo: {
-              Producto: { items: wItems.filter(i => i.tipo === "Producto"), top: topMotive(wItems.filter(i => i.tipo === "Producto")) },
-              Insumo:   { items: wItems.filter(i => i.tipo === "Insumo"),   top: topMotive(wItems.filter(i => i.tipo === "Insumo")) },
-              Venta:    { items: wItems.filter(i => i.tipo === "Venta"),    top: topMotive(wItems.filter(i => i.tipo === "Venta")) },
-            },
-          })),
-      }));
-  }, [allItems]);
-
-  const safeMonthIdx = Math.min(analyticsMonthIdx, Math.max(0, analytics.length - 1));
-  const currentMonth = analytics[safeMonthIdx];
-
   // ── FormBody rendered as plain function call (not JSX component) to preserve focus ──
   const renderFormBody = (readOnly: boolean, previewId?: string) => {
-    const nombreLabel = form.tipo === "Insumo" ? "Nombre del insumo" : "Nombre del producto";
+    // En modo consulta lee el registro (viewItem); en modo alta usa el formulario.
+    const f = readOnly && viewItem ? viewItem : form;
+    const opcionesProducto = f.tipo === "Producto insumo"
+      ? insumos.filter(i => i.tipo === "ProductoInsumo").map(i => ({ nombre: i.nombre, unidad: i.unidadMedida }))
+      : productos.filter(p => p.estado !== "Descontinuado").map(p => ({ nombre: p.nombre, unidad: "und" }));
     return (
-      <div className="space-y-4 px-5 py-5">
+      <div className="space-y-4 px-6 py-5">
         {previewId && (
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">ID</label>
-            <input value={previewId} readOnly className={`${iCls} opacity-60 cursor-default`} />
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">N.º</label>
+            <p className="text-sm font-semibold text-foreground py-2">{previewId}</p>
           </div>
         )}
 
+        {/* Fila 1: Fecha de registro | Tipo */}
         <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
+            {readOnly
+              ? <p className="text-sm font-semibold text-foreground py-2">{f.fechaRegistro}</p>
+              : <input type="date" value={f.fechaRegistro}
+                  max={new Date().toLocaleDateString("en-CA")}
+                  onChange={e => set({ fechaRegistro: e.target.value })} className={iCls} />
+            }
+          </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
             {readOnly
-              ? <p className="text-sm font-semibold text-foreground py-2">{form.tipo}</p>
+              ? <p className="text-sm font-semibold text-foreground py-2">{f.tipo}</p>
               : <div className="relative">
-                  <select value={form.tipo} onChange={e => set({ tipo: e.target.value as Tipo })} className={sCls}>
-                    <option>Producto</option>
-                    <option>Insumo</option>
+                  <select value={f.tipo} onChange={e => {
+                    const t = e.target.value as Tipo;
+                    set({ tipo: t, nombre: "", unidadMedida: t === "Producto" ? "und" : "", ventaRef: "", ordenRef: "" });
+                  }} className={sCls}>
+                    <option value="Producto">Producto</option>
+                    <option value="Producto insumo">Producto insumo</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
                 </div>
+            }
+          </div>
+        </div>
+
+        {/* Fila 2: Orden de producción relacionada | Venta relacionada (según el tipo) */}
+        {!readOnly && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`relative ${f.tipo === "Producto insumo" ? "col-span-2" : ""}`}>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción relacionada (opcional)</label>
+              <input
+                value={f.ordenRef || ""}
+                onChange={e => { set({ ordenRef: e.target.value }); setShowOrdenSugg(true); }}
+                onFocus={() => setShowOrdenSugg(true)}
+                onBlur={() => setTimeout(() => setShowOrdenSugg(false), 150)}
+                placeholder="Buscar por número de orden o producto…"
+                autoComplete="off"
+                className={iCls}
+              />
+              {showOrdenSugg && ordenSuggestions.length > 0 && (
+                <ul className="absolute z-30 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                  {ordenSuggestions.map(s => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onMouseDown={() => { set({ ordenRef: s.id }); setShowOrdenSugg(false); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors cursor-pointer"
+                      >
+                        <span className="font-mono font-bold text-primary">{s.id}</span>
+                        <span className="text-muted-foreground ml-2 text-xs truncate">{s.label.split("·").slice(1).join("·").trim()}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {f.tipo === "Producto" && (
+              <div className="relative">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Venta relacionada (opcional)</label>
+                <input
+                  value={f.ventaRef || ""}
+                  onChange={e => { set({ ventaRef: e.target.value }); setShowVentaSugg(true); }}
+                  onFocus={() => setShowVentaSugg(true)}
+                  onBlur={() => setTimeout(() => setShowVentaSugg(false), 150)}
+                  placeholder="Buscar por número de venta o cliente…"
+                  autoComplete="off"
+                  className={iCls}
+                />
+                {showVentaSugg && ventaSuggestions.length > 0 && (
+                  <ul className="absolute z-30 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                    {ventaSuggestions.map(s => (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onMouseDown={() => { set({ ventaRef: s.id }); setShowVentaSugg(false); }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors cursor-pointer"
+                        >
+                          <span className="font-mono font-bold text-primary">{s.id}</span>
+                          <span className="text-muted-foreground ml-2 text-xs truncate">{s.label.split("·").slice(1).join("·").trim()}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fila 3: Producto (selector, ancho completo) */}
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1">Producto</label>
+          {readOnly
+            ? <div>
+                <p className="text-sm font-semibold text-foreground py-2">{f.nombre}</p>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {f.tipo === "Producto" ? "Producto del menú" : f.tipo === "Producto insumo" ? "Producto insumo" : "Pérdida en venta"}
+                </span>
+              </div>
+            : <div className="relative">
+                <select value={f.nombre} onChange={e => {
+                  const sel = opcionesProducto.find(o => o.nombre === e.target.value);
+                  if (sel) set({ nombre: sel.nombre, unidadMedida: sel.unidad });
+                  else set({ nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "" });
+                }} className={sCls}>
+                  <option value="">Selecciona…</option>
+                  {opcionesProducto.map(o => <option key={o.nombre} value={o.nombre}>{o.nombre}</option>)}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
+              </div>
+          }
+        </div>
+
+        {/* Fila 4: Cantidad afectada | Unidad de medida (automática, solo lectura) */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
+            {readOnly
+              ? <p className="text-sm font-semibold text-foreground py-2">{f.cantidadAfectada} {f.unidadMedida}</p>
+              : <input type="number" min={1} value={f.cantidadAfectada}
+                  onChange={e => set({ cantidadAfectada: Number(e.target.value) })} className={iCls} />
             }
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
             {readOnly
-              ? <p className="text-sm font-semibold text-foreground py-2">{form.unidadMedida}</p>
-              : <div className="relative">
-                  <select value={form.unidadMedida} onChange={e => set({ unidadMedida: e.target.value })} className={sCls}>
-                    {UNIDADES.map(u => <option key={u}>{u}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
-                </div>
-            }
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">{nombreLabel}</label>
-          {readOnly
-            ? <div>
-                <p className="text-sm font-semibold text-foreground py-2">{form.nombre}</p>
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {form.tipo === "Producto" ? "Producto terminado" : form.tipo === "Insumo" ? "Insumo de producción" : "Pérdida en venta"}
-                </span>
-              </div>
-            : <input
-                value={form.nombre}
-                onChange={e => handleNombreChange(e.target.value)}
-                placeholder={form.tipo === "Insumo" ? "Ej: Harina de trigo" : "Ej: Pizza Pepperoni"}
-                className={iCls}
-              />
-          }
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
-            {readOnly
-              ? <p className="text-sm font-semibold text-foreground py-2">{form.cantidadAfectada} {form.unidadMedida}</p>
-              : <input type="number" min={1} value={form.cantidadAfectada}
-                  onChange={e => set({ cantidadAfectada: Number(e.target.value) })} className={iCls} />
-            }
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
-            {readOnly
-              ? <p className="text-sm font-semibold text-foreground py-2">{form.fechaRegistro}</p>
-              : <input type="date" value={form.fechaRegistro}
-                  onChange={e => set({ fechaRegistro: e.target.value })} className={iCls} />
+              ? <p className="text-sm font-semibold text-foreground py-2">{f.unidadMedida}</p>
+              : <input value={f.unidadMedida} readOnly placeholder="—"
+                  className={`${iCls} opacity-70 cursor-default`} />
             }
           </div>
         </div>
@@ -576,23 +578,26 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
           </div>
           <div className="p-3 space-y-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Título / motivo principal</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Motivo</label>
               {readOnly
-                ? <span className="inline-block text-xs font-semibold px-3 py-1 bg-primary/10 text-primary rounded-full">{form.tipoNoConformidad}</span>
-                : <select value={form.tipoNoConformidad} onChange={e => set({ tipoNoConformidad: e.target.value })} className={sCls}>
-                    {TIPOS_NC.map(t => <option key={t}>{t}</option>)}
-                  </select>
+                ? <span className="inline-block text-xs font-semibold px-3 py-1 bg-primary/10 text-primary rounded-full">{f.tipoNoConformidad}</span>
+                : <input
+                    value={f.tipoNoConformidad}
+                    onChange={e => set({ tipoNoConformidad: e.target.value })}
+                    placeholder="Ej: Masa con sabor ácido"
+                    className={iCls}
+                  />
               }
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción detallada</label>
               {readOnly
-                ? <p className="text-sm text-foreground leading-relaxed py-1 whitespace-pre-wrap">{form.descripcionProblema || <span className="italic text-muted-foreground/50">Sin descripción</span>}</p>
+                ? <p className="text-sm text-foreground leading-relaxed py-1 whitespace-pre-wrap">{f.descripcionProblema || <span className="italic text-muted-foreground/50">Sin descripción</span>}</p>
                 : <textarea
-                    rows={4}
-                    value={form.descripcionProblema}
+                    rows={2}
+                    value={f.descripcionProblema}
                     onChange={e => set({ descripcionProblema: e.target.value })}
-                    placeholder="Describe detalladamente qué ocurrió, síntomas observados, impacto..."
+                    placeholder="Describe qué pasó, qué se observó y a qué afectó…"
                     className={tCls}
                   />
               }
@@ -608,76 +613,35 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
             <div className="p-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-                <select value={form.tipoSolucion ?? ""} onChange={e => set({ tipoSolucion: e.target.value })} className={sCls}>
-                  <option value="">Selecciona...</option>
-                  {TIPOS_SOLUCION.map(t => <option key={t}>{t}</option>)}
+                <select value={f.tipoSolucion ?? ""} onChange={e => set({ tipoSolucion: e.target.value })} className={sCls}>
+                  <option value="">Selecciona…</option>
+                  {TIPOS_SOLUCION.map(t => {
+                    const bloqueado = t === "Reembolso al cliente" && !(f.tipo === "Producto" && f.ventaRef);
+                    return <option key={t} value={t} disabled={bloqueado} title={bloqueado ? "Requiere una venta relacionada" : undefined}>{t}</option>;
+                  })}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
-                <textarea rows={3} value={form.solucion ?? ""} onChange={e => set({ solucion: e.target.value })}
+                <textarea rows={2} value={f.solucion ?? ""} onChange={e => set({ solucion: e.target.value })}
                   placeholder="Describe qué se hizo o se hará para resolver la no conformidad..." className={tCls} />
               </div>
             </div>
           </div>
         )}
 
-        {!readOnly && (
+        {readOnly && (f.ventaRef || f.ordenRef) && (
           <div className="grid grid-cols-2 gap-3">
-            {/* Venta reference with autocomplete */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Referencia de venta (opcional)</label>
-              <input
-                value={form.ventaRef || ""}
-                onChange={e => { set({ ventaRef: e.target.value }); setShowVentaSugg(true); }}
-                onFocus={() => setShowVentaSugg(true)}
-                onBlur={() => setTimeout(() => setShowVentaSugg(false), 150)}
-                placeholder="Buscar por ID o nombre..."
-                autoComplete="off"
-                className={iCls}
-              />
-              {showVentaSugg && ventaSuggestions.length > 0 && (
-                <ul className="absolute z-30 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
-                  {ventaSuggestions.map(s => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onMouseDown={() => { set({ ventaRef: s.id }); setShowVentaSugg(false); }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors cursor-pointer"
-                      >
-                        <span className="font-mono font-bold text-primary">{s.id}</span>
-                        <span className="text-muted-foreground ml-2 text-xs truncate">{s.label.split("—")[1]?.trim()}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Referencia orden producción (opcional)</label>
-              <input
-                value={form.ordenRef || ""}
-                onChange={e => set({ ordenRef: e.target.value })}
-                placeholder="Ej: OP-001"
-                className={iCls}
-              />
-            </div>
-          </div>
-        )}
-
-        {readOnly && (form.ventaRef || form.ordenRef) && (
-          <div className="grid grid-cols-2 gap-3">
-            {form.ventaRef && (
+            {f.ventaRef && (
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Venta de origen</label>
-                <p className="text-sm font-semibold text-foreground font-mono">{form.ventaRef}</p>
+                <p className="text-sm font-semibold text-foreground font-mono">{f.ventaRef}</p>
               </div>
             )}
-            {form.ordenRef && (
+            {f.ordenRef && (
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción</label>
-                <p className="text-sm font-semibold text-foreground font-mono">{form.ordenRef}</p>
+                <p className="text-sm font-semibold text-foreground font-mono">{f.ordenRef}</p>
               </div>
             )}
           </div>
@@ -686,25 +650,28 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
         <div>
           <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto de evidencia</label>
           {readOnly
-            ? form.evidencia
-              ? <img src={form.evidencia} alt="evidencia" className="w-full max-h-48 object-cover rounded-xl border border-border mt-1" />
+            ? f.evidencia
+              ? <img src={f.evidencia} alt="evidencia" className="w-full max-h-48 object-cover rounded-xl border border-border mt-1" />
               : <p className="text-sm text-muted-foreground/50 italic py-2">Sin evidencia adjunta</p>
             : <>
-                <input type="file" accept="image/*" ref={fileRef} className="hidden" onChange={handleFile} />
-                {form.evidencia ? (
+                <input type="file" accept="image/jpeg,image/png" ref={fileRef} className="hidden" onChange={handleFile} />
+                {f.evidencia ? (
                   <div className="relative rounded-xl overflow-hidden border border-border h-32">
-                    <img src={form.evidencia} alt="evidencia" className="w-full h-full object-cover" />
+                    <img src={f.evidencia} alt="evidencia" className="w-full h-full object-cover" />
                     <button onClick={() => set({ evidencia: undefined })}
                       className="absolute top-1.5 right-1.5 bg-black/60 text-white rounded-full p-0.5 cursor-pointer hover:bg-black/80">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => fileRef.current?.click()}
-                    className="w-full border-2 border-dashed border-border rounded-xl py-5 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer">
-                    <Upload className="w-5 h-5" />
-                    <span className="text-xs font-medium">Subir imagen de evidencia</span>
-                  </button>
+                  <>
+                    <button onClick={() => fileRef.current?.click()}
+                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer">
+                      <Upload className="w-5 h-5" />
+                      <span className="text-xs font-medium">Subir imagen de evidencia</span>
+                    </button>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 text-center">JPG o PNG · máx 5 MB</p>
+                  </>
                 )}
               </>
           }
@@ -727,7 +694,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">Información de la venta</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">ID Venta</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de venta</label>
             <p className="text-sm font-semibold text-foreground font-mono">{item.ventaRef || item.id.split("-")[1] || item.id}</p>
           </div>
           <div>
@@ -759,42 +726,33 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
     </div>
   );
 
-  const renderSolucionPanel = () => (
-    <div className="mx-5 mb-5 border border-emerald-200 rounded-xl overflow-hidden">
-      <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
-        <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Solución de la no conformidad</p>
-      </div>
-      <div className="p-3 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+  const renderSolucionPanel = () => {
+    if (!viewItem) return null;
+    // Siempre de solo lectura en el detalle: texto, nunca inputs editables.
+    return (
+      <div className="mx-5 mb-5 border border-emerald-200 rounded-xl overflow-hidden">
+        <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Solución de la no conformidad</p>
+        </div>
+        <div className="p-3 space-y-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-            <select value={solForm.tipoSolucion} onChange={e => setSolForm(f => ({ ...f, tipoSolucion: e.target.value }))} className={sCls}>
-              <option value="">Selecciona...</option>
-              {TIPOS_SOLUCION.map(t => <option key={t}>{t}</option>)}
-            </select>
+            <p className="text-sm font-semibold text-foreground py-1">{viewItem.tipoSolucion || "—"}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-            <select value={solForm.estado} onChange={e => setSolForm(f => ({ ...f, estado: e.target.value as EstadoNC }))} className={sCls}>
-              <option>Pendiente</option>
-              <option>En análisis</option>
-              <option>En proceso</option>
-              <option>Cerrado</option>
-            </select>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
+            <p className="text-sm text-foreground leading-relaxed py-1 whitespace-pre-wrap">{viewItem.solucion || "—"}</p>
           </div>
+          {viewItem.fechaCierre && (
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de cierre</label>
+              <p className="text-sm font-semibold text-foreground py-1">{viewItem.fechaCierre}</p>
+            </div>
+          )}
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
-          <textarea rows={3} value={solForm.solucion} onChange={e => setSolForm(f => ({ ...f, solucion: e.target.value }))}
-            placeholder="Describe qué se hizo para resolver la no conformidad..." className={tCls} />
-        </div>
-        <button onClick={guardarSolucion}
-          className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 cursor-pointer active:scale-95 transition-all">
-          Guardar solución
-        </button>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -824,19 +782,17 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-5">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por ID, nombre, responsable, motivo..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por número, nombre, responsable, motivo..."
+          wrapperClassName="flex-1 min-w-48 max-w-sm"
+        />
         <select value={filterEst} onChange={e => { setFilterEst(e.target.value as EstadoNC | ""); setPage(1); }}
           className="px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none cursor-pointer appearance-none min-w-36">
           <option value="">Todo estado</option>
           <option>Pendiente</option>
-          <option>En análisis</option>
-          <option>En proceso</option>
-          <option>Cerrado</option>
+          <option>Completado</option>
         </select>
       </div>
 
@@ -846,7 +802,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID", "Tipo", "Producto / Insumo", "Fecha", "Cantidad", "Motivo", "Origen", "Acciones"].map(h => (
+                {["N.º", "Tipo", "Producto / Insumo", "Fecha", "Cantidad", "Motivo", "Origen", "Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -891,26 +847,10 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
                       }
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            const { id: _id, ...rest } = item;
-                            setForm(rest);
-                            setSolForm({ tipoSolucion: item.tipoSolucion ?? "", solucion: item.solucion ?? "", estado: item.estado });
-                            setViewItem(item);
-                          }}
-                          title="Visualizar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canDelete && !isVenta && (
-                          <button onClick={() => setDeleteTarget(item)} title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                      <ActionIcons
+                        onView={() => setViewItem(item)}
+                        onDelete={canDelete && !isVenta ? () => setDeleteTarget(item) : undefined}
+                      />
                     </td>
                   </tr>
                 );
@@ -936,138 +876,18 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
         </div>
       )}
 
-      {/* Analytics panel */}
-      <div className="mt-6 bg-card border border-border rounded-2xl overflow-hidden">
-        <button
-          onClick={() => setShowAnalytics(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer"
-        >
-          <div className="flex items-center gap-2.5">
-            <BarChart2 className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold text-foreground" style={{ fontFamily: SERIF }}>
-              Análisis por semana y mes
-            </span>
-            <span className="text-xs text-muted-foreground">— motivos de pérdida más frecuentes</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showAnalytics ? "rotate-180" : ""}`} />
-        </button>
-
-        <AnimatePresence>
-          {showAnalytics && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="px-5 pb-5">
-                {analytics.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">Sin datos para analizar</p>
-                ) : (
-                  <>
-                    {/* Month navigation */}
-                    <div className="flex items-center justify-between mb-4">
-                      <button
-                        onClick={() => setAnalyticsMonthIdx(i => Math.min(i + 1, analytics.length - 1))}
-                        disabled={safeMonthIdx >= analytics.length - 1}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm font-semibold text-muted-foreground transition-colors"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                        Anterior
-                      </button>
-                      <div className="text-center">
-                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: SERIF }}>{currentMonth?.label}</p>
-                        <p className="text-xs text-muted-foreground">{currentMonth?.weeks.reduce((s, w) => s + w.total, 0)} registros en este mes</p>
-                      </div>
-                      <button
-                        onClick={() => setAnalyticsMonthIdx(i => Math.max(i - 1, 0))}
-                        disabled={safeMonthIdx <= 0}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm font-semibold text-muted-foreground transition-colors"
-                      >
-                        Siguiente
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {currentMonth && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-muted-foreground uppercase tracking-wider">
-                              <th className="text-left py-2 pr-4 font-semibold whitespace-nowrap">Semana</th>
-                              <th className="text-left py-2 pr-4 font-semibold">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
-                                  Producto
-                                </span>
-                              </th>
-                              <th className="text-left py-2 pr-4 font-semibold">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                                  Insumo
-                                </span>
-                              </th>
-                              <th className="text-left py-2 font-semibold">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-                                  Venta
-                                </span>
-                              </th>
-                              <th className="text-right py-2 font-semibold text-muted-foreground/60">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/50">
-                            {currentMonth.weeks.map(wk => (
-                              <tr key={wk.week} className="hover:bg-muted/20 transition-colors">
-                                <td className="py-2.5 pr-4 font-bold text-foreground whitespace-nowrap">Semana {wk.week}</td>
-                                <td className="py-2.5 pr-4">
-                                  {wk.byTipo.Producto.items.length > 0 ? (
-                                    <div>
-                                      <span className="font-semibold text-blue-700">{wk.byTipo.Producto.top}</span>
-                                      <span className="text-muted-foreground ml-1">({wk.byTipo.Producto.items.length})</span>
-                                    </div>
-                                  ) : <span className="text-muted-foreground/40 italic">—</span>}
-                                </td>
-                                <td className="py-2.5 pr-4">
-                                  {wk.byTipo.Insumo.items.length > 0 ? (
-                                    <div>
-                                      <span className="font-semibold text-amber-700">{wk.byTipo.Insumo.top}</span>
-                                      <span className="text-muted-foreground ml-1">({wk.byTipo.Insumo.items.length})</span>
-                                    </div>
-                                  ) : <span className="text-muted-foreground/40 italic">—</span>}
-                                </td>
-                                <td className="py-2.5">
-                                  {wk.byTipo.Venta.items.length > 0 ? (
-                                    <div>
-                                      <span className="font-semibold text-red-700">{wk.byTipo.Venta.top}</span>
-                                      <span className="text-muted-foreground ml-1">({wk.byTipo.Venta.items.length})</span>
-                                    </div>
-                                  ) : <span className="text-muted-foreground/40 italic">—</span>}
-                                </td>
-                                <td className="py-2.5 text-right font-bold text-foreground">{wk.total}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
 
       {/* ── MODAL: VIEW ── */}
       <AnimatePresence>
         {viewItem && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-background overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
+            <div className="flex min-h-full items-center justify-center">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
                   {viewItem.id} · {viewItem.nombre}
@@ -1084,7 +904,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
               </div>
             </div>
 
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {viewItem.tipo === "Venta"
                 ? renderVentaDetail(viewItem)
                 : renderFormBody(true, viewItem.id)
@@ -1093,11 +913,13 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
               {renderSolucionPanel()}
             </div>
 
-            <div className="px-6 py-4 border-t border-border sticky bottom-0 bg-background max-w-3xl mx-auto w-full">
+            <div className="px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setViewItem(null)}
                 className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                 Cerrar
               </button>
+            </div>
+            </motion.div>
             </div>
           </motion.div>
         )}
@@ -1108,21 +930,24 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
         {showCreate && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-background overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
-              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva no conformidad</h3>
+            <div className="flex min-h-full items-center justify-center">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Registrar producto no conforme</h3>
               <button onClick={() => setShowCreate(false)}
                 className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {renderFormBody(false)}
             </div>
 
-            <div className="flex gap-3 px-6 py-4 border-t border-border sticky bottom-0 bg-background max-w-3xl mx-auto w-full">
+            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setShowCreate(false)}
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                 Cancelar
@@ -1132,9 +957,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, canCreate: _canCrea
                 Registrar
               </button>
             </div>
+            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+
 
       {/* ── MODAL: DELETE ── */}
       <AnimatePresence>

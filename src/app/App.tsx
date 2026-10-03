@@ -14,7 +14,6 @@ import {
   ClipboardList,
   CreditCard,
   DollarSign,
-  Edit,
   Edit2,
   Eye,
   FileText,
@@ -93,8 +92,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
+import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
@@ -108,6 +108,9 @@ import {
 } from "./screens/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
 import { ESTADO_COLORES } from "./components/EstadoProducto";
+import { EstadoSelect } from "./components/EstadoSelect";
+import { SearchInput } from "./components/SearchInput";
+import { ActionIcons } from "./components/ActionIcons";
 import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -132,7 +135,7 @@ import {
   normalizarNombre,
   type OrdenProduccion,
 } from "./screens/OrdenProduccionScreen";
-import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
+import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "./screens/ProductosPerecederosScreen";
 import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
 import {
   PurchasesScreen
@@ -229,6 +232,19 @@ interface PendingOrder {
   documento?: string;
 }
 
+/** Resumen del pedido que se acaba de registrar, para la pantalla de
+    confirmación. Lo crea el checkout al enviar (handleConfirm y
+    submitAsGuest) y el login al retomar el pedido que un invitado
+    dejó a medio hacer (handleLogin). */
+interface PedidoResumen {
+  id: string;
+  items: CartItem[];
+  total: number;
+  nombre: string;
+  documento?: string;
+  hora: string;
+}
+
 interface Order {
   id: string;
   client: string;
@@ -253,12 +269,31 @@ const SIZES_DEFAULT = [
   { label: "Grande", price: 16000 },
 ];
 
+// Recargo del tamaño "Grande" de pizza por encima del precio de venta.
+const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + este valor. Confirmar con la clienta.
+
 // Un producto con selector de tamaño (pizzas, lasañas) usa el precio del tamaño
 // elegido; uno sin tamaños (bebidas, botella única) cae a su precio base. Evita
 // que el detalle o el quick-add revienten al leer sizes[0] de un array vacío.
 const sizeDe = (p: Product, i: number) => p.sizes[i] ?? { label: "", price: p.price };
 
 const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
+
+/** Tamaños del menú público para un producto del panel: se derivan SIEMPRE del
+    precio de venta (`precioUnitario`), para que crear o editar el precio en
+    Gestión de Productos se refleje en el detalle público y en el carrito:
+    - Pizza (CAT-001): Mediano = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
+    - Lasaña (CAT-002): Normal = precio de venta.
+    - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
+const sizesDeProducto = (p: Producto): Product["sizes"] =>
+  p.idCategoria === "CAT-001"
+    ? [
+        { label: "Mediano", price: p.precioUnitario },
+        { label: "Grande", price: p.precioUnitario + RECARGO_TAMANO_GRANDE },
+      ]
+    : p.idCategoria === "CAT-002"
+      ? [{ label: "Normal", price: p.precioUnitario }]
+      : [];
 
 // Las botellas de Bebidas son imágenes altas y angostas: con object-cover el
 // recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
@@ -558,7 +593,7 @@ const productoACatalogo = (p: Producto): Product => ({
   price: p.precioUnitario,
   image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
   category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
-  sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+  sizes: sizesDeProducto(p),
   extras: [],
   status: p.estado === "Disponible" ? "disponible" : "no disponible",
   rating: 4.5,
@@ -704,10 +739,28 @@ const STATUS_LABEL: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
+/** Colores del pill de estado de la tabla. Incluye los valores del tipo
+    (`disponible`/`no disponible`, con el que nacen los productos) y los del
+    desplegable (`activo`/`agotado`/`pausado`), que es lo que hoy se puede
+    elegir en Manage Products. */
 const PROD_STATUS_COLOR: Record<string, string> = {
-  disponible: "bg-emerald-100 text-emerald-800",
-  "no disponible": "bg-red-100 text-red-700",
+  disponible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  "no disponible": "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  agotado: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  pausado: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
 };
+
+const PROD_STATUS_LABEL: Record<string, string> = {
+  disponible: "Activo",
+  "no disponible": "No disponible",
+  activo: "Activo",
+  agotado: "Agotado",
+  pausado: "Pausado",
+};
+
+/** Estados que ofrece el desplegable (los de siempre de Manage Products). */
+const PROD_STATUS_OPCIONES = ["activo", "agotado", "pausado"] as const;
 
 const ADMIN_SCREENS: Screen[] = [
   "dashboard",
@@ -1007,8 +1060,8 @@ const NAV_SECTIONS = [
   },
 ];
 
-const canViewPermission = (accesos: AccesosMap, permKey: string, isNamedAdmin: boolean) =>
-  isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
+const canViewPermission = (accesos: AccesosMap, permKey: string) =>
+  accesos[permKey]?.includes("Ver") ?? false;
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
@@ -1120,7 +1173,7 @@ function Sidebar({
   // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
   // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
   const canView = (permKey: string) =>
-    hasDashboardAccess || canViewPermission(accesos, permKey, isNamedAdmin);
+    canViewPermission(accesos, permKey);
 
   return (
     <aside
@@ -2591,7 +2644,7 @@ function CatalogScreen({
 
       <div className="mt-8 pb-20 md:pb-4">
         <p className="text-sm text-muted-foreground text-center mb-3">
-          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} productos
+          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} producto{filtered.length === 1 ? "" : "s"}
         </p>
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2">
@@ -2888,7 +2941,8 @@ function CartScreen({
   isLoggedIn,
   clienteSesion,
   onRequireLogin,
-  confirmationHora,
+  confirmationData,
+  onClearConfirmation,
 }: {
   cart: CartItem[];
   navigate: (s: Screen) => void;
@@ -2902,12 +2956,17 @@ function CartScreen({
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
-  ) => void;
+  ) => string;
   isLoggedIn: boolean;
   /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
   clienteSesion?: string;
   onRequireLogin: (order: PendingOrder) => void;
-  confirmationHora?: string;
+  /** Resumen del pedido ya registrado que se viene a mostrar (llega
+      del login, cuando un invitado inicia sesión con el pedido a
+      medio hacer). */
+  confirmationData?: PedidoResumen;
+  /** Limpia `orderConfirmation` en App al salir de la confirmación. */
+  onClearConfirmation?: () => void;
 }) {
   const [payment, setPayment] = useState("Nequi");
   const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 2 | 3>(
@@ -2918,15 +2977,15 @@ function CartScreen({
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pedidoConfirmado, setPedidoConfirmado] =
-    useState(Boolean(confirmationHora));
-  const [horaConfirmada, setHoraConfirmada] = useState(
-    confirmationHora ?? "",
+  const [pedidoConfirmado, setPedidoConfirmado] = useState(
+    Boolean(confirmationData),
   );
-  // El nombre que se acabó registrando, para mostrarlo ya en la pantalla de
-  // confirmación (donde `guestName` puede seguir editable hacia atrás).
-  const [nombreConfirmado, setNombreConfirmado] = useState("");
-  const [documentoConfirmado, setDocumentoConfirmado] = useState("");
+  // Resumen del pedido que se acaba de registrar (id, productos,
+  // total, cliente y hora): alimenta la pantalla de confirmación.
+  // En el flujo invitado→login arranca desde `confirmationData`.
+  const [pedidoResumen, setPedidoResumen] = useState<PedidoResumen | null>(
+    confirmationData ?? null,
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cartTotal = (item: CartItem) =>
@@ -2965,12 +3024,19 @@ function CartScreen({
     }
     setLoading(true);
     setTimeout(() => {
-      onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
+      const idVenta = onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
+      // Resumen del pedido ANTES de vaciar el carrito: es lo que
+      // muestra la pantalla de confirmación.
+      setPedidoResumen({
+        id: idVenta,
+        items: [...cart],
+        total: cart.reduce((s, i) => s + cartTotal(i), 0),
+        nombre: nombreCliente,
+        hora: horaRecogida,
+      });
       clear();
       setLoading(false);
       setCheckoutStep(0);
-      setHoraConfirmada(horaRecogida);
-      setNombreConfirmado(nombreCliente);
       setPedidoConfirmado(true);
     }, 1400);
   };
@@ -2985,7 +3051,7 @@ function CartScreen({
       // El documento se enviaba pero se quedaba en el formulario: la venta
       // guardaba solo el nombre, así que un pedido de invitado quedaba sin
       // identificación.
-      onOrder(
+      const idVenta = onOrder(
         payment,
         comprobante,
         [...cart],
@@ -2993,17 +3059,22 @@ function CartScreen({
         guestName.trim(),
         guestDocument.trim(),
       );
+      setPedidoResumen({
+        id: idVenta,
+        items: [...cart],
+        total: cart.reduce((s, i) => s + cartTotal(i), 0),
+        nombre: guestName.trim(),
+        documento: guestDocument.trim(),
+        hora: horaRecogida,
+      });
       clear();
       setLoading(false);
       setCheckoutStep(0);
-      setHoraConfirmada(horaRecogida);
-      setNombreConfirmado(guestName.trim());
-      setDocumentoConfirmado(guestDocument.trim());
       setPedidoConfirmado(true);
     }, 1400);
   };
 
-  if (pedidoConfirmado) {
+  if (pedidoConfirmado && pedidoResumen) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
@@ -3013,72 +3084,117 @@ function CartScreen({
         >
           ¡Pedido recibido!
         </h2>
-         <p className="text-muted-foreground mb-2">
-           Estamos verificando tu comprobante de pago.
-         </p>
-         <p className="text-muted-foreground mb-6 text-sm">
-           Esto tardará unos pocos minutos; te confirmaremos cuando tu pedido esté listo.
-         </p>
-         {/* El nombre con el que quedó registrado el pedido, para que el
-             cliente confirme a nombre de quién compró. */}
-         {nombreConfirmado && (
-           <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-             <h3 className="font-bold text-foreground mb-2 flex items-center gap-2">
-               <ShoppingBag className="w-4 h-4 text-primary" /> Pedido
-               realizado por
-             </h3>
-             <p className="text-foreground font-semibold">
-               {nombreConfirmado}
-             </p>
-             {documentoConfirmado && (
-               <p className="text-sm text-muted-foreground mt-0.5">
-                 Documento: {documentoConfirmado}
-               </p>
-             )}
-           </div>
-         )}
-         <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-            <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" /> Dónde
-              recoger tu pedido
+
+        {/* a) Pedido: número, estado y mensaje de verificación. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-primary" /> Pedido{" "}
+              {pedidoResumen.id}
             </h3>
-           <p className="text-sm text-muted-foreground mb-4">
-             Podrás pasar por tu pedido
-             {horaConfirmada ? ` a las ${horaConfirmada}` : ""}.
-           </p>
-           <div className="mb-4 border-l-2 border-primary/60 pl-3">
-             <p className="text-xs text-muted-foreground">Hora de recogida</p>
-             <p className="text-base font-bold text-primary">
-               {horaConfirmada}
-             </p>
-           </div>
-           <p className="text-foreground font-semibold">
-             La Sirena Pizza
-           </p>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              Por verificar
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Estamos verificando tu comprobante de pago. Esto tardará unos
+            pocos minutos; te confirmaremos cuando tu pedido esté listo.
+          </p>
+        </div>
+
+        {/* b) Productos con su desglose y totales. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <h3 className="font-bold text-foreground mb-3">Productos</h3>
+          <div className="space-y-3 mb-4">
+            {pedidoResumen.items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {item.product.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.size ? `${item.size} · ` : ""}x{item.quantity}
+                  </p>
+                </div>
+                <span
+                  className="text-sm font-bold text-foreground shrink-0"
+                  style={{ fontFamily: MONO }}
+                >
+                  {fmt((item.sizePrice + item.extrasPrice) * item.quantity)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <ResumenTotales subtotal={pedidoResumen.total} />
+        </div>
+
+        {/* c) Cliente (nombre y documento, si hay). */}
+        {pedidoResumen.nombre && (
+          <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+            <h3 className="font-bold text-foreground mb-2">Cliente</h3>
+            <p className="text-foreground font-semibold">
+              {pedidoResumen.nombre}
+            </p>
+            {pedidoResumen.documento && (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Documento: {pedidoResumen.documento}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* d) Recogida: hora, dirección, teléfono y horario. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" /> Dónde
+            recoger tu pedido
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Podrás pasar por tu pedido
+            {pedidoResumen.hora ? ` a las ${pedidoResumen.hora}` : ""}.
+          </p>
+          <div className="mb-4 border-l-2 border-primary/60 pl-3">
+            <p className="text-xs text-muted-foreground">Hora de recogida</p>
+            <p className="text-base font-bold text-primary">
+              {pedidoResumen.hora}
+            </p>
+          </div>
+          <p className="text-foreground font-semibold">
+            La Sirena Pizza
+          </p>
           <p className="text-muted-foreground text-sm">
             Cra. 45 #104-30, Laureles
           </p>
           <p className="text-muted-foreground text-sm">
             Medellín, Antioquia
           </p>
-           <div className="mt-3 pt-3 border-t border-border space-y-1">
-             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-               <Phone className="w-3.5 h-3.5" /> 604 234 5678
-             </p>
-             <p className="text-xs font-semibold text-primary">
-               Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
-             </p>
-           </div>
-         </div>
+          <div className="mt-3 pt-3 border-t border-border space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" /> 604 234 5678
+            </p>
+            <p className="text-xs font-semibold text-primary">
+              Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+            </p>
+          </div>
+        </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           {isLoggedIn && (
-            <PrimaryBtn onClick={() => navigate("mis-pedidos")} size="lg">
+            <PrimaryBtn
+              onClick={() => {
+                onClearConfirmation?.();
+                navigate("mis-pedidos");
+              }}
+              size="lg"
+            >
               Ver mis pedidos
             </PrimaryBtn>
           )}
           <GhostBtn
-            onClick={() => navigate("landing")}
+            onClick={() => {
+              onClearConfirmation?.();
+              navigate("landing");
+            }}
             className="px-7 py-4 text-lg min-h-[56px]"
           >
             Volver al inicio
@@ -3214,28 +3330,13 @@ function CartScreen({
                 <ShoppingBag className="w-4 h-4 text-primary" />{" "}
                 Resumen
               </h3>
-              {/* "Subtotal" y "Total" muestran hoy la misma cifra porque el
-                  pedido no tiene envío ni impuestos; se mantienen las dos
-                  filas para que, cuando se agreguen esos conceptos, el
-                  desglose ya tenga dónde mostrarlos sin tocar el layout. */}
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>
-                    Subtotal (
-                    {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
-                    productos)
-                  </span>
-                  <span style={{ fontFamily: MONO }}>
-                    {fmt(subtotal)}
-                  </span>
-                </div>
-                <div className="border-t border-border pt-2 flex justify-between font-bold text-base text-foreground">
-                  <span>Total</span>
-                  <span style={{ fontFamily: MONO }}>
-                    {fmt(subtotal)}
-                  </span>
-                </div>
-              </div>
+              {/* Solo recogida y total: la fila "Subtotal (N productos)" se
+                  quitó del recuadro (el cambio aplica igual en el modal de
+                  pago y en la confirmación, porque es el mismo componente). */}
+              <ResumenTotales
+                subtotal={subtotal}
+                className="space-y-2 mb-4 text-sm"
+              />
               <PrimaryBtn
                 onClick={() => setCheckoutStep(1)}
                 size="lg"
@@ -3330,31 +3431,12 @@ function CartScreen({
                       </div>
                     ))}
                   </div>
-                  {/* Mismas dos filas que el panel "Resumen" del carrito, para
+                  {/* Mismas filas que el panel "Resumen" del carrito, para
                       que el cliente lea el mismo desglose en las dos vistas. */}
-                  <div className="mt-4 pt-3 border-t border-border space-y-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>
-                        Subtotal (
-                        {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
-                        productos)
-                      </span>
-                      <span style={{ fontFamily: MONO }}>
-                        {fmt(subtotal)}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-border flex justify-between items-center">
-                      <span className="font-bold text-foreground text-base">
-                        Total
-                      </span>
-                      <span
-                        className="text-base font-bold text-primary"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(subtotal)}
-                      </span>
-                    </div>
-                  </div>
+                  <ResumenTotales
+                    subtotal={subtotal}
+                    className="mt-4 pt-3 border-t border-border space-y-2 text-sm"
+                  />
                 </div>
                 {/* RIGHT: payment method + pickup time */}
                 <div className="px-5 py-5 space-y-5">
@@ -4136,14 +4218,22 @@ function LoginScreen({
   usuarios,
   darkMode,
   loginNotice,
+  initialEmail,
+  onPasswordReset,
 }: {
   navigate: (s: Screen) => void;
   onLogin: (user: Usuario) => void;
   usuarios: Usuario[];
   darkMode: boolean;
   loginNotice?: boolean;
+  /** Correo que queda escrito al llegar desde el cambio de contraseña:
+   *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
+  initialEmail?: string;
+  /** Escribe la contraseña nueva en `usuarios` (en memoria) para la cuenta
+   *  con ese correo. */
+  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
@@ -4203,8 +4293,9 @@ function LoginScreen({
       return;
     }
 
-    // All system users share the password "123456"
-    if (password !== "123456") {
+    // All system users store their own password; default for accounts
+    // created before password tracking was added.
+    if (password !== (user.contrasena ?? "123456")) {
       console.log("[login] credenciales inválidas: contraseña incorrecta");
       setErrors({
         email: "Credenciales incorrectas",
@@ -4237,7 +4328,11 @@ function LoginScreen({
       overlay={
         <AnimatePresence>
           {showForgot && (
-            <ForgotPasswordModal onClose={() => setShowForgot(false)} />
+            <ForgotPasswordModal
+              onClose={() => setShowForgot(false)}
+              usuarios={usuarios}
+              onPasswordReset={onPasswordReset}
+            />
           )}
         </AnimatePresence>
       }
@@ -4384,8 +4479,16 @@ function LoginScreen({
 
 function ForgotPasswordModal({
   onClose,
+  usuarios,
+  onPasswordReset,
 }: {
   onClose: () => void;
+  /** Directorio de cuentas: sirve para avisar antes de enviar un código a un
+   *  correo que no existe. */
+  usuarios: Usuario[];
+  /** Escribe la contraseña nueva en `usuarios` (en memoria) y devuelve "ok"
+   *  si encontró la cuenta. */
+  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
   const [step, setStep] = useState<
     "email" | "code" | "password" | "done"
@@ -4397,6 +4500,10 @@ function ForgotPasswordModal({
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  // Fallo del guardado real (p. ej. la cuenta se borró entre el código y la
+  // contraseña): va aparte de `errores`, que es validación de campos y se
+  // recalcula mientras se escribe.
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
@@ -4421,8 +4528,17 @@ function ForgotPasswordModal({
 
   const sendCode = () => {
     const err = validarCorreo(forgotEmail);
-    setErrores(err ? { forgotEmail: err } : {});
-    if (err) return;
+    if (err) {
+      setErrores({ forgotEmail: err });
+      return;
+    }
+    // Sin cuenta no hay nada que restablecer: se avisa antes de los tres pasos.
+    const clave = forgotEmail.trim().toLowerCase();
+    if (!usuarios.some((u) => u.correo.trim().toLowerCase() === clave)) {
+      setErrores({ forgotEmail: "No existe una cuenta con ese correo" });
+      return;
+    }
+    setErrores({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -4456,18 +4572,56 @@ function ForgotPasswordModal({
     }, 1000);
   };
 
+  // ── Validación en tiempo real del paso "Nueva contraseña" ───────────
+  // Se deriva del valor mientras se escribe, igual que en el cambio de
+  // contraseña de Mi perfil, y comparte la misma lista de requisitos.
+  const passwordError = newPass.length > 0 ? validarContrasena(newPass) : null;
+  const confirmVacio = confirm.length === 0;
+  const confirmCoincide = !confirmVacio && confirm === newPass;
+  const confirmError = !confirmVacio && !confirmCoincide;
+  const todoValido = validarContrasena(newPass) === null && confirmCoincide;
+  const faltan: string[] = [];
+  if (newPass.length === 0) faltan.push("escribir la contraseña");
+  else faltan.push(...faltantesContrasena(newPass));
+  if (confirmVacio) faltan.push("confirmar la contraseña");
+  else if (confirmError) faltan.push("que las contraseñas coincidan");
+
+  // Sin `inputCls`: ahí el borde lo decide solo la presencia de error, y aquí
+  // hace falta una tercera estado (verde) cuando el campo ya es válido.
+  const clsCampo = (estado: "ok" | "err" | "neutro") =>
+    `w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+      estado === "err"
+        ? "border-red-400 bg-red-50/30"
+        : estado === "ok"
+          ? "border-emerald-500"
+          : "border-border"
+    }`;
+  const estadoNew: "ok" | "err" | "neutro" =
+    newPass.length === 0 ? "neutro" : passwordError ? "err" : "ok";
+  const estadoConfirm: "ok" | "err" | "neutro" =
+    confirmVacio ? "neutro" : confirmError ? "err" : "ok";
+
   const changePassword = () => {
-    const errs: Record<string, string> = {};
-    const passwordError = validarContrasena(newPass);
-    if (passwordError) errs.newPass = passwordError;
-    if (newPass !== confirm) errs.confirm = "Las contraseñas no coinciden";
-    setErrores(errs);
-    if (Object.values(errs).some(Boolean)) return;
+    if (loading || !todoValido) return;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
+      // Escribe la contraseña de la cuenta con ese correo en la lista
+      // `usuarios` (en memoria: igual que el cambio desde Mi perfil, este
+      // prototipo no guarda credenciales en localStorage).
+      const res = onPasswordReset?.(forgotEmail.trim().toLowerCase(), newPass) ?? "no-existe";
+      if (res !== "ok") {
+        setErrorGuardado("No existe una cuenta con ese correo");
+        return;
+      }
+      setErrores({});
       setStep("done");
     }, 1200);
+  };
+
+  /** Enter envía cuando todo es válido. */
+  const enviarConEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") changePassword();
   };
 
   const handleCodeInput = (i: number, val: string) => {
@@ -4658,14 +4812,17 @@ function ForgotPasswordModal({
                   value={newPass}
                   onChange={(v) => {
                     setNewPass(v);
-                    if (errores.newPass)
-                      setErrores((p) => ({ ...p, newPass: "" }));
+                    setErrorGuardado(null);
                   }}
+                  onKeyDown={enviarConEnter}
                   placeholder="Mínimo 8 caracteres"
                   autoComplete="new-password"
-                  cls={inputCls(errores.newPass)}
+                  cls={clsCampo(estadoNew)}
                 />
-                <MensajeError err={errores.newPass} />
+                {/* Lista de requisitos que se marca mientras se escribe. */}
+                <RequisitosContrasena valor={newPass} />
+                <MensajeError err={passwordError ?? undefined} />
+                {errorGuardado && <MensajeError err={errorGuardado} />}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
@@ -4673,21 +4830,24 @@ function ForgotPasswordModal({
                 </label>
                 <PasswordField
                   value={confirm}
-                  onChange={(v) => {
-                    setConfirm(v);
-                    if (errores.confirm)
-                      setErrores((p) => ({ ...p, confirm: "" }));
-                  }}
+                  onChange={setConfirm}
+                  onKeyDown={enviarConEnter}
                   placeholder="Repite tu contraseña"
                   autoComplete="new-password"
-                  cls={inputCls(errores.confirm)}
+                  cls={clsCampo(estadoConfirm)}
                 />
-                <MensajeError err={errores.confirm} />
+                {confirmError && <MensajeError err="Las contraseñas no coinciden" />}
+                {confirmCoincide && (
+                  <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Las contraseñas coinciden
+                  </p>
+                )}
               </div>
             </div>
             <button
               onClick={changePassword}
-              disabled={loading}
+              disabled={loading || !todoValido}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
             >
               {loading ? (
@@ -4695,6 +4855,12 @@ function ForgotPasswordModal({
               ) : null}
               {loading ? "Cambiando..." : "Cambiar contraseña"}
             </button>
+            {/* Un botón deshabilitado nunca queda sin explicación. */}
+            {!todoValido && (
+              <p className="text-xs text-muted-foreground mb-3 leading-tight">
+                Para guardar falta: {faltan.join(", ")}.
+              </p>
+            )}
             <button
               onClick={onClose}
               className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
@@ -4788,7 +4954,18 @@ function RegisterScreen({
         if (k === "email") next.email = validarCorreo(value) ?? "";
         if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
         if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
-        if (k === "password") next.password = value ? validarContrasena(value) ?? "" : "";
+        if (k === "password") {
+          next.password = value ? validarContrasena(value) ?? "" : "";
+          // Al escribir la contraseña se recalcula también el confirm: si el
+          // usuario repitió la contraseña antes y luego cambió la primera,
+          // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
+          // un desajuste que acaba de producirse).
+          next.confirm = form.confirm
+            ? value === form.confirm
+              ? ""
+              : "Las contraseñas no coinciden"
+            : "";
+        }
         if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
         if (k === "name") next.name = validarNombre(value) ?? "";
         return next;
@@ -4841,8 +5018,9 @@ function RegisterScreen({
       if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
 
-    if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/\d/.test(form.password))
-      errs.password = "Usa 8 caracteres, mayúscula, minúscula y número";
+    // Mismas reglas que el resto de formularios (fuente única en campo.tsx).
+    const passwordError = validarContrasena(form.password);
+    if (passwordError) errs.password = passwordError;
     if (form.password !== form.confirm)
       errs.confirm = "Las contraseñas no coinciden";
 
@@ -4873,6 +5051,7 @@ function RegisterScreen({
         numeroDocumento: form.docNum.trim(),
         rolId: "ROL-002",
         activo: true,
+        contrasena: form.password,
       };
        setUsuarios(p => [...p, nuevoUsuario]);
        toast.success(
@@ -4890,6 +5069,12 @@ function RegisterScreen({
      Boolean(validarContrasena(form.password)) ||
      !form.confirm ||
      form.password !== form.confirm;
+
+   /** Enter en los campos de contraseña crea la cuenta; `register` es quien
+    *  decide si hay errores, así que nunca envía un formulario incompleto. */
+   const enviarConEnterRegistro = (e: React.KeyboardEvent<HTMLInputElement>) => {
+     if (e.key === "Enter") register();
+   };
 
    return (
     <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0" darkMode={darkMode}>
@@ -5004,6 +5189,7 @@ function RegisterScreen({
                 <PasswordField
                   value={form[key]}
                   onChange={setVal(key)}
+                  onKeyDown={enviarConEnterRegistro}
                   placeholder={placeholder}
                   autoComplete="new-password"
                   cls={inputCls(errores[key])}
@@ -5019,6 +5205,9 @@ function RegisterScreen({
                 />
               )}
               <MensajeError err={errores[key]} />
+              {/* Lista de requisitos en tiempo real (solo bajo la contraseña:
+                  la confirmación ya tiene su propio mensaje). */}
+              {key === "password" && <RequisitosContrasena valor={form.password} />}
             </div>
           ))}
         </div>
@@ -5233,7 +5422,7 @@ function DashboardScreen({
                 active && payload?.length ? (
                   <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
                     <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-                    <p className="font-bold text-foreground">{payload[0].value} productos</p>
+                    <p className="font-bold text-foreground">{payload[0].value} producto{payload[0].value === 1 ? "" : "s"}</p>
                   </div>
                 ) : null
               } />
@@ -5552,7 +5741,7 @@ function ManageProductsScreen() {
             Gestión de productos
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {products.length} productos en total
+            {products.length} producto{products.length === 1 ? "" : "s"} en total
           </p>
         </div>
         <PrimaryBtn onClick={() => setCreating(true)} size="md">
@@ -5562,18 +5751,15 @@ function ManageProductsScreen() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Buscar producto..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground text-sm"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          placeholder="Buscar producto..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select
           value={statusF}
           onChange={(e) => {
@@ -5659,20 +5845,31 @@ function ManageProductsScreen() {
                       {fmt(p.price)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <select
-                        value={p.status}
-                        onChange={(e) =>
-                          changeStatus(
-                            p.id,
-                            e.target.value as Product["status"],
-                          )
-                        }
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${PROD_STATUS_COLOR[p.status]}`}
-                      >
-                        <option value="activo">Activo</option>
-                        <option value="agotado">Agotado</option>
-                        <option value="pausado">Pausado</option>
-                      </select>
+                      {/* Pill de estado (diseño de Proveedores). Misma regla
+                          que el select nativo: elegir lo que ya se muestra no
+                          hace nada y el resto llama a changeStatus. */}
+                      <EstadoSelect
+                        value={p.status as string}
+                        onChange={(nuevo) => {
+                          if (PROD_STATUS_LABEL[nuevo] === PROD_STATUS_LABEL[p.status]) return;
+                          changeStatus(p.id, nuevo as Product["status"]);
+                        }}
+                        options={[
+                          {
+                            value: p.status,
+                            label: PROD_STATUS_LABEL[p.status],
+                            color: PROD_STATUS_COLOR[p.status],
+                          },
+                          ...PROD_STATUS_OPCIONES.filter(
+                            (s) =>
+                              PROD_STATUS_LABEL[s] !== PROD_STATUS_LABEL[p.status],
+                          ).map((s) => ({
+                            value: s as string,
+                            label: PROD_STATUS_LABEL[s],
+                            color: PROD_STATUS_COLOR[s],
+                          })),
+                        ]}
+                      />
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground"
@@ -5681,22 +5878,10 @@ function ManageProductsScreen() {
                       {p.sales.toLocaleString("es-CO")}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setEditP({ ...p })}
-                          className="p-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground hover:text-foreground"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer text-muted-foreground hover:text-red-600"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <ActionIcons
+                        onEdit={() => setEditP({ ...p })}
+                        onDelete={() => setDeleteId(p.id)}
+                      />
                     </td>
                   </tr>
                 ))
@@ -6017,15 +6202,12 @@ function OrdersScreen({
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por cliente o código..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por cliente o código..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select
           value={statusF}
           onChange={(e) => setStatusF(e.target.value)}
@@ -6602,6 +6784,18 @@ function DevolucionesScreen({
                     dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
                     0;
                   const pendiente = !dev.devolucionResuelta;
+                  // Estado derivado: solo se resuelve con el flujo de
+                  // "Gestionar devolución", por eso la pill va sin menú.
+                  const estadoDevLabel = pendiente
+                    ? "Pendiente"
+                    : dev.devolucionTipo === "dinero"
+                      ? "Resuelta · Dinero"
+                      : dev.devolucionTipo === "producto"
+                        ? "Resuelta · Canje"
+                        : "Resuelta · Mixta";
+                  const estadoDevColor = pendiente
+                    ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200";
 
                   return (
                     <tr
@@ -6633,21 +6827,12 @@ function DevolucionesScreen({
                         <PagoPill metodo={dev.metodoPago} />
                       </td>
                       <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                            pendiente
-                              ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
-                          }`}
-                        >
-                          {pendiente
-                            ? "Pendiente"
-                            : dev.devolucionTipo === "dinero"
-                              ? "Resuelta · Dinero"
-                              : dev.devolucionTipo === "producto"
-                                ? "Resuelta · Canje"
-                                : "Resuelta · Mixta"}
-                        </span>
+                        <EstadoSelect
+                          value={estadoDevLabel}
+                          onChange={() => {}}
+                          options={[{ value: estadoDevLabel, label: estadoDevLabel, color: estadoDevColor }]}
+                          disabled
+                        />
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -6666,14 +6851,9 @@ function DevolucionesScreen({
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDetalleDevolucion(dev)}
-                            title="Visualizar devolución"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted text-foreground hover:bg-border transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <ActionIcons
+                            onView={() => setDetalleDevolucion(dev)}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -7628,16 +7808,17 @@ const leerRolesPersistidos = (): Rol[] => {
   return INITIAL_ROLES;
 };
 
-// ── Persistencia de usuarios (TEMPORAL) ──────────────────────────────
-// Mismo criterio y mismo riesgo que la de roles: los usuarios se creaban solo
-// en memoria, así que cualquier alta se perdía con el F5. Se guardan en
-// localStorage como solución puente, con la misma forma que el bloque de roles
-// y también con versión en la clave.
+// ── Lectura de usuarios (la clave se LEE, no se Escribe) ───────────────
+// `sivpro.usuarios.v1` se sigue leyendo por si queda algo guardado de una
+// build anterior (y por el backfill de `contrasena` de abajo), pero ya NO se
+// escribe: en este prototipo no hay backend y las credenciales no deben quedar
+// en el navegador. Alta, edición y cambio de contraseña viven solo en el
+// `useState` de App y por eso se pierden al recargar (F5).
 //
-// OJO: al persistir TODO el array se guardan también los cambios que hacen
-// otras pantallas, no solo los del modal de alta: las ediciones de "Mi Perfil"
-// y los interruptores de Activo/Inactivo de la pantalla de Usuarios.
-// Para volver a la semilla: localStorage.removeItem(USUARIOS_STORAGE_KEY).
+// ATENCIÓN con mezclar: si algún día se vuelve a persistir el array, se
+// guardarían también las ediciones de "Mi Perfil" y los interruptores de
+// Activo/Inactivo de la pantalla de Usuarios… y las contraseñas.
+// Para vaciar la clave a mano: localStorage.removeItem(USUARIOS_STORAGE_KEY).
 const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
 const CUENTAS_PRUEBA_IDS = new Set(["USR-001", "USR-002", "USR-010"]);
 
@@ -7682,7 +7863,11 @@ const leerUsuariosPersistidos = (): Usuario[] => {
       const otrosUsuarios = persistidos
         .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
         .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
-      return [...cuentasPrueba, ...otrosUsuarios];
+      return [...cuentasPrueba, ...otrosUsuarios].map(u => ({
+        ...u,
+        // Backfill para registros viejos sin contraseña propia.
+        contrasena: u.contrasena ?? "123456",
+      }));
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -7699,6 +7884,12 @@ const leerUsuariosPersistidos = (): Usuario[] => {
 // las ediciones, los interruptores Activo/Inactivo y los BORRADOS de empleado,
 // no solo las contrataciones. Para volver a la semilla:
 // localStorage.removeItem(EMPLEADOS_STORAGE_KEY).
+//
+// EXCEPCIÓN IMPORTANTE: `contrasena` NO se serializa. Las credenciales no se
+// guardan en el navegador (mismo criterio que el bloque de usuarios), así que
+// el efecto de escritura quita ese campo y `normalizarEmpleado` de abajo lo
+// repone con "123456" al leer. Las contraseñas que el usuario cambie durante
+// la sesión viven solo en memoria.
 const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
 
 const esEmpleadoValido = (e: unknown): e is Empleado => {
@@ -7797,6 +7988,7 @@ const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
 const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
 const VENTAS_STORAGE_KEY = "sivpro.ventas.v1";
 const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
+const NO_CONFORMIDADES_STORAGE_KEY = "sivpro.noConformidades.v1";
 
 /** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
     forma, se usa la semilla en vez de romper el arranque. */
@@ -7840,6 +8032,16 @@ const leerInsumosPersistidos = () =>
   leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
 const leerVentasPersistidas = () =>
   leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
+const esNoConformidadValida = (x: unknown) =>
+  esObjeto(x) &&
+  typeof x.id === "string" &&
+  typeof x.tipo === "string" &&
+  typeof x.estado === "string" &&
+  typeof x.fechaRegistro === "string";
+
+const leerNoConformidadesPersistidas = () =>
+  leerListaPersistida<NoConformidad>(NO_CONFORMIDADES_STORAGE_KEY, INITIAL_NO_CONFORMIDADES, esNoConformidadValida);
+
 const leerFichasPersistidas = () => {
   try {
     const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
@@ -8059,8 +8261,13 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
-  const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null);
+  const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
+  // Correo que queda precargado en "Iniciar sesión" cuando se llega desde el
+  // cambio de contraseña: la sesión acaba de cerrarse y así el usuario solo
+  // tiene que escribir la clave nueva. Vive aquí (y no dentro de LoginScreen)
+  // porque quien lo conoce es el flujo que cierra la sesión.
+  const [loginEmailPre, setLoginEmailPre] = useState("");
   // Catálogo de productos. Lo consumen GestionProductosScreen y
   // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
   // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
@@ -8076,6 +8283,10 @@ export default function App() {
   // se perdían al salir del módulo y no había forma de crear el pedido solo.
   const [ordenesProduccion, setOrdenesProduccion] =
     useState<OrdenProduccion[]>(leerOrdenesPersistidas);
+  // No conformidades (módulo Productos no conformes). Subidas a App para que
+  // Orden de Producción pueda registrar mermas y sobrevivan al F5.
+  const [noConformidades, setNoConformidades] =
+    useState<NoConformidad[]>(leerNoConformidadesPersistidas);
   // Categorías de producto. Las consume el módulo de Categoría Producto (que
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
@@ -8125,7 +8336,12 @@ export default function App() {
             changed = true;
           }
         } else {
-          const nuevo = { id: siguienteId(), ...base };
+          // Solo al CREAR: el usuario nuevo nace con la contraseña de su ficha
+          // de empleado para poder entrar con ella. `base` no lleva
+          // `contrasena` a propósito, así que la rama de arriba (actualizar)
+          // jamás pisa la contraseña que el usuario cambió en "Mi perfil" o en
+          // "Restablecer contraseña".
+          const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
           next.push(nuevo);
           porCorreo.set(correo, nuevo);
           changed = true;
@@ -8201,7 +8417,9 @@ export default function App() {
         next[indice] = actualizado;
         porCorreo.set(correo, actualizado);
       } else {
-        const nuevo = { id: siguienteId(), ...base };
+        // Misma regla que en el efecto de arriba: la contraseña se copia SOLO
+        // al crear, nunca al actualizar (el listado unificado no debe pisarla).
+        const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
         next.push(nuevo);
         porCorreo.set(correo, nuevo);
       }
@@ -8282,7 +8500,7 @@ export default function App() {
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
     const key = SCREEN_PERM_KEY[s];
-    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
+    if (!key) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
@@ -8352,6 +8570,37 @@ export default function App() {
     }
   }, [categorias]);
 
+  // Mitad que faltaba del par leer/escribir de los roles: `leerRolesPersistidos`
+  // lee `sivpro.roles.v1`, pero nada la escribía, así que cualquier rol creado
+  // en "Gestión de Usuarios" desaparecía con el F5 (y el permiso que alguien
+  // le había dado dejaba de servir al recargar). Ningún dato de credencial
+  // entra aquí: solo id, nombre, descripción, activo y accesos.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
+    } catch {
+      // Almacenamiento bloqueado o sin cuota: los roles siguen en memoria.
+    }
+  }, [roles]);
+
+  // Igual para empleados: sin esta escritura, el alta de un empleado y su
+  // historial de contrataciones se perdían en cada F5.
+  //
+  // `contrasena` se DEJA FUERA a propósito (ver EMPLEADOS_STORAGE_KEY): las
+  // credenciales no se guardan en el navegador. Al leer, `normalizarEmpleado`
+  // repone "123456" a los registros que lleguen sin ella, que es exactamente
+  // lo que ocurre tras guardar aquí.
+  useEffect(() => {
+    try {
+      const sinContrasena = empleados.map(
+        ({ contrasena: _sinContrasena, ...resto }) => resto,
+      );
+      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(sinContrasena));
+    } catch {
+      // Almacenamiento bloqueado o sin cuota: los empleados siguen en memoria.
+    }
+  }, [empleados]);
+
   // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
   // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
   // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
@@ -8372,6 +8621,14 @@ export default function App() {
       // El almacenamiento puede estar bloqueado o sin cuota.
     }
   }, [insumos]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NO_CONFORMIDADES_STORAGE_KEY, JSON.stringify(noConformidades));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [noConformidades]);
 
   useEffect(() => {
     try {
@@ -8461,6 +8718,7 @@ export default function App() {
 
   const openLogin = () => {
     setLoginNotice(false);
+    setLoginEmailPre("");
     navigate("login");
   };
 
@@ -8472,19 +8730,36 @@ export default function App() {
     });
     setIsLoggedIn(true);
     setLoginNotice(false);
+    setLoginEmailPre("");
 
     const orderToResume = pendingOrder;
     if (orderToResume) {
-      registrarPedido(
+      // El nombre que queda registrado es el del invitado (si lo
+      // llegó a escribir) o el de la cuenta que inicia sesión.
+      const nombrePedido = orderToResume.nombre?.trim() || user.nombre;
+      const idVenta = registrarPedido(
         orderToResume.metodoPago,
         orderToResume.comprobante,
         orderToResume.items,
         orderToResume.horaRecogida,
-        orderToResume.nombre,
+        nombrePedido,
         orderToResume.documento,
       );
       setCart([]);
-      setOrderConfirmation(orderToResume.horaRecogida);
+      // Confirmación como objeto (no solo la hora) para que la
+      // pantalla del carrito muestre exactamente lo mismo que tras
+      // un pedido normal: número, productos, cliente y recogida.
+      setOrderConfirmation({
+        id: idVenta,
+        hora: orderToResume.horaRecogida,
+        nombre: nombrePedido,
+        documento: orderToResume.documento?.trim(),
+        items: orderToResume.items,
+        total: orderToResume.items.reduce(
+          (s, i) => s + (i.sizePrice + i.extrasPrice) * i.quantity,
+          0,
+        ),
+      });
       window.setTimeout(() => {
         setPendingOrder(null);
         navigate("cart");
@@ -8565,7 +8840,7 @@ export default function App() {
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
-  ) => {
+  ): string => {
     const newVenta: Venta = {
       id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
       usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
@@ -8609,6 +8884,7 @@ export default function App() {
       })),
     };
     setVentas((prev) => [newVenta, ...prev]);
+    return newVenta.id;
   };
 
   const updateQty = (id: string, qty: number) => {
@@ -8644,7 +8920,18 @@ export default function App() {
 
   // El frontend actual no tiene endpoint de logout. Si se configura uno para
   // una integración futura, la limpieza local sigue ocurriendo en finally.
-  const logout = async () => {
+  /** Cierra la sesión.
+   *
+   * `silenciarAviso` evita el toast "Has cerrado sesión correctamente" cuando
+   * el cierre es un paso interno (p. ej. tras cambiar la contraseña, donde el
+   * aviso es otro y dos toasts seguidos solo enredan).
+   * `destino` permite ir directo a "login" sin pasar por la landing. */
+  const logout = async (opciones?: {
+    silenciarAviso?: boolean;
+    destino?: Screen;
+  }) => {
+    const silenciarAviso = opciones?.silenciarAviso ?? false;
+    const destino: Screen = opciones?.destino ?? "landing";
     try {
       const endpoint = import.meta.env.VITE_AUTH_LOGOUT_URL;
       if (endpoint) {
@@ -8657,9 +8944,68 @@ export default function App() {
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
-      navigate("landing", { replace: true });
-      toast.success("Has cerrado sesión correctamente");
+      navigate(destino, { replace: true });
+      if (!silenciarAviso) {
+        toast.success("Has cerrado sesión correctamente");
+      }
     }
+  };
+
+  /** Guarda la contraseña nueva del usuario de la sesión en la lista
+   *  `usuarios` (en memoria: este prototipo no guarda credenciales en
+   *  localStorage, así que un F5 devuelve las contraseñas de la semilla).
+   *
+   *  Devuelve false —sin tocar nada— cuando no se pudo actualizar, para que "Mi
+   *  perfil" conserve tanto el modal como la sesión abiertas. */
+  const actualizarContrasena = (
+    id: string,
+    nuevaContrasena: string,
+  ): boolean => {
+    try {
+      if (!nuevaContrasena) return false;
+      if (!usuarios.some((u) => u.id === id)) return false;
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, contrasena: nuevaContrasena } : u)),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Mismo cambio de contraseña, pero por correo: lo usa "¿Olvidaste tu
+   *  contraseña?". Actualiza todas las cuentas con ese correo y avisa si no
+   *  existe ninguna, para no simular una recuperación sobre una cuenta inexistente. */
+  const restablecerContrasena = (
+    correo: string,
+    nuevaContrasena: string,
+  ): "ok" | "no-existe" => {
+    const clave = correo.trim().toLowerCase();
+    const existe = usuarios.some(
+      (u) => u.correo.trim().toLowerCase() === clave,
+    );
+    if (!existe) return "no-existe";
+    setUsuarios((prev) =>
+      prev.map((u) =>
+        u.correo.trim().toLowerCase() === clave
+          ? { ...u, contrasena: nuevaContrasena }
+          : u,
+      ),
+    );
+    return "ok";
+  };
+
+  /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
+   *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
+   *  conserva) y llegada a "Iniciar sesión" con el correo ya escrito. */
+  const trasCambiarContrasena = async (correo: string) => {
+    toast.success(
+      "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
+    );
+    // El correo se fija ANTES de navegar: si se hiciera después, LoginScreen
+    // ya se habría montado con `initialEmail` vacío y `useState` no lo tomaría.
+    setLoginEmailPre(correo);
+    await logout({ silenciarAviso: true, destino: "login" });
   };
 
   // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
@@ -8684,6 +9030,15 @@ export default function App() {
     if (isLoggedIn && !hasValidSession && !pendingOrder) void logout();
   }, [isLoggedIn, hasValidSession, pendingOrder]);
 
+  // La confirmación de pedido solo vive mientras se ve el carrito:
+  // antes se asignaba (en el login y al enviar) y jamás se limpiaba,
+  // así que volver al carrito después de un pedido volvía a mostrar
+  // "¡Pedido recibido!". Al cambiar de pantalla se borra; los botones
+  // de la propia confirmación también la limpian antes de navegar.
+  useEffect(() => {
+    if (screen !== "cart") setOrderConfirmation(null);
+  }, [screen]);
+
   // If a client or an invalid session somehow lands on an admin screen, send
   // them out of the protected area.
   if (
@@ -8693,9 +9048,16 @@ export default function App() {
     setTimeout(() => navigate("landing", { replace: true }), 0);
   }
 
-  if (!hasValidSession && screen === "mis-pedidos") {
-    setTimeout(() => navigate("landing", { replace: true }), 0);
-  }
+  // "Mis pedidos" requiere sesión válida. Antes este guard navegaba
+  // desde el render (setTimeout dentro del cuerpo del componente);
+  // ahora corre como efecto, después de pintar. Un cliente logueado
+  // (rol "Cliente" o con ficha en usuarios) tiene sesión válida y
+  // NO es redirigido a la landing.
+  useEffect(() => {
+    if (!hasValidSession && screen === "mis-pedidos") {
+      navigate("landing", { replace: true });
+    }
+  }, [hasValidSession, screen, navigate]);
 
   // Dashboard and Inicio are mutually exclusive landing screens. Other admin
   // screens remain protected by their module permission below.
@@ -8861,7 +9223,7 @@ export default function App() {
                     price: p.precioUnitario,
                     image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
                     category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
-                    sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+                    sizes: sizesDeProducto(p),
                     extras: [],
                     status: p.estado === "Disponible" ? "disponible" : "no disponible",
                     rating: 4.5,
@@ -8902,7 +9264,8 @@ export default function App() {
                     setLoginNotice(true);
                     openLogin();
                   }}
-                  confirmationHora={orderConfirmation ?? undefined}
+                  confirmationData={orderConfirmation ?? undefined}
+                  onClearConfirmation={() => setOrderConfirmation(null)}
                   clienteSesion={loggedInUser?.nombre}
                 />
               )}
@@ -8919,6 +9282,8 @@ export default function App() {
                     usuarios={usuarios}
                     darkMode={darkMode}
                     loginNotice={loginNotice}
+                    initialEmail={loginEmailPre}
+                    onPasswordReset={restablecerContrasena}
                     onLogin={handleLogin}
                 />
               )}
@@ -8986,6 +9351,11 @@ export default function App() {
                       cantidad: v.cantidad,
                       total: v.total,
                     }))}
+                  insumos={insumos}
+                  productos={productos}
+                  ordenesProduccion={ordenesProduccion}
+                  noConformidades={noConformidades}
+                  setNoConformidades={setNoConformidades}
                 />
               )}
               {screen === "orden-compra" && (
@@ -9138,6 +9508,13 @@ export default function App() {
                   rolUserCounts={Object.fromEntries(
                     roles.map(r => [r.id, usuarios.filter(u => u.rolId === r.id).length])
                   )}
+                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
+                  canCreate={getPerms("gestion-roles").canCreate}
+                  canEdit={getPerms("gestion-roles").canEdit}
+                  canDelete={getPerms("gestion-roles").canDelete}
+                  accesosPropios={loggedInAccesos}
+                  loggedInRolId={loggedInRol?.id ?? null}
+                  usuarios={usuariosUnificados}
                 />
               )}
               {screen === "sales-chart" && (
@@ -9163,6 +9540,10 @@ export default function App() {
                   empleados={empleados}
                   setEmpleados={setEmpleados}
                   clientes={clientes}
+                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
+                  canCreate={getPerms("users").canCreate}
+                  canEdit={getPerms("users").canEdit}
+                  canDelete={getPerms("users").canDelete}
                 />
               )}
               {screen === "empleados" && (
@@ -9185,6 +9566,8 @@ export default function App() {
                   fichasPorProducto={fichasPorProducto}
                   ordenes={ordenesProduccion}
                   setOrdenes={setOrdenesProduccion}
+                  noConformidades={noConformidades}
+                  setNoConformidades={setNoConformidades}
                 />
               )}
               {screen === "finished-products" && (
@@ -9205,12 +9588,15 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
+                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  onUpdatePassword={actualizarContrasena}
+                  onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   inStore
@@ -9231,12 +9617,15 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
+                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  onUpdatePassword={actualizarContrasena}
+                  onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                 />

@@ -1,9 +1,16 @@
 import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos } from "./GestionConfigScreen";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
+import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, fullAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
@@ -30,6 +37,7 @@ export interface Usuario {
   rolId: string;
   rolInternoId?: string;
   activo: boolean;
+  contrasena?: string;
 }
 
 export const INIT_USUARIOS: Usuario[] = [
@@ -122,6 +130,10 @@ export function GestionUsuariosScreen({
   empleados,
   setEmpleados,
   clientes,
+  canVer = true,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
 }: {
   userRole: string;
   roles: Rol[];
@@ -130,6 +142,10 @@ export function GestionUsuariosScreen({
   empleados: Empleado[];
   setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
   clientes: Cliente[];
+  canVer?: boolean;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const [search,     setSearch]    = useState("");
   const [filterRol,  setFiltroR]   = useState("todos");
@@ -263,12 +279,34 @@ export function GestionUsuariosScreen({
     }));
   };
 
+  // ¿Este rol tiene TODOS los permisos y privilegios?
+  const rolInfoTotal = (rolId: string) => {
+    const r = roles.find(x => x.id === rolId);
+    if (!r) return false;
+    const full = fullAccesos();
+    return Object.entries(full).every(([k, acts]) => (r.accesos?.[k] ?? []).length > 0 && acts.every(a => r.accesos[k]?.includes(a)));
+  };
+  // Usuarios ACTIVOS cuyo rol tiene todos los permisos, para nunca dejar el
+  // sistema sin nadie con acceso total.
+  const totalesActivos = usuariosUnicos.filter(u => u.activo && rolInfoTotal(u.rolId));
+
+  // Misma regla y mismos efectos para cambiar el estado, sea desde el detalle
+  // o desde la pill de la tabla: nunca al usuario actual si es el último con
+  // todos los permisos, y siempre actualizando el empleado vinculado.
+  const aplicarCambioEstado = (usuario: Usuario, nuevoEstado: boolean) => {
+    if (nuevoEstado === usuario.activo) return;
+    if (!nuevoEstado && usuario.activo && rolInfoTotal(usuario.rolId) && totalesActivos.length === 1) {
+      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+      return;
+    }
+    updateUsuario(usuario.id, { activo: nuevoEstado });
+    updateEmpleadoLinked(usuario.correo, { activo: nuevoEstado });
+    toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+  };
+
   const cambiarEstado = () => {
     if (!detail) return;
-    const nuevoEstado = !detail.activo;
-    updateUsuario(detail.id, { activo: nuevoEstado });
-    updateEmpleadoLinked(detail.correo, { activo: nuevoEstado });
-    toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+    aplicarCambioEstado(detail, !detail.activo);
   };
 
   const handleEdit = () => {
@@ -301,6 +339,14 @@ export function GestionUsuariosScreen({
       if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
+    // No quitar el último usuario activo con todos los permisos cambiando su rol.
+    const anterior = usuarios.find(u => u.id === editItem.id);
+    const eraTotal = anterior ? rolInfoTotal(anterior.rolId) : false;
+    const seraTotal = rolInfoTotal(editItem.rolId);
+    if (eraTotal && !seraTotal && totalesActivos.length === 1) {
+      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+      return;
+    }
     // Se recalculan las iniciales al renombrar: antes se guardaba `editItem` tal
     // cual y el avatar de la tabla, del detalle y de la vista previa seguían
     // mostrando las del nombre viejo. Empleados y Clientes ya lo hacían así.
@@ -323,6 +369,10 @@ export function GestionUsuariosScreen({
 
   const handleDelete = (id: string) => {
     const objetivo = usuarios.find(u => u.id === id);
+    if (objetivo && objetivo.activo && rolInfoTotal(objetivo.rolId) && totalesActivos.length === 1) {
+      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+      return;
+    }
     setUsuarios(p => p.filter(u => u.id !== id));
     if (objetivo) {
       const key = objetivo.correo.trim().toLowerCase();
@@ -420,6 +470,7 @@ export function GestionUsuariosScreen({
         numeroDocumento: dm,
         rolId: newRolId,
         activo: newActivo,
+        contrasena: "123456",
       },
       ...prev,
     ]);
@@ -430,12 +481,12 @@ export function GestionUsuariosScreen({
 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
 
-  if (userRole !== "Administrador") {
+  if (!canVer) {
     return (
       <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
         <div className="text-6xl mb-4">🔒</div>
         <h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2>
-        <p className="text-muted-foreground">Solo el Administrador puede acceder a Gestión Usuarios.</p>
+        <p className="text-muted-foreground">No tienes permiso para ver Gestión Usuarios. Pide acceso al administrador.</p>
       </div>
     );
   }
@@ -452,12 +503,12 @@ export function GestionUsuariosScreen({
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <div className="relative flex-1 min-w-52">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo, rol o documento..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, correo, rol o documento..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select value={filterRol} onChange={e => { setFiltroR(e.target.value); setPage(1); }} className={iCls}>
           <option value="todos">Todos los roles</option>
           {roles.filter(r => r.activo).map(r => (
@@ -521,25 +572,27 @@ export function GestionUsuariosScreen({
                       </div>
                     </td>
                     <td className="px-4 py-1.5">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
-                        {u.activo ? "Activo" : "Inactivo"}
-                      </span>
+                      {/* Pill de estado (diseño de Proveedores). Aplica el
+                          MISMO cambio que el botón del detalle, con la misma
+                          regla del último usuario con todos los permisos. */}
+                      <EstadoSelect
+                        value={u.activo ? "activo" : "inactivo"}
+                        onChange={nuevoEstado => {
+                          if ((nuevoEstado === "activo") === u.activo) return;
+                          aplicarCambioEstado(u, nuevoEstado === "activo");
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
                     </td>
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetail(u)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); }} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteId(u.id)} title="Eliminar"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <ActionIcons
+                        onView={() => setDetail(u)}
+                        onEdit={canEdit ? () => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); } : undefined}
+                        onDelete={canDelete ? () => setDeleteId(u.id) : undefined}
+                      />
                     </td>
                   </tr>
                 );
@@ -677,6 +730,7 @@ export function GestionUsuariosScreen({
                   ))}
 
                   {/* Cambiar estado */}
+                  {canEdit && (
                   <button onClick={cambiarEstado}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-colors cursor-pointer active:scale-95 ${
                       detail.activo
@@ -686,14 +740,17 @@ export function GestionUsuariosScreen({
                     <RefreshCw className="w-4 h-4" />
                     {detail.activo ? "Desactivar usuario" : "Activar usuario"}
                   </button>
+                  )}
                   </div>
                 </div>
 
                 <div className="flex gap-3 px-5 py-3 border-t border-border shrink-0">
+                  {canEdit && (
                   <button onClick={() => { setDetail(null); setEditItem({ ...detail }); setEditPrevCorreo(detail.correo); setEditErrors({}); }}
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Editar usuario
                   </button>
+                  )}
                   <button onClick={() => setDetail(null)}
                     className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                     Cerrar

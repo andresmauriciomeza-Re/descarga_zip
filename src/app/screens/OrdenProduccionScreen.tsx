@@ -1,17 +1,21 @@
 ﻿import { useState, useMemo, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight,
+  Plus, Search, Trash2, X, ChevronLeft, ChevronRight,
   AlertCircle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import type { Insumo } from "./GestionInsumosScreen";
 import type { Venta } from "./VentasScreen";
 import type { Producto, FichasPorProducto } from "./GestionProductosScreen";
+import { nextNoConformidadId, type NoConformidad } from "./ProductosPerecederosScreen";
 
 const SERIF = "var(--font-titulo)";
 
@@ -27,10 +31,10 @@ export const TIPO_LABEL: Record<TipoOrden, string> = {
 };
 
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
-  pendiente:    "bg-yellow-100 text-yellow-800",
-  "en-proceso": "bg-blue-100 text-blue-800",
-  completada:   "bg-emerald-100 text-emerald-800",
-  cancelada:    "bg-red-100 text-red-700",
+  pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
+  "en-proceso": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  completada:   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  cancelada:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 const ESTADO_LABEL: Record<EstadoOrden, string> = {
@@ -710,6 +714,8 @@ export function OrdenProduccionScreen({
   fichasPorProducto,
   ordenes,
   setOrdenes,
+  noConformidades,
+  setNoConformidades,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -723,6 +729,8 @@ export function OrdenProduccionScreen({
   fichasPorProducto: FichasPorProducto;
   ordenes: OrdenProduccion[];
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
+  noConformidades: NoConformidad[];
+  setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1035,8 +1043,48 @@ export function OrdenProduccionScreen({
     } else {
       toast.success(`${orden.id} completada`);
     }
-    // TODO Producto no conforme: la merma de cada línea (y sus pasos) debería
-    // registrarse como producto no conforme. La orden ya la guarda.
+    // Merma como no conformidad: solo órdenes "Preparación en lote" (las de
+    // "Pedido de cliente" entregan platos, no Productos Insumo). El dedupe
+    // vive dentro del updater funcional para que ni un doble clic ni el doble
+    // render de React la dupliquen. Esa cantidad NO se descuenta del stock:
+    // nunca entró al inventario (solo entró la cantidad real).
+    if (orden.tipo === "preparacion") {
+      setNoConformidades((prev) => {
+        const nuevas: NoConformidad[] = [];
+        orden.lineas.forEach((l, i) => {
+          const real = Number(reales[i]);
+          if (!Number.isFinite(real)) return;
+          const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
+          if (merma <= 0) return;
+          const yaExiste = prev.some(
+            (n) => n.ordenRef === orden.id && n.nombre === l.nombre && n.tipoNoConformidad === "Merma de cocina",
+          );
+          if (yaExiste) return;
+          nuevas.push({
+            id: nextNoConformidadId([...prev, ...nuevas]),
+            tipo: "Producto insumo",
+            nombre: l.nombre,
+            categoria: "Producto insumo",
+            fechaRegistro: new Date().toLocaleDateString("en-CA"),
+            cantidadAfectada: merma,
+            unidadMedida: l.unidad,
+            tipoNoConformidad: "Merma de cocina",
+            descripcionProblema: `Se planificaron ${l.cantidadEstimada} ${l.unidad} y se obtuvieron ${real} ${l.unidad}.`,
+            causa: "",
+            areaProceso: "Producción",
+            responsable: "",
+            estado: "Pendiente",
+            tipoSolucion: "",
+            solucion: "",
+            ordenRef: orden.id,
+          });
+        });
+        nuevas.forEach((n) =>
+          toast.success(`Se registró la merma de ${n.nombre} en Productos no conformes`),
+        );
+        return nuevas.length > 0 ? [...nuevas, ...prev] : prev;
+      });
+    }
     // TODO stock de productos elaborados = cuántos se pueden armar con los
     // Productos Insumo disponibles. Las órdenes ya no suben el stock de
     // Productos, así que este cálculo queda pendiente.
@@ -1119,7 +1167,7 @@ export function OrdenProduccionScreen({
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Orden Producción</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
@@ -1136,13 +1184,13 @@ export function OrdenProduccionScreen({
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por ID, venta, cliente o producto..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por ID, venta, cliente o producto..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value as typeof filtroTipo); setPage(1); }}
           aria-label="Filtrar por tipo" className={sCls + " sm:w-48"}>
           <option value="todos">Todo tipo</option>
@@ -1157,13 +1205,13 @@ export function OrdenProduccionScreen({
       </div>
 
       {/* Listado */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1179,31 +1227,31 @@ export function OrdenProduccionScreen({
                 const completada = o.estadoOrden === "completada";
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
+                    <td className="px-4 py-2">
+                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
                       {o.tipo === "pedido" && o.ventaNumero && (
                         <p className="text-[11px] text-muted-foreground">Venta {o.ventaNumero}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
                         o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
                       }`}>
                         {TIPO_LABEL[o.tipo]}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2">
                       <p className="text-sm font-medium text-foreground">{resumenProductos(o)}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {o.lineas.map((l) => `${l.cantidadEstimada} × ${l.nombre}`).join(", ")}
                       </p>
                     </td>
-                    <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
+                    <td className="px-4 py-2 text-sm font-semibold text-foreground whitespace-nowrap">
                       {o.lineas.length === 1
                         ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad)
                         : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
-                    <td className="px-4 py-3.5 text-sm whitespace-nowrap">
+                    <td className="px-4 py-2 text-sm whitespace-nowrap">
                       {!completada ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
@@ -1219,50 +1267,39 @@ export function OrdenProduccionScreen({
                         </>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
-                      {VALID_TRANSITIONS[o.estadoOrden].length === 0 ? (
-                        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
-                          {ESTADO_LABEL[o.estadoOrden]}
-                        </span>
-                      ) : (
-                        <select value={o.estadoOrden}
-                          onChange={e => {
-                            const next = e.target.value as EstadoOrden;
-                            if (next === o.estadoOrden) return;
-                            e.target.value = o.estadoOrden;
-                            applyTransition(o.id, next);
-                          }}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${ESTADO_COLOR[o.estadoOrden]}`}>
-                          <option value={o.estadoOrden}>{ESTADO_LABEL[o.estadoOrden]}</option>
-                          {VALID_TRANSITIONS[o.estadoOrden].map(n => (
-                            <option key={n} value={n}>{ESTADO_LABEL[n]}</option>
-                          ))}
-                        </select>
-                      )}
+                    <td className="px-4 py-2">
+                      {/* Pill de estado (diseño de Proveedores). La transición
+                          se aplica igual que antes; sin transiciones (estados
+                          finales) la pill queda sin menú. */}
+                      <EstadoSelect
+                        value={o.estadoOrden}
+                        onChange={next => {
+                          if (next === o.estadoOrden) return;
+                          applyTransition(o.id, next);
+                        }}
+                        options={[
+                          { value: o.estadoOrden, label: ESTADO_LABEL[o.estadoOrden], color: ESTADO_COLOR[o.estadoOrden] },
+                          ...VALID_TRANSITIONS[o.estadoOrden].map(n => ({
+                            value: n, label: ESTADO_LABEL[n], color: ESTADO_COLOR[n],
+                          })),
+                        ]}
+                        disabled={VALID_TRANSITIONS[o.estadoOrden].length === 0}
+                      />
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                       {fmtDT(ultimoCambio(o))}
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetailItem(o)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                        {canEdit && (
-                          <button onClick={() => soloPendiente && setEditItem({ ...o })}
-                            disabled={!soloPendiente}
-                            title={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button onClick={() => soloPendiente && setDeleteId(o.id)}
-                            disabled={!soloPendiente}
-                            title={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <ActionIcons
+                          onView={() => setDetailItem(o)}
+                          onEdit={canEdit ? () => setEditItem({ ...o }) : undefined}
+                          editDisabled={!soloPendiente}
+                          editTitle={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
+                          onDelete={canDelete ? () => setDeleteId(o.id) : undefined}
+                          deleteDisabled={!soloPendiente}
+                          deleteTitle={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                        />
                         <button onClick={() => puedeBaja && openDarBaja(o)}
                           disabled={!puedeBaja}
                           title={puedeBaja ? "Dar de baja" : "No se puede dar de baja en este estado"}
@@ -1604,6 +1641,21 @@ export function OrdenProduccionScreen({
                     <span className="text-sm font-semibold text-foreground text-right">{v}</span>
                   </div>
                 ))}
+
+                {(() => {
+                  const mermas = noConformidades.filter(
+                    (n) => n.ordenRef === detailItem.id && n.tipoNoConformidad === "Merma de cocina",
+                  );
+                  if (mermas.length === 0) return null;
+                  return (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <p className="text-xs font-semibold text-amber-800">Merma registrada en Productos no conformes</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        {mermas.map((m) => `${m.nombre} · ${m.cantidadAfectada} ${m.unidadMedida}`).join(", ")}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>

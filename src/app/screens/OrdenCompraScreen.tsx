@@ -9,13 +9,15 @@ import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
-  Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
+  Plus, Search, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -123,10 +125,10 @@ export const PROVEEDORES_INIT: ProveedorRef[] = [
 ];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
-  Borrador: "bg-gray-100 text-gray-700",
-  Enviado: "bg-blue-100 text-blue-800",
-  Completado: "bg-emerald-100 text-emerald-800",
-  Anulado: "bg-red-100 text-red-800",
+  Borrador: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
+  Enviado: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  Completado: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  Anulado: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300",
 };
 
 /**
@@ -2021,15 +2023,12 @@ export function OrdenCompraScreen({
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-sm shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por proveedor, fecha, N° factura o estado..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={v => { setSearch(v); setPage(1); }}
+        placeholder="Buscar por proveedor, fecha, N° factura o estado..."
+        wrapperClassName="mb-4 max-w-sm shrink-0"
+      />
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-auto">
@@ -2121,14 +2120,8 @@ export function OrdenCompraScreen({
                         </EstadoHistorialTooltip>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <button
-                            onClick={() => onVerDetalle(o)}
-                            title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <ActionIcons onView={() => onVerDetalle(o)} />
                           {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}

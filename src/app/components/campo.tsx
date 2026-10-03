@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
+import { Check, Circle, Eye, EyeOff } from "lucide-react";
 
 // Piezas compartidas del patron de validacion inline.
 //
@@ -51,12 +51,15 @@ export function PasswordField({
   placeholder,
   cls,
   autoComplete,
+  onKeyDown,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   cls: string;
   autoComplete?: string;
+  /** Opcional: sirve para enviar con Enter cuando todo el formulario es válido. */
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -65,6 +68,7 @@ export function PasswordField({
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete={autoComplete}
         className={`${cls} pr-11`}
@@ -148,12 +152,105 @@ export function validarTelefonoOpcional(v: string): string | null {
   return null;
 }
 
+/**
+ * Reglas de contraseña — FUENTE ÚNICA.
+ *
+ * El mismo array alimenta la lista en tiempo real y el validador, de modo que
+ * no puede existir una regla visible que el guardado no compruebe (ni una regla
+ * oculta que bloquee el botón sin explicación). Se usa en Cambiar contraseña,
+ * Registro, Restablecer contraseña y alta de empleados.
+ *
+ * Los caracteres especiales se PERMITEN pero no se exigen: por eso esta lista
+ * no tiene regla de carácter especial.
+ */
+export type ReglaContrasena = {
+  id: string;
+  /** Texto que se pinta en la lista de requisitos. */
+  texto: string;
+  /** Mensaje de error si la regla no se cumple. */
+  mensaje: string;
+  ok: (v: string) => boolean;
+};
+
+export const REGLAS_CONTRASENA: ReglaContrasena[] = [
+  {
+    id: "largo",
+    texto: `Mínimo ${MIN_CONTRASENA} caracteres`,
+    mensaje: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`,
+    ok: (v) => v.length >= MIN_CONTRASENA,
+  },
+  {
+    id: "mayuscula",
+    texto: "Al menos una letra mayúscula",
+    mensaje: "Debe incluir al menos una letra mayúscula",
+    ok: (v) => /[A-Z]/.test(v),
+  },
+  {
+    id: "minuscula",
+    texto: "Al menos una letra minúscula",
+    mensaje: "Debe incluir al menos una letra minúscula",
+    ok: (v) => /[a-z]/.test(v),
+  },
+  {
+    id: "numero",
+    texto: "Al menos un número",
+    mensaje: "Debe incluir al menos un número",
+    ok: (v) => /\d/.test(v),
+  },
+  // `v.length > 0` evita pintar "Sin espacios" en verde con el campo vacío.
+  {
+    id: "espacios",
+    texto: "Sin espacios",
+    mensaje: "La contraseña no puede contener espacios",
+    ok: (v) => v.length > 0 && !/\s/.test(v),
+  },
+];
+
+/** Mensaje de la primera regla incumplida, o null si la contraseña es válida. */
 export function validarContrasena(v: string): string | null {
-  if (v.length < MIN_CONTRASENA)
-    return `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`;
-  if (!/[A-Z]/.test(v) || !/[a-z]/.test(v) || !/\d/.test(v))
-    return "Debe incluir mayúscula, minúscula y número";
-  return null;
+  return REGLAS_CONTRASENA.find((r) => !r.ok(v))?.mensaje ?? null;
+}
+
+/** Textos de las reglas aún pendientes: es lo que se lista bajo el botón
+ *  deshabilitado, para que nunca aparezca apagado sin explicación. */
+export function faltantesContrasena(v: string): string[] {
+  return REGLAS_CONTRASENA.filter((r) => !r.ok(v)).map((r) => r.texto);
+}
+
+/**
+ * Lista de requisitos en tiempo real. Ícono gris mientras la regla no se
+ * cumple y check verde en cuanto se cumple; se pinta mientras se escribe, no
+ * al enviar el formulario.
+ */
+export function RequisitosContrasena({
+  valor,
+  className,
+}: {
+  valor: string;
+  className?: string;
+}) {
+  return (
+    <ul className={`mt-2 space-y-1 ${className ?? ""}`}>
+      {REGLAS_CONTRASENA.map((regla) => {
+        const ok = regla.ok(valor);
+        return (
+          <li
+            key={regla.id}
+            className={`flex items-center gap-1.5 text-xs leading-tight ${
+              ok ? "text-emerald-600" : "text-muted-foreground"
+            }`}
+          >
+            {ok ? (
+              <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            ) : (
+              <Circle className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            )}
+            <span>{regla.texto}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 /**

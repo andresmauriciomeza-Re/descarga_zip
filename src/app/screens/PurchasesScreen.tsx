@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, X, Check, ChevronLeft, ChevronRight, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Search, Pencil, X, Check, ChevronLeft, ChevronRight, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
 import { INITIAL_SUPPLIERS } from "./SuppliersScreen";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -103,10 +106,10 @@ interface Purchase {
 }
 
 const PURCHASE_STATUS_COLOR: Record<PurchaseStatus, string> = {
-  enviado: "bg-emerald-100 text-emerald-800",
-  anulado: "bg-red-100 text-red-700",
-  proceso: "bg-yellow-100 text-yellow-800",
-  recibido: "bg-blue-100 text-blue-800",
+  enviado: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  anulado: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  proceso: "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
+  recibido: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
 };
 
 const PURCHASE_STATUS_LABEL: Record<PurchaseStatus, string> = {
@@ -619,15 +622,11 @@ export function PurchasesScreen() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por ID o proveedor..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por ID o proveedor..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -701,46 +700,43 @@ export function PurchasesScreen() {
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <select
+                      {/* Pill de estado con las mismas transiciones del
+                          select nativo que había; anulada queda sin menú. */}
+                      <EstadoSelect
                         value={p.estado}
-                        disabled={p.estado === "anulado"}
-                        onChange={(e) => {
-                          const nuevoEstado = e.target.value as PurchaseStatus;
+                        onChange={(nuevoEstado) => {
+                          if (nuevoEstado === p.estado) return;
                           setConfirmEstado({ purchase: p, nuevoEstado });
                         }}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none ${p.estado === "anulado" ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${PURCHASE_STATUS_COLOR[p.estado]}`}
-                      >
-                        <option value={p.estado}>{PURCHASE_STATUS_LABEL[p.estado]}</option>
-                        {ESTADO_TRANSITIONS[p.estado].map((s) => (
-                          <option key={s} value={s}>{PURCHASE_STATUS_LABEL[s]}</option>
-                        ))}
-                      </select>
+                        options={[
+                          {
+                            value: p.estado,
+                            label: PURCHASE_STATUS_LABEL[p.estado],
+                            color: PURCHASE_STATUS_COLOR[p.estado],
+                          },
+                          ...ESTADO_TRANSITIONS[p.estado].map((s) => ({
+                            value: s,
+                            label: PURCHASE_STATUS_LABEL[s],
+                            color: PURCHASE_STATUS_COLOR[s],
+                          })),
+                        ]}
+                        disabled={p.estado === "anulado"}
+                      />
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setDetailItem(p)}
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"
-                          title="Ver detalle"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => p.estado === "proceso" && abrirEdicion(p)}
-                          disabled={p.estado !== "proceso"}
-                          className={`p-1.5 rounded-lg transition-colors ${p.estado === "proceso" ? "hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer" : "text-muted-foreground/30 cursor-not-allowed"}`}
-                          title={p.estado === "proceso" ? "Editar" : "Solo editable en estado En proceso"}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          disabled
-                          className="p-1.5 rounded-lg text-muted-foreground/30 cursor-not-allowed"
-                          title="Las compras no se pueden eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <ActionIcons
+                        onView={() => setDetailItem(p)}
+                        onEdit={() => abrirEdicion(p)}
+                        editDisabled={p.estado !== "proceso"}
+                        editTitle={
+                          p.estado === "proceso"
+                            ? "Editar"
+                            : "Solo editable en estado En proceso"
+                        }
+                        onDelete={() => {}}
+                        deleteDisabled
+                        deleteTitle="Las compras no se pueden eliminar"
+                      />
                     </td>
                   </tr>
                 ))
