@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Trash2, X, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -242,12 +244,11 @@ export function RecetasScreen() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por ID o producto..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={v => { setSearch(v); setPage(1); }}
+        placeholder="Buscar por ID o producto..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
@@ -287,14 +288,11 @@ export function RecetasScreen() {
                         </button>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => setDetailItem(r)} title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                          <button onClick={() => setEditItem({ ...r })} title="Editar"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => setDeleteId(r.id)} title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                        </div>
+                        <ActionIcons
+                          onView={() => setDetailItem(r)}
+                          onEdit={() => setEditItem({ ...r })}
+                          onDelete={() => setDeleteId(r.id)}
+                        />
                       </td>
                     </tr>
                     {isExpanded && (

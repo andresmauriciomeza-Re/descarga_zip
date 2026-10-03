@@ -1,10 +1,17 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Plus, Pencil, Trash2, X, Check, Package, Eye, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Package, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -743,15 +750,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
 
       {/* Search + Filtros */}
       <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, ID o categoría..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted dark:bg-input rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, ID o categoría..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select
           value={filtroEstado}
           onChange={e => { setFiltroEstado(e.target.value as "todos" | "activos" | "inactivos"); setPage(1); }}
@@ -846,50 +850,29 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   <td className="px-2 py-3 text-xs font-mono text-muted-foreground">{insumo.stockMaximo}</td>
                   <td className="px-2 py-3 text-xs font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-2 whitespace-nowrap">
-                      <button
-                        onClick={() => toggleEstado(insumo.id)}
-                        className={`relative w-10 h-[22px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${
-                          insumo.estado === "activo" ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
-                        }`}
-                      >
-                        <span className={`absolute left-[2px] top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${
-                          insumo.estado === "activo" ? "translate-x-[18px]" : "translate-x-0"
-                        }`} />
-                      </button>
-                      <span className={`text-xs ${insumo.estado === "activo" ? "text-emerald-700 dark:text-emerald-300" : "text-gray-500 dark:text-gray-400"}`}>
-                        {insumo.estado === "activo" ? "Activo" : "Inactivo"}
-                      </span>
-                    </div>
+                    {/* Pill de estado (diseño de Proveedores). Mantiene el
+                        flujo de siempre: elegir la opción contraria pide la
+                        confirmación y si es la actual no hace nada. */}
+                    <EstadoSelect
+                      value={insumo.estado}
+                      onChange={nuevoEstado => {
+                        if (nuevoEstado === insumo.estado) return;
+                        toggleEstado(insumo.id);
+                      }}
+                      options={[
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                      ]}
+                    />
                   </td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
-                        title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openEdit(insumo)}
-                        title={inactivo ? "Activa el insumo para editarlo" : "Editar"}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          inactivo
-                            ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                            : "hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                        }`}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setConfirmState({ tipo: "eliminar", mensaje: "", id: insumo.id })}
-                        title="Eliminar"
-                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <ActionIcons
+                      onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
+                      onEdit={() => openEdit(insumo)}
+                      editDisabled={inactivo}
+                      editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
+                      onDelete={() => setConfirmState({ tipo: "eliminar", mensaje: "", id: insumo.id })}
+                    />
                   </td>
                 </tr>
               );

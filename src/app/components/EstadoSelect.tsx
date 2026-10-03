@@ -2,6 +2,17 @@ import React from "react";
 import { Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 
+/**
+ * Colores compartidos para el pill de estado "Activo"/"Inactivo" (diseño de
+ * Proveedores) con su variante dark: fondo translúcido oscuro y texto claro
+ * del mismo tono. Los módulos multiestado conservan su propio mapa de
+ * colores pero deben incluir las variantes `dark:` equivalentes.
+ */
+export const ESTADO_ACTIVO_COLOR =
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300";
+export const ESTADO_INACTIVO_COLOR =
+  "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300";
+
 export interface EstadoOption<T extends string> {
   value: T;
   label: string;

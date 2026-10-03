@@ -1,19 +1,17 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Search,
   X,
   Plus,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  Edit,
-  Trash2,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MensajeError } from "../components/campo";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { GRUPOS_ICONOS } from "../constants/iconosCategoria";
 
 const SERIF = "var(--font-titulo)";
@@ -339,15 +337,11 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por ID o nombre..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por ID o nombre..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -398,50 +392,32 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setDetailItem(c)}
-                          title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                          <button
-                            onClick={() => {
-                              setEditErrors({});
-                              setEditItem({ ...c });
-                              // Grupo del selector donde vive el ícono
-                              // actual, para que al abrir Editar el
-                              // grupo activo sea el del ícono de la
-                              // categoría (índice 0 si no se encuentra).
-                              const iconoActual =
-                                c.icono || ICONOS_FIJOS[c.id] || "";
-                              setGrupoIconoEdicion(
-                                Math.max(
-                                  0,
-                                  GRUPOS_ICONOS.findIndex((g) =>
-                                    g.iconos.includes(iconoActual),
+                      <ActionIcons
+                        onView={() => setDetailItem(c)}
+                        onEdit={
+                          canEdit
+                            ? () => {
+                                setEditErrors({});
+                                setEditItem({ ...c });
+                                // Grupo del selector donde vive el ícono
+                                // actual, para que al abrir Editar el
+                                // grupo activo sea el del ícono de la
+                                // categoría (índice 0 si no se encuentra).
+                                const iconoActual =
+                                  c.icono || ICONOS_FIJOS[c.id] || "";
+                                setGrupoIconoEdicion(
+                                  Math.max(
+                                    0,
+                                    GRUPOS_ICONOS.findIndex((g) =>
+                                      g.iconos.includes(iconoActual),
+                                    ),
                                   ),
-                                ),
-                              );
-                            }}
-                            title="Editar"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={() => setDeleteId(c.id)}
-                            title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                                );
+                              }
+                            : undefined
+                        }
+                        onDelete={canDelete ? () => setDeleteId(c.id) : undefined}
+                      />
                     </td>
                   </tr>
                 ))

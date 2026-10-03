@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Search,
   X,
   Plus,
   ChevronLeft,
@@ -10,7 +9,6 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
-  Edit,
   Edit2,
   Trash2,
   AlertCircle,
@@ -23,11 +21,13 @@ import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import {
   EstadoBadge,
-  EstadoProductoSelect,
   ESTADOS_PRODUCTO,
   ESTADO_COLORES,
   type EstadoProducto,
 } from "../components/EstadoProducto";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import type { Insumo } from "./GestionInsumosScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -58,6 +58,14 @@ export const tipoPillCls = (t: TipoProducto): string =>
 // importaciones existentes.
 export { ESTADOS_PRODUCTO, ESTADO_COLORES } from "../components/EstadoProducto";
 export type { EstadoProducto } from "../components/EstadoProducto";
+
+/** Clases Tailwind del pill de estado de la tabla (diseño de Proveedores),
+    con el mismo tono de ESTADO_COLORES y su variante dark translúcida. */
+const ESTADO_PRODUCTO_CLASES: Record<EstadoProducto, string> = {
+  Disponible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  "No disponible": "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
+  Descontinuado: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
+};
 
 export interface Producto {
   id: string;
@@ -2042,15 +2050,12 @@ export function GestionProductosScreen({
 
       {/* Search + filtro por tipo */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, categoría o tipo..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre, categoría o tipo..."
+          wrapperClassName="max-w-sm flex-1"
+        />
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value as "Todos" | TipoProducto)}
@@ -2181,50 +2186,33 @@ export function GestionProductosScreen({
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      {/* El estado se elige de una lista redondeada (ya no
-                          alterna); al elegir, se confirma en el modal
-                          "pasará de X a Y". Sin permiso de edición solo se ve
-                          el badge, sin flecha. */}
-                      <EstadoProductoSelect
+                      {/* Pill de estado (diseño de Proveedores). El estado se
+                          elige de la lista; al elegir se confirma en el modal
+                          "pasará de X a Y". Sin permiso de edición queda la
+                          pill sin menú. */}
+                      <EstadoSelect
                         value={p.estado}
                         disabled={!canEdit}
                         onChange={(next) =>
                           setConfirmEstado({ id: p.id, nombre: p.nombre, current: p.estado, next })
                         }
+                        options={ESTADOS_PRODUCTO.map((e) => ({
+                          value: e,
+                          label: e,
+                          color: ESTADO_PRODUCTO_CLASES[e],
+                        }))}
                       />
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setDetailItem(p);
-                            // Abre mostrando la versión vigente (la última).
-                            setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
-                          }}
-                          title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                          <button
-                            onClick={() => openEdit(p)}
-                            title="Editar"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={() => setDeleteId(p.id)}
-                            title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                      <ActionIcons
+                        onView={() => {
+                          setDetailItem(p);
+                          // Abre mostrando la versión vigente (la última).
+                          setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
+                        }}
+                        onEdit={canEdit ? () => openEdit(p) : undefined}
+                        onDelete={canDelete ? () => setDeleteId(p.id) : undefined}
+                      />
                     </td>
                   </tr>
                 ))

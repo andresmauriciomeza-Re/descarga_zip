@@ -1,8 +1,14 @@
 import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { EstadoSwitch } from "../components/EstadoSwitch";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
 import { type Rol } from "./GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
@@ -530,12 +536,12 @@ export function GestionEmpleadosScreen({
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <div className="relative flex-1 min-w-52">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo, cargo, documento o estado..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, correo, cargo, documento o estado..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
           <option value="todos">Todos los estados</option>
           <option value="activo">Activo</option>
@@ -590,22 +596,25 @@ export function GestionEmpleadosScreen({
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{rolNombre(e.rolId)}</td>
                     <td className="px-4 py-1.5">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
-                        {e.activo ? "Activo" : "Inactivo"}
-                      </span>
+                      {/* Pill de estado (diseño de Proveedores): antes era un
+                          badge y el switch vivía en Acciones. */}
+                      <EstadoSelect
+                        value={e.activo ? "activo" : "inactivo"}
+                        onChange={nuevoEstado => {
+                          if ((nuevoEstado === "activo") === e.activo) return;
+                          toggleEstado(e.id);
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
                     </td>
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetailItem(e)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => { setEditItem({ ...e }); setEditPrevCorreo(e.correo); setEditErrors({}); }} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <EstadoSwitch activo={e.activo} onToggle={() => toggleEstado(e.id)} />
-                      </div>
+                      <ActionIcons
+                        onView={() => setDetailItem(e)}
+                        onEdit={() => { setEditItem({ ...e }); setEditPrevCorreo(e.correo); setEditErrors({}); }}
+                      />
                     </td>
                   </tr>
                 );

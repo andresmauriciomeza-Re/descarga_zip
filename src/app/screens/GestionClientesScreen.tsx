@@ -1,8 +1,14 @@
 import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, ChevronLeft, ChevronRight, X, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { EstadoSwitch } from "../components/EstadoSwitch";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Usuario } from "./GestionUsuariosScreen";
@@ -273,12 +279,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <div className="relative flex-1 min-w-52">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo, documento o estado..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, correo, documento o estado..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
           <option value="todos">Todos los estados</option>
           <option value="activo">Activo</option>
@@ -323,24 +329,25 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <td className="px-4 py-1.5 text-sm text-muted-foreground">{c.correo}</td>
                   <td className="px-4 py-1.5 text-sm font-bold text-center text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</td>
                   <td className="px-4 py-1.5">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
-                      {c.activo ? "Activo" : "Inactivo"}
-                    </span>
+                    {/* Pill de estado (diseño de Proveedores): antes era un
+                        badge y el switch vivía en Acciones. */}
+                    <EstadoSelect
+                      value={c.activo ? "activo" : "inactivo"}
+                      onChange={nuevoEstado => {
+                        if ((nuevoEstado === "activo") === c.activo) return;
+                        toggleEstado(c.id);
+                      }}
+                      options={[
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                      ]}
+                    />
                   </td>
                   <td className="px-4 py-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setDetailItem(c)} title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {canEdit && (
-                        <button onClick={() => { abrirEdicion(c); }} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      <EstadoSwitch activo={c.activo} onToggle={() => toggleEstado(c.id)} />
-                    </div>
+                    <ActionIcons
+                      onView={() => setDetailItem(c)}
+                      onEdit={canEdit ? () => { abrirEdicion(c); } : undefined}
+                    />
                   </td>
                 </tr>
               ))}

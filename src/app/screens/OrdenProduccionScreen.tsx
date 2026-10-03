@@ -1,11 +1,14 @@
 ﻿import { useState, useMemo, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight,
+  Plus, Search, Trash2, X, ChevronLeft, ChevronRight,
   AlertCircle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "../components/CalendarDropdown";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
@@ -28,10 +31,10 @@ export const TIPO_LABEL: Record<TipoOrden, string> = {
 };
 
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
-  pendiente:    "bg-yellow-100 text-yellow-800",
-  "en-proceso": "bg-blue-100 text-blue-800",
-  completada:   "bg-emerald-100 text-emerald-800",
-  cancelada:    "bg-red-100 text-red-700",
+  pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
+  "en-proceso": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  completada:   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  cancelada:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 const ESTADO_LABEL: Record<EstadoOrden, string> = {
@@ -1182,12 +1185,12 @@ export function OrdenProduccionScreen({
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por ID, venta, cliente o producto..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por ID, venta, cliente o producto..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value as typeof filtroTipo); setPage(1); }}
           aria-label="Filtrar por tipo" className={sCls + " sm:w-48"}>
           <option value="todos">Todo tipo</option>
@@ -1265,49 +1268,38 @@ export function OrdenProduccionScreen({
                       )}
                     </td>
                     <td className="px-4 py-2">
-                      {VALID_TRANSITIONS[o.estadoOrden].length === 0 ? (
-                        <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
-                          {ESTADO_LABEL[o.estadoOrden]}
-                        </span>
-                      ) : (
-                        <select value={o.estadoOrden}
-                          onChange={e => {
-                            const next = e.target.value as EstadoOrden;
-                            if (next === o.estadoOrden) return;
-                            e.target.value = o.estadoOrden;
-                            applyTransition(o.id, next);
-                          }}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${ESTADO_COLOR[o.estadoOrden]}`}>
-                          <option value={o.estadoOrden}>{ESTADO_LABEL[o.estadoOrden]}</option>
-                          {VALID_TRANSITIONS[o.estadoOrden].map(n => (
-                            <option key={n} value={n}>{ESTADO_LABEL[n]}</option>
-                          ))}
-                        </select>
-                      )}
+                      {/* Pill de estado (diseño de Proveedores). La transición
+                          se aplica igual que antes; sin transiciones (estados
+                          finales) la pill queda sin menú. */}
+                      <EstadoSelect
+                        value={o.estadoOrden}
+                        onChange={next => {
+                          if (next === o.estadoOrden) return;
+                          applyTransition(o.id, next);
+                        }}
+                        options={[
+                          { value: o.estadoOrden, label: ESTADO_LABEL[o.estadoOrden], color: ESTADO_COLOR[o.estadoOrden] },
+                          ...VALID_TRANSITIONS[o.estadoOrden].map(n => ({
+                            value: n, label: ESTADO_LABEL[n], color: ESTADO_COLOR[n],
+                          })),
+                        ]}
+                        disabled={VALID_TRANSITIONS[o.estadoOrden].length === 0}
+                      />
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                       {fmtDT(ultimoCambio(o))}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetailItem(o)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                        {canEdit && (
-                          <button onClick={() => soloPendiente && setEditItem({ ...o })}
-                            disabled={!soloPendiente}
-                            title={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button onClick={() => soloPendiente && setDeleteId(o.id)}
-                            disabled={!soloPendiente}
-                            title={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <ActionIcons
+                          onView={() => setDetailItem(o)}
+                          onEdit={canEdit ? () => setEditItem({ ...o }) : undefined}
+                          editDisabled={!soloPendiente}
+                          editTitle={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
+                          onDelete={canDelete ? () => setDeleteId(o.id) : undefined}
+                          deleteDisabled={!soloPendiente}
+                          deleteTitle={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                        />
                         <button onClick={() => puedeBaja && openDarBaja(o)}
                           disabled={!puedeBaja}
                           title={puedeBaja ? "Dar de baja" : "No se puede dar de baja en este estado"}

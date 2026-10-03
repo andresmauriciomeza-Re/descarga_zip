@@ -1,15 +1,17 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, PackageCheck, ChevronLeft, ChevronRight, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { PackageCheck, ChevronLeft, ChevronRight, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
 
 const SERIF = "var(--font-titulo)";
 
 type EstadoEntrega = "listo" | "entregado";
 
 const ESTADO_COLOR: Record<EstadoEntrega, string> = {
-  listo:      "bg-blue-100 text-blue-800",
-  entregado:  "bg-emerald-100 text-emerald-800",
+  listo:      "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  entregado:  "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
 };
 const ESTADO_LABEL: Record<EstadoEntrega, string> = {
   listo:     "Listo",
@@ -104,12 +106,11 @@ export function ProductoTerminadoScreen() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por ID u orden de producción..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={v => { setSearch(v); setPage(1); }}
+        placeholder="Buscar por ID u orden de producción..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
@@ -144,9 +145,32 @@ export function ProductoTerminadoScreen() {
                   </td>
                   <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{p.cantidad}</td>
                   <td className="px-4 py-3.5">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[p.estadoEntrega]}`}>
-                      {ESTADO_LABEL[p.estadoEntrega]}
-                    </span>
+                    {/* Pill de estado (diseño de Proveedores). La única
+                        transición es listo → entregado y pasa por el MISMO
+                        modal de confirmación del botón de la fila; entregado
+                        queda sin menú (estado final). */}
+                    <EstadoSelect
+                      value={p.estadoEntrega}
+                      onChange={next => {
+                        if (next === p.estadoEntrega) return;
+                        openConfirm(p);
+                      }}
+                      options={[
+                        {
+                          value: p.estadoEntrega,
+                          label: ESTADO_LABEL[p.estadoEntrega],
+                          color: ESTADO_COLOR[p.estadoEntrega],
+                        },
+                        ...(p.estadoEntrega === "listo"
+                          ? [{
+                              value: "entregado" as EstadoEntrega,
+                              label: ESTADO_LABEL.entregado,
+                              color: ESTADO_COLOR.entregado,
+                            }]
+                          : []),
+                      ]}
+                      disabled={p.estadoEntrega === "entregado"}
+                    />
                   </td>
                   <td className="px-4 py-3.5">
                     {p.estadoEntrega === "entregado" ? (
