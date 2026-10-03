@@ -12,6 +12,7 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import type { Insumo } from "./GestionInsumosScreen";
 import type { Venta } from "./VentasScreen";
 import type { Producto, FichasPorProducto } from "./GestionProductosScreen";
+import { nextNoConformidadId, type NoConformidad } from "./ProductosPerecederosScreen";
 
 const SERIF = "var(--font-titulo)";
 
@@ -710,6 +711,8 @@ export function OrdenProduccionScreen({
   fichasPorProducto,
   ordenes,
   setOrdenes,
+  noConformidades,
+  setNoConformidades,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -723,6 +726,8 @@ export function OrdenProduccionScreen({
   fichasPorProducto: FichasPorProducto;
   ordenes: OrdenProduccion[];
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
+  noConformidades: NoConformidad[];
+  setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1035,8 +1040,48 @@ export function OrdenProduccionScreen({
     } else {
       toast.success(`${orden.id} completada`);
     }
-    // TODO Producto no conforme: la merma de cada línea (y sus pasos) debería
-    // registrarse como producto no conforme. La orden ya la guarda.
+    // Merma como no conformidad: solo órdenes "Preparación en lote" (las de
+    // "Pedido de cliente" entregan platos, no Productos Insumo). El dedupe
+    // vive dentro del updater funcional para que ni un doble clic ni el doble
+    // render de React la dupliquen. Esa cantidad NO se descuenta del stock:
+    // nunca entró al inventario (solo entró la cantidad real).
+    if (orden.tipo === "preparacion") {
+      setNoConformidades((prev) => {
+        const nuevas: NoConformidad[] = [];
+        orden.lineas.forEach((l, i) => {
+          const real = Number(reales[i]);
+          if (!Number.isFinite(real)) return;
+          const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
+          if (merma <= 0) return;
+          const yaExiste = prev.some(
+            (n) => n.ordenRef === orden.id && n.nombre === l.nombre && n.tipoNoConformidad === "Merma de cocina",
+          );
+          if (yaExiste) return;
+          nuevas.push({
+            id: nextNoConformidadId([...prev, ...nuevas]),
+            tipo: "Producto insumo",
+            nombre: l.nombre,
+            categoria: "Producto insumo",
+            fechaRegistro: new Date().toLocaleDateString("en-CA"),
+            cantidadAfectada: merma,
+            unidadMedida: l.unidad,
+            tipoNoConformidad: "Merma de cocina",
+            descripcionProblema: `Se planificaron ${l.cantidadEstimada} ${l.unidad} y se obtuvieron ${real} ${l.unidad}.`,
+            causa: "",
+            areaProceso: "Producción",
+            responsable: "",
+            estado: "Pendiente",
+            tipoSolucion: "",
+            solucion: "",
+            ordenRef: orden.id,
+          });
+        });
+        nuevas.forEach((n) =>
+          toast.success(`Se registró la merma de ${n.nombre} en Productos no conformes`),
+        );
+        return nuevas.length > 0 ? [...nuevas, ...prev] : prev;
+      });
+    }
     // TODO stock de productos elaborados = cuántos se pueden armar con los
     // Productos Insumo disponibles. Las órdenes ya no suben el stock de
     // Productos, así que este cálculo queda pendiente.
@@ -1604,6 +1649,21 @@ export function OrdenProduccionScreen({
                     <span className="text-sm font-semibold text-foreground text-right">{v}</span>
                   </div>
                 ))}
+
+                {(() => {
+                  const mermas = noConformidades.filter(
+                    (n) => n.ordenRef === detailItem.id && n.tipoNoConformidad === "Merma de cocina",
+                  );
+                  if (mermas.length === 0) return null;
+                  return (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <p className="text-xs font-semibold text-amber-800">Merma registrada en Productos no conformes</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        {mermas.map((m) => `${m.nombre} · ${m.cantidadAfectada} ${m.unidadMedida}`).join(", ")}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>
