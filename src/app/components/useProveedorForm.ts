@@ -31,9 +31,18 @@ export function soloDigitos(valor: string): string {
   return valor.replace(/\D/g, "");
 }
 
-/** Filtra dirección: letras, números, espacios y los símbolos # - . , ° /. */
+/** Filtra dirección: letras (con tildes y ñ), números, espacios y los símbolos # - . , ° /. */
 export function soloDireccion(valor: string): string {
-  return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s#\-.,°\/]/g, "");
+  return valor.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s#\-.,°\/]/g, "");
+}
+
+/** Valida una dirección: mínimo 5 caracteres, máximo 100. */
+export function validarDireccion(direccion: string): string | null {
+  const d = direccion.trim();
+  if (!d) return "La dirección es obligatoria.";
+  if (d.length < 5) return "Ingresa una dirección válida (ej. Cra 50 #30-10).";
+  if (d.length > 100) return "La dirección no puede tener más de 100 caracteres.";
+  return null;
 }
 
 /** Valida formato de correo. */
@@ -119,12 +128,9 @@ export function useProveedorForm(
       e.asesorComercial = "El asesor comercial debe tener al menos 3 caracteres.";
     }
 
-    // Dirección: obligatoria, mínimo 5 caracteres
-    if (!values.direccion.trim()) {
-      e.direccion = "La dirección es obligatoria.";
-    } else if (values.direccion.trim().length < 5) {
-      e.direccion = "La dirección debe tener al menos 5 caracteres.";
-    }
+    // Dirección: obligatoria, mínimo 5 caracteres, máximo 100
+    const direccionError = validarDireccion(values.direccion);
+    if (direccionError) e.direccion = direccionError;
 
     return e;
   }, [values, existentes]);

@@ -8253,6 +8253,7 @@ export default function App() {
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
+  const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -9089,7 +9090,10 @@ export default function App() {
     // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
     screen === "orden-compra" || screen === "nueva-orden-compra" ||
     screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra" || screen === "orden-detalle"
+    screen === "nueva-compra" || screen === "orden-detalle" ||
+    // Proveedores: ocupa el viewport y sin scroll de página (la tabla se
+    // pagina en bloques de 5 en vez de crecer hasta hacer scroll).
+    screen === "suppliers"
   );
 
   return (
@@ -9373,7 +9377,14 @@ export default function App() {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
                   }}
-                  onNuevaOrden={() => navigate("nueva-orden-compra")}
+                  onNuevaOrden={() => {
+                    setOrdenAEditar(null);
+                    navigate("nueva-orden-compra");
+                  }}
+                  onEditarOrden={(orden) => {
+                    setOrdenAEditar(orden);
+                    navigate("nueva-orden-compra");
+                  }}
                   onVerDetalle={(orden) => {
                     setOrdenDetalle(orden);
                     setScreen("orden-detalle");
@@ -9391,7 +9402,11 @@ export default function App() {
                   setProveedores={setProveedores}
                   insumos={insumos}
                   setInsumos={setInsumos}
-                  onBack={() => navigate("orden-compra")}
+                  onBack={() => {
+                    setOrdenAEditar(null);
+                    navigate("orden-compra");
+                  }}
+                  orden={ordenAEditar}
                 />
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
@@ -9465,7 +9480,15 @@ export default function App() {
                   onBack={() => navigate("gestion-compra")}
                 />
               )}
-              {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
+              {screen === "suppliers" && (
+                <SuppliersScreen
+                  {...getPerms("suppliers")}
+                  ordenes={ordenes}
+                  gestiones={gestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                />
+              )}
               {screen === "ventas-pedidos" && (
                 <VentasScreen
                   {...getPerms("ventas-pedidos")}

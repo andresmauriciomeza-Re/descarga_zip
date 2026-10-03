@@ -460,6 +460,12 @@ export function VentasScreen({
   /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
   const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
 
+  /** Modal para enviar factura por correo. */
+  const [enviarFacturaModal, setEnviarFacturaModal] = useState(false);
+  const [facturaParaEnviar, setFacturaParaEnviar] = useState<Venta | null>(null);
+  const [correoEnviar, setCorreoEnviar] = useState("");
+  const [errorCorreo, setErrorCorreo] = useState("");
+
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
   const horaEstado = (p: Venta) =>
