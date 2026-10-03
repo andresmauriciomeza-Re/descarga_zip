@@ -4,13 +4,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import { UnidadSelect } from "../components/UnidadSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock, ChevronDown,
+  AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToExcel } from "../utils/exportExcel";
@@ -32,7 +33,14 @@ export interface OrdenItem {
   unidad: string;
   costoUnitario: number;
   precioUnitario: number;
+  /** Porcentaje de IVA de la línea (0–100). */
   iva: number;
+  /** Compras (IVA): base imponible de la línea guardada al crear la factura.
+   *  Se recalcula en el backend con la misma fórmula (ver
+   *  `db/migracion_iva_compras.sql`). */
+  baseSinIva?: number;
+  /** Compras (IVA): valor del IVA de la línea en pesos. */
+  montoIva?: number;
   /** true = insumo agregado en recepción (no venía en la OC original) */
   esNoSolicitado?: boolean;
 }
@@ -77,6 +85,16 @@ export interface GestionCompra {
   estado: EstadoGestion;
   items?: OrdenItem[];
   compraCreada?: boolean;
+  /** Compras (IVA): true = los montos unitarios de la factura ya traen el IVA
+   *  incluido ("Sí, IVA incluido"). Las compras antiguas, sin el campo, se
+   *  leen como "Sí, IVA incluido" con IVA 0 % (se ven igual que antes). */
+  ivaIncluido?: boolean;
+  /** Compras (IVA): suma de las bases imponibles (sin IVA) de las líneas. */
+  subtotalSinIva?: number;
+  /** Compras (IVA): suma del IVA de las líneas. */
+  totalIva?: number;
+  /** Compras (IVA): total pagado = subtotalSinIva + totalIva (= valorTotal). */
+  totalPagado?: number;
   /** Punto 6: trazabilidad de la anulación. El motivo es obligatorio en la UI
    *  (botón "Anular" deshabilitado mientras esté vacío) y la fecha queda en el
    *  mismo instante del cambio de estado. */
@@ -362,7 +380,6 @@ function EstadoBadge({ e }: { e: EstadoOrden }) {
 }
 
 const iCls = "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-const sCls = `${iCls} appearance-none`;
 
 // ��������� CONFIRM MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -2208,19 +2225,16 @@ export function NuevoInsumoModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
-              {/* Punto 5: `sCls` trae appearance-none (sin flecha nativa), así
-                  que la agrega el icono, con el mismo estilo de los demás selects. */}
-              <div className="relative">
-                <select
-                  value={unidad}
-                  onChange={e => setUnidad(e.target.value)}
-                  onBlur={() => marcarTocado("unidad")}
-                  className={`${sCls} cursor-pointer pr-8`}
-                >
-                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              </div>
+              {/* Select personalizado (Radix, igual que los estados): el
+                  `<select>` nativo desplegaba la lista CUADRADA y con el azul
+                  del navegador. */}
+              <UnidadSelect
+                value={unidad}
+                onChange={(v) => {
+                  setUnidad(v);
+                  marcarTocado("unidad");
+                }}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">IVA (%)</label>

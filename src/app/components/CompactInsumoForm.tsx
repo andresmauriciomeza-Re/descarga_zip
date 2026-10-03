@@ -46,6 +46,8 @@ export interface CompactInsumoFormProps {
   onCrearInsumo?: () => void;
   containerRef?: React.Ref<HTMLDivElement>;
   readOnly?: boolean;
+  /** Bloquea todo el bloque "Agregar insumo" (campos y botón). */
+  disabled?: boolean;
   placeholder?: string;
   buttonLabel?: string;
 }
@@ -71,13 +73,20 @@ export function CompactInsumoForm({
   onCrearInsumo,
   containerRef,
   readOnly = false,
+  disabled = false,
   placeholder = "Buscar insumo...",
   buttonLabel = "Agregar",
 }: CompactInsumoFormProps) {
+  /** `readOnly` y `disabled` bloquean los controles; el primero es solo lectura
+      visual, el segundo deshabilita por completo (p. ej. falta elegir el IVA). */
+  const bloqueado = readOnly || disabled;
+
   return (
     <div
       ref={containerRef}
-      className="p-4 bg-muted/40 border border-border rounded-xl"
+      className={`p-4 bg-muted/40 border border-border rounded-xl transition-opacity ${
+        disabled ? "opacity-60" : ""
+      }`}
     >
       <h3 className="text-sm font-bold text-foreground mb-3" style={{ fontFamily: SERIF }}>
         {titulo}
@@ -96,14 +105,15 @@ export function CompactInsumoForm({
             <input
               value={nombre}
               onChange={(e) => onNombreChange(e.target.value)}
-              onFocus={readOnly ? undefined : onNombreFocus}
+              onFocus={bloqueado ? undefined : onNombreFocus}
               placeholder={readOnly ? "Solo lectura" : placeholder}
               readOnly={readOnly}
+              disabled={disabled}
               className={`${readOnly ? readOnlyInputCls : compactInputCls} pl-8`}
             />
           </div>
 
-          {!readOnly && showSuggestions && (
+          {!readOnly && !disabled && showSuggestions && (
             <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
               {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera opción, estén o no
                   resultados de búsqueda, y va separado del resto de la lista. */}
@@ -142,7 +152,7 @@ export function CompactInsumoForm({
             <button
               type="button"
               onClick={() => onCantidadChange(Math.max(1, cantidad - 1))}
-              disabled={readOnly}
+              disabled={bloqueado}
               className="flex items-center justify-center w-8 bg-muted border border-border rounded-l-lg text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Minus className="w-3 h-3" />
@@ -152,13 +162,13 @@ export function CompactInsumoForm({
               min={1}
               value={cantidad}
               onChange={(e) => onCantidadChange(Math.max(1, Number(e.target.value)))}
-              disabled={readOnly}
+              disabled={bloqueado}
               className="w-full min-w-0 px-1 py-2 bg-muted border-y border-border text-xs text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button
               type="button"
               onClick={() => onCantidadChange(cantidad + 1)}
-              disabled={readOnly}
+              disabled={bloqueado}
               className="flex items-center justify-center w-8 bg-muted border border-border rounded-r-lg text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Plus className="w-3 h-3" />
@@ -175,7 +185,7 @@ export function CompactInsumoForm({
           <select
             value={unidad}
             onChange={(e) => onUnidadChange(e.target.value)}
-            disabled={readOnly || unidadDisabled}
+            disabled={bloqueado || unidadDisabled}
             className={readOnly ? readOnlyInputCls : `${compactInputCls} cursor-pointer`}
           >
             {UNIDADES.map((u) => (
@@ -198,7 +208,7 @@ export function CompactInsumoForm({
             value={precio || ""}
             onChange={(e) => onPrecioChange(Number(e.target.value))}
             placeholder="0"
-            disabled={readOnly}
+            disabled={bloqueado}
             className={readOnly ? readOnlyInputCls : compactInputCls}
           />
         </div>
@@ -216,7 +226,7 @@ export function CompactInsumoForm({
             value={iva}
             onChange={(e) => onIvaChange(Math.min(100, Math.max(0, Number(e.target.value))))}
             placeholder="0"
-            disabled={readOnly}
+            disabled={bloqueado}
             className={readOnly ? readOnlyInputCls : compactInputCls}
           />
         </div>
@@ -224,8 +234,8 @@ export function CompactInsumoForm({
         <button
           type="button"
           onClick={onAgregar}
-          disabled={readOnly}
-          className={`inline-flex h-[36px] items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${readOnly ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"}`}
+          disabled={bloqueado}
+          className={`inline-flex h-[36px] items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${bloqueado ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"}`}
         >
           <Plus className="w-3.5 h-3.5" />
           {buttonLabel}

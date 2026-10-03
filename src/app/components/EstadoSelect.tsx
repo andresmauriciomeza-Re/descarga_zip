@@ -40,8 +40,11 @@ export function EstadoSelect<T extends string>({
         {/* z-[100]: el menú va en un portal al <body>, por encima de los overlays
             de los modales (z-50), de ConfirmModal (z-[70]) y de NuevoProveedorModal
             (z-[80]). Con z-50 quedaba DETRÁS del fondo y los clics no llegaban. */}
+        {/* bg-popover/text-popover-foreground: en claro son #ffffff/#1a1a1a
+            (igual que antes) y en oscuro toman el tema (--popover: #1c1c1c),
+            así el menú de estado deja de verse blanco en modo oscuro. */}
         <Select.Content
-          className="z-[100] bg-white rounded-xl shadow-xl border border-border overflow-hidden min-w-[150px]"
+          className="z-[100] bg-popover text-popover-foreground rounded-xl shadow-xl border border-border overflow-hidden min-w-[150px]"
           sideOffset={6}
           position="popper"
         >

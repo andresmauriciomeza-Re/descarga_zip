@@ -95,6 +95,7 @@ import {
 } from "recharts";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
+import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
@@ -227,6 +228,19 @@ interface PendingOrder {
   horaRecogida: string;
   nombre?: string;
   documento?: string;
+}
+
+/** Resumen del pedido que se acaba de registrar, para la pantalla de
+    confirmación. Lo crea el checkout al enviar (handleConfirm y
+    submitAsGuest) y el login al retomar el pedido que un invitado
+    dejó a medio hacer (handleLogin). */
+interface PedidoResumen {
+  id: string;
+  items: CartItem[];
+  total: number;
+  nombre: string;
+  documento?: string;
+  hora: string;
 }
 
 interface Order {
@@ -2888,7 +2902,8 @@ function CartScreen({
   isLoggedIn,
   clienteSesion,
   onRequireLogin,
-  confirmationHora,
+  confirmationData,
+  onClearConfirmation,
 }: {
   cart: CartItem[];
   navigate: (s: Screen) => void;
@@ -2902,12 +2917,17 @@ function CartScreen({
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
-  ) => void;
+  ) => string;
   isLoggedIn: boolean;
   /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
   clienteSesion?: string;
   onRequireLogin: (order: PendingOrder) => void;
-  confirmationHora?: string;
+  /** Resumen del pedido ya registrado que se viene a mostrar (llega
+      del login, cuando un invitado inicia sesión con el pedido a
+      medio hacer). */
+  confirmationData?: PedidoResumen;
+  /** Limpia `orderConfirmation` en App al salir de la confirmación. */
+  onClearConfirmation?: () => void;
 }) {
   const [payment, setPayment] = useState("Nequi");
   const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 2 | 3>(
@@ -2918,15 +2938,15 @@ function CartScreen({
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pedidoConfirmado, setPedidoConfirmado] =
-    useState(Boolean(confirmationHora));
-  const [horaConfirmada, setHoraConfirmada] = useState(
-    confirmationHora ?? "",
+  const [pedidoConfirmado, setPedidoConfirmado] = useState(
+    Boolean(confirmationData),
   );
-  // El nombre que se acabó registrando, para mostrarlo ya en la pantalla de
-  // confirmación (donde `guestName` puede seguir editable hacia atrás).
-  const [nombreConfirmado, setNombreConfirmado] = useState("");
-  const [documentoConfirmado, setDocumentoConfirmado] = useState("");
+  // Resumen del pedido que se acaba de registrar (id, productos,
+  // total, cliente y hora): alimenta la pantalla de confirmación.
+  // En el flujo invitado→login arranca desde `confirmationData`.
+  const [pedidoResumen, setPedidoResumen] = useState<PedidoResumen | null>(
+    confirmationData ?? null,
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cartTotal = (item: CartItem) =>
@@ -2965,12 +2985,19 @@ function CartScreen({
     }
     setLoading(true);
     setTimeout(() => {
-      onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
+      const idVenta = onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
+      // Resumen del pedido ANTES de vaciar el carrito: es lo que
+      // muestra la pantalla de confirmación.
+      setPedidoResumen({
+        id: idVenta,
+        items: [...cart],
+        total: cart.reduce((s, i) => s + cartTotal(i), 0),
+        nombre: nombreCliente,
+        hora: horaRecogida,
+      });
       clear();
       setLoading(false);
       setCheckoutStep(0);
-      setHoraConfirmada(horaRecogida);
-      setNombreConfirmado(nombreCliente);
       setPedidoConfirmado(true);
     }, 1400);
   };
@@ -2985,7 +3012,7 @@ function CartScreen({
       // El documento se enviaba pero se quedaba en el formulario: la venta
       // guardaba solo el nombre, así que un pedido de invitado quedaba sin
       // identificación.
-      onOrder(
+      const idVenta = onOrder(
         payment,
         comprobante,
         [...cart],
@@ -2993,17 +3020,22 @@ function CartScreen({
         guestName.trim(),
         guestDocument.trim(),
       );
+      setPedidoResumen({
+        id: idVenta,
+        items: [...cart],
+        total: cart.reduce((s, i) => s + cartTotal(i), 0),
+        nombre: guestName.trim(),
+        documento: guestDocument.trim(),
+        hora: horaRecogida,
+      });
       clear();
       setLoading(false);
       setCheckoutStep(0);
-      setHoraConfirmada(horaRecogida);
-      setNombreConfirmado(guestName.trim());
-      setDocumentoConfirmado(guestDocument.trim());
       setPedidoConfirmado(true);
     }, 1400);
   };
 
-  if (pedidoConfirmado) {
+  if (pedidoConfirmado && pedidoResumen) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
@@ -3013,72 +3045,123 @@ function CartScreen({
         >
           ¡Pedido recibido!
         </h2>
-         <p className="text-muted-foreground mb-2">
-           Estamos verificando tu comprobante de pago.
-         </p>
-         <p className="text-muted-foreground mb-6 text-sm">
-           Esto tardará unos pocos minutos; te confirmaremos cuando tu pedido esté listo.
-         </p>
-         {/* El nombre con el que quedó registrado el pedido, para que el
-             cliente confirme a nombre de quién compró. */}
-         {nombreConfirmado && (
-           <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-             <h3 className="font-bold text-foreground mb-2 flex items-center gap-2">
-               <ShoppingBag className="w-4 h-4 text-primary" /> Pedido
-               realizado por
-             </h3>
-             <p className="text-foreground font-semibold">
-               {nombreConfirmado}
-             </p>
-             {documentoConfirmado && (
-               <p className="text-sm text-muted-foreground mt-0.5">
-                 Documento: {documentoConfirmado}
-               </p>
-             )}
-           </div>
-         )}
-         <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-            <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" /> Dónde
-              recoger tu pedido
+
+        {/* a) Pedido: número, estado y mensaje de verificación. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-primary" /> Pedido{" "}
+              {pedidoResumen.id}
             </h3>
-           <p className="text-sm text-muted-foreground mb-4">
-             Podrás pasar por tu pedido
-             {horaConfirmada ? ` a las ${horaConfirmada}` : ""}.
-           </p>
-           <div className="mb-4 border-l-2 border-primary/60 pl-3">
-             <p className="text-xs text-muted-foreground">Hora de recogida</p>
-             <p className="text-base font-bold text-primary">
-               {horaConfirmada}
-             </p>
-           </div>
-           <p className="text-foreground font-semibold">
-             La Sirena Pizza
-           </p>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              Por verificar
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Estamos verificando tu comprobante de pago. Esto tardará unos
+            pocos minutos; te confirmaremos cuando tu pedido esté listo.
+          </p>
+        </div>
+
+        {/* b) Productos con su desglose y totales. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <h3 className="font-bold text-foreground mb-3">Productos</h3>
+          <div className="space-y-3 mb-4">
+            {pedidoResumen.items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {item.product.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.size ? `${item.size} · ` : ""}x{item.quantity}
+                  </p>
+                </div>
+                <span
+                  className="text-sm font-bold text-foreground shrink-0"
+                  style={{ fontFamily: MONO }}
+                >
+                  {fmt((item.sizePrice + item.extrasPrice) * item.quantity)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <ResumenTotales
+            cantidadProductos={pedidoResumen.items.reduce(
+              (s, i) => s + i.quantity,
+              0,
+            )}
+            subtotal={pedidoResumen.total}
+          />
+        </div>
+
+        {/* c) Cliente (nombre y documento, si hay). */}
+        {pedidoResumen.nombre && (
+          <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+            <h3 className="font-bold text-foreground mb-2">Cliente</h3>
+            <p className="text-foreground font-semibold">
+              {pedidoResumen.nombre}
+            </p>
+            {pedidoResumen.documento && (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Documento: {pedidoResumen.documento}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* d) Recogida: hora, dirección, teléfono y horario. */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
+          <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" /> Dónde
+            recoger tu pedido
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Podrás pasar por tu pedido
+            {pedidoResumen.hora ? ` a las ${pedidoResumen.hora}` : ""}.
+          </p>
+          <div className="mb-4 border-l-2 border-primary/60 pl-3">
+            <p className="text-xs text-muted-foreground">Hora de recogida</p>
+            <p className="text-base font-bold text-primary">
+              {pedidoResumen.hora}
+            </p>
+          </div>
+          <p className="text-foreground font-semibold">
+            La Sirena Pizza
+          </p>
           <p className="text-muted-foreground text-sm">
             Cra. 45 #104-30, Laureles
           </p>
           <p className="text-muted-foreground text-sm">
             Medellín, Antioquia
           </p>
-           <div className="mt-3 pt-3 border-t border-border space-y-1">
-             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-               <Phone className="w-3.5 h-3.5" /> 604 234 5678
-             </p>
-             <p className="text-xs font-semibold text-primary">
-               Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
-             </p>
-           </div>
-         </div>
+          <div className="mt-3 pt-3 border-t border-border space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" /> 604 234 5678
+            </p>
+            <p className="text-xs font-semibold text-primary">
+              Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+            </p>
+          </div>
+        </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           {isLoggedIn && (
-            <PrimaryBtn onClick={() => navigate("mis-pedidos")} size="lg">
+            <PrimaryBtn
+              onClick={() => {
+                onClearConfirmation?.();
+                navigate("mis-pedidos");
+              }}
+              size="lg"
+            >
               Ver mis pedidos
             </PrimaryBtn>
           )}
           <GhostBtn
-            onClick={() => navigate("landing")}
+            onClick={() => {
+              onClearConfirmation?.();
+              navigate("landing");
+            }}
             className="px-7 py-4 text-lg min-h-[56px]"
           >
             Volver al inicio
@@ -3215,27 +3298,14 @@ function CartScreen({
                 Resumen
               </h3>
               {/* "Subtotal" y "Total" muestran hoy la misma cifra porque el
-                  pedido no tiene envío ni impuestos; se mantienen las dos
+                  pedido no tiene envío ni impuestos; se mantienen las
                   filas para que, cuando se agreguen esos conceptos, el
                   desglose ya tenga dónde mostrarlos sin tocar el layout. */}
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>
-                    Subtotal (
-                    {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
-                    productos)
-                  </span>
-                  <span style={{ fontFamily: MONO }}>
-                    {fmt(subtotal)}
-                  </span>
-                </div>
-                <div className="border-t border-border pt-2 flex justify-between font-bold text-base text-foreground">
-                  <span>Total</span>
-                  <span style={{ fontFamily: MONO }}>
-                    {fmt(subtotal)}
-                  </span>
-                </div>
-              </div>
+              <ResumenTotales
+                cantidadProductos={cart.reduce((s, i) => s + i.quantity, 0)}
+                subtotal={subtotal}
+                className="space-y-2 mb-4 text-sm"
+              />
               <PrimaryBtn
                 onClick={() => setCheckoutStep(1)}
                 size="lg"
@@ -3330,31 +3400,13 @@ function CartScreen({
                       </div>
                     ))}
                   </div>
-                  {/* Mismas dos filas que el panel "Resumen" del carrito, para
+                  {/* Mismas filas que el panel "Resumen" del carrito, para
                       que el cliente lea el mismo desglose en las dos vistas. */}
-                  <div className="mt-4 pt-3 border-t border-border space-y-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>
-                        Subtotal (
-                        {cart.reduce((s, i) => s + i.quantity, 0)}{" "}
-                        productos)
-                      </span>
-                      <span style={{ fontFamily: MONO }}>
-                        {fmt(subtotal)}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-border flex justify-between items-center">
-                      <span className="font-bold text-foreground text-base">
-                        Total
-                      </span>
-                      <span
-                        className="text-base font-bold text-primary"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {fmt(subtotal)}
-                      </span>
-                    </div>
-                  </div>
+                  <ResumenTotales
+                    cantidadProductos={cart.reduce((s, i) => s + i.quantity, 0)}
+                    subtotal={subtotal}
+                    className="mt-4 pt-3 border-t border-border space-y-2 text-sm"
+                  />
                 </div>
                 {/* RIGHT: payment method + pickup time */}
                 <div className="px-5 py-5 space-y-5">
@@ -8072,7 +8124,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
-  const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null);
+  const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
   // Catálogo de productos. Lo consumen GestionProductosScreen y
   // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
@@ -8500,16 +8552,32 @@ export default function App() {
 
     const orderToResume = pendingOrder;
     if (orderToResume) {
-      registrarPedido(
+      // El nombre que queda registrado es el del invitado (si lo
+      // llegó a escribir) o el de la cuenta que inicia sesión.
+      const nombrePedido = orderToResume.nombre?.trim() || user.nombre;
+      const idVenta = registrarPedido(
         orderToResume.metodoPago,
         orderToResume.comprobante,
         orderToResume.items,
         orderToResume.horaRecogida,
-        orderToResume.nombre,
+        nombrePedido,
         orderToResume.documento,
       );
       setCart([]);
-      setOrderConfirmation(orderToResume.horaRecogida);
+      // Confirmación como objeto (no solo la hora) para que la
+      // pantalla del carrito muestre exactamente lo mismo que tras
+      // un pedido normal: número, productos, cliente y recogida.
+      setOrderConfirmation({
+        id: idVenta,
+        hora: orderToResume.horaRecogida,
+        nombre: nombrePedido,
+        documento: orderToResume.documento?.trim(),
+        items: orderToResume.items,
+        total: orderToResume.items.reduce(
+          (s, i) => s + (i.sizePrice + i.extrasPrice) * i.quantity,
+          0,
+        ),
+      });
       window.setTimeout(() => {
         setPendingOrder(null);
         navigate("cart");
@@ -8590,7 +8658,7 @@ export default function App() {
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
-  ) => {
+  ): string => {
     const newVenta: Venta = {
       id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
       usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
@@ -8634,6 +8702,7 @@ export default function App() {
       })),
     };
     setVentas((prev) => [newVenta, ...prev]);
+    return newVenta.id;
   };
 
   const updateQty = (id: string, qty: number) => {
@@ -8709,6 +8778,15 @@ export default function App() {
     if (isLoggedIn && !hasValidSession && !pendingOrder) void logout();
   }, [isLoggedIn, hasValidSession, pendingOrder]);
 
+  // La confirmación de pedido solo vive mientras se ve el carrito:
+  // antes se asignaba (en el login y al enviar) y jamás se limpiaba,
+  // así que volver al carrito después de un pedido volvía a mostrar
+  // "¡Pedido recibido!". Al cambiar de pantalla se borra; los botones
+  // de la propia confirmación también la limpian antes de navegar.
+  useEffect(() => {
+    if (screen !== "cart") setOrderConfirmation(null);
+  }, [screen]);
+
   // If a client or an invalid session somehow lands on an admin screen, send
   // them out of the protected area.
   if (
@@ -8718,9 +8796,16 @@ export default function App() {
     setTimeout(() => navigate("landing", { replace: true }), 0);
   }
 
-  if (!hasValidSession && screen === "mis-pedidos") {
-    setTimeout(() => navigate("landing", { replace: true }), 0);
-  }
+  // "Mis pedidos" requiere sesión válida. Antes este guard navegaba
+  // desde el render (setTimeout dentro del cuerpo del componente);
+  // ahora corre como efecto, después de pintar. Un cliente logueado
+  // (rol "Cliente" o con ficha en usuarios) tiene sesión válida y
+  // NO es redirigido a la landing.
+  useEffect(() => {
+    if (!hasValidSession && screen === "mis-pedidos") {
+      navigate("landing", { replace: true });
+    }
+  }, [hasValidSession, screen, navigate]);
 
   // Dashboard and Inicio are mutually exclusive landing screens. Other admin
   // screens remain protected by their module permission below.
@@ -8927,7 +9012,8 @@ export default function App() {
                     setLoginNotice(true);
                     openLogin();
                   }}
-                  confirmationHora={orderConfirmation ?? undefined}
+                  confirmationData={orderConfirmation ?? undefined}
+                  onClearConfirmation={() => setOrderConfirmation(null)}
                   clienteSesion={loggedInUser?.nombre}
                 />
               )}
@@ -9057,6 +9143,7 @@ export default function App() {
                 <RecepcionCompraScreen
                   orden={ordenRecepcion}
                   insumos={insumos}
+                  setInsumos={setInsumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   onGuardar={(recepcion, estado) => {

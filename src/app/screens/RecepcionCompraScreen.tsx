@@ -2,9 +2,12 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
+import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
 import {
   ConfirmModal,
+  NuevoInsumoModal,
+  insumoDeAlta,
   type OrdenCompra,
   type Recepcion,
   type ItemRecibido,
@@ -33,6 +36,8 @@ function fmtCOP(n: number) {
 interface Props {
   orden: OrdenCompra;
   insumos: Insumo[];
+  /** Catálogo compartido: "+ Crear insumo" da de alta el insumo aquí. */
+  setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   onGuardar: (recepcion: Recepcion, estado: EstadoOrden) => void;
@@ -59,6 +64,7 @@ function registradosEnOrden(gestiones: GestionCompra[], ordenId: string) {
 export function RecepcionCompraScreen({
   orden,
   insumos,
+  setInsumos,
   gestiones,
   setGestiones,
   onGuardar,
@@ -112,7 +118,9 @@ export function RecepcionCompraScreen({
         cantidadRecibida: i.cantidad,
         unidad: i.unidad,
         precioReferencia: i.costoUnitario,
-        costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario, iva: 0
+        costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
+        // El IVA de la línea viene del catálogo/OC (0 % si no está definido).
+        iva: Number(i.iva ?? 0)
       }));
   });
 
@@ -121,10 +129,17 @@ export function RecepcionCompraScreen({
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
 
+  // Esta pantalla NO tiene selector de IVA general: los cálculos trabajan
+  // SIEMPRE como factura con IVA incluido (regla general), usando el IVA (%)
+  // de cada insumo. Ver `calcularLineaIva` con `ivaIncluido: true`.
+  const ivaIncluido = true;
+  const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
+
   const [exNombre, setExNombre] = useState("");
   const [exCant, setExCant] = useState(1);
   const [exUnidad, setExUnidad] = useState(UNIDADES[0]);
   const [exPrecio, setExPrecio] = useState(0);
+  const [exIva, setExIva] = useState(0);
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
@@ -266,13 +281,14 @@ export function RecepcionCompraScreen({
         cantidadRecibida: exCant,
         unidad: exUnidad,
         precioReferencia: exPrecio,
-        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: 0
+        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: exIva
       },
     ]);
 
     setExNombre("");
     setExCant(1);
     setExPrecio(0);
+    setExIva(0);
     setExShowSug(false);
 
     toast.success("Insumo adicional agregado.");
@@ -283,7 +299,8 @@ export function RecepcionCompraScreen({
     setEditExtraDraft({
       cantidad: item.cantidadRecibida,
       unidad: item.unidad,
-      costoUnitario: item.costoUnitario, precioUnitario: item.costoUnitario, iva: 0
+      costoUnitario: item.costoUnitario, precioUnitario: item.costoUnitario,
+      iva: item.iva ?? 0
     });
   };
 
@@ -302,6 +319,8 @@ export function RecepcionCompraScreen({
                 cantidadRecibida: Math.max(0, editExtraDraft.cantidad),
                 unidad: editExtraDraft.unidad,
                 costoUnitario: Math.max(0, editExtraDraft.costoUnitario),
+                precioUnitario: Math.max(0, editExtraDraft.costoUnitario),
+                iva: Math.min(100, Math.max(0, editExtraDraft.iva)),
               }
             : item
         )
@@ -315,9 +334,17 @@ export function RecepcionCompraScreen({
     0
   );
 
+  // Punto 1: los totales de esta factura salen de la fórmula única
+  // `calcularLineaIva` (Subtotal sin IVA → IVA → Total pagado).
   const totalRec = [...items, ...itemsExtra].reduce(
     (total, item) =>
-      total + item.cantidadRecibida * item.costoUnitario,
+      total +
+      calcularLineaIva({
+        cantidad: item.cantidadRecibida,
+        montoUnitario: item.costoUnitario,
+        porcentajeIva: item.iva ?? 0,
+        ivaIncluido,
+      }).subtotalConIva,
     0
   );
 
@@ -383,24 +410,42 @@ export function RecepcionCompraScreen({
     const idsOrdenFactura = new Set(orden.items.map((item) => item.idInsumo));
 
     // Esta factura: solo lo que trae, con su número, fecha y total propios.
+    // Cada línea guarda su porcentaje y sus valores de IVA (base e IVA).
     const itemsFactura: OrdenItem[] = [...filasRecibidas, ...itemsExtra].map(
-      (item) => ({
-        rowId: item.rowId,
-        idInsumo: item.idInsumo,
-        nombre: item.nombre,
-        cantidad: item.cantidadRecibida,
-        unidad: item.unidad,
-        costoUnitario: item.costoUnitario,
-        precioUnitario: item.costoUnitario,
-        iva: 0,
-        esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
-      })
+      (item) => {
+        const linea = calcularLineaIva({
+          cantidad: item.cantidadRecibida,
+          montoUnitario: item.costoUnitario,
+          porcentajeIva: item.iva ?? 0,
+          ivaIncluido,
+        });
+
+        return {
+          rowId: item.rowId,
+          idInsumo: item.idInsumo,
+          nombre: item.nombre,
+          cantidad: item.cantidadRecibida,
+          unidad: item.unidad,
+          costoUnitario: item.costoUnitario,
+          precioUnitario: item.costoUnitario,
+          iva: item.iva ?? 0,
+          baseSinIva: linea.baseSinIva,
+          montoIva: linea.montoIva,
+          esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
+        };
+      }
     );
 
-    const valorTotal = itemsFactura.reduce(
-      (total, item) => total + item.cantidad * item.costoUnitario,
+    // Subtotal sin IVA → IVA → Total pagado (idéntico a `totalRec`).
+    const subtotalSinIvaFactura = itemsFactura.reduce(
+      (s, item) => s + (item.baseSinIva ?? 0),
       0
     );
+    const totalIvaGuardado = itemsFactura.reduce(
+      (s, item) => s + (item.montoIva ?? 0),
+      0
+    );
+    const valorTotal = subtotalSinIvaFactura + totalIvaGuardado;
 
     // 1) Una compra nueva por factura: las facturas anteriores no se tocan.
     const nuevoId = String(
@@ -417,6 +462,12 @@ export function RecepcionCompraScreen({
         valorTotal,
         estado: "Recibido",
         items: itemsFactura,
+        // Punto 1: totales de IVA guardados en la compra (el backend los
+        // recalcula con la misma fórmula antes de persistir).
+        ivaIncluido,
+        subtotalSinIva: subtotalSinIvaFactura,
+        totalIva: totalIvaGuardado,
+        totalPagado: valorTotal,
       },
       ...prev,
     ]);
@@ -461,7 +512,7 @@ export function RecepcionCompraScreen({
             cantidadRecibida: a.cantidad,
             unidad: pedido.unidad,
             precioReferencia: pedido.costoUnitario,
-            costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: 0
+            costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: a.iva ?? 0
           } as ItemRecibido;
         })
         .filter((x): x is ItemRecibido => x !== null),
@@ -475,7 +526,7 @@ export function RecepcionCompraScreen({
           cantidadRecibida: a.cantidad,
           unidad: a.unidad,
           precioReferencia: a.costoUnitario,
-          costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: 0
+          costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: a.iva ?? 0
         })),
       usarLotes: false,
       fechaRecepcion: today,
@@ -832,8 +883,12 @@ export function RecepcionCompraScreen({
 
                             <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
                               {fmtCOP(
-                                item.cantidadRecibida *
-                                  item.costoUnitario
+                                calcularLineaIva({
+                                  cantidad: item.cantidadRecibida,
+                                  montoUnitario: item.costoUnitario,
+                                  porcentajeIva: item.iva ?? 0,
+                                  ivaIncluido,
+                                }).subtotalConIva
                               )}
                             </td>
 
@@ -1073,8 +1128,23 @@ export function RecepcionCompraScreen({
                           className={`${compactInputCls} pl-8`}
                         />
                       </div>
-                      {exShowSug && exSugs.length > 0 && (
+                      {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera
+                          opción (aunque el campo esté vacío o sin resultados)
+                          y va separado del resto de la lista. */}
+                      {exShowSug && (
                         <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setExShowSug(false);
+                              setShowNuevoInsumo(true);
+                            }}
+                            className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Crear insumo {exNombre.trim() && `“${exNombre.trim()}”`}
+                          </button>
                           {exSugs.map((ins) => (
                             <button
                               key={ins.id}
@@ -1087,6 +1157,9 @@ export function RecepcionCompraScreen({
                                     : UNIDADES[0]
                                 );
                                 setExPrecio(ins.costoUnitario);
+                                // Punto 2: al elegir del catálogo se completan
+                                // Medida, Monto unitario e IVA.
+                                setExIva(Number(ins.iva ?? 0));
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
@@ -1097,6 +1170,11 @@ export function RecepcionCompraScreen({
                               </p>
                             </button>
                           ))}
+                          {exSugs.length === 0 && (
+                            <div className="px-3 py-2.5 text-xs text-muted-foreground text-center">
+                              Sin resultados
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1131,16 +1209,36 @@ export function RecepcionCompraScreen({
                       </select>
                     </div>
 
-                    {/* Precio */}
-                    <div className="w-24 flex-none">
+                    {/* Precio — la factura siempre se trabaja con IVA incluido */}
+                    <div className="w-32 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Precio unitario
+                        Monto unitario (con IVA)
                       </label>
                       <input
                         type="number"
                         min={0}
                         value={exPrecio || ""}
                         onChange={(e) => setExPrecio(Number(e.target.value))}
+                        className={compactInputCls}
+                      />
+                    </div>
+
+                    {/* IVA (%) — 0 a 100 */}
+                    <div className="w-[76px] flex-none">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                        IVA (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={exIva}
+                        onChange={(e) =>
+                          setExIva(
+                            Math.min(100, Math.max(0, Number(e.target.value)))
+                          )
+                        }
+                        placeholder="0"
                         className={compactInputCls}
                       />
                     </div>
@@ -1172,6 +1270,31 @@ export function RecepcionCompraScreen({
                   Guardar
                 </button>
               </div>
+
+              <AnimatePresence>
+                {showNuevoInsumo && (
+                  <NuevoInsumoModal
+                    nombreInicial={exNombre.trim()}
+                    insumosExistentes={insumos}
+                    onGuardar={(ins) => {
+                      // Punto 2: se da de alta en el catálogo como tipo
+                      // "Insumo" y queda seleccionado en el formulario.
+                      setInsumos((prev) => [insumoDeAlta(ins), ...prev]);
+                      setExNombre(ins.nombre);
+                      setExUnidad(
+                        UNIDADES.includes(ins.unidadMedida)
+                          ? ins.unidadMedida
+                          : UNIDADES[0]
+                      );
+                      setExPrecio(ins.precioUnitario);
+                      setExIva(Number(ins.iva ?? 0));
+                      setShowNuevoInsumo(false);
+                      toast.success(`Insumo "${ins.nombre}" creado`);
+                    }}
+                    onClose={() => setShowNuevoInsumo(false)}
+                  />
+                )}
+              </AnimatePresence>
 
               <AnimatePresence>
                 {showGuardarConf && (
