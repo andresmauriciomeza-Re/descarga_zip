@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Search, Plus, Pencil, Trash2, X, Check, Package, Eye, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect } from "../components/UnidadSelect";
+import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -221,6 +223,35 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // Descarga del listado completo (buscador + estado + tipo, sin importar
+  // la página actual del paginador).
+  const exportExcel = async () => {
+    if (filtered.length === 0) {
+      toast.error("No hay datos para exportar.");
+      return;
+    }
+    const archivo = await exportarExcelEstilizado({
+      datos: filtered,
+      nombreHoja: "Insumos",
+      nombreArchivo: "insumos",
+      titulo: "Insumos",
+      columnas: [
+        { header: "ID", valor: (i) => i.id },
+        { header: "Tipo", valor: (i) => (i.tipo === "ProductoInsumo" ? "Producto insumo" : "Insumo") },
+        { header: "Categoría", valor: (i) => (i.tipo === "ProductoInsumo" ? "-" : categoriaNombre(i.categoriaId)) },
+        { header: "Nombre", valor: (i) => i.nombre },
+        { header: "Unidad", valor: (i) => i.unidadMedida },
+        { header: "Stock Actual", valor: (i) => i.stockActual, alineacion: "right" },
+        { header: "Stock Mínimo", valor: (i) => i.stockMinimo, alineacion: "right" },
+        { header: "Stock Máximo", valor: (i) => i.stockMaximo, alineacion: "right" },
+        { header: "Costo Unitario", valor: (i) => (i.tipo === "ProductoInsumo" ? "-" : i.costoUnitario), numFmt: "$#,##0", alineacion: "right" },
+        { header: "Estado", valor: (i) => (i.estado === "activo" ? "Activo" : "Inactivo"), esEstado: true },
+      ],
+    });
+    void archivo;
+    toast.success("Archivo Excel descargado");
+  };
+
   // ─────────────────────────── Insumo CRUD ───────────────────────────
   const openCreate = () => {
     setEditingId(null);
@@ -290,12 +321,19 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
     }
 
     if (editingId) {
-      // En edición, solo se actualizan stockMaximo y costoUnitario
+      // En edición solo se actualiza stockMaximo; el costoUnitario y los demás
+      // campos conservan su valor original aunque el formulario los envíe
+      // modificados (no se confía solo en el disabled del HTML).
       const original = insumos.find(i => i.id === editingId);
       if (!original) return;
+      // Validación: el stock actual no puede exceder el nuevo máximo.
+      if (original.stockActual > stockMaximo) {
+        toast.error("El stock actual no puede exceder el nuevo stock máximo.");
+        return;
+      }
       setInsumos(prev => prev.map(i =>
         i.id === editingId
-          ? { ...i, stockMaximo, costoUnitario }
+          ? { ...i, stockMaximo, costoUnitario: original.costoUnitario }
           : i
       ));
       if (esStockBajo(original)) {
@@ -564,7 +602,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
             Catálogo de insumos disponibles
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <BotonDescargarExcel onClick={exportExcel} />
           <button
             onClick={openCreateProducto}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-card border border-border text-foreground font-semibold text-sm rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shadow-sm"
@@ -790,7 +829,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   </button>
                 </div>
                 {editingId && (
-                  <p className="text-xs text-muted-foreground mt-1">Solo se pueden modificar el stock máximo y el costo unitario.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Solo se puede modificar el stock máximo.</p>
                 )}
               </div>
               <div className="px-6 py-5 space-y-4">
@@ -900,8 +939,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     type="number"
                     min={0}
                     value={costoUnitario || ""}
+                    disabled={!!editingId}
                     onChange={e => setCostoUnitario(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
+                      editingId
+                        ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                        : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
+                    }`}
                   />
                 </div>
               </div>
