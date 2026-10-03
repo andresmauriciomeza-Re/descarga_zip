@@ -1,13 +1,20 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
 import { useProveedorForm } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
-import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+  type EstadoOption,
+} from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 
@@ -401,12 +408,11 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por NIT, nombre, asesor o email..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por NIT, nombre, asesor o email..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -441,30 +447,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
                         setConfirmToggleId(s.id);
                       }}
                       options={[
-                        { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-                        { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
                       ]}
                     />
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {canEdit && (
-                        <button onClick={() => setEditItem({ ...s })} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => setDeleteId(s.id)} title="Eliminar"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                    <ActionIcons
+                      onView={() => setDetailItem(s)}
+                      onEdit={canEdit ? () => setEditItem({ ...s }) : undefined}
+                      onDelete={canDelete ? () => setDeleteId(s.id) : undefined}
+                    />
                   </td>
                 </tr>
               ))}

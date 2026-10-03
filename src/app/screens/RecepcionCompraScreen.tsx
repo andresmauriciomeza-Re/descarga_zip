@@ -1,9 +1,10 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
 import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
+import { ActionIcons } from "../components/ActionIcons";
 import {
   ConfirmModal,
   NuevoInsumoModal,
@@ -1070,27 +1071,17 @@ export function RecepcionCompraScreen({
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => startEditExtra(item)}
-                                      title="Editar insumo"
-                                      className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        setItemsExtra((prev) =>
-                                          prev.filter(
-                                            (x) => x.rowId !== item.rowId
-                                          )
+                                  <ActionIcons
+                                    onEdit={() => startEditExtra(item)}
+                                    editTitle="Editar insumo"
+                                    onDelete={() =>
+                                      setItemsExtra((prev) =>
+                                        prev.filter(
+                                          (x) => x.rowId !== item.rowId
                                         )
-                                      }
-                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                                      )
+                                    }
+                                  />
                                 )}
                               </td>
                             </tr>
