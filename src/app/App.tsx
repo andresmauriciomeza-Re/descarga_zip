@@ -93,7 +93,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
@@ -1021,8 +1021,8 @@ const NAV_SECTIONS = [
   },
 ];
 
-const canViewPermission = (accesos: AccesosMap, permKey: string, isNamedAdmin: boolean) =>
-  isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
+const canViewPermission = (accesos: AccesosMap, permKey: string) =>
+  accesos[permKey]?.includes("Ver") ?? false;
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
@@ -1134,7 +1134,7 @@ function Sidebar({
   // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
   // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
   const canView = (permKey: string) =>
-    hasDashboardAccess || canViewPermission(accesos, permKey, isNamedAdmin);
+    canViewPermission(accesos, permKey);
 
   return (
     <aside
@@ -4188,14 +4188,22 @@ function LoginScreen({
   usuarios,
   darkMode,
   loginNotice,
+  initialEmail,
+  onPasswordReset,
 }: {
   navigate: (s: Screen) => void;
   onLogin: (user: Usuario) => void;
   usuarios: Usuario[];
   darkMode: boolean;
   loginNotice?: boolean;
+  /** Correo que queda escrito al llegar desde el cambio de contraseña:
+   *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
+  initialEmail?: string;
+  /** Escribe la contraseña nueva en `usuarios` (en memoria) para la cuenta
+   *  con ese correo. */
+  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
@@ -4255,8 +4263,9 @@ function LoginScreen({
       return;
     }
 
-    // All system users share the password "123456"
-    if (password !== "123456") {
+    // All system users store their own password; default for accounts
+    // created before password tracking was added.
+    if (password !== (user.contrasena ?? "123456")) {
       console.log("[login] credenciales inválidas: contraseña incorrecta");
       setErrors({
         email: "Credenciales incorrectas",
@@ -4289,7 +4298,11 @@ function LoginScreen({
       overlay={
         <AnimatePresence>
           {showForgot && (
-            <ForgotPasswordModal onClose={() => setShowForgot(false)} />
+            <ForgotPasswordModal
+              onClose={() => setShowForgot(false)}
+              usuarios={usuarios}
+              onPasswordReset={onPasswordReset}
+            />
           )}
         </AnimatePresence>
       }
@@ -4436,8 +4449,16 @@ function LoginScreen({
 
 function ForgotPasswordModal({
   onClose,
+  usuarios,
+  onPasswordReset,
 }: {
   onClose: () => void;
+  /** Directorio de cuentas: sirve para avisar antes de enviar un código a un
+   *  correo que no existe. */
+  usuarios: Usuario[];
+  /** Escribe la contraseña nueva en `usuarios` (en memoria) y devuelve "ok"
+   *  si encontró la cuenta. */
+  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
   const [step, setStep] = useState<
     "email" | "code" | "password" | "done"
@@ -4449,6 +4470,10 @@ function ForgotPasswordModal({
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  // Fallo del guardado real (p. ej. la cuenta se borró entre el código y la
+  // contraseña): va aparte de `errores`, que es validación de campos y se
+  // recalcula mientras se escribe.
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
@@ -4473,8 +4498,17 @@ function ForgotPasswordModal({
 
   const sendCode = () => {
     const err = validarCorreo(forgotEmail);
-    setErrores(err ? { forgotEmail: err } : {});
-    if (err) return;
+    if (err) {
+      setErrores({ forgotEmail: err });
+      return;
+    }
+    // Sin cuenta no hay nada que restablecer: se avisa antes de los tres pasos.
+    const clave = forgotEmail.trim().toLowerCase();
+    if (!usuarios.some((u) => u.correo.trim().toLowerCase() === clave)) {
+      setErrores({ forgotEmail: "No existe una cuenta con ese correo" });
+      return;
+    }
+    setErrores({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -4508,18 +4542,56 @@ function ForgotPasswordModal({
     }, 1000);
   };
 
+  // ── Validación en tiempo real del paso "Nueva contraseña" ───────────
+  // Se deriva del valor mientras se escribe, igual que en el cambio de
+  // contraseña de Mi perfil, y comparte la misma lista de requisitos.
+  const passwordError = newPass.length > 0 ? validarContrasena(newPass) : null;
+  const confirmVacio = confirm.length === 0;
+  const confirmCoincide = !confirmVacio && confirm === newPass;
+  const confirmError = !confirmVacio && !confirmCoincide;
+  const todoValido = validarContrasena(newPass) === null && confirmCoincide;
+  const faltan: string[] = [];
+  if (newPass.length === 0) faltan.push("escribir la contraseña");
+  else faltan.push(...faltantesContrasena(newPass));
+  if (confirmVacio) faltan.push("confirmar la contraseña");
+  else if (confirmError) faltan.push("que las contraseñas coincidan");
+
+  // Sin `inputCls`: ahí el borde lo decide solo la presencia de error, y aquí
+  // hace falta una tercera estado (verde) cuando el campo ya es válido.
+  const clsCampo = (estado: "ok" | "err" | "neutro") =>
+    `w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+      estado === "err"
+        ? "border-red-400 bg-red-50/30"
+        : estado === "ok"
+          ? "border-emerald-500"
+          : "border-border"
+    }`;
+  const estadoNew: "ok" | "err" | "neutro" =
+    newPass.length === 0 ? "neutro" : passwordError ? "err" : "ok";
+  const estadoConfirm: "ok" | "err" | "neutro" =
+    confirmVacio ? "neutro" : confirmError ? "err" : "ok";
+
   const changePassword = () => {
-    const errs: Record<string, string> = {};
-    const passwordError = validarContrasena(newPass);
-    if (passwordError) errs.newPass = passwordError;
-    if (newPass !== confirm) errs.confirm = "Las contraseñas no coinciden";
-    setErrores(errs);
-    if (Object.values(errs).some(Boolean)) return;
+    if (loading || !todoValido) return;
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
+      // Escribe la contraseña de la cuenta con ese correo en la lista
+      // `usuarios` (en memoria: igual que el cambio desde Mi perfil, este
+      // prototipo no guarda credenciales en localStorage).
+      const res = onPasswordReset?.(forgotEmail.trim().toLowerCase(), newPass) ?? "no-existe";
+      if (res !== "ok") {
+        setErrorGuardado("No existe una cuenta con ese correo");
+        return;
+      }
+      setErrores({});
       setStep("done");
     }, 1200);
+  };
+
+  /** Enter envía cuando todo es válido. */
+  const enviarConEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") changePassword();
   };
 
   const handleCodeInput = (i: number, val: string) => {
@@ -4710,14 +4782,17 @@ function ForgotPasswordModal({
                   value={newPass}
                   onChange={(v) => {
                     setNewPass(v);
-                    if (errores.newPass)
-                      setErrores((p) => ({ ...p, newPass: "" }));
+                    setErrorGuardado(null);
                   }}
+                  onKeyDown={enviarConEnter}
                   placeholder="Mínimo 8 caracteres"
                   autoComplete="new-password"
-                  cls={inputCls(errores.newPass)}
+                  cls={clsCampo(estadoNew)}
                 />
-                <MensajeError err={errores.newPass} />
+                {/* Lista de requisitos que se marca mientras se escribe. */}
+                <RequisitosContrasena valor={newPass} />
+                <MensajeError err={passwordError ?? undefined} />
+                {errorGuardado && <MensajeError err={errorGuardado} />}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-1.5">
@@ -4725,21 +4800,24 @@ function ForgotPasswordModal({
                 </label>
                 <PasswordField
                   value={confirm}
-                  onChange={(v) => {
-                    setConfirm(v);
-                    if (errores.confirm)
-                      setErrores((p) => ({ ...p, confirm: "" }));
-                  }}
+                  onChange={setConfirm}
+                  onKeyDown={enviarConEnter}
                   placeholder="Repite tu contraseña"
                   autoComplete="new-password"
-                  cls={inputCls(errores.confirm)}
+                  cls={clsCampo(estadoConfirm)}
                 />
-                <MensajeError err={errores.confirm} />
+                {confirmError && <MensajeError err="Las contraseñas no coinciden" />}
+                {confirmCoincide && (
+                  <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Las contraseñas coinciden
+                  </p>
+                )}
               </div>
             </div>
             <button
               onClick={changePassword}
-              disabled={loading}
+              disabled={loading || !todoValido}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
             >
               {loading ? (
@@ -4747,6 +4825,12 @@ function ForgotPasswordModal({
               ) : null}
               {loading ? "Cambiando..." : "Cambiar contraseña"}
             </button>
+            {/* Un botón deshabilitado nunca queda sin explicación. */}
+            {!todoValido && (
+              <p className="text-xs text-muted-foreground mb-3 leading-tight">
+                Para guardar falta: {faltan.join(", ")}.
+              </p>
+            )}
             <button
               onClick={onClose}
               className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
@@ -4840,7 +4924,18 @@ function RegisterScreen({
         if (k === "email") next.email = validarCorreo(value) ?? "";
         if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
         if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
-        if (k === "password") next.password = value ? validarContrasena(value) ?? "" : "";
+        if (k === "password") {
+          next.password = value ? validarContrasena(value) ?? "" : "";
+          // Al escribir la contraseña se recalcula también el confirm: si el
+          // usuario repitió la contraseña antes y luego cambió la primera,
+          // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
+          // un desajuste que acaba de producirse).
+          next.confirm = form.confirm
+            ? value === form.confirm
+              ? ""
+              : "Las contraseñas no coinciden"
+            : "";
+        }
         if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
         if (k === "name") next.name = validarNombre(value) ?? "";
         return next;
@@ -4893,8 +4988,9 @@ function RegisterScreen({
       if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
 
-    if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/\d/.test(form.password))
-      errs.password = "Usa 8 caracteres, mayúscula, minúscula y número";
+    // Mismas reglas que el resto de formularios (fuente única en campo.tsx).
+    const passwordError = validarContrasena(form.password);
+    if (passwordError) errs.password = passwordError;
     if (form.password !== form.confirm)
       errs.confirm = "Las contraseñas no coinciden";
 
@@ -4925,6 +5021,7 @@ function RegisterScreen({
         numeroDocumento: form.docNum.trim(),
         rolId: "ROL-002",
         activo: true,
+        contrasena: form.password,
       };
        setUsuarios(p => [...p, nuevoUsuario]);
        toast.success(
@@ -4942,6 +5039,12 @@ function RegisterScreen({
      Boolean(validarContrasena(form.password)) ||
      !form.confirm ||
      form.password !== form.confirm;
+
+   /** Enter en los campos de contraseña crea la cuenta; `register` es quien
+    *  decide si hay errores, así que nunca envía un formulario incompleto. */
+   const enviarConEnterRegistro = (e: React.KeyboardEvent<HTMLInputElement>) => {
+     if (e.key === "Enter") register();
+   };
 
    return (
     <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0" darkMode={darkMode}>
@@ -5056,6 +5159,7 @@ function RegisterScreen({
                 <PasswordField
                   value={form[key]}
                   onChange={setVal(key)}
+                  onKeyDown={enviarConEnterRegistro}
                   placeholder={placeholder}
                   autoComplete="new-password"
                   cls={inputCls(errores[key])}
@@ -5071,6 +5175,9 @@ function RegisterScreen({
                 />
               )}
               <MensajeError err={errores[key]} />
+              {/* Lista de requisitos en tiempo real (solo bajo la contraseña:
+                  la confirmación ya tiene su propio mensaje). */}
+              {key === "password" && <RequisitosContrasena valor={form.password} />}
             </div>
           ))}
         </div>
@@ -7680,16 +7787,17 @@ const leerRolesPersistidos = (): Rol[] => {
   return INITIAL_ROLES;
 };
 
-// ── Persistencia de usuarios (TEMPORAL) ──────────────────────────────
-// Mismo criterio y mismo riesgo que la de roles: los usuarios se creaban solo
-// en memoria, así que cualquier alta se perdía con el F5. Se guardan en
-// localStorage como solución puente, con la misma forma que el bloque de roles
-// y también con versión en la clave.
+// ── Lectura de usuarios (la clave se LEE, no se Escribe) ───────────────
+// `sivpro.usuarios.v1` se sigue leyendo por si queda algo guardado de una
+// build anterior (y por el backfill de `contrasena` de abajo), pero ya NO se
+// escribe: en este prototipo no hay backend y las credenciales no deben quedar
+// en el navegador. Alta, edición y cambio de contraseña viven solo en el
+// `useState` de App y por eso se pierden al recargar (F5).
 //
-// OJO: al persistir TODO el array se guardan también los cambios que hacen
-// otras pantallas, no solo los del modal de alta: las ediciones de "Mi Perfil"
-// y los interruptores de Activo/Inactivo de la pantalla de Usuarios.
-// Para volver a la semilla: localStorage.removeItem(USUARIOS_STORAGE_KEY).
+// ATENCIÓN con mezclar: si algún día se vuelve a persistir el array, se
+// guardarían también las ediciones de "Mi Perfil" y los interruptores de
+// Activo/Inactivo de la pantalla de Usuarios… y las contraseñas.
+// Para vaciar la clave a mano: localStorage.removeItem(USUARIOS_STORAGE_KEY).
 const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
 const CUENTAS_PRUEBA_IDS = new Set(["USR-001", "USR-002", "USR-010"]);
 
@@ -7734,7 +7842,11 @@ const leerUsuariosPersistidos = (): Usuario[] => {
       const otrosUsuarios = persistidos
         .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
         .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
-      return [...cuentasPrueba, ...otrosUsuarios];
+      return [...cuentasPrueba, ...otrosUsuarios].map(u => ({
+        ...u,
+        // Backfill para registros viejos sin contraseña propia.
+        contrasena: u.contrasena ?? "123456",
+      }));
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -7751,6 +7863,12 @@ const leerUsuariosPersistidos = (): Usuario[] => {
 // las ediciones, los interruptores Activo/Inactivo y los BORRADOS de empleado,
 // no solo las contrataciones. Para volver a la semilla:
 // localStorage.removeItem(EMPLEADOS_STORAGE_KEY).
+//
+// EXCEPCIÓN IMPORTANTE: `contrasena` NO se serializa. Las credenciales no se
+// guardan en el navegador (mismo criterio que el bloque de usuarios), así que
+// el efecto de escritura quita ese campo y `normalizarEmpleado` de abajo lo
+// repone con "123456" al leer. Las contraseñas que el usuario cambie durante
+// la sesión viven solo en memoria.
 const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
 
 const esEmpleadoValido = (e: unknown): e is Empleado => {
@@ -8126,6 +8244,11 @@ export default function App() {
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
+  // Correo que queda precargado en "Iniciar sesión" cuando se llega desde el
+  // cambio de contraseña: la sesión acaba de cerrarse y así el usuario solo
+  // tiene que escribir la clave nueva. Vive aquí (y no dentro de LoginScreen)
+  // porque quien lo conoce es el flujo que cierra la sesión.
+  const [loginEmailPre, setLoginEmailPre] = useState("");
   // Catálogo de productos. Lo consumen GestionProductosScreen y
   // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
   // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
@@ -8194,7 +8317,12 @@ export default function App() {
             changed = true;
           }
         } else {
-          const nuevo = { id: siguienteId(), ...base };
+          // Solo al CREAR: el usuario nuevo nace con la contraseña de su ficha
+          // de empleado para poder entrar con ella. `base` no lleva
+          // `contrasena` a propósito, así que la rama de arriba (actualizar)
+          // jamás pisa la contraseña que el usuario cambió en "Mi perfil" o en
+          // "Restablecer contraseña".
+          const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
           next.push(nuevo);
           porCorreo.set(correo, nuevo);
           changed = true;
@@ -8270,7 +8398,9 @@ export default function App() {
         next[indice] = actualizado;
         porCorreo.set(correo, actualizado);
       } else {
-        const nuevo = { id: siguienteId(), ...base };
+        // Misma regla que en el efecto de arriba: la contraseña se copia SOLO
+        // al crear, nunca al actualizar (el listado unificado no debe pisarla).
+        const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
         next.push(nuevo);
         porCorreo.set(correo, nuevo);
       }
@@ -8351,7 +8481,7 @@ export default function App() {
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
     const key = SCREEN_PERM_KEY[s];
-    if (!key || isNamedAdmin || hasDashboardAccess) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
+    if (!key) return { canCreate: true, canEdit: true, canDelete: true, canExportExcel: true };
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
@@ -8420,6 +8550,37 @@ export default function App() {
       // en memoria durante la sesión.
     }
   }, [categorias]);
+
+  // Mitad que faltaba del par leer/escribir de los roles: `leerRolesPersistidos`
+  // lee `sivpro.roles.v1`, pero nada la escribía, así que cualquier rol creado
+  // en "Gestión de Usuarios" desaparecía con el F5 (y el permiso que alguien
+  // le había dado dejaba de servir al recargar). Ningún dato de credencial
+  // entra aquí: solo id, nombre, descripción, activo y accesos.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
+    } catch {
+      // Almacenamiento bloqueado o sin cuota: los roles siguen en memoria.
+    }
+  }, [roles]);
+
+  // Igual para empleados: sin esta escritura, el alta de un empleado y su
+  // historial de contrataciones se perdían en cada F5.
+  //
+  // `contrasena` se DEJA FUERA a propósito (ver EMPLEADOS_STORAGE_KEY): las
+  // credenciales no se guardan en el navegador. Al leer, `normalizarEmpleado`
+  // repone "123456" a los registros que lleguen sin ella, que es exactamente
+  // lo que ocurre tras guardar aquí.
+  useEffect(() => {
+    try {
+      const sinContrasena = empleados.map(
+        ({ contrasena: _sinContrasena, ...resto }) => resto,
+      );
+      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(sinContrasena));
+    } catch {
+      // Almacenamiento bloqueado o sin cuota: los empleados siguen en memoria.
+    }
+  }, [empleados]);
 
   // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
   // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
@@ -8538,6 +8699,7 @@ export default function App() {
 
   const openLogin = () => {
     setLoginNotice(false);
+    setLoginEmailPre("");
     navigate("login");
   };
 
@@ -8549,6 +8711,7 @@ export default function App() {
     });
     setIsLoggedIn(true);
     setLoginNotice(false);
+    setLoginEmailPre("");
 
     const orderToResume = pendingOrder;
     if (orderToResume) {
@@ -8738,7 +8901,18 @@ export default function App() {
 
   // El frontend actual no tiene endpoint de logout. Si se configura uno para
   // una integración futura, la limpieza local sigue ocurriendo en finally.
-  const logout = async () => {
+  /** Cierra la sesión.
+   *
+   * `silenciarAviso` evita el toast "Has cerrado sesión correctamente" cuando
+   * el cierre es un paso interno (p. ej. tras cambiar la contraseña, donde el
+   * aviso es otro y dos toasts seguidos solo enredan).
+   * `destino` permite ir directo a "login" sin pasar por la landing. */
+  const logout = async (opciones?: {
+    silenciarAviso?: boolean;
+    destino?: Screen;
+  }) => {
+    const silenciarAviso = opciones?.silenciarAviso ?? false;
+    const destino: Screen = opciones?.destino ?? "landing";
     try {
       const endpoint = import.meta.env.VITE_AUTH_LOGOUT_URL;
       if (endpoint) {
@@ -8751,9 +8925,68 @@ export default function App() {
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
-      navigate("landing", { replace: true });
-      toast.success("Has cerrado sesión correctamente");
+      navigate(destino, { replace: true });
+      if (!silenciarAviso) {
+        toast.success("Has cerrado sesión correctamente");
+      }
     }
+  };
+
+  /** Guarda la contraseña nueva del usuario de la sesión en la lista
+   *  `usuarios` (en memoria: este prototipo no guarda credenciales en
+   *  localStorage, así que un F5 devuelve las contraseñas de la semilla).
+   *
+   *  Devuelve false —sin tocar nada— cuando no se pudo actualizar, para que "Mi
+   *  perfil" conserve tanto el modal como la sesión abiertas. */
+  const actualizarContrasena = (
+    id: string,
+    nuevaContrasena: string,
+  ): boolean => {
+    try {
+      if (!nuevaContrasena) return false;
+      if (!usuarios.some((u) => u.id === id)) return false;
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, contrasena: nuevaContrasena } : u)),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Mismo cambio de contraseña, pero por correo: lo usa "¿Olvidaste tu
+   *  contraseña?". Actualiza todas las cuentas con ese correo y avisa si no
+   *  existe ninguna, para no simular una recuperación sobre una cuenta inexistente. */
+  const restablecerContrasena = (
+    correo: string,
+    nuevaContrasena: string,
+  ): "ok" | "no-existe" => {
+    const clave = correo.trim().toLowerCase();
+    const existe = usuarios.some(
+      (u) => u.correo.trim().toLowerCase() === clave,
+    );
+    if (!existe) return "no-existe";
+    setUsuarios((prev) =>
+      prev.map((u) =>
+        u.correo.trim().toLowerCase() === clave
+          ? { ...u, contrasena: nuevaContrasena }
+          : u,
+      ),
+    );
+    return "ok";
+  };
+
+  /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
+   *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
+   *  conserva) y llegada a "Iniciar sesión" con el correo ya escrito. */
+  const trasCambiarContrasena = async (correo: string) => {
+    toast.success(
+      "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
+    );
+    // El correo se fija ANTES de navegar: si se hiciera después, LoginScreen
+    // ya se habría montado con `initialEmail` vacío y `useState` no lo tomaría.
+    setLoginEmailPre(correo);
+    await logout({ silenciarAviso: true, destino: "login" });
   };
 
   // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
@@ -9030,6 +9263,8 @@ export default function App() {
                     usuarios={usuarios}
                     darkMode={darkMode}
                     loginNotice={loginNotice}
+                    initialEmail={loginEmailPre}
+                    onPasswordReset={restablecerContrasena}
                     onLogin={handleLogin}
                 />
               )}
@@ -9056,6 +9291,7 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
+                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   isStaff={isStaff}
@@ -9253,6 +9489,13 @@ export default function App() {
                   rolUserCounts={Object.fromEntries(
                     roles.map(r => [r.id, usuarios.filter(u => u.rolId === r.id).length])
                   )}
+                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
+                  canCreate={getPerms("gestion-roles").canCreate}
+                  canEdit={getPerms("gestion-roles").canEdit}
+                  canDelete={getPerms("gestion-roles").canDelete}
+                  accesosPropios={loggedInAccesos}
+                  loggedInRolId={loggedInRol?.id ?? null}
+                  usuarios={usuariosUnificados}
                 />
               )}
               {screen === "sales-chart" && (
@@ -9278,6 +9521,10 @@ export default function App() {
                   empleados={empleados}
                   setEmpleados={setEmpleados}
                   clientes={clientes}
+                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
+                  canCreate={getPerms("users").canCreate}
+                  canEdit={getPerms("users").canEdit}
+                  canDelete={getPerms("users").canDelete}
                 />
               )}
               {screen === "empleados" && (
@@ -9322,12 +9569,15 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
+                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  onUpdatePassword={actualizarContrasena}
+                  onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   inStore
@@ -9348,12 +9598,15 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
+                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
                   onUpdateUser={(id, data) => {
                     setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
                   }}
+                  onUpdatePassword={actualizarContrasena}
+                  onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                 />

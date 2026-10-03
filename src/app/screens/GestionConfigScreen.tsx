@@ -309,13 +309,14 @@ export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }
 }
 
 // ── RolModal — árbol izquierdo + CRUD derecho ─────────────────────────
-function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave, roles, rolId }: {
+function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave, roles, rolId, accesosPropios }: {
   title: string;
   initialNombre: string; initialDesc: string; initialActivo: boolean; initialAccesos: AccesosMap;
   onClose: () => void;
   onSave: (nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => void;
   roles: Rol[];
   rolId?: string;
+  accesosPropios?: AccesosMap;
 }) {
   const [nombre,     setNombre]     = useState(initialNombre);
   const [desc,       setDesc]       = useState(initialDesc);
@@ -341,9 +342,17 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const countAssignedPermissions = (celda: Celda) =>
     subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub)).length;
 
+  // ¿El usuario con sesión tiene este privilegio concreto? Si no, el rol no
+  // puede asignárselo (evita que un rol suplente parcial conceda más de lo
+  // que su propio usuario tiene). Un Administrador suplente con todos los
+  // privilegios sí puede asignar cualquiera.
+  const puedeAsignar = (m: string, s: string, accion: Accion) =>
+    accesosPropios === undefined || (accesosPropios[KEY(m, s)] ?? []).includes(accion);
+
   const toggleAccion = (m: string, s: string, accion: Accion) => {
     const k = KEY(m, s);
     setErrors(p => ({ ...p, modulos: undefined }));
+    if (!puedeAsignar(m, s, accion)) return;
     setAccesos(prev => {
       const cur = prev[k] ?? [];
       return { ...prev, [k]: cur.includes(accion) ? cur.filter(a => a !== accion) : [...cur, accion] };
@@ -369,7 +378,9 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     setAccesos(prev => {
       const next = { ...prev };
       subs.forEach(sub => {
-        next[KEY(celda.modulo, sub)] = allOn ? [] : [...accionesDeSub(celda.modulo, sub)];
+        next[KEY(celda.modulo, sub)] = allOn
+          ? []
+          : accionesDeSub(celda.modulo, sub).filter(a => puedeAsignar(celda.modulo, sub, a));
       });
       return next;
     });
@@ -410,7 +421,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                     type="button"
                     role="checkbox"
                     aria-checked={allSel}
-                    onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? [] : [...disponibles] }))}
+                    onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? [] : disponibles.filter(a => puedeAsignar(celda.modulo, sub, a)) }))}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
                       allSel
                         ? "bg-red-100 text-red-700 border-red-200"
@@ -425,11 +436,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
                 {disponibles.map(accion => {
                   const on = selAcc.includes(accion);
+                  const permitido = puedeAsignar(celda.modulo, sub, accion);
                   return (
-                    <button key={accion} type="button" onClick={() => toggleAccion(celda.modulo, sub, accion)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer active:scale-95 ${
-                        on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
-                      }`}
+                    <button key={accion} type="button" disabled={!permitido}
+                      title={permitido ? undefined : "No tienes este privilegio para asignarlo"}
+                      onClick={() => toggleAccion(celda.modulo, sub, accion)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${!permitido ? "opacity-40 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
+                        }`}
                     >
                       {on && <Check className="w-3 h-3" />}{accion}
                     </button>
@@ -719,11 +732,25 @@ export function GestionConfigScreen({
   roles,
   setRoles,
   rolUserCounts,
+  canVer = true,
+  canCreate = true,
+  canEdit = true,
+  canDelete = true,
+  accesosPropios,
+  loggedInRolId,
+  usuarios,
 }: {
   userRole: string;
   roles: Rol[];
   setRoles: React.Dispatch<React.SetStateAction<Rol[]>>;
   rolUserCounts: Record<string, number>;
+  canVer?: boolean;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  accesosPropios?: AccesosMap;
+  loggedInRolId?: string | null;
+  usuarios?: { id: string; rolId: string; activo: boolean }[];
 }) {
   const [page,       setPage]      = useState(1);
   const PER_PAGE = 5;
@@ -752,12 +779,43 @@ export function GestionConfigScreen({
     toast.success(`Rol ${newRol.id} creado`);
   };
 
+  // Misma regla para el mapa de accesos (p. ej. al editar un rol total).
+  const accesosEsTotal = (accs?: AccesosMap) => {
+    if (!accs) return false;
+    const full = fullAccesos();
+    return Object.entries(full).every(([k, acts]) => (accs[k]?.length ?? 0) > 0 && acts.every(a => accs[k]?.includes(a)));
+  };
+
   const saveRol = (id: string | null, nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
     if (id) {
-      setRoles(p => p.map(r => r.id === id ? { ...r, nombre, descripcion: desc, activo, accesos } : r));
+      const r = roles.find(x => x.id === id);
+      if (r && rolEsTotal(r) && (!activo || !accesosEsTotal(accesos)) && ultimoTotalCubiertoPor(id)) {
+        toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+        return;
+      }
+      setRoles(p => p.map(x => x.id === id ? { ...x, nombre, descripcion: desc, activo, accesos } : x));
       setEditItem(null);
       toast.success("Rol actualizado");
     }
+  };
+
+  // ¿Este rol tiene TODOS los permisos y privilegios?
+  const rolEsTotal = (rol?: Rol | null) => {
+    if (!rol) return false;
+    const full = fullAccesos();
+    return Object.entries(full).every(([k, acts]) => (rol.accesos?.[k] ?? []).length > 0 && acts.every(a => rol.accesos[k]?.includes(a)));
+  };
+  // Usuarios ACTIVOS cuyo rol tiene todos los permisos. Si el cambio de un
+  // rol/usuario lo dejara en 0, el sistema se queda sin nadie con acceso total.
+  const totalesActivos = (usuarios ?? []).filter(u => {
+    const r = roles.find(x => x.id === u.rolId);
+    return u.activo && rolEsTotal(r);
+  });
+  // ¿Esta acción dejaría el sistema sin ningún usuario activo con todos los
+  // permisos? ¿El rol indicado cubre a TODOS los totales activos?
+  const ultimoTotalCubiertoPor = (rolId: string) => {
+    if (totalesActivos.length === 0) return false;
+    return totalesActivos.every(u => u.rolId === rolId);
   };
 
   const handleDelete = (id: string) => {
@@ -771,17 +829,21 @@ export function GestionConfigScreen({
       );
       return;
     }
+    if (rolEsTotal(rol) && ultimoTotalCubiertoPor(id)) {
+      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+      return;
+    }
     setRoles(p => p.filter(r => r.id !== id));
     setDeleteId(null);
     toast.success("Rol eliminado");
   };
 
-  if (userRole !== "Administrador") {
+  if (!canVer) {
     return (
       <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
         <div className="text-6xl mb-4">🔒</div>
         <h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2>
-        <p className="text-muted-foreground">Solo el Administrador puede acceder a Gestión Configuración.</p>
+        <p className="text-muted-foreground">No tienes permiso para ver Gestión Configuración. Pide acceso al administrador.</p>
       </div>
     );
   }
@@ -803,10 +865,12 @@ export function GestionConfigScreen({
                className="w-64 pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
              />
            </div>
+           {canCreate && (<>
            <button onClick={() => setShowCreate(true)}
              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
              <Plus className="w-4 h-4" /> Crear Rol
            </button>
+           </>)}
          </div>
       </div>
 
@@ -830,7 +894,17 @@ export function GestionConfigScreen({
                   <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
                   <td className="px-4 py-3.5">
                     <select value={r.activo ? "activo" : "inactivo"}
-                      onChange={e => { setRoles(p => p.map(x => x.id === r.id ? { ...x, activo: e.target.value === "activo" } : x)); toast.success("Estado actualizado"); }}
+                      disabled={!canEdit || r.id === loggedInRolId}
+                      title={r.id === loggedInRolId ? "No puedes modificar tu propio rol" : undefined}
+                      onChange={e => {
+                        const nuevo = e.target.value === "activo";
+                        if (r.activo && !nuevo && rolEsTotal(r) && ultimoTotalCubiertoPor(r.id)) {
+                          toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+                          return;
+                        }
+                        setRoles(p => p.map(x => x.id === r.id ? { ...x, activo: nuevo } : x));
+                        toast.success("Estado actualizado");
+                      }}
                       className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${r.activo ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
                       <option value="activo">Activo</option>
                       <option value="inactivo">Inactivo</option>
@@ -839,8 +913,18 @@ export function GestionConfigScreen({
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => setDetailItem(r)} title="Ver detalle" className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                      <button onClick={() => setEditItem(r)} title="Editar" className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>
-                       <button onClick={() => handleDelete(r.id)} disabled={r.id === "ROL-001" || r.id === "ROL-002" || (rolUserCounts[r.id] ?? 0) > 0} title={(rolUserCounts[r.id] ?? 0) > 0 ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)` : "Eliminar"} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
+                      {canEdit && r.id !== loggedInRolId && (
+                        <button onClick={() => setEditItem(r)} title="Editar" className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>
+                      )}
+                      {r.id === loggedInRolId && (
+                        <button disabled title="No puedes modificar tu propio rol" className="p-1.5 rounded-lg text-muted-foreground opacity-40 cursor-not-allowed"><Pencil className="w-4 h-4" /></button>
+                      )}
+                      {canDelete && r.id !== loggedInRolId && (
+                        <button onClick={() => handleDelete(r.id)} disabled={r.id === "ROL-001" || r.id === "ROL-002" || (rolUserCounts[r.id] ?? 0) > 0} title={(rolUserCounts[r.id] ?? 0) > 0 ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)` : "Eliminar"} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
+                      )}
+                      {r.id === loggedInRolId && (
+                        <button disabled title="No puedes modificar tu propio rol" className="p-1.5 rounded-lg text-muted-foreground opacity-40 cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -872,6 +956,7 @@ export function GestionConfigScreen({
           <RolModal key="create" title="Crear Rol"
             initialNombre="" initialDesc="" initialActivo={true} initialAccesos={{}}
             roles={roles}
+            accesosPropios={accesosPropios}
             onClose={() => setShowCreate(false)}
             onSave={handleCreate}
           />
@@ -883,7 +968,7 @@ export function GestionConfigScreen({
           <RolModal key={editItem.id} title={`Editar Rol — ${editItem.id}`}
             initialNombre={editItem.nombre} initialDesc={editItem.descripcion}
             initialActivo={editItem.activo} initialAccesos={{ ...editItem.accesos }}
-            roles={roles} rolId={editItem.id}
+            roles={roles} rolId={editItem.id} accesosPropios={accesosPropios}
             onClose={() => setEditItem(null)}
             onSave={(n,d,a,acc) => saveRol(editItem.id,n,d,a,acc)}
           />
@@ -936,10 +1021,18 @@ export function GestionConfigScreen({
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
+                {canEdit && detailItem.id !== loggedInRolId && (
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
                 </button>
+                )}
+                {detailItem.id === loggedInRolId && (
+                  <button disabled title="No puedes modificar tu propio rol"
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
+                    Editar rol
+                  </button>
+                )}
                 <button onClick={() => setDetailItem(null)}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                   Cerrar
