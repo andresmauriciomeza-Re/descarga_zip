@@ -132,7 +132,7 @@ import {
   normalizarNombre,
   type OrdenProduccion,
 } from "./screens/OrdenProduccionScreen";
-import { ProductosPerecederosScreen } from "./screens/ProductosPerecederosScreen";
+import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "./screens/ProductosPerecederosScreen";
 import { ProductoTerminadoScreen } from "./screens/ProductoTerminadoScreen";
 import {
   PurchasesScreen
@@ -7797,6 +7797,7 @@ const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
 const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
 const VENTAS_STORAGE_KEY = "sivpro.ventas.v1";
 const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
+const NO_CONFORMIDADES_STORAGE_KEY = "sivpro.noConformidades.v1";
 
 /** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
     forma, se usa la semilla en vez de romper el arranque. */
@@ -7840,6 +7841,16 @@ const leerInsumosPersistidos = () =>
   leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
 const leerVentasPersistidas = () =>
   leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
+const esNoConformidadValida = (x: unknown) =>
+  esObjeto(x) &&
+  typeof x.id === "string" &&
+  typeof x.tipo === "string" &&
+  typeof x.estado === "string" &&
+  typeof x.fechaRegistro === "string";
+
+const leerNoConformidadesPersistidas = () =>
+  leerListaPersistida<NoConformidad>(NO_CONFORMIDADES_STORAGE_KEY, INITIAL_NO_CONFORMIDADES, esNoConformidadValida);
+
 const leerFichasPersistidas = () => {
   try {
     const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
@@ -8078,6 +8089,10 @@ export default function App() {
   // se perdían al salir del módulo y no había forma de crear el pedido solo.
   const [ordenesProduccion, setOrdenesProduccion] =
     useState<OrdenProduccion[]>(leerOrdenesPersistidas);
+  // No conformidades (módulo Productos no conformes). Subidas a App para que
+  // Orden de Producción pueda registrar mermas y sobrevivan al F5.
+  const [noConformidades, setNoConformidades] =
+    useState<NoConformidad[]>(leerNoConformidadesPersistidas);
   // Categorías de producto. Las consume el módulo de Categoría Producto (que
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
@@ -8374,6 +8389,14 @@ export default function App() {
       // El almacenamiento puede estar bloqueado o sin cuota.
     }
   }, [insumos]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NO_CONFORMIDADES_STORAGE_KEY, JSON.stringify(noConformidades));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota.
+    }
+  }, [noConformidades]);
 
   useEffect(() => {
     try {
@@ -8988,6 +9011,11 @@ export default function App() {
                       cantidad: v.cantidad,
                       total: v.total,
                     }))}
+                  insumos={insumos}
+                  productos={productos}
+                  ordenesProduccion={ordenesProduccion}
+                  noConformidades={noConformidades}
+                  setNoConformidades={setNoConformidades}
                 />
               )}
               {screen === "orden-compra" && (
@@ -9185,6 +9213,8 @@ export default function App() {
                   fichasPorProducto={fichasPorProducto}
                   ordenes={ordenesProduccion}
                   setOrdenes={setOrdenesProduccion}
+                  noConformidades={noConformidades}
+                  setNoConformidades={setNoConformidades}
                 />
               )}
               {screen === "finished-products" && (

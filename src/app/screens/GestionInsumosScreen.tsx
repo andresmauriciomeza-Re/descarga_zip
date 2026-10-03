@@ -655,11 +655,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   </td>
                   <td className="px-2 py-3 text-sm text-foreground break-words">
                     <div>{insumo.nombre}</div>
-                    {esProductoInsumo && (
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300 whitespace-nowrap">
-                        Producto insumo
-                      </span>
-                    )}
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
+                      {esProductoInsumo ? "Producto insumo" : "Insumo"}
+                    </span>
                   </td>
                   <td className="px-2 py-3 text-xs text-muted-foreground">{insumo.unidadMedida}</td>
                   <td className="px-2 py-3">
