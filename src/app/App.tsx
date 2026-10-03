@@ -267,12 +267,31 @@ const SIZES_DEFAULT = [
   { label: "Grande", price: 16000 },
 ];
 
+// Recargo del tamaño "Grande" de pizza por encima del precio de venta.
+const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + este valor. Confirmar con la clienta.
+
 // Un producto con selector de tamaño (pizzas, lasañas) usa el precio del tamaño
 // elegido; uno sin tamaños (bebidas, botella única) cae a su precio base. Evita
 // que el detalle o el quick-add revienten al leer sizes[0] de un array vacío.
 const sizeDe = (p: Product, i: number) => p.sizes[i] ?? { label: "", price: p.price };
 
 const SIZES_LASANA = [{ label: "Normal", price: 20000 }];
+
+/** Tamaños del menú público para un producto del panel: se derivan SIEMPRE del
+    precio de venta (`precioUnitario`), para que crear o editar el precio en
+    Gestión de Productos se refleje en el detalle público y en el carrito:
+    - Pizza (CAT-001): Mediano = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
+    - Lasaña (CAT-002): Normal = precio de venta.
+    - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
+const sizesDeProducto = (p: Producto): Product["sizes"] =>
+  p.idCategoria === "CAT-001"
+    ? [
+        { label: "Mediano", price: p.precioUnitario },
+        { label: "Grande", price: p.precioUnitario + RECARGO_TAMANO_GRANDE },
+      ]
+    : p.idCategoria === "CAT-002"
+      ? [{ label: "Normal", price: p.precioUnitario }]
+      : [];
 
 // Las botellas de Bebidas son imágenes altas y angostas: con object-cover el
 // recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
@@ -572,7 +591,7 @@ const productoACatalogo = (p: Producto): Product => ({
   price: p.precioUnitario,
   image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
   category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
-  sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+  sizes: sizesDeProducto(p),
   extras: [],
   status: p.estado === "Disponible" ? "disponible" : "no disponible",
   rating: 4.5,
@@ -2605,7 +2624,7 @@ function CatalogScreen({
 
       <div className="mt-8 pb-20 md:pb-4">
         <p className="text-sm text-muted-foreground text-center mb-3">
-          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} productos
+          Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} producto{filtered.length === 1 ? "" : "s"}
         </p>
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2">
@@ -3086,13 +3105,7 @@ function CartScreen({
               </div>
             ))}
           </div>
-          <ResumenTotales
-            cantidadProductos={pedidoResumen.items.reduce(
-              (s, i) => s + i.quantity,
-              0,
-            )}
-            subtotal={pedidoResumen.total}
-          />
+          <ResumenTotales subtotal={pedidoResumen.total} />
         </div>
 
         {/* c) Cliente (nombre y documento, si hay). */}
@@ -3297,12 +3310,10 @@ function CartScreen({
                 <ShoppingBag className="w-4 h-4 text-primary" />{" "}
                 Resumen
               </h3>
-              {/* "Subtotal" y "Total" muestran hoy la misma cifra porque el
-                  pedido no tiene envío ni impuestos; se mantienen las
-                  filas para que, cuando se agreguen esos conceptos, el
-                  desglose ya tenga dónde mostrarlos sin tocar el layout. */}
+              {/* Solo recogida y total: la fila "Subtotal (N productos)" se
+                  quitó del recuadro (el cambio aplica igual en el modal de
+                  pago y en la confirmación, porque es el mismo componente). */}
               <ResumenTotales
-                cantidadProductos={cart.reduce((s, i) => s + i.quantity, 0)}
                 subtotal={subtotal}
                 className="space-y-2 mb-4 text-sm"
               />
@@ -3403,7 +3414,6 @@ function CartScreen({
                   {/* Mismas filas que el panel "Resumen" del carrito, para
                       que el cliente lea el mismo desglose en las dos vistas. */}
                   <ResumenTotales
-                    cantidadProductos={cart.reduce((s, i) => s + i.quantity, 0)}
                     subtotal={subtotal}
                     className="mt-4 pt-3 border-t border-border space-y-2 text-sm"
                   />
@@ -5392,7 +5402,7 @@ function DashboardScreen({
                 active && payload?.length ? (
                   <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
                     <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-                    <p className="font-bold text-foreground">{payload[0].value} productos</p>
+                    <p className="font-bold text-foreground">{payload[0].value} producto{payload[0].value === 1 ? "" : "s"}</p>
                   </div>
                 ) : null
               } />
@@ -5711,7 +5721,7 @@ function ManageProductsScreen() {
             Gestión de productos
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {products.length} productos en total
+            {products.length} producto{products.length === 1 ? "" : "s"} en total
           </p>
         </div>
         <PrimaryBtn onClick={() => setCreating(true)} size="md">
@@ -9204,7 +9214,7 @@ export default function App() {
                     price: p.precioUnitario,
                     image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
                     category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
-                    sizes: p.idCategoria === "CAT-001" ? SIZES_DEFAULT : p.idCategoria === "CAT-002" ? SIZES_LASANA : [],
+                    sizes: sizesDeProducto(p),
                     extras: [],
                     status: p.estado === "Disponible" ? "disponible" : "no disponible",
                     rating: 4.5,
