@@ -358,6 +358,13 @@ export function PurchasesScreen() {
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
+  // "NIT 830.115.220-1" debajo del nombre en el listado (mismo estilo que en
+  // Proveedores y en Órdenes de Compra). Vacío si el proveedor no tiene NIT.
+  const nitDeProveedor = (id: string) => {
+    const nit = INITIAL_SUPPLIERS.find((s) => s.id === id)?.nit ?? "";
+    return nit ? `NIT ${nit}` : "";
+  };
+
   // El modal de detalle lee los vencimientos de la compra abierta, no del estado
   // global de la pantalla: `idInsumo` se repite entre compras, así que con el
   // estado global el detalle de una compra mostraba los lotes de otra.
@@ -680,9 +687,7 @@ export function PurchasesScreen() {
                         )?.nombre ?? p.idProveedor}
                       </p>
                       <p className="text-[11px] text-muted-foreground font-mono">
-                        {INITIAL_SUPPLIERS.find(
-                          (s) => s.id === p.idProveedor,
-                        )?.nit ?? ""}
+                        {nitDeProveedor(p.idProveedor)}
                       </p>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">
