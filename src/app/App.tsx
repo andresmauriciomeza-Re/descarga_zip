@@ -8252,9 +8252,8 @@ export default function App() {
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
-  const [showNuevaOrden, setShowNuevaOrden] = useState(false);
-  const [showNuevaCompra, setShowNuevaCompra] = useState(false);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
+  const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -9091,7 +9090,10 @@ export default function App() {
     // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
     screen === "orden-compra" || screen === "nueva-orden-compra" ||
     screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra" || screen === "orden-detalle"
+    screen === "nueva-compra" || screen === "orden-detalle" ||
+    // Proveedores: ocupa el viewport y sin scroll de página (la tabla se
+    // pagina en bloques de 5 en vez de crecer hasta hacer scroll).
+    screen === "suppliers"
   );
 
   return (
@@ -9361,39 +9363,51 @@ export default function App() {
                 />
               )}
               {screen === "orden-compra" && (
-                <>
-                  <OrdenCompraScreen
-                    {...getPerms("orden-compra")}
-                    ordenes={ordenes}
-                    setOrdenes={setOrdenes}
-                    gestiones={gestiones}
-                    setGestiones={setGestiones}
-                    proveedores={proveedores}
-                    setProveedores={setProveedores}
-                    insumos={insumos}
-                    setInsumos={setInsumos}
-                    onAbrirRecepcion={(orden) => {
-                      setOrdenRecepcion(orden);
-                      setScreen("recepcion-compra");
-                    }}
-                    onNuevaOrden={() => setShowNuevaOrden(true)}
-                    onVerDetalle={(orden) => {
-                      setOrdenDetalle(orden);
-                      setScreen("orden-detalle");
-                    }}
-                  />
-                  {showNuevaOrden && (
-                    <NuevaOrdenCompraPage
-                      ordenes={ordenes}
-                      setOrdenes={setOrdenes}
-                      proveedores={proveedores}
-                      setProveedores={setProveedores}
-                      insumos={insumos}
-                      setInsumos={setInsumos}
-                      onBack={() => setShowNuevaOrden(false)}
-                    />
-                  )}
-                </>
+                <OrdenCompraScreen
+                  {...getPerms("orden-compra")}
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  onAbrirRecepcion={(orden) => {
+                    setOrdenRecepcion(orden);
+                    setScreen("recepcion-compra");
+                  }}
+                  onNuevaOrden={() => {
+                    setOrdenAEditar(null);
+                    navigate("nueva-orden-compra");
+                  }}
+                  onEditarOrden={(orden) => {
+                    setOrdenAEditar(orden);
+                    navigate("nueva-orden-compra");
+                  }}
+                  onVerDetalle={(orden) => {
+                    setOrdenDetalle(orden);
+                    setScreen("orden-detalle");
+                  }}
+                />
+              )}
+              {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
+                  (igual que Recepción y Ver detalle), sin modal y sin scroll
+                  de página. El listado queda desmontado mientras se crea. */}
+              {screen === "nueva-orden-compra" && (
+                <NuevaOrdenCompraPage
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  onBack={() => {
+                    setOrdenAEditar(null);
+                    navigate("orden-compra");
+                  }}
+                  orden={ordenAEditar}
+                />
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
                 <RecepcionCompraScreen
@@ -9442,31 +9456,39 @@ export default function App() {
                 />
               )}
               {screen === "gestion-compra" && (
-                <>
-                  <GestionCompraScreen
-                    {...getPerms("gestion-compra")}
-                    gestiones={gestiones}
-                    setGestiones={setGestiones}
-                    ordenes={ordenes}
-                    setOrdenes={setOrdenes}
-                    insumos={insumos}
-                    proveedores={proveedores}
-                    setProveedores={setProveedores}
-                    onNuevaCompra={() => setShowNuevaCompra(true)}
-                  />
-                  {showNuevaCompra && (
-                    <NuevaCompraPage
-                      gestiones={gestiones}
-                      setGestiones={setGestiones}
-                      proveedores={proveedores}
-                      setProveedores={setProveedores}
-                      insumos={insumos}
-                      onBack={() => setShowNuevaCompra(false)}
-                    />
-                  )}
-                </>
+                <GestionCompraScreen
+                  {...getPerms("gestion-compra")}
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  insumos={insumos}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  onNuevaCompra={() => navigate("nueva-compra")}
+                />
               )}
-              {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
+              {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
+                  Recepción), sin modal y sin scroll de página. */}
+              {screen === "nueva-compra" && (
+                <NuevaCompraPage
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("gestion-compra")}
+                />
+              )}
+              {screen === "suppliers" && (
+                <SuppliersScreen
+                  {...getPerms("suppliers")}
+                  ordenes={ordenes}
+                  gestiones={gestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                />
+              )}
               {screen === "ventas-pedidos" && (
                 <VentasScreen
                   {...getPerms("ventas-pedidos")}

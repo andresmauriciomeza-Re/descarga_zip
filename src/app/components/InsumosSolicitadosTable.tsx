@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { UNIDADES } from "./CompactInsumoForm";
 import { calcularLineaIva } from "../utils/iva";
 
@@ -21,7 +21,11 @@ function fmtCOP(n: number) {
 }
 
 const cellInputCls =
-  "px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30";
+  "w-full px-1.5 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
+  // Los spinners del input numérico se comen ~18px de una celda fija angosta;
+  // sin ellos el valor (ej. "12500") entra completo y se sigue escribiendo con
+  // el teclado.
+  "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario" | "iva">;
 
@@ -42,31 +46,22 @@ export function InsumosSolicitadosTable({
   totalLabel = "Total estimado",
   modoIva = false,
   ivaIncluido = false,
+  enPagina = false,
   className = "",
 }: {
   items: InsumoSolicitadoRow[];
   onRemove?: (rowId: string) => void;
-  /** Habilita la edición en línea de cantidad, unidad y precio unitario. */
   onUpdate?: (rowId: string, patch: DraftRow) => void;
   showActions?: boolean;
-  /** Titulo de la tabla (p. ej. "Insumos recibidos"). */
   titulo?: string;
-  /** "amber" pinta la tabla como insumos no solicitados. */
   tono?: "normal" | "amber";
-  /** Etiqueta de la fila de subtotal del pie (en modo IVA la fila se llama
-   *  siempre "Subtotal sin IVA"). */
   subtotalLabel?: string;
-  /** Muestra la fila de IVA (los detalles de compra no lo usan). */
   mostrarIva?: boolean;
-  /** Muestra la fila final con `totalLabel`. */
   mostrarTotal?: boolean;
   totalLabel?: string;
-  /** Compras: columnas completas de IVA (IVA %, Monto IVA, Subtotal con IVA)
-   *  y pie "Subtotal sin IVA → IVA → Total", todo con `calcularLineaIva`. */
   modoIva?: boolean;
-  /** Compras: true = el monto unitario ya incluye el IVA. */
   ivaIncluido?: boolean;
-  /** Clases del contenedor; usar "flex-1 min-h-0" para que la tabla scrollee sola. */
+  enPagina?: boolean;
   className?: string;
 }) {
   const [editId, setEditId] = useState<string | null>(null);
@@ -101,11 +96,6 @@ export function InsumosSolicitadosTable({
     cancelEdit();
   };
 
-  // Cálculo por línea:
-  //  - modoIva (Compras): SIEMPRE `calcularLineaIva`, la única fórmula del
-  //    frontend (idéntica a la del backend, ver db/migracion_iva_compras.sql).
-  //  - sin modoIva (Orden de Compra / detalles antiguos): se conserva el
-  //    cálculo clásico cantidad × precio + IVA, tal cual estaba.
   const calcularLinea = (row: InsumoSolicitadoRow) =>
     modoIva
       ? calcularLineaIva({
@@ -123,12 +113,10 @@ export function InsumosSolicitadosTable({
           };
         })();
 
-  // Suma las líneas (usa la fila en edición si la hay, para que el pie se
-  // actualice mientras se escribe).
   const totales = items.reduce(
     (acc, item) => {
       const d = editId === item.rowId ? draft : null;
-      const row: InsumoSolicitadoRow = d ? mergeRow(item, d) : item;
+      const row = d ? mergeRow(item, d) : item;
       const l = calcularLinea(row);
       acc.baseSinIva += l.baseSinIva;
       acc.montoIva += l.montoIva;
@@ -153,280 +141,440 @@ export function InsumosSolicitadosTable({
   }, 0);
   const total = modoIva ? totales.total : subtotalGeneral + ivaGeneral;
 
-  // Encabezados. En modo IVA las columnas son:
-  // Nombre | Cantidad | Unidad | Monto unitario | IVA (%) | Monto IVA | Subtotal (con IVA)
   const mostrarColsIva = modoIva || mostrarIva;
-  const headers = [
-    "Nombre",
-    "Cantidad",
-    "Unidad",
-    "Monto unitario",
-    ...(mostrarColsIva ? (modoIva ? ["IVA (%)", "Monto IVA"] : ["IVA"]) : []),
-    modoIva ? "Subtotal (con IVA)" : "Subtotal",
-  ];
+  const colIvaSimple = mostrarColsIva && enPagina;
+  const headers = ["Nombre", "Cantidad", "Unidad", "Monto unitario"];
+  if (mostrarColsIva) {
+    if (colIvaSimple || !modoIva) headers.push("IVA");
+    else { headers.push("IVA (%)"); headers.push("Monto IVA"); }
+  }
+  headers.push(modoIva && !enPagina ? "Subtotal (con IVA)" : "Subtotal");
   const columnCount = headers.length + (showActions ? 1 : 0);
-  // El pie alinea la etiqueta bajo la primera columna y el valor queda en la
-  // última (Subtotal); con acciones, la última columna es para los botones.
   const colSpanPie = headers.length - 1;
-  const labelSubtotal = modoIva ? "Subtotal sin IVA" : subtotalLabel;
+  const labelSubtotal = modoIva && !enPagina ? "Subtotal sin IVA" : subtotalLabel;
+  const ivaDeLinea = (row: InsumoSolicitadoRow) =>
+    modoIva
+      ? calcularLinea(row).montoIva
+      : row.cantidad * row.precioUnitario * (row.iva / 100);
 
-  return (
-    <div
-      className={`rounded-xl border overflow-hidden flex flex-col ${
-        esAmber ? "bg-amber-50/40 border-amber-200" : "bg-muted/30 border-border"
-      } ${className}`}
-    >
-      <div
-        className={`px-3 py-2 border-b shrink-0 ${
-          esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30"
-        }`}
-      >
-        <p
-          className={`text-xs font-bold uppercase tracking-wider ${
-            esAmber ? "text-amber-700" : "text-muted-foreground"
-          }`}
-        >
-          {titulo}
-        </p>
-      </div>
-      <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-full text-sm">
-        <thead
-          className={`text-xs uppercase tracking-wider ${
-            esAmber ? "bg-amber-50 text-amber-700" : "bg-muted/50 text-muted-foreground"
-          }`}
+  const tdBase = "px-1.5 " + (enPagina ? "py-2" : "py-2.5");
+
+  /**
+   * Anchos fijos de columna para `table-layout: fixed`. Sólo "Nombre" queda
+   * sin ancho para que se lleve todo el espacio que sobra; los demás son
+   * valores fijos en px calculados para que la tabla quepa en los ~502 px de
+   * la columna derecha a 1366×768 SIN scroll horizontal y con la columna de
+   * Acciones (lápiz + basurero) siempre visible. Si la pantalla es más
+   * angosta, `min-w` conserva el ancho mínimo y el scroll queda dentro del
+   * contenedor de la tabla.
+   */
+  const ANCHOS: Record<string, number | undefined> = {
+    Cantidad: 68,
+    Unidad: 56,
+    "Monto unitario": 68,
+    IVA: 60,
+    "IVA (%)": 60,
+    "Monto IVA": 73,
+    Subtotal: 83,
+    "Subtotal (con IVA)": 126,
+  };
+  const ANCHO_ACCIONES = 66;
+  const colgroup = (
+    <colgroup>
+      {headers.map((h) => (
+        <col key={h} style={ANCHOS[h] ? { width: ANCHOS[h] } : undefined} />
+      ))}
+      {showActions && <col style={{ width: ANCHO_ACCIONES }} />}
+    </colgroup>
+  );
+
+  const renderTbody = () => (
+    <tbody className={"divide-y " + (esAmber ? "divide-amber-100" : "divide-border")}>
+      {items.length === 0 ? (
+        <tr>
+          <td
+            colSpan={columnCount}
+            className={"text-center text-xs text-muted-foreground px-3 " + (enPagina ? "py-6" : "py-8")}
+          >
+            {enPagina ? (
+              <span className="inline-flex items-center gap-2">
+                <Package className="w-5 h-5 text-muted-foreground/40" />
+                Aún no has agregado insumos
+              </span>
+            ) : (
+              "Sin insumos agregados"
+            )}
+          </td>
+        </tr>
+      ) : (
+        items.map((item) => {
+          const draftRow = editId === item.rowId ? draft : null;
+          const row = draftRow ? mergeRow(item, draftRow) : item;
+
+          return (
+            <tr key={item.rowId} className="hover:bg-muted/20">
+              <td className={tdBase + " text-sm font-medium text-foreground"}>
+                <div
+                  className="line-clamp-2 break-words"
+                  title={item.nombre}
+                >
+                  {item.nombre}
+                </div>
+              </td>
+
+              <td className={tdBase + " text-sm"}>
+                {draftRow ? (
+                  <input
+                    type="number"
+                    min={0}
+                    value={draftRow.cantidad}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draftRow,
+                        cantidad: Number(e.target.value),
+                      })
+                    }
+                    className={cellInputCls}
+                  />
+                ) : (
+                  row.cantidad
+                )}
+              </td>
+
+              <td className={tdBase + " text-xs text-muted-foreground"}>
+                {draftRow ? (
+                  <select
+                    value={draftRow.unidad}
+                    onChange={(e) =>
+                      setDraft({ ...draftRow, unidad: e.target.value })
+                    }
+                    className={cellInputCls + " appearance-none cursor-pointer"}
+                  >
+                    {UNIDADES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  row.unidad
+                )}
+              </td>
+
+              <td className={tdBase + " text-sm"}>
+                {draftRow ? (
+                  <input
+                    type="number"
+                    min={0}
+                    value={draftRow.precioUnitario}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draftRow,
+                        precioUnitario: Number(e.target.value),
+                      })
+                    }
+                    className={cellInputCls}
+                  />
+                ) : (
+                  fmtCOP(row.precioUnitario)
+                )}
+              </td>
+
+              {colIvaSimple && (
+                <td className={tdBase + " text-xs"}>
+                  {draftRow ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={draftRow.iva}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draftRow,
+                          iva: Math.min(100, Math.max(0, Number(e.target.value))),
+                        })
+                      }
+                      className={cellInputCls}
+                    />
+                  ) : (
+                    <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {fmtCOP(ivaDeLinea(row))}
+                  </p>
+                </td>
+              )}
+
+              {!colIvaSimple && modoIva && (
+                <td className={tdBase + " text-xs text-muted-foreground"}>
+                  {draftRow ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={draftRow.iva}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draftRow,
+                          iva: Math.min(100, Math.max(0, Number(e.target.value))),
+                        })
+                      }
+                      className={cellInputCls}
+                    />
+                  ) : (
+                    row.iva + "%"
+                  )}
+                </td>
+              )}
+
+              {!colIvaSimple && modoIva && (
+                <td className={tdBase + " text-xs text-muted-foreground whitespace-nowrap"}>
+                  {fmtCOP(calcularLinea(row).montoIva)}
+                </td>
+              )}
+
+              {!colIvaSimple && !modoIva && mostrarColsIva && (
+                <td className={tdBase + " text-xs text-muted-foreground"}>
+                  {row.iva}%
+                </td>
+              )}
+
+              <td className={tdBase + " text-sm font-semibold"}>
+                {modoIva
+                  ? fmtCOP(calcularLinea(row).subtotalConIva)
+                  : fmtCOP(row.cantidad * row.precioUnitario)}
+              </td>
+
+              {showActions && (
+                <td className={tdBase + " whitespace-nowrap"}>
+                  {draftRow ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={commitEdit}
+                        title="Guardar cambios"
+                        className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        title="Cancelar"
+                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {onUpdate && (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          title="Editar insumo"
+                          className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onRemove?.(item.rowId)}
+                        title="Eliminar insumo"
+                        className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </td>
+              )}
+            </tr>
+          );
+        })
+      )}
+    </tbody>
+  );
+
+  const renderTfoot = () => (
+    <>
+      {items.length > 0 && !enPagina && (
+        <tfoot
+          className={"border-t " +
+            (esAmber ? "bg-amber-50 border-amber-200" : "bg-muted/50 border-border")}
         >
           <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-3 py-2.5 text-left font-semibold">
-                {h}
-              </th>
-            ))}
-            {showActions && <th className="px-3 py-2.5" />}
+            <td
+              colSpan={colSpanPie}
+              className={"px-1.5 py-2 text-xs font-bold text-right uppercase tracking-wider " +
+                (esAmber ? "text-amber-700" : "text-muted-foreground")}
+            >
+              {labelSubtotal}
+            </td>
+            <td className={"px-1.5 py-2 text-sm font-bold " + (esAmber ? "text-amber-700" : "text-foreground")}>
+              {fmtCOP(subtotalGeneral)}
+            </td>
+            {showActions && <td />}
           </tr>
-        </thead>
-        <tbody className={`divide-y ${esAmber ? "divide-amber-100" : "divide-border"}`}>
-          {items.length === 0 ? (
-            <tr>
-              <td
-                colSpan={columnCount}
-                className="px-3 py-8 text-center text-xs text-muted-foreground"
-              >
-                Sin insumos agregados
-              </td>
-            </tr>
-          ) : (
-            items.map((item) => {
-              const draftRow: DraftRow | null =
-                editId === item.rowId ? draft : null;
-              const row: InsumoSolicitadoRow = draftRow ? mergeRow(item, draftRow) : item;
-
-              return (
-                <tr key={item.rowId} className="hover:bg-muted/20">
-                  <td className="px-3 py-2.5 text-sm font-medium text-foreground">
-                    {item.nombre}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-sm">
-                    {draftRow ? (
-                      <input
-                        type="number"
-                        min={0}
-                        value={draftRow.cantidad}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draftRow,
-                            cantidad: Number(e.target.value),
-                          })
-                        }
-                        className={`${cellInputCls} w-16`}
-                      />
-                    ) : (
-                      row.cantidad
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                    {draftRow ? (
-                      <select
-                        value={draftRow.unidad}
-                        onChange={(e) =>
-                          setDraft({ ...draftRow, unidad: e.target.value })
-                        }
-                        className={`${cellInputCls} w-[72px] cursor-pointer`}
-                      >
-                        {UNIDADES.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      row.unidad
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-sm">
-                    {draftRow ? (
-                      <input
-                        type="number"
-                        min={0}
-                        value={draftRow.precioUnitario}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draftRow,
-                            precioUnitario: Number(e.target.value),
-                          })
-                        }
-                        className={`${cellInputCls} w-24`}
-                      />
-                    ) : (
-                      fmtCOP(row.precioUnitario)
-                    )}
-                  </td>
-
-                  {modoIva && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                      {draftRow ? (
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={draftRow.iva}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draftRow,
-                              iva: Math.min(100, Math.max(0, Number(e.target.value))),
-                            })
-                          }
-                          className={`${cellInputCls} w-16`}
-                        />
-                      ) : (
-                        `${row.iva}%`
-                      )}
-                    </td>
-                  )}
-
-                  {modoIva && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                      {fmtCOP(calcularLinea(row).montoIva)}
-                    </td>
-                  )}
-
-                  {!modoIva && mostrarColsIva && (
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                      {row.iva}%
-                    </td>
-                  )}
-
-                  <td className="px-3 py-2.5 text-sm font-semibold whitespace-nowrap">
-                    {modoIva
-                      ? fmtCOP(calcularLinea(row).subtotalConIva)
-                      : fmtCOP(row.cantidad * row.precioUnitario)}
-                  </td>
-
-                  {showActions && (
-                    <td className="px-3 py-2.5">
-                      {draftRow ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={commitEdit}
-                            title="Guardar cambios"
-                            className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            title="Cancelar"
-                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          {onUpdate && (
-                            <button
-                              type="button"
-                              onClick={() => startEdit(item)}
-                              title="Editar insumo"
-                              className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => onRemove?.(item.rowId)}
-                            title="Eliminar insumo"
-                            className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-        {items.length > 0 && (
-          <tfoot
-            className={`border-t ${
-              esAmber ? "bg-amber-50 border-amber-200" : "bg-muted/50 border-border"
-            }`}
-          >
+          {mostrarIva && (
             <tr>
               <td
                 colSpan={colSpanPie}
-                className={`px-3 py-2 text-xs font-bold text-right uppercase tracking-wider ${
-                  esAmber ? "text-amber-700" : "text-muted-foreground"
-                }`}
+                className="px-1.5 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
               >
-                {labelSubtotal}
+                IVA
               </td>
-              <td className={`px-3 py-2 text-sm font-bold ${esAmber ? "text-amber-700" : "text-foreground"}`}>
-                {fmtCOP(subtotalGeneral)}
+              <td className="px-1.5 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(ivaGeneral)}
               </td>
               {showActions && <td />}
             </tr>
-            {mostrarIva && (
-              <tr>
-                <td
-                  colSpan={colSpanPie}
-                  className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
-                >
-                  IVA
-                </td>
-                <td className="px-3 py-2 text-sm font-bold text-foreground">
-                  {fmtCOP(ivaGeneral)}
-                </td>
-                {showActions && <td />}
-              </tr>
-            )}
-            {mostrarTotal && (
-              <tr>
-                <td
-                  colSpan={colSpanPie}
-                  className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
-                >
-                  {totalLabel}
-                </td>
-                <td className="px-3 py-2 text-sm font-bold text-foreground">
-                  {fmtCOP(total)}
-                </td>
-                {showActions && <td />}
-              </tr>
-            )}
-          </tfoot>
+          )}
+          {mostrarTotal && (
+            <tr>
+              <td
+                colSpan={colSpanPie}
+                className="px-1.5 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+              >
+                {totalLabel}
+              </td>
+              <td className="px-1.5 py-2 text-sm font-bold text-foreground">
+                {fmtCOP(total)}
+              </td>
+              {showActions && <td />}
+            </tr>
+          )}
+        </tfoot>
+      )}
+    </>
+  );
+
+  const renderTotalesExternos = () =>
+    enPagina && items.length > 0 && (
+      <div className="flex items-baseline justify-end gap-5 shrink-0 px-3 py-1.5 border-t border-border">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          {labelSubtotal}
+        </span>
+        <span className="text-sm font-semibold text-foreground">
+          {fmtCOP(subtotalGeneral)}
+        </span>
+        {mostrarIva && (
+          <>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              IVA
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {fmtCOP(ivaGeneral)}
+            </span>
+          </>
         )}
+        {mostrarTotal && (
+          <>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+              {totalLabel}
+            </span>
+            <span className="text-lg font-bold text-foreground">
+              {fmtCOP(total)}
+            </span>
+          </>
+        )}
+      </div>
+    );
+
+  if (enPagina) {
+    return (
+      <div className={"flex flex-col flex-1 min-h-0 " + className}>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="table-fixed w-full min-w-[500px] text-sm [&_td]:py-2">
+            {colgroup}
+            <thead
+              className={"text-[10px] uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
+                (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground")}
+            >
+              <tr>
+                {headers.map((h) => (
+                  <th
+                    key={h}
+                    className="px-1.5 py-1.5 text-left font-semibold bg-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
+                {showActions && (
+                  <th className="px-1.5 py-1.5 bg-muted" />
+                )}
+              </tr>
+            </thead>
+            {renderTbody()}
+            {renderTfoot()}
+          </table>
+        </div>
+
+        {renderTotalesExternos()}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={"rounded-xl border overflow-hidden flex flex-col " +
+        (esAmber ? "bg-amber-50/40 border-amber-200" : "bg-muted/30 border-border") +
+        " " + className}
+    >
+      {!enPagina && (
+        <div
+          className={"px-3 py-2 border-b shrink-0 " +
+            (esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30")}
+        >
+          <p
+            className={"text-xs font-bold uppercase tracking-wider " +
+              (esAmber ? "text-amber-700" : "text-muted-foreground")}
+          >
+            {titulo}
+          </p>
+        </div>
+      )}
+      <div
+        className={"flex-1 min-h-0 overflow-auto " +
+          (enPagina && items.length === 0 ? "flex items-center" : "")}
+      >
+        <table className={"table-fixed w-full min-w-[500px] text-sm " + (enPagina ? "[&_td]:py-2" : "")}>
+          {colgroup}
+          <thead
+            className={"text-[10px] uppercase tracking-wider " +
+              (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted/50 text-muted-foreground")}
+          >
+            <tr>
+              {headers.map((h) => (
+                <th
+                  key={h}
+                  className={"px-1.5 " + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold " +
+                    (enPagina
+                      ? "sticky top-0 z-10 border-b border-border " +
+                        (esAmber ? "bg-amber-50" : "bg-muted")
+                      : "")}
+                >
+                  {h}
+                </th>
+              ))}
+              {showActions && (
+                <th
+                  className={"px-1.5 py-2.5 " +
+                    (enPagina
+                      ? "sticky top-0 z-10 border-b border-border " +
+                        (esAmber ? "bg-amber-50" : "bg-muted")
+                      : "")}
+                />
+              )}
+            </tr>
+          </thead>
+          {renderTbody()}
+          {renderTfoot()}
         </table>
       </div>
+
+      {renderTotalesExternos()}
     </div>
   );
 }

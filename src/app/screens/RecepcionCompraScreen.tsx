@@ -4,7 +4,6 @@ import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-
 import { toast } from "sonner";
 import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
-import { ActionIcons } from "../components/ActionIcons";
 import {
   ConfirmModal,
   NuevoInsumoModal,
@@ -15,6 +14,7 @@ import {
   type GestionCompra,
   type OrdenItem,
   type EstadoOrden,
+  type ProveedorRef,
 } from "./OrdenCompraScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -41,6 +41,7 @@ interface Props {
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
+  proveedores: ProveedorRef[];
   onGuardar: (recepcion: Recepcion, estado: EstadoOrden) => void;
   onBack: () => void;
 }
@@ -62,12 +63,37 @@ function registradosEnOrden(gestiones: GestionCompra[], ordenId: string) {
   return set;
 }
 
+/**
+ * "2024-02-05" → "05/02/2024" para mostrarlo en el mensaje de error.
+ * Se resuelve sólo con texto (sin new Date()), así que no interviene ninguna
+ * zona horaria.
+ */
+function fechaCorta(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+/**
+ * Devuelve la fecha como "YYYY-MM-DD" para poder compararla COMO TEXTO
+ * (el orden lexicográfico de ISO coincide con el cronológico).
+ * Acepta también "dd/MM/yyyy", que es otro formato que usa el proyecto.
+ * Nunca se pasa por new Date("YYYY-MM-DD"): eso se interpreta en medianoche
+ * UTC y en Colombia (UTC-5) cae en el día anterior.
+ */
+function aFechaIso(fecha: string): string {
+  const t = fecha.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
 export function RecepcionCompraScreen({
   orden,
   insumos,
   setInsumos,
   gestiones,
   setGestiones,
+  proveedores,
   onGuardar,
   onBack,
 }: Props) {
@@ -130,10 +156,13 @@ export function RecepcionCompraScreen({
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
 
-  // Esta pantalla NO tiene selector de IVA general: los cálculos trabajan
-  // SIEMPRE como factura con IVA incluido (regla general), usando el IVA (%)
-  // de cada insumo. Ver `calcularLineaIva` con `ivaIncluido: true`.
-  const ivaIncluido = true;
+  // Esta pantalla SIEMPRE trabaja con precios SIN IVA:
+  // - Monto unitario = base (sin IVA)
+  // - Subtotal = Cantidad × Monto unitario
+  // - IVA = Subtotal × IVA% / 100 (se SUMA aparte)
+  // - Total pagado = Subtotal + IVA
+  // Al guardar, la compra se registra como "precios sin IVA" (ivaIncluido: false).
+  const ivaIncluido = false;
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
 
   const [exNombre, setExNombre] = useState("");
@@ -156,16 +185,38 @@ export function RecepcionCompraScreen({
 
   const exRef = useRef<HTMLDivElement>(null);
 
+  // Factura única: normalización y validación de duplicados
+  const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
+  const facturaActualNormalizada = normalizarFactura(numeroFactura);
+  const facturaDuplicada = gestiones.some(
+    (g) =>
+      g.numeroFactura &&
+      g.numeroFactura.trim().toUpperCase().replace(/\s+/g, "") === facturaActualNormalizada,
+  );
+
   // ������ Validación en tiempo real (patrón de MiPerfilScreen) ������������������������������������������������������
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
   const errorNumeroFactura = numeroFactura.trim()
-    ? undefined
+    ? facturaDuplicada
+      ? "Ya existe una compra con este número de factura"
+      : undefined
     : "Ingresa el número de factura.";
-  const errorFechaFactura = fechaFactura
-    ? undefined
-    : "Selecciona la fecha de la factura.";
+  const [facturaTocada, setFacturaTocada] = useState(false);
+  /**
+   * Reglas de la fecha de factura, comparando el texto "YYYY-MM-DD" del input:
+   * 1) obligatoria, 2) no futura (hoy SÍ vale: `today` es la fecha local), y
+   * 3) no anterior a la orden. Todas se comparan como texto, nunca pasando la
+   * fecha por new Date("YYYY-MM-DD"), que se calcula en UTC.
+   */
+  const errorFechaFactura = !fechaFactura.trim()
+    ? "Ingresa la fecha de la factura"
+    : fechaFactura > today
+      ? "La fecha de la factura no puede ser futura"
+      : aFechaIso(orden.fecha) && fechaFactura < aFechaIso(orden.fecha)
+        ? `La fecha de la factura no puede ser anterior a la fecha de la orden (${fechaCorta(orden.fecha)})`
+        : undefined;
   const errorProveedor = orden.proveedor.trim()
     ? undefined
     : "La orden no tiene proveedor asignado.";
@@ -179,7 +230,8 @@ export function RecepcionCompraScreen({
     !errorNumeroFactura &&
     !errorFechaFactura &&
     !errorProveedor &&
-    !errorItems;
+    !errorItems &&
+    !facturaDuplicada;
   const algunoTocado = tocado.numeroFactura || tocado.fechaFactura;
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
     setTocado((t) => ({ ...t, [campo]: true }));
@@ -337,6 +389,7 @@ export function RecepcionCompraScreen({
 
   // Punto 1: los totales de esta factura salen de la fórmula única
   // `calcularLineaIva` (Subtotal sin IVA → IVA → Total pagado).
+  // Como ivaIncluido = false: Monto unitario = base, IVA se suma aparte.
   const totalRec = [...items, ...itemsExtra].reduce(
     (total, item) =>
       total +
@@ -344,7 +397,7 @@ export function RecepcionCompraScreen({
         cantidad: item.cantidadRecibida,
         montoUnitario: item.costoUnitario,
         porcentajeIva: item.iva ?? 0,
-        ivaIncluido,
+        ivaIncluido: false,
       }).subtotalConIva,
     0
   );
@@ -386,6 +439,13 @@ export function RecepcionCompraScreen({
       return;
     }
 
+    // Mismas reglas que las del campo: sin esto se podría guardar una fecha
+    // futura o anterior a la orden aunque el campo aparezca en rojo.
+    if (errorFechaFactura) {
+      toast.error(errorFechaFactura);
+      return;
+    }
+
     if (!orden.proveedor.trim()) {
       toast.error("La orden no tiene proveedor asignado.");
       return;
@@ -395,6 +455,19 @@ export function RecepcionCompraScreen({
 
     if (filasRecibidas.length === 0 && itemsExtra.length === 0) {
       toast.error("Registra al menos un insumo recibido en la factura.");
+      return;
+    }
+
+    // Validación de factura duplicada
+    const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
+    const facturaActualNormalizada = normalizarFactura(numeroFactura);
+    const facturaDuplicada = gestiones.some(
+      (g) =>
+        g.numeroFactura &&
+        normalizarFactura(g.numeroFactura) === facturaActualNormalizada,
+    );
+    if (facturaDuplicada) {
+      toast.error("Ya existe una compra con este número de factura");
       return;
     }
 
@@ -418,7 +491,7 @@ export function RecepcionCompraScreen({
           cantidad: item.cantidadRecibida,
           montoUnitario: item.costoUnitario,
           porcentajeIva: item.iva ?? 0,
-          ivaIncluido,
+          ivaIncluido: false,
         });
 
         return {
@@ -453,19 +526,24 @@ export function RecepcionCompraScreen({
       Math.max(0, ...gestiones.map((g) => Number(g.id) || 0)) + 1
     ).padStart(3, "0");
 
+    // Buscar proveedorId por nombre del proveedor de la orden
+    const prov = proveedores.find(p => p.nombre === orden.proveedor);
+    const proveedorId = prov?.id;
+
     setGestiones((prev) => [
       {
         id: nuevoId,
         ordenId: orden.id,
         proveedor: orden.proveedor,
+        proveedorId,
         numeroFactura: numeroFactura.trim(),
         fechaFactura,
         valorTotal,
         estado: "Recibido",
         items: itemsFactura,
-        // Punto 1: totales de IVA guardados en la compra (el backend los
-        // recalcula con la misma fórmula antes de persistir).
-        ivaIncluido,
+        // Punto 1: la recepción SIEMPRE guarda como "precios sin IVA".
+        // El Monto unitario es base, el IVA se calcula y suma aparte.
+        ivaIncluido: false,
         subtotalSinIva: subtotalSinIvaFactura,
         totalIva: totalIvaGuardado,
         totalPagado: valorTotal,
@@ -730,16 +808,16 @@ export function RecepcionCompraScreen({
                     onChange={(e) =>
                       setNumeroFactura(e.target.value)
                     }
-                    onBlur={() => marcarTocado("numeroFactura")}
+                    onBlur={() => { marcarTocado("numeroFactura"); setFacturaTocada(true); }}
                     placeholder="Ej: FAC-000123"
                     className={campoCls(
-                      (tocado.numeroFactura || intentoGuardar)
+                      (tocado.numeroFactura || facturaTocada || intentoGuardar)
                         ? errorNumeroFactura
                         : undefined
                     )}
-                    aria-invalid={!!((tocado.numeroFactura || intentoGuardar) && errorNumeroFactura)}
+                    aria-invalid={!!((tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura)}
                   />
-                  {(tocado.numeroFactura || intentoGuardar) && errorNumeroFactura && (
+                  {(tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura && (
                     <p className="text-xs text-red-500 mt-1 ml-0.5">
                       {errorNumeroFactura}
                     </p>
@@ -815,7 +893,7 @@ export function RecepcionCompraScreen({
                           </th>
 
                           <th className="px-3 py-3 text-left font-semibold">
-                            P. real
+                            Monto unitario
                           </th>
 
                           <th className="px-3 py-3 text-left font-semibold">
@@ -888,7 +966,7 @@ export function RecepcionCompraScreen({
                                   cantidad: item.cantidadRecibida,
                                   montoUnitario: item.costoUnitario,
                                   porcentajeIva: item.iva ?? 0,
-                                  ivaIncluido,
+                                  ivaIncluido: false,
                                 }).subtotalConIva
                               )}
                             </td>
@@ -954,7 +1032,7 @@ export function RecepcionCompraScreen({
                           </th>
 
                           <th className="px-3 py-2 text-left text-xs">
-                            P. Unitario
+                            Monto unitario
                           </th>
 
                           <th className="px-3 py-2 text-left text-xs">
@@ -1000,22 +1078,17 @@ export function RecepcionCompraScreen({
                               {/* Unidad */}
                               <td className="px-3 py-2">
                                 {draft ? (
-                                  <select
+                                  <UnidadSelect
                                     value={draft.unidad}
-                                    onChange={(e) =>
+                                    onChange={(unidad) =>
                                       setEditExtraDraft({
                                         ...draft,
-                                        unidad: e.target.value,
+                                        unidad,
                                       })
                                     }
-                                    className="w-14 px-1 py-1 bg-background border border-border rounded-lg text-xs focus:outline-none cursor-pointer"
-                                  >
-                                    {UNIDADES.map((u) => (
-                                      <option key={u} value={u}>
-                                        {u}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    ariaLabel="Unidad"
+                                    fieldClassName="bg-background border border-border text-foreground h-8 rounded-lg text-xs"
+                                  />
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
                                     {item.unidad}
@@ -1184,26 +1257,23 @@ export function RecepcionCompraScreen({
                       />
                     </div>
 
-                    {/* Medida */}
+                    {/* Medida — select personalizado (mismo componente que Nueva Compra) */}
                     <div className="w-16 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         Medida
                       </label>
-                      <select
+                      <UnidadSelect
                         value={exUnidad}
-                        onChange={(e) => setExUnidad(e.target.value)}
-                        className={`${compactInputCls} cursor-pointer`}
-                      >
-                        {UNIDADES.map((u) => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                      </select>
+                        onChange={setExUnidad}
+                        ariaLabel="Medida"
+                        fieldClassName="bg-muted border border-border text-foreground h-[34px] rounded-lg"
+                      />
                     </div>
 
-                    {/* Precio — la factura siempre se trabaja con IVA incluido */}
+                    {/* Precio — la factura SIEMPRE se trabaja SIN IVA */}
                     <div className="w-32 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Monto unitario (con IVA)
+                        Monto unitario
                       </label>
                       <input
                         type="number"

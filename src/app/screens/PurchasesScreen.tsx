@@ -674,9 +674,16 @@ export function PurchasesScreen() {
                       {p.id}
                     </td>
                     <td className="px-4 py-3.5 text-sm text-foreground">
-                      {INITIAL_SUPPLIERS.find(
-                        (s) => s.id === p.idProveedor,
-                      )?.nombre ?? p.idProveedor}
+                      <p className="font-medium">
+                        {INITIAL_SUPPLIERS.find(
+                          (s) => s.id === p.idProveedor,
+                        )?.nombre ?? p.idProveedor}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-mono">
+                        {INITIAL_SUPPLIERS.find(
+                          (s) => s.id === p.idProveedor,
+                        )?.nit ?? ""}
+                      </p>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">
                       {p.fecha}

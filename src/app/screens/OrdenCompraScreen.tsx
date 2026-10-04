@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import type { Insumo } from "./GestionInsumosScreen";
 import { motion, AnimatePresence } from "motion/react";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
-import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
+import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
@@ -14,7 +14,7 @@ import {
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { exportToExcel } from "../utils/exportExcel";
+import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "../utils/exportExcelEstilizado";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
@@ -81,6 +81,7 @@ export interface GestionCompra {
   id: string;
   ordenId: string;
   proveedor?: string;
+  proveedorId?: string;
   numeroFactura: string;
   fechaFactura: string;
   valorTotal: number;
@@ -107,6 +108,7 @@ export interface GestionCompra {
 // ��������� CONSTANTS ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 export interface ProveedorRef {
+  id: string;
   nombre: string;
   nit: string;
   asesorComercial: string;
@@ -117,11 +119,15 @@ export interface ProveedorRef {
 }
 
 export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
-  { nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
-  { nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
-  { nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
+  { id: "PROV-001", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { id: "PROV-002", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { id: "PROV-003", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { id: "PROV-004", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { id: "PROV-005", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
+  { id: "PROV-006", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { id: "PROV-007", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { id: "PROV-008", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { id: "PROV-009", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
 ];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
@@ -152,6 +158,18 @@ const opcionesEstado = (estado: EstadoOrden): EstadoOption<EstadoOrden>[] =>
  * para que ambos módulos se vean igual de compactos.
  */
 export const FORM_MAXW = "max-w-4xl";
+/** Ancho del contenido cuando el formulario va a pantalla completa (no modal):
+ *  ocupa casi todo el panel para que las dos columnas (40 % / 60 %) quepan en
+ *  1366×768 sin scroll. */
+const FORM_MAXW_PAGINA = "max-w-[1200px]";
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
+ *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */
+const iPaginaCls =
+  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+/** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
+ *  que el formulario Nuevo Proveedor. */
+const seccionCls =
+  "text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground pb-1.5 border-b border-border";
 
 // ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -224,6 +242,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "001",
     ordenId: "",
     proveedor: "Distribuidora La Cosecha",
+    proveedorId: "PROV-006",
     numeroFactura: "FAC-2026-0301",
     fechaFactura: "2026-08-05",
     valorTotal: 410000,
@@ -238,6 +257,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "002",
     ordenId: "",
     proveedor: "Quesos del Norte S.A.S.",
+    proveedorId: "PROV-007",
     numeroFactura: "FAC-2026-0318",
     fechaFactura: "2026-08-19",
     valorTotal: 560000,
@@ -251,6 +271,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "003",
     ordenId: "",
     proveedor: "Carnes Premium Ltda.",
+    proveedorId: "PROV-008",
     numeroFactura: "FAC-2026-0329",
     fechaFactura: "2026-09-01",
     valorTotal: 190000,
@@ -263,6 +284,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "004",
     ordenId: "",
     proveedor: "Bebidas y Más",
+    proveedorId: "PROV-009",
     numeroFactura: "FAC-2026-0347",
     fechaFactura: "2026-09-12",
     valorTotal: 275500,
@@ -276,6 +298,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "005",
     ordenId: "",
     proveedor: "Molinos del Valle",
+    proveedorId: "PROV-001",
     numeroFactura: "FAC-2026-0360",
     fechaFactura: "2026-09-20",
     valorTotal: 750000,
@@ -634,6 +657,11 @@ export function OrdenModal({
   const [showProvSug, setShowProvSug] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
+  /** Cerrar: vuelve directo al listado sin confirmación. */
+  const salir = () => {
+    onClose();
+  };
+
   const provSugs = useMemo(() => {
     const q = provQuery.trim().toLowerCase();
     const base = q
@@ -666,6 +694,10 @@ export function OrdenModal({
   const [aShowSug, setAShowSug] = useState(false);
   const sugRef = useRef<HTMLDivElement>(null);
 
+  // Estado para edición de fila (lápiz de la tabla en modo pantalla completa)
+  const [editando, setEditando] = useState<string | null>(null);
+  const nombreRef = useRef<HTMLInputElement>(null);
+
   // ������ Validación en tiempo real (patrón de MiPerfilScreen) ������������������������������������������������������
   const [tocado, setTocado] = useState({ proveedor: false, fecha: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
@@ -687,9 +719,14 @@ export function OrdenModal({
   const marcarTocado = (campo: "proveedor" | "fecha") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
+  /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
+  const labelCls = isPage
+    ? "block text-[13px] leading-tight font-medium text-foreground/70 mb-1"
+    : "block text-xs font-semibold text-muted-foreground mb-1.5";
+
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
-    `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
+    `${isPage ? iPaginaCls : iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
   const suggestions = useMemo(() => {
     const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
@@ -744,6 +781,19 @@ export function OrdenModal({
   };
 
   const addItem = () => {
+    // Modo edición (lápiz de la tabla): la fila está cargada arriba, así que
+    // solo se reemplaza y se deja el formulario listo para el siguiente.
+    if (editando) {
+      if (!aNombre.trim()) { toast.error("Ingresa el nombre del insumo."); return; }
+      if (form.items.some(i => i.rowId !== editando && i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
+        toast.error("Este insumo ya está en la orden.");
+        return;
+      }
+      actualizarItem(editando);
+      limpiarFilaInsumo();
+      return;
+    }
+
     if (!aNombre.trim()) { toast.error("Ingresa el nombre del insumo."); return; }
     if (form.items.some(i => i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
       toast.error("Este insumo ya está en la orden.");
@@ -768,7 +818,48 @@ export function OrdenModal({
         iva: aIva,
       }],
     });
-    setANombre(""); setACant(1); setAPrecio(0); setAIva(0); setAFromCat(false); setAInsumoId("");
+    limpiarFilaInsumo();
+  };
+
+  /** Deja la fila "Agregar insumo" lista para el siguiente insumo: campos en
+   *  cero, sin modo edición y foco de vuelta en el buscador de Nombre. */
+  const limpiarFilaInsumo = () => {
+    setANombre(""); setACant(1); setAPrecio(0); setAIva(0);
+    setAFromCat(false); setAInsumoId(""); setAShowSug(false);
+    setEditando(null);
+    nombreRef.current?.focus();
+  };
+
+  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda. */
+  const editarItem = (row: InsumoSolicitadoRow) => {
+    setEditando(row.rowId);
+    setANombre(row.nombre);
+    setACant(row.cantidad);
+    setAUnidad(row.unidad);
+    setAPrecio(row.precioUnitario);
+    setAIva(row.iva);
+    setAFromCat(false);
+    setAShowSug(false);
+    nombreRef.current?.focus();
+  };
+
+  /** Reemplaza la fila cargada por el lápiz con los valores del formulario
+   *  (mismos campos que tenía la edición en línea de la tabla). */
+  const actualizarItem = (rowId: string) => {
+    pf({
+      items: form.items.map((i) =>
+        i.rowId === rowId
+          ? {
+              ...i,
+              nombre: aNombre.trim(),
+              cantidad: aCant,
+              unidad: aUnidad,
+              precioUnitario: aPrecio,
+              iva: aIva,
+            }
+          : i
+      ),
+    });
   };
 
   const selectProv = (p: ProveedorRef) => {
@@ -795,12 +886,24 @@ export function OrdenModal({
     onGuardar(form);
   };
 
+  /** Subtítulo de la cabecera (solo cuando aporta algo). */
+  const subtitulo =
+    isView || mode === "edit"
+      ? orden
+        ? `${orden.proveedor} · ${orden.fecha}`
+        : ""
+      : isPage
+        ? isCompra
+          ? "Registra una factura de proveedor"
+          : "Crea una orden de compra para un proveedor"
+        : "";
+
   return (
     <>
       <div
         className={
           isPage
-            ? `w-full p-6 ${FORM_MAXW} mx-auto h-full flex flex-col`
+            ? `w-full p-4 ${FORM_MAXW_PAGINA} mx-auto h-full flex flex-col overflow-hidden`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -816,32 +919,43 @@ export function OrdenModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${FORM_MAXW}${
+            className={`flex flex-col w-full ${isPage ? FORM_MAXW_PAGINA : FORM_MAXW}${
               isPage
-                ? "h-full"
+                ? " h-full"
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-              <div>
-                <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {mode === "create"
-                    ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
-                    : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
-                </h3>
-                {orden && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{orden.proveedor} · {orden.fecha}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {isView && orden && <EstadoBadge e={orden.estado} />}
-                {isPage ? (
-                  <button onClick={onClose} title="Volver" className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+            {/* Cabecera: ← + título + subtítulo en pantalla completa; X en el
+                modal. Volver pide confirmación si hay datos escritos. */}
+            <div className={`flex items-center justify-between gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
+              <div className="flex items-center gap-3 min-w-0">
+                {isPage && (
+                  <button
+                    onClick={salir}
+                    title="Volver"
+                    className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                  >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                ) : (
-                  <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                )}
+                <div className="min-w-0">
+                  <h3
+                    className={`${isPage ? "text-lg" : "text-base"} font-bold text-foreground`}
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {mode === "create"
+                      ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
+                      : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
+                  </h3>
+                  {subtitulo && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {isView && orden && <EstadoBadge e={orden.estado} />}
+                {!isPage && (
+                  <button onClick={salir} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -851,10 +965,19 @@ export function OrdenModal({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-4 flex flex-col gap-4 overflow-hidden"
-                  : "flex-1 min-h-0 px-5 py-5 space-y-5 overflow-y-auto"
+                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden"
+                  : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
+              {/* Columna IZQUIERDA — formulario (50 %). En el modal es solo un
+                  grupo vertical: mantiene el mismo flujo de antes. */}
+              <div
+                className={
+                  isPage
+                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:overflow-y-auto"
+                    : "flex flex-col gap-5"
+                }
+              >
               {/* Status banners */}
               {isView && orden?.estado === "Completado" && orden.recepcion && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
@@ -875,179 +998,207 @@ export function OrdenModal({
                 </div>
               )}
 
-              {/* Fields */}
-              <div className="grid grid-cols-2 gap-4 shrink-0">
-                {isCompra && (
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Número de factura <span className="text-red-500">*</span></label>
+              {/* Sección 1 — "Datos de la orden" (el título solo existe en
+                  pantalla completa; en el modal el `<section>` solo agrupa
+                  para mantener el mismo espaciado de antes). */}
+              <section className={`flex flex-col ${isPage ? "gap-2 shrink-0" : "gap-5"}`}>
+                {isPage && <p className={seccionCls}>Datos de la orden</p>}
+
+                {/* Detalle (vista): 3 columnas. Creación en pantalla completa:
+                    Fila 1: Proveedor * (ancho completo)
+                    Fila 2: Fecha * | Estado *
+                    En el modal se conserva la rejilla de 2/3. */}
+                <div
+                  className={`grid gap-4 shrink-0 ${
+                    isView
+                      ? "grid-cols-2 md:grid-cols-3"
+                      : isPage
+                        ? "grid-cols-1"
+                        : "grid-cols-2"
+                  }`}
+                >
+                  <div className="relative col-span-2">
+                    <label className={labelCls}>Proveedor {!isView && <span className="text-red-500">*</span>}</label>
                     {isView
-                      ? <p className="text-sm font-semibold text-foreground py-2">{form.numeroFactura || "—"}</p>
+                      ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
                       : (
-                        <input
-                          value={form.numeroFactura ?? ""}
-                          onChange={e => pf({ numeroFactura: e.target.value })}
-                          onBlur={() => setIntentoGuardar(true)}
-                          placeholder="Ej: FAC-2024-0001"
-                          className={campoCls(intentoGuardar ? errorNumeroFactura : undefined)}
-                          aria-invalid={!!(intentoGuardar && errorNumeroFactura)}
-                        />
+                        <div className="relative" ref={provRef}>
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                          <input
+                            value={provQuery}
+                            onChange={e => {
+                              setProvQuery(e.target.value);
+                              pf({ proveedor: e.target.value });
+                              setShowProvSug(true);
+                            }}
+                            onFocus={() => setShowProvSug(true)}
+                            onBlur={() => marcarTocado("proveedor")}
+                            placeholder="Buscar por nombre, NIT, asesor o email..."
+                            className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} pl-10`}
+                            aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
+                          />
+                          {/* Punto 6: el desplegable va por encima de todo el
+                              formulario (z-50), para que el badge de Estado no
+                              se monte sobre la lista. */}
+                          {showProvSug && (
+                            <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+                              {/* Opción "+ Crear proveedor" PRIMERA */}
+                              <button
+                                type="button"
+                                onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
+                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                Crear proveedor {provQuery.trim() && `"${provQuery.trim()}"`}
+                              </button>
+                              <hr className="my-0.5 border-border" />
+                              {/* Resultados - máximo 3 */}
+                              {provSugs.slice(0, 3).map(p => (
+                                <button
+                                  key={p.nit}
+                                  type="button"
+                                  onMouseDown={() => selectProv(p)}
+                                  className={`w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0 ${form.proveedor === p.nombre ? "bg-muted/60" : ""}`}
+                                >
+                                  <p className="font-semibold text-foreground flex items-center gap-1.5">
+                                    {p.nombre}
+                                    {form.proveedor === p.nombre && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    NIT {p.nit}
+                                    {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
+                                  </p>
+                                </button>
+                              ))}
+                              {provSugs.length === 0 && (
+                                <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
+                                  Sin resultados
+                                </div>
+                              )}
+                              {provSugs.length > 3 && (
+                                <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                                  +{provSugs.length - 3} más...
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
-                    {!isView && intentoGuardar && errorNumeroFactura && (
-                      <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNumeroFactura}</p>
+                    {!isView && (tocado.proveedor || intentoGuardar) && errorProveedor && (
+                      <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorProveedor}</p>
                     )}
                   </div>
-                )}
-                {orden?.id && (
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">N· Orden</label>
-                    <input value={orden.id} readOnly className={`${iCls} opacity-60 cursor-default`} />
-                  </div>
-                )}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Proveedor {!isView && <span className="text-red-500">*</span>}</label>
-                  {isView
-                    ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
-                    : (
-                      <div className="relative" ref={provRef}>
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+                  {!isView && isPage && (
+                    <>
+                      <div className="relative">
+                        <label className={labelCls}>Fecha <span className="text-red-500">*</span></label>
                         <input
-                          value={provQuery}
-                          onChange={e => {
-                            setProvQuery(e.target.value);
-                            pf({ proveedor: e.target.value });
-                            setShowProvSug(true);
-                          }}
-                          onFocus={() => setShowProvSug(true)}
-                          onBlur={() => marcarTocado("proveedor")}
-                          placeholder="Buscar por nombre, NIT, asesor o email..."
-                          className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} pl-10`}
-                          aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
+                          type="date"
+                          value={form.fecha}
+                          onChange={e => pf({ fecha: e.target.value })}
+                          onBlur={() => marcarTocado("fecha")}
+                          readOnly
+                          className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
+                          aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
                         />
-                        {/* Punto 6: el desplegable va por encima de todo el
-                            formulario (z-50), para que el badge de Estado no
-                            se monte sobre la lista. */}
-                        {showProvSug && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-                            {/* Opción "+ Crear proveedor" PRIMERA */}
-                            <button
-                              type="button"
-                              onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
-                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Crear proveedor {provQuery.trim() && `"${provQuery.trim()}"`}
-                            </button>
-                            <hr className="my-0.5 border-border" />
-                            {/* Resultados - máximo 3 */}
-                            {provSugs.slice(0, 3).map(p => (
-                              <button
-                                key={p.nit}
-                                type="button"
-                                onMouseDown={() => selectProv(p)}
-                                className={`w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0 ${form.proveedor === p.nombre ? "bg-muted/60" : ""}`}
-                              >
-                                <p className="font-semibold text-foreground flex items-center gap-1.5">
-                                  {p.nombre}
-                                  {form.proveedor === p.nombre && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                                </p>
-                                <p className="text-muted-foreground">
-                                  NIT {p.nit}
-                                  {p.asesorComercial && <> · Asesor: {p.asesorComercial}</>}
-                                </p>
-                              </button>
-                            ))}
-                            {provSugs.length === 0 && (
-                              <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
-                                Sin resultados
-                              </div>
-                            )}
-                            {provSugs.length > 3 && (
-                              <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                                +{provSugs.length - 3} más...
-                              </div>
-                            )}
-                          </div>
+                        {(tocado.fecha || intentoGuardar) && errorFecha && (
+                          <p className="absolute left-0 top-full text-xs text-red-500">{errorFecha}</p>
+                        )}
+                        {/* Fecha con hora en gris pequeño debajo del input */}
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          {new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          {new Date().toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true })}
+                        </p>
+                      </div>
+
+                      <div className="relative">
+                        <label className={labelCls}>Estado <span className="text-red-500">*</span></label>
+                        {/* EstadoSelect (Radix) con portal z-[100] */}
+                        <EstadoSelect
+                          value={form.estado}
+                          onChange={(nuevoEstado) => {
+                            setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as EstadoOrden, fecha: today }]);
+                            pf({ estado: nuevoEstado });
+                          }}
+                          options={opcionesEstado(form.estado as EstadoOrden)}
+                        />
+                        {estadoHistorial.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            {estadoHistorial[estadoHistorial.length - 1].fecha}
+                          </p>
                         )}
                       </div>
-                    )}
-                  {!isView && (tocado.proveedor || intentoGuardar) && errorProveedor && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorProveedor}</p>
+                    </>
                   )}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Fecha {!isView && <span className="text-red-500">*</span>}</label>
-                  {isView
-                    ? <p className="text-sm font-semibold text-foreground py-2">{form.fecha}</p>
-                    : (
-                      <input
-                        type="date"
-                        value={form.fecha}
-                        onChange={e => pf({ fecha: e.target.value })}
-                        onBlur={() => marcarTocado("fecha")}
-                        readOnly
-                        className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
-                        aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
-                      />
-                    )}
-                  {!isView && (tocado.fecha || intentoGuardar) && errorFecha && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFecha}</p>
-                  )}
-                </div>
-                {!isView && (
-                  <div onMouseDown={() => setShowProvSug(false)}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado <span className="text-red-500">*</span></label>
-                    {/* Punto 6: el trigger va SIN z-index ni position con z. Con
-                        `relative z-40` el badge "Borrador" se montaba sobre el
-                        desplegable del Proveedor (z-50) y tapaba los resultados.
-                        El menú va en portal (z-[100]) y sigue por encima de todo. */}
-                    <EstadoSelect
-                      value={form.estado}
-                      onChange={(nuevoEstado) => {
-                        setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as EstadoOrden, fecha: today }]);
-                        pf({ estado: nuevoEstado });
-                      }}
-                      options={(
-                        isCompra
-                          ? [
-                              { value: "Recibido" as EstadoGestion, label: "Recibido", color: "bg-emerald-100 text-emerald-800" },
-                              { value: "Anulado" as EstadoGestion, label: "Anulado", color: "bg-red-100 text-red-800" },
-                            ]
-                          : opcionesEstado(form.estado as EstadoOrden)
-                      )}
-                    />
-                    {estadoHistorial.length > 0 && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        {estadoHistorial[estadoHistorial.length - 1].fecha}
-                      </p>
-                    )}
-                    {mode !== "create" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Mostrar historial completo
-                          alert(estadoHistorial.map(h => `${h.estado} - ${h.fecha}`).join('\n'));
-                        }}
-                        className="text-[11px] text-primary hover:underline mt-0.5"
-                      >
-                        Ver historial
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              {/* Agregar insumo */}
+                  {!isView && !isPage && (
+                    <>
+                      <div className="relative">
+                        <label className={labelCls}>Fecha <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={form.fecha}
+                          onChange={e => pf({ fecha: e.target.value })}
+                          onBlur={() => marcarTocado("fecha")}
+                          readOnly
+                          className={campoCls((tocado.fecha || intentoGuardar) ? errorFecha : undefined)}
+                          aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
+                        />
+                        {(tocado.fecha || intentoGuardar) && errorFecha && (
+                          <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFecha}</p>
+                        )}
+                      </div>
+                      <div onMouseDown={() => setShowProvSug(false)}>
+                        <label className={labelCls}>Estado <span className="text-red-500">*</span></label>
+                        {/* Punto 6: el trigger va SIN z-index ni position con z. Con
+                            `relative z-40` el badge "Borrador" se montaba sobre el
+                            desplegable del Proveedor (z-50) y tapaba los resultados.
+                            El menú va en portal (z-[100]) y sigue por encima de todo. */}
+                        <EstadoSelect
+                          value={form.estado}
+                          onChange={(nuevoEstado) => {
+                            setEstadoHistorial(prev => [...prev, { estado: nuevoEstado as EstadoOrden, fecha: today }]);
+                            pf({ estado: nuevoEstado });
+                          }}
+                          options={opcionesEstado(form.estado as EstadoOrden)}
+                        />
+                        {estadoHistorial.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            {estadoHistorial[estadoHistorial.length - 1].fecha}
+                          </p>
+                        )}
+                        {mode !== "create" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Mostrar historial completo
+                              alert(estadoHistorial.map(h => `${h.estado} - ${h.fecha}`).join('\n'));
+                            }}
+                            className="text-[11px] text-primary hover:underline mt-0.5"
+                          >
+                            Ver historial
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              {/* Sección 2 — "Agregar insumo": fila con buscador, stepper y
+                  botón en una sola línea. En pantalla completa es el ÚLTIMO
+                  bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
-                <div className="shrink-0">
+                <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
+                  {isPage && <p className={seccionCls}>Agregar insumo</p>}
                   <CompactInsumoForm
                     containerRef={sugRef}
-                    titulo="Agregar insumo"
+                    titulo={isPage ? "" : "Agregar insumo"}
                     nombre={aNombre}
                     onNombreChange={(value) => {
                       setANombre(value);
                       setAFromCat(false);
-                      // El nombre ya no coincide con la sugerencia elegida, así que
-                      // la línea deja de estar ligada a ese insumo del catálogo.
                       setAInsumoId("");
                       setAShowSug(true);
                     }}
@@ -1065,89 +1216,160 @@ export function OrdenModal({
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
                     onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
-                    onCrearInsumo={() => setShowNuevoInsumo(true)}
+                    onCrearInsumo={() => {
+                      setAShowSug(false);
+                      setShowNuevoInsumo(true);
+                    }}
+                    compacto={isPage}
+                    buttonLabel={editando ? "Actualizar" : "Agregar"}
+                    variante="compacta"
+                  />
+                  {/* Aviso de insumos: en pantalla completa va justo debajo de
+                      la fila (solo empuja la tabla al aparecer); en el modal,
+                      con el mismo margen de 20px de antes. */}
+                  {!isView && errorItems && (algunoTocado || intentoGuardar) && (
+                    <p className={`text-xs text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
+                      {errorItems}
+                    </p>
+                  )}
+                </section>
+              )}
+              </div>
+
+              {/* Columna DERECHA (50 %) — insumos solicitados, totales y
+                  botones. Separada de la izquierda por una línea vertical. */}
+              <div
+                className={
+                  isPage
+                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6"
+                    : "flex flex-col gap-5"
+                }
+              >
+                {/* Cabecera de la tabla: contador */}
+                {isPage && !isView && (
+                  <div className="shrink-0">
+                    <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
+                      <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
+                        Insumos solicitados
+                      </p>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {form.items.length} {form.items.length === 1 ? "insumo" : "insumos"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+              {isView ? (
+                <div className="flex flex-col gap-4">
+                  {/* Recepcion detail — acumulado de todas las facturas de la OC */}
+                  {orden?.recepcion && (
+                    <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
+                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                          <tr>
+                            {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
+                              <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-100">
+                          {[...orden.recepcion.items, ...orden.recepcion.itemsExtra].map(item => (
+                            <tr key={item.rowId}>
+                              <td className="px-3 py-2 font-medium text-foreground">
+                                {item.nombre}
+                                {item.cantidadSolicitada === 0 && (
+                                  <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
+                                    No solicitado
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
+                              <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
+                              <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
+                              <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
+                              <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
+                          <tr>
+                            <td colSpan={5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
+                              Total recibido
+                            </td>
+                            <td className="px-3 py-2 text-sm font-bold text-foreground">
+                              {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
+                                (s, i) => s + i.cantidadRecibida * i.costoUnitario, 0
+                              ))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                  <InsumosSolicitadosTable
+                    items={form.items}
+                    showActions={false}
+                    enPagina={isPage}
+                    className={isPage ? "flex-1 min-h-0" : ""}
                   />
                 </div>
-              )}
+              ) : (
+                <>
+                  <InsumosSolicitadosTable
+                    items={form.items}
+                    showActions
+                    onRemove={rowId => pf({ items: form.items.filter(i => i.rowId !== rowId) })}
+                    onUpdate={actualizarItem}
+                    totalLabel="Total estimado"
+                    enPagina={isPage}
+                    className={isPage ? "flex-1 min-h-0" : ""}
+                  />
 
-              {!isView && errorItems && (algunoTocado || intentoGuardar) && (
-                <p className="text-xs text-red-500 ml-0.5 shrink-0">{errorItems}</p>
+                  {/* Acciones: en pantalla completa van al final de ESTA columna
+                      (siempre visibles); en el modal siguen en el pie general. */}
+                  {isPage && (
+                    <div className="flex gap-3 shrink-0 pt-1">
+                      <button
+                        onClick={salir}
+                        className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleGuardar}
+                        disabled={!formValido}
+                        className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                      >
+                        <Check className="w-4 h-4" />
+                        {mode === "edit" ? "Guardar cambios" : "Guardar"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
-
-              {/* Items table */}
-              <InsumosSolicitadosTable
-                items={form.items}
-                showActions={!isView}
-                onRemove={!isView ? (rowId) => pf({ items: form.items.filter((i) => i.rowId !== rowId) }) : undefined}
-                onUpdate={!isView ? (rowId, patch) => pf({ items: form.items.map(i => i.rowId === rowId ? { ...i, ...patch } : i) }) : undefined}
-                className={isPage ? "flex-1 min-h-0" : ""}
-              />
-
-              {/* Recepcion detail ��� acumulado de todas las facturas de la OC */}
-              {isView && orden?.recepcion && (
-                <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
-                  <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
-                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                      <tr>
-                        {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
-                          <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-emerald-100">
-                      {[...orden.recepcion.items, ...orden.recepcion.itemsExtra].map(item => (
-                        <tr key={item.rowId}>
-                          <td className="px-3 py-2 font-medium text-foreground">
-                            {item.nombre}
-                            {item.cantidadSolicitada === 0 && (
-                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
-                                No solicitado
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
-                          <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
-                          <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
-                          <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
-                      <tr>
-                        <td colSpan={5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
-                          Total recibido
-                        </td>
-                        <td className="px-3 py-2 text-sm font-bold text-foreground">
-                          {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
-                            (s, i) => s + i.cantidadRecibida * i.costoUnitario, 0
-                          ))}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
+              </div>
             </div>
 
-            {/* Footer ��� solo en creación; en detalle se cierra con la X del encabezado */}
-            {!isView && (
+            {/* Footer del modal — solo en creación; en detalle se cierra con
+                la X del encabezado. */}
+            {!isView && !isPage && (
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
-                  onClick={onClose}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
+                  onClick={salir}
+                  className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleGuardar}
                   disabled={!formValido}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
-                  Guardar
+                  <Check className="w-4 h-4" />
+                  {mode === "edit" ? "Guardar cambios" : "Guardar"}
                 </button>
               </div>
             )}
@@ -1210,6 +1432,8 @@ interface NuevaOrdenCompraPageProps {
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
   onBack: () => void;
+  /** Orden a editar (modo edición). Si no se pasa, es modo creación. */
+  orden?: OrdenCompra;
 }
 
 export function NuevaOrdenCompraPage({
@@ -1221,31 +1445,51 @@ export function NuevaOrdenCompraPage({
   setInsumos,
   onNuevoProveedor,
   onBack,
+  orden,
 }: NuevaOrdenCompraPageProps) {
+  const isEdit = !!orden;
   // Punto 5: el insumo creado en el formulario pasa al catálogo global.
   const handleCrearInsumo = (ins: NuevoInsumoCreado) =>
     setInsumos(prev => [insumoDeAlta(ins), ...prev]);
 
   const handleGuardar = (data: OrdenFormData) => {
-    const nueva: OrdenCompra = {
-      id: nextOrdenId(ordenes),
-      proveedor: data.proveedor,
-      fecha: data.fecha,
-      estado: data.estado as EstadoOrden,
-      items: data.items,
-      // El estado inicial se registra desde el nacimiento de la OC: el
-      // historial nunca queda vacío y el listado muestra su fecha/hora real.
-      historialEstados: [
-        { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
-      ],
-    };
+    if (isEdit && orden) {
+      // Validación backend: solo se puede editar en estado Borrador
+      if (orden.estado !== "Borrador") {
+        toast.error("Solo se pueden editar órdenes en estado Borrador");
+        return;
+      }
+      // Si cambia el estado, registrar en historial
+      const nuevoHistorial = orden.estado !== data.estado
+        ? [...(orden.historialEstados ?? []), { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() }]
+        : orden.historialEstados ?? [];
+      setOrdenes(prev => prev.map(o => o.id === orden.id
+        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items, historialEstados: nuevoHistorial }
+        : o));
+      toast.success(`OC ${orden.id} actualizada`);
+    } else {
+      const nueva: OrdenCompra = {
+        id: nextOrdenId(ordenes),
+        proveedor: data.proveedor,
+        fecha: data.fecha,
+        estado: data.estado as EstadoOrden,
+        items: data.items,
+        // El estado inicial se registra desde el nacimiento de la OC: el
+        // historial nunca queda vacío y el listado muestra su fecha/hora real.
+        historialEstados: [
+          { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
+        ],
+      };
 
-    setOrdenes(prev => [nueva, ...prev]);
-    toast.success(`OC ${nueva.id} guardada como ${nueva.estado}`);
+      setOrdenes(prev => [nueva, ...prev]);
+      toast.success(`OC ${nueva.id} guardada como ${nueva.estado}`);
+    }
     onBack();
   };
 
   const handleNuevoProveedor = (p: ProveedorRef) => {
+    // Actualizar el estado global de proveedores en App.tsx para que el
+    // listado de Proveedores lo vea inmediatamente.
     if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
       setProveedores(prev => [...prev, p]);
     }
@@ -1255,8 +1499,12 @@ export function NuevaOrdenCompraPage({
 
   return (
     <OrdenModal
-      mode="create"
+      mode={isEdit ? "edit" : "create"}
       tipo="orden"
+      orden={orden}
+      // Pantalla completa dentro del panel (no modal): cabecera con ← y
+      // pie Cancelar/Guardar siempre visibles, sin scroll de página.
+      fullPage
       proveedores={proveedores}
       insumos={insumos}
       onClose={onBack}
@@ -1701,6 +1949,7 @@ interface Props {
   onAbrirRecepcion?: (orden: OrdenCompra) => void;
   onVerDetalle: (orden: OrdenCompra) => void;
   onNuevaOrden: () => void;
+  onEditarOrden: (orden: OrdenCompra) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1710,7 +1959,7 @@ interface Props {
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden,
+  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   canCreate = true, canEdit = true,
   canExportExcel = true,
 }: Props) {
@@ -1730,12 +1979,17 @@ export function OrdenCompraScreen({
       if (!q) return true;
       const facturas = getFacturas(o.id);
       const facturasTexto = facturas.map(f => f.numeroFactura ?? "").join(" ");
+      // Find provider NIT
+      const prov = proveedores.find(p => p.nombre === o.proveedor);
+      const nit = prov?.nit ?? "";
       return (o.proveedor ?? "").toLowerCase().includes(q)
+        || (o.id ?? "").toLowerCase().includes(q)
+        || nit.toLowerCase().includes(q)
         || facturasTexto.toLowerCase().includes(q)
         || (o.estado ?? "").toLowerCase().includes(q)
         || (o.fecha ?? "").toLowerCase().includes(q);
     }),
-    [ordenes, search, gestiones]);
+    [ordenes, search, gestiones, proveedores]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -1771,8 +2025,17 @@ export function OrdenCompraScreen({
       setOrdenes(p => [n, ...p]);
       toast.success(`OC ${n.id} guardada como ${n.estado}`);
     } else if (modal?.mode === "edit" && modal.orden) {
+      // Validación de backend: solo se puede editar en estado Borrador
+      if (modal.orden.estado !== "Borrador") {
+        toast.error("Solo se pueden editar órdenes en estado Borrador");
+        return;
+      }
+      // Si cambia el estado, registrar en historial
+      const nuevoHistorial = modal.orden.estado !== data.estado
+        ? [...(modal.orden.historialEstados ?? []), { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() }]
+        : modal.orden.historialEstados ?? [];
       setOrdenes(p => p.map(o => o.id === modal.orden!.id
-        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items }
+        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items, historialEstados: nuevoHistorial }
         : o));
       toast.success(`OC ${modal.orden.id} actualizada`);
     }
@@ -1863,25 +2126,131 @@ export function OrdenCompraScreen({
     toast.success(`OC ${o.id} ${estadoFinal === "Completado" ? "completada" : "actualizada"} · Registra la factura en Gestión de Compras`);
   };
 
-  const handleDownload = () => {
-    exportToExcel(
-      filtered.map(o => ({
+  const handleDownload = async () => {
+    // Exportar todas las órdenes (filtradas) con sus insumos agrupados en una sola hoja
+    const ordenesParaExcel: OrdenConInsumos[] = filtered.map(o => {
+      // Buscar facturas de esta orden para obtener el número de factura de los insumos no solicitados
+      const facturasOrden = gestiones.filter(g => g.ordenId === o.id && g.numeroFactura);
+      // Mapa de idInsumo -> numeroFactura para insumos no solicitados
+      const extraFacturaMap = new Map<string, string>();
+      for (const f of facturasOrden) {
+        for (const it of f.items ?? []) {
+          if (it.esNoSolicitado) {
+            extraFacturaMap.set(it.idInsumo, f.numeroFactura);
+          }
+        }
+      }
+      
+      return {
+        id: o.id,
         proveedor: o.proveedor,
         fecha: o.fecha,
-        numeroFactura: getFacturas(o.id).map(f => f.numeroFactura).join(", ") || "—",
-        total: fmtCOP(calcTotal(o.items)),
         estado: o.estado,
-      })),
-      [
-        { key: "proveedor", label: "Proveedor" },
-        { key: "fecha", label: "Fecha" },
-        { key: "numeroFactura", label: "N° Factura" },
-        { key: "total", label: "Total" },
-        { key: "estado", label: "Estado" },
-      ],
-      "ordenes-de-compra"
-    );
+        items: o.items.map(item => ({
+          nombre: item.nombre,
+          cantidad: item.cantidad,
+          unidad: item.unidad,
+          costoUnitario: item.costoUnitario,
+          iva: item.iva,
+        })),
+        recepcion: o.recepcion?.itemsExtra && o.recepcion.itemsExtra.length > 0
+          ? {
+              itemsExtra: o.recepcion.itemsExtra.map(item => ({
+                nombre: item.nombre,
+                cantidad: item.cantidadRecibida,
+                unidad: item.unidad,
+                costoUnitario: item.costoUnitario,
+                iva: item.iva ?? 0,
+                facturaNumero: extraFacturaMap.get(item.idInsumo) || "",
+              })),
+            }
+          : undefined,
+      };
+    });
+    
+    await exportarOrdenesConInsumosExcel({
+      ordenes: ordenesParaExcel,
+      proveedores,
+      nombreArchivo: "ordenes-de-compra",
+    });
     toast.success("Excel descargado");
+  };
+
+  // PDF generation for individual order
+  const handleDownloadPDF = (orden: OrdenCompra) => {
+    // Dynamic import of jsPDF to avoid SSR issues
+    import("jspdf").then(({ jsPDF }) => {
+      import("jspdf-autotable").then(() => {
+        const doc = new jsPDF();
+        const prov = proveedores.find(p => p.nombre === orden.proveedor);
+        const nit = prov?.nit ?? "";
+        const asesor = prov?.asesorComercial ?? "";
+        const telefono = prov?.telefono ?? "";
+        const email = prov?.email ?? "";
+        
+        // Header - La Sirena
+        doc.setFontSize(20);
+        doc.setTextColor(220, 38, 38); // Red color
+        doc.text("La Sirena Pizza", 14, 20);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("S.I.V.PRO - Sistema de Gestión", 14, 26);
+        
+        // Order info
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text(`Orden de Compra N° ${orden.id}`, 14, 36);
+        doc.text(`Fecha: ${orden.fecha}`, 14, 42);
+        doc.text(`Estado: ${orden.estado}`, 14, 48);
+        
+        // Provider info
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text("Proveedor:", 14, 56);
+        doc.setFont(undefined, 'normal');
+        doc.text(orden.proveedor, 14, 62);
+        if (nit) doc.text(`NIT: ${nit}`, 14, 68);
+        if (asesor) doc.text(`Asesor: ${asesor}`, 14, 74);
+        if (telefono) doc.text(`Tel: ${telefono}`, 14, 80);
+        if (email) doc.text(`Email: ${email}`, 14, 86);
+        
+        // Items table
+        const tableData = orden.items.map(item => [
+          item.nombre,
+          item.cantidad.toString(),
+          item.unidad,
+          new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(item.costoUnitario),
+          `${item.iva}%`,
+          new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(item.cantidad * item.costoUnitario),
+        ]);
+        
+        (doc as any).autoTable({
+          startY: 95,
+          head: [["Insumo", "Cantidad", "Unidad", "Monto unit.", "IVA %", "Subtotal"]],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { fillColor: [220, 38, 38], textColor: 255 },
+          styles: { fontSize: 9 },
+        });
+        
+        // Totals
+        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        const total = orden.items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Total: ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(total)}`, 14, finalY);
+        
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("La Sirena Pizza - Medellín, Colombia - S.I.V.PRO", 105, 290, { align: "center" });
+        
+        doc.save(`orden-compra-${orden.id}-${new Date().toLocaleDateString("en-CA")}.pdf`);
+        toast.success("PDF generado");
+      });
+    }).catch(() => {
+      toast.error("Error generando PDF. Instale jspdf y jspdf-autotable.");
+    });
   };
 
   return (
@@ -1899,7 +2268,11 @@ export function OrdenCompraScreen({
           {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
           {canCreate && (
             <button
-              onClick={onNuevaOrden}
+              onClick={(e) => {
+                console.log("[OrdenCompraScreen] + Crear Orden clicked");
+                console.log("[OrdenCompraScreen] onNuevaOrden:", onNuevaOrden);
+                onNuevaOrden();
+              }}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" /> Crear Orden
@@ -1908,20 +2281,23 @@ export function OrdenCompraScreen({
         </div>
       </div>
 
-      <SearchInput
-        value={search}
-        onChange={v => { setSearch(v); setPage(1); }}
-        placeholder="Buscar por proveedor, fecha, N° factura o estado..."
-        wrapperClassName="mb-4 max-w-sm shrink-0"
-      />
+      <div className="relative mb-4 max-w-sm shrink-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Buscar por proveedor, fecha, N° factura o estado..."
+          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                {["N° Orden", "Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado", "Acciones"].map(h => (
+                  <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1929,7 +2305,7 @@ export function OrdenCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📋</p>
                       <p className="font-medium">No se encontraron órdenes</p>
                     </td>
@@ -1940,45 +2316,40 @@ export function OrdenCompraScreen({
                   const totalOrden = calcTotal(o.items);
                   const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
                   const porFacturar = Math.max(0, totalOrden - totalFacturado);
-                  return (
-                    <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 text-sm text-foreground">{o.proveedor}</td>
-                      <td className="px-4 py-3.5 text-xs text-muted-foreground">{o.fecha}</td>
-                      <td className="px-4 py-3.5 text-xs">
+                    // Find provider NIT
+                    const prov = proveedores.find(p => p.nombre === o.proveedor);
+                    const nit = prov?.nit ?? "";
+                    return (
+                      <tr key={o.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-3.5 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</td>
+                        <td className="px-3 py-3.5">
+                          <p className="text-sm text-foreground">{o.proveedor}</p>
+                          {nit && <p className="text-[11px] text-muted-foreground font-mono">{nit}</p>}
+                        </td>
+                        <td className="px-3 py-3.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
+                      <td className="px-3 py-3.5 text-xs">
                         {facturas.length > 0 ? (
                           <>
-                            {facturas.slice(0, 2).map((f) => (
+                            {facturas.map((f) => (
                               <span key={f.id} className="block font-mono font-semibold text-emerald-700">
                                 {f.numeroFactura}
                               </span>
                             ))}
-                            {facturas.length > 2 && (
-                              <span className="block text-muted-foreground">
-                                +{facturas.length - 2} factura{facturas.length - 2 > 1 ? "s" : ""}
-                              </span>
-                            )}
-                            <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
-                              {facturas.length === 1
-                                ? `Recibida: ${facturas[0].fechaFactura}`
-                                : `${facturas.length} facturas recibidas`}
-                            </p>
                           </>
-                        ) : o.estado === "Completado" ? (
-                          <span className="text-amber-600 font-medium">Pendiente</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-sm font-semibold text-foreground">
+                      <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {fmtCOP(totalOrden)}
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-emerald-700 font-semibold">
+                      <td className="px-3 py-3.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
                         {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-amber-700 font-semibold">
+                      <td className="px-3 py-3.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
                         {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                       </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-3 py-3.5">
                         <EstadoSelect
                           value={o.estado}
                           onChange={(nuevoEstado) => {
@@ -2005,8 +2376,14 @@ export function OrdenCompraScreen({
                         </EstadoHistorialTooltip>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <ActionIcons onView={() => onVerDetalle(o)} />
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            onClick={() => onVerDetalle(o)}
+                            title="Ver detalle"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
@@ -2601,3 +2978,4 @@ export function OrdenDetallePage({
     </div>
   );
 }
+
