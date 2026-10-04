@@ -1,8 +1,15 @@
 import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, fullAccesos } from "./GestionConfigScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
@@ -283,16 +290,23 @@ export function GestionUsuariosScreen({
   // sistema sin nadie con acceso total.
   const totalesActivos = usuariosUnicos.filter(u => u.activo && rolInfoTotal(u.rolId));
 
-  const cambiarEstado = () => {
-    if (!detail) return;
-    const nuevoEstado = !detail.activo;
-    if (!nuevoEstado && detail.activo && rolInfoTotal(detail.rolId) && totalesActivos.length === 1) {
+  // Misma regla y mismos efectos para cambiar el estado, sea desde el detalle
+  // o desde la pill de la tabla: nunca al usuario actual si es el último con
+  // todos los permisos, y siempre actualizando el empleado vinculado.
+  const aplicarCambioEstado = (usuario: Usuario, nuevoEstado: boolean) => {
+    if (nuevoEstado === usuario.activo) return;
+    if (!nuevoEstado && usuario.activo && rolInfoTotal(usuario.rolId) && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
     }
-    updateUsuario(detail.id, { activo: nuevoEstado });
-    updateEmpleadoLinked(detail.correo, { activo: nuevoEstado });
+    updateUsuario(usuario.id, { activo: nuevoEstado });
+    updateEmpleadoLinked(usuario.correo, { activo: nuevoEstado });
     toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+  };
+
+  const cambiarEstado = () => {
+    if (!detail) return;
+    aplicarCambioEstado(detail, !detail.activo);
   };
 
   const handleEdit = () => {
@@ -489,12 +503,12 @@ export function GestionUsuariosScreen({
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <div className="relative flex-1 min-w-52">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, correo, rol o documento..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, correo, rol o documento..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select value={filterRol} onChange={e => { setFiltroR(e.target.value); setPage(1); }} className={iCls}>
           <option value="todos">Todos los roles</option>
           {roles.filter(r => r.activo).map(r => (
@@ -558,29 +572,27 @@ export function GestionUsuariosScreen({
                       </div>
                     </td>
                     <td className="px-4 py-1.5">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
-                        {u.activo ? "Activo" : "Inactivo"}
-                      </span>
+                      {/* Pill de estado (diseño de Proveedores). Aplica el
+                          MISMO cambio que el botón del detalle, con la misma
+                          regla del último usuario con todos los permisos. */}
+                      <EstadoSelect
+                        value={u.activo ? "activo" : "inactivo"}
+                        onChange={nuevoEstado => {
+                          if ((nuevoEstado === "activo") === u.activo) return;
+                          aplicarCambioEstado(u, nuevoEstado === "activo");
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
                     </td>
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetail(u)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                        <button onClick={() => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); }} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        )}
-                        {canDelete && (
-                        <button onClick={() => setDeleteId(u.id)} title="Eliminar"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        )}
-                      </div>
+                      <ActionIcons
+                        onView={() => setDetail(u)}
+                        onEdit={canEdit ? () => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); } : undefined}
+                        onDelete={canDelete ? () => setDeleteId(u.id) : undefined}
+                      />
                     </td>
                   </tr>
                 );

@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Check,
   Clock,
-  Eye,
   AlertCircle,
   RefreshCw,
   ShieldCheck,
@@ -23,6 +22,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
+import { EstadoSelect } from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 import { descargarFactura, imprimirFactura } from "../utils/facturaVenta";
 import { exportToExcel } from "../utils/exportExcel";
 
@@ -171,12 +173,15 @@ export interface Venta {
   devolucionMotivos?: Record<string, { motivo: string; descripcion: string }>;
 }
 
+/** Colores de estado de la venta, con variante dark (fondo translúcido
+    oscuro y texto claro del mismo tono) para el pill de la tabla y los
+    badges de detalle/historial. */
 const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
-  venta:           "bg-blue-100 text-blue-800",
-  perdida:         "bg-orange-100 text-orange-800",
-  "por-verificar": "bg-amber-100 text-amber-800",
-  completado:      "bg-emerald-100 text-emerald-800",
-  anulado:         "bg-red-100 text-red-700",
+  venta:           "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  perdida:         "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
+  "por-verificar": "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+  completado:      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  anulado:         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
@@ -454,6 +459,12 @@ export function VentasScreen({
   } | null>(null);
   /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
   const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
+
+  /** Modal para enviar factura por correo. */
+  const [enviarFacturaModal, setEnviarFacturaModal] = useState(false);
+  const [facturaParaEnviar, setFacturaParaEnviar] = useState<Venta | null>(null);
+  const [correoEnviar, setCorreoEnviar] = useState("");
+  const [errorCorreo, setErrorCorreo] = useState("");
 
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
@@ -1257,15 +1268,11 @@ export function VentasScreen({
       })()}
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por #, cliente o producto..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por #, cliente o producto..."
+      />
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -1339,35 +1346,32 @@ export function VentasScreen({
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {p.estado === "anulado" || p.estado === "perdida" ? (
-                        <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-block ${VENTA_STATUS_COLOR[p.estado]}`}
-                        >
-                          {VENTA_STATUS_LABEL[p.estado]}
-                        </span>
-                      ) : (
-                        <select
-                          value={p.estado}
-                          onChange={(e) => {
-                            const next = e.target
-                              .value as VentaStatus;
-                            if (next === p.estado) return;
-                            e.target.value = p.estado;
-                            setConfirmEstadoV({
-                              id: p.id,
-                              current: p.estado,
-                              next,
-                            });
-                          }}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${VENTA_STATUS_COLOR[p.estado]}`}
-                        >
-                          {VENTA_STATUS_SELECCIONABLES.map((s) => (
-                            <option key={s} value={s}>
-                              {VENTA_STATUS_LABEL[s]}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                      {/* Pill de estado (diseño de Proveedores). Las anuladas
+                          y devoluciones quedan en pill sin menú: se llega a
+                          ellas con sus botones de acción, no eligiéndolas. */}
+                      <EstadoSelect
+                        value={p.estado}
+                        onChange={(next) => {
+                          if (next === p.estado) return;
+                          setConfirmEstadoV({
+                            id: p.id,
+                            current: p.estado,
+                            next,
+                          });
+                        }}
+                        options={(
+                          VENTA_STATUS_SELECCIONABLES.includes(p.estado)
+                            ? VENTA_STATUS_SELECCIONABLES
+                            : [p.estado, ...VENTA_STATUS_SELECCIONABLES]
+                        ).map((s) => ({
+                          value: s,
+                          label: VENTA_STATUS_LABEL[s],
+                          color: VENTA_STATUS_COLOR[s],
+                        }))}
+                        disabled={
+                          p.estado === "anulado" || p.estado === "perdida"
+                        }
+                      />
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
@@ -1387,13 +1391,12 @@ export function VentasScreen({
                             Verificar
                           </button>
                         )}
-                        <button
-                          onClick={() => { setDetailItem(p); setMontoRecibido(""); }}
-                          title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <ActionIcons
+                          onView={() => {
+                            setDetailItem(p);
+                            setMontoRecibido("");
+                          }}
+                        />
                         {/* Anular venta: la deja en estado "anulado". Un círculo con
                             la línea en diagonal dice "anular" mejor que una papelera,
                             que parecía borrar el pedido. */}

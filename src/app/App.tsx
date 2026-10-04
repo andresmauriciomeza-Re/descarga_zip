@@ -14,7 +14,6 @@ import {
   ClipboardList,
   CreditCard,
   DollarSign,
-  Edit,
   Edit2,
   Eye,
   FileText,
@@ -109,6 +108,9 @@ import {
 } from "./screens/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
 import { ESTADO_COLORES } from "./components/EstadoProducto";
+import { EstadoSelect } from "./components/EstadoSelect";
+import { SearchInput } from "./components/SearchInput";
+import { ActionIcons } from "./components/ActionIcons";
 import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
@@ -737,10 +739,28 @@ const STATUS_LABEL: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
+/** Colores del pill de estado de la tabla. Incluye los valores del tipo
+    (`disponible`/`no disponible`, con el que nacen los productos) y los del
+    desplegable (`activo`/`agotado`/`pausado`), que es lo que hoy se puede
+    elegir en Manage Products. */
 const PROD_STATUS_COLOR: Record<string, string> = {
-  disponible: "bg-emerald-100 text-emerald-800",
-  "no disponible": "bg-red-100 text-red-700",
+  disponible: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  "no disponible": "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  activo: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  agotado: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  pausado: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
 };
+
+const PROD_STATUS_LABEL: Record<string, string> = {
+  disponible: "Activo",
+  "no disponible": "No disponible",
+  activo: "Activo",
+  agotado: "Agotado",
+  pausado: "Pausado",
+};
+
+/** Estados que ofrece el desplegable (los de siempre de Manage Products). */
+const PROD_STATUS_OPCIONES = ["activo", "agotado", "pausado"] as const;
 
 const ADMIN_SCREENS: Screen[] = [
   "dashboard",
@@ -5731,18 +5751,15 @@ function ManageProductsScreen() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Buscar producto..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground text-sm"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          placeholder="Buscar producto..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select
           value={statusF}
           onChange={(e) => {
@@ -5828,20 +5845,31 @@ function ManageProductsScreen() {
                       {fmt(p.price)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <select
-                        value={p.status}
-                        onChange={(e) =>
-                          changeStatus(
-                            p.id,
-                            e.target.value as Product["status"],
-                          )
-                        }
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${PROD_STATUS_COLOR[p.status]}`}
-                      >
-                        <option value="activo">Activo</option>
-                        <option value="agotado">Agotado</option>
-                        <option value="pausado">Pausado</option>
-                      </select>
+                      {/* Pill de estado (diseño de Proveedores). Misma regla
+                          que el select nativo: elegir lo que ya se muestra no
+                          hace nada y el resto llama a changeStatus. */}
+                      <EstadoSelect
+                        value={p.status as string}
+                        onChange={(nuevo) => {
+                          if (PROD_STATUS_LABEL[nuevo] === PROD_STATUS_LABEL[p.status]) return;
+                          changeStatus(p.id, nuevo as Product["status"]);
+                        }}
+                        options={[
+                          {
+                            value: p.status,
+                            label: PROD_STATUS_LABEL[p.status],
+                            color: PROD_STATUS_COLOR[p.status],
+                          },
+                          ...PROD_STATUS_OPCIONES.filter(
+                            (s) =>
+                              PROD_STATUS_LABEL[s] !== PROD_STATUS_LABEL[p.status],
+                          ).map((s) => ({
+                            value: s as string,
+                            label: PROD_STATUS_LABEL[s],
+                            color: PROD_STATUS_COLOR[s],
+                          })),
+                        ]}
+                      />
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground"
@@ -5850,22 +5878,10 @@ function ManageProductsScreen() {
                       {p.sales.toLocaleString("es-CO")}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setEditP({ ...p })}
-                          className="p-1.5 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground hover:text-foreground"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer text-muted-foreground hover:text-red-600"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <ActionIcons
+                        onEdit={() => setEditP({ ...p })}
+                        onDelete={() => setDeleteId(p.id)}
+                      />
                     </td>
                   </tr>
                 ))
@@ -6186,15 +6202,12 @@ function OrdersScreen({
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por cliente o código..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 text-sm"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por cliente o código..."
+          wrapperClassName="flex-1 max-w-sm"
+        />
         <select
           value={statusF}
           onChange={(e) => setStatusF(e.target.value)}
@@ -6771,6 +6784,18 @@ function DevolucionesScreen({
                     dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
                     0;
                   const pendiente = !dev.devolucionResuelta;
+                  // Estado derivado: solo se resuelve con el flujo de
+                  // "Gestionar devolución", por eso la pill va sin menú.
+                  const estadoDevLabel = pendiente
+                    ? "Pendiente"
+                    : dev.devolucionTipo === "dinero"
+                      ? "Resuelta · Dinero"
+                      : dev.devolucionTipo === "producto"
+                        ? "Resuelta · Canje"
+                        : "Resuelta · Mixta";
+                  const estadoDevColor = pendiente
+                    ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200";
 
                   return (
                     <tr
@@ -6802,21 +6827,12 @@ function DevolucionesScreen({
                         <PagoPill metodo={dev.metodoPago} />
                       </td>
                       <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                            pendiente
-                              ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
-                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200"
-                          }`}
-                        >
-                          {pendiente
-                            ? "Pendiente"
-                            : dev.devolucionTipo === "dinero"
-                              ? "Resuelta · Dinero"
-                              : dev.devolucionTipo === "producto"
-                                ? "Resuelta · Canje"
-                                : "Resuelta · Mixta"}
-                        </span>
+                        <EstadoSelect
+                          value={estadoDevLabel}
+                          onChange={() => {}}
+                          options={[{ value: estadoDevLabel, label: estadoDevLabel, color: estadoDevColor }]}
+                          disabled
+                        />
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -6835,14 +6851,9 @@ function DevolucionesScreen({
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDetalleDevolucion(dev)}
-                            title="Visualizar devolución"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted text-foreground hover:bg-border transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <ActionIcons
+                            onView={() => setDetalleDevolucion(dev)}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -8241,9 +8252,8 @@ export default function App() {
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
-  const [showNuevaOrden, setShowNuevaOrden] = useState(false);
-  const [showNuevaCompra, setShowNuevaCompra] = useState(false);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
+  const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -9080,7 +9090,10 @@ export default function App() {
     // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
     screen === "orden-compra" || screen === "nueva-orden-compra" ||
     screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra" || screen === "orden-detalle"
+    screen === "nueva-compra" || screen === "orden-detalle" ||
+    // Proveedores: ocupa el viewport y sin scroll de página (la tabla se
+    // pagina en bloques de 5 en vez de crecer hasta hacer scroll).
+    screen === "suppliers"
   );
 
   return (
@@ -9350,39 +9363,51 @@ export default function App() {
                 />
               )}
               {screen === "orden-compra" && (
-                <>
-                  <OrdenCompraScreen
-                    {...getPerms("orden-compra")}
-                    ordenes={ordenes}
-                    setOrdenes={setOrdenes}
-                    gestiones={gestiones}
-                    setGestiones={setGestiones}
-                    proveedores={proveedores}
-                    setProveedores={setProveedores}
-                    insumos={insumos}
-                    setInsumos={setInsumos}
-                    onAbrirRecepcion={(orden) => {
-                      setOrdenRecepcion(orden);
-                      setScreen("recepcion-compra");
-                    }}
-                    onNuevaOrden={() => setShowNuevaOrden(true)}
-                    onVerDetalle={(orden) => {
-                      setOrdenDetalle(orden);
-                      setScreen("orden-detalle");
-                    }}
-                  />
-                  {showNuevaOrden && (
-                    <NuevaOrdenCompraPage
-                      ordenes={ordenes}
-                      setOrdenes={setOrdenes}
-                      proveedores={proveedores}
-                      setProveedores={setProveedores}
-                      insumos={insumos}
-                      setInsumos={setInsumos}
-                      onBack={() => setShowNuevaOrden(false)}
-                    />
-                  )}
-                </>
+                <OrdenCompraScreen
+                  {...getPerms("orden-compra")}
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  onAbrirRecepcion={(orden) => {
+                    setOrdenRecepcion(orden);
+                    setScreen("recepcion-compra");
+                  }}
+                  onNuevaOrden={() => {
+                    setOrdenAEditar(null);
+                    navigate("nueva-orden-compra");
+                  }}
+                  onEditarOrden={(orden) => {
+                    setOrdenAEditar(orden);
+                    navigate("nueva-orden-compra");
+                  }}
+                  onVerDetalle={(orden) => {
+                    setOrdenDetalle(orden);
+                    setScreen("orden-detalle");
+                  }}
+                />
+              )}
+              {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
+                  (igual que Recepción y Ver detalle), sin modal y sin scroll
+                  de página. El listado queda desmontado mientras se crea. */}
+              {screen === "nueva-orden-compra" && (
+                <NuevaOrdenCompraPage
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  setInsumos={setInsumos}
+                  onBack={() => {
+                    setOrdenAEditar(null);
+                    navigate("orden-compra");
+                  }}
+                  orden={ordenAEditar}
+                />
               )}
               {screen === "recepcion-compra" && ordenRecepcion && (
                 <RecepcionCompraScreen
@@ -9431,31 +9456,39 @@ export default function App() {
                 />
               )}
               {screen === "gestion-compra" && (
-                <>
-                  <GestionCompraScreen
-                    {...getPerms("gestion-compra")}
-                    gestiones={gestiones}
-                    setGestiones={setGestiones}
-                    ordenes={ordenes}
-                    setOrdenes={setOrdenes}
-                    insumos={insumos}
-                    proveedores={proveedores}
-                    setProveedores={setProveedores}
-                    onNuevaCompra={() => setShowNuevaCompra(true)}
-                  />
-                  {showNuevaCompra && (
-                    <NuevaCompraPage
-                      gestiones={gestiones}
-                      setGestiones={setGestiones}
-                      proveedores={proveedores}
-                      setProveedores={setProveedores}
-                      insumos={insumos}
-                      onBack={() => setShowNuevaCompra(false)}
-                    />
-                  )}
-                </>
+                <GestionCompraScreen
+                  {...getPerms("gestion-compra")}
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  ordenes={ordenes}
+                  setOrdenes={setOrdenes}
+                  insumos={insumos}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  onNuevaCompra={() => navigate("nueva-compra")}
+                />
               )}
-              {screen === "suppliers" && <SuppliersScreen {...getPerms("suppliers")} />}
+              {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
+                  Recepción), sin modal y sin scroll de página. */}
+              {screen === "nueva-compra" && (
+                <NuevaCompraPage
+                  gestiones={gestiones}
+                  setGestiones={setGestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                  insumos={insumos}
+                  onBack={() => navigate("gestion-compra")}
+                />
+              )}
+              {screen === "suppliers" && (
+                <SuppliersScreen
+                  {...getPerms("suppliers")}
+                  ordenes={ordenes}
+                  gestiones={gestiones}
+                  proveedores={proveedores}
+                  setProveedores={setProveedores}
+                />
+              )}
               {screen === "ventas-pedidos" && (
                 <VentasScreen
                   {...getPerms("ventas-pedidos")}

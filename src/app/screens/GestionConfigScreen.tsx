@@ -1,8 +1,15 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Eye, Pencil, Trash2, X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign, Search } from "lucide-react";
+import { X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 
@@ -855,25 +862,20 @@ export function GestionConfigScreen({
            <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión de Roles</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{roles.length} roles registrados</p>
         </div>
-         <div className="flex items-center gap-2">
-           {canCreate && (<>
-           <button onClick={() => setShowCreate(true)}
-             className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
-             <Plus className="w-4 h-4" /> Crear Rol
-           </button>
-           </>)}
-         </div>
+         {canCreate && (
+         <button onClick={() => setShowCreate(true)}
+           className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
+           <Plus className="w-4 h-4" /> Crear Rol
+         </button>
+         )}
       </div>
 
-      <div className="relative mb-5">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por nombre o descripción..."
-          className="w-64 pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      {/* Search (fila propia, como en Gestión Proveedor) */}
+      <SearchInput
+        value={search}
+        onChange={v => { setSearch(v); setPage(1); }}
+        placeholder="Buscar por nombre o descripción..."
+      />
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -894,39 +896,61 @@ export function GestionConfigScreen({
                   <td className="px-4 py-3.5 text-sm font-medium text-foreground">{r.nombre}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
                   <td className="px-4 py-3.5">
-                    <select value={r.activo ? "activo" : "inactivo"}
-                      disabled={!canEdit || r.id === loggedInRolId}
+                    {/* Pill de estado (diseño de Proveedores). Misma regla
+                        que antes: sin permiso o en el propio rol queda sin
+                        menú, y no se puede quedar el sistema sin un usuario
+                        activo con todos los permisos. */}
+                    <span
                       title={r.id === loggedInRolId ? "No puedes modificar tu propio rol" : undefined}
-                      onChange={e => {
-                        const nuevo = e.target.value === "activo";
-                        if (r.activo && !nuevo && rolEsTotal(r) && ultimoTotalCubiertoPor(r.id)) {
-                          toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
-                          return;
-                        }
-                        setRoles(p => p.map(x => x.id === r.id ? { ...x, activo: nuevo } : x));
-                        toast.success("Estado actualizado");
-                      }}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none ${r.activo ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
+                    >
+                      <EstadoSelect
+                        value={r.activo ? "activo" : "inactivo"}
+                        disabled={!canEdit || r.id === loggedInRolId}
+                        onChange={nuevoEstado => {
+                          if ((nuevoEstado === "activo") === r.activo) return;
+                          const nuevo = nuevoEstado === "activo";
+                          if (r.activo && !nuevo && rolEsTotal(r) && ultimoTotalCubiertoPor(r.id)) {
+                            toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
+                            return;
+                          }
+                          setRoles(p => p.map(x => x.id === r.id ? { ...x, activo: nuevo } : x));
+                          toast.success("Estado actualizado");
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
+                    </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setDetailItem(r)} title="Ver detalle" className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4" /></button>
-                      {canEdit && r.id !== loggedInRolId && (
-                        <button onClick={() => setEditItem(r)} title="Editar" className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer"><Pencil className="w-4 h-4" /></button>
-                      )}
-                      {r.id === loggedInRolId && (
-                        <button disabled title="No puedes modificar tu propio rol" className="p-1.5 rounded-lg text-muted-foreground opacity-40 cursor-not-allowed"><Pencil className="w-4 h-4" /></button>
-                      )}
-                      {canDelete && r.id !== loggedInRolId && (
-                        <button onClick={() => handleDelete(r.id)} disabled={r.id === "ROL-001" || r.id === "ROL-002" || (rolUserCounts[r.id] ?? 0) > 0} title={(rolUserCounts[r.id] ?? 0) > 0 ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)` : "Eliminar"} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                      {r.id === loggedInRolId && (
-                        <button disabled title="No puedes modificar tu propio rol" className="p-1.5 rounded-lg text-muted-foreground opacity-40 cursor-not-allowed"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                    </div>
+                    <ActionIcons
+                      onView={() => setDetailItem(r)}
+                      onEdit={
+                        r.id === loggedInRolId
+                          ? () => {}
+                          : canEdit ? () => setEditItem(r) : undefined
+                      }
+                      editDisabled={r.id === loggedInRolId}
+                      editTitle={r.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Editar"}
+                      onDelete={
+                        r.id === loggedInRolId
+                          ? () => {}
+                          : canDelete ? () => handleDelete(r.id) : undefined
+                      }
+                      deleteDisabled={
+                        r.id === loggedInRolId ||
+                        r.id === "ROL-001" || r.id === "ROL-002" ||
+                        (rolUserCounts[r.id] ?? 0) > 0
+                      }
+                      deleteTitle={
+                        r.id === loggedInRolId
+                          ? "No puedes modificar tu propio rol"
+                          : (rolUserCounts[r.id] ?? 0) > 0
+                            ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)`
+                            : "Eliminar"
+                      }
+                    />
                   </td>
                 </tr>
               ))}

@@ -1,10 +1,17 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Plus, Pencil, Trash2, X, Check, Package, Eye, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Package, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+} from "../components/EstadoSelect";
+import { SearchInput } from "../components/SearchInput";
+import { ActionIcons } from "../components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -133,6 +140,105 @@ const formatearId = (id: string): string => {
   return match ? match[1] : id;
 };
 
+/**
+ * Diálogo de confirmación del módulo. Se extrajo del JSX inline que usaban
+ * "Crear", "Cancelar" y activar/inactivar para que el flujo de eliminar
+ * reutilice exactamente el mismo estilo (fondo del tema, rounded-2xl y dos
+ * botones del mismo ancho). `titulo`, `icono` y `advertencia` son
+ * opcionales: los flujos preexistentes se pintan igual que siempre, y
+ * `cerrarConEscYOverlay` / `enfocarCancelar` solo se activan en el diálogo
+ * de eliminar para no alterar el comportamiento de los demás flujos.
+ */
+function ConfirmDialog({
+  mensaje,
+  titulo,
+  icono,
+  advertencia,
+  textoConfirmar = "Confirmar",
+  cerrarConEscYOverlay = false,
+  enfocarCancelar = false,
+  onConfirmar,
+  onCancelar,
+}: {
+  mensaje: React.ReactNode;
+  titulo?: string;
+  icono?: React.ReactNode;
+  advertencia?: React.ReactNode;
+  textoConfirmar?: string;
+  cerrarConEscYOverlay?: boolean;
+  enfocarCancelar?: boolean;
+  onConfirmar: () => void;
+  onCancelar: () => void;
+}) {
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+
+  // Esc cierra sin eliminar, igual que pulsar "Cancelar".
+  useEffect(() => {
+    if (!cerrarConEscYOverlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancelar();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cerrarConEscYOverlay, onCancelar]);
+
+  // Foco inicial en Cancelar: Enter nunca elimina por accidente.
+  useEffect(() => {
+    if (enfocarCancelar) cancelRef.current?.focus();
+  }, [enfocarCancelar]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4"
+      onClick={
+        cerrarConEscYOverlay
+          ? (e) => {
+              // Solo un clic en el overlay (fuera del diálogo) lo cierra.
+              if (e.target === e.currentTarget) onCancelar();
+            }
+          : undefined
+      }
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white dark:bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
+      >
+        {icono && <div className="mb-3">{icono}</div>}
+        {titulo && (
+          <h3 className="text-lg font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>
+            {titulo}
+          </h3>
+        )}
+        <p className={`text-sm mb-5 ${titulo ? "text-muted-foreground" : "text-foreground"}`}>
+          {mensaje}
+        </p>
+        {advertencia && (
+          <div className="-mt-3 mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-snug break-words text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            {advertencia}
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button
+            ref={cancelRef}
+            onClick={onCancelar}
+            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirmar}
+            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
+          >
+            {textoConfirmar}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─────────────────────────── Componente ───────────────────────────
 interface Props {
   insumos: Insumo[];
@@ -180,7 +286,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
 
   // Confirmación
   const [confirmState, setConfirmState] = useState<{
-    tipo: "crear-producto" | "cancelar-producto" | "cambiar-estado" | null;
+    tipo: "crear-producto" | "cancelar-producto" | "cambiar-estado" | "eliminar" | null;
     mensaje: string;
     id?: string;
     nuevoEstado?: "activo" | "inactivo";
@@ -372,6 +478,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   };
 
   const handleDelete = (id: string) => {
+    const reg = insumos.find(i => i.id === id);
     setInsumos(prev => {
       const next = prev.filter(i => i.id !== id);
       // Si la página actual queda vacía, retroceder
@@ -381,7 +488,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       }
       return next;
     });
-    toast.success("Insumo eliminado");
+    toast.success(
+      reg?.tipo === "ProductoInsumo"
+        ? "Producto insumo eliminado correctamente"
+        : "Insumo eliminado correctamente",
+    );
   };
 
   // ─────────────────────────── Estado Activo/Inactivo ───────────────────────────
@@ -581,6 +692,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         i.id === confirmState.id ? { ...i, estado: confirmState.nuevoEstado! } : i
       ));
       toast.success(`Estado actualizado`);
+    } else if (confirmState.tipo === "eliminar" && confirmState.id) {
+      // Reutiliza handleDelete: mantiene el retroceso de página si queda
+      // vacía, filtros y buscador intactos, y el recálculo de stock bajo.
+      handleDelete(confirmState.id);
     }
     setConfirmState({ tipo: null, mensaje: "" });
   };
@@ -588,6 +703,20 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   const cancelarConfirmacion = () => {
     setConfirmState({ tipo: null, mensaje: "" });
   };
+
+  // Registro que espera el diálogo de "eliminar" (si ese es el flujo activo)
+  // y productos insumo cuya composición lo incluyen: solo una advertencia
+  // visible, nunca bloquea la acción.
+  const regAEliminar =
+    confirmState.tipo === "eliminar" && confirmState.id
+      ? insumos.find(i => i.id === confirmState.id) ?? null
+      : null;
+  const usadosEnProductos =
+    regAEliminar && regAEliminar.tipo !== "ProductoInsumo"
+      ? insumos.filter(
+          p => p.tipo === "ProductoInsumo" && (p.composicion ?? []).some(c => c.id === regAEliminar.id),
+        )
+      : [];
 
   // ─────────────────────────── Render ───────────────────────────
   return (
@@ -621,15 +750,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
 
       {/* Search + Filtros */}
       <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, ID o categoría..."
-            className="w-full pl-10 pr-4 py-2.5 bg-muted dark:bg-input rounded-xl border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={v => { setSearch(v); setPage(1); }}
+          placeholder="Buscar por nombre, ID o categoría..."
+          wrapperClassName="w-full max-w-sm shrink-0"
+        />
         <select
           value={filtroEstado}
           onChange={e => { setFiltroEstado(e.target.value as "todos" | "activos" | "inactivos"); setPage(1); }}
@@ -724,50 +850,29 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   <td className="px-2 py-3 text-xs font-mono text-muted-foreground">{insumo.stockMaximo}</td>
                   <td className="px-2 py-3 text-xs font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-2 whitespace-nowrap">
-                      <button
-                        onClick={() => toggleEstado(insumo.id)}
-                        className={`relative w-10 h-[22px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${
-                          insumo.estado === "activo" ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"
-                        }`}
-                      >
-                        <span className={`absolute left-[2px] top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${
-                          insumo.estado === "activo" ? "translate-x-[18px]" : "translate-x-0"
-                        }`} />
-                      </button>
-                      <span className={`text-xs ${insumo.estado === "activo" ? "text-emerald-700 dark:text-emerald-300" : "text-gray-500 dark:text-gray-400"}`}>
-                        {insumo.estado === "activo" ? "Activo" : "Inactivo"}
-                      </span>
-                    </div>
+                    {/* Pill de estado (diseño de Proveedores). Mantiene el
+                        flujo de siempre: elegir la opción contraria pide la
+                        confirmación y si es la actual no hace nada. */}
+                    <EstadoSelect
+                      value={insumo.estado}
+                      onChange={nuevoEstado => {
+                        if (nuevoEstado === insumo.estado) return;
+                        toggleEstado(insumo.id);
+                      }}
+                      options={[
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                      ]}
+                    />
                   </td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
-                        title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openEdit(insumo)}
-                        title={inactivo ? "Activa el insumo para editarlo" : "Editar"}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          inactivo
-                            ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                            : "hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                        }`}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(insumo.id)}
-                        title="Eliminar"
-                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <ActionIcons
+                      onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
+                      onEdit={() => openEdit(insumo)}
+                      editDisabled={inactivo}
+                      editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
+                      onDelete={() => setConfirmState({ tipo: "eliminar", mensaje: "", id: insumo.id })}
+                    />
                   </td>
                 </tr>
               );
@@ -1230,10 +1335,15 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
               className="bg-white dark:bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border flex flex-col max-h-[90vh]"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Detalle de Insumo
+                <h3
+                  className="min-w-0 flex-1 pr-3 text-lg font-bold text-foreground break-words"
+                  style={{ fontFamily: SERIF }}
+                >
+                  {/* Título según el campo `tipo` del registro (no por el
+                      prefijo del ID): un solo modal, un solo título dinámico. */}
+                  {detalleItem.tipo === "ProductoInsumo" ? "Detalle de Producto Insumo" : "Detalle de Insumo"}
                 </h3>
-                <button onClick={() => setShowDetalleModal(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <button onClick={() => setShowDetalleModal(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1392,30 +1502,37 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       {/* ─────────────────────────── Modal Confirmación ─────────────────────────── */}
       <AnimatePresence>
         {confirmState.tipo && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
-            >
-              <p className="text-sm text-foreground mb-5">{confirmState.mensaje}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={cancelarConfirmacion}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={ejecutarConfirmacion}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
-                >
-                  Confirmar
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          <ConfirmDialog
+            mensaje={
+              regAEliminar
+                ? `Vas a eliminar «${regAEliminar.nombre}» (ID ${regAEliminar.id}). Esta acción no se puede deshacer.`
+                : confirmState.mensaje
+            }
+            titulo={
+              confirmState.tipo === "eliminar"
+                ? regAEliminar?.tipo === "ProductoInsumo"
+                  ? "¿Eliminar producto insumo?"
+                  : "¿Eliminar insumo?"
+                : undefined
+            }
+            icono={
+              confirmState.tipo === "eliminar" ? (
+                <span className="inline-flex w-10 h-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </span>
+              ) : undefined
+            }
+            advertencia={
+              usadosEnProductos.length > 0
+                ? `Este insumo se usa en los productos insumo: ${usadosEnProductos.map(p => p.nombre).join(", ")}`
+                : undefined
+            }
+            textoConfirmar={confirmState.tipo === "eliminar" ? "Eliminar" : "Confirmar"}
+            cerrarConEscYOverlay={confirmState.tipo === "eliminar"}
+            enfocarCancelar={confirmState.tipo === "eliminar"}
+            onConfirmar={ejecutarConfirmacion}
+            onCancelar={cancelarConfirmacion}
+          />
         )}
       </AnimatePresence>
     </div>

@@ -2,17 +2,15 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  Plus, Check, Ban, CheckCircle2,
+  Plus, Check, Ban, CheckCircle2, HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "../utils/exportExcelEstilizado";
+import { exportToExcel } from "../utils/exportExcel";
 import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
 import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect } from "../components/EstadoSelect";
-import { SearchInput } from "../components/SearchInput";
-import { ActionIcons } from "../components/ActionIcons";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
@@ -30,8 +28,8 @@ const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 
 const ESTADO_CONFIG: Record<EstadoGestion, string> = {
-  "Recibido":   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
-  "Anulado":    "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300",
+  "Recibido":   "bg-emerald-100 text-emerald-800",
+  "Anulado":    "bg-red-100 text-red-800",
 };
 
 /** Badge de estado, con el mismo estilo que el detalle de Orden de Compra. */
@@ -91,15 +89,15 @@ const MSJ_SIN_PRECIOS = "Primero elige cómo vienen los precios en la factura";
 const OPCIONES_IVA = [
   {
     valor: true,
-    titulo: "Con IVA incluido",
+    titulo: "Precios con IVA incluido",
     tag: "Más común",
-    desc: "El IVA ya está en el precio",
+    desc: "El precio de cada producto ya tiene el IVA. El sistema calcula cuánto IVA pagaste.",
   },
   {
     valor: false,
-    titulo: "Sin IVA",
+    titulo: "Precios sin IVA",
     tag: "",
-    desc: "El IVA se suma al final",
+    desc: "La factura cobra el IVA aparte, al final. El sistema lo suma al total.",
   },
 ] as const;
 
@@ -120,7 +118,6 @@ type ItemFactura = {
 
 export interface NuevaCompraData {
   proveedor: string;
-  proveedorId?: string;
   numeroFactura: string;
   fechaFactura: string;
   valorTotal: number;
@@ -140,7 +137,6 @@ function CompraForm({
   proveedores,
   setProveedores,
   insumos,
-  gestiones,
   mode = "create",
   compra,
   fullPage = false,
@@ -151,8 +147,6 @@ function CompraForm({
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
-  /** Gestiones de compra existentes para validar factura única. */
-  gestiones: GestionCompra[];
   mode?: "create" | "view";
   compra?: GestionCompra;
   fullPage?: boolean;
@@ -215,27 +209,36 @@ function CompraForm({
    *  y el botón pasa a "Actualizar" (pantalla completa). */
   const [editando, setEditando] = useState<string | null>(null);
 
-  // Factura única: normalización y validación de duplicados
-  const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
-  const facturaActualNormalizada = normalizarFactura(numeroFactura);
-  const facturaDuplicada = gestiones.some(
-    (g) =>
-      g.numeroFactura &&
-      normalizarFactura(g.numeroFactura) === facturaActualNormalizada &&
-      g.id !== (compra?.id ?? ""),
-  );
-  const [facturaTocada, setFacturaTocada] = useState(false);
-
   const [provQuery, setProvQuery] = useState(compra?.proveedor ?? "");
-  const [provId, setProvId] = useState(compra?.proveedorId ?? "");
   const [provSugAbierto, setProvSugAbierto] = useState(false);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
+  const [showSalirConf, setShowSalirConf] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
-  /** Cerrar: vuelve directo al listado sin confirmación. */
+  // Confirmación al salir (solo pantalla completa): guarda una foto del estado
+  // inicial del formulario para saber si el usuario llegó a escribir algo.
+  const inicialRef = useRef({
+    numeroFactura,
+    fechaFactura,
+    provQuery,
+    iva: ivaIncluido,
+    items: JSON.stringify(items),
+  });
+  const sucio =
+    numeroFactura !== inicialRef.current.numeroFactura ||
+    fechaFactura !== inicialRef.current.fechaFactura ||
+    provQuery !== inicialRef.current.provQuery ||
+    ivaIncluido !== inicialRef.current.iva ||
+    JSON.stringify(items) !== inicialRef.current.items;
+
+  /** Cerrar: si hay datos escritos pide confirmación antes de perderlos. */
   const salir = () => {
+    if (isPage && sucio) {
+      setShowSalirConf(true);
+      return;
+    }
     onClose();
   };
 
@@ -284,9 +287,7 @@ function CompraForm({
   const [ivaIntentado, setIvaIntentado] = useState(false);
 
   const errorNumeroFactura = numeroFactura.trim()
-    ? facturaDuplicada
-      ? "Ya existe una compra con este número de factura"
-      : undefined
+    ? undefined
     : "Ingresa el número de factura.";
   const errorFechaFactura = fechaFactura ? undefined : "Selecciona la fecha de la factura.";
   // El proveedor es opcional en este formulario.
@@ -363,22 +364,18 @@ function CompraForm({
   const faltaIva = ivaIncluido === null;
   // Guardar queda habilitado aunque falte elegir el IVA: en ese caso el clic
   // muestra el mensaje rojo bajo el selector (y el toast) sin abrir el confirm.
-  const botonGuardarOk = camposOk && !facturaDuplicada;
+  const botonGuardarOk = camposOk;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
     setProvQuery(p.nombre);
-    setProvId(p.id);
     setProvSugAbierto(false);
   };
 
   const crearProveedor = (p: ProveedorRef) => {
-    // Actualizar el estado global de proveedores en App.tsx para que el
-    // listado de Proveedores lo vea inmediatamente.
     if (!proveedores.some((x) => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
       setProveedores((prev) => [...prev, p]);
     }
     setProvQuery(p.nombre);
-    setProvId(p.id);
     setMostrarNuevoProveedor(false);
     toast.success(`Proveedor "${p.nombre}" creado`);
   };
@@ -387,6 +384,7 @@ function CompraForm({
     // Punto 2: el precio del catálogo viene en `costoUnitario` (number), que es
     // el mismo que muestra la lista desplegable. `precioUnitario` es null en las
     // semillas, por eso el Monto unitario quedaba en 0.
+    console.log("[Punto 2] onSelect insumo:", ins);
     setItemId(ins.id);
     setItemNombre(ins.nombre);
     setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
@@ -512,10 +510,6 @@ function CompraForm({
       toast.error("Ingresa el número de factura.");
       return;
     }
-    if (facturaDuplicada) {
-      toast.error("Ya existe una compra con este número de factura");
-      return;
-    }
     if (!fechaFactura) {
       toast.error("Selecciona la fecha de la factura.");
       return;
@@ -544,7 +538,6 @@ function CompraForm({
     setShowGuardarConf(false);
     onGuardar({
       proveedor: provQuery.trim(),
-      proveedorId: provId,
       numeroFactura: numeroFactura.trim(),
       fechaFactura,
       valorTotal: total,
@@ -645,12 +638,12 @@ function CompraForm({
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
-              {/* Columna IZQUIERDA — formulario (50 %). En el modal es solo un
+              {/* Columna IZQUIERDA — formulario (40 %). En el modal es solo un
                   grupo vertical: mantiene el mismo flujo de antes. */}
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:overflow-y-auto"
+                    ? "w-full lg:w-[40%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:overflow-y-auto"
                     : "flex flex-col gap-5"
                 }
               >
@@ -671,15 +664,14 @@ function CompraForm({
                 {isPage && <p className={seccionCls}>Datos de la factura</p>}
 
                 {/* Detalle (vista): 3 columnas. Creación en pantalla completa:
-                    Fila 1: Número de factura * | Proveedor (opcional)
-                    Fila 2: Fecha de factura * | Estado (badge Recibido)
-                    En el modal se conserva la rejilla original. */}
+                    Número y Proveedor a ancho completo y, debajo, Fecha · Estado
+                    en la misma fila. En el modal se conserva la rejilla de 3. */}
                 <div
                   className={`grid gap-4 shrink-0 ${
                     isView
                       ? "grid-cols-2 md:grid-cols-3"
                       : isPage
-                        ? "grid-cols-2"
+                        ? "grid-cols-1"
                         : "grid-cols-1 md:grid-cols-3"
                   }`}
                 >
@@ -693,16 +685,16 @@ function CompraForm({
                       <input
                         value={numeroFactura}
                         onChange={(e) => setNumeroFactura(e.target.value)}
-                        onBlur={() => { marcarTocado("numeroFactura"); setFacturaTocada(true); }}
+                        onBlur={() => marcarTocado("numeroFactura")}
                         placeholder="Ej: FAC-2026-0001"
                         className={campoCls(
-                          (tocado.numeroFactura || facturaTocada || intentoGuardar) ? errorNumeroFactura : undefined
+                          (tocado.numeroFactura || intentoGuardar) ? errorNumeroFactura : undefined
                         )}
-                        aria-invalid={!!((tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura)}
+                        aria-invalid={!!((tocado.numeroFactura || intentoGuardar) && errorNumeroFactura)}
                         autoFocus
                       />
                     )}
-                    {!isView && (tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura && (
+                    {!isView && (tocado.numeroFactura || intentoGuardar) && errorNumeroFactura && (
                       <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorNumeroFactura}</p>
                     )}
                   </div>
@@ -798,8 +790,8 @@ function CompraForm({
 
                       <div className="relative">
                         <label className={labelCls}>Estado</label>
-                        {/* Badge "Recibido" alineado a la izquierda, centrado verticalmente a la altura del input */}
-                        <div className="h-10 flex items-center">
+                        {/* Badge "Recibido" centrado en caja de 40px (h-10) */}
+                        <div className="h-10 flex items-center justify-center px-3 rounded-xl bg-muted border border-border">
                           <EstadoBadge e="Recibido" />
                         </div>
                       </div>
@@ -830,9 +822,7 @@ function CompraForm({
 
                       <div className={campoCortoCls}>
                         <label className={labelCls}>Estado</label>
-                        <div className="py-2">
-                          <EstadoBadge e="Recibido" />
-                        </div>
+                        <EstadoBadge e="Recibido" />
                       </div>
                     </>
                   )}
@@ -894,7 +884,7 @@ function CompraForm({
                 </div>
 
               {/* Selector de precios (pantalla completa): dos tarjetas tipo
-                  radio, en la MISMA fila. NINGUNA viene elegida al abrir; con
+                  radio, una debajo de otra. NINGUNA viene elegida al abrir; con
                   al menos un insumo la no elegida queda bloqueada y su tooltip
                   explica cómo desbloquearla. El error en ROJO solo aparece
                   cuando el usuario intenta agregar o guardar. */}
@@ -922,7 +912,7 @@ function CompraForm({
                   <div
                     role="radiogroup"
                     aria-label="Cómo vienen los precios en la factura"
-                    className="flex gap-2"
+                    className="flex flex-col gap-2"
                   >
                     {OPCIONES_IVA.map(({ valor, titulo, tag, desc }) => {
                       const elegida = ivaIncluido === valor;
@@ -941,7 +931,7 @@ function CompraForm({
                             setIvaIncluido(valor);
                             setIvaIntentado(false);
                           }}
-                          className={`flex-1 flex items-start gap-2 px-2 py-2 rounded-xl border text-left transition-colors ${
+                          className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
                             elegida
                               ? "border-primary bg-primary/5"
                               : "border-border bg-background"
@@ -959,17 +949,17 @@ function CompraForm({
                             {elegida && <span className="w-2 h-2 rounded-full bg-primary" />}
                           </span>
                           <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="text-[12px] font-semibold text-foreground">
+                            <span className="flex items-center gap-2">
+                              <span className="text-[13px] font-semibold text-foreground">
                                 {titulo}
                               </span>
                               {tag && (
-                                <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                                   {tag}
                                 </span>
                               )}
                             </span>
-                            <span className="block text-[11px] leading-snug text-muted-foreground mt-0.5">
+                            <span className="block text-xs leading-snug text-muted-foreground mt-0.5">
                               {desc}
                             </span>
                           </span>
@@ -986,14 +976,14 @@ function CompraForm({
               </section>
 
               {/* Sección 2 — "Agregar insumo": fila con buscador, stepper y
-                  botón en una sola línea. En pantalla completa es el ÚLTIMO
-                  bloque de la columna izquierda (la tabla vive en la derecha). */}
+                  botón. En pantalla completa es el ÚLTIMO bloque de la columna
+                  izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {isPage && <p className={seccionCls}>Agregar insumo</p>}
+                <div className="shrink-0 relative">
                   <CompactInsumoForm
                     containerRef={itemRef}
-                    titulo={isPage ? "" : "Agregar insumo"}
+                    titulo="Agregar insumo"
                     nombre={itemNombre}
                     onNombreChange={(value) => {
                       setItemNombre(value);
@@ -1006,10 +996,12 @@ function CompraForm({
                     unidad={itemUnidad}
                     onUnidadChange={setItemUnidad}
                     disabled={ivaIncluido === null}
+                    disabledMsg={MSJ_SIN_PRECIOS}
                     precio={itemPrecio}
                     onPrecioChange={setItemPrecio}
                     iva={itemIva}
                     onIvaChange={setItemIva}
+                    precioLabel={labelMonto}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
@@ -1022,8 +1014,8 @@ function CompraForm({
                       setShowNuevoInsumo(true);
                     }}
                     compacto={isPage}
+                    nombreRef={nombreRef}
                     buttonLabel={editando ? "Actualizar" : "Agregar"}
-                    variante="compacta"
                   />
                   {/* Aviso de insumos/total: en pantalla completa va justo
                       debajo de la fila (solo empuja la tabla al aparecer); en
@@ -1033,16 +1025,17 @@ function CompraForm({
                       {errorItems ?? errorTotal}
                     </p>
                   )}
+                </div>
                 </section>
               )}
               </div>
 
-              {/* Columna DERECHA (50 %) — insumos agregados, totales y
+              {/* Columna DERECHA (60 %) — insumos agregados, totales y
                   botones. Separada de la izquierda por una línea vertical. */}
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6"
+                    ? "flex-1 min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1132,9 +1125,14 @@ function CompraForm({
                   showActions
                   onRemove={eliminarItem}
                   onUpdate={actualizarItem}
+                  // Pantalla completa: el lápiz pasa la fila al formulario de
+                  // la izquierda en lugar de editar en línea.
+                  onEdit={isPage ? editarItem : undefined}
                   totalLabel="Total pagado"
                   modoIva
                   ivaIncluido={ivaIncluido ?? true}
+                  // En pantalla completa la tabla scrollea sola y deja los
+                  // totales y los botones fuera del área con scroll.
                   enPagina={isPage}
                   className={isPage ? "flex-1 min-h-0" : ""}
                 />
@@ -1233,6 +1231,28 @@ function CompraForm({
           />
         )}
       </AnimatePresence>
+
+      {/* Volver con datos escritos (solo pantalla completa): pide confirmación
+          antes de descartar lo que se escribió. */}
+      <AnimatePresence>
+        {showSalirConf && (
+          <ConfirmModal
+            title="¿Salir sin guardar?"
+            detail="Hay datos en esta compra que se perderán si sales ahora."
+            confirmLabel="Salir"
+            icon={
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-amber-600" />
+              </div>
+            }
+            onConfirm={() => {
+              setShowSalirConf(false);
+              onClose();
+            }}
+            onCancel={() => setShowSalirConf(false)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -1265,7 +1285,6 @@ export function NuevaCompraPage({
       id: nuevoId,
       ordenId: "",
       proveedor: data.proveedor,
-      proveedorId: data.proveedorId,
       numeroFactura: data.numeroFactura,
       fechaFactura: data.fechaFactura,
       valorTotal: data.valorTotal,
@@ -1291,7 +1310,6 @@ export function NuevaCompraPage({
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}
-      gestiones={gestiones}
       onClose={onBack}
       onGuardar={handleGuardar}
     />
@@ -1336,7 +1354,18 @@ export function GestionCompraScreen({
   // (lo mismo que "devolvería" el GET del detalle) al abrir el ojo.
   useEffect(() => {
     if (import.meta.env.DEV && detail) {
-      // Debug logging removed
+      console.log(
+        "[detalle-compra] JSON recibido por CompraForm mode=view:",
+        JSON.stringify(
+          {
+            ...detail,
+            proveedor: detail.proveedor ?? getOrden(detail.ordenId)?.proveedor ?? "",
+            orden: getOrden(detail.ordenId) ?? null,
+          },
+          null,
+          2
+        )
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail]);
@@ -1410,58 +1439,24 @@ export function GestionCompraScreen({
     toast.success(`Estado cambiado a: ${next}`);
   };
 
-  const handleDownload = async () => {
-    // Preparar datos agrupados: cada compra con sus insumos debajo
-    const comprasParaExcel: GestionCompraConInsumos[] = filtered.map(g => {
-      const orden = getOrden(g.ordenId);
-      // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
-      const prov = g.proveedorId
-        ? proveedores.find(p => p.id === g.proveedorId)
-        : proveedores.find(p => 
-            p.nombre === (orden?.proveedor ?? g.proveedor) || 
-            p.nombre.toLowerCase() === (orden?.proveedor ?? g.proveedor)?.toLowerCase() ||
-            p.nombre.toLowerCase().includes((orden?.proveedor ?? g.proveedor)?.toLowerCase() || '') ||
-            (orden?.proveedor ?? g.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
-          );
-      const idsOrden = new Set(orden?.items.map(i => i.idInsumo) ?? []);
-      
-      const items = (g.items ?? []).map(item => {
-        const esSolicitado = idsOrden.has(item.idInsumo) || (item.esNoSolicitado === false && idsOrden.size === 0);
-        let tipo: "Solicitado" | "No solicitado" | "—";
-        if (orden && idsOrden.size > 0) {
-          tipo = esSolicitado ? "Solicitado" : "No solicitado";
-        } else {
-          tipo = "—";
-        }
-        return {
-          nombre: item.nombre,
-          tipo,
-          cantidad: item.cantidad,
-          unidad: item.unidad,
-          costoUnitario: item.costoUnitario,
-          iva: item.iva ?? 0,
-        };
-      });
-
-      return {
-        id: g.id,
-        numeroFactura: g.numeroFactura || "—",
-        proveedor: prov?.nombre ?? orden?.proveedor ?? g.proveedor ?? "—",
-        nit: prov?.nit ?? "",
+  const handleDownload = () => {
+    exportToExcel(
+      filtered.map(g => ({
+        proveedor: (getOrden(g.ordenId)?.proveedor ?? g.proveedor) || "—",
         fechaFactura: g.fechaFactura,
+        numeroFactura: g.numeroFactura,
+        total: fmtCOP(g.valorTotal),
         estado: g.estado,
-        subtotalSinIva: g.subtotalSinIva ?? 0,
-        totalIva: g.totalIva ?? 0,
-        totalPagado: g.totalPagado ?? g.valorTotal,
-        motivoAnulacion: g.motivoAnulacion,
-        items,
-      };
-    });
-
-    await exportarGestionComprasConInsumosExcel({
-      compras: comprasParaExcel,
-      nombreArchivo: "gestion-de-compras",
-    });
+      })),
+      [
+        { key: "proveedor", label: "Proveedor" },
+        { key: "fechaFactura", label: "Fecha de factura" },
+        { key: "numeroFactura", label: "N° Factura" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+      ],
+      "gestion-de-compras"
+    );
     toast.success("Excel descargado");
   };
 
@@ -1490,12 +1485,15 @@ export function GestionCompraScreen({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <SearchInput
-          value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por ID, OC o N° Factura..."
-          wrapperClassName="w-full max-w-sm shrink-0"
-        />
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Buscar por ID, OC o N° Factura..."
+            className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
@@ -1523,30 +1521,18 @@ export function GestionCompraScreen({
                 )
                 : paged.map(g => {
                   const orden = getOrden(g.ordenId);
-                  // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
-                  const prov = g.proveedorId
-                    ? proveedores.find(p => p.id === g.proveedorId)
-                    : proveedores.find(p => 
-                        p.nombre === (g.proveedor || orden?.proveedor) || 
-                        p.nombre.toLowerCase() === (g.proveedor || orden?.proveedor)?.toLowerCase() ||
-                        p.nombre.toLowerCase().includes((g.proveedor || orden?.proveedor)?.toLowerCase() || '') ||
-                        (g.proveedor || orden?.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
-                      );
-                  const nit = prov?.nit ?? "";
-                  const nombreMostrar = prov?.nombre || g.proveedor || orden?.proveedor || "—";
                   return (
                     <tr key={g.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3.5 text-xs">
                         {g.numeroFactura
                           ? <span className="font-mono font-semibold text-foreground">{g.numeroFactura}</span>
-                          : <span className="text-muted-foreground">—</span>}
+                          : <span className="text-amber-600 font-medium italic">Pendiente</span>}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {g.fechaFactura || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-sm text-foreground">
-                        <p className="text-sm text-foreground">{nombreMostrar}</p>
-                        {nit && <p className="text-[11px] text-muted-foreground font-mono">{nit}</p>}
+                        {(orden?.proveedor ?? g.proveedor) || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0
@@ -1626,7 +1612,6 @@ export function GestionCompraScreen({
             proveedores={proveedores}
             setProveedores={setProveedores}
             insumos={insumos}
-            gestiones={gestiones}
             ordenes={ordenes}
             onClose={() => setDetail(null)}
             onGuardar={() => {}}

@@ -1,12 +1,17 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
-import { useProveedorForm } from "../components/useProveedorForm";
+import { useProveedorForm, filtrarNit, soloDireccion } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
-import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+  type EstadoOption,
+} from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 
 const SERIF = "var(--font-titulo)";
@@ -140,8 +145,32 @@ function Modal({
   );
 }
 
-export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = true }: { canCreate?: boolean; canEdit?: boolean; canDelete?: boolean } = {}) {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+import type { OrdenCompra, GestionCompra } from "./OrdenCompraScreen";
+
+interface SuppliersScreenProps {
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  ordenes?: OrdenCompra[];
+  gestiones?: GestionCompra[];
+  /** Estado global de proveedores desde App.tsx */
+  proveedores?: ProveedorRef[];
+  setProveedores?: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
+}
+
+export function SuppliersScreen({ 
+  canCreate = true, 
+  canEdit = true, 
+  canDelete = true,
+  ordenes = [],
+  gestiones = [],
+  proveedores: proveedoresProp,
+  setProveedores: setProveedoresProp,
+}: SuppliersScreenProps) {
+  // Usar el estado global de proveedores si está disponible, si no, usar datos locales
+  const [suppliersLocal, setSuppliersLocal] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+  const suppliers = proveedoresProp ?? suppliersLocal;
+  const setSuppliers = setProveedoresProp ?? setSuppliersLocal;
   const [search,    setSearch]    = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem,   setEditItem]   = useState<Supplier | null>(null);
@@ -151,11 +180,19 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   const [form, setForm] = useState(emptySupplier());
 
   const [page, setPage] = useState(1);
+  // Máximo 5 proveedores por página: la tabla nunca hace scroll por sí sola,
+  // la única forma de ver el resto es el paginador de abajo.
   const PER_PAGE = 5;
+
+  // Nota: La lógica anterior que consultaba si el proveedor tenía compras u
+  // órdenes asociadas para decidir si se podían editar el NIT y el nombre fue
+  // eliminada. Ahora el NIT y el nombre NUNCA se pueden editar después de creado
+  // el proveedor, tenga o no compras u órdenes asociadas.
 
   const filtered = useMemo(
     () => suppliers.filter(s =>
       s.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      s.nit.toLowerCase().includes(search.toLowerCase()) ||
       s.telefono.toLowerCase().includes(search.toLowerCase()) ||
       s.email.toLowerCase().includes(search.toLowerCase()) ||
       s.asesorComercial.toLowerCase().includes(search.toLowerCase()) ||
@@ -165,7 +202,11 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   );
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  // Página efectiva recortada al rango: si el total baja (borrado o filtro),
+  // `page` puede quedar fuera de rango durante un render y la tabla saldría
+  // vacía. Así nunca se pinta una página inexistente.
+  const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
   // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
   // más allá de la última página: la tabla salía vacía sin mensaje de "sin
@@ -203,17 +244,17 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   const handleEdit = () => {
     if (!editItem) return;
     editForm.setIntentoGuardar(true);
-    // Solo se validan los campos que este formulario realmente guarda (abajo):
-    // NIT y Nombre están bloqueados, no se actualizan, y sus datos semilla no
-    // cumplen la validación ("900.123.456-1" frente a 10 dígitos) — lo que
-    // dejaba el guardado bloqueado sin ningún error visible.
-    const camposGuardados = ["asesorComercial", "telefono", "email", "direccion", "estado"] as const;
-    if (!camposGuardados.every(c => !editForm.errors[c])) {
+    // Validar todos los campos editables (nombre y nit NUNCA se editan)
+    const camposAValidar = ["asesorComercial", "telefono", "email", "direccion", "estado"];
+    if (!camposAValidar.every(c => !editForm.errors[c])) {
       toast.error("Revisa los campos del formulario");
       return;
     }
+    // El NIT y el nombre NUNCA se pueden editar: se conservan los valores originales
     setSuppliers(p => p.map(s => s.id === editItem.id ? {
       ...s,
+      nombre: s.nombre, // NUNCA se actualiza
+      nit: s.nit, // NUNCA se actualiza
       asesorComercial: editForm.values.asesorComercial,
       telefono: editForm.values.telefono,
       email: editForm.values.email,
@@ -244,7 +285,8 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
     setConfirmToggleId(null);
   };
 
-  // Campos para EDITAR — mismo layout 2 columnas, NIT y Nombre bloqueados
+  // El NIT y el nombre NUNCA se pueden editar después de creado el proveedor.
+  // Se bloquean siempre, tenga o no compras u órdenes asociadas.
   const editForm = useProveedorForm(
     {
       nombre: editItem?.nombre ?? "",
@@ -283,12 +325,12 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT</label>
             <div className={disabledCls}>{editItem.nit}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">No se puede modificar</p>
+            <p className="text-[10px] text-muted-foreground mt-1">El NIT y el nombre no se pueden modificar después de creado el proveedor</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre <span className="text-red-500">*</span></label>
             <div className={disabledCls}>{editItem.nombre}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">No se puede modificar</p>
+            <p className="text-[10px] text-muted-foreground mt-1">El NIT y el nombre no se pueden modificar después de creado el proveedor</p>
           </div>
         </div>
       </div>
@@ -350,8 +392,8 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
             <input
               value={editForm.values.direccion}
               onChange={e => {
-                editForm.setCampo("direccion", e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, ""));
-                setEditItem(x => x && { ...x, direccion: e.target.value.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'.#]/g, "") });
+                editForm.setCampo("direccion", soloDireccion(e.target.value));
+                setEditItem(x => x && { ...x, direccion: soloDireccion(e.target.value) });
               }}
               onBlur={() => editForm.marcarTocado("direccion")}
               className={`${inputCls} ${editForm.campoCls("direccion")}`}
@@ -385,19 +427,21 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
   ) : null;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 py-3 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Proveedor</h1>
+          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Proveedor</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{suppliers.length} proveedores registrados</p>
         </div>
-        {canCreate && (
-          <button onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
-            <Plus className="w-4 h-4" /> Crear Proveedor
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <button onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
+              <Plus className="w-4 h-4" /> Crear Proveedor
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -408,32 +452,54 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      {/* Table — el card mide sólo lo que ocupan el encabezado y las filas
+          (sin flex-1 ni min-height): no queda espacio vacío debajo de la
+          última fila. Si el alto disponible no alcanza, es el wrapper interno
+          el que scrollea, nunca la página.
+          `table-fixed` + <colgroup> reparte el ancho entre las 6 columnas, así
+          que la tabla nunca supera el ancho disponible (sin scroll horizontal
+          en escritorio); el `min-w` es sólo el piso para que en tablet/celular
+          quepan las columnas y la tabla se desplace dentro del card. */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
+        <div className="overflow-auto">
+          <table className="w-full table-fixed min-w-[860px]">
+            <colgroup>
+              <col className="w-[24%]" />
+              <col className="w-[15%]" />
+              <col className="w-[13%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
+            </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Nombre", "Teléfono", "Email", "Asesor Comercial", "Estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                {["Nombre", "Contacto", "Teléfono", "Email", "Estado", "Acciones"].map(h => (
+                  <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
                     <p className="text-4xl mb-3">🚛</p>
                     <p>No se encontraron proveedores</p>
                   </td>
                 </tr>
               ) : paged.map(s => (
                 <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-medium text-foreground">{s.nombre}</td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.telefono}</td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.email}</td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{s.asesorComercial || "—"}</td>
-                  <td className="px-4 py-3.5">
+                  <td className="px-3 py-2 overflow-hidden">
+                    <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${s.nit}`}>NIT {s.nit}</p>
+                  </td>
+                  <td className="px-3 py-2 overflow-hidden">
+                    <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
+                  </td>
+                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.telefono}>{s.telefono}</td>
+                  {/* El email largo se corta con "…" y el `title` muestra el
+                      texto completo al pasar el cursor. */}
+                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.email}>{s.email}</td>
+                  <td className="px-3 py-2 overflow-hidden">
                     <EstadoSelect
                       value={s.estado}
                       onChange={(nuevoEstado) => {
@@ -441,8 +507,8 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
                         setConfirmToggleId(s.id);
                       }}
                       options={[
-                        { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-                        { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
                       ]}
                     />
                   </td>
@@ -473,20 +539,44 @@ export function SuppliersScreen({ canCreate = true, canEdit = true, canDelete = 
         </div>
       </div>
 
-      {filtered.length > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-center mt-4">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronLeft className="w-4 h-4" /></button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <button key={n} onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                {n}
-              </button>
-            ))}
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronRight className="w-4 h-4" /></button>
-          </div>
+      {/* Paginador compacto y centrado — sólo aparece con más de 5 proveedores
+          filtrados (con 5 o menos se muestran todos y no hace falta).
+          Sólo flechas ‹ › sin texto, sin borde ni fondo, en gris claro y
+          deshabilitadas en el extremo correspondiente; los números van sin
+          borde y la página actual en un círculo rojo del tema (bg-primary) con
+          el número en blanco. Todo a 32 px de alto (w-8 h-8). */}
+      {filtered.length > PER_PAGE && (
+        <div className="flex items-center justify-center gap-1 mt-2 shrink-0">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={pageActual === 1}
+            aria-label="Página anterior"
+            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+            <button
+              key={n}
+              onClick={() => setPage(n)}
+              aria-current={n === pageActual ? "page" : undefined}
+              className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${
+                n === pageActual
+                  ? "bg-primary text-white"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={pageActual === totalPages}
+            aria-label="Página siguiente"
+            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       )}
 
