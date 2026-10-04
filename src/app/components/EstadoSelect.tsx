@@ -21,7 +21,9 @@ export interface EstadoOption<T extends string> {
 
 interface EstadoSelectProps<T extends string> {
   value: T;
-  onChange: (value: T) => void;
+  /** Opcional: las pastillas de solo lectura (Ver detalle, modal de
+      confirmación) no cambian nada y se quedan sin menú. */
+  onChange?: (value: T) => void;
   options: EstadoOption<T>[];
   disabled?: boolean;
   className?: string;

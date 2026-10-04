@@ -12,6 +12,12 @@ import { MensajeError } from "../components/campo";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
+import {
+  EstadoSelect,
+  ESTADO_ACTIVO_COLOR,
+  ESTADO_INACTIVO_COLOR,
+  type EstadoOption,
+} from "../components/EstadoSelect";
 import { GRUPOS_ICONOS } from "../constants/iconosCategoria";
 
 const SERIF = "var(--font-titulo)";
@@ -82,12 +88,33 @@ export interface CategoriaProducto {
    * originales conservan su ícono fijo, escrito en App.tsx.
    */
   icono?: string;
+  /**
+   * Activo / Inactivo. Opcional: el dato guardado antes de que existiera el
+   * campo sigue siendo Activo (ver `estadoDe`). Una Inactiva sigue en este
+   * listado, pero no se muestra en el landing ni en el selector de Categoría
+   * de producto.
+   */
+  estado?: EstadoCategoria;
 }
 
+export type EstadoCategoria = "Activo" | "Inactivo";
+
+/** Estado de una categoría, con el que no lo tiene todavía: Activo. */
+export const estadoDe = (c?: CategoriaProducto): EstadoCategoria =>
+  c?.estado ?? "Activo";
+
+/** Opciones de la pill de estado: mismos colores que Proveedores/Usuarios. Se
+    usan en el selector del listado y, en solo lectura (Ver detalle y modal de
+    confirmación), con el mismo EstadoSelect deshabilitado. */
+export const OPCIONES_ESTADO_CATEGORIA: EstadoOption<EstadoCategoria>[] = [
+  { value: "Activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+  { value: "Inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+];
+
 export const INITIAL_CATEGORIAS: CategoriaProducto[] = [
-  { id: "CAT-001", nombre: "Pizzas" },
-  { id: "CAT-002", nombre: "Lasañas" },
-  { id: "CAT-003", nombre: "Bebidas" },
+  { id: "CAT-001", nombre: "Pizzas", estado: "Activo" },
+  { id: "CAT-002", nombre: "Lasañas", estado: "Activo" },
+  { id: "CAT-003", nombre: "Bebidas", estado: "Activo" },
 ];
 
 /**
@@ -201,6 +228,15 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   const [grupoIconoEdicion, setGrupoIconoEdicion] = useState(0);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  // Estado que se guarda al crear: empieza en Activo. El de Editar viaja en
+  // `editItem` y se confirma en el modal de la tabla, igual que el producto.
+  const [formEstado, setFormEstado] = useState<EstadoCategoria>("Activo");
+  const [confirmEstado, setConfirmEstado] = useState<{
+    id: string;
+    nombre: string;
+    current: EstadoCategoria;
+    next: EstadoCategoria;
+  } | null>(null);
 
   const inputCls =
     "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -272,28 +308,34 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     const newId = `CAT-${String(nextNum).padStart(3, "0")}`;
     setCategorias((p) => [
       ...p,
-      { id: newId, nombre: formNombre.trim(), icono: formIcono },
+      { id: newId, nombre: formNombre.trim(), icono: formIcono, estado: formEstado },
     ]);
     setShowCreate(false);
     setFormNombre("");
     setFormIcono("");
+    setFormEstado("Activo");
     toast.success("Categoría creada correctamente");
   };
 
   const handleEdit = () => {
     if (!editItem) return;
-    // Las originales conservan nombre e ícono: el guardado no las toca.
-    if (CATEGORIAS_FIJAS.has(editItem.id)) {
-      setEditItem(null);
-      return;
+    const esFija = CATEGORIAS_FIJAS.has(editItem.id);
+    // Las originales conservan nombre e ícono (el suyo está escrito en el
+    // landing), así que no se valida lo que no se puede tocar: solo cambia su
+    // estado.
+    if (!esFija) {
+      const errs = validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
+      setEditErrors(errs);
+      if (Object.keys(errs).length) return;
     }
-    const errs = validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
-    setEditErrors(errs);
-    if (Object.keys(errs).length) return;
-    const nombre = editItem.nombre.trim();
+    const estado = editItem.estado ?? "Activo";
     setCategorias((p) =>
       p.map((x) =>
-        x.id === editItem.id ? { ...x, nombre, icono: editItem.icono } : x,
+        x.id === editItem.id
+          ? esFija
+            ? { ...x, estado }
+            : { ...x, nombre: editItem.nombre.trim(), icono: editItem.icono, estado }
+          : x,
       ),
     );
     setEditItem(null);
@@ -307,7 +349,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -326,6 +368,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             onClick={() => {
               setFormNombre("");
               setFormIcono("");
+              setFormEstado("Activo");
               setCreateErrors({});
               setShowCreate(true);
             }}
@@ -347,16 +390,17 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+            <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
               <tr>
                 {[
                   "ID",
                   "Nombre Categoría",
+                  "Estado",
                   "Acciones",
                 ].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-3 text-left font-semibold whitespace-nowrap"
+                    className="px-3 py-2 text-left font-semibold whitespace-nowrap"
                   >
                     {h}
                   </th>
@@ -367,8 +411,8 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={3}
-                    className="px-4 py-14 text-center text-muted-foreground"
+                    colSpan={4}
+                    className="px-3 py-8 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">🏷️</p>
                     <p>No se encontraron categorías</p>
@@ -380,7 +424,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     key={c.id}
                     className="hover:bg-muted/20 transition-colors"
                   >
-                    <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
+                    <td className="px-3 py-2 text-xs font-mono font-semibold text-foreground">
                       {/* Solo el número: de "CAT-005" muestra "005". El dato
                           `c.id` NO cambia (lo usan CATEGORIAS_FIJAS,
                           ICONOS_FIJOS, borrar/editar y el idCategoria de los
@@ -388,7 +432,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                           `c.id` completo. */}
                       {c.id.replace("CAT-", "")}
                     </td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-foreground">
+                    <td className="px-3 py-2 text-xs font-medium text-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         {iconoDe(c) && (
                           <span aria-hidden="true">{iconoDe(c)}</span>
@@ -396,7 +440,26 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                         {c.nombre}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-2">
+                      {/* Pill de estado (diseño de Proveedores). Elegir la opción
+                          contraria pide confirmación, igual que en Gestión de
+                          Producto; sin permiso de edición queda la pill sola. */}
+                      <EstadoSelect
+                        value={estadoDe(c)}
+                        disabled={!canEdit}
+                        onChange={(next) => {
+                          if (next === estadoDe(c)) return;
+                          setConfirmEstado({
+                            id: c.id,
+                            nombre: c.nombre,
+                            current: estadoDe(c),
+                            next,
+                          });
+                        }}
+                        options={OPCIONES_ESTADO_CATEGORIA}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
                       <ActionIcons
                         onView={() => setDetailItem(c)}
                         onEdit={
@@ -504,26 +567,39 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                   (automático)
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Nombre Categoría *
-                </label>
-                <input
-                  type="text"
-                  value={formNombre}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setFormNombre(v);
-                    setCreateErrors((p) => ({
-                      ...p,
-                      nombre: validarCategoria(v, formIcono).nombre,
-                    }));
-                  }}
-                  placeholder="Ej. Parrilladas"
-                  maxLength={MAX_NOMBRE}
-                  className={campoCls(createErrors.nombre)}
-                />
-                <MensajeError err={createErrors.nombre} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Nombre Categoría *
+                  </label>
+                  <input
+                    type="text"
+                    value={formNombre}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormNombre(v);
+                      setCreateErrors((p) => ({
+                        ...p,
+                        nombre: validarCategoria(v, formIcono).nombre,
+                      }));
+                    }}
+                    placeholder="Ej. Parrilladas"
+                    maxLength={MAX_NOMBRE}
+                    className={campoCls(createErrors.nombre)}
+                  />
+                  <MensajeError err={createErrors.nombre} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Estado
+                  </label>
+                  {/* Nueva categoría: siempre empieza como Activo. */}
+                  <EstadoSelect
+                    value={formEstado}
+                    onChange={(v) => setFormEstado(v)}
+                    options={OPCIONES_ESTADO_CATEGORIA}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -597,40 +673,56 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                   {editItem.id}
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Nombre Categoría *
-                </label>
-                <input
-                  type="text"
-                  value={editItem.nombre}
-                  disabled={CATEGORIAS_FIJAS.has(editItem.id)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setEditItem((x) => (x ? { ...x, nombre: v } : x));
-                    setEditErrors((p) => ({
-                      ...p,
-                      nombre: validarCategoria(
-                        v,
-                        editItem.icono ?? "",
-                        editItem.id,
-                      ).nombre,
-                    }));
-                  }}
-                  placeholder="Ej. Parrilladas"
-                  maxLength={MAX_NOMBRE}
-                  className={
-                    campoCls(
-                      CATEGORIAS_FIJAS.has(editItem.id)
-                        ? undefined
-                        : editErrors.nombre,
-                    ) +
-                    (CATEGORIAS_FIJAS.has(editItem.id)
-                      ? " bg-muted/60 text-muted-foreground cursor-not-allowed"
-                      : "")
-                  }
-                />
-                <MensajeError err={editErrors.nombre} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Nombre Categoría *
+                  </label>
+                  <input
+                    type="text"
+                    value={editItem.nombre}
+                    disabled={CATEGORIAS_FIJAS.has(editItem.id)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEditItem((x) => (x ? { ...x, nombre: v } : x));
+                      setEditErrors((p) => ({
+                        ...p,
+                        nombre: validarCategoria(
+                          v,
+                          editItem.icono ?? "",
+                          editItem.id,
+                        ).nombre,
+                      }));
+                    }}
+                    placeholder="Ej. Parrilladas"
+                    maxLength={MAX_NOMBRE}
+                    className={
+                      campoCls(
+                        CATEGORIAS_FIJAS.has(editItem.id)
+                          ? undefined
+                          : editErrors.nombre,
+                      ) +
+                      (CATEGORIAS_FIJAS.has(editItem.id)
+                        ? " bg-muted/60 text-muted-foreground cursor-not-allowed"
+                        : "")
+                    }
+                  />
+                  <MensajeError err={editErrors.nombre} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Estado
+                  </label>
+                  {/* Editable también para las categorías originales: solo su
+                      nombre y su ícono quedan fijos. */}
+                  <EstadoSelect
+                    value={estadoDe(editItem)}
+                    onChange={(next) =>
+                      setEditItem((x) => (x ? { ...x, estado: next } : x))
+                    }
+                    options={OPCIONES_ESTADO_CATEGORIA}
+                  />
+                </div>
               </div>
               {!CATEGORIAS_FIJAS.has(editItem.id) && (
                 <div>
@@ -720,6 +812,17 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     label: "Nombre Categoría",
                     value: detailItem.nombre,
                   },
+                  {
+                    label: "Estado",
+                    // La misma pill de la tabla, aquí en solo lectura.
+                    value: (
+                      <EstadoSelect
+                        value={estadoDe(detailItem)}
+                        disabled
+                        options={OPCIONES_ESTADO_CATEGORIA}
+                      />
+                    ),
+                  },
                   ...(iconoDe(detailItem)
                     ? [
                         {
@@ -748,6 +851,81 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                   className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
                 >
                   Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Confirmar cambio de estado ── */}
+      <AnimatePresence>
+        {confirmEstado && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3
+                  className="text-lg font-bold text-foreground"
+                  style={{ fontFamily: SERIF }}
+                >
+                  ¿Desea cambiar el estado de la categoría?
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">
+                La categoría{" "}
+                <strong className="text-foreground">{confirmEstado.nombre}</strong>{" "}
+                pasará de:
+              </p>
+              <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
+                <EstadoSelect
+                  value={confirmEstado.current}
+                  disabled
+                  options={OPCIONES_ESTADO_CATEGORIA}
+                />
+                <span className="text-muted-foreground text-sm">→</span>
+                <EstadoSelect
+                  value={confirmEstado.next}
+                  disabled
+                  options={OPCIONES_ESTADO_CATEGORIA}
+                />
+              </div>
+              {confirmEstado.next === "Inactivo" && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
+                  La categoría dejará de mostrarse en el landing y en el selector
+                  de Categoría de producto.
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmEstado(null)}
+                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setCategorias((prev) =>
+                      prev.map((x) =>
+                        x.id === confirmEstado.id
+                          ? { ...x, estado: confirmEstado.next }
+                          : x,
+                      ),
+                    );
+                    setConfirmEstado(null);
+                    toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+                  }}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+                >
+                  Confirmar
                 </button>
               </div>
             </motion.div>

@@ -96,7 +96,7 @@ import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError,
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
-import { CategoriaProductoScreen, INITIAL_CATEGORIAS, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
+import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
@@ -106,7 +106,7 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "./screens/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, type Producto, type FichasPorProducto, type FichaVersion } from "./screens/GestionProductosScreen";
 import { ESTADO_COLORES } from "./components/EstadoProducto";
 import { EstadoSelect } from "./components/EstadoSelect";
 import { SearchInput } from "./components/SearchInput";
@@ -1973,10 +1973,14 @@ function LandingScreen({
             }}
           >
             {[
-              { emoji: "🍕", label: "Pizzas" },
-              { emoji: "🥤", label: "Bebidas" },
-              { emoji: "🍝", label: "Lasaña" },
-            ].map(({ emoji, label }) => (
+              { id: "CAT-001", emoji: "🍕", label: "Pizzas" },
+              { id: "CAT-003", emoji: "🥤", label: "Bebidas" },
+              { id: "CAT-002", emoji: "🍝", label: "Lasaña" },
+            ]
+              // Categoría Inactiva: su tarjeta no aparece en el landing. Las
+              // originales se reconocen por su id (el ícono vive acá).
+              .filter(({ id }) => estadoDe(categorias.find((c) => c.id === id)) !== "Inactivo")
+              .map(({ emoji, label }) => (
               <button
                 key={label}
                 onClick={() => onCategoryNavigate(label)}
@@ -1995,7 +1999,7 @@ function LandingScreen({
                 que se escribió en el admin. El filtro del catálogo es una lista
                 fija, así que su clic abre el catálogo completo en "Todas". */}
             {categorias
-              .filter((c) => c.icono)
+              .filter((c) => c.icono && estadoDe(c) !== "Inactivo")
               .map((c) => (
                 <button
                   key={c.id}
@@ -7949,12 +7953,15 @@ const CATEGORIAS_STORAGE_KEY = "sivpro.categorias.v1";
 const esCategoriaValida = (c: unknown): c is CategoriaProducto => {
   if (!c || typeof c !== "object") return false;
   const cat = c as CategoriaProducto;
-  // `icono` se acepta ausente: las tres categorías originales no lo llevan,
-  // porque su ícono está escrito en el landing.
+  // `icono` y `estado` se aceptan ausentes: las tres categorías originales no
+  // lo llevan (el suyo está escrito en el landing) y el dato guardado antes de
+  // que existiera el estado tampoco. Con estado inválido NO se acepta la lista:
+  // volvería a la semilla y se perderían todas las categorías guardadas.
   return (
     typeof cat.id === "string" &&
     typeof cat.nombre === "string" &&
-    (cat.icono === undefined || typeof cat.icono === "string")
+    (cat.icono === undefined || typeof cat.icono === "string") &&
+    (cat.estado === undefined || cat.estado === "Activo" || cat.estado === "Inactivo")
   );
 };
 
@@ -8047,7 +8054,14 @@ const leerFichasPersistidas = () => {
     const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
     if (!raw) return INITIAL_FICHAS;
     const parsed: unknown = JSON.parse(raw);
-    if (esFichasValidas(parsed)) return parsed as FichasPorProducto;
+    // La limpieza descarta las fichas de productos que ya no existen y las
+    // fichas semilla del código viejo (no deben seguir ocupando número), y
+    // luego reasigna los ID de ficha de forma consecutiva: corrige los
+    // "REC-001" duplicados del dato viejo sin tocar versiones ni contenido.
+    // Los productos no se persisten: al recargar vuelven a la semilla, así que
+    // los ID válidos aquí son los de INITIAL_PRODUCTOS.
+    if (esFichasValidas(parsed))
+      return normalizarIdsFicha(parsed as FichasPorProducto, INITIAL_PRODUCTOS.map((p) => p.id));
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
   }
@@ -9515,6 +9529,7 @@ export default function App() {
                   insumos={insumos}
                   fichas={fichasPorProducto}
                   setFichas={setFichasPorProducto}
+                  categorias={categorias}
                 />
               )}
               {screen === "cat-producto" && (

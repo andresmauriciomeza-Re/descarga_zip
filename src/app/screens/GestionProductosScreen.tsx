@@ -29,6 +29,7 @@ import { EstadoSelect } from "../components/EstadoSelect";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
 import type { Insumo } from "./GestionInsumosScreen";
+import { estadoDe, type CategoriaProducto } from "./CategoriaProductoScreen";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -265,11 +266,21 @@ export const INITIAL_PRODUCTOS: Producto[] = [
 ];
 
 export interface RInsumo { nombre: string; cantidad: number; unidad: string; }
+
+/** Tamaños que admite la lista "Porciones por tamaño" de la ficha. */
+export const TAMANOS_FICHA = ["Grande", "Mediana", "Normal"] as const;
+export type TamanoFicha = (typeof TAMANOS_FICHA)[number];
+export interface PorcionesTamano { tamano: TamanoFicha; porciones: number; }
+
 export interface FichaVersion {
   version: number;
   idReceta: string;
   tiempoPreparacion: number;
   porciones: number;
+  /** Porciones por tamaño (campo nuevo, opcional y solo de Crear). `porciones`
+      siempre refleja la PRIMERA fila: es el que siguen leyendo Detalle,
+      Editar, el cálculo de stock y Orden de Producción. */
+  porcionesPorTamano?: PorcionesTamano[];
   insumos: RInsumo[];
   pasos: string[];
   fechaInicio: string;
@@ -300,66 +311,9 @@ export const fichaTieneCambios = (a: FichaVersion, b: FichaVersion): boolean =>
   JSON.stringify(a.insumos) !== JSON.stringify(b.insumos) ||
   JSON.stringify(a.pasos) !== JSON.stringify(b.pasos);
 
-// Fichas v1 de ejemplo para que Editar abra con contenido real. Usan insumos
-// del catálogo de Insumos (INITIAL_INSUMOS): OJO, ese catálogo no trae
-// "Harina de trigo", así que la masa se representa con "Masa Pre-elaborada".
-const FECHA_SEMILLA_FICHA = "2026-01-15T00:00:00.000Z";
-
-const fichaPizzaEjemplo = (extraInsumos: RInsumo[] = []): FichaVersion => ({
-  version: 1,
-  idReceta: "REC-001",
-  tiempoPreparacion: 25,
-  porciones: 8,
-  insumos: [
-    { nombre: "Masa Pre-elaborada", cantidad: 1, unidad: "und" },
-    { nombre: "Salsa de Tomate", cantidad: 0.1, unidad: "lt" },
-    { nombre: "Queso Mozzarella", cantidad: 0.15, unidad: "kg" },
-    ...extraInsumos,
-  ],
-  pasos: [
-    "Extender la masa sobre la mesa enharinada.",
-    "Cubrir con salsa de tomate dejando 1 cm de borde.",
-    "Repartir el queso mozzarella y los ingredientes.",
-    "Hornear a 220 °C por 15 minutos y porcionar en 8.",
-  ],
-  fechaInicio: FECHA_SEMILLA_FICHA,
-  fechaFin: null,
-});
-
-const fichaLasanaEjemplo = (): FichaVersion => ({
-  version: 1,
-  idReceta: "REC-001",
-  tiempoPreparacion: 40,
-  porciones: 4,
-  insumos: [
-    { nombre: "Masa Pre-elaborada", cantidad: 2, unidad: "und" },
-    { nombre: "Salsa de Tomate", cantidad: 0.15, unidad: "lt" },
-    { nombre: "Queso Mozzarella", cantidad: 0.2, unidad: "kg" },
-  ],
-  pasos: [
-    "Precalentar el horno a 180 °C.",
-    "Alternar capas de masa, salsa y queso en el molde.",
-    "Hornear 30 minutos hasta gratinar.",
-    "Reposar 5 minutos y servir en 4 porciones.",
-  ],
-  fechaInicio: FECHA_SEMILLA_FICHA,
-  fechaFin: null,
-});
-
-/** Ficha v1 inicial por producto (pizzas y lasañas). Las gaseosas no llevan. */
-export const INITIAL_FICHAS: FichasPorProducto = {
-  "PROD-001": [fichaPizzaEjemplo([{ nombre: "Pepperoni", cantidad: 0.05, unidad: "kg" }])],
-  "PROD-002": [fichaPizzaEjemplo()],
-  "PROD-003": [fichaPizzaEjemplo()],
-  "PROD-004": [fichaPizzaEjemplo()],
-  "PROD-005": [fichaPizzaEjemplo()],
-  "PROD-006": [fichaPizzaEjemplo()],
-  "PROD-007": [fichaPizzaEjemplo()],
-  "PROD-008": [fichaPizzaEjemplo()],
-  "PROD-009": [fichaLasanaEjemplo()],
-  "PROD-010": [fichaLasanaEjemplo()],
-  "PROD-011": [fichaLasanaEjemplo()],
-};
+/** Sin fichas de ejemplo: los productos de fábrica nacen SIN ficha técnica y la
+    primera que se cree recibe el ID 001 (ver `siguienteNumeroFicha`). */
+export const INITIAL_FICHAS: FichasPorProducto = {};
 
 /** Mueve un elemento de una lista una posicion. Funcion pura: no muta la entrada. */
 export function moverEnLista<T>(lista: T[], desde: number, dir: -1 | 1): T[] {
@@ -542,7 +496,9 @@ function InsumosFichaTable({
 function emptyFichaVersion(n: number, fechaInicio?: string): FichaVersion {
   return {
     version: n,
-    idReceta: `REC-${String(n).padStart(3, "0")}`,
+    // Vacío: el ID real se asigna al GUARDAR (número de ficha consecutivo y
+    // único). Mientras tanto la pantalla muestra el que le tocaría.
+    idReceta: "",
     tiempoPreparacion: 0,
     porciones: 1,
     insumos: [],
@@ -551,6 +507,81 @@ function emptyFichaVersion(n: number, fechaInicio?: string): FichaVersion {
     fechaFin: null,
   };
 }
+
+/** Número de una ficha, tal como se muestra: "001". Es el ÚNICO punto donde el
+    dato se convierte en texto visible, así que también tolera los IDs viejos
+    guardados como "REC-001". */
+export const numeroDeFicha = (idReceta: string): string =>
+  idReceta.replace("REC-", "").padStart(3, "0").trim();
+
+/** Número con que se vería una ficha recién guardada. */
+const numeroNuevoFicha = (n: number): string => String(n).padStart(3, "0");
+
+/** Siguiente número de ficha: mayor sufijo + 1, calculado SOBRE LAS FICHAS DE
+    PRODUCTOS QUE EXISTEN. Las huérfanas (de un producto ya borrado) no consumen
+    número, así la secuencia se mantiene consecutiva, sin huecos y arrancando
+    en 001. */
+export const siguienteNumeroFicha = (fichas: FichasPorProducto, productos: Producto[]): number => {
+  const existentes = new Set(productos.map((p) => p.id));
+  return (
+    Object.entries(fichas)
+      .filter(([idProducto]) => existentes.has(idProducto))
+      .flatMap(([, versiones]) => versiones.map((v) => parseInt(numeroDeFicha(v.idReceta), 10) || 0))
+      .reduce((max, n) => Math.max(max, n), 0) + 1
+  );
+};
+
+/** ID visible de una ficha: su número si ya existe; si es un borrador sin
+    guardar (producto sin ficha), el que le tocará al guardarse. */
+export const idFichaVisible = (v: FichaVersion, fichas: FichasPorProducto, productos: Producto[]): string =>
+  v.idReceta ? numeroDeFicha(v.idReceta) : numeroNuevoFicha(siguienteNumeroFicha(fichas, productos));
+
+/** Fechas fijas con que venían las fichas de ejemplo del código: la primera
+    semilla usaba "2024-01-01" y las siguientes "2026-01-15T00:00:00.000Z".
+    Una ficha real siempre guarda `new Date().toISOString()`, así que con estas
+    dos marcas se reconocen las fichas semilla que quedaron en localStorage y
+    se descartan al cargar: no deben seguir ocupando número. */
+const FECHAS_FICHA_SEMILLA = ["2024-01-01", "2026-01-15T00:00:00.000Z"];
+
+/** Limpia y reasigna los ID de las fichas leídas de localStorage. Se aplican
+    dos reglas, en este orden:
+    1. Se DESCARTAN las fichas de productos que ya no existen (huérfanas) y
+       las fichas semilla del código viejo: ninguna debe seguir consumiendo
+       número de ficha.
+    2. A las que quedan se les reasigna un ID único y consecutivo siguiendo el
+       orden del id de producto: todas las versiones de un producto comparten
+       el mismo número. Solo cambia `idReceta`; versiones, fechas y contenido
+       quedan intactos. Así también se corrigen los "REC-001" duplicados que
+       dejó el dato viejo. */
+export const normalizarIdsFicha = (fichas: FichasPorProducto, idsExistentes?: string[]): FichasPorProducto => {
+  const ordenId = (id: string) => parseInt(id.replace(/\D+/g, ""), 10) || 0;
+  const existentes = idsExistentes ? new Set(idsExistentes) : null;
+  const salida: FichasPorProducto = {};
+  let n = 1;
+  for (const id of Object.keys(fichas).sort((a, b) => ordenId(a) - ordenId(b))) {
+    if (existentes && !existentes.has(id)) continue;
+    const versiones = fichas[id].filter((v) => !FECHAS_FICHA_SEMILLA.includes(v.fechaInicio));
+    if (versiones.length === 0) continue;
+    const idFicha = numeroNuevoFicha(n++);
+    salida[id] = versiones.map((v) => ({ ...v, idReceta: idFicha }));
+  }
+  return salida;
+};
+
+/** Borrador de la ficha en Crear: v1 vacía con la primera fila de
+    "Porciones por tamaño" (Grande, 1 porción, igual que el valor único de
+    antes). El resto de pantallas sigue usando `emptyFichaVersion`. */
+const nuevoBorradorFicha = (): FichaVersion => ({
+  ...emptyFichaVersion(1),
+  porcionesPorTamano: [{ tamano: TAMANOS_FICHA[0], porciones: 1 }],
+});
+
+/** Regla mínima de una ficha de Producto insumo: al menos un insumo y
+    porciones >= 1 (en el campo único y en cada fila por tamaño). */
+const fichaCumpleMinimo = (v: FichaVersion): boolean =>
+  v.insumos.length > 0 &&
+  v.porciones >= 1 &&
+  (v.porcionesPorTamano ?? []).every((f) => f.porciones >= 1);
 
 /** Indica si un borrador de ficha tiene contenido real que valga la pena
     guardar (sirve para Crear, donde la ficha es opcional al crear). */
@@ -609,8 +640,9 @@ function FichaReadOnly({ v, readCls }: { v: FichaVersion; readCls: string }) {
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
       <div className="shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</p>
-        <div className={readCls}>{v.idReceta}</div>
+        <p className="text-xs font-semibold text-muted-foreground mb-0.5">ID</p>
+        {/* Solo el número ("001"): el dato viejo con prefijo lo limpia la misma función. */}
+        <div className={readCls}>{numeroDeFicha(v.idReceta)}</div>
       </div>
       {/* Tiempo de preparación y Porciones en una sola fila (2 columnas). */}
       <div className="shrink-0 grid grid-cols-2 gap-3">
@@ -619,8 +651,16 @@ function FichaReadOnly({ v, readCls }: { v: FichaVersion; readCls: string }) {
           <div className={readCls}>{v.tiempoPreparacion}</div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Porciones</p>
-          <div className={readCls}>{v.porciones}</div>
+          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</p>
+          {v.porcionesPorTamano?.map((pt, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground">{pt.tamano}</span>
+              <span className="text-sm text-foreground">{pt.porciones}</span>
+            </div>
+          ))}
+          {!v.porcionesPorTamano?.length && (
+            <span className="text-xs text-muted-foreground">Normal: {v.porciones}</span>
+          )}
         </div>
       </div>
       {/* Insumos: tabla compacta (Insumo | Cantidad | Unidad) con filas de
@@ -678,6 +718,7 @@ export function GestionProductosScreen({
   insumos,
   fichas: fichasExternas,
   setFichas: setFichasExternas,
+  categorias,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -691,11 +732,16 @@ export function GestionProductosScreen({
       para saber qué insumos consume cada plato de un pedido. */
   fichas: FichasPorProducto;
   setFichas: React.Dispatch<React.SetStateAction<FichasPorProducto>>;
+  /** Categorías del módulo Categoría de Productos: alimentan el selector de
+      Categoría (sin las Inactivas) y el nombre que se muestra en la lista.
+      Si no llega, se usa la lista local de las tres originales. */
+  categorias?: CategoriaProducto[];
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
 }) {
+  const opcionesCategoriaBase = categorias ?? CATEGORIAS_PRODUCTO;
   const [search, setSearch] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"Todos" | TipoProducto>("Todos");
   const [filtroEstado, setFiltroEstado] = useState<"Todos" | EstadoProducto>("Todos");
@@ -719,7 +765,7 @@ export function GestionProductosScreen({
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
     nombre: "",
-    idCategoria: "CAT-001",
+    idCategoria: "",
     tipo: TIPOS_PRODUCTO[0],
     costoUnitario: 0, precioUnitario: 0,
     unidadVenta: "und",
@@ -745,9 +791,9 @@ export function GestionProductosScreen({
   };
 
   // Ficha técnica de Crear: un solo BORRADOR que se guarda como v1 junto con
-  // el producto (ya no existe "Guardar Ficha Técnica" ni se crean versiones
-  // antes de que el producto exista).
-  const [fichaBorrador, setFichaBorrador] = useState<FichaVersion>(emptyFichaVersion(1));
+  // el producto (no se crean versiones antes de que el producto exista). El
+  // botón "Guardar Ficha Técnica" solo valida y lo marca como guardado.
+  const [fichaBorrador, setFichaBorrador] = useState<FichaVersion>(nuevoBorradorFicha);
   const [fichaInsumoNombre, setFichaInsumoNombre] = useState("");
   const [fichaInsumoCantidad, setFichaInsumoCantidad] = useState(1);
   const [fichaInsumoUnidad, setFichaInsumoUnidad] = useState("kg");
@@ -757,6 +803,12 @@ export function GestionProductosScreen({
   // Fila de la tabla de insumos abierta en edición (crear). Solo una a la vez.
   const [fichaEditandoIdx, setFichaEditandoIdx] = useState<number | null>(null);
   const [fichaPaso, setFichaPaso] = useState("");
+  // Confirmación del modal "Guardar Ficha Técnica" y marca de guardada: se
+  // compara con el borrador actual, así que cualquier edición posterior la
+  // invalida sola.
+  const [confirmGuardarFicha, setConfirmGuardarFicha] = useState(false);
+  const [fichaGuardadaEn, setFichaGuardadaEn] = useState<string | null>(null);
+  const fichaGuardada = fichaGuardadaEn !== null && fichaGuardadaEn === JSON.stringify(fichaBorrador);
 
   // Edit-ficha: las versiones guardadas son de SOLO LECTURA (nunca se
   // modifican); los cambios se escriben en `editFichaBorrador`, una copia
@@ -773,19 +825,109 @@ export function GestionProductosScreen({
   const [editFichaPaso, setEditFichaPaso] = useState("");
 
   const resetFichaForm = () => {
-    setFichaBorrador(emptyFichaVersion(1));
+    setFichaBorrador(nuevoBorradorFicha());
     setFichaInsumoNombre("");
     setFichaInsumoCantidad(1);
     setFichaInsumoUnidad("kg");
     setFichaInsumoSel(null);
     setFichaPaso("");
+    setConfirmGuardarFicha(false);
+    setFichaGuardadaEn(null);
   };
 
   const updateFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
     setFichaBorrador(prev => ({ ...prev, [field]: value }));
 
-  // Al elegir del buscador se autocompleta la "Medida" con la unidad del
-  // catálogo; sigue siendo editable a mano después.
+  // ── "Porciones por tamaño" (solo el borrador de Crear) ─────────────
+  const filasTamano = (): PorcionesTamano[] =>
+    fichaBorrador.porcionesPorTamano ?? [{ tamano: TAMANOS_FICHA[0], porciones: fichaBorrador.porciones }];
+
+  /** Escribe las filas y mantiene `porciones` = primera fila, para que el
+      resto de pantallas siga leyendo el campo de siempre. */
+  const setFilasTamano = (filas: PorcionesTamano[]) =>
+    setFichaBorrador(prev => ({ ...prev, porcionesPorTamano: filas, porciones: filas[0].porciones }));
+
+  const addTamano = () => {
+    const usados = filasTamano().map((f) => f.tamano);
+    const libre = TAMANOS_FICHA.find((t) => !usados.includes(t));
+    if (!libre) return;
+    setFilasTamano([...filasTamano(), { tamano: libre, porciones: 1 }]);
+  };
+
+  const removeTamano = (idx: number) => {
+    const filas = filasTamano();
+    if (filas.length > 1) setFilasTamano(filas.filter((_, i) => i !== idx));
+  };
+
+  // Elige el tamaño de una fila; un tamaño ya usado en otra fila queda
+  // deshabilitado y aquí se descarta por seguridad.
+  const updateTamano = (idx: number, tamano: TamanoFicha) => {
+    const filas = filasTamano();
+    if (filas.some((f, i) => i !== idx && f.tamano === tamano)) return;
+    setFilasTamano(filas.map((f, i) => (i === idx ? { ...f, tamano } : f)));
+  };
+
+  const updatePorcionesTamano = (idx: number, n: number) => {
+    if (!Number.isFinite(n) || n < 0) return;
+    setFilasTamano(filasTamano().map((f, i) => (i === idx ? { ...f, porciones: n } : f)));
+  };
+
+  // ── "Porciones por tamaño" para Editar (igual que Crear, pero sobre
+  //     editFichaBorrador). Si la ficha antigua solo tenía un número de
+  //     porciones, se muestra como una fila con tamaño "Normal". ─────
+  const editFilasTamano = (): PorcionesTamano[] =>
+    editFichaBorrador.porcionesPorTamano ??
+    [{ tamano: TAMANOS_FICHA[2], porciones: editFichaBorrador.porciones }];
+
+  const editSetFilasTamano = (filas: PorcionesTamano[]) =>
+    setEditFichaBorrador(prev => ({ ...prev, porcionesPorTamano: filas, porciones: filas[0].porciones }));
+
+  const editAddTamano = () => {
+    const usados = editFilasTamano().map((f) => f.tamano);
+    const libre = TAMANOS_FICHA.find((t) => !usados.includes(t));
+    if (!libre) return;
+    editSetFilasTamano([...editFilasTamano(), { tamano: libre, porciones: 1 }]);
+  };
+
+  const editRemoveTamano = (idx: number) => {
+    const filas = editFilasTamano();
+    if (filas.length > 1) editSetFilasTamano(filas.filter((_, i) => i !== idx));
+  };
+
+  // Elige el tamaño de una fila; un tamaño ya usado en otra fila queda
+  // deshabilitado y aquí se descarta por seguridad.
+  const editUpdateTamano = (idx: number, tamano: TamanoFicha) => {
+    const filas = editFilasTamano();
+    if (filas.some((f, i) => i !== idx && f.tamano === tamano)) return;
+    editSetFilasTamano(filas.map((f, i) => (i === idx ? { ...f, tamano } : f)));
+  };
+
+  const editUpdatePorcionesTamano = (idx: number, n: number) => {
+    if (!Number.isFinite(n) || n < 0) return;
+    editSetFilasTamano(
+      editFilasTamano().map((f, i) => (i === idx ? { ...f, porciones: n } : f)),
+    );
+  };
+
+  // ── Guardar ficha técnica (Crear) ──────────────────────────────────
+  const solicitarGuardarFicha = () => {
+    if (!fichaCumpleMinimo(fichaBorrador)) {
+      toast.error("La ficha necesita al menos un insumo y porciones de 1 en adelante");
+      return;
+    }
+    setConfirmGuardarFicha(true);
+  };
+
+  // El producto todavía no existe, así que aquí no se escribe en `fichas`:
+  // la escritura real sigue siendo la de "Crear" (handleCreate).
+  const confirmarGuardarFicha = () => {
+    setConfirmGuardarFicha(false);
+    setFichaGuardadaEn(JSON.stringify(fichaBorrador));
+    toast.success("Ficha técnica guardada");
+  };
+
+  // Al elegir del buscador se autocompleta la "Medida" con la unidad
+  // del catálogo; sigue siendo editable a mano después.
   const seleccionarFichaInsumo = (ins: Insumo) => {
     setFichaInsumoSel(ins);
     setFichaInsumoNombre(ins.nombre);
@@ -909,8 +1051,24 @@ export function GestionProductosScreen({
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
     "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  /** Nombre visible de una categoría: el del listado del módulo Categoría de
+      Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
+      CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
   const catName = (id: string) =>
-    CATEGORIAS_PRODUCTO.find((c) => c.id === id)?.nombre ?? id;
+    opcionesCategoriaBase.find((c) => c.id === id)?.nombre ?? "Sin categoría";
+
+  /** Opciones del selector de Categoría (Crear y Editar): las activas del
+      módulo Categoría de Productos. Al editar se añade la actual aunque esté
+      Inactiva (para no cambiarle el dato al guardar) o, si su id ya no existe
+      en el listado, la etiqueta "Sin categoría". En Crear (valor vacío) salen
+      solo las activas: ahí manda el placeholder "Selecciona una categoría". */
+  const opcionesCategoria = (valorActual: string): CategoriaProducto[] => {
+    const activas = opcionesCategoriaBase.filter((c) => estadoDe(c) !== "Inactivo");
+    if (!valorActual) return activas;
+    if (activas.some((c) => c.id === valorActual)) return activas;
+    const actual = opcionesCategoriaBase.find((c) => c.id === valorActual);
+    return [...activas, actual ?? { id: valorActual, nombre: "Sin categoría" }];
+  };
 
   /** Palabra con que se muestra el stock ("2 pizzas", "1 lasaña", "24 und"). */
   const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
@@ -1007,17 +1165,17 @@ export function GestionProductosScreen({
     }, 0) + 1;
     const newId = `PROD-${String(nextNum).padStart(3, "0")}`;
     // Un Producto insumo no se guarda sin su ficha: al menos 1 insumo y
-    // porciones >= 1. Un Producto (reventa) nunca guarda ficha.
+    // porciones >= 1 en cada tamaño. Un Producto (reventa) nunca guarda ficha.
     if (tipoDe(form) === TIPOS_PRODUCTO[0]) {
-      if (fichaBorrador.insumos.length === 0 || fichaBorrador.porciones < 1) {
+      if (!fichaCumpleMinimo(fichaBorrador)) {
         // Si la ficha estaba oculta, se vuelve a mostrar sola con el error.
         setFichaOculta(false);
-        toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo");
+        toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo y porciones de 1 en adelante");
         return;
       }
       setFichas(prev => ({
         ...prev,
-        [newId]: [{ ...fichaBorrador, version: 1, idReceta: "REC-001", fechaInicio: new Date().toISOString(), fechaFin: null }],
+        [newId]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, productos)), fechaInicio: new Date().toISOString(), fechaFin: null }],
       }));
     }
     setProductos((p) => [{ id: newId, ...form }, ...p]);
@@ -1070,7 +1228,9 @@ export function GestionProductosScreen({
             {
               ...editFichaBorrador,
               version: n,
-              idReceta: `REC-${String(n).padStart(3, "0")}`,
+              // El ID identifica a la FICHA, no a la versión: las versiones
+              // siguientes conservan el mismo número.
+              idReceta: ultima.idReceta,
               fechaInicio: now,
               fechaFin: null,
             },
@@ -1081,7 +1241,7 @@ export function GestionProductosScreen({
       // El producto no tenía ficha: el borrador se guarda como v1.
       setFichas(prev => ({
         ...prev,
-        [editItem.id]: [{ ...editFichaBorrador, version: 1, idReceta: "REC-001", fechaInicio: new Date().toISOString(), fechaFin: null }],
+          [editItem.id]: [{ ...editFichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, productos)), fechaInicio: new Date().toISOString(), fechaFin: null }],
       }));
     }
     setEditItem(null);
@@ -1090,6 +1250,14 @@ export function GestionProductosScreen({
 
   const handleDelete = (id: string) => {
     setProductos((p) => p.filter((x) => x.id !== id));
+    // La ficha del producto borrado también se retira: si queda, es una
+    // huérfana que ya no ve nadie pero seguiría ocupando número de ID.
+    setFichas((prev) => {
+      if (!(id in prev)) return prev;
+      const sinFicha = { ...prev };
+      delete sinFicha[id];
+      return sinFicha;
+    });
     setDeleteId(null);
     toast.success("Producto eliminado");
   };
@@ -1203,7 +1371,8 @@ export function GestionProductosScreen({
           disabled={readOnly}
           className={readOnly ? roCls : inputCls + " cursor-pointer"}
         >
-          {CATEGORIAS_PRODUCTO.map((c) => (
+          <option value="" disabled>Selecciona una categoría</option>
+          {opcionesCategoria(values.idCategoria).map((c) => (
             <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}
         </select>
@@ -1306,6 +1475,7 @@ export function GestionProductosScreen({
   // ── Pantalla completa Crear Producto ──────────────────────────────
   if (showCreate) {
     const activeV = fichaBorrador;
+    const filasTam = filasTamano();
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
@@ -1431,7 +1601,8 @@ export function GestionProductosScreen({
                 <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
                 <select value={form.idCategoria} onChange={e => setForm(p => ({ ...p, idCategoria: e.target.value }))}
                   className={iCls + " cursor-pointer"}>
-                  {CATEGORIAS_PRODUCTO.map(c => (
+                  <option value="" disabled>Selecciona una categoría</option>
+                  {opcionesCategoria(form.idCategoria).map(c => (
                     <option key={c.id} value={c.id}>{c.nombre}</option>
                   ))}
                 </select>
@@ -1449,11 +1620,11 @@ export function GestionProductosScreen({
           </div>
 
           {/* ── COLUMNA DERECHA: ficha técnica ── */}
-          {/* La ficha técnica scrollea por dentro. Se guarda con el mismo
-              botón "Crear" del encabezado (ya no hay "Guardar Ficha Técnica"
-              aparte). Solo se activa si "¿Tiene ficha técnica?" es Sí. Al
-              ocultarla, la columna colapsa con una animación de 0,2 s y NO se
-              borra lo diligenciado. */}
+          {/* La ficha técnica scrollea por dentro; el botón "Guardar Ficha
+              Técnica" vive FUERA del scroller (footer de la columna), así que
+              siempre queda visible y nunca tapa el input de pasos. Solo se
+              activa si "¿Tiene ficha técnica?" es Sí. Al ocultarla, la columna
+              colapsa con una animación de 0,2 s y NO se borra lo diligenciado. */}
           <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
             fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
           }`}>
@@ -1473,11 +1644,18 @@ export function GestionProductosScreen({
               </div>
             ) : (
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between gap-2 mb-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
-                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
-                  Nueva versión (borrador)
-                </span>
+                <div className="flex items-center gap-2">
+                  {fichaGuardada && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                      <Check className="w-3.5 h-3.5" /> Ficha guardada
+                    </span>
+                  )}
+                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
+                    Nueva versión (borrador)
+                  </span>
+                </div>
               </div>
 
               <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
@@ -1485,10 +1663,12 @@ export function GestionProductosScreen({
               </p>
 
               <div className="space-y-4">
-                {/* ID Ficha Técnica + Tiempo + Porciones */}
+                {/* El ID se asigna al guardar: el número que sigue (001, 002, …)
+                    sobre todas las fichas. Aquí se previsualiza, en solo lectura,
+                    con el mismo formato que muestran Editar y Ver detalle. */}
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</label>
-                  <input value={activeV.idReceta} readOnly tabIndex={-1}
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID</label>
+                  <input value={idFichaVisible(activeV, fichas, productos)} readOnly tabIndex={-1}
                     className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1498,9 +1678,39 @@ export function GestionProductosScreen({
                       onChange={e => updateFichaField("tiempoPreparacion", Number(e.target.value))} className={iCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones</label>
-                    <input type="number" min={1} value={activeV.porciones}
-                      onChange={e => updateFichaField("porciones", Number(e.target.value))} className={iCls} />
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
+                    <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
+                      <span className="flex-1 min-w-0">Tamaño</span>
+                      <span className="w-20 shrink-0">Porciones</span>
+                      <span className="w-6 shrink-0" />
+                    </div>
+                    <div className="space-y-2">
+                      {filasTam.map((fila, idx) => (
+                        <div key={fila.tamano} className="flex items-center gap-2">
+                          <select
+                            value={fila.tamano}
+                            onChange={e => updateTamano(idx, e.target.value as TamanoFicha)}
+                            aria-label="Tamaño"
+                            className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
+                            {TAMANOS_FICHA.map(t => (
+                              <option key={t} value={t} disabled={filasTam.some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
+                            ))}
+                          </select>
+                          <input type="number" min={1} value={fila.porciones} aria-label="Porciones"
+                            onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
+                            className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                          <button type="button" title="Quitar tamaño" onClick={() => removeTamano(idx)}
+                            disabled={filasTam.length === 1}
+                            className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={addTamano} disabled={filasTam.length === TAMANOS_FICHA.length}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Agregar tamaño
+                    </button>
                   </div>
                 </div>
 
@@ -1594,8 +1804,29 @@ export function GestionProductosScreen({
               </div>
             </div>
             )}
+            {formTieneFicha === "si" && (
+              <div className="shrink-0 pt-4">
+                <button type="button" onClick={solicitarGuardarFicha}
+                  className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  Guardar Ficha Técnica
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── Confirmar guardado de la ficha técnica ── */}
+        <AnimatePresence>
+          {confirmGuardarFicha && (
+            <ConfirmDeleteModal
+              title="Guardar ficha técnica"
+              message="¿Estás seguro de guardar la ficha técnica?"
+              confirmLabel="Sí"
+              onConfirm={confirmarGuardarFicha}
+              onCancel={() => setConfirmGuardarFicha(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -1899,8 +2130,8 @@ export function GestionProductosScreen({
                 <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
                 <div className="space-y-4 flex-1">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID Ficha Técnica</label>
-                    <input value={activeEV.idReceta} readOnly tabIndex={-1}
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID</label>
+                    <input value={idFichaVisible(activeEV, fichas, productos)} readOnly tabIndex={-1}
                       className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1910,9 +2141,39 @@ export function GestionProductosScreen({
                         onChange={e => updateEditFichaField("tiempoPreparacion", Number(e.target.value))} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones</label>
-                      <input type="number" min={1} value={activeEV.porciones}
-                        onChange={e => updateEditFichaField("porciones", Number(e.target.value))} className={inputCls} />
+                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
+                      <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
+                        <span className="flex-1 min-w-0">Tamaño</span>
+                        <span className="w-20 shrink-0">Porciones</span>
+                        <span className="w-6 shrink-0" />
+                      </div>
+                      <div className="space-y-2">
+                        {editFilasTamano().map((fila, idx) => (
+                          <div key={fila.tamano} className="flex items-center gap-2">
+                            <select
+                              value={fila.tamano}
+                              onChange={e => editUpdateTamano(idx, e.target.value as TamanoFicha)}
+                              aria-label="Tamaño"
+                              className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
+                              {TAMANOS_FICHA.map(t => (
+                                <option key={t} value={t} disabled={editFilasTamano().some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
+                              ))}
+                            </select>
+                            <input type="number" min={1} value={fila.porciones} aria-label="Porciones"
+                              onChange={e => editUpdatePorcionesTamano(idx, Number(e.target.value))}
+                              className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <button type="button" title="Quitar tamaño" onClick={() => editRemoveTamano(idx)}
+                              disabled={editFilasTamano().length === 1}
+                              className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={editAddTamano} disabled={editFilasTamano().length === TAMANOS_FICHA.length}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Agregar tamaño
+                      </button>
                     </div>
                   </div>
                   <div>
