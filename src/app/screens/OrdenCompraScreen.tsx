@@ -138,6 +138,29 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
 };
 
 /**
+ * Clave normalizada de un estado: sin tildes, sin espacios y en minúsculas.
+ * Así "Bórrador", " BORRADOR " y "borrador" se comparan igual (los datos
+ * pueden llegar así desde la base).
+ */
+const claveEstado = (estado?: string) =>
+  (estado ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+/**
+ * Sólo las órdenes en Borrador se pueden editar: es la condición del lápiz en
+ * el listado, del guard de entrada al formulario y de la validación al guardar.
+ */
+const esBorrador = (estado?: string) => claveEstado(estado) === "borrador";
+
+/** Ancho reservado del botón de editar (p-1.5 + ícono w-4 = 28px) para que,
+    en las filas sin lápiz, los iconos [Ver] [Editar] [OC] sigan alineados. */
+const SLOT_EDITAR = "block shrink-0 p-1.5 w-7 h-7";
+
+/**
  * La Orden de Compra solo avanza: desde cada estado se ofrecen los siguientes.
  * Los estados finales (Completado/Anulado) quedan con una única opción y el
  * selector deshabilitado.
@@ -1456,6 +1479,21 @@ export function NuevaOrdenCompraPage({
   orden,
 }: NuevaOrdenCompraPageProps) {
   const isEdit = !!orden;
+  // La orden a editar se relee de `ordenes` por id: App guarda una copia en
+  // `ordenAEditar` y podría quedar desfasada si el estado cambia después.
+  const ordenViva = isEdit ? (ordenes.find(o => o.id === orden?.id) ?? orden) : undefined;
+
+  // Entrada directa a la edición (deep link, botón guardado, etc.): si la orden
+  // ya NO está en Borrador no se pinta el formulario, se avisa y se vuelve al
+  // listado. Mismo mensaje que la validación de `handleGuardar`.
+  // `onBack` es una flecha inline en App (identidad nueva en cada render), así
+  // que las deps son sólo el id y el estado de la orden.
+  useEffect(() => {
+    if (!ordenViva || esBorrador(ordenViva.estado)) return;
+    toast.error("Solo se pueden editar órdenes en estado Borrador");
+    onBack();
+  }, [orden?.id, ordenViva?.estado]);
+
   // Punto 5: el insumo creado en el formulario pasa al catálogo global.
   const handleCrearInsumo = (ins: NuevoInsumoCreado) =>
     setInsumos(prev => [insumoDeAlta(ins), ...prev]);
@@ -1463,7 +1501,7 @@ export function NuevaOrdenCompraPage({
   const handleGuardar = (data: OrdenFormData) => {
     if (isEdit && orden) {
       // Validación backend: solo se puede editar en estado Borrador
-      if (orden.estado !== "Borrador") {
+      if (!esBorrador(orden.estado)) {
         toast.error("Solo se pueden editar órdenes en estado Borrador");
         return;
       }
@@ -2034,7 +2072,7 @@ export function OrdenCompraScreen({
       toast.success(`OC ${n.id} guardada como ${n.estado}`);
     } else if (modal?.mode === "edit" && modal.orden) {
       // Validación de backend: solo se puede editar en estado Borrador
-      if (modal.orden.estado !== "Borrador") {
+      if (!esBorrador(modal.orden.estado)) {
         toast.error("Solo se pueden editar órdenes en estado Borrador");
         return;
       }
@@ -2392,17 +2430,22 @@ export function OrdenCompraScreen({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {/* Editar: usa `onEditarOrden` (que App conecta con
-                              setOrdenAEditar + navigate("nueva-orden-compra")).
-                              Estaba declarado y desestructurado pero sin botón,
-                              así que la edición de OC quedaba inalcanzable. */}
-                          <button
-                            onClick={() => onEditarOrden(o)}
-                            title="Editar orden"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {/* Editar sólo en Borrador: `onEditarOrden` conecta con
+                              setOrdenAEditar + navigate("nueva-orden-compra").
+                              En el resto de estados se reserva el mismo ancho
+                              (SLOT_EDITAR) para que [Ver] [Editar] [OC] no se
+                              muevan entre filas. */}
+                          {esBorrador(o.estado) ? (
+                            <button
+                              onClick={() => onEditarOrden(o)}
+                              title="Editar orden"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span aria-hidden className={SLOT_EDITAR} />
+                          )}
                           {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
