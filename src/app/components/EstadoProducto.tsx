@@ -67,12 +67,16 @@ export function EstadoProductoSelect({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="rounded-2xl shadow-lg border border-border p-1.5 min-w-[10rem]">
         {ESTADOS_PRODUCTO.map((e) => (
+          // Fondo naranja del hover: `--accent` (#e65100) con texto blanco
+          // tapaba la pastilla. Se anula SOLO aquí (cn() usa twMerge, así que
+          // pisa el focus:bg-accent que viene de ui/dropdown-menu.tsx sin
+          // editar ese archivo). El check y las pastillas siguen igual.
           <DropdownMenuItem
             key={e}
             onSelect={() => {
               if (e !== value) onChange(e);
             }}
-            className="rounded-xl cursor-pointer flex items-center justify-between gap-2 px-1.5 py-1.5"
+            className="rounded-xl cursor-pointer flex items-center justify-between gap-2 px-1.5 py-1.5 focus:bg-transparent focus:text-foreground data-[highlighted]:bg-transparent"
           >
             <EstadoBadge estado={e} />
             {e === value && <Check className="w-4 h-4 text-foreground" />}

@@ -1228,10 +1228,10 @@ export function OrdenProduccionScreen({
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-2">
-                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
-                      {o.tipo === "pedido" && o.ventaNumero && (
-                        <p className="text-[11px] text-muted-foreground">Venta {o.ventaNumero}</p>
-                      )}
+                      {/* Solo el número: de "OP-004" muestra "004". `o.id` y
+                          `o.ventaNumero` no cambian: los siguen usando el
+                          buscador, el Excel, el detalle y la creación. */}
+                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id.replace("OP-", "")}</p>
                     </td>
                     <td className="px-4 py-2">
                       <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${

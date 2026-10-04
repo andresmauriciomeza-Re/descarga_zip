@@ -350,7 +350,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {[
-                  "ID Categoría",
+                  "ID",
                   "Nombre Categoría",
                   "Acciones",
                 ].map((h) => (
@@ -381,7 +381,12 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     className="hover:bg-muted/20 transition-colors"
                   >
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
-                      {c.id}
+                      {/* Solo el número: de "CAT-005" muestra "005". El dato
+                          `c.id` NO cambia (lo usan CATEGORIAS_FIJAS,
+                          ICONOS_FIJOS, borrar/editar y el idCategoria de los
+                          productos), y el buscador sigue comparando contra
+                          `c.id` completo. */}
+                      {c.id.replace("CAT-", "")}
                     </td>
                     <td className="px-4 py-3.5 text-sm font-medium text-foreground">
                       <span className="inline-flex items-center gap-1.5">

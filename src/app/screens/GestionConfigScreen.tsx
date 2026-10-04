@@ -881,7 +881,7 @@ export function GestionConfigScreen({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>{["ID Rol","Nombre","Descripción","Estado","Acciones"].map(h => (
+              <tr>{["ID","Nombre","Descripción","Estado","Acciones"].map(h => (
                 <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
               ))}</tr>
             </thead>
@@ -892,7 +892,7 @@ export function GestionConfigScreen({
                 </td></tr>
               ) : paged.map(r => (
                 <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{r.id}</td>
+                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{r.id.replace("ROL-", "")}</td>
                   <td className="px-4 py-3.5 text-sm font-medium text-foreground">{r.nombre}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
                   <td className="px-4 py-3.5">
