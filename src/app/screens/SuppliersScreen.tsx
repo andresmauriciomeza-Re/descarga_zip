@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, AlertCircle, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
@@ -145,7 +145,7 @@ function Modal({
   );
 }
 
-import type { OrdenCompra, GestionCompra } from "./OrdenCompraScreen";
+import type { OrdenCompra, GestionCompra, ProveedorRef } from "./OrdenCompraScreen";
 
 interface SuppliersScreenProps {
   canCreate?: boolean;
