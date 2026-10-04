@@ -9416,6 +9416,12 @@ export default function App() {
                   setInsumos={setInsumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
+<<<<<<< Updated upstream
+=======
+                  // Sin esta prop `proveedores` llegaba undefined y
+                  // `confirmarGuardar` moría en `proveedores.find(...)`: el
+                  // clic en Confirmar cerraba el modal sin guardar ni avisar.
+>>>>>>> Stashed changes
                   proveedores={proveedores}
                   onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
