@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Check, Package, Pencil, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { UNIDADES } from "./CompactInsumoForm";
 import { calcularLineaIva } from "../utils/iva";
 
@@ -20,12 +21,32 @@ function fmtCOP(n: number) {
   }).format(n);
 }
 
+/**
+ * Número seguro para los inputs en modo edición: vacío o basura → 0, y nunca
+ * NaN (Number("") es 0, pero Number("abc") es NaN y arruina todos los cálculos
+ * de la fila: quedaría "$ NaN" y totales NaN).
+ */
+function toNum(v: string | number) {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Altura fija de TODOS los controles de edición (32 px) para que las 4 celdas
+// queden idénticas y la fila no cambie de alto al entrar o salir de edición.
 const cellInputCls =
-  "w-full px-1.5 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
+  "w-full h-8 px-1.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
   // Los spinners del input numérico se comen ~18px de una celda fija angosta;
   // sin ellos el valor (ej. "12500") entra completo y se sigue escribiendo con
   // el teclado.
   "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+// Símbolo "%" a la derecha DENTRO del input de IVA (el valor va a la izquierda,
+// así no se pisa con el símbolo en valores de 1 a 3 dígitos).
+const sufijoIva = (
+  <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[11px] text-muted-foreground">
+    %
+  </span>
+);
 
 type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario" | "iva">;
 
@@ -85,11 +106,31 @@ export function InsumosSolicitadosTable({
 
   const commitEdit = () => {
     if (editId && draft) {
+      // Nunca se reemplaza la fila: sólo entran estos 4 campos editables, así
+      // que id, nombre y unidad se conservan siempre (mergeRow hace lo mismo
+      // para el borrador en pantalla).
+      const cantidad = toNum(draft.cantidad);
+      const precioUnitario = toNum(draft.precioUnitario);
+      const iva = toNum(draft.iva);
+
+      if (cantidad <= 0) {
+        toast.error("La cantidad debe ser mayor a 0.");
+        return; // se queda en modo edición, no se pierde lo escrito
+      }
+      if (precioUnitario <= 0) {
+        toast.error("El monto unitario debe ser mayor a 0.");
+        return;
+      }
+      if (iva < 0 || iva > 100) {
+        toast.error("El IVA debe estar entre 0 y 100.");
+        return;
+      }
+
       onUpdate?.(editId, {
-        cantidad: Math.max(0, draft.cantidad),
+        cantidad,
         unidad: draft.unidad,
-        precioUnitario: Math.max(0, draft.precioUnitario),
-        iva: Math.min(100, Math.max(0, draft.iva)),
+        precioUnitario,
+        iva,
       });
     }
 
@@ -157,7 +198,10 @@ export function InsumosSolicitadosTable({
       ? calcularLinea(row).montoIva
       : row.cantidad * row.precioUnitario * (row.iva / 100);
 
-  const tdBase = "px-1.5 " + (enPagina ? "py-2" : "py-2.5");
+  // align-middle: en modo edición los inputs son cajas inline y, con el valor
+  // por defecto (baseline), quedaban desplazados respecto a las celdas de
+  // texto; así los 4 controles quedan centrados verticalmente en la fila.
+  const tdBase = "align-middle px-1.5 " + (enPagina ? "py-2" : "py-2.5");
 
   /**
    * Anchos fijos de columna para `table-layout: fixed`. Sólo "Nombre" queda
@@ -231,7 +275,7 @@ export function InsumosSolicitadosTable({
                     onChange={(e) =>
                       setDraft({
                         ...draftRow,
-                        cantidad: Number(e.target.value),
+                        cantidad: toNum(e.target.value),
                       })
                     }
                     className={cellInputCls}
@@ -270,7 +314,7 @@ export function InsumosSolicitadosTable({
                     onChange={(e) =>
                       setDraft({
                         ...draftRow,
-                        precioUnitario: Number(e.target.value),
+                        precioUnitario: toNum(e.target.value),
                       })
                     }
                     className={cellInputCls}
@@ -283,44 +327,54 @@ export function InsumosSolicitadosTable({
               {colIvaSimple && (
                 <td className={tdBase + " text-xs"}>
                   {draftRow ? (
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={draftRow.iva}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draftRow,
-                          iva: Math.min(100, Math.max(0, Number(e.target.value))),
-                        })
-                      }
-                      className={cellInputCls}
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={draftRow.iva}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draftRow,
+                            iva: toNum(e.target.value),
+                          })
+                        }
+                        className={cellInputCls}
+                      />
+                      {sufijoIva}
+                    </div>
                   ) : (
                     <span className="text-[13px] text-foreground/80">{row.iva}%</span>
                   )}
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                    {fmtCOP(ivaDeLinea(row))}
-                  </p>
+                  {/* Mientras se edita el monto no se pinta: quedaba "$ 0"
+                      debajo del input y agrandaba la fila. */}
+                  {!draftRow && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      {fmtCOP(ivaDeLinea(row))}
+                    </p>
+                  )}
                 </td>
               )}
 
               {!colIvaSimple && modoIva && (
                 <td className={tdBase + " text-xs text-muted-foreground"}>
                   {draftRow ? (
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={draftRow.iva}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draftRow,
-                          iva: Math.min(100, Math.max(0, Number(e.target.value))),
-                        })
-                      }
-                      className={cellInputCls}
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={draftRow.iva}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draftRow,
+                            iva: toNum(e.target.value),
+                          })
+                        }
+                        className={cellInputCls}
+                      />
+                      {sufijoIva}
+                    </div>
                   ) : (
                     row.iva + "%"
                   )}
