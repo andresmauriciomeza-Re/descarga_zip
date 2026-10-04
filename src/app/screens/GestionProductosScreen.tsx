@@ -2083,13 +2083,19 @@ export function GestionProductosScreen({
               <tr>
                 {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
                     Crear/Editar (aquí solo ocupaba ancho y alto). */}
+                {/* Los anchos suman SIEMPRE 100 %: la tabla es `w-full
+                    table-fixed`, así que el ancho total no cambia y no
+                    aparece scroll horizontal. El ID entra primero (5,5 %) y
+                    se compensa sobre todo en Stock, que era la que más
+                    sobrante tenía. Estado y Acciones quedan intactas. */}
                 {[
-                  { h: "Nombre", w: "w-[13%]" },
-                  { h: "Tipo", w: "w-[14%]" },
-                  { h: "Ficha técnica", w: "w-[10%]" },
-                  { h: "Categoría", w: "w-[8%]" },
-                  { h: "Precio de venta", w: "w-[10%]" },
-                  { h: "Stock", w: "w-[17%]", pl: "pl-10" },
+                  { h: "ID", w: "w-[5.5%]" },
+                  { h: "Nombre", w: "w-[11%]" },
+                  { h: "Tipo", w: "w-[14.5%]" },
+                  { h: "Ficha técnica", w: "w-[9.5%]" },
+                  { h: "Categoría", w: "w-[7.5%]" },
+                  { h: "Precio de venta", w: "w-[9%]" },
+                  { h: "Stock", w: "w-[15%]", pl: "pl-10" },
                   { h: "Estado", w: "w-[16%]" },
                   { h: "Acciones", w: "w-[12%]" },
                 ].map(({ h, w, pl }) => (
@@ -2106,7 +2112,7 @@ export function GestionProductosScreen({
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-14 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">📦</p>
@@ -2119,6 +2125,13 @@ export function GestionProductosScreen({
                     key={p.id}
                     className="hover:bg-muted/20 transition-colors h-[61px]"
                   >
+                    {/* ID numérico sin letras: de "PROD-001" muestra "001".
+                        Solo cambia la presentación; `p.id` sigue siendo el
+                        identificador interno (Excel, detalle, edición y
+                        borrado lo siguen usando tal cual). */}
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground whitespace-nowrap">
+                      {p.id.replace(/\D/g, "")}
+                    </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground truncate" title={p.nombre}>
                       {p.nombre}
                     </td>
@@ -2162,23 +2175,26 @@ export function GestionProductosScreen({
                     >
                       {fmtCOP(p.precioUnitario)}
                     </td>
-                    <td className="pl-10 pr-4 py-2.5" title={ayudaStock(p)}>
-                      {/* Stock en UNA sola línea: "50 pizzas · 400 porciones"
-                          (el detalle por pizza queda solo en el tooltip del
-                          título). Producto o sin ficha: solo unidades. */}
+                    <td className="pl-10 pr-4 py-2.5 align-middle" title={ayudaStock(p)}>
+                      {/* Stock en DOS líneas: arriba las unidades (negrita y
+                          color, igual que antes) y debajo las porciones en
+                          gris y más pequeño, sin el "·" y sin recorte.
+                          `align-middle` + la altura fija de la fila (61 px,
+                          más que los 56 px que ocupan las dos líneas) hacen
+                          que todas las filas midan igual en todas las
+                          páginas. El detalle completo queda en el tooltip. */}
                       <span
-                        className="text-sm block truncate"
+                        className="block"
                         title={`${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}${tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) ? ` · ${p.stockDisponible * fichaVigente(p.id)!.porciones} porciones` : ""}`}
                       >
                         <span
-                          className={`font-bold ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
+                          className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
                         >
                           {p.stockDisponible} {palabraStock(p, p.stockDisponible)}
                         </span>
                         {tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) && (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {p.stockDisponible * fichaVigente(p.id)!.porciones} porciones
+                          <span className="block text-xs leading-4 text-muted-foreground whitespace-nowrap">
+                            {p.stockDisponible * fichaVigente(p.id)!.porciones} porciones
                           </span>
                         )}
                       </span>
