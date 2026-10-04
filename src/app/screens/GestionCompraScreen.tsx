@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  Plus, Check, Ban, CheckCircle2,
+  Plus, Check, Ban, CheckCircle2, HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "../utils/exportExcelEstilizado";
@@ -501,7 +501,18 @@ function CompraForm({
     patch: Partial<ItemFactura>
   ) => {
     setItems((prev) =>
-      prev.map((item) => (item.rowId === rowId ? { ...item, ...patch } : item))
+      prev.map((item) =>
+        item.rowId === rowId
+          ? {
+              ...item,
+              ...patch,
+              // `costoUnitario` es el precio que consumen el listado, el PDF y
+              // la persistencia de la compra: si cambia el monto unitario hay
+              // que moverlo también o los totales quedan con el precio viejo.
+              costoUnitario: patch.precioUnitario ?? item.costoUnitario,
+            }
+          : item
+      )
     );
   };
 
@@ -1546,7 +1557,7 @@ export function GestionCompraScreen({
                       </td>
                       <td className="px-4 py-3.5 text-sm text-foreground">
                         <p className="text-sm text-foreground">{nombreMostrar}</p>
-                        {nit && <p className="text-[11px] text-muted-foreground font-mono">{nit}</p>}
+                        {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0

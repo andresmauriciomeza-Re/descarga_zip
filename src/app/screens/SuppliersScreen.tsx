@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
@@ -13,6 +13,7 @@ import {
   type EstadoOption,
 } from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
+import type { ProveedorRef } from "./OrdenCompraScreen";
 
 const SERIF = "var(--font-titulo)";
 

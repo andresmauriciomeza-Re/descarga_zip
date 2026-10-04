@@ -9,7 +9,7 @@ import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
-  Plus, Search, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
+  Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
@@ -789,7 +789,13 @@ export function OrdenModal({
         toast.error("Este insumo ya está en la orden.");
         return;
       }
-      actualizarItem(editando);
+      actualizarItem(editando, {
+        nombre: aNombre.trim(),
+        cantidad: aCant,
+        unidad: aUnidad,
+        precioUnitario: aPrecio,
+        iva: aIva,
+      });
       limpiarFilaInsumo();
       return;
     }
@@ -843,19 +849,21 @@ export function OrdenModal({
     nombreRef.current?.focus();
   };
 
-  /** Reemplaza la fila cargada por el lápiz con los valores del formulario
-   *  (mismos campos que tenía la edición en línea de la tabla). */
-  const actualizarItem = (rowId: string) => {
+  /** Patch de la edición en línea de la tabla (✓): conserva TODOS los datos de
+   *  la fila (id, nombre, idInsumo, costo...) y sólo pisa los campos
+   *  editables. Antes se reemplazaba la fila con los estados del formulario de
+   *  arriba (`aNombre=""`, `aPrecio=0`, `aIva=0`), que el lápiz de la tabla
+   *  nunca carga, y la fila quedaba vacía con $ 0. */
+  const actualizarItem = (rowId: string, patch: Partial<OrdenItem>) => {
     pf({
       items: form.items.map((i) =>
         i.rowId === rowId
           ? {
               ...i,
-              nombre: aNombre.trim(),
-              cantidad: aCant,
-              unidad: aUnidad,
-              precioUnitario: aPrecio,
-              iva: aIva,
+              ...patch,
+              // `costoUnitario` es el precio que usan calcTotal, el PDF y las
+              // facturas: se mueve junto con `precioUnitario`.
+              costoUnitario: patch.precioUnitario ?? i.costoUnitario,
             }
           : i
       ),
@@ -2324,7 +2332,7 @@ export function OrdenCompraScreen({
                         <td className="px-3 py-3.5 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</td>
                         <td className="px-3 py-3.5">
                           <p className="text-sm text-foreground">{o.proveedor}</p>
-                          {nit && <p className="text-[11px] text-muted-foreground font-mono">{nit}</p>}
+                          {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
                         </td>
                         <td className="px-3 py-3.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
                       <td className="px-3 py-3.5 text-xs">
@@ -2383,6 +2391,17 @@ export function OrdenCompraScreen({
                             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                           >
                             <Eye className="w-4 h-4" />
+                          </button>
+                          {/* Editar: usa `onEditarOrden` (que App conecta con
+                              setOrdenAEditar + navigate("nueva-orden-compra")).
+                              Estaba declarado y desestructurado pero sin botón,
+                              así que la edición de OC quedaba inalcanzable. */}
+                          <button
+                            onClick={() => onEditarOrden(o)}
+                            title="Editar orden"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            <Pencil className="w-4 h-4" />
                           </button>
                           {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
