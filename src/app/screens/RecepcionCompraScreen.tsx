@@ -4,6 +4,8 @@ import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-
 import { toast } from "sonner";
 import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
+import { UnidadSelect } from "../components/UnidadSelect";
+import { ActionIcons } from "../components/ActionIcons";
 import {
   ConfirmModal,
   NuevoInsumoModal,

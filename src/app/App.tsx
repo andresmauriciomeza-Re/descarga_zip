@@ -9416,6 +9416,7 @@ export default function App() {
                   setInsumos={setInsumos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
+                  proveedores={proveedores}
                   onGuardar={(recepcion, estado) => {
                     setOrdenes((prev) =>
                       prev.map((o) => {
