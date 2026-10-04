@@ -158,6 +158,23 @@ export function RecepcionCompraScreen({
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
 
+  // Refs de los campos: si una validación falla, el aviso tiene que quedar A LA
+  // VISTA del usuario (la columna derecha scrollea por dentro) y con el foco
+  // puesto en el campo. Renderizar el mensaje fuera del área visible era
+  // indistinguible de "no pasa nada".
+  const numeroFacturaRef = useRef<HTMLInputElement>(null);
+  const fechaFacturaRef = useRef<HTMLInputElement>(null);
+  const itemsMsgRef = useRef<HTMLParagraphElement>(null);
+
+  const enfocarCampo = (ref: React.RefObject<HTMLElement | null>) => {
+    const el = ref.current;
+    if (!el) return;
+
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+
+    if (el instanceof HTMLInputElement) el.focus({ preventScroll: true });
+  };
+
   // Esta pantalla SIEMPRE trabaja con precios SIN IVA:
   // - Monto unitario = base (sin IVA)
   // - Subtotal = Cantidad × Monto unitario
@@ -432,35 +449,13 @@ export function RecepcionCompraScreen({
     setIntentoGuardar(true);
 
     if (!numeroFactura.trim()) {
+      enfocarCampo(numeroFacturaRef);
       toast.error("Ingresa el número de factura.");
       return;
     }
 
-    if (!fechaFactura) {
-      toast.error("Selecciona la fecha de la factura.");
-      return;
-    }
-
-    // Mismas reglas que las del campo: sin esto se podría guardar una fecha
-    // futura o anterior a la orden aunque el campo aparezca en rojo.
-    if (errorFechaFactura) {
-      toast.error(errorFechaFactura);
-      return;
-    }
-
-    if (!orden.proveedor.trim()) {
-      toast.error("La orden no tiene proveedor asignado.");
-      return;
-    }
-
-    const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
-
-    if (filasRecibidas.length === 0 && itemsExtra.length === 0) {
-      toast.error("Registra al menos un insumo recibido en la factura.");
-      return;
-    }
-
-    // Validación de factura duplicada
+    // Validación de factura duplicada (normalizando mayúsculas/espacios:
+    // "fac-123456" y "FAC-123456" son la misma factura).
     const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
     const facturaActualNormalizada = normalizarFactura(numeroFactura);
     const facturaDuplicada = gestiones.some(
@@ -469,7 +464,37 @@ export function RecepcionCompraScreen({
         normalizarFactura(g.numeroFactura) === facturaActualNormalizada,
     );
     if (facturaDuplicada) {
+      enfocarCampo(numeroFacturaRef);
       toast.error("Ya existe una compra con este número de factura");
+      return;
+    }
+
+    if (!fechaFactura) {
+      enfocarCampo(fechaFacturaRef);
+      toast.error("Selecciona la fecha de la factura.");
+      return;
+    }
+
+    // Mismas reglas que las del campo: sin esto se podría guardar una fecha
+    // futura o anterior a la orden aunque el campo aparezca en rojo.
+    if (errorFechaFactura) {
+      enfocarCampo(fechaFacturaRef);
+      toast.error(errorFechaFactura);
+      return;
+    }
+
+    if (!orden.proveedor.trim()) {
+      // El aviso del proveedor se pinta justo debajo del campo de fecha.
+      enfocarCampo(fechaFacturaRef);
+      toast.error("La orden no tiene proveedor asignado.");
+      return;
+    }
+
+    const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
+
+    if (filasRecibidas.length === 0 && itemsExtra.length === 0) {
+      enfocarCampo(itemsMsgRef);
+      toast.error("Registra al menos un insumo recibido en la factura.");
       return;
     }
 
@@ -479,6 +504,20 @@ export function RecepcionCompraScreen({
   const confirmarGuardar = () => {
     setShowGuardarConf(false);
 
+    // Guardar NUNCA puede fallar en silencio: cualquier excepción (props mal
+    // pasadas, error del backend al persistir, etc.) se informa en pantalla y
+    // la recepción queda como estaba para poder reintentar.
+    try {
+      guardarConfirmado();
+    } catch (e) {
+      console.error("No se pudo guardar la recepción:", e);
+      toast.error(
+        `No se pudo guardar la recepción: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+  };
+
+  const guardarConfirmado = () => {
     const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
     // Un insumo es "no solicitado" si su id no está en el detalle de la OC:
@@ -806,6 +845,7 @@ export function RecepcionCompraScreen({
                   </label>
 
                   <input
+                    ref={numeroFacturaRef}
                     value={numeroFactura}
                     onChange={(e) =>
                       setNumeroFactura(e.target.value)
@@ -832,6 +872,7 @@ export function RecepcionCompraScreen({
                   </label>
 
                   <input
+                    ref={fechaFacturaRef}
                     type="date"
                     value={fechaFactura}
                     onChange={(e) =>
@@ -872,7 +913,7 @@ export function RecepcionCompraScreen({
               {/* Recibido según factura */}
               <div>
                 {errorItems && (algunoTocado || intentoGuardar) && (
-                  <p className="text-xs text-red-500 mb-2 ml-0.5">
+                  <p ref={itemsMsgRef} className="text-xs text-red-500 mb-2 ml-0.5">
                     {errorItems}
                   </p>
                 )}
