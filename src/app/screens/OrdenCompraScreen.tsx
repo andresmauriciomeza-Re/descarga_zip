@@ -11,7 +11,7 @@ import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock, Eye,
+  AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "../utils/exportExcelEstilizado";
