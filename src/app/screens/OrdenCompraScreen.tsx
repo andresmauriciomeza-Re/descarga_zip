@@ -2003,6 +2003,8 @@ interface Props {
   onVerDetalle: (orden: OrdenCompra) => void;
   onNuevaOrden: () => void;
   onEditarOrden: (orden: OrdenCompra) => void;
+  page: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -2013,11 +2015,11 @@ export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
   insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+  page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
 }: Props) {
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [modal, setModal] = useState<{ mode: "create" | "edit" | "view"; orden?: OrdenCompra } | null>(null);
   const [recepcionOrden, setRecepcionOrden] = useState<OrdenCompra | null>(null);
   const [sendConfirm, setSendConfirm] = useState<OrdenCompra | null>(null);
@@ -2045,7 +2047,12 @@ export function OrdenCompraScreen({
     [ordenes, search, gestiones, proveedores]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [setPage, totalPages]);
 
   /** Facturas (compras) registradas para una orden. */
   const facturasDeOrden = (oid: string) => gestiones.filter((g) => g.ordenId === oid);
@@ -2307,8 +2314,8 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto min-h-full flex flex-col">
-      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
+    <div className="px-6 pt-3 pb-2 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-y-auto md:overflow-hidden">
+      <div className="flex items-center justify-between gap-4 mb-3 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Órdenes de Compra
@@ -2334,7 +2341,7 @@ export function OrdenCompraScreen({
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-sm shrink-0">
+      <div className="relative mb-3 max-w-sm shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           value={search}
@@ -2344,10 +2351,21 @@ export function OrdenCompraScreen({
         />
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
-        <div className="overflow-auto">
-           <table className="w-full min-w-[1100px]">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+       <div className="bg-card border border-border rounded-2xl mb-3 shrink-0">
+         <div className="overflow-x-auto md:overflow-visible">
+           <table className="w-full table-fixed min-w-[860px]">
+             <colgroup>
+               <col className="w-[8%]" />
+               <col className="w-[23%]" />
+               <col className="w-[8%]" />
+               <col className="w-[8%]" />
+               <col className="w-[8%]" />
+               <col className="w-[8%]" />
+               <col className="w-[8%]" />
+               <col className="w-[16%]" />
+               <col className="w-[13%]" />
+             </colgroup>
+             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["N° Orden", "Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado", "Acciones"].map(h => (
                   <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
@@ -2374,35 +2392,35 @@ export function OrdenCompraScreen({
                     const nit = prov?.nit ?? "";
                     return (
                       <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-3 py-3.5 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</td>
-                        <td className="px-3 py-3.5">
-                          <p className="text-sm text-foreground">{o.proveedor}</p>
-                          {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
-                        </td>
-                        <td className="px-3 py-3.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
-                      <td className="px-3 py-3.5 text-xs">
-                        {facturas.length > 0 ? (
-                          <>
-                            {facturas.map((f) => (
-                              <span key={f.id} className="block font-mono font-semibold text-emerald-700">
-                                {f.numeroFactura}
-                              </span>
-                            ))}
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
-                        {fmtCOP(totalOrden)}
-                      </td>
-                      <td className="px-3 py-3.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
-                        {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
-                      </td>
-                      <td className="px-3 py-3.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
-                        {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
-                      </td>
-                      <td className="px-3 py-3.5">
+                        <td className="px-3 py-2.5 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</td>
+                         <td className="px-3 py-2.5 overflow-hidden">
+                           <p className="text-sm text-foreground break-words">{o.proveedor}</p>
+                           {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
+                         </td>
+                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
+                       <td className="px-3 py-2.5 text-xs">
+                         {facturas.length > 0 ? (
+                           <>
+                             {facturas.map((f) => (
+                               <span key={f.id} className="block font-mono font-semibold text-emerald-700">
+                                 {f.numeroFactura}
+                               </span>
+                             ))}
+                           </>
+                         ) : (
+                           <span className="text-muted-foreground">—</span>
+                         )}
+                       </td>
+                       <td className="px-3 py-2.5 text-sm font-semibold text-foreground whitespace-nowrap">
+                         {fmtCOP(totalOrden)}
+                       </td>
+                       <td className="px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
+                         {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
+                       </td>
+                       <td className="px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
+                         {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
+                       </td>
+                        <td className="px-3 py-2.5 overflow-visible">
                         <EstadoSelect
                           value={o.estado}
                           onChange={(nuevoEstado) => {
@@ -2412,7 +2430,7 @@ export function OrdenCompraScreen({
                           options={opcionesEstado(o.estado)}
                           disabled={o.estado === "Anulado" || o.estado === "Completado"}
                         />
-                        <p className="text-[11px] text-muted-foreground mt-1">{fechaUltimoCambio(o)}</p>
+                         <p className="text-[11px] text-muted-foreground mt-1 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
                         {/* El tooltip envuelve SOLO el botón: el selector de estado (menú
                             en portal con z-[100]) queda fuera, así que el desplegable
                             nunca queda tapado por el cuadro del historial. */}
@@ -2428,8 +2446,8 @@ export function OrdenCompraScreen({
                           </button>
                         </EstadoHistorialTooltip>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1 flex-wrap">
+                       <td className="px-3 py-2.5">
+                         <div className="flex items-center gap-1 flex-nowrap">
                           <button
                             onClick={() => onVerDetalle(o)}
                             title="Ver detalle"
@@ -2470,35 +2488,36 @@ export function OrdenCompraScreen({
             </tbody>
           </table>
         </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <button
-                key={n}
-                onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-              >
-                {n}
-              </button>
-            ))}
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+       {filtered.length > PER_PAGE && (
+         <div className="flex items-center justify-center gap-1 mt-2 shrink-0">
+             <button
+               onClick={() => setPage(p => Math.max(1, p - 1))}
+               disabled={pageActual === 1}
+               aria-label="Página anterior"
+               className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+             >
+               <ChevronLeft className="w-4 h-4" />
+             </button>
+             {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+               <button
+                 key={n}
+                 onClick={() => setPage(n)}
+                 aria-current={n === pageActual ? "page" : undefined}
+                 className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${n === pageActual ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}
+               >
+                 {n}
+               </button>
+             ))}
+             <button
+               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+               disabled={pageActual === totalPages}
+               aria-label="Página siguiente"
+               className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+             >
+               <ChevronRight className="w-4 h-4" />
+             </button>
+         </div>
+       )}
       </div>
 
       <AnimatePresence>

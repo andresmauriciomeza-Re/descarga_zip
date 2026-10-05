@@ -8339,6 +8339,7 @@ export default function App() {
     useState<OrdenCompra | null>(null);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
   const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
+  const [ordenCompraPage, setOrdenCompraPage] = useState(1);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
@@ -9474,6 +9475,8 @@ export default function App() {
                     setOrdenAEditar(orden);
                     navigate("nueva-orden-compra");
                   }}
+                  page={ordenCompraPage}
+                  setPage={setOrdenCompraPage}
                   onVerDetalle={(orden) => {
                     setOrdenDetalle(orden);
                     setScreen("orden-detalle");
