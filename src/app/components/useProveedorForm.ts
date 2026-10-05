@@ -21,6 +21,35 @@ export function filtrarNit(valor: string): string {
   return valor.replace(/\D/g, "").slice(0, NIT_LENGTH);
 }
 
+/**
+ * NIT para mostrar, SIEMPRE con el mismo formato para todos los proveedores
+ * (987.654.321-1). Es idempotente: un NIT que ya viene formateado en la
+ * semilla ("901.777.888-4") sale igual, y uno guardado en dígitos puros
+ * ("9876543211") se formatea aquí. Solo cambia la presentación: lo guardado
+ * sigue siendo lo que manda (el campo de alta sigue pidiendo 10 dígitos).
+ * Si no tiene 10 dígitos se devuelve tal cual, para no inventar datos.
+ */
+export function formatoNit(nit: string): string {
+  const digitos = (nit ?? "").replace(/\D/g, "");
+  if (digitos.length !== NIT_LENGTH) return nit ?? "";
+  return `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9)}`;
+}
+
+/**
+ * Siguiente id de proveedor. Regla del sistema: ids numéricos, sin letras ni
+ * prefijos (1, 2, 3…), igual que el Id_Proveedor INT de la base de datos.
+ * Tolera ids heredados con formato viejo ("PROV-007") o ausentes: se quedan
+ * con los dígitos y, si no hay ninguno, arranca en 1. Es el ÚNICO punto donde
+ * se genera el id, así los tres formularios de alta guardan la misma estructura.
+ */
+export function siguienteProveedorId(proveedores: { id?: string }[] = []): string {
+  const max = proveedores.reduce((mayor, p) => {
+    const n = parseInt(String(p.id ?? "").replace(/\D/g, ""), 10) || 0;
+    return Math.max(mayor, n);
+  }, 0);
+  return String(max + 1);
+}
+
 /** Filtra texto de nombres: solo letras y espacios (con tildes y ñ). */
 export function soloLetras(valor: string): string {
   return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, "");
@@ -106,12 +135,16 @@ export function useProveedorForm(
       e.nombre = "El nombre solo puede contener letras y espacios.";
     }
 
-    // Teléfono: obligatorio, solo números, exactamente 10 dígitos
-    if (!values.telefono.trim()) {
+    // Teléfono: obligatorio, solo números, exactamente 10 dígitos.
+    // Los espacios se ignoran AQUÍ para poder mostrar el valor tal cual está
+    // guardado ("604 321 0001") en Editar sin que la validación lo rechace;
+    // el campo de crear ya filtra a dígitos, así que ese caso no cambia.
+    const telefonoDigitos = values.telefono.replace(/\s/g, "");
+    if (!telefonoDigitos) {
       e.telefono = "El teléfono es obligatorio.";
-    } else if (!/^\d+$/.test(values.telefono.trim())) {
+    } else if (!/^\d+$/.test(telefonoDigitos)) {
       e.telefono = "El teléfono solo puede contener números.";
-    } else if (values.telefono.trim().length !== 10) {
+    } else if (telefonoDigitos.length !== 10) {
       e.telefono = "El teléfono debe tener exactamente 10 dígitos.";
     }
 

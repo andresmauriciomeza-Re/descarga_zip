@@ -6,7 +6,7 @@ import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "../components
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
-import { useProveedorForm, soloLetras } from "../components/useProveedorForm";
+import { useProveedorForm, soloLetras, siguienteProveedorId } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
@@ -119,15 +119,15 @@ export interface ProveedorRef {
 }
 
 export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { id: "PROV-001", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
-  { id: "PROV-002", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { id: "PROV-003", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
-  { id: "PROV-004", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
-  { id: "PROV-005", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
-  { id: "PROV-006", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
-  { id: "PROV-007", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { id: "PROV-008", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
-  { id: "PROV-009", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { id: "1", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { id: "2", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { id: "3", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { id: "4", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { id: "5", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
+  { id: "6", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
+  { id: "7", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
+  { id: "8", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
+  { id: "9", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
 ];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
@@ -265,7 +265,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "001",
     ordenId: "",
     proveedor: "Distribuidora La Cosecha",
-    proveedorId: "PROV-006",
+    proveedorId: "6",
     numeroFactura: "FAC-2026-0301",
     fechaFactura: "2026-08-05",
     valorTotal: 410000,
@@ -280,7 +280,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "002",
     ordenId: "",
     proveedor: "Quesos del Norte S.A.S.",
-    proveedorId: "PROV-007",
+    proveedorId: "7",
     numeroFactura: "FAC-2026-0318",
     fechaFactura: "2026-08-19",
     valorTotal: 560000,
@@ -294,7 +294,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "003",
     ordenId: "",
     proveedor: "Carnes Premium Ltda.",
-    proveedorId: "PROV-008",
+    proveedorId: "8",
     numeroFactura: "FAC-2026-0329",
     fechaFactura: "2026-09-01",
     valorTotal: 190000,
@@ -307,7 +307,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "004",
     ordenId: "",
     proveedor: "Bebidas y Más",
-    proveedorId: "PROV-009",
+    proveedorId: "9",
     numeroFactura: "FAC-2026-0347",
     fechaFactura: "2026-09-12",
     valorTotal: 275500,
@@ -321,7 +321,7 @@ export const INITIAL_GESTIONES: GestionCompra[] = [
     id: "005",
     ordenId: "",
     proveedor: "Molinos del Valle",
-    proveedorId: "PROV-001",
+    proveedorId: "1",
     numeroFactura: "FAC-2026-0360",
     fechaFactura: "2026-09-20",
     valorTotal: 750000,
@@ -513,9 +513,10 @@ export function NuevoProveedorModal({
   onGuardar: (p: ProveedorRef) => void;
   onClose: () => void;
   nombreInicial?: string;
-  /** Punto 1: proveedores ya existentes, para detectar NIT repetido con las
-      mismas reglas del módulo Proveedores. */
-  existentes?: { nit: string; nombre: string }[];
+  /** Punto 1: proveedores ya existentes. Sirven para dos cosas: detectar NIT
+      repetido con las mismas reglas del módulo Proveedores y generar el id
+      numérico del nuevo registro (mismo cálculo que "Crear Proveedor"). */
+  existentes?: ProveedorRef[];
 }) {
   // Punto 1: mismas validaciones que el formulario del módulo Proveedores
   // (useProveedorForm). El nombre llega del buscador y se filtra con las
@@ -537,6 +538,12 @@ export function NuevoProveedorModal({
     form.setIntentoGuardar(true);
     if (!form.formValido) return;
     onGuardar({
+      // Punto 1: el alta pasa por el MISMO generador de id que el módulo
+      // Proveedores, así el objeto que llega a la lista es idéntico en los
+      // tres formularios (sin esto el proveedor entraba sin id y el título
+      // de Detalle/Editar salía vacío y el ícono de eliminar ni abría la
+      // alerta).
+      id: siguienteProveedorId(existentes),
       nombre: form.values.nombre.trim(),
       nit: form.values.nit.trim(),
       telefono: form.values.telefono.trim(),
