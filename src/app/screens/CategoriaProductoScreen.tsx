@@ -134,7 +134,7 @@ const MAX_NOMBRE = 30;
  * semilla ni lo que está guardado. Las nuevas usan el que se les eligió al
  * crearlas, y si alguna no tuviera ícono ni equivalente se queda sin pintar.
  */
-const ICONOS_FIJOS: Record<string, string> = {
+export const ICONOS_FIJOS: Record<string, string> = {
   "CAT-001": "🍕",
   "CAT-002": "🍝",
   "CAT-003": "🥤",

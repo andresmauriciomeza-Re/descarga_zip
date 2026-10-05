@@ -1762,6 +1762,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 px-5 py-4 border-t border-border">
                 <button onClick={() => setDetailItem(null)} className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
+                <button onClick={() => alert("Ver ficha del producto - funcionalidad por implementar")} className="w-full py-2.5 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
               </div>
             </motion.div>
           </div>

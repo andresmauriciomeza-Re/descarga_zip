@@ -1488,7 +1488,7 @@ export function GestionProductosScreen({
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Producto</h1>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Producto Insumo</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex gap-3">
@@ -2355,8 +2355,7 @@ export function GestionProductosScreen({
                     se compensa sobre todo en Stock, que era la que más
                     sobrante tenía. Estado y Acciones quedan intactas. */}
                 {[
-                  { h: "ID", w: "w-[5.5%]" },
-                  { h: "Nombre", w: "w-[11%]" },
+                  { h: "Nombre", w: "w-[16.5%]" },
                   { h: "Tipo", w: "w-[14.5%]" },
                   { h: "Ficha técnica", w: "w-[9.5%]" },
                   { h: "Categoría", w: "w-[7.5%]" },
@@ -2395,9 +2394,6 @@ export function GestionProductosScreen({
                         Solo cambia la presentación; `p.id` sigue siendo el
                         identificador interno (Excel, detalle, edición y
                         borrado lo siguen usando tal cual). */}
-                    <td className="px-4 py-2.5 text-sm font-medium text-foreground whitespace-nowrap">
-                      {p.id.replace(/\D/g, "")}
-                    </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground truncate" title={p.nombre}>
                       {p.nombre}
                     </td>

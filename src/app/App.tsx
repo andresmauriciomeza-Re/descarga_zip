@@ -96,7 +96,7 @@ import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError,
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
-import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "./screens/CategoriaProductoScreen";
+import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
@@ -205,6 +205,7 @@ interface Product {
   description: string;
   price: number;
   image: string;
+  idCategoria: string;
   category: string;
   sizes: { label: string; price: number }[];
   extras: { label: string; price: number }[];
@@ -299,7 +300,7 @@ const sizesDeProducto = (p: Producto): Product["sizes"] =>
 // recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
 // caber la imagen completa respetando su proporción (queda espacio a los lados).
 // Pizzas y Lasañas conservan object-cover, que es su diseño original.
-const verImagenCompleta = (p: Product) => p.category === "Bebidas";
+const verImagenCompleta = (p: Product) => p.idCategoria === "CAT-003";
 
 // Secciones del grid cuando el filtro es "Todas", en el orden en que se
 // muestran. El título va aparte del nombre de la categoría porque no siempre
@@ -325,6 +326,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza de la casa.",
     price: 14000,
     image: pizzaCañon,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -338,6 +340,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con carnes.",
     price: 14000,
     image: pizzaCarnes,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -351,6 +354,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con jamón y piña.",
     price: 14000,
     image: pizzaHawaii,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -364,6 +368,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con jamón y queso.",
     price: 14000,
     image: pizzaJamonQueso,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -377,6 +382,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con maíz.",
     price: 14000,
     image: pizzaMaicitos,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -390,6 +396,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con peperoni.",
     price: 14000,
     image: pizzaPeperoni,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -403,6 +410,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con pollo.",
     price: 14000,
     image: pizzaPollo,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -416,6 +424,7 @@ const PRODUCTS: Product[] = [
     description: "Pizza con tocineta.",
     price: 14000,
     image: pizzaTocineta,
+    idCategoria: "CAT-001",
     category: "Pizzas",
     sizes: SIZES_DEFAULT,
     extras: [],
@@ -430,6 +439,7 @@ const PRODUCTS: Product[] = [
     description: "Lasaña de carne con salsa boloñesa, bechamel y queso gratinado.",
     price: 20000,
     image: "/src/imports/lasaña_carne.png",
+    idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
     extras: [],
@@ -443,6 +453,7 @@ const PRODUCTS: Product[] = [
     description: "Lasaña de pollo con salsa blanca, bechamel y queso gratinado.",
     price: 20000,
     image: "/src/imports/lasaña_pollo.png",
+    idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
     extras: [],
@@ -456,6 +467,7 @@ const PRODUCTS: Product[] = [
     description: "Lasaña mixta con carne y pollo, salsa boloñesa y queso gratinado.",
     price: 22000,
     image: "/src/imports/lasaña_mixta.png",
+    idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
     extras: [],
@@ -470,6 +482,7 @@ const PRODUCTS: Product[] = [
     description: "Botella de 2.5 L. Sabor cítrico y refrescante.",
     price: 3000,
     image: "/src/imports/Quatro.png",
+    idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
     extras: [],
@@ -483,6 +496,7 @@ const PRODUCTS: Product[] = [
     description: "Botella de 2.5 L. Sabor frutal y refrescante.",
     price: 3500,
     image: "/src/imports/Premio.png",
+    idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
     extras: [],
@@ -496,6 +510,7 @@ const PRODUCTS: Product[] = [
     description: "Botella de 2.5 L. El sabor clásico de siempre.",
     price: 2500,
     image: "/src/imports/Coca-Cola.png",
+    idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
     extras: [],
@@ -509,6 +524,7 @@ const PRODUCTS: Product[] = [
     description: "Botella de 2.5 L. Sabor cola y refrescante.",
     price: 2500,
     image: "/src/imports/Pepsi.png",
+    idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
     extras: [],
@@ -586,13 +602,19 @@ const DESCRIPCIONES: Record<string, string> = {
 // detalle y el carrito. Es la misma conversión que se hace al pasarle
 // `productos` a CatalogScreen, para que una favorita de la landing abra el
 // detalle con la foto, la descripción y los tamaños reales.
-const productoACatalogo = (p: Producto): Product => ({
+const nombreCategoria = (idCategoria: string, categorias: CategoriaProducto[]) => {
+  const cat = categorias.find((c) => c.id === idCategoria);
+  return cat ? cat.nombre : "Otros";
+};
+
+const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => ({
   id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
   name: p.nombre,
   description: DESCRIPCIONES[p.nombre] ?? "",
   price: p.precioUnitario,
   image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
-  category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
+  idCategoria: p.idCategoria,
+  category: nombreCategoria(p.idCategoria, categorias),
   sizes: sizesDeProducto(p),
   extras: [],
   status: p.estado === "Disponible" ? "disponible" : "no disponible",
@@ -1972,42 +1994,22 @@ function LandingScreen({
               WebkitOverflowScrolling: "touch",
             }}
           >
-            {[
-              { id: "CAT-001", emoji: "🍕", label: "Pizzas" },
-              { id: "CAT-003", emoji: "🥤", label: "Bebidas" },
-              { id: "CAT-002", emoji: "🍝", label: "Lasaña" },
-            ]
-              // Categoría Inactiva: su tarjeta no aparece en el landing. Las
-              // originales se reconocen por su id (el ícono vive acá).
-              .filter(({ id }) => estadoDe(categorias.find((c) => c.id === id)) !== "Inactivo")
-              .map(({ emoji, label }) => (
-              <button
-                key={label}
-                onClick={() => onCategoryNavigate(label)}
-                className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
-              >
-                <span className="text-4xl leading-none">
-                  {emoji}
-                </span>
-                <p className="text-foreground text-sm font-semibold text-center leading-snug">
-                  {label}
-                </p>
-              </button>
-            ))}
-            {/* Categorías creadas desde Producción > Categoría Productos. Se
-                pintan con el mismo diseño de tarjeta y con el nombre exacto
-                que se escribió en el admin. El filtro del catálogo es una lista
-                fija, así que su clic abre el catálogo completo en "Todas". */}
             {categorias
-              .filter((c) => c.icono && estadoDe(c) !== "Inactivo")
+              .filter((c) => estadoDe(c) !== "Inactivo")
               .map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => onCategoryNavigate("Todas")}
+                  onClick={() => onCategoryNavigate(c.nombre)}
                   className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
                 >
                   <span className="text-4xl leading-none">
-                    {c.icono}
+                    {c.id === "CAT-001"
+                      ? ICONOS_FIJOS["CAT-001"]
+                      : c.id === "CAT-002"
+                        ? ICONOS_FIJOS["CAT-002"]
+                        : c.id === "CAT-003"
+                          ? ICONOS_FIJOS["CAT-003"]
+                          : c.icono || ""}
                   </span>
                   <p className="text-foreground text-sm font-semibold text-center leading-snug">
                     {c.nombre}
@@ -2069,7 +2071,7 @@ function LandingScreen({
                   );
                 });
                 if (!producto) return null;
-                const favorita = productoACatalogo(producto);
+                const favorita = productoACatalogo(producto, categorias);
                 return (
                   <motion.div
                     key={producto.id}
@@ -2413,12 +2415,12 @@ function ProductCard({
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         <div className="absolute top-3 right-3">
-          {/* Mismos colores de estado que el panel (ESTADO_COLORES). */}
+          {/* Badge sólido con fondo y texto legible */}
           <Badge
             className="border-0"
             style={{
-              backgroundColor: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"] + "1A",
-              color: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"],
+              backgroundColor: "emerald-100",
+              color: "emerald-800",
             }}
           >
             {p.status === "disponible"
@@ -2486,6 +2488,7 @@ function CatalogScreen({
   onOpenDetail,
   cart,
   updateQty,
+  categorias,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
@@ -2503,19 +2506,44 @@ function CatalogScreen({
   onOpenDetail: (p: Product) => void;
   cart: CartItem[];
   updateQty: (id: string, delta: number) => void;
+  /** Categorías del admin, para filtros dinámicos. */
+  categorias: CategoriaProducto[];
 }) {
   const [cat, setCat] = useState(initialCat);
-  const cats = ["Todas", "Pizzas", "Bebidas", "Lasaña"];
   const isMobile = useIsMobile();
   // 9 = 3 columnas del grid, así cada página cierra en filas completas.
   // En móvil: 6 por página (2 columnas de 3).
   const PER_PAGE = isMobile ? 6 : 9;
 
+  // Determina qué categorías mostrar en filtros: Activas que tengan productos no descontinuados
+  const categoriasConProductos = useMemo(() => {
+    const productosPorCategoria = useMemo(
+      () =>
+        productos.reduce(
+          (acc, p) => {
+            const catId = p.idCategoria;
+            if (!acc[catId]) acc[catId] = [];
+            acc[catId].push(p);
+            return acc;
+          },
+          {} as Record<string, Product[]>,
+        ),
+      [productos],
+    );
+    return categorias.filter((c) => {
+      const activo = c.estado !== "Inactivo";
+      const tieneProductos = Object.keys(productosPorCategoria).includes(c.id);
+      const tieneProductosDisponibles =
+        tieneProductos && productosPorCategoria[c.id].some((p) => p.status === "disponible");
+      return activo && tieneProductosDisponibles;
+    });
+  }, [categorias, productos]);
+
   const filtered = useMemo(
     () =>
       productos.filter(
         (p) =>
-          (cat === "Todas" || p.category === cat) &&
+          (cat === "Todas" || p.idCategoria === cat) &&
           (search === "" ||
             p.name
               .toLowerCase()
@@ -2604,18 +2632,26 @@ function CatalogScreen({
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {cats.map((c) => (
+          <button
+            key="Todas"
+            onClick={() => {
+              setCat("Todas");
+              setPage(1);
+            }}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
+              Todas
+            </button>
+          {categoriasConProductos.map((c) => (
             <button
-              key={c}
+              key={c.id}
               onClick={() => {
-                setCat(c);
+                setCat(c.id);
                 setPage(1);
               }}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}
-            >
-              {c}
-            </button>
-          ))}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
+                {nombreCategoria(c.id, categorias)}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -5716,6 +5752,7 @@ function ManageProductsScreen() {
       price: Number(newP.price),
       image:
         "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=600&h=600&fit=crop&auto=format",
+      idCategoria: "CAT-001",
       category: newP.cat,
       sizes: [
         {
@@ -9229,6 +9266,7 @@ export default function App() {
                   }}
                   cart={cart}
                   updateQty={updateQty}
+                  categorias={categorias}
                   productos={productos
                     // Un producto "Descontinuado" no aparece en el catálogo
                     // público; "No disponible" sí aparece pero no se puede
@@ -9239,8 +9277,9 @@ export default function App() {
                     name: p.nombre,
                     description: DESCRIPCIONES[p.nombre] ?? "",
                     price: p.precioUnitario,
+                    idCategoria: p.idCategoria,
                     image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
-                    category: p.idCategoria === "CAT-001" ? "Pizzas" : p.idCategoria === "CAT-002" ? "Lasaña" : "Bebidas",
+                    category: nombreCategoria(p.idCategoria, categorias),
                     sizes: sizesDeProducto(p),
                     extras: [],
                     status: p.estado === "Disponible" ? "disponible" : "no disponible",
