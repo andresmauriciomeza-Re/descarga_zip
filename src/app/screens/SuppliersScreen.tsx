@@ -447,7 +447,7 @@ export function SuppliersScreen({
   ) : null;
 
   return (
-    <div className="px-4 py-3 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 py-3 max-w-6xl mx-auto min-h-full flex flex-col">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shrink-0">
         <div>
@@ -557,8 +557,6 @@ export function SuppliersScreen({
             </tbody>
           </table>
         </div>
-      </div>
-
       {/* Paginador compacto y centrado — sólo aparece con más de 5 proveedores
           filtrados (con 5 o menos se muestran todos y no hace falta).
           Sólo flechas ‹ › sin texto, sin borde ni fondo, en gris claro y
@@ -599,6 +597,7 @@ export function SuppliersScreen({
           </button>
         </div>
       )}
+      </div>
 
       {/* ── Modal: Crear Proveedor (centrado, 2 columnas) ── */}
       <AnimatePresence>

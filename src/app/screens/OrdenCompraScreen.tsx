@@ -2307,7 +2307,7 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto min-h-full flex flex-col">
       <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
@@ -2346,7 +2346,7 @@ export function OrdenCompraScreen({
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-auto">
-          <table className="w-full">
+           <table className="w-full min-w-[1100px]">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["N° Orden", "Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado", "Acciones"].map(h => (
@@ -2470,8 +2470,6 @@ export function OrdenCompraScreen({
             </tbody>
           </table>
         </div>
-      </div>
-
       {totalPages > 1 && (
         <div className="flex items-center justify-center shrink-0">
           <div className="flex items-center gap-1">
@@ -2501,6 +2499,7 @@ export function OrdenCompraScreen({
           </div>
         </div>
       )}
+      </div>
 
       <AnimatePresence>
         {modal && (

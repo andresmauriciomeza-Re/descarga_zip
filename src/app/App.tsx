@@ -54,7 +54,7 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "./components/ui/use-mobile";
 
@@ -2511,48 +2511,46 @@ function CatalogScreen({
 }) {
   const [cat, setCat] = useState(initialCat);
   const isMobile = useIsMobile();
+  const productosSeguros = Array.isArray(productos) ? productos : [];
+  const categoriasSeguras = Array.isArray(categorias) ? categorias : [];
   // 9 = 3 columnas del grid, así cada página cierra en filas completas.
   // En móvil: 6 por página (2 columnas de 3).
   const PER_PAGE = isMobile ? 6 : 9;
 
   // Determina qué categorías mostrar en filtros: Activas que tengan productos no descontinuados
   const categoriasConProductos = useMemo(() => {
-    const productosPorCategoria = useMemo(
-      () =>
-        productos.reduce(
-          (acc, p) => {
-            const catId = p.idCategoria;
-            if (!acc[catId]) acc[catId] = [];
-            acc[catId].push(p);
-            return acc;
-          },
-          {} as Record<string, Product[]>,
-        ),
-      [productos],
+    const productosPorCategoria = productosSeguros.reduce(
+      (acc, p) => {
+        const catId = p.idCategoria ?? "";
+        if (!acc[catId]) acc[catId] = [];
+        acc[catId].push(p);
+        return acc;
+      },
+      {} as Record<string, Product[]>,
     );
-    return categorias.filter((c) => {
+    return categoriasSeguras.filter((c) => {
       const activo = c.estado !== "Inactivo";
       const tieneProductos = Object.keys(productosPorCategoria).includes(c.id);
       const tieneProductosDisponibles =
         tieneProductos && productosPorCategoria[c.id].some((p) => p.status === "disponible");
       return activo && tieneProductosDisponibles;
     });
-  }, [categorias, productos]);
+  }, [categoriasSeguras, productosSeguros]);
 
   const filtered = useMemo(
     () =>
-      productos.filter(
+      productosSeguros.filter(
         (p) =>
           (cat === "Todas" || p.idCategoria === cat) &&
           (search === "" ||
-            p.name
+            (p.name ?? "")
               .toLowerCase()
               .includes(search.toLowerCase()) ||
-            p.description
+            (p.description ?? "")
               .toLowerCase()
               .includes(search.toLowerCase())),
       ),
-    [search, cat, productos],
+    [search, cat, productosSeguros],
   );
 
   // Sin paginado el menú volcaba los 13 productos de una vez, así que al
@@ -2659,11 +2657,12 @@ function CatalogScreen({
         <div className="text-center py-20">
           <p className="text-6xl mb-4">🔍</p>
           <h3 className="text-xl font-bold mb-2 text-foreground">
-            Sin resultados
+            {productosSeguros.length === 0 ? "No hay productos disponibles" : "Sin resultados"}
           </h3>
           <p className="text-muted-foreground">
-            No encontramos pizzas con ese nombre. ¡Intenta con
-            otro!
+            {productosSeguros.length === 0
+              ? "Vuelve a intentarlo más tarde."
+              : "No encontramos pizzas con ese nombre. ¡Intenta con otro!"}
           </p>
         </div>
       ) : (
@@ -8296,6 +8295,41 @@ const fusionarCarritos = (
   return fusionado;
 };
 
+class LandingErrorBoundary extends Component<
+  { resetKey: Screen; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    console.error("[LandingErrorBoundary] Error al renderizar una ruta pública", error, info);
+  }
+
+  componentDidUpdate(prevProps: { resetKey: Screen }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-2xl mx-auto px-6 py-24 text-center">
+          <h1 className="text-2xl font-bold text-foreground">No se pudo cargar esta sección</h1>
+          <p className="mt-2 text-muted-foreground">
+            Intenta volver al inicio y abrirla nuevamente.
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
@@ -9221,6 +9255,7 @@ export default function App() {
               ? "pt-20"
               : "",
             isLockedScreen ? " flex-1 min-h-0" : "",
+            isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
           <AnimatePresence mode="wait">
@@ -9232,6 +9267,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
             >
+              <LandingErrorBoundary resetKey={screen}>
               {screen === "landing" && (
                 <LandingScreen
                   navigate={navigate}
@@ -9751,6 +9787,7 @@ export default function App() {
                     homeScreen={adminHomeScreen}
                   />
                 )}
+              </LandingErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>
