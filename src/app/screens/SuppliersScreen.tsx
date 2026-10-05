@@ -14,6 +14,7 @@ import {
 } from "../components/EstadoSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
 import type { ProveedorRef } from "./OrdenCompraScreen";
+import { useFilasPorPagina } from "../hooks/useFilasPorPagina";
 
 const SERIF = "var(--font-titulo)";
 
@@ -179,9 +180,10 @@ export function SuppliersScreen({
   const [form, setForm] = useState(emptySupplier());
 
   const [page, setPage] = useState(1);
-  // Máximo 5 proveedores por página: la tabla nunca hace scroll por sí sola,
-  // la única forma de ver el resto es el paginador de abajo.
-  const PER_PAGE = 5;
+  // Máximo 5 proveedores por página: las filas por página se calculan según el
+  // alto disponible (ResizeObserver, useFilasPorPagina). La tabla nunca hace
+  // scroll por sí sola, la única forma de ver el resto es el paginador de abajo.
+  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
 
   // Nota: La lógica anterior que consultaba si el proveedor tenía compras u
   // órdenes asociadas para decidir si se podían editar el NIT y el nombre fue
@@ -200,12 +202,12 @@ export function SuppliersScreen({
     [suppliers, search],
   );
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const totalPages = Math.ceil(filtered.length / filasPorPagina);
   // Página efectiva recortada al rango: si el total baja (borrado o filtro),
   // `page` puede quedar fuera de rango durante un render y la tabla saldría
   // vacía. Así nunca se pinta una página inexistente.
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
+  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
 
   // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
   // más allá de la última página: la tabla salía vacía sin mensaje de "sin
@@ -447,7 +449,7 @@ export function SuppliersScreen({
   ) : null;
 
   return (
-    <div className="px-4 py-3 max-w-6xl mx-auto min-h-full flex flex-col">
+    <div className="px-4 py-3 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shrink-0">
         <div>
@@ -465,106 +467,158 @@ export function SuppliersScreen({
       </div>
 
       {/* Search */}
-      <div className="relative mb-5 max-w-sm">
+      <div className="relative mb-4 shrink-0 max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Buscar por NIT, nombre, asesor o email..."
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
-      {/* Table — el card mide sólo lo que ocupan el encabezado y las filas
-          (sin flex-1 ni min-height): no queda espacio vacío debajo de la
-          última fila. Si el alto disponible no alcanza, es el wrapper interno
-          el que scrollea, nunca la página.
-          `table-fixed` + <colgroup> reparte el ancho entre las 6 columnas, así
-          que la tabla nunca supera el ancho disponible (sin scroll horizontal
-          en escritorio); el `min-w` es sólo el piso para que en tablet/celular
-          quepan las columnas y la tabla se desplace dentro del card. */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
-        <div className="overflow-auto">
-          <table className="w-full table-fixed min-w-[860px]">
-            <colgroup>
-              <col className="w-[24%]" />
-              <col className="w-[15%]" />
-              <col className="w-[13%]" />
-              <col className="w-[18%]" />
-              <col className="w-[14%]" />
-              <col className="w-[16%]" />
-            </colgroup>
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["Nombre", "Contacto", "Teléfono", "Email", "Estado", "Acciones"].map(h => (
-                  <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
+      {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
+          (se pagina en filas que quepan, useFilasPorPagina); sólo queda scroll
+          horizontal en tablet y scroll vertical en móvil (tarjetas). El
+          paginador queda fijo debajo, siempre visible y por encima del footer.
+          `table-fixed` con anchos % por <th> reparte las columnas; la columna
+          Teléfono sólo existe desde 1440px (debajo va bajo Contacto). */}
+      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
+        <div
+          ref={scrollerRef}
+          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
+        >
+          {filtered.length === 0 ? (
+            <div className="px-4 py-14 text-center text-muted-foreground">
+              <p className="text-4xl mb-3">🚛</p>
+              <p>No se encontraron proveedores</p>
+            </div>
+          ) : (
+            <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[800px]">
+              <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                    <p className="text-4xl mb-3">🚛</p>
-                    <p>No se encontraron proveedores</p>
-                  </td>
+                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[26%] min-[1440px]:w-[24%]">Nombre</th>
+                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[17%] min-[1440px]:w-[15%]">Contacto</th>
+                  <th className="hidden min-[1440px]:table-cell px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[13%]">Teléfono</th>
+                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[22%] min-[1440px]:w-[18%]">Email</th>
+                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[14%]">Estado</th>
+                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[17%] min-[1440px]:w-[16%]">Acciones</th>
                 </tr>
-              ) : paged.map(s => (
-                <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-3 py-2 overflow-hidden">
-                    <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
-                    <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${formatoNit(s.nit)}`}>NIT {formatoNit(s.nit)}</p>
-                  </td>
-                  <td className="px-3 py-2 overflow-hidden">
-                    <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
-                  </td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.telefono}>{s.telefono}</td>
-                  {/* El email largo se corta con "…" y el `title` muestra el
-                      texto completo al pasar el cursor. */}
-                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.email}>{s.email}</td>
-                  <td className="px-3 py-2 overflow-hidden">
-                    <EstadoSelect
-                      value={s.estado}
-                      onChange={(nuevoEstado) => {
-                        if (nuevoEstado === s.estado) return;
-                        setConfirmToggleId(s.id);
-                      }}
-                      options={[
-                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                      ]}
-                    />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {canEdit && (
-                        <button onClick={() => setEditItem({ ...s })} title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                          <Pencil className="w-4 h-4" />
+              </thead>
+              <tbody className="divide-y divide-border">
+                {paged.map(s => (
+                  <tr key={s.id} className="group hover:bg-muted/20 transition-colors">
+                    <td className="px-3 py-2 overflow-hidden sticky left-0 z-10 bg-card group-hover:bg-muted/20">
+                      <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${formatoNit(s.nit)}`}>NIT {formatoNit(s.nit)}</p>
+                    </td>
+                    <td className="px-3 py-2 overflow-hidden">
+                      <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
+                      {/* Sólo hasta 1439px: el teléfono va bajo el contacto */}
+                      <p className="text-[11px] text-muted-foreground truncate min-[1440px]:hidden" title={s.telefono}>{s.telefono}</p>
+                    </td>
+                    <td className="hidden min-[1440px]:table-cell px-3 py-2 text-sm text-muted-foreground truncate" title={s.telefono}>{s.telefono}</td>
+                    {/* El email largo se corta con "…" y el `title` muestra el
+                        texto completo al pasar el cursor. */}
+                    <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.email}>{s.email}</td>
+                    <td className="px-3 py-2 overflow-hidden">
+                      <EstadoSelect
+                        value={s.estado}
+                        onChange={(nuevoEstado) => {
+                          if (nuevoEstado === s.estado) return;
+                          setConfirmToggleId(s.id);
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
+                    </td>
+                    <td className="px-3 py-2 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setDetailItem(s)} title="Ver detalle"
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
+                          <Eye className="w-4 h-4" />
                         </button>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        {canEdit && (
+                          <button onClick={() => setEditItem({ ...s })} title="Editar"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => alPedirEliminar(s)} title="Eliminar"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+      {/* Celular (<768px): cada proveedor como tarjeta. */}
+      {filtered.length > 0 && (
+        <div className="md:hidden divide-y divide-border">
+          {paged.map(s => (
+            <div key={s.id} className="p-4">
+              {/* Nombre, NIT y estado arriba */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground break-words">{s.nombre}</p>
+                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">NIT {formatoNit(s.nit)}</p>
+                </div>
+                <EstadoSelect
+                  value={s.estado}
+                  onChange={(nuevoEstado) => {
+                    if (nuevoEstado === s.estado) return;
+                    setConfirmToggleId(s.id);
+                  }}
+                  options={[
+                    { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                    { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                  ]}
+                  className="shrink-0"
+                />
+              </div>
+
+              {/* Contacto con teléfono y email */}
+              <div className="mt-2 space-y-0.5">
+                <p className="text-sm text-foreground">{s.asesorComercial || "—"}</p>
+                <p className="text-xs text-muted-foreground" title={s.telefono}>{s.telefono}</p>
+                <p className="text-xs text-muted-foreground truncate" title={s.email}>{s.email}</p>
+              </div>
+
+              {/* Acciones abajo — mismas reglas y permisos que la tabla. */}
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <button onClick={() => setDetailItem(s)} title="Ver detalle"
+                  className="p-2 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
+                  <Eye className="w-4 h-4" />
+                </button>
+                {canEdit && (
+                  <button onClick={() => setEditItem({ ...s })} title="Editar"
+                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button onClick={() => alPedirEliminar(s)} title="Eliminar"
+                    className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      {/* Paginador compacto y centrado — sólo aparece con más de 5 proveedores
-          filtrados (con 5 o menos se muestran todos y no hace falta).
-          Sólo flechas ‹ › sin texto, sin borde ni fondo, en gris claro y
-          deshabilitadas en el extremo correspondiente; los números van sin
-          borde y la página actual en un círculo rojo del tema (bg-primary) con
-          el número en blanco. Todo a 32 px de alto (w-8 h-8). */}
-      {filtered.length > PER_PAGE && (
-        <div className="flex items-center justify-center gap-1 mt-2 shrink-0">
+      )}
+        </div>
+
+      {/* Paginador fijo dentro de la card: no se pierde con el scroll.
+          Sólo aparece con más de 5 proveedores filtrados. Sólo flechas ‹ › sin
+          texto; la página actual en un círculo rojo del tema (bg-primary). */}
+      {filtered.length > filasPorPagina && (
+        <div className="shrink-0 border-t border-border flex items-center justify-center gap-1 px-3 py-2">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={pageActual === 1}

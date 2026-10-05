@@ -18,9 +18,9 @@ import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type Orde
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
+import { useFilasPorPagina } from "../hooks/useFilasPorPagina";
 
 const SERIF = "var(--font-titulo)";
-const PER_PAGE = 5;
 
 // ��������� TYPES ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -2046,9 +2046,13 @@ export function OrdenCompraScreen({
     }),
     [ordenes, search, gestiones, proveedores]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
+  // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
+  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
+
+  const totalPages = Math.ceil(filtered.length / filasPorPagina);
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
+  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
 
   useEffect(() => {
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
@@ -2314,8 +2318,8 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="px-6 pt-3 pb-2 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-y-auto md:overflow-hidden">
-      <div className="flex items-center justify-between gap-4 mb-3 shrink-0">
+    <div className="px-4 md:px-6 pt-3 pb-2 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-4 mb-3 shrink-0 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Órdenes de Compra
@@ -2346,30 +2350,36 @@ export function OrdenCompraScreen({
         <input
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por proveedor, fecha, N° factura o estado..."
+          placeholder="Buscar por Nº orden, proveedor, NIT, factura o estado…"
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
 
-       <div className="bg-card border border-border rounded-2xl mb-3 shrink-0">
-         <div className="overflow-x-auto md:overflow-visible">
-           <table className="w-full table-fixed min-w-[860px]">
-             <colgroup>
-               <col className="w-[8%]" />
-               <col className="w-[23%]" />
-               <col className="w-[8%]" />
-               <col className="w-[8%]" />
-               <col className="w-[8%]" />
-               <col className="w-[8%]" />
-               <col className="w-[8%]" />
-               <col className="w-[16%]" />
-               <col className="w-[13%]" />
-             </colgroup>
-             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+      {/* La card ocupa todo el alto que queda bajo el header y el buscador. La
+          tabla NO hace scroll vertical: se pagina en filas que quepan
+          (useFilasPorPagina); sólo queda scroll horizontal en tablet y scroll
+          vertical en móvil (tarjetas). El paginador queda fijo debajo:
+          siempre visible y por encima del footer. */}
+      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
+        <div
+          ref={scrollerRef}
+          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
+        >
+          {/* Escritorio/tablet (>=768px): tabla. Las 3 columnas de dinero y la
+              fecha sólo existen desde 1440px; por debajo se fusionan en Total y
+              la fecha va bajo el N° de orden. */}
+          <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[780px]">
+            <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["N° Orden", "Proveedor", "Fecha", "N° Factura", "Total", "Facturado", "Por facturar", "Estado", "Acciones"].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[16%] min-[1440px]:w-[9%]">N° Orden</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[19%] min-[1440px]:w-[15%]">Proveedor</th>
+                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[8%]">Fecha</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[13%] min-[1440px]:w-[9%]">N° Factura</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[10%]">Total</th>
+                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[11%]">Facturado</th>
+                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[11%]">Por facturar</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[13%]">Estado</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[16%] min-[1440px]:w-[14%]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -2378,7 +2388,7 @@ export function OrdenCompraScreen({
                   <tr>
                     <td colSpan={9} className="px-4 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📋</p>
-                      <p className="font-medium">No se encontraron órdenes</p>
+                      <p className="font-semibold">No se encontraron órdenes</p>
                     </td>
                   </tr>
                 )
@@ -2391,18 +2401,21 @@ export function OrdenCompraScreen({
                     const prov = proveedores.find(p => p.nombre === o.proveedor);
                     const nit = prov?.nit ?? "";
                     return (
-                      <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-3 py-2.5 text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</td>
+                      <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-2.5 sticky left-0 z-10 bg-card group-hover:bg-muted/20">
+                          <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap min-[1440px]:hidden">{o.fecha}</p>
+                        </td>
                          <td className="px-3 py-2.5 overflow-hidden">
-                           <p className="text-sm text-foreground break-words">{o.proveedor}</p>
-                           {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
+                           <p className="text-sm text-foreground break-words" title={o.proveedor}>{o.proveedor}</p>
+                           {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                          </td>
-                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
-                       <td className="px-3 py-2.5 text-xs">
+                         <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
+                       <td className="px-3 py-2.5 text-xs overflow-hidden">
                          {facturas.length > 0 ? (
                            <>
                              {facturas.map((f) => (
-                               <span key={f.id} className="block font-mono font-semibold text-emerald-700">
+                               <span key={f.id} className="block font-mono font-semibold text-emerald-700 truncate" title={f.numeroFactura}>
                                  {f.numeroFactura}
                                </span>
                              ))}
@@ -2411,16 +2424,30 @@ export function OrdenCompraScreen({
                            <span className="text-muted-foreground">—</span>
                          )}
                        </td>
-                       <td className="px-3 py-2.5 text-sm font-semibold text-foreground whitespace-nowrap">
-                         {fmtCOP(totalOrden)}
+                       <td className="px-3 py-2.5">
+                         <p className="text-sm font-semibold text-foreground whitespace-nowrap">{fmtCOP(totalOrden)}</p>
+                         {/* Sólo hasta 1399px: el total arriba y el desglose en
+                             texto pequeño debajo (fusiona las 3 columnas). */}
+                         <p className="text-[11px] leading-tight mt-0.5 text-muted-foreground min-[1440px]:hidden">
+                           {totalFacturado > 0 ? (
+                             <>
+                               Facturado <span className="font-semibold text-emerald-700">{fmtCOP(totalFacturado)}</span>
+                               {" · "}Por facturar <span className="font-semibold text-amber-700">{fmtCOP(porFacturar)}</span>
+                             </>
+                           ) : (
+                             <>
+                               Por facturar <span className="font-semibold text-amber-700">{fmtCOP(porFacturar)}</span>
+                             </>
+                           )}
+                         </p>
                        </td>
-                       <td className="px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
+                       <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
                          {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
                        </td>
-                       <td className="px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
+                       <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                        </td>
-                        <td className="px-3 py-2.5 overflow-visible">
+                        <td className="px-3 py-2.5 overflow-hidden">
                         <EstadoSelect
                           value={o.estado}
                           onChange={(nuevoEstado) => {
@@ -2431,9 +2458,9 @@ export function OrdenCompraScreen({
                           disabled={o.estado === "Anulado" || o.estado === "Completado"}
                         />
                          <p className="text-[11px] text-muted-foreground mt-1 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
-                        {/* El tooltip envuelve SOLO el botón: el selector de estado (menú
-                            en portal con z-[100]) queda fuera, así que el desplegable
-                            nunca queda tapado por el cuadro del historial. */}
+                        {/* El tooltip envuelve SOLO el botón y su cuadro se pinta
+                            en un portal al <body>: ni la tabla ni el footer lo
+                            recortan. */}
                         <EstadoHistorialTooltip
                           historial={o.historialEstados ?? []}
                           estadoColors={ESTADO_CONFIG}
@@ -2446,7 +2473,7 @@ export function OrdenCompraScreen({
                           </button>
                         </EstadoHistorialTooltip>
                       </td>
-                       <td className="px-3 py-2.5">
+                       <td className="px-3 py-2.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                          <div className="flex items-center gap-1 flex-nowrap">
                           <button
                             onClick={() => onVerDetalle(o)}
@@ -2477,7 +2504,10 @@ export function OrdenCompraScreen({
                               title="Registrar recepción"
                               className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" /> OC
+                              <ClipboardCheck className="w-3.5 h-3.5" />
+                              {/* Sólo desde 1440px: por debajo el botón va con
+                                  el ícono solo, con el mismo tooltip. */}
+                              <span className="hidden min-[1440px]:inline">OC</span>
                             </button>
                           )}
                         </div>
@@ -2487,37 +2517,161 @@ export function OrdenCompraScreen({
                 })}
             </tbody>
           </table>
+
+          {/* Celular (<768px): cada orden como tarjeta. */}
+          <div className="md:hidden divide-y divide-border">
+            {paged.length === 0
+              ? (
+                <div className="px-4 py-12 text-center text-muted-foreground">
+                  <p className="text-4xl mb-3">📋</p>
+                  <p className="font-semibold">No se encontraron órdenes</p>
+                </div>
+              )
+              : paged.map(o => {
+                const facturas = getFacturas(o.id);
+                const totalOrden = calcTotal(o.items);
+                const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
+                const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                const prov = proveedores.find(p => p.nombre === o.proveedor);
+                const nit = prov?.nit ?? "";
+                return (
+                  <div key={o.id} className="p-4">
+                    {/* N° de orden y estado arriba */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
+                      </div>
+                      <EstadoSelect
+                        value={o.estado}
+                        onChange={(nuevoEstado) => {
+                          if (nuevoEstado === o.estado) return;
+                          setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                        }}
+                        options={opcionesEstado(o.estado)}
+                        disabled={o.estado === "Anulado" || o.estado === "Completado"}
+                        className="shrink-0"
+                      />
+                    </div>
+
+                    {/* Proveedor con NIT */}
+                    <div className="mt-2.5 min-w-0">
+                      <p className="text-sm text-foreground break-words">{o.proveedor}</p>
+                      {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
+                    </div>
+
+                    {/* Fecha de la orden */}
+                    <p className="text-xs text-muted-foreground mt-1.5">{o.fecha}</p>
+
+                    {facturas.length > 0 && (
+                      <p className="text-xs mt-1.5">
+                        <span className="text-muted-foreground">Factura </span>
+                        {facturas.map((f, i) => (
+                          <span key={f.id} className="font-mono font-semibold text-emerald-700">
+                            {i > 0 ? " · " : ""}{f.numeroFactura}
+                          </span>
+                        ))}
+                      </p>
+                    )}
+
+                    {/* Total, facturado y por facturar */}
+                    <div className="mt-2.5 rounded-xl bg-muted/50 border border-border px-3 py-2 space-y-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">Total</span>
+                        <span className="text-sm font-semibold text-foreground">{fmtCOP(totalOrden)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">Facturado</span>
+                        <span className="text-xs font-semibold text-emerald-700">
+                          {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">Por facturar</span>
+                        <span className="text-xs font-semibold text-amber-700">
+                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Acciones abajo — mismas reglas que la tabla: editar sólo
+                        en Borrador y botón OC sólo cuando la orden está Enviado
+                        y le faltan insumos por recibir. */}
+                    <div className="mt-2.5 flex items-center gap-1 flex-wrap">
+                      <button
+                        onClick={() => onVerDetalle(o)}
+                        title="Ver detalle"
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      {esBorrador(o.estado) && (
+                        <button
+                          onClick={() => onEditarOrden(o)}
+                          title="Editar orden"
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
+                        <button
+                          onClick={() => onAbrirRecepcion?.(o)}
+                          title="Registrar recepción"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
+                        >
+                          <ClipboardCheck className="w-3.5 h-3.5" /> OC
+                        </button>
+                      )}
+                      <EstadoHistorialTooltip
+                        historial={o.historialEstados ?? []}
+                        estadoColors={ESTADO_CONFIG}
+                      >
+                        <button
+                          type="button"
+                          className="ml-auto text-[11px] text-primary hover:underline px-2 py-2"
+                        >
+                          Ver historial
+                        </button>
+                      </EstadoHistorialTooltip>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
         </div>
-       {filtered.length > PER_PAGE && (
-         <div className="flex items-center justify-center gap-1 mt-2 shrink-0">
-             <button
-               onClick={() => setPage(p => Math.max(1, p - 1))}
-               disabled={pageActual === 1}
-               aria-label="Página anterior"
-               className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-             >
-               <ChevronLeft className="w-4 h-4" />
-             </button>
-             {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-               <button
-                 key={n}
-                 onClick={() => setPage(n)}
-                 aria-current={n === pageActual ? "page" : undefined}
-                 className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${n === pageActual ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}
-               >
-                 {n}
-               </button>
-             ))}
-             <button
-               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-               disabled={pageActual === totalPages}
-               aria-label="Página siguiente"
-               className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-             >
-               <ChevronRight className="w-4 h-4" />
-             </button>
-         </div>
-       )}
+
+        {/* Paginador fijo dentro de la card: no se pierde con el scroll. */}
+        {filtered.length > filasPorPagina && (
+          <div className="shrink-0 border-t border-border flex items-center justify-center gap-1 px-3 py-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={pageActual === 1}
+              aria-label="Página anterior"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+              <button
+                key={n}
+                onClick={() => setPage(n)}
+                aria-current={n === pageActual ? "page" : undefined}
+                className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${n === pageActual ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                {n}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={pageActual === totalPages}
+              aria-label="Página siguiente"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>

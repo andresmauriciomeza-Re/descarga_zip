@@ -1169,6 +1169,9 @@ function Sidebar({
   accesos,
   isNamedAdmin,
   hasDashboardAccess,
+  esMovil = false,
+  abierto = true,
+  onCerrarMovil,
 }: {
   current: Screen;
   navigate: (s: Screen) => void;
@@ -1179,6 +1182,11 @@ function Sidebar({
   accesos: AccesosMap;
   isNamedAdmin: boolean;
   hasDashboardAccess: boolean;
+  /** true en viewport < 768px: el aside pasa a panel deslizante. */
+  esMovil?: boolean;
+  /** Estado del panel deslizante en móvil (false = fuera de pantalla). */
+  abierto?: boolean;
+  onCerrarMovil?: () => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     ventas: true,
@@ -1186,6 +1194,11 @@ function Sidebar({
   });
   const toggle = (k: string) =>
     setOpen((p) => ({ ...p, [k]: !p[k] }));
+  // En móvil navegar cierra el panel para que no tape la pantalla.
+  const ir = (s: Screen) => {
+    navigate(s);
+    if (esMovil) onCerrarMovil?.();
+  };
   const active = (s: Screen) =>
     current === s ||
     (s === "orden-compra" && current === "nueva-orden-compra") ||
@@ -1199,7 +1212,11 @@ function Sidebar({
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-all duration-300 ${collapsed ? "w-16" : "w-60"}`}
+      className={`fixed left-0 top-0 h-full bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-all duration-300 ${collapsed ? "w-16" : "w-60"} ${
+        esMovil
+          ? `max-w-[80vw] ${abierto ? "translate-x-0" : "-translate-x-full"}`
+          : "translate-x-0"
+      }`}
     >
       {/* Header */}
       <div
@@ -1268,7 +1285,7 @@ function Sidebar({
                 {allItems.map((it) => (
                   <button
                     key={it.screen}
-                    onClick={() => navigate(it.screen)}
+                    onClick={() => ir(it.screen)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                   >
                     <it.Icon className="w-4 h-4 shrink-0" />
@@ -1303,7 +1320,7 @@ function Sidebar({
                   {allItems.map((it) => (
                     <button
                       key={it.screen}
-                      onClick={() => navigate(it.screen)}
+                      onClick={() => ir(it.screen)}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white font-semibold" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                     >
                       <it.Icon className="w-3.5 h-3.5 shrink-0" />
@@ -2414,13 +2431,13 @@ function ProductCard({
           alt={p.name}
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
-        <div className="absolute top-3 right-3">
-          {/* Badge sólido con fondo y texto legible */}
+        <div className="absolute top-3 right-3 z-10">
+          {/* Mismos colores de estado que el panel (ESTADO_COLORES). */}
           <Badge
             className="border-0"
             style={{
-              backgroundColor: "emerald-100",
-              color: "emerald-800",
+              backgroundColor: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"] + "1A",
+              color: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"],
             }}
           >
             {p.status === "disponible"
@@ -8601,6 +8618,10 @@ export default function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(false);
+  // En celular/tablet el sidebar no cabe (240px fijos sobre ~375px de ancho):
+  // se oculta y el botón del topbar lo abre como panel deslizante.
+  const esMovil = useIsMobile();
+  const [sidebarMovilAbierto, setSidebarMovilAbierto] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
@@ -9166,9 +9187,11 @@ export default function App() {
   }
 
   const sideW = isAdmin
-    ? sidebarCollapsed
-      ? "ml-16"
-      : "ml-60"
+    ? esMovil
+      ? ""
+      : sidebarCollapsed
+        ? "ml-16"
+        : "ml-60"
     : "";
 
   const isLockedScreen = isAdmin && (
@@ -9211,6 +9234,9 @@ export default function App() {
            accesos={loggedInAccesos}
            isNamedAdmin={isNamedAdmin}
            hasDashboardAccess={hasDashboardAccess}
+           esMovil={esMovil}
+           abierto={sidebarMovilAbierto}
+           onCerrarMovil={() => setSidebarMovilAbierto(false)}
         />
       )}
 
@@ -9237,7 +9263,9 @@ export default function App() {
           <AdminTopBar
             current={screen}
             onToggleSidebar={() =>
-              setSidebarCollapsed((p) => !p)
+              esMovil
+                ? setSidebarMovilAbierto((p) => !p)
+                : setSidebarCollapsed((p) => !p)
             }
             navigate={navigate}
             darkMode={darkMode}
@@ -9835,6 +9863,17 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* Fondo del sidebar deslizante en celular/tablet: va DESPUÉS del contenido
+          (mismo z-index que el topbar) para quedar por encima de él, y por debajo
+          del aside (z-30), que sigue siendo el elemento visible. */}
+      {isAdmin && esMovil && sidebarMovilAbierto && (
+        <div
+          className="fixed inset-0 z-20 bg-black/50"
+          onClick={() => setSidebarMovilAbierto(false)}
+          aria-hidden
+        />
+      )}
 
       {/* Mobile drawer */}
       <MobileDrawer
