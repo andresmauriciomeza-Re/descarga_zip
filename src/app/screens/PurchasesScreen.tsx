@@ -122,7 +122,7 @@ const PURCHASE_STATUS_LABEL: Record<PurchaseStatus, string> = {
 export const INITIAL_PURCHASES: Purchase[] = [
   {
     id: "COM-001",
-    idProveedor: "PROV-001",
+    idProveedor: "1",
     fecha: "2024-01-10",
     iva: 19000,
     subtotal: 100000,
@@ -132,7 +132,7 @@ export const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     id: "COM-002",
-    idProveedor: "PROV-003",
+    idProveedor: "3",
     fecha: "2024-01-12",
     iva: 28500,
     subtotal: 150000,
@@ -142,7 +142,7 @@ export const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     id: "COM-003",
-    idProveedor: "PROV-002",
+    idProveedor: "2",
     fecha: "2024-01-14",
     iva: 9500,
     subtotal: 50000,
@@ -152,7 +152,7 @@ export const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     id: "COM-004",
-    idProveedor: "PROV-001",
+    idProveedor: "1",
     fecha: "2024-01-15",
     iva: 38000,
     subtotal: 200000,
@@ -162,7 +162,7 @@ export const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     id: "COM-005",
-    idProveedor: "PROV-004",
+    idProveedor: "4",
     fecha: "2024-01-16",
     iva: 14250,
     subtotal: 75000,

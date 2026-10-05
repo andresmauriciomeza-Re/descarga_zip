@@ -4,7 +4,7 @@ import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertC
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
-import { useProveedorForm, filtrarNit, soloDireccion } from "../components/useProveedorForm";
+import { useProveedorForm, filtrarNit, soloDireccion, formatoNit, siguienteProveedorId } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   EstadoSelect,
@@ -62,7 +62,7 @@ interface Supplier {
 
 export const INITIAL_SUPPLIERS: Supplier[] = [
   {
-    id: "PROV-001", nit: "900.123.456-1",
+    id: "1", nit: "900.123.456-1",
     nombre: "Distribuidora La Cosecha",
     telefono: "604 321 0001", email: "cosecha@proveedores.co",
     direccion: "Cra 50 #30-10, Medellín",
@@ -70,7 +70,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     estado: "activo",
   },
   {
-    id: "PROV-002", nit: "800.654.321-2",
+    id: "2", nit: "800.654.321-2",
     nombre: "Quesos del Norte S.A.S.",
     telefono: "604 321 0002", email: "quesos@norte.co",
     direccion: "Cll 80 #45-20, Bello",
@@ -78,7 +78,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     estado: "activo",
   },
   {
-    id: "PROV-003", nit: "700.111.222-3",
+    id: "3", nit: "700.111.222-3",
     nombre: "Carnes Premium Ltda.",
     telefono: "604 321 0003", email: "ventas@carnespremium.co",
     direccion: "Av. 33 #76-60, Medellín",
@@ -86,21 +86,13 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     estado: "inactivo",
   },
   {
-    id: "PROV-004", nit: "901.777.888-4",
+    id: "4", nit: "901.777.888-4",
     nombre: "Bebidas y Más",
     telefono: "604 321 0004", email: "pedidos@bebidasmas.co",
     direccion: "Cra 65 #12-40, Itagüí",
     asesorComercial: "Luisa Palacio",
     estado: "activo",
   },
-];
-
-const INITIAL_PURCHASES_REF = [
-  { id: "COM-001", idProveedor: "PROV-001" },
-  { id: "COM-002", idProveedor: "PROV-003" },
-  { id: "COM-003", idProveedor: "PROV-002" },
-  { id: "COM-004", idProveedor: "PROV-001" },
-  { id: "COM-005", idProveedor: "PROV-004" },
 ];
 
 const SUPPLIER_STATUS_COLOR: Record<SupplierStatus, string> = {
@@ -176,7 +168,13 @@ export function SuppliersScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [editItem,   setEditItem]   = useState<Supplier | null>(null);
   const [detailItem, setDetailItem] = useState<Supplier | null>(null);
-  const [deleteId,   setDeleteId]   = useState<string | null>(null);
+  // Punto 3: se guarda el PROVEEDOR, no el id. Con el id podían quedar en
+  // `undefined` (proveedores creados desde Crear Orden/Compra) y `deleteId &&`
+  // resultaba falsy: el ícono de eliminar no abría NINGUNA alerta.
+  const [deleteItem, setDeleteItem] = useState<Supplier | null>(null);
+  // Proveedor con órdenes/compras: en vez de la alerta de borrado se muestra
+  // esta alerta informativa con un solo botón.
+  const [bloqueoItem, setBloqueoItem] = useState<Supplier | null>(null);
   const [confirmToggleId, setConfirmToggleId] = useState<string | null>(null);
   const [form, setForm] = useState(emptySupplier());
 
@@ -230,11 +228,11 @@ export function SuppliersScreen({
       toast.error("Revisa los campos del formulario");
       return;
     }
-    const nextNum = suppliers.reduce((max, s) => {
-      const n = parseInt(s.id.replace("PROV-", ""), 10) || 0;
-      return Math.max(max, n);
-    }, 0) + 1;
-    const newId = `PROV-${String(nextNum).padStart(3, "0")}`;
+    // Punto 1: mismo generador de id que "+ Crear proveedor" (Crear Orden y
+    // Crear Compra): un único punto para los tres formularios, ids numéricos
+    // sin prefijo (regla del sistema) y tolerante a registros heredados que
+    // hubieran quedado sin id (antes `s.id.replace(...)` lanzaba TypeError).
+    const newId = siguienteProveedorId(suppliers);
     setSuppliers(p => [{ id: newId, ...proveedorForm.values }, ...p]);
     setShowCreate(false);
     setForm(emptySupplier());
@@ -266,14 +264,29 @@ export function SuppliersScreen({
     toast.success("Proveedor editado exitosamente");
   };
 
-  const handleDelete = (id: string) => {
-    if (INITIAL_PURCHASES_REF.some(c => c.idProveedor === id)) {
-      toast.error("No se puede eliminar: el proveedor tiene compras asignadas");
-      setDeleteId(null);
+  /** Punto 3: un proveedor no se puede eliminar si tiene órdenes de compra o
+   *  compras asociadas. Se comprueba contra los datos REALES que entrega
+   *  App.tsx (`ordenes` y `gestiones`), no contra una lista fija: las órdenes
+   *  guardan el nombre del proveedor y las compras, además, su id. Se matchea
+   *  por id O por nombre, cubriendo también los proveedores que se crearon
+   *  antes de tener id. */
+  const tieneMovimientos = (s: Supplier) =>
+    ordenes.some(o => o.proveedor === s.nombre) ||
+    gestiones.some(g => g.proveedorId === s.id || g.proveedor === s.nombre);
+
+  /** Punto 3: SIEMPRE se abre una alerta. Si hay movimientos, la informativa;
+   *  si no, la de confirmación. */
+  const alPedirEliminar = (s: Supplier) => {
+    if (tieneMovimientos(s)) {
+      setBloqueoItem(s);
       return;
     }
-    setSuppliers(p => p.filter(s => s.id !== id));
-    setDeleteId(null);
+    setDeleteItem(s);
+  };
+
+  const handleDelete = (s: Supplier) => {
+    setSuppliers(p => p.filter(x => !(x.id === s.id && x.nombre === s.nombre)));
+    setDeleteItem(null);
     toast.success("Proveedor eliminado");
   };
 
@@ -292,10 +305,11 @@ export function SuppliersScreen({
     {
       nombre: editItem?.nombre ?? "",
       nit: editItem?.nit ?? "",
-      // Las semillas guardan el teléfono con espacios ("604 321 0001") pero la
-      // validación exige solo dígitos: se normaliza aquí, igual que hace el
-      // filtro del propio campo, o el guardado quedaba bloqueado.
-      telefono: soloDigitos(editItem?.telefono ?? ""),
+      // Punto 2: el teléfono se muestra EXACTAMENTE como está guardado, igual
+      // que en Ver detalle y en el listado. La validación ignora los espacios
+      // ("604 321 0001" pasa), y al escribir el filtro del propio campo deja
+      // el valor en dígitos como siempre.
+      telefono: editItem?.telefono ?? "",
       email: editItem?.email ?? "",
       asesorComercial: editItem?.asesorComercial ?? "",
       direccion: editItem?.direccion ?? "",
@@ -324,15 +338,20 @@ export function SuppliersScreen({
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
+            {/* Punto 2: sin asterisco, porque el NIT no se puede editar. */}
             <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT</label>
-            <div className={disabledCls}>{editItem.nit}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">El NIT y el nombre no se pueden modificar después de creado el proveedor</p>
+            <div className={disabledCls}>{formatoNit(editItem.nit)}</div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre <span className="text-red-500">*</span></label>
+            {/* Punto 2: sin asterisco, por lo mismo: el nombre tampoco cambia. */}
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre</label>
             <div className={disabledCls}>{editItem.nombre}</div>
-            <p className="text-[10px] text-muted-foreground mt-1">El NIT y el nombre no se pueden modificar después de creado el proveedor</p>
           </div>
+          {/* Punto 2: el aviso aparece UNA sola vez, debajo de los dos campos y
+              ocupando las dos columnas (antes se repetía bajo cada uno). */}
+          <p className="col-span-2 text-[10px] text-muted-foreground mt-0.5">
+            El NIT y el nombre no se pueden modificar después de creado el proveedor
+          </p>
         </div>
       </div>
       <div>
@@ -491,7 +510,7 @@ export function SuppliersScreen({
                 <tr key={s.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-3 py-2 overflow-hidden">
                     <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
-                    <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${s.nit}`}>NIT {s.nit}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${formatoNit(s.nit)}`}>NIT {formatoNit(s.nit)}</p>
                   </td>
                   <td className="px-3 py-2 overflow-hidden">
                     <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
@@ -526,7 +545,7 @@ export function SuppliersScreen({
                         </button>
                       )}
                       {canDelete && (
-                        <button onClick={() => setDeleteId(s.id)} title="Eliminar"
+                        <button onClick={() => alPedirEliminar(s)} title="Eliminar"
                           className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -625,7 +644,7 @@ export function SuppliersScreen({
                 className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4"
               >
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h3>
+                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h3>
                   <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5">
@@ -650,7 +669,7 @@ export function SuppliersScreen({
                 exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
                 className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
+                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
                   <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5 space-y-6">
@@ -661,7 +680,7 @@ export function SuppliersScreen({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-1">NIT</p>
-                        <div className={disabledCls}>{detailItem.nit}</div>
+                        <div className={disabledCls}>{formatoNit(detailItem.nit)}</div>
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-1">Nombre</p>
@@ -698,7 +717,17 @@ export function SuppliersScreen({
                     </p>
                     <div className="w-1/2 pr-1.5">
                       <p className="text-xs font-semibold text-muted-foreground mb-1">Estado</p>
-                      <div className={disabledCls}>{detailItem.estado === "activo" ? "Activo" : "Inactivo"}</div>
+                      {/* Punto 2: badge de color igual al del listado y en modo
+                          solo lectura (antes el estado iba dentro de un div con
+                          aspecto de input deshabilitado). */}
+                      <EstadoSelect
+                        value={detailItem.estado}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                        disabled
+                      />
                     </div>
                   </div>
                 </div>
@@ -760,14 +789,32 @@ export function SuppliersScreen({
         })()}
       </AnimatePresence>
 
-      {/* ── Confirmar eliminación ── */}
+      {/* ── Proveedor con órdenes/compras: alerta informativa (un solo botón)
+             en lugar de la de eliminar ── */}
       <AnimatePresence>
-        {deleteId && (
+        {bloqueoItem && (
+          <ConfirmDeleteModal
+            informativo
+            title="No se puede eliminar"
+            message={
+              <>
+                No se puede eliminar {bloqueoItem.nombre} porque tiene órdenes de
+                compra o compras registradas. Puedes cambiar su estado a Inactivo.
+              </>
+            }
+            onCancel={() => setBloqueoItem(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Confirmar eliminación (siempre con el nombre, nunca con el id) ── */}
+      <AnimatePresence>
+        {deleteItem && (
           <ConfirmDeleteModal
             title="Eliminar proveedor"
-            message={`¿Seguro que deseas eliminar al proveedor ${deleteId}? Esta acción no se puede deshacer.`}
-            onConfirm={() => handleDelete(deleteId)}
-            onCancel={() => setDeleteId(null)}
+            message={`¿Seguro que deseas eliminar al proveedor ${deleteItem.nombre}? Esta acción no se puede deshacer.`}
+            onConfirm={() => handleDelete(deleteItem)}
+            onCancel={() => setDeleteItem(null)}
           />
         )}
       </AnimatePresence>
