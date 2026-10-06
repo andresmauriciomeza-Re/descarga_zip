@@ -83,6 +83,10 @@ function rolColor(rolId: string, esCliente: boolean, esEmpleado: boolean) {
 }
 
 function rolLabel(u: Usuario, roles: Rol[], esCliente: boolean, esEmpleado: boolean): string {
+  // P8: la cuenta de super administradora (Gloria, USR-001) se etiqueta SIEMPRE
+  // como "Super Administrador", nunca como Cliente ni Empleado, para que la
+  // vista de Usuarios no contradiga al módulo de Clientes.
+  if (esSuperAdmin(u)) return "Super Administrador";
   if (u.rolId === "ROL-001") return "Administrador";
   if (esEmpleado || u.rolId === "ROL-003") return "Cliente/Empleado";
   if (esCliente) return "Cliente";
@@ -93,6 +97,16 @@ function rolLabel(u: Usuario, roles: Rol[], esCliente: boolean, esEmpleado: bool
 // Id con el que se guardan las fichas de Clientes: es el que `usuariosUnificados`
 // (App.tsx) le asigna al unir los listados de Usuarios, Empleados y Clientes.
 const ROL_CLIENTE = "ROL-002";
+
+// ── P7/P8 — Cuenta de super administrador ────────────────────────────────
+// El perfil de Gloria (USR-001, gloria@lasirena.com) es la super
+// administradora del sistema: NO se puede eliminar, editar ni cambiar su
+// estado desde ningún flujo de esta pantalla. Se identifica por id/correo y
+// nunca por rolId, porque `usuariosUnificados` (App.tsx) puede pisar el
+// rolId a ROL-002 cuando la persona también figura en `clientes`.
+const esSuperAdmin = (u: Usuario): boolean =>
+  u.id === "USR-001" || u.correo.trim().toLowerCase() === "gloria@lasirena.com";
+const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
 // Roles reales de una persona para la vista de detalle: el que tiene asignado y,
 // si además está registrada como empleado o como cliente, el que le corresponde
@@ -107,6 +121,10 @@ const rolesDeUsuario = (
 ): Rol[] => {
   const correo = usuario.correo.trim().toLowerCase();
   const ids: string[] = [usuario.rolId];
+  // P8: el perfil de super administrador conserva el rol Administrador aunque
+  // `usuariosUnificados` le haya pisado el rolId a ROL-002 al aparecer en
+  // `clientes`; sin esto, el detalle dejaría de mostrar sus permisos reales.
+  if (esSuperAdmin(usuario) && !ids.includes("ROL-001")) ids.unshift("ROL-001");
   const fichaEmpleado = empleados.find(e => e.correo.trim().toLowerCase() === correo);
   if (fichaEmpleado) ids.push(fichaEmpleado.rolId);
   if (clientes.some(c => c.correo.trim().toLowerCase() === correo)) ids.push(ROL_CLIENTE);
@@ -198,13 +216,24 @@ export function GestionUsuariosScreen({
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return usuariosUnicos.filter(u => {
-      const rol = rolInfo(u.rolId);
       const correo = u.correo.trim().toLowerCase();
       const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
       const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
-      const rolNombre = rolLabel(u, roles, esCliente, esEmpleado);
-      const matchQ = !q || u.nombre.toLowerCase().includes(q) || u.correo.toLowerCase().includes(q) || u.numeroDocumento.toLowerCase().includes(q) || `${u.tipoDocumento} ${u.numeroDocumento}`.toLowerCase().includes(q) || rolNombre.toLowerCase().includes(q);
-      const matchR = filterRol === "todos" || u.rolId === filterRol;
+      // P6: la búsqueda y el filtro de rol trabajan con TODOS los roles de la
+      // persona (rolesDeUsuario), no solo con el rolId principal, para que un
+      // usuario con varios roles se encuentre por cualquiera de ellos.
+      const rolesActuales = rolesDeUsuario(u, roles, empleados, clientes);
+      const nombresRoles = rolesActuales.map(r => r.nombre.toLowerCase());
+      const esSuper = esSuperAdmin(u);
+      const matchQ = !q
+        || u.nombre.toLowerCase().includes(q)
+        || u.correo.toLowerCase().includes(q)
+        || u.numeroDocumento.toLowerCase().includes(q)
+        || `${u.tipoDocumento} ${u.numeroDocumento}`.toLowerCase().includes(q)
+        || nombresRoles.some(n => n.includes(q))
+        // P8: "super" o "super administrador" también encuentran a Gloria.
+        || (esSuper && "super administrador".includes(q));
+      const matchR = filterRol === "todos" || rolesActuales.some(r => r.id === filterRol) || (esSuper && filterRol === "ROL-001");
       const matchE = filterEst === "todos" || (filterEst === "activo" ? u.activo : !u.activo);
       return matchQ && matchR && matchE;
     });
@@ -295,6 +324,12 @@ export function GestionUsuariosScreen({
   // todos los permisos, y siempre actualizando el empleado vinculado.
   const aplicarCambioEstado = (usuario: Usuario, nuevoEstado: boolean) => {
     if (nuevoEstado === usuario.activo) return;
+    // P7: la cuenta de super administrador no se puede ni activar ni
+    // desactivar desde ningún flujo de la pantalla.
+    if (esSuperAdmin(usuario)) {
+      toast.error(`${TITULO_SUPER_ADMIN}: no se puede cambiar su estado.`);
+      return;
+    }
     if (!nuevoEstado && usuario.activo && rolInfoTotal(usuario.rolId) && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
@@ -311,6 +346,12 @@ export function GestionUsuariosScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
+    // P7: barrera de seguridad — aunque los botones ya vienen deshabilitados
+    // para Gloria, ningún flujo de la pantalla debe poder guardar su edición.
+    if (esSuperAdmin(editItem)) {
+      toast.error(`${TITULO_SUPER_ADMIN}: no se puede editar.`);
+      return;
+    }
     const errs: Record<string, string> = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
@@ -369,6 +410,12 @@ export function GestionUsuariosScreen({
 
   const handleDelete = (id: string) => {
     const objetivo = usuarios.find(u => u.id === id);
+    // P7: la cuenta de super administrador nunca se puede eliminar, ni desde
+    // la fila de la tabla ni desde ningún otro flujo.
+    if (objetivo && esSuperAdmin(objetivo)) {
+      toast.error(`${TITULO_SUPER_ADMIN}: no se puede eliminar.`);
+      return;
+    }
     if (objetivo && objetivo.activo && rolInfoTotal(objetivo.rolId) && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
@@ -560,10 +607,18 @@ export function GestionUsuariosScreen({
                     </td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo}</td>
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(u.rolId, esCliente, esEmpleado)} ${rolInactivo ? "opacity-50" : ""}`}>
-                          {rolLabel(u, roles, esCliente, esEmpleado)}
-                       </span>
+                      {/* P6: se pintan TODOS los roles que la persona posee en
+                          este momento (rolId del usuario + el de su ficha de
+                          empleado + Cliente si está en `clientes`), no solo el
+                          principal. P8: la super administradora se etiqueta
+                          como "Super Administrador", nunca como Cliente ni
+                          Empleado. */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {rolesDeUsuario(u, roles, empleados, clientes).map(r => (
+                          <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(r.id, esCliente, esEmpleado)} ${!r.activo ? "opacity-50" : ""}`}>
+                            {esSuperAdmin(u) && r.id === "ROL-001" ? "Super Administrador" : r.nombre}
+                          </span>
+                        ))}
                         {rolInactivo && (
                           <span title="Rol inactivo" className="flex items-center shrink-0">
                             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
@@ -574,24 +629,36 @@ export function GestionUsuariosScreen({
                     <td className="px-4 py-1.5">
                       {/* Pill de estado (diseño de Proveedores). Aplica el
                           MISMO cambio que el botón del detalle, con la misma
-                          regla del último usuario con todos los permisos. */}
-                      <EstadoSelect
-                        value={u.activo ? "activo" : "inactivo"}
-                        onChange={nuevoEstado => {
-                          if ((nuevoEstado === "activo") === u.activo) return;
-                          aplicarCambioEstado(u, nuevoEstado === "activo");
-                        }}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                      />
+                          regla del último usuario con todos los permisos.
+                          P7: para la super administradora el pill queda
+                          deshabilitado con su explicación. */}
+                      <span title={esSuperAdmin(u) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
+                        <EstadoSelect
+                          value={u.activo ? "activo" : "inactivo"}
+                          disabled={esSuperAdmin(u)}
+                          onChange={nuevoEstado => {
+                            if ((nuevoEstado === "activo") === u.activo) return;
+                            aplicarCambioEstado(u, nuevoEstado === "activo");
+                          }}
+                          options={[
+                            { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                            { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                          ]}
+                        />
+                      </span>
                     </td>
                     <td className="px-4 py-1.5">
+                      {/* P7: editar y eliminar quedan deshabilitados para la
+                          cuenta de super administrador, con el tooltip que
+                          explica el motivo. */}
                       <ActionIcons
                         onView={() => setDetail(u)}
                         onEdit={canEdit ? () => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); } : undefined}
+                        editDisabled={canEdit && esSuperAdmin(u)}
+                        editTitle={TITULO_SUPER_ADMIN}
                         onDelete={canDelete ? () => setDeleteId(u.id) : undefined}
+                        deleteDisabled={canDelete && esSuperAdmin(u)}
+                        deleteTitle={TITULO_SUPER_ADMIN}
                       />
                     </td>
                   </tr>
@@ -671,25 +738,44 @@ export function GestionUsuariosScreen({
                       (Correo, el único dato de texto libre y largo, ocupa las 2). */}
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     {[
-                      { l: "Tipo de documento",   v: detail.tipoDocumento,   ancho: false, chip: undefined },
-                      { l: "Número de documento", v: detail.numeroDocumento, ancho: false, chip: undefined },
-                      { l: "Nombre completo",     v: detail.nombre,           ancho: false, chip: undefined },
-                      { l: "Teléfono",            v: detail.telefono,         ancho: false, chip: undefined },
+                      { l: "Tipo de documento",   v: detail.tipoDocumento,   ancho: false, chip: undefined, chips: undefined },
+                      { l: "Número de documento", v: detail.numeroDocumento, ancho: false, chip: undefined, chips: undefined },
+                      { l: "Nombre completo",     v: detail.nombre,           ancho: false, chip: undefined, chips: undefined },
+                      { l: "Teléfono",            v: detail.telefono,         ancho: false, chip: undefined, chips: undefined },
                       {
-                        l: "Rol", v: rolLabel(detail, roles, esCliente, esEmpleado), ancho: false,
-                        // Gris para Cliente, verde para Cliente/Empleado y rojo
-                        // para Administrador, el mismo badge del listado.
-                        chip: { color: rolColor(detail.rolId, esCliente, esEmpleado), aviso: rolInactivo },
+                        // P6: se listan TODOS los roles que la persona posee
+                        // en este momento (rolId + ficha de empleado + Cliente
+                        // si está en `clientes`), con chip por cada uno.
+                        // P8: la super administradora se etiqueta como
+                        // "Super Administrador".
+                        l: "Roles", v: "", ancho: false, chip: undefined,
+                        chips: rolesDetalle.map(r => ({
+                          label: esSuperAdmin(detail) && r.id === "ROL-001" ? "Super Administrador" : r.nombre,
+                          color: rolColor(r.id, esCliente, esEmpleado),
+                          aviso: !r.activo,
+                        })),
                       },
                       {
                         l: "Estado", v: detail.activo ? "Activo" : "Inactivo", ancho: false,
                         chip: { color: detail.activo ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600", aviso: false },
+                        chips: undefined,
                       },
-                      { l: "Correo", v: detail.correo, ancho: true, chip: undefined },
-                    ].map(({ l, v, ancho, chip }) => (
+                      { l: "Correo", v: detail.correo, ancho: true, chip: undefined, chips: undefined },
+                    ].map(({ l, v, ancho, chip, chips }) => (
                       <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "col-span-2" : ""}`}>
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</span>
-                        {chip ? (
+                        {chips ? (
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            {chips.map(c => (
+                              <span key={c.label} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.color} ${c.aviso ? "opacity-60" : ""}`}>{c.label}</span>
+                            ))}
+                            {chips.some(c => c.aviso) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                <AlertTriangle className="w-3 h-3" /> Rol inactivo
+                              </span>
+                            )}
+                          </span>
+                        ) : chip ? (
                           <span className="flex items-center gap-1.5 flex-wrap">
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${chip.color} ${chip.aviso ? "opacity-60" : ""}`}>{v || "—"}</span>
                             {chip.aviso && (
@@ -729,13 +815,19 @@ export function GestionUsuariosScreen({
                     </div>
                   ))}
 
-                  {/* Cambiar estado */}
+                  {/* Cambiar estado — P7: deshabilitado para la cuenta de
+                      super administrador, con el tooltip que explica el
+                      motivo. */}
                   {canEdit && (
                   <button onClick={cambiarEstado}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-colors cursor-pointer active:scale-95 ${
-                      detail.activo
-                        ? "border-gray-200 text-gray-600 hover:bg-gray-50"
-                        : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                    disabled={esSuperAdmin(detail)}
+                    title={esSuperAdmin(detail) ? TITULO_SUPER_ADMIN : undefined}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border transition-colors active:scale-95 ${
+                      esSuperAdmin(detail)
+                        ? "opacity-50 cursor-not-allowed border-border text-muted-foreground"
+                        : detail.activo
+                          ? "border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer"
+                          : "border-emerald-200 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
                     }`}>
                     <RefreshCw className="w-4 h-4" />
                     {detail.activo ? "Desactivar usuario" : "Activar usuario"}
@@ -747,7 +839,11 @@ export function GestionUsuariosScreen({
                 <div className="flex gap-3 px-5 py-3 border-t border-border shrink-0">
                   {canEdit && (
                   <button onClick={() => { setDetail(null); setEditItem({ ...detail }); setEditPrevCorreo(detail.correo); setEditErrors({}); }}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    // P7: la super administradora no se puede editar desde
+                    // ningún flujo, incluido este acceso rápido del detalle.
+                    disabled={esSuperAdmin(detail)}
+                    title={esSuperAdmin(detail) ? TITULO_SUPER_ADMIN : undefined}
+                    className={`flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold transition-colors ${esSuperAdmin(detail) ? "opacity-50 cursor-not-allowed text-muted-foreground" : "text-foreground hover:bg-muted cursor-pointer"}`}>
                     Editar usuario
                   </button>
                   )}
@@ -842,9 +938,34 @@ export function GestionUsuariosScreen({
                 ))}
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol actual</label>
+                  {/* P4: lista VISIBLE de los roles que el usuario posee EN
+                      ESTE MOMENTO (rolId del usuario + el de su ficha de
+                      empleado + Cliente si está en `clientes`), pintada con
+                      `rolesDeUsuario` ANTES de que el usuario agregue o cambie
+                      roles en el select de abajo. */}
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Roles actuales del usuario</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(() => {
+                      const actuales = rolesDeUsuario(editItem, roles, empleados, clientes);
+                      return actuales.length === 0 ? (
+                        <span className="text-xs text-muted-foreground italic">Sin roles registrados</span>
+                      ) : actuales.map(r => (
+                        <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${!r.activo ? "opacity-50" : ""} ${
+                          esSuperAdmin(editItem) && r.id === "ROL-001"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-muted text-foreground border border-border"
+                        }`}>
+                          {esSuperAdmin(editItem) && r.id === "ROL-001" ? "Super Administrador" : r.nombre}
+                          {!r.activo ? " (Inactivo)" : ""}
+                        </span>
+                      ));
+                    })()}
+                  </div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol principal (a modificar)</label>
                   <select
-                     disabled={false}
+                    // P7: el rol de la super administradora no se puede cambiar.
+                    disabled={esSuperAdmin(editItem)}
+                    title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
                     value={editItem.rolId}
                     onChange={e => setEditItem(x => x && ({ ...x, rolId: e.target.value }))}
                     className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
@@ -860,9 +981,13 @@ export function GestionUsuariosScreen({
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                   <select
+                    // P7: el estado de la super administradora no se puede
+                    // cambiar desde el modal de edición tampoco.
+                    disabled={esSuperAdmin(editItem)}
+                    title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
                     value={editItem.activo ? "activo" : "inactivo"}
                     onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="activo">Activo</option>
                     <option value="inactivo">Inactivo</option>
@@ -877,7 +1002,11 @@ export function GestionUsuariosScreen({
                   Cancelar
                 </button>
                 <button onClick={handleEdit}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  // P7: doble barrera — además de los guards de handleEdit,
+                  // el botón viene deshabilitado para la super administradora.
+                  disabled={esSuperAdmin(editItem)}
+                  title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
+                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${esSuperAdmin(editItem) ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>
                   Guardar cambios
                 </button>
               </div>

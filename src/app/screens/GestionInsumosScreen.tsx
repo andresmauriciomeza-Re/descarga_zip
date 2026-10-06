@@ -321,8 +321,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         categoriaNombre(i.categoriaId).toLowerCase().includes(q)
       );
     }
-    // Orden por defecto: ID ascendente
-    result = [...result].sort((a, b) => a.id.localeCompare(b.id));
+    // Orden por defecto: se RESPETA el orden del array (orden de creación) y ya
+    // no se reordena por ID. Antes había un `sort((a, b) => a.id.localeCompare(b.id))`
+    // que mandaba el insumo recién creado al FINAL, porque se inserta con
+    // `setInsumos(prev => [nuevo, ...prev])` al inicio y su ID es la más baja
+    // de la lista (INS-001, INS-002…): el usuario quiere ver LO ÚLTIMO CREADO
+    // ARRIBA, así que manda el orden de creación. Paginación, filtros y la
+    // descarga a Excel siguen funcionando igual: solo cambia el orden de las filas.
     return result;
   }, [insumos, search, filtroEstado, filtroTipo]);
 
@@ -413,20 +418,24 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       toast.error("El nombre es obligatorio.");
       return;
     }
-    if (stockMaximo <= 0) {
-      toast.error("El stock máximo debe ser mayor a 0.");
-      return;
-    }
-    if (stockMaximo < stockMinimo) {
-      toast.error("El stock máximo no puede ser menor al stock mínimo.");
-      return;
-    }
-    if (costoUnitario < 0) {
-      toast.error("El costo unitario no puede ser negativo.");
-      return;
-    }
 
     if (editingId) {
+      // Punto 10: estas validaciones SOLO aplican en edición. En la creación
+      // ya no se piden Stock máximo ni Costo unitario (quedan en 0 y se
+      // cargan después), así que exigirles un valor bloqueaba el alta.
+      if (stockMaximo <= 0) {
+        toast.error("El stock máximo debe ser mayor a 0.");
+        return;
+      }
+      if (stockMaximo < stockMinimo) {
+        toast.error("El stock máximo no puede ser menor al stock mínimo.");
+        return;
+      }
+      if (costoUnitario < 0) {
+        toast.error("El costo unitario no puede ser negativo.");
+        return;
+      }
+
       // En edición solo se actualiza stockMaximo; el costoUnitario y los demás
       // campos conservan su valor original aunque el formulario los envíe
       // modificados (no se confía solo en el disabled del HTML).
@@ -458,6 +467,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         nombre: nombre.trim(),
         categoriaId,
         unidadMedida: unidad,
+        // Punto 10: la creación ya no pide estos tres campos, así que nacen
+        // en 0 (el stock se carga después de crear el insumo y el máximo y el
+        // costo se escriben desde Editar). Los estados siguen en 0 porque
+        // `openCreate` los limpia y los campos están ocultos.
         stockActual,
         stockMinimo,
         stockMaximo,
@@ -793,17 +806,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
             <col style={{ width: "12%" }} />
             <col style={{ width: "10%" }} />
           </colgroup>
-          <thead className="bg-muted/50 dark:bg-muted/30 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
               {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "STOCK MÁX.", "COSTO UNIT.", "ESTADO", "ACCIONES"].map(h => (
-                <th key={h} className="px-2 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-14 text-center text-muted-foreground">
+                <td colSpan={10} className="px-3 py-14 text-center text-muted-foreground">
                   <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p className="font-medium">No hay resultados</p>
                 </td>
@@ -815,18 +828,18 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
               const inactivo = insumo.estado === "inactivo";
               return (
                 <tr key={insumo.id} className={`hover:bg-muted/20 dark:hover:bg-muted/10 transition-colors ${inactivo ? "opacity-50" : ""}`}>
-                  <td className="px-2 py-3 text-xs font-mono font-bold text-foreground">{formatearId(insumo.id)}</td>
-                  <td className="px-2 py-3 text-xs text-foreground break-words">
+                  <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{formatearId(insumo.id)}</td>
+                  <td className="px-3 py-3.5 text-sm text-foreground break-words">
                     {esProductoInsumo ? "-" : categoriaNombre(insumo.categoriaId)}
                   </td>
-                  <td className="px-2 py-3 text-sm text-foreground break-words">
+                  <td className="px-3 py-3.5 text-sm text-foreground break-words">
                     <div>{insumo.nombre}</div>
                     <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
                       {esProductoInsumo ? "Producto insumo" : "Insumo"}
                     </span>
                   </td>
-                  <td className="px-2 py-3 text-xs text-muted-foreground">{insumo.unidadMedida}</td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3.5 text-sm text-muted-foreground">{insumo.unidadMedida}</td>
+                  <td className="px-3 py-3.5">
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
                       {stockBajo && (
@@ -846,10 +859,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       )}
                     </div>
                   </td>
-                  <td className="px-2 py-3 text-xs font-mono text-muted-foreground">{insumo.stockMinimo}</td>
-                  <td className="px-2 py-3 text-xs font-mono text-muted-foreground">{insumo.stockMaximo}</td>
-                  <td className="px-2 py-3 text-xs font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
+                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMaximo}</td>
+                  <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
+                  <td className="px-3 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). Mantiene el
                         flujo de siempre: elegir la opción contraria pide la
                         confirmación y si es la actual no hace nada. */}
@@ -865,7 +878,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                       ]}
                     />
                   </td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3.5">
                     <ActionIcons
                       onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
                       onEdit={() => openEdit(insumo)}
@@ -989,22 +1002,26 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     />
                   </div>
                 </div>
-                {/* Stock Actual + Stock Mínimo */}
+                {/* Punto 10: el Stock Actual solo se pide al EDITAR (al crear
+                    el stock se carga después de dar de alta el insumo). */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Actual</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={stockActual}
-                      onChange={e => setStockActual(Number(e.target.value))}
-                      disabled={!!editingId}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        editingId ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed" : "bg-muted dark:bg-input"
-                      }`}
-                    />
-                  </div>
-                  <div>
+                  {editingId && (
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Actual</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={stockActual}
+                        onChange={e => setStockActual(Number(e.target.value))}
+                        disabled={!!editingId}
+                        className={`w-full px-3 py-2.5 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                          editingId ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed" : "bg-muted dark:bg-input"
+                        }`}
+                      />
+                    </div>
+                  )}
+                  {/* En creación toma las dos columnas: no está el Stock Actual. */}
+                  <div className={editingId ? "" : "col-span-2"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
                     <input
                       type="number"
@@ -1023,36 +1040,41 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     )}
                   </div>
                 </div>
-                {/* Stock Máximo */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Máximo *</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={stockMaximo}
-                    onChange={e => setStockMaximo(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  {stockActual > stockMaximo && stockMaximo > 0 && (
-                    <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
-                  )}
-                </div>
-                {/* Costo Unitario */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Costo Unitario (COP)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={costoUnitario || ""}
-                    disabled={!!editingId}
-                    onChange={e => setCostoUnitario(Number(e.target.value))}
-                    className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                      editingId
-                        ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                    }`}
-                  />
-                </div>
+                {/* Punto 10: Stock Máximo y Costo Unitario también se quitan
+                    de la CREACIÓN; en la EDICIÓN siguen igual (el máximo es
+                    el único campo editable del formulario). */}
+                {editingId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Máximo *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={stockMaximo}
+                      onChange={e => setStockMaximo(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    {stockActual > stockMaximo && stockMaximo > 0 && (
+                      <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
+                    )}
+                  </div>
+                )}
+                {editingId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Costo Unitario (COP)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={costoUnitario || ""}
+                      disabled={!!editingId}
+                      onChange={e => setCostoUnitario(Number(e.target.value))}
+                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
+                        editingId
+                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
+                      }`}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-border">
                 <button

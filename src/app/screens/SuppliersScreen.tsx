@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { filtrarCorreo, soloDigitos, soloLetras, validarCorreo } from "../components/campo";
-import { useProveedorForm, filtrarNit, soloDireccion, formatoNit, siguienteProveedorId } from "../components/useProveedorForm";
+// Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
+// también el formulario compartido de Orden de Compra y Compra).
+import { useProveedorForm, formatoNit, siguienteProveedorId, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type TipoDocumento, type TipoSociedad, type ProveedorFormValues } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   EstadoSelect,
@@ -52,12 +53,46 @@ type SupplierStatus = "activo" | "inactivo";
 interface Supplier {
   id: string;
   nit: string;
+  /** Nombre DERIVADO: Persona Natural → "Nombres Apellidos", Persona Jurídica
+   *  → Razón social. Es el dato que leen listados, compras y órdenes. */
   nombre: string;
-  telefono: string;
-  email: string;
-  direccion: string;
-  asesorComercial: string;
+  // Campos de contacto viejos: hoy son OPCIONALES porque el formulario ya no
+  // los pide a Persona Natural (los cubre el contacto comercial de Jurídica).
+  // Los proveedores antiguos sí los traen y al editar se conservan.
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  asesorComercial?: string;
   estado: SupplierStatus;
+  /** Punto 12: opcional (los registros antiguos no lo traen); el alta lo
+   *  pide siempre. "" = sin elegir, se muestra como "—" en listado/detalle. */
+  tipoPersona?: TipoPersona | "";
+  // ── Datos nuevos por tipo de persona (todos opcionales: los registros
+  // antiguos no los traen y los formularios de Orden/Compra no los generan). ──
+  /** Persona Natural. */
+  nombres?: string;
+  apellidos?: string;
+  tipoDocumento?: TipoDocumento | "";
+  numeroDocumento?: string;
+  /** DV (dígito de verificación). */
+  dv?: string;
+  /** Persona Jurídica: forma societaria. La razón social NO se guarda aquí,
+   *  vive en `nombre` (es su valor derivado). */
+  tipoSociedad?: TipoSociedad | "";
+  /** Adjunto de la Cámara de Comercio: nombre del archivo + dataURL. */
+  camaraComercioNombre?: string;
+  camaraComercioArchivo?: string;
+  fechaExpedicionCamara?: string;
+  /** Persona Jurídica: contacto comercial (en Natural queda vacío). Al
+   *  guardar se copia a asesor/telefono/email para el resto de la app. */
+  contactoNombre?: string;
+  contactoTelefono?: string;
+  contactoEmail?: string;
+  /** Representante legal (solo Persona Jurídica). */
+  repLegalNombres?: string;
+  repLegalApellidos?: string;
+  repLegalTipoDocumento?: TipoDocumento | "";
+  repLegalNumeroDocumento?: string;
 }
 
 export const INITIAL_SUPPLIERS: Supplier[] = [
@@ -68,6 +103,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     direccion: "Cra 50 #30-10, Medellín",
     asesorComercial: "Carlos Mejía",
     estado: "activo",
+    tipoPersona: "Persona Jurídica",
   },
   {
     id: "2", nit: "800.654.321-2",
@@ -76,6 +112,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     direccion: "Cll 80 #45-20, Bello",
     asesorComercial: "Ana Restrepo",
     estado: "activo",
+    tipoPersona: "Persona Jurídica",
   },
   {
     id: "3", nit: "700.111.222-3",
@@ -84,6 +121,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     direccion: "Av. 33 #76-60, Medellín",
     asesorComercial: "Jorge Ríos",
     estado: "inactivo",
+    tipoPersona: "Persona Jurídica",
   },
   {
     id: "4", nit: "901.777.888-4",
@@ -92,6 +130,7 @@ export const INITIAL_SUPPLIERS: Supplier[] = [
     direccion: "Cra 65 #12-40, Itagüí",
     asesorComercial: "Luisa Palacio",
     estado: "activo",
+    tipoPersona: "Persona Natural",
   },
 ];
 
@@ -100,7 +139,10 @@ const SUPPLIER_STATUS_COLOR: Record<SupplierStatus, string> = {
   inactivo: "bg-red-100 text-red-700",
 };
 
-const emptySupplier = (): Omit<Supplier, "id"> => ({
+/** Estado inicial del alta: son los valores del hook `useProveedorForm`
+ *  (por eso incluye `tipoPersona`, que en el proveedor guardado es opcional).
+ *  Los campos nuevos arrancan en "" para que ningún input quede sin controlar. */
+const emptySupplier = (): ProveedorFormValues => ({
   nit: "",
   nombre: "",
   telefono: "",
@@ -108,7 +150,149 @@ const emptySupplier = (): Omit<Supplier, "id"> => ({
   direccion: "",
   asesorComercial: "",
   estado: "activo",
+  // Punto 12: sin elegir: la validación exige que el usuario lo elija.
+  tipoPersona: "",
+  // Persona Natural.
+  nombres: "",
+  apellidos: "",
+  tipoDocumento: "",
+  numeroDocumento: "",
+  dv: "",
+  // Persona Jurídica.
+  razonSocial: "",
+  tipoSociedad: "",
+  camaraComercioNombre: "",
+  camaraComercioArchivo: "",
+  fechaExpedicionCamara: "",
+  contactoNombre: "",
+  contactoTelefono: "",
+  contactoEmail: "",
+  repLegalNombres: "",
+  repLegalApellidos: "",
+  repLegalTipoDocumento: "",
+  repLegalNumeroDocumento: "",
 });
+
+/**
+ * Cuerpo de "Ver detalle": pinta los datos según el tipo de persona, con los
+ * mismos campos que pide cada formulario (así lo que se guardó es lo que se
+ * ve). Los proveedores antiguos sin tipo siguen mostrando el bloque de
+ * contacto viejo (asesor/teléfono/email/dirección).
+ */
+function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
+  const esNatural = s.tipoPersona === "Persona Natural";
+  const esJuridica = s.tipoPersona === "Persona Jurídica";
+
+  const seccion = (titulo: string) => (
+    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
+      {titulo}
+    </p>
+  );
+
+  /** Celda de la rejilla: valor vacío o sin registrar → "—". */
+  const celda = (label: string, valor?: string, contenido?: React.ReactNode) => (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
+      <div className={cls}>{contenido ?? ((valor ?? "").trim() || "—")}</div>
+    </div>
+  );
+
+  return (
+    <>
+      <div>
+        {seccion("Identificación del proveedor")}
+        <div className="grid grid-cols-2 gap-3">
+          {/* En Jurídica el nombre guardado ES la razón social. */}
+          {celda(esJuridica ? "Razón social" : "Nombre", s.nombre)}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-1">Tipo de persona</p>
+            <div className={cls}>{s.tipoPersona || "—"}</div>
+          </div>
+          {esNatural && (
+            <>
+              {celda("Nombres", s.nombres)}
+              {celda("Apellidos", s.apellidos)}
+              {celda("Tipo de documento", s.tipoDocumento)}
+              {celda("Número de documento", s.numeroDocumento)}
+              {celda("NIT (opcional)", formatoNit(s.nit))}
+              {celda("DV", s.dv)}
+            </>
+          )}
+          {!esNatural && (
+            <>
+              {celda("NIT", formatoNit(s.nit))}
+              {celda("DV", s.dv)}
+              {esJuridica && celda("Tipo de sociedad", s.tipoSociedad)}
+            </>
+          )}
+        </div>
+      </div>
+
+      {esJuridica && (
+        <div>
+          {seccion("Cámara de Comercio")}
+          <div className="grid grid-cols-2 gap-3">
+            {celda(
+              "Documento",
+              s.camaraComercioNombre,
+              // Si quedó el dataURL se puede abrir en otra pestaña; si no,
+              // solo se muestra el nombre del archivo.
+              s.camaraComercioArchivo
+                ? (
+                  <a
+                    href={s.camaraComercioArchivo}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline break-all hover:text-red-700"
+                    title={s.camaraComercioNombre}
+                  >
+                    {s.camaraComercioNombre}
+                  </a>
+                )
+                : undefined,
+            )}
+            {celda("Fecha de expedición", s.fechaExpedicionCamara)}
+          </div>
+        </div>
+      )}
+
+      {esJuridica && (
+        <div>
+          {seccion("Contacto comercial")}
+          <div className="grid grid-cols-2 gap-3">
+            {celda("Nombre", s.contactoNombre)}
+            {celda("Teléfono", s.contactoTelefono)}
+            {celda("Correo", s.contactoEmail)}
+          </div>
+        </div>
+      )}
+
+      {esJuridica && (
+        <div>
+          {seccion("Representante legal")}
+          <div className="grid grid-cols-2 gap-3">
+            {celda("Nombres", s.repLegalNombres)}
+            {celda("Apellidos", s.repLegalApellidos)}
+            {celda("Tipo de documento", s.repLegalTipoDocumento)}
+            {celda("Número de documento", s.repLegalNumeroDocumento)}
+          </div>
+        </div>
+      )}
+
+      {!esNatural && !esJuridica && (
+        <div>
+          {seccion("Contacto")}
+          <div className="grid grid-cols-2 gap-3">
+            {celda("Asesor Comercial", s.asesorComercial)}
+            {celda("Teléfono", s.telefono)}
+            {celda("Email", s.email)}
+            {celda("Dirección", s.direccion)}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function Modal({
   title, onClose, onConfirm, confirmLabel = "Guardar", children,
@@ -192,9 +376,11 @@ export function SuppliersScreen({
     () => suppliers.filter(s =>
       s.nombre.toLowerCase().includes(search.toLowerCase()) ||
       s.nit.toLowerCase().includes(search.toLowerCase()) ||
-      s.telefono.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase()) ||
-      s.asesorComercial.toLowerCase().includes(search.toLowerCase()) ||
+      // Los campos de contacto son opcionales en el modelo (Persona Natural no
+      // los pide): se buscan sobre "" para no romper con un registro sin ellos.
+      (s.telefono ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.asesorComercial ?? "").toLowerCase().includes(search.toLowerCase()) ||
       s.estado.toLowerCase().includes(search.toLowerCase())
     ),
     [suppliers, search],
@@ -214,7 +400,6 @@ export function SuppliersScreen({
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
-  const inputCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const disabledCls = "w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
   const proveedorForm = useProveedorForm(
@@ -233,7 +418,24 @@ export function SuppliersScreen({
     // sin prefijo (regla del sistema) y tolerante a registros heredados que
     // hubieran quedado sin id (antes `s.id.replace(...)` lanzaba TypeError).
     const newId = siguienteProveedorId(suppliers);
-    setSuppliers(p => [{ id: newId, ...proveedorForm.values }, ...p]);
+    const v = proveedorForm.values;
+    // El objeto se arma llave por llave: el estado global se guarda como
+    // ProveedorRef (App.tsx no conoce los campos nuevos), así que los campos
+    // viejos SIEMPRE van presentes y los datos por tipo de persona se suman
+    // aparte. `nombre` y el contacto vienen ya derivados del formulario.
+    const nuevo: Supplier = {
+      id: newId,
+      nombre: nombreGuardado(v),
+      nit: v.nit.trim(),
+      // Persona Jurídica: contacto comercial → asesor/teléfono/email (los que
+      // leen compras y órdenes). Persona Natural no los pide: quedan vacíos.
+      ...contactoGuardado(v),
+      direccion: (v.direccion ?? "").trim(),
+      estado: v.estado,
+      tipoPersona: v.tipoPersona,
+      ...datosNuevosProveedor(v),
+    };
+    setSuppliers(p => [nuevo, ...p]);
     setShowCreate(false);
     setForm(emptySupplier());
     proveedorForm.reset();
@@ -243,22 +445,44 @@ export function SuppliersScreen({
   const handleEdit = () => {
     if (!editItem) return;
     editForm.setIntentoGuardar(true);
-    // Validar todos los campos editables (nombre y nit NUNCA se editan)
-    const camposAValidar = ["asesorComercial", "telefono", "email", "direccion", "estado"];
-    if (!camposAValidar.every(c => !editForm.errors[c])) {
+    // Se revisan TODOS los campos con error MENOS los dos que este formulario
+    // no gestiona como dato editable: el NIT (queda congelado arriba) y el
+    // nombre (se deriva de la identificación al guardar). Sin esta lista el
+    // modal no se podría guardar mientras haya un proveedor antiguo cuyo NIT
+    // venga con formato ("900.123.456-1") o un nombre heredado.
+    const camposConError = (Object.keys(editForm.errors) as (keyof ProveedorFormValues)[])
+      .filter(c => c !== "nit" && c !== "nombre");
+    if (camposConError.length > 0) {
       toast.error("Revisa los campos del formulario");
       return;
     }
-    // El NIT y el nombre NUNCA se pueden editar: se conservan los valores originales
+    const v = editForm.values;
+    // Las órdenes de compra guardan el NOMBRE del proveedor como texto (es lo
+    // que `tieneMovimientos` usa para bloquear el borrado): renombrarlo dejaría
+    // esa referencia huérfana. Si el proveedor ya tiene órdenes, se conserva el
+    // nombre y se avisa; los datos nuevos (nombres/apellidos o razón social) sí
+    // se guardan igual.
+    const nombreEditado = nombreGuardado(v, editItem.nombre);
+    const renombrarRompeOrdenes =
+      nombreEditado !== editItem.nombre &&
+      ordenes.some(o => o.proveedor === editItem.nombre);
+    if (renombrarRompeOrdenes) {
+      toast.warning("El nombre se mantiene: el proveedor tiene órdenes de compra registradas con su nombre actual.");
+    }
     setSuppliers(p => p.map(s => s.id === editItem.id ? {
+      // `...s` conserva TODO lo que el formulario nuevo no cubre, en especial
+      // la dirección y los datos de contacto de un proveedor viejo: no se borran.
       ...s,
-      nombre: s.nombre, // NUNCA se actualiza
-      nit: s.nit, // NUNCA se actualiza
-      asesorComercial: editForm.values.asesorComercial,
-      telefono: editForm.values.telefono,
-      email: editForm.values.email,
-      direccion: editForm.values.direccion,
-      estado: editForm.values.estado,
+      // El NIT y el nombre de la base siguen sin editarse: el NIT es fijo y el
+      // nombre se recalcula desde Nombres+Apellidos / Razón social.
+      nit: s.nit,
+      nombre: renombrarRompeOrdenes ? s.nombre : nombreEditado,
+      // Persona Jurídica: el contacto comercial pisa asesor/teléfono/email;
+      // en Persona Natural se conservan los valores anteriores.
+      ...contactoGuardado(v, s),
+      estado: v.estado,
+      tipoPersona: v.tipoPersona,
+      ...datosNuevosProveedor(v),
     } : s));
     setEditItem(null);
     toast.success("Proveedor editado exitosamente");
@@ -314,6 +538,39 @@ export function SuppliersScreen({
       asesorComercial: editItem?.asesorComercial ?? "",
       direccion: editItem?.direccion ?? "",
       estado: editItem?.estado ?? "activo",
+      // Punto 12: vacío si el proveedor no lo tiene registrado todavía.
+      tipoPersona: editItem?.tipoPersona ?? "",
+      // ── Datos nuevos. Los proveedores antiguos no los traen, así que se
+      // arrancan en "" y el formulario pide completarlos al guardar. ──
+      nombres: editItem?.nombres ?? "",
+      apellidos: editItem?.apellidos ?? "",
+      tipoDocumento: editItem?.tipoDocumento ?? "",
+      numeroDocumento: editItem?.numeroDocumento ?? "",
+      dv: editItem?.dv ?? "",
+      tipoSociedad: editItem?.tipoSociedad ?? "",
+      camaraComercioNombre: editItem?.camaraComercioNombre ?? "",
+      camaraComercioArchivo: editItem?.camaraComercioArchivo ?? "",
+      fechaExpedicionCamara: editItem?.fechaExpedicionCamara ?? "",
+      repLegalNombres: editItem?.repLegalNombres ?? "",
+      repLegalApellidos: editItem?.repLegalApellidos ?? "",
+      repLegalTipoDocumento: editItem?.repLegalTipoDocumento ?? "",
+      repLegalNumeroDocumento: editItem?.repLegalNumeroDocumento ?? "",
+      // Razón social: en el modelo no existe como campo, vive en `nombre`
+      // (es lo que se muestra como "Razón social"), así que un proveedor
+      // Jurídico antiguo se siembra desde ahí y no se pierde al editar.
+      razonSocial: editItem?.tipoPersona === "Persona Jurídica" ? (editItem?.nombre ?? "") : "",
+      // Contacto comercial: en Jurídica se siembra desde los campos viejos
+      // (asesor/teléfono/email) para que un proveedor antiguo no los pierda;
+      // en Natural el formulario no lo muestra.
+      contactoNombre: editItem?.tipoPersona === "Persona Jurídica"
+        ? (editItem?.contactoNombre ?? editItem?.asesorComercial ?? "")
+        : (editItem?.contactoNombre ?? ""),
+      contactoTelefono: editItem?.tipoPersona === "Persona Jurídica"
+        ? (editItem?.contactoTelefono ?? editItem?.telefono ?? "")
+        : (editItem?.contactoTelefono ?? ""),
+      contactoEmail: editItem?.tipoPersona === "Persona Jurídica"
+        ? (editItem?.contactoEmail ?? editItem?.email ?? "")
+        : (editItem?.contactoEmail ?? ""),
     },
     suppliers.map(s => ({ nit: s.nit, nombre: s.nombre })),
     { bloquearNombre: true, bloquearNit: true },
@@ -330,121 +587,11 @@ export function SuppliersScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editItem?.id]);
 
-  const EditFields = () => editItem ? (
-    <div className="space-y-6">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Identificación del proveedor
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            {/* Punto 2: sin asterisco, porque el NIT no se puede editar. */}
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">NIT</label>
-            <div className={disabledCls}>{formatoNit(editItem.nit)}</div>
-          </div>
-          <div>
-            {/* Punto 2: sin asterisco, por lo mismo: el nombre tampoco cambia. */}
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre</label>
-            <div className={disabledCls}>{editItem.nombre}</div>
-          </div>
-          {/* Punto 2: el aviso aparece UNA sola vez, debajo de los dos campos y
-              ocupando las dos columnas (antes se repetía bajo cada uno). */}
-          <p className="col-span-2 text-[10px] text-muted-foreground mt-0.5">
-            El NIT y el nombre no se pueden modificar después de creado el proveedor
-          </p>
-        </div>
-      </div>
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Contacto
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</label>
-            <input
-              value={editForm.values.asesorComercial}
-              onChange={e => {
-                editForm.setCampo("asesorComercial", soloLetras(e.target.value));
-                setEditItem(x => x && { ...x, asesorComercial: soloLetras(e.target.value) });
-              }}
-              onBlur={() => editForm.marcarTocado("asesorComercial")}
-              placeholder="Carlos Mejía"
-              className={`${inputCls} ${editForm.campoCls("asesorComercial")}`}
-            />
-            {editForm.obtenerError("asesorComercial") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("asesorComercial")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono</label>
-            <input
-              type="tel"
-              value={editForm.values.telefono}
-              onChange={e => {
-                editForm.setCampo("telefono", soloDigitos(e.target.value));
-                setEditItem(x => x && { ...x, telefono: soloDigitos(e.target.value) });
-              }}
-              onBlur={() => editForm.marcarTocado("telefono")}
-              className={`${inputCls} ${editForm.campoCls("telefono")}`}
-            />
-            {editForm.obtenerError("telefono") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("telefono")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Email</label>
-            <input
-              type="email"
-              value={editForm.values.email}
-              onChange={e => {
-                editForm.setCampo("email", filtrarCorreo(e.target.value));
-                setEditItem(x => x && { ...x, email: filtrarCorreo(e.target.value) });
-              }}
-              onBlur={() => editForm.marcarTocado("email")}
-              className={`${inputCls} ${editForm.campoCls("email")}`}
-            />
-            {editForm.obtenerError("email") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("email")}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Dirección *</label>
-            <input
-              value={editForm.values.direccion}
-              onChange={e => {
-                editForm.setCampo("direccion", soloDireccion(e.target.value));
-                setEditItem(x => x && { ...x, direccion: soloDireccion(e.target.value) });
-              }}
-              onBlur={() => editForm.marcarTocado("direccion")}
-              className={`${inputCls} ${editForm.campoCls("direccion")}`}
-            />
-            {editForm.obtenerError("direccion") && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{editForm.obtenerError("direccion")}</p>
-            )}
-          </div>
-        </div>
-      </div>
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-          Configuración
-        </p>
-        <div className="w-1/2 pr-1.5">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-          <EstadoSelect
-            value={editForm.values.estado}
-            onChange={(nuevoEstado) => {
-              editForm.setCampo("estado", nuevoEstado);
-              setEditItem(x => x && { ...x, estado: nuevoEstado });
-            }}
-            options={[
-              { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-              { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
-            ]}
-          />
-        </div>
-      </div>
-    </div>
-  ) : null;
+  // Modal Editar: usa el MISMO componente que el alta (`ProveedorFormCampos`),
+  // que pinta los campos según el tipo de persona y deja el NIT en solo
+  // lectura al recibir `nitLectura`. Antes aquí había un bloque de campos a
+  // mano: se duplicaba con el formulario y, como el componente se recreaba en
+  // cada render, React remontaba todos los inputs y se perdía el foco.
 
   return (
     <div className="px-4 py-3 max-w-6xl mx-auto min-h-full flex flex-col">
@@ -482,44 +629,54 @@ export function SuppliersScreen({
           quepan las columnas y la tabla se desplace dentro del card. */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col">
         <div className="overflow-auto">
-          <table className="w-full table-fixed min-w-[860px]">
+          <table className="w-full table-fixed min-w-[940px]">
             <colgroup>
-              <col className="w-[24%]" />
-              <col className="w-[15%]" />
+              {/* Punto 12: se abre una columna para "Tipo de persona"; los
+                  porcentajes se redistribuyen para sumar siempre 100 %. */}
+              <col className="w-[20%]" />
               <col className="w-[13%]" />
-              <col className="w-[18%]" />
-              <col className="w-[14%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
               <col className="w-[16%]" />
+              <col className="w-[13%]" />
+              <col className="w-[13%]" />
             </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["Nombre", "Contacto", "Teléfono", "Email", "Estado", "Acciones"].map(h => (
-                  <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
+                {["Nombre", "Tipo", "Contacto", "Teléfono", "Email", "Estado", "Acciones"].map(h => (
+                  <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-14 text-center text-muted-foreground">
                     <p className="text-4xl mb-3">🚛</p>
                     <p>No se encontraron proveedores</p>
                   </td>
                 </tr>
               ) : paged.map(s => (
                 <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-3 py-2 overflow-hidden">
+                  <td className="px-3 py-3.5 overflow-hidden">
                     <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
                     <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${formatoNit(s.nit)}`}>NIT {formatoNit(s.nit)}</p>
                   </td>
-                  <td className="px-3 py-2 overflow-hidden">
+                  {/* Punto 12: el tipo de persona también se ve en el listado;
+                      los proveedores antiguos sin dato muestran "—". */}
+                  <td className="px-3 py-3.5 text-sm text-muted-foreground truncate" title={s.tipoPersona || "Sin registrar"}>
+                    {s.tipoPersona || "—"}
+                  </td>
+                  <td className="px-3 py-3.5 overflow-hidden">
                     <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
                   </td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.telefono}>{s.telefono}</td>
+                  {/* Persona Natural no pide teléfono/email: se pinta "—" en
+                      vez de una celda vacía. */}
+                  <td className="px-3 py-3.5 text-sm text-muted-foreground truncate" title={s.telefono || "Sin registrar"}>{s.telefono || "—"}</td>
                   {/* El email largo se corta con "…" y el `title` muestra el
                       texto completo al pasar el cursor. */}
-                  <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.email}>{s.email}</td>
-                  <td className="px-3 py-2 overflow-hidden">
+                  <td className="px-3 py-3.5 text-sm text-muted-foreground truncate" title={s.email || "Sin registrar"}>{s.email || "—"}</td>
+                  <td className="px-3 py-3.5 overflow-hidden">
                     <EstadoSelect
                       value={s.estado}
                       onChange={(nuevoEstado) => {
@@ -532,7 +689,7 @@ export function SuppliersScreen({
                       ]}
                     />
                   </td>
-                  <td className="px-4 py-3.5">
+                  <td className="px-3 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => setDetailItem(s)} title="Ver detalle"
                         className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
@@ -557,14 +714,18 @@ export function SuppliersScreen({
             </tbody>
           </table>
         </div>
-      {/* Paginador compacto y centrado — sólo aparece con más de 5 proveedores
+      </div>
+      {/* Punto 15: el paginador queda FUERA del card (abajo y separado), como
+          en el resto de listados: dentro seguía pintándose como si fuera otra
+          fila de la tabla.
+          Paginador compacto y centrado — sólo aparece con más de 5 proveedores
           filtrados (con 5 o menos se muestran todos y no hace falta).
           Sólo flechas ‹ › sin texto, sin borde ni fondo, en gris claro y
           deshabilitadas en el extremo correspondiente; los números van sin
           borde y la página actual en un círculo rojo del tema (bg-primary) con
           el número en blanco. Todo a 32 px de alto (w-8 h-8). */}
       {filtered.length > PER_PAGE && (
-        <div className="flex items-center justify-center gap-1 mt-2 shrink-0">
+        <div className="flex items-center justify-center gap-1 mt-3 shrink-0">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={pageActual === 1}
@@ -597,7 +758,6 @@ export function SuppliersScreen({
           </button>
         </div>
       )}
-      </div>
 
       {/* ── Modal: Crear Proveedor (centrado, 2 columnas) ── */}
       <AnimatePresence>
@@ -647,7 +807,14 @@ export function SuppliersScreen({
                   <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5">
-                  {EditFields()}
+                  {editItem && (
+                    <ProveedorFormCampos
+                      form={editForm}
+                      autoFocusNombre={false}
+                      // El NIT queda congelado: es la regla del módulo.
+                      nitLectura={editItem.nit}
+                    />
+                  )}
                 </div>
                 <div className="flex gap-3 px-6 py-4 border-t border-border">
                   <button onClick={() => setEditItem(null)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
@@ -672,44 +839,9 @@ export function SuppliersScreen({
                   <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-5 space-y-6">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-                      Identificación del proveedor
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">NIT</p>
-                        <div className={disabledCls}>{formatoNit(detailItem.nit)}</div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Nombre</p>
-                        <div className={disabledCls}>{detailItem.nombre}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-                      Contacto
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Asesor Comercial</p>
-                        <div className={disabledCls}>{detailItem.asesorComercial || "—"}</div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Teléfono</p>
-                        <div className={disabledCls}>{detailItem.telefono}</div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Email</p>
-                        <div className={disabledCls}>{detailItem.email}</div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Dirección</p>
-                        <div className={disabledCls}>{detailItem.direccion || "—"}</div>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Punto 12 + formulario por tipo de persona: el detalle
+                      muestra exactamente los campos que pide cada tipo. */}
+                  <DetalleContenido s={detailItem} cls={disabledCls} />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
                       Configuración

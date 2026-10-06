@@ -98,6 +98,16 @@ export const nuevoContratacionId = (empleadoId: string, existentes: Contratacion
 export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
   [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || b.id.localeCompare(a.id));
 
+// ── Cuenta de super administrador (Gloria) ─────────────────────────────────
+// Gloria (EMP-001, gloria@lasirena.com) es la super administradora: su cuenta
+// NUNCA puede quedar inactiva, porque nadie podría volver a entrar para
+// reactivarla. Se identifica por id/correo (igual que en GestionUsuariosScreen,
+// que ya la protege desde su propia pantalla) y nunca por rolId, porque el rol
+// puede variar si la persona también figura en Clientes.
+const esSuperAdmin = (e: Pick<Empleado, "id" | "correo">): boolean =>
+  e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
+const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
+
 export function GestionEmpleadosScreen({
   roles,
   usuarios,
@@ -218,6 +228,19 @@ export function GestionEmpleadosScreen({
   const activos = empleados.filter(e => e.activo).length;
   const inact   = empleados.filter(e => !e.activo).length;
 
+  // Garantía de fondo: si una guardada vieja dejó a Gloria con `activo:false`,
+  // la ficha se corrige sola apenas cambia la lista (si no hay nada que
+  // corregir se devuelve la MISMA referencia, así React no re-renderiza en
+  // bucle). Sin esto, con la pill deshabilitada no habría forma de reactivarla
+  // desde la tabla y la cuenta de login quedaría muerta.
+  useEffect(() => {
+    setEmpleados(prev =>
+      prev.some(e => esSuperAdmin(e) && !e.activo)
+        ? prev.map(e => (esSuperAdmin(e) ? { ...e, activo: true } : e))
+        : prev,
+    );
+  }, [empleados, setEmpleados]);
+
   const filtered = useMemo(() => {
     let r = empleados.filter(e => {
       const q = search.toLowerCase();
@@ -297,8 +320,25 @@ export function GestionEmpleadosScreen({
   const paged      = filtered.slice((pageActual-1)*filasPorPagina, pageActual*filasPorPagina);
 
   const toggleEstado = (id: string) => {
-    setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: !e.activo } : e));
     const cur = empleados.find(e => e.id === id);
+    // Gloria jamás se puede desactivar: el guard va ANTES de tocar
+    // `setEmpleados` o `upsertUsuario`, que son justamente los dos caminos por
+    // los que esta pantalla la apagaría (y con ella su cuenta de login en
+    // GestionUsuariosScreen). Si los datos viejos la trajeran inactiva, en vez
+    // de alternar se fuerza a activa: nunca puede quedar apagada.
+    if (cur && esSuperAdmin(cur)) {
+      if (cur.activo) {
+        toast.error("La cuenta del super administrador no se puede desactivar");
+        return;
+      }
+      // Caso heredado (`activo:false` en datos guardados antes de esta regla):
+      // se corrige a activa en lugar de permitir el alternar.
+      setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: true } : e));
+      upsertUsuario({ ...cur, activo: true }, cur.correo);
+      toast.success("Estado del empleado actualizado");
+      return;
+    }
+    setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: !e.activo } : e));
     if (cur) upsertUsuario({ ...cur, activo: !cur.activo }, cur.correo);
     toast.success("Estado del empleado actualizado");
   };
@@ -341,8 +381,13 @@ export function GestionEmpleadosScreen({
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
 
     const nuevasIniciales = e.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
-    setEmpleados(p => p.map(x => x.id === e.id ? { ...e, iniciales: nuevasIniciales } : x));
-    upsertUsuario({ ...e, iniciales: nuevasIniciales }, editPrevCorreo ?? undefined);
+    // Guard defensivo del submit: aunque el select de estado venga
+    // deshabilitado, nada debe poder guardar a Gloria con `activo:false`
+    // (p. ej. si su ficha vieja ya venía inactiva). Se fuerza a activa aquí,
+    // antes de tocar `empleados` y su Usuario vinculado.
+    const activoFinal = esSuperAdmin(e) ? true : e.activo;
+    setEmpleados(p => p.map(x => x.id === e.id ? { ...e, activo: activoFinal, iniciales: nuevasIniciales } : x));
+    upsertUsuario({ ...e, activo: activoFinal, iniciales: nuevasIniciales }, editPrevCorreo ?? undefined);
     setEditItem(null);
     setEditPrevCorreo(null);
     setEditErrors({});
@@ -487,7 +532,10 @@ export function GestionEmpleadosScreen({
       rolId: contrato.rolId,
       fechaInicio: contrato.fechaInicio,
       fechaFinal: contrato.fechaFinal,
-      activo: ctrActivo,
+      // P7: este modal también escribe `activo` (y luego lo sube a su Usuario
+      // con upsertUsuario), así que acá Gloria tampoco puede quedar inactiva,
+      // aunque el selector venga deshabilitado.
+      activo: esSuperAdmin(emp!) ? true : ctrActivo,
       contrataciones: [...(emp!.contrataciones ?? []), contrato],
     };
 
@@ -506,6 +554,14 @@ export function GestionEmpleadosScreen({
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
   const fCls = (err?: string) =>
     `w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
+
+  // Empleado elegido en el modal "Nueva contratación". Si es Gloria, su
+  // selector de Estado queda deshabilitado con el tooltip del super
+  // administrador (la edición de los demás datos sigue permitida).
+  const ctrEmpleado = ctrEmpleadoId
+    ? empleados.find(e => e.id === ctrEmpleadoId) ?? null
+    : null;
+  const ctrEsSuperAdmin = !!ctrEmpleado && esSuperAdmin(ctrEmpleado);
 
   return (
     <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
@@ -597,18 +653,24 @@ export function GestionEmpleadosScreen({
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{rolNombre(e.rolId)}</td>
                     <td className="px-4 py-1.5">
                       {/* Pill de estado (diseño de Proveedores): antes era un
-                          badge y el switch vivía en Acciones. */}
-                      <EstadoSelect
-                        value={e.activo ? "activo" : "inactivo"}
-                        onChange={nuevoEstado => {
-                          if ((nuevoEstado === "activo") === e.activo) return;
-                          toggleEstado(e.id);
-                        }}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                      />
+                          badge y el switch vivía en Acciones.
+                          P7: para Gloria el pill queda deshabilitado con el
+                          tooltip que explica el motivo, igual que en
+                          GestionUsuariosScreen. */}
+                      <span title={esSuperAdmin(e) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
+                        <EstadoSelect
+                          value={e.activo ? "activo" : "inactivo"}
+                          disabled={esSuperAdmin(e)}
+                          onChange={nuevoEstado => {
+                            if ((nuevoEstado === "activo") === e.activo) return;
+                            toggleEstado(e.id);
+                          }}
+                          options={[
+                            { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                            { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                          ]}
+                        />
+                      </span>
                     </td>
                     <td className="px-4 py-1.5">
                       <ActionIcons
@@ -672,7 +734,15 @@ export function GestionEmpleadosScreen({
                       Empleado <span className="text-primary">*</span>
                     </label>
                     <select value={ctrEmpleadoId} autoFocus
-                      onChange={e => { setCtrEmpleadoId(e.target.value); if (ctrErrors.empleado) setCtrErrors(p => ({ ...p, empleado: undefined })); }}
+                      onChange={e => {
+                        setCtrEmpleadoId(e.target.value);
+                        // P7: al elegir a Gloria el estado se fuerza a Activo,
+                        // para que el selector de Estado (deshabilitado más
+                        // abajo) no arranque en "Inactivo" con datos viejos.
+                        const empSel = empleados.find(x => x.id === e.target.value);
+                        if (empSel && esSuperAdmin(empSel)) setCtrActivo(true);
+                        if (ctrErrors.empleado) setCtrErrors(p => ({ ...p, empleado: undefined }));
+                      }}
                       className={`${fCls(ctrErrors.empleado)} cursor-pointer`}>
                       <option value="">Selecciona un empleado…</option>
                       {empleados.map(e => (
@@ -688,9 +758,14 @@ export function GestionEmpleadosScreen({
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+                    {/* P7: si el empleado elegido es Gloria, el estado no se
+                        puede tocar (el guard de handleNuevaContratacion además
+                        lo fuerza a activo al guardar). */}
                     <select value={ctrActivo ? "activo" : "inactivo"}
+                      disabled={ctrEsSuperAdmin}
+                      title={ctrEsSuperAdmin ? TITULO_SUPER_ADMIN : undefined}
                       onChange={e => setCtrActivo(e.target.value === "activo")}
-                      className={`${fCls()} cursor-pointer`}>
+                      className={`${fCls()} cursor-pointer disabled:cursor-not-allowed disabled:opacity-70`}>
                       <option value="activo">Activo</option>
                       <option value="inactivo">Inactivo</option>
                     </select>
@@ -1081,9 +1156,15 @@ export function GestionEmpleadosScreen({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                  <select value={editItem.activo ? "activo" : "inactivo"}
+                  <select
+                    // P7: el estado de Gloria no se puede cambiar desde el
+                    // modal de edición tampoco (el resto de sus datos sí se
+                    // puede editar). El tooltip explica el motivo.
+                    disabled={esSuperAdmin(editItem)}
+                    title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
+                    value={esSuperAdmin(editItem) || editItem.activo ? "activo" : "inactivo"}
                     onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}
-                    className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
+                    className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
                     <option value="activo">Activo</option>
                     <option value="inactivo">Inactivo</option>
                   </select>

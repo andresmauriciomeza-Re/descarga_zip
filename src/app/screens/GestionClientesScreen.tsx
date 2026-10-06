@@ -140,6 +140,31 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   // puede quedar fuera de rango: se vuelve a la primera.
   useEffect(() => { setPage(1); }, [filasPorPagina]);
 
+  // ── P8 — Reconciliación Gloria ↔ Clientes ──────────────────────────────
+  // Gloria (USR-001, super administradora) aparece en el módulo de Usuarios
+  // pero NO figuraba en el listado de clientes, lo que rompía la
+  // consistencia entre módulos. Decisión: al montar esta pantalla, si
+  // `clientes` no la incluye, se agrega aquí con su correo y su documento
+  // CC 12345678 (los mismos que tiene como usuario), para que el módulo de
+  // Clientes la muestre y ambos módulos cuenten con la misma persona. Se usa
+  // el update funcional para no pisar altas hechas en el mismo render, y la
+  // dependencia vacía hace que solo corra al montar (el chequeo de
+  // existencia vive dentro del update).
+  useEffect(() => {
+    setClientes(prev => {
+      const correo = "gloria@lasirena.com";
+      if (prev.some(c => c.correo.trim().toLowerCase() === correo)) return prev;
+      const maxNum = prev.reduce((max, c) => {
+        const n = parseInt(c.id.replace("CLI-", "")) || 0;
+        return Math.max(max, n);
+      }, 0);
+      return [
+        { id: `CLI-${String(maxNum + 1).padStart(3, "0")}`, nombre: "Gloria Inés Vargas", iniciales: "GV", avatarColor: "bg-red-500", correo, tipoDocumento: "CC", numeroDocumento: "12345678", pedidos: 0, activo: true },
+        ...prev,
+      ];
+    });
+  }, [setClientes]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
   // se reduce (p. ej. al apagar un switch con un filtro de estado activo) `page`
@@ -201,21 +226,59 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     setNewActivo(true); setCreateErrors({});
   };
 
+  // ── P1 — Validación en tiempo real del alta de cliente ─────────────────
+  // Mientras se escribe ya se comprueba el formato (con los helpers de
+  // `campo.tsx`) Y que el dato no pertenezca ya a otra persona: el duplicado
+  // se busca en las tres colecciones (clientes, empleados y usuarios), igual
+  // que en el envío, para que el botón quede bloqueado en cuanto el usuario
+  // pega un documento o correo ya registrado. Se usan las MISMAS funciones en
+  // onChange y en handleCreate, así no puede existir un duplicado que el
+  // envío detecte pero el tiempo real no.
+  const correoDuplicado = (correo: string): boolean => {
+    const em = correo.trim().toLowerCase();
+    return (
+      clientes.some(c => c.correo.trim().toLowerCase() === em) ||
+      empleados.some(e => e.correo.trim().toLowerCase() === em) ||
+      usuarios.some(u => u.correo.trim().toLowerCase() === em)
+    );
+  };
+  const documentoDuplicado = (tipo: string, numero: string): boolean => {
+    const clave = `${tipo}||${numero}`.toLowerCase();
+    return (
+      clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave) ||
+      empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
+      usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave)
+    );
+  };
+  // Devuelve el error del campo, o undefined si está válido (o vacío: el
+  // vacío solo se marca en el envío, para no gritar "obligatorio" al abrir
+  // el modal).
+  const errorCorreoAlta = (correo: string): string | undefined => {
+    if (!correo.trim()) return undefined;
+    const formato = validarCorreo(correo);
+    if (formato) return formato;
+    return correoDuplicado(correo) ? "Ya existe un cliente con este correo" : undefined;
+  };
+  const errorDocumentoAlta = (tipo: string, numero: string): string | undefined => {
+    if (!numero.trim()) return undefined;
+    const formato = validarDocumento(numero, tipo);
+    if (formato) return formato;
+    return documentoDuplicado(tipo, numero) ? "Ya existe un cliente con este documento" : undefined;
+  };
+  // P1: el botón queda bloqueado mientras haya CUALQUIER error en el alta
+  // (formato inválido O duplicado de documento/correo).
+  const createBloqueado = Object.values(createErrors).some(v => !!v);
+
   const handleCreate = () => {
     const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
-    } else if (validarCorreo(newCorreo)) {
-      errs.correo = validarCorreo(newCorreo) as string;
     } else {
-      const em = newCorreo.trim().toLowerCase();
-      const duplicado =
-        clientes.some(c => c.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
-        usuarios.some(u => u.correo.trim().toLowerCase() === em);
-      if (duplicado) errs.correo = "Este correo ya está registrado";
+      // Reutiliza las mismas funciones del tiempo real: formato + duplicado.
+      const v = errorCorreoAlta(newCorreo);
+      if (v) errs.correo = v;
     }
     if (!newTipoDoc.trim()) {
       errs.tipoDocumento = "Selecciona el tipo de documento";
@@ -223,15 +286,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     const dm = newDocumento.trim();
     if (!dm) {
       errs.numeroDocumento = "El número de documento es obligatorio";
-    } else if (validarDocumento(dm, newTipoDoc)) {
-      errs.numeroDocumento = validarDocumento(dm, newTipoDoc) as string;
     } else {
-      const clave = `${newTipoDoc}||${dm}`.toLowerCase();
-      const docDup =
-        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave) ||
-        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
-        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave);
-      if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
+      const v = errorDocumentoAlta(newTipoDoc, dm);
+      if (v) errs.numeroDocumento = v;
     }
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
 
@@ -455,7 +512,10 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       </label>
                       <select
                         value={newTipoDoc}
-                         onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
+                        // P1: al cambiar el tipo se revalida el documento en
+                        // tiempo real, porque el formato y el duplicado
+                        // dependen del tipo (CC 6-10, CE/PP 6-12).
+                        onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: errorDocumentoAlta(e.target.value, newDocumento) })); }}
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       >
                         {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
@@ -468,11 +528,13 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       </label>
                       <input
                         type="text"
-                         inputMode="numeric"
+                        inputMode="numeric"
                         value={newDocumento}
                         autoComplete="off"
-                         onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
-                         placeholder="12345678"
+                        // P1 — tiempo real: solo dígitos (soloDigitos) y como
+                        // máximo 10 números, cortando el valor con slice(0,10).
+                        onChange={e => { const v = soloDigitos(e.target.value).slice(0, 10); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
+                        placeholder="12345678"
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       />
                       {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
@@ -504,7 +566,10 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       type="email"
                       value={newCorreo}
                       autoComplete="off"
-                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
+                      // P1 — tiempo real: filtrarCorreo normaliza mientras se
+                      // escribe y errorCorreoAlta valida formato + duplicado
+                      // contra clientes, empleados y usuarios.
+                      onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: errorCorreoAlta(v) })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
@@ -547,7 +612,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     Cancelar
                   </button>
                   <button onClick={handleCreate}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    // P1: bloqueado mientras haya error de formato o un
+                    // documento/correo duplicado — el usuario ve el mensaje
+                    // debajo del campo en el momento de escribir.
+                    disabled={createBloqueado}
+                    title={createBloqueado ? "Corrige los campos marcados en rojo para crear el cliente" : undefined}
+                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${createBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>
                     Crear cliente
                   </button>
                 </div>
