@@ -34,6 +34,7 @@ import {
   PackageCheck,
   Phone,
   Plus,
+  QrCode,
   RefreshCw,
   Search,
   Settings,
@@ -92,7 +93,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "./components/campo";
+import QRCode from "qrcode";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "./components/campo";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
@@ -243,6 +245,8 @@ interface PedidoResumen {
   total: number;
   nombre: string;
   documento?: string;
+  /** Teléfono del cliente, si lo dejó en el formulario de datos. */
+  telefono?: string;
   hora: string;
 }
 
@@ -2534,31 +2538,40 @@ function CatalogScreen({
   // En móvil: 6 por página (2 columnas de 3).
   const PER_PAGE = isMobile ? 6 : 9;
 
-  // Determina qué categorías mostrar en filtros: Activas que tengan productos no descontinuados
-  const categoriasConProductos = useMemo(() => {
-    const productosPorCategoria = productosSeguros.reduce(
-      (acc, p) => {
-        const catId = p.idCategoria ?? "";
-        if (!acc[catId]) acc[catId] = [];
-        acc[catId].push(p);
-        return acc;
-      },
-      {} as Record<string, Product[]>,
-    );
-    return categoriasSeguras.filter((c) => {
-      const activo = c.estado !== "Inactivo";
-      const tieneProductos = Object.keys(productosPorCategoria).includes(c.id);
-      const tieneProductosDisponibles =
-        tieneProductos && productosPorCategoria[c.id].some((p) => p.status === "disponible");
-      return activo && tieneProductosDisponibles;
+  // Botones de filtro. Se derivan de los PRODUCTOS que se están listando y no
+  // de la lista de categorías del admin: así, aunque una categoría se haya
+  // guardado con otro id o quede marcada como inactiva en localStorage, el menú
+  // siempre muestra sus botones (antes no salía ninguno y solo se veía "Todas").
+  const filtros = useMemo(() => {
+    const porId = new Map<string, string>();
+    productosSeguros.forEach((p) => {
+      const id = p.idCategoria ?? "";
+      if (!id || porId.has(id)) return;
+      const nombre =
+        categoriasSeguras.find((c) => c.id === id)?.nombre ||
+        p.category ||
+        "Otros";
+      porId.set(id, nombre);
     });
-  }, [categoriasSeguras, productosSeguros]);
+    return [...porId.entries()].map(([id, nombre]) => ({ id, nombre }));
+  }, [productosSeguros, categoriasSeguras]);
+
+  const nombreFiltroActivo = filtros.find((f) => f.id === cat)?.nombre;
+
+  // Si la categoría guardada ya no existe en el catálogo (se renombró o se
+  // borró en el admin), el filtro quedaba apuntando a nada y la lista salía
+  // vacía: se vuelve a "Todas" para que siempre se vean productos.
+  useEffect(() => {
+    if (cat !== "Todas" && !filtros.some((f) => f.id === cat)) setCat("Todas");
+  }, [cat, filtros]);
 
   const filtered = useMemo(
     () =>
       productosSeguros.filter(
         (p) =>
-          (cat === "Todas" || p.idCategoria === cat) &&
+          (cat === "Todas" ||
+            p.idCategoria === cat ||
+            (nombreFiltroActivo !== undefined && p.category === nombreFiltroActivo)) &&
           (search === "" ||
             (p.name ?? "")
               .toLowerCase()
@@ -2567,7 +2580,7 @@ function CatalogScreen({
               .toLowerCase()
               .includes(search.toLowerCase())),
       ),
-    [search, cat, productosSeguros],
+    [search, cat, nombreFiltroActivo, productosSeguros],
   );
 
   // Sin paginado el menú volcaba los 13 productos de una vez, así que al
@@ -2656,7 +2669,7 @@ function CatalogScreen({
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
               Todas
             </button>
-          {categoriasConProductos.map((c) => (
+          {filtros.map((c) => (
             <button
               key={c.id}
               onClick={() => {
@@ -2664,7 +2677,7 @@ function CatalogScreen({
                 setPage(1);
               }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
-                {nombreCategoria(c.id, categorias)}
+                {c.nombre}
               </button>
             ))}
         </div>
@@ -2966,9 +2979,13 @@ function ProductDetailScreen({
 
 // ─────────────────────────── CART ───────────────────────────
 
+/** Datos de la cuenta a la que se hace el depósito. `llave` es la llave de la
+    cuenta (interbancaria/Nequi) por si el cliente prefiere enviar el dinero con
+    ella en vez del número, y `qr` es el contenido que se pinta en el recuadro
+    del QR para pagar escaneando. */
 const PAYMENT_INFO: Record<
   string,
-  { icon: string; lines: string[] }
+  { icon: string; lines: string[]; llave: string; qr: string }
 > = {
   Nequi: {
     icon: "💜",
@@ -2976,6 +2993,8 @@ const PAYMENT_INFO: Record<
       "Número Nequi: 310 555 1234",
       "Titular: La Sirena Pizza",
     ],
+    llave: "310 555 1234",
+    qr: "nequi://pay/3105551234?name=La%20Sirena%20Pizza",
   },
   Bancolombia: {
     icon: "🏦",
@@ -2984,7 +3003,45 @@ const PAYMENT_INFO: Record<
       "Titular: La Sirena Pizza SAS",
       "NIT: 900.123.456-7",
     ],
+    llave: "900 123 456 789",
+    qr: "https://banco.example.com/pagar?cuenta=690123456789&titular=La%20Sirena%20Pizza%20SAS",
   },
+};
+
+/** Horario de atención para la recogida, en minutos desde medianoche:
+    de 4:00 PM (960) a 10:00 PM (1320). El cliente puede elegir CUALQUIER
+    minuto dentro de ese lapso —4:22 PM, 6:38 PM…— no solo horas exactas. */
+const HORA_APERTURA = 16 * 60; // 4:00 PM
+const HORA_CIERRE = 22 * 60; // 10:00 PM
+
+/** Convierte "16:00", "6:00 p. m." o "06:00 PM" a minutos desde medianoche.
+    Devuelve null cuando la hora no se puede leer. */
+const minutosDeHora = (texto?: string): number | null => {
+  if (!texto) return null;
+  const m = texto
+    .trim()
+    .toLowerCase()
+    .match(/^(\d{1,2})[:.]?(\d{2})?\s*(a\.?\s?m\.?|p\.?\s?m\.?|am|pm)?$/);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const sufijo = (m[3] ?? "").replace(/\s|\./g, "");
+  if (sufijo.startsWith("p") && h < 12) h += 12;
+  if (sufijo.startsWith("a") && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+};
+
+/** "16:22" (o "6:38 p. m.") → "4:22 PM". Si no se puede leer, devuelve el
+    texto tal cual. Se usa para mostrar la hora de recogida con minutos. */
+const etiquetaHora = (valor?: string): string => {
+  if (!valor) return "";
+  const minutos = minutosDeHora(valor);
+  if (minutos === null) return valor;
+  const h24 = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  const h12 = h24 > 12 ? h24 - 12 : h24 === 0 ? 12 : h24;
+  return `${h12}:${String(m).padStart(2, "0")} ${h24 >= 12 ? "PM" : "AM"}`;
 };
 
 function CartScreen({
@@ -3012,6 +3069,7 @@ function CartScreen({
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
+    clienteTelefono?: string,
   ) => string;
   isLoggedIn: boolean;
   /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
@@ -3032,6 +3090,18 @@ function CartScreen({
   const [horaRecogida, setHoraRecogida] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
+  /** Teléfono del cliente: opcional, pero se guarda con el pedido para que el
+      local pueda avisarle algo antes de la recogida. */
+  const [guestPhone, setGuestPhone] = useState("");
+  /** Marca el campo como tocado para mostrar el error mientras se escribe
+      (validación en tiempo real) sin gritarle al cliente desde el primer
+      carácter. */
+  const [tocadoDoc, setTocadoDoc] = useState(false);
+  const [tocadoNombre, setTocadoNombre] = useState(false);
+  const [tocadoTel, setTocadoTel] = useState(false);
+  /** true apenas se intenta avanzar con el formulario inválido: así aparecen
+      todos los errores juntos aunque el campo no se haya tocado. */
+  const [intentoDatos, setIntentoDatos] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] = useState(
     Boolean(confirmationData),
@@ -3054,6 +3124,57 @@ function CartScreen({
     ? clienteSesion?.trim() || ""
     : guestName.trim();
 
+  // ── Validación de la hora de recogida ──
+  // Se puede elegir cualquier minuto dentro del horario de atención
+  // (4:00 PM – 10:00 PM), no solo horas exactas.
+  const horaFueraDeRango = (valor: string) => {
+    const m = minutosDeHora(valor);
+    return m !== null && (m < HORA_APERTURA || m > HORA_CIERRE);
+  };
+  const horaYaPaso = (valor: string) => {
+    const m = minutosDeHora(valor);
+    if (m === null) return false;
+    const ahora = new Date().getHours() * 60 + new Date().getMinutes();
+    return m <= ahora;
+  };
+
+  // ── Validación del formulario "Datos para enviar tu pedido" ──
+  // Se recalcula en cada render, así que el mensaje cambia mientras se escribe;
+  // solo se pinta si el campo ya se tocó o si se intentó avanzar.
+  const errDocumento = validarDocumento(guestDocument, "CC");
+  const errNombre = validarNombre(guestName);
+  const errTelefono = validarTelefonoOpcional(guestPhone);
+  const verErrDoc = tocadoDoc || intentoDatos ? errDocumento : null;
+  const verErrNom = tocadoNombre || intentoDatos ? errNombre : null;
+  const verErrTel = tocadoTel || intentoDatos ? errTelefono : null;
+  const datosValidos = !errDocumento && !errNombre && !errTelefono;
+
+  // QR de pago de la cuenta elegida (Nequi o Bancolombia). Se genera en el
+  // cliente para que el recuadro funcione sin depender de ningún servicio
+  // externo; si falla, el recuadro muestra el mensaje de reserva.
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    const base = PAYMENT_INFO[payment]?.qr ?? "";
+    const payload = base
+      ? `${base}${base.includes("?") ? "&" : "?"}valor=${subtotal}`
+      : "";
+    if (!payload) {
+      setQrDataUrl("");
+      return;
+    }
+    QRCode.toDataURL(payload, {
+      margin: 1,
+      width: 260,
+      color: { dark: "#141414", light: "#ffffff" },
+    })
+      .then((url) => vivo && setQrDataUrl(url))
+      .catch(() => vivo && setQrDataUrl(""));
+    return () => {
+      vivo = false;
+    };
+  }, [payment, subtotal]);
+
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -3065,6 +3186,9 @@ function CartScreen({
     reader.readAsDataURL(file);
   };
 
+  /** Último paso: registra la venta con los datos del formulario (invitado)
+      o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
+      aquí no se vuelve a interrumpir el flujo. */
   const handleConfirm = () => {
     if (!comprobante) {
       toast.error("Por favor sube el comprobante de pago");
@@ -3074,13 +3198,34 @@ function CartScreen({
       toast.error("Por favor selecciona la hora de recogida");
       return;
     }
-    if (!isLoggedIn) {
+    const minutos = minutosDeHora(horaRecogida);
+    if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
+      toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+      return;
+    }
+    if (horaYaPaso(horaRecogida)) {
+      toast.error("Esta hora no está disponible — ya pasó");
+      return;
+    }
+    if (!isLoggedIn && !datosValidos) {
+      // Nunca debería pasar (el paso 3 ya validó), pero el pedido no se
+      // registra a medias si el formulario quedó en un estado inválido.
+      setIntentoDatos(true);
       setCheckoutStep(3);
+      toast.error("Revisa tus datos para enviar el pedido");
       return;
     }
     setLoading(true);
     setTimeout(() => {
-      const idVenta = onOrder(payment, comprobante, [...cart], horaRecogida, nombreCliente || undefined);
+      const idVenta = onOrder(
+        payment,
+        comprobante,
+        [...cart],
+        horaRecogida,
+        nombreCliente || undefined,
+        guestDocument.trim() || undefined,
+        guestPhone.trim() || undefined,
+      );
       // Resumen del pedido ANTES de vaciar el carrito: es lo que
       // muestra la pantalla de confirmación.
       setPedidoResumen({
@@ -3088,6 +3233,8 @@ function CartScreen({
         items: [...cart],
         total: cart.reduce((s, i) => s + cartTotal(i), 0),
         nombre: nombreCliente,
+        documento: guestDocument.trim() || undefined,
+        telefono: guestPhone.trim() || undefined,
         hora: horaRecogida,
       });
       clear();
@@ -3097,42 +3244,25 @@ function CartScreen({
     }, 1400);
   };
 
-  const submitAsGuest = () => {
-    if (!guestName.trim() || !guestDocument.trim()) {
-      toast.error("Ingresa tu nombre y documento para continuar");
+  /** Paso 1 del checkout: valida el formulario de datos y pasa al resumen. */
+  const continuarDatos = () => {
+    setIntentoDatos(true);
+    if (!datosValidos) {
+      toast.error(
+        errDocumento ??
+          errNombre ??
+          errTelefono ??
+          "Revisa los datos de tu pedido",
+      );
       return;
     }
-    setLoading(true);
-    setTimeout(() => {
-      // El documento se enviaba pero se quedaba en el formulario: la venta
-      // guardaba solo el nombre, así que un pedido de invitado quedaba sin
-      // identificación.
-      const idVenta = onOrder(
-        payment,
-        comprobante,
-        [...cart],
-        horaRecogida,
-        guestName.trim(),
-        guestDocument.trim(),
-      );
-      setPedidoResumen({
-        id: idVenta,
-        items: [...cart],
-        total: cart.reduce((s, i) => s + cartTotal(i), 0),
-        nombre: guestName.trim(),
-        documento: guestDocument.trim(),
-        hora: horaRecogida,
-      });
-      clear();
-      setLoading(false);
-      setCheckoutStep(0);
-      setPedidoConfirmado(true);
-    }, 1400);
+    setCheckoutStep(1);
   };
 
   if (pedidoConfirmado && pedidoResumen) {
+    const horaEtiqueta = etiquetaHora(pedidoResumen.hora);
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
         <h2
           className="text-2xl font-bold mb-2 text-foreground"
@@ -3141,7 +3271,8 @@ function CartScreen({
           ¡Pedido recibido!
         </h2>
 
-        {/* a) Pedido: número, estado y mensaje de verificación. */}
+        {/* a) Pedido: número, estado y mensaje de verificación. Ocupa el
+            ancho completo, igual que el encabezado. */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
           <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
             <h3 className="font-bold text-foreground flex items-center gap-2">
@@ -3158,79 +3289,89 @@ function CartScreen({
           </p>
         </div>
 
-        {/* b) Productos con su desglose y totales. */}
-        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-          <h3 className="font-bold text-foreground mb-3">Productos</h3>
-          <div className="space-y-3 mb-4">
-            {pedidoResumen.items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {item.product.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {item.size ? `${item.size} · ` : ""}x{item.quantity}
-                  </p>
+        {/* b) Dos columnas: cliente y recogida a la izquierda; productos y
+            totales a la derecha. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start text-left">
+          {/* Productos con su desglose y totales. En "pedido recibido" los
+              productos van a la derecha y cliente/recogida a la izquierda. */}
+          <div className="order-2 md:order-2 bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-bold text-foreground mb-3">Productos</h3>
+            <div className="space-y-3 mb-4">
+              {pedidoResumen.items.map((item) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {item.product.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.size ? `${item.size} · ` : ""}x{item.quantity}
+                    </p>
+                  </div>
+                  <span
+                    className="text-sm font-bold text-foreground shrink-0"
+                    style={{ fontFamily: MONO }}
+                  >
+                    {fmt((item.sizePrice + item.extrasPrice) * item.quantity)}
+                  </span>
                 </div>
-                <span
-                  className="text-sm font-bold text-foreground shrink-0"
-                  style={{ fontFamily: MONO }}
-                >
-                  {fmt((item.sizePrice + item.extrasPrice) * item.quantity)}
-                </span>
+              ))}
+            </div>
+            <ResumenTotales subtotal={pedidoResumen.total} />
+          </div>
+
+          {/* Cliente + dónde recoger. */}
+          <div className="order-1 md:order-1 space-y-4">
+            {pedidoResumen.nombre && (
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-foreground mb-2">Cliente</h3>
+                <p className="text-foreground font-semibold">
+                  {pedidoResumen.nombre}
+                </p>
+                {pedidoResumen.documento && (
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Documento: {pedidoResumen.documento}
+                  </p>
+                )}
+                {pedidoResumen.telefono && (
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Teléfono: {pedidoResumen.telefono}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
-          <ResumenTotales subtotal={pedidoResumen.total} />
-        </div>
-
-        {/* c) Cliente (nombre y documento, si hay). */}
-        {pedidoResumen.nombre && (
-          <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-            <h3 className="font-bold text-foreground mb-2">Cliente</h3>
-            <p className="text-foreground font-semibold">
-              {pedidoResumen.nombre}
-            </p>
-            {pedidoResumen.documento && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Documento: {pedidoResumen.documento}
-              </p>
             )}
-          </div>
-        )}
 
-        {/* d) Recogida: hora, dirección, teléfono y horario. */}
-        <div className="bg-card border border-border rounded-2xl p-5 mb-4 text-left">
-          <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" /> Dónde
-            recoger tu pedido
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Podrás pasar por tu pedido
-            {pedidoResumen.hora ? ` a las ${pedidoResumen.hora}` : ""}.
-          </p>
-          <div className="mb-4 border-l-2 border-primary/60 pl-3">
-            <p className="text-xs text-muted-foreground">Hora de recogida</p>
-            <p className="text-base font-bold text-primary">
-              {pedidoResumen.hora}
-            </p>
-          </div>
-          <p className="text-foreground font-semibold">
-            La Sirena Pizza
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Cra. 45 #104-30, Laureles
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Medellín, Antioquia
-          </p>
-          <div className="mt-3 pt-3 border-t border-border space-y-1">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5" /> 604 234 5678
-            </p>
-            <p className="text-xs font-semibold text-primary">
-              Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
-            </p>
+            {/* Recogida: hora, dirección, teléfono y horario. */}
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground mb-1 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" /> Dónde
+                recoger tu pedido
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Podrás pasar por tu pedido
+                {horaEtiqueta ? ` a las ${horaEtiqueta}` : ""}.
+              </p>
+              <div className="mb-4 border-l-2 border-primary/60 pl-3">
+                <p className="text-xs text-muted-foreground">Hora de recogida</p>
+                <p className="text-base font-bold text-primary">{horaEtiqueta}</p>
+              </div>
+              <p className="text-foreground font-semibold">
+                La Sirena Pizza
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Cra. 45 #104-30, Laureles
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Medellín, Antioquia
+              </p>
+              <div className="mt-3 pt-3 border-t border-border space-y-1">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" /> 604 234 5678
+                </p>
+                <p className="text-xs font-semibold text-primary">
+                  Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3379,8 +3520,10 @@ function CartScreen({
             ))}
           </div>
 
-          {/* Resumen + CTA */}
-          <div className="space-y-4">
+          {/* Resumen + CTA. Sticky en escritorio: con muchos productos el
+              recuadro acompaña el scroll y el total y el botón de pago
+              siempre están a la vista. */}
+          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
             <div className="bg-card border border-border rounded-2xl p-4">
               <h3 className="font-bold mb-3 text-foreground flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-primary" />{" "}
@@ -3394,7 +3537,9 @@ function CartScreen({
                 className="space-y-2 mb-4 text-sm"
               />
               <PrimaryBtn
-                onClick={() => setCheckoutStep(1)}
+                // Sin sesión lo primero es el formulario de datos; con sesión
+                // se entra directo al resumen como siempre.
+                onClick={() => setCheckoutStep(isLoggedIn ? 1 : 3)}
                 size="lg"
                 className="w-full"
               >
@@ -3416,7 +3561,7 @@ function CartScreen({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
+              className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -3529,7 +3674,9 @@ function CartScreen({
                     </div>
                   </div>
 
-                  {/* Hora de recogida */}
+                  {/* Hora de recogida. Se puede elegir cualquier minuto
+                      dentro del horario de atención: de 4:00 PM a 10:00 PM
+                      (16:00–22:00), no solo horas exactas. */}
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
                       Hora de recogida
@@ -3539,57 +3686,43 @@ function CartScreen({
                         Atendemos de <strong className="text-foreground">4:00 PM</strong> a{" "}
                         <strong className="text-foreground">10:00 PM</strong>
                       </p>
-                      <p className="text-xs mt-0.5">
-                        Ejemplo: a las <strong className="text-foreground">06:00 p. m.</strong>
-                      </p>
                     </div>
-                    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${
-                      horaRecogida && (() => {
-                        const [h, m] = horaRecogida.split(":").map(Number);
-                        const now = new Date();
-                        const sel = new Date(); sel.setHours(h, m, 0, 0);
-                        const open = new Date(); open.setHours(16, 0, 0, 0);
-                        const close = new Date(); close.setHours(22, 0, 0, 0);
-                        return sel <= now || sel < open || sel >= close;
-                      })() ? "border-red-400 focus-within:ring-red-300" : "border-border"
-                    }`}>
+                    <div
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${
+                        horaFueraDeRango(horaRecogida)
+                          ? "border-red-400 focus-within:ring-red-300"
+                          : "border-border"
+                      }`}
+                    >
                       <span className="text-base shrink-0">🕐</span>
                       <input
                         type="time"
                         value={horaRecogida}
                         min="16:00"
-                        max="21:59"
-                        aria-label="Hora de recogida, por ejemplo 06:00 p. m."
+                        max="22:00"
+                        step={60}
+                        aria-label="Hora de recogida, de 4:00 PM a 10:00 PM (puedes elegir los minutos)"
                         onChange={(e) => setHoraRecogida(e.target.value)}
                         className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      Ej: <span className="font-semibold text-foreground">06:00 p. m.</span> — usa el formato HH:MM y selecciona AM/PM
-                    </p>
-                    {/* Past-time / out-of-hours error */}
-                    {horaRecogida && (() => {
-                      const [h, m] = horaRecogida.split(":").map(Number);
-                      const now = new Date();
-                      const sel = new Date(); sel.setHours(h, m, 0, 0);
-                      const open = new Date(); open.setHours(16, 0, 0, 0);
-                      const close = new Date(); close.setHours(22, 0, 0, 0);
-                      if (sel < open || sel >= close) {
-                        return (
-                          <p className="text-xs text-red-500 mt-1 font-medium flex items-center gap-1">
-                            ⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)
-                          </p>
-                        );
-                      }
-                      if (sel <= now) {
-                        return (
-                          <p className="text-xs text-red-500 mt-1 font-medium flex items-center gap-1">
-                            ⚠ Esta hora no está disponible — ya pasó
-                          </p>
-                        );
-                      }
-                      return null;
-                    })()}
+                    {horaRecogida && (
+                      <p
+                        className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${
+                          horaYaPaso(horaRecogida)
+                            ? "text-red-500"
+                            : horaFueraDeRango(horaRecogida)
+                              ? "text-red-500"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {horaFueraDeRango(horaRecogida)
+                          ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                          : horaYaPaso(horaRecogida)
+                            ? "⚠ Esta hora no está disponible — ya pasó"
+                            : `Recogerás a las ${etiquetaHora(horaRecogida)}`}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3607,16 +3740,12 @@ function CartScreen({
                       toast.error("Por favor ingresa la hora de recogida");
                       return;
                     }
-                    const [h, m] = horaRecogida.split(":").map(Number);
-                    const now = new Date();
-                    const sel = new Date(); sel.setHours(h, m, 0, 0);
-                    const open = new Date(); open.setHours(16, 0, 0, 0);
-                    const close = new Date(); close.setHours(22, 0, 0, 0);
-                    if (sel < open || sel >= close) {
+                    const minutos = minutosDeHora(horaRecogida);
+                    if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
                       toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
                       return;
                     }
-                    if (sel <= now) {
+                    if (horaYaPaso(horaRecogida)) {
                       toast.error("Esta hora no está disponible — ya pasó");
                       return;
                     }
@@ -3657,41 +3786,94 @@ function CartScreen({
                   </button>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Ingresa tus datos para continuar como invitado o inicia sesión.
+                  Primero tus datos: con ellos quedamos a nombre de quién va el
+                  pedido. Después revisas el resumen y el pago.
                 </p>
                 <div className="space-y-3 mb-5">
+                  {/* 1) Documento — obligatorio, 6 a 10 dígitos. */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">
-                      Nombre completo
-                    </label>
-                    <input
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      placeholder="Ej: Laura Martínez"
-                      className="w-full px-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-foreground mb-1.5">
-                      Documento
+                      Documento <span className="text-primary">*</span>
                     </label>
                     <input
                       value={guestDocument}
-                      onChange={(e) => setGuestDocument(e.target.value)}
+                      onChange={(e) => {
+                        setGuestDocument(soloDigitos(e.target.value).slice(0, 10));
+                        setTocadoDoc(true);
+                      }}
+                      onBlur={() => setTocadoDoc(true)}
                       placeholder="Ej: 1234567890"
                       inputMode="numeric"
-                      className="w-full px-4 py-2.5 bg-muted rounded-xl border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      aria-invalid={Boolean(verErrDoc)}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                        verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
+                      }`}
                     />
+                    <p
+                      className={`text-xs mt-1 ${
+                        verErrDoc ? "text-red-500" : "text-muted-foreground"
+                      }`}
+                    >
+                      {verErrDoc ?? "Entre 6 y 10 dígitos"}
+                    </p>
+                  </div>
+
+                  {/* 2) Nombre — obligatorio. */}
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Nombre completo <span className="text-primary">*</span>
+                    </label>
+                    <input
+                      value={guestName}
+                      onChange={(e) => {
+                        setGuestName(filtrarNombre(e.target.value));
+                        setTocadoNombre(true);
+                      }}
+                      onBlur={() => setTocadoNombre(true)}
+                      placeholder="Ej: Laura Martínez"
+                      aria-invalid={Boolean(verErrNom)}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                        verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
+                      }`}
+                    />
+                    {verErrNom && (
+                      <p className="text-xs text-red-500 mt-1">{verErrNom}</p>
+                    )}
+                  </div>
+
+                  {/* 3) Teléfono — opcional. */}
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-1.5">
+                      Número de teléfono{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (opcional)
+                      </span>
+                    </label>
+                    <input
+                      value={guestPhone}
+                      onChange={(e) => {
+                        setGuestPhone(soloDigitos(e.target.value).slice(0, 10));
+                        setTocadoTel(true);
+                      }}
+                      onBlur={() => setTocadoTel(true)}
+                      placeholder="Ej: 310 555 1234"
+                      inputMode="tel"
+                      aria-invalid={Boolean(verErrTel)}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                        verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
+                      }`}
+                    />
+                    {verErrTel && (
+                      <p className="text-xs text-red-500 mt-1">{verErrTel}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={submitAsGuest}
-                    disabled={loading}
-                    className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                    onClick={continuarDatos}
+                    className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 flex items-center justify-center gap-2"
                   >
-                    {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                    {loading ? "Enviando..." : "Ingresar"}
+                    Continuar <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </motion.div>
@@ -3710,7 +3892,7 @@ function CartScreen({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4"
+              className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -3735,8 +3917,12 @@ function CartScreen({
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              {/* Body */}
-              <div className="px-5 py-5 space-y-5">
+              {/* Body: dos columnas — izquierda cuenta + QR, derecha
+                  comprobante — para que el modal no se alargue y haya poco
+                  scroll. */}
+              <div className="px-5 py-5 grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                {/* LEFT: account info + QR */}
+                <div className="space-y-4">
                 {/* Account info */}
                 <div className="bg-muted/50 rounded-2xl p-4 border border-border">
                   <div className="flex items-center gap-3 mb-3">
@@ -3758,6 +3944,19 @@ function CartScreen({
                         </p>
                       ),
                     )}
+                    {/* Llave de la cuenta: por si el cliente prefiere enviar
+                        el dinero con la llave en vez del número/cuenta. */}
+                    <div className="flex items-center justify-between gap-3 pt-2 mt-1 border-t border-border">
+                      <span className="text-sm text-muted-foreground">
+                        Llave de la cuenta
+                      </span>
+                      <span
+                        className="text-sm font-bold text-foreground"
+                        style={{ fontFamily: MONO }}
+                      >
+                        {PAYMENT_INFO[payment].llave}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground border-t border-border pt-2">
                     Realiza la transferencia por el valor exacto
@@ -3769,6 +3968,36 @@ function CartScreen({
                   </p>
                 </div>
 
+                {/* QR de la cuenta: para depositar escaneando con la app del
+                    banco o con Nequi. */}
+                <div className="rounded-2xl border border-border bg-muted/50 p-4 flex flex-col items-center gap-3">
+                  <p className="w-full text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-primary" />
+                    O deposita escaneando el QR
+                  </p>
+                  <div className="bg-white rounded-xl p-3 border border-border shadow-sm">
+                    {qrDataUrl ? (
+                      <img
+                        src={qrDataUrl}
+                        alt={`QR de pago ${payment}`}
+                        className="w-44 h-44"
+                      />
+                    ) : (
+                      <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground px-5">
+                        <span className="text-2xl">📱</span>
+                        Generando el QR…
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Escanea con la cámara o con tu app de pago y paga{" "}
+                    <strong className="text-foreground">{fmt(subtotal)}</strong>.
+                  </p>
+                </div>
+                </div>
+
+                {/* RIGHT: upload */}
+                <div>
                 {/* Upload */}
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
@@ -3818,6 +4047,7 @@ function CartScreen({
                       </div>
                     </button>
                   )}
+                </div>
                 </div>
               </div>
               {/* Footer */}
@@ -6719,7 +6949,23 @@ function DevolucionesScreen({
   const textoComp =
     activa?.compensacion.map((c) => `${c.cantidad}x ${c.nombre}${c.tamaño ? ` (${c.tamaño})` : ""}`).join(", ") ??
     "";
-  const puedeConfirmar = !!activa && totalDevueltos > 0;
+  // P18 — el motivo es OBLIGATORIO: cada producto que entra debe tener su
+  // razón registrada (y "Otro" exige además la descripción, que es lo que
+  // realmente explica el caso). Sin motivo no se puede confirmar la
+  // devolución: el botón queda deshabilitado y `faltan` explica el porqué.
+  const lineasSinMotivo = activa
+    ? detalleAct
+        .map((d, i) => {
+          const q = activa.devueltos[i] ?? 0;
+          if (q <= 0) return null;
+          const mv = activa.motivos[i];
+          const incompleto =
+            !mv?.motivo?.trim() || (mv.motivo === "Otro" && !mv.descripcion?.trim());
+          return incompleto ? d.nombre : null;
+        })
+        .filter((n): n is string => n !== null)
+    : [];
+  const puedeConfirmar = !!activa && totalDevueltos > 0 && lineasSinMotivo.length === 0;
   const modoGlobal: DevolucionTipo =
     totalComp > 0 && (dineroADar > 0 || dineroARecibir > 0)
       ? "mixto"
@@ -6727,15 +6973,30 @@ function DevolucionesScreen({
         ? "producto"
         : "dinero";
 
-  // "Aún puedes hacer…": solo queda decidir qué entra, porque la liquidación
-  // en dinero ya está siempre activa.
+  // "Aún puedes hacer…": primero marcar qué entra y, ahora, el motivo de cada
+  // producto devuelto (obligatorio); la liquidación en dinero ya está siempre
+  // activa.
   const faltan: string[] = [];
   if (totalDevueltos === 0) {
     faltan.push("Marca las unidades que devuelve el cliente.");
   }
+  for (const nombre of lineasSinMotivo) {
+    faltan.push(`Indica el motivo de la devolución de «${nombre}» (obligatorio).`);
+  }
 
   const confirmarDevolucion = () => {
-    if (!activa || !devActiva || !puedeConfirmar) return;
+    if (!activa || !devActiva) return;
+    // P18 — red de seguridad: aunque el botón ya viene deshabilitado, si falta
+    // el motivo NO se registra la devolución y se avisa en español.
+    if (lineasSinMotivo.length > 0) {
+      import("sonner").then(({ toast }) =>
+        toast.error("No se puede registrar la devolución sin motivo", {
+          description: `Falta el motivo de: ${lineasSinMotivo.join(", ")}`,
+        }),
+      );
+      return;
+    }
+    if (!puedeConfirmar) return;
     const devStr = detalleAct
       .map((d, i) => {
         const q = activa.devueltos[i] ?? 0;
@@ -7441,8 +7702,10 @@ function DevolucionesScreen({
 
                         <div className="p-4 space-y-3">
                           <div>
+                            {/* P18: el motivo es obligatorio para poder
+                                confirmar la devolución. */}
                             <label className="block text-xs font-semibold text-foreground mb-1.5">
-                              Por qué
+                              Por qué <span className="text-orange-600 dark:text-orange-400">*</span>
                             </label>
                             <div className="grid grid-cols-2 gap-1.5">
                               {MOTIVOS_DEVOLUCION.map((m) => (
@@ -7486,9 +7749,25 @@ function DevolucionesScreen({
                         <div className="px-4 pb-4">
                           <button
                             type="button"
-                            onClick={() =>
-                              setActiva((p) => (p ? { ...p, editandoMotivo: null } : p))
-                            }
+                            onClick={() => {
+                              // P18: el motivo es obligatorio. Si se pulsa
+                              // "Listo" sin elegir motivo —o sin descripción
+                              // cuando el motivo es "Otro"— no se cierra el
+                              // formulario y se avisa en español.
+                              if (!mv.motivo.trim()) {
+                                import("sonner").then(({ toast }) =>
+                                  toast.error("Debes indicar el motivo de la devolución"),
+                                );
+                                return;
+                              }
+                              if (esOtro && !mv.descripcion.trim()) {
+                                import("sonner").then(({ toast }) =>
+                                  toast.error("Escribe la descripción de la situación"),
+                                );
+                                return;
+                              }
+                              setActiva((p) => (p ? { ...p, editandoMotivo: null } : p));
+                            }}
                             className="w-full py-2.5 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                           >
                             Listo
@@ -8578,8 +8857,47 @@ export default function App() {
     ? roles.find(r => r.id === loggedInUser.rolId && r.activo) ?? null
     : null;
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
-  // AccesosMap for the logged-in user's role (empty object = no permissions)
-  const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
+  // ── Permisos multi-rol (P5) ─────────────────────────────────────────
+  // Un usuario puede tener VARIOS roles: el de la ficha de usuario (`rolId`),
+  // el de su ficha de empleado (se vincula por correo, igual que
+  // `upsertUsuario`) y —cuando la sesión es de cliente— el rol público
+  // "Cliente". Antes la sesión calculaba accesos SOLO con `user.rolId`, así
+  // que un usuario con dos roles veía únicamente los permisos del primero.
+  // Ahora se fusionan los mapas `accesos` de TODOS esos roles: unión por
+  // clave — si algún rol da "Ver"/"Crear"/etc. en un módulo, el usuario lo
+  // tiene. Un usuario de un solo rol queda igual que antes (unión trivial de
+  // un único mapa), y un rol DESACTIVADO sigue sin conceder nada: `loggedInRol`
+  // de arriba conserva el rol principal para el nombre y el atajo de admin.
+  const correoSesion = loggedInUser?.correo.trim().toLowerCase() ?? "";
+  const rolesIdsSesion: string[] = [];
+  const sumarRolSesion = (rolId?: string | null) => {
+    if (!rolId) return;
+    const rol = roles.find(r => r.id === rolId && r.activo) ?? null;
+    if (rol && !rolesIdsSesion.includes(rol.id)) rolesIdsSesion.push(rol.id);
+  };
+  sumarRolSesion(loggedInUser?.rolId);
+  // Ficha de empleado con el mismo correo: trae su propio `rolId`.
+  sumarRolSesion(
+    empleados.find(e => e.correo.trim().toLowerCase() === correoSesion)?.rolId,
+  );
+  // El rol "Cliente" se fusiona cuando forma parte de la sesión: o es el rol
+  // principal (público) o la cuenta es la legacy de cliente sin ficha en
+  // usuarios (`hasValidSession` más abajo). Así un usuario de un solo rol
+  // operativo no gana permisos de más por el solo hecho de existir el rol.
+  const esSesionCliente =
+    PUBLIC_ROLE_NAMES.includes(loggedInRol?.nombre ?? "") ||
+    (loggedInUser === null && userRole === "Cliente");
+  if (esSesionCliente) {
+    sumarRolSesion(roles.find(r => r.nombre === "Cliente" && r.activo)?.id);
+  }
+  const loggedInAccesos: AccesosMap = rolesIdsSesion.reduce<AccesosMap>((acc, id) => {
+    const mapa = roles.find(r => r.id === id)?.accesos ?? {};
+    for (const [clave, acciones] of Object.entries(mapa)) {
+      const previas = acc[clave] ?? [];
+      acc[clave] = [...previas, ...acciones.filter(a => !previas.includes(a))];
+    }
+    return acc;
+  }, {});
   // El atajo se ancla al rol SEMILLA por id, no por nombre. Así renombrar el rol
   // no altera el acceso, y ningún rol con permisos parciales puede apropiárselo
   // por llamarse "Administrador". Cualquier otro rol —incluso con acceso
@@ -8746,6 +9064,55 @@ export default function App() {
     }
   }, [ventas]);
 
+  // ── Avance automático del estado de la venta (§13) ──
+  // El estado NO se cambia a mano: sigue el proceso del pedido. Acá se
+  // resuelve el último salto, el que ningún humano debe tocar: un pedido
+  // que quedó "por entregar" (es decir, ya se verificó el pago) pasa solo
+  // a "completado" cuando se cumple la hora de recogida que eligió el
+  // cliente. Un "por-verificar" NO se autocumple: ese salto exige que el
+  // admin revise el comprobante, que es una decisión humana.
+  useEffect(() => {
+    const marcarCompletados = () => {
+      setVentas((prev) => {
+        const ahora = new Date();
+        let cambio = false;
+        const siguientes = prev.map((v) => {
+          if (v.estado !== "venta") return v;
+          const minutos = minutosDeHora(v.horaRecogida);
+          if (minutos === null) return v;
+          const horaHoy = ahora.getHours() * 60 + ahora.getMinutes();
+          const fechaVenta = new Date(`${v.fecha}T00:00:00`);
+          const mismoDia =
+            isNaN(fechaVenta.getTime()) ||
+            fechaVenta.toDateString() === ahora.toDateString();
+          // Hoy se compara contra la hora actual; una fecha anterior ya
+          // venció. Si la fecha no se pudo leer, solo se usa la hora.
+          const vencido = mismoDia ? minutos <= horaHoy : true;
+          if (!vencido) return v;
+          cambio = true;
+          return {
+            ...v,
+            estado: "completado" as VentaStatus,
+            historial: [
+              ...(v.historial ?? []),
+              {
+                estado: "completado" as VentaStatus,
+                hora: ahora.toLocaleTimeString("es-CO", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              },
+            ],
+          };
+        });
+        return cambio ? siguientes : prev;
+      });
+    };
+    marcarCompletados();
+    const id = window.setInterval(marcarCompletados, 60000);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
@@ -8754,16 +9121,26 @@ export default function App() {
     }
   }, [fichasPorProducto]);
 
-  // Creación automática de la orden de producción (§3a): cuando una venta PASA a
-  // estado "venta" —o sea, el pago quedó verificado— se le crea sola una orden
-  // tipo "Pedido" en Pendiente. Mientras la venta está "por-verificar" no se
-  // crea nada, que es justo cuando NO se prepara.
+  // Creación automática de la orden de producción (§3a / P2): cuando una venta
+  // queda en estado "venta" —o sea, el pago quedó verificado— se le crea sola
+  // una orden tipo "Pedido" en Pendiente. Mientras la venta está "por-verificar"
+  // no se crea nada, que es justo cuando NO se prepara.
+  //
+  // El filtro es por ESTADO, no por transición, así que cubre los dos flujos:
+  // - Ventas web: nacen en "por-verificar" (registrarPedido) y, al aprobarlas
+  //   en VentasScreen, pasan a "venta" → el efecto reacciona al cambio.
+  // - Ventas del admin: VentasScreen las crea directamente en "venta" (vía
+  //   setVentas) → el efecto las detecta aunque nunca "pasaron" por otro estado.
+  // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
+  // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
+  // orden por producto.
   //
   // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas
   // "verificadas" de la semilla y de lo que se cargó de localStorage, y no es un
   // cambio de estado sino el arranque. A partir de ahí, cada venta que aparece
-  // en "venta" sin orden genera la suya. Los ids se calculan FUERA del updater
-  // de setState, así que crearlas dos veces en modo estricto no duplica nada.
+  // en "venta" sin orden genera la suya. La clave anti-duplicados es `ventaId`:
+  // una venta = una sola orden, y el updater vuelve a comprobarlo contra el
+  // estado final por si acaso.
   const vigilaVentasRef = useRef(false);
   useEffect(() => {
     if (!vigilaVentasRef.current) {
@@ -8780,7 +9157,12 @@ export default function App() {
       creada.push(crearOrdenPedido(v, { productos, fichas: fichasPorProducto, insumos }, id));
       id = `OP-${String(parseInt(id.replace("OP-", ""), 10) + 1).padStart(3, "0")}`;
     }
-    setOrdenesProduccion((p) => [...creada, ...p]);
+    setOrdenesProduccion((p) => {
+      // Defensa por `ventaId`: si alguna orden del mismo ventaId ya entró en
+      // `p` (carrera rara con el buscador manual), no se vuelve a crear.
+      const yaTiene = new Set(p.map((o) => o.ventaId).filter(Boolean) as string[]);
+      return [...creada.filter((o) => !o.ventaId || !yaTiene.has(o.ventaId)), ...p];
+    });
     creada.forEach((o) =>
       toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
     );
@@ -8887,8 +9269,12 @@ export default function App() {
       namedRol?.id === "ROL-001" ||
       (namedRol?.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
     const nextRole = goPublic ? "Cliente" : (namedRol?.nombre ?? "Empleado");
+    // P9: el cliente público SIEMPRE cae en la landing. Antes iba al catálogo,
+    // y un rol público no tiene nada que hacer en el back-office: su destino es
+    // la portada. El guard de rutas admin (más abajo) expulsa igual a cualquier
+    // cliente que intente abrir una pantalla del panel.
     const nextScreen = goPublic
-      ? "catalog"
+      ? "landing"
       : loginHasDashboard
         ? "dashboard"
         : "inicio";
@@ -8948,11 +9334,24 @@ export default function App() {
     horaRecogida: string,
     clienteNombre?: string,
     clienteDocumento?: string,
+    clienteTelefono?: string,
   ): string => {
+    // ID único: se calcula contra los ids existentes (no contra el largo de
+    // la lista, que se desincroniza si se borra o se importa una venta). Se
+    // busca el sufijo numérico más alto de los "VEN-###" y se suma uno.
+    const siguienteId = () => {
+      const maximo = ventas.reduce((max, v) => {
+        const m = /^VEN-(\d+)$/.exec(v.id);
+        if (!m) return max;
+        return Math.max(max, parseInt(m[1], 10));
+      }, 0);
+      return `VEN-${String(maximo + 1).padStart(3, "0")}`;
+    };
     const newVenta: Venta = {
-      id: `VEN-${String(ventas.length + 1).padStart(3, "0")}`,
+      id: siguienteId(),
       usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
       documento: clienteDocumento?.trim() || undefined,
+      telefono: clienteTelefono?.trim() || undefined,
       fecha: new Date().toLocaleDateString("en-CA"),
       productos: items
         .map((i) => `${i.product.name} x${i.quantity}`)
@@ -9147,8 +9546,12 @@ export default function App() {
     if (screen !== "cart") setOrderConfirmation(null);
   }, [screen]);
 
-  // If a client or an invalid session somehow lands on an admin screen, send
-  // them out of the protected area.
+  // P9 — guard de rutas del panel: un cliente público (`esClientePublico`) NO
+  // es `isAdminRole`, así que si de algún modo aterriza en una pantalla del
+  // panel (`ADMIN_SCREENS`, que cubre todos los módulos del back-office) se le
+  // manda de vuelta a la landing. Lo mismo aplica a una sesión inválida. El
+  // rol "Cliente" solo da acceso al portal público (landing / catálogo /
+  // mis-pedidos), nunca al panel.
   if (
     (!hasValidSession || !isAdminRole) &&
     ADMIN_SCREENS.includes(screen)
@@ -9478,6 +9881,10 @@ export default function App() {
                   ordenesProduccion={ordenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
+                  // P17b: el descuento de stock al registrar un producto no
+                  // conforme necesita poder escribir en el inventario de
+                  // productos (sin esto el descuento es no-op).
+                  setProductos={setProductos}
                 />
               )}
               {screen === "orden-compra" && (
@@ -9586,6 +9993,11 @@ export default function App() {
                   insumos={insumos}
                   proveedores={proveedores}
                   setProveedores={setProveedores}
+                  // Control de inventario: al anular una compra hay que
+                  // devolver al stock lo que ella sumó (productos incluidos).
+                  productos={productos}
+                  setInsumos={setInsumos}
+                  setProductos={setProductos}
                   onNuevaCompra={() => navigate("nueva-compra")}
                 />
               )}
@@ -9598,6 +10010,11 @@ export default function App() {
                   proveedores={proveedores}
                   setProveedores={setProveedores}
                   insumos={insumos}
+                  productos={productos}
+                  // Al guardar, los ítems comprados suman su stock (son
+                  // opcionales: sin ellos la compra se guarda igual).
+                  setInsumos={setInsumos}
+                  setProductos={setProductos}
                   onBack={() => navigate("gestion-compra")}
                 />
               )}
@@ -9616,6 +10033,7 @@ export default function App() {
                   pedidos={ventas}
                   setPedidos={setVentas}
                   productos={PRODUCTS}
+                  clientes={clientes}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />
               )}
@@ -9823,34 +10241,10 @@ export default function App() {
           </AnimatePresence>
         </main>
 
-        {/* Admin footer (en Usuarios/Clientes/Empleados queda como fila fija, sin scroll de página) */}
-        {isAdmin && (
-          <footer
-            className={`border-t border-border bg-card mt-auto${isLockedScreen ? " shrink-0" : ""}`}
-          >
-            <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-9 w-auto object-contain shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-foreground leading-tight">
-                    La Sirena Pizza
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    S.I.V.PRO — Panel Administrativo
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground text-center">
-                © 2026 La Sirena Pizza · Medellín, Colombia ·
-                Desde 1994
-              </p>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Phone className="w-3.5 h-3.5" />
-                <span>(+57) 604 444 5555</span>
-              </div>
-            </div>
-          </footer>
-        )}
+        {/* P12: se eliminó el footer de administración ("S.I.V.PRO — Panel
+            Administrativo") para que no se muestre en ningún módulo del panel.
+            El footer público del landing no se toca. `isLockedScreen` sigue
+            vivo porque lo usa el contenedor de arriba (alto fijo del viewport). */}
 
         {/* Mobile bottom nav */}
         {!isAdmin && !isAuth && (

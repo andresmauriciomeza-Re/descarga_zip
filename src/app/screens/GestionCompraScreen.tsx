@@ -2,14 +2,15 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
-  Plus, Check, Ban, CheckCircle2, HelpCircle,
+  Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "../utils/exportExcelEstilizado";
 import { calcularLineaIva } from "../utils/iva";
 import type { Insumo } from "./GestionInsumosScreen";
-import { CompactInsumoForm, UNIDADES } from "../components/CompactInsumoForm";
-import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "../components/InsumosSolicitadosTable";
+import type { Producto } from "./GestionProductosScreen";
+import { CompactInsumoForm, type InsumoSuggestion } from "../components/CompactInsumoForm";
+import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect } from "../components/EstadoSelect";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
@@ -26,6 +27,168 @@ import {
   type EstadoOrden,
   type ProveedorRef,
 } from "./OrdenCompraScreen";
+
+// ─── CONTROL DE STOCK DE LAS COMPRAS ─────────────────────────────────────────
+
+/** Estado React de un catálogo del panel (insumos / productos). */
+type SetCatalogo<T> = React.Dispatch<React.SetStateAction<T[]>>;
+
+/** Lo mínimo que necesita el cálculo de stock de una línea de factura: lo
+ *  comparten `ItemFactura` (formulario) y `OrdenItem` (lo que queda guardado
+ *  en `GestionCompra.items`), así que la misma función sirve para aplicar y
+ *  para revertir. */
+type ItemStock = {
+  idInsumo: string;
+  nombre: string;
+  cantidad: number;
+  tipoItem?: TipoItem;
+};
+
+/**
+ * `GestionCompra` se declara en OrdenCompraScreen.tsx (archivo que este cambio
+ * no puede tocar), así que se amplía con *module augmentation*: TypeScript
+ * fusiona estos dos campos con la interfaz original en todo el proyecto sin
+ * duplicar el modelo.
+ *
+ * - `stockAplicado`: la compra ya sumó sus ítems al inventario. Marca de
+ *   control para aplicar el stock UNA sola vez (guardar/reintentar dos veces
+ *   no debe duplicar la suma).
+ * - `stockRevertido`: esa suma ya se devolvió al anular. Guard para que una
+ *   segunda anulación (o un reintentos) no reste dos veces la misma compra.
+ */
+declare module "./OrdenCompraScreen" {
+  interface GestionCompra {
+    stockAplicado?: boolean;
+    stockRevertido?: boolean;
+  }
+}
+
+interface OpcionesStock {
+  /** Catálogos ACTUALES: son los que dicen a qué ítem corresponde cada línea. */
+  insumos?: Insumo[];
+  productos?: Producto[];
+  /** Sin setters no hay forma de escribir el inventario: la compra se guarda
+   *  igual y el stock simplemente no se aplica (nadie se entera de nada roto). */
+  setInsumos?: SetCatalogo<Insumo>;
+  setProductos?: SetCatalogo<Producto>;
+}
+
+interface ResumenStock {
+  /** Unidades totales sumadas (signo +1) o restadas (signo -1). */
+  unidades: number;
+  /** Nombres de los ítems que coincidieron con un insumo/producto del catálogo. */
+  nombres: string[];
+}
+
+/** Redondeo a 3 decimales: evita el desfase binario de punto flotante
+ *  (0.1 + 0.2 = 0.30000000000000004) al acumular stock. */
+const redondear3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * Suma (signo 1) o resta (signo -1) en el inventario las cantidades de los
+ * ítems de una compra.
+ *
+ * Por qué existe: guardar una compra es el hecho que incrementa el stock de lo
+ * comprado, y anularla debe devolver el inventario al estado previo. Los updates
+ * son SIEMPRE funcionales (`prev => ...`) para no pisar estados concurrentes
+ * (otra pantalla del panel puede estar actualizando el mismo catálogo en el
+ * mismo lote de render).
+ *
+ * Devuelve `null` cuando no hay setters que tocar y, si los hay, el resumen de
+ * lo realmente aplicado (para armar el toast).
+ */
+function aplicarStockCompra(
+  items: ItemStock[],
+  signo: 1 | -1,
+  { insumos, productos, setInsumos, setProductos }: OpcionesStock
+): ResumenStock | null {
+  // Sin setters no se puede escribir el catálogo: no se rompe nada, la compra
+  // se guarda igual y aquí no se aplica stock (el llamador además decide no
+  // marcar `stockAplicado`, para que después no intente revertir algo que
+  // nunca sumó).
+  if (!setInsumos && !setProductos) return null;
+
+  // A qué catálogo pertenece cada línea. Si trae `tipoItem` (P14) el dato
+  // manda; si es una compra vieja sin tipo, decide la coincidencia de id. Las
+  // líneas de texto libre (id sintético `INS-FAC-…`) o las de un insumo ya
+  // dado de baja no coinciden con nada: quedan fuera porque no hay stock que
+  // mover en ningún catálogo.
+  const lineasInsumo: ItemStock[] = [];
+  const lineasProducto: ItemStock[] = [];
+  for (const item of items) {
+    if (!item.cantidad) continue;
+    const enInsumo = (insumos ?? []).some((i) => i.id === item.idInsumo);
+    const enProducto = (productos ?? []).some((p) => p.id === item.idInsumo);
+    if (item.tipoItem === "producto") {
+      if (enProducto) lineasProducto.push(item);
+    } else if (item.tipoItem === "insumo") {
+      if (enInsumo) lineasInsumo.push(item);
+    } else if (enInsumo) {
+      lineasInsumo.push(item);
+    } else if (enProducto) {
+      lineasProducto.push(item);
+    }
+  }
+
+  // El resumen sólo cuenta lo que SE PUEDE aplicar (catálogo + setter presente).
+  const lineasAfectadas = [
+    ...(setInsumos ? lineasInsumo : []),
+    ...(setProductos ? lineasProducto : []),
+  ];
+  if (lineasAfectadas.length === 0) return { unidades: 0, nombres: [] };
+
+  // Si la factura trae dos líneas del mismo insumo, se acumulan en una sola
+  // pasada para no depender del orden de los updates.
+  const acumular = (lineas: ItemStock[]) => {
+    const mapa = new Map<string, number>();
+    for (const l of lineas) mapa.set(l.idInsumo, (mapa.get(l.idInsumo) ?? 0) + l.cantidad);
+    return mapa;
+  };
+  const cantInsumo = acumular(lineasInsumo);
+  const cantProducto = acumular(lineasProducto);
+
+  if (setInsumos && cantInsumo.size > 0) {
+    setInsumos((prev) =>
+      prev.map((i) => {
+        const cant = cantInsumo.get(i.id);
+        if (!cant) return i;
+        const total = i.stockActual + signo * cant;
+        // Piso en 0 al restar: una anulación nunca deja el stock en negativo.
+        return { ...i, stockActual: signo < 0 ? Math.max(0, redondear3(total)) : redondear3(total) };
+      })
+    );
+  }
+
+  if (setProductos && cantProducto.size > 0) {
+    setProductos((prev) =>
+      prev.map((p) => {
+        const cant = cantProducto.get(p.id);
+        if (!cant) return p;
+        const total = p.stockDisponible + signo * cant;
+        // Mismo criterio que en insumos: redondeo a 3 decimales y mínimo 0.
+        return { ...p, stockDisponible: signo < 0 ? Math.max(0, redondear3(total)) : redondear3(total) };
+      })
+    );
+  }
+
+  return {
+    unidades: lineasAfectadas.reduce((s, l) => s + Math.abs(l.cantidad), 0),
+    nombres: [...new Set(lineasAfectadas.map((l) => l.nombre))],
+  };
+}
+
+/** Texto del toast al sumar stock: con una línea se nombra el insumo/producto
+ *  y con varias se resume (no se satura el toast con 20 nombres). */
+const textoStockActualizado = (r: ResumenStock) => {
+  if (r.nombres.length === 1) {
+    return `Stock actualizado: ${r.unidades} unidades de «${r.nombres[0]}» añadidas al inventario`;
+  }
+  const mostrados = r.nombres.slice(0, 3);
+  const resto = r.nombres.length - mostrados.length;
+  return `Stock actualizado: ${r.nombres.length} ítems añadidos al inventario (${mostrados
+    .map((n) => `«${n}»`)
+    .join(", ")}${resto > 0 ? `, +${resto} más` : ""})`;
+};
 
 const SERIF = "var(--font-titulo)";
 
@@ -75,7 +238,7 @@ const iPaginaCls =
   "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** Tooltip de la opción de IVA no elegida, bloqueada con insumos en la tabla. */
-const MSJ_IVA_BLOQUEADO = "Elimina los insumos agregados para cambiar esta opción";
+const MSJ_IVA_BLOQUEADO = "Elimina los ítems agregados para cambiar esta opción";
 
 /** Ayuda del ícono (?) junto a la pregunta del selector de precios. */
 const MSJ_IVA_AYUDA =
@@ -103,6 +266,11 @@ const OPCIONES_IVA = [
   },
 ] as const;
 
+/** P14: qué se está agregando a la factura de compra. Mismos valores que
+ *  `OrdenItem.tipoItem`, para que el dato guardado sea compatible con las
+ *  compras que nacen de una Orden de Compra. */
+type TipoItem = "insumo" | "producto";
+
 type ItemFactura = {
   rowId: string;
   idInsumo: string;
@@ -116,6 +284,8 @@ type ItemFactura = {
   /** Valores guardados de la línea (se recalculan en el backend). */
   baseSinIva?: number;
   montoIva?: number;
+  /** P14: insumo del catálogo o producto del módulo de productos. */
+  tipoItem?: TipoItem;
 };
 
 export interface NuevaCompraData {
@@ -136,10 +306,262 @@ export interface NuevaCompraData {
   totalPagado: number;
 }
 
+// ─── P14: TABLA DE ÍTEMAS DE LA FACTURA ──────────────────────────────────────
+
+/** Badge del tipo de ítem (P14): "Insumo" en gris y "Producto" en violeta,
+ *  para distinguir de un vistazo qué se está comprando en cada fila. */
+function TipoItemBadge({ tipo }: { tipo: TipoItem }) {
+  const esProducto = tipo === "producto";
+  return (
+    <span
+      className={`inline-block px-1 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${
+        esProducto
+          ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      {esProducto ? "Producto" : "Insumo"}
+    </span>
+  );
+}
+
+/**
+ * P14: tabla de los ítems agregados en la Nueva compra, con columna "Tipo".
+ *
+ * Es LOCAL y no reutiliza `InsumosSolicitadosTable` porque esa tabla es
+ * compartida con la Orden de Compra y la Recepción (que sólo manejan insumos)
+ * y no puede tocarse para mostrar el tipo de cada fila. Los cálculos son los
+ * mismos: `calcularLineaIva` con la opción de precios elegida, de modo que la
+ * suma incluye por igual insumos y productos.
+ *
+ * El lápiz NO edita en línea: carga la fila en el formulario de la izquierda
+ * (`editarItem`), que es para lo que existe ese estado.
+ */
+function TablaItemsFactura({
+  items,
+  onEdit,
+  onRemove,
+  modoIva = false,
+  ivaIncluido = true,
+  enPagina = false,
+  rowEditando = null,
+  className = "",
+}: {
+  items: ItemFactura[];
+  /** Lápiz: carga la fila en el formulario de la izquierda. */
+  onEdit: (row: ItemFactura) => void;
+  onRemove: (rowId: string) => void;
+  modoIva?: boolean;
+  ivaIncluido?: boolean;
+  /** Misma estructura que la tabla compartida: sin card ni título. */
+  enPagina?: boolean;
+  /** Fila cargada en el formulario (se resalta para saber qué se edita). */
+  rowEditando?: string | null;
+  className?: string;
+}) {
+  const linea = (row: ItemFactura) =>
+    modoIva
+      ? calcularLineaIva({
+          cantidad: row.cantidad,
+          montoUnitario: row.precioUnitario,
+          porcentajeIva: row.iva,
+          ivaIncluido,
+        })
+      : (() => {
+          const base = row.cantidad * row.precioUnitario;
+          const monto = Math.round((base * row.iva) / 100);
+          return { baseSinIva: base, montoIva: monto, subtotalConIva: base + monto };
+        })();
+
+  const totales = items.reduce(
+    (acc, row) => {
+      const l = linea(row);
+      acc.baseSinIva += l.baseSinIva;
+      acc.montoIva += l.montoIva;
+      acc.total += l.subtotalConIva;
+      return acc;
+    },
+    { baseSinIva: 0, montoIva: 0, total: 0 }
+  );
+
+  // La suma de anchos fijos (405 px) es casi la misma que la tabla que
+  // reemplaza, así que "Ítem" sigue teniendo ~95 px de sobra a 1366×768 y la
+  // tabla NO muestra scroll horizontal. La unidad va debajo de la cantidad
+  // (P14 sólo pide tipo, cantidad, precio e IVA) para no robarle ancho al nombre.
+  const headers = ["Tipo", "Ítem", "Cantidad", "Monto unitario", "IVA", "Subtotal"];
+  const ANCHOS: Record<string, number> = {
+    Tipo: 80,
+    Cantidad: 50,
+    "Monto unitario": 68,
+    IVA: 60,
+    Subtotal: 83,
+  };
+  const ANCHO_ACCIONES = 64;
+  const columnCount = headers.length + 1;
+  const td = "align-middle px-1.5 " + (enPagina ? "py-2" : "py-2.5");
+
+  return (
+    <div
+      className={
+        (enPagina
+          ? "flex flex-col flex-1 min-h-0 "
+          : "rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col ") +
+        className
+      }
+    >
+      {!enPagina && (
+        <div className="px-3 py-2 border-b border-border bg-muted/30 shrink-0">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Ítems de la factura
+          </p>
+        </div>
+      )}
+
+      <div
+        className={
+          "flex-1 min-h-0 overflow-auto " +
+          (enPagina && items.length === 0 ? "flex items-center" : "")
+        }
+      >
+        <table
+          className={
+            "table-fixed w-full min-w-[500px] text-sm " + (enPagina ? "[&_td]:py-2" : "")
+          }
+        >
+          <colgroup>
+            {headers.map((h) => (
+              <col key={h} style={{ width: ANCHOS[h] }} />
+            ))}
+            <col style={{ width: ANCHO_ACCIONES }} />
+          </colgroup>
+          <thead
+            className={
+              "text-[10px] uppercase tracking-wider " +
+              (enPagina
+                ? "sticky top-0 z-10 border-b border-border bg-muted text-muted-foreground"
+                : "bg-muted/50 text-muted-foreground")
+            }
+          >
+            <tr>
+              {headers.map((h) => (
+                <th
+                  key={h}
+                  className={
+                    "px-1.5 text-left font-semibold " +
+                    (enPagina ? "py-1.5 bg-muted" : "py-2.5")
+                  }
+                >
+                  {h}
+                </th>
+              ))}
+              <th className={"px-1.5 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-border">
+            {items.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columnCount}
+                  className="text-center text-xs text-muted-foreground px-3 py-8"
+                >
+                  {enPagina ? "Aún no has agregado ítems" : "Sin ítems agregados"}
+                </td>
+              </tr>
+            ) : (
+              items.map((row) => {
+                const l = linea(row);
+                const editandoFila = rowEditando === row.rowId;
+                return (
+                  <tr
+                    key={row.rowId}
+                    className={`hover:bg-muted/20 transition-colors ${
+                      editandoFila ? "bg-primary/5" : ""
+                    }`}
+                  >
+                    <td className={td + " text-center"}>
+                      <TipoItemBadge tipo={row.tipoItem ?? "insumo"} />
+                    </td>
+                    <td className={td + " text-sm font-medium text-foreground"}>
+                      <div className="line-clamp-2 break-words" title={row.nombre}>
+                        {row.nombre}
+                      </div>
+                    </td>
+                    <td className={td + " text-sm"}>
+                      <span className="block">{row.cantidad}</span>
+                      {/* La unidad viaja debajo: ahorra una columna completa
+                          y la fila sigue diciendo en qué medida se compró. */}
+                      <span className="block text-[10px] leading-tight text-muted-foreground">
+                        {row.unidad}
+                      </span>
+                    </td>
+                    <td className={td + " text-sm whitespace-nowrap"}>
+                      {fmtCOP(row.precioUnitario)}
+                    </td>
+                    <td className={td + " text-xs text-muted-foreground"}>
+                      <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                        {fmtCOP(l.montoIva)}
+                      </p>
+                    </td>
+                    <td className={td + " text-sm font-semibold whitespace-nowrap"}>
+                      {fmtCOP(l.subtotalConIva)}
+                    </td>
+                    <td className={td + " whitespace-nowrap"}>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(row)}
+                          title="Editar ítem"
+                          className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(row.rowId)}
+                          title="Eliminar ítem"
+                          className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 shrink-0 px-3 py-2 border-t border-border">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            {modoIva ? "Subtotal sin IVA" : "Subtotal"}
+          </span>
+          <span className="text-sm font-semibold text-foreground">
+            {fmtCOP(totales.baseSinIva)}
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            IVA
+          </span>
+          <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.montoIva)}</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Total pagado
+          </span>
+          <span className="text-lg font-bold text-foreground">{fmtCOP(totales.total)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CompraForm({
   proveedores,
   setProveedores,
   insumos,
+  productos,
   gestiones,
   mode = "create",
   compra,
@@ -151,6 +573,9 @@ function CompraForm({
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  /** P14: catálogo de productos del módulo de Productos: son la otra mitad
+   *  del selector "Tipo de ítem" de la Nueva compra. */
+  productos?: Producto[];
   /** Gestiones de compra existentes para validar factura única. */
   gestiones: GestionCompra[];
   mode?: "create" | "view";
@@ -203,10 +628,15 @@ function CompraForm({
 
   const [itemNombre, setItemNombre] = useState("");
   const [itemCantidad, setItemCantidad] = useState(1);
-  const [itemUnidad, setItemUnidad] = useState(UNIDADES[0]);
+  // P11: la Medida ya no se elige a mano en la compra, así que el valor por
+  // defecto es "und" y al guardar se toma SIEMPRE la unidad del insumo o del
+  // producto seleccionado (ver `unidadElegida`).
+  const [itemUnidad, setItemUnidad] = useState("und");
   const [itemPrecio, setItemPrecio] = useState(0);
   const [itemIva, setItemIva] = useState(0);
   const [itemId, setItemId] = useState("");
+  // P14: qué se está agregando, insumo del catálogo o producto del módulo.
+  const [itemTipo, setItemTipo] = useState<TipoItem>("insumo");
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   /** Input de Nombre: recupera el foco tras agregar o actualizar una fila. */
@@ -276,6 +706,11 @@ function CompraForm({
   const totalPagado = lineasIva.reduce((s, l) => s + l.subtotalConIva, 0);
   const total = subtotalSinIva + totalIva;
 
+  // P14: reparto por tipo de ítem, para el contador de la cabecera de la
+  // tabla ("5 ítems · 3 insumos · 2 productos").
+  const nProductos = items.filter((i) => (i.tipoItem ?? "insumo") === "producto").length;
+  const nInsumos = items.length - nProductos;
+
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
@@ -290,7 +725,7 @@ function CompraForm({
     : "Ingresa el número de factura.";
   const errorFechaFactura = fechaFactura ? undefined : "Selecciona la fecha de la factura.";
   // El proveedor es opcional en este formulario.
-  const errorItems = items.length > 0 ? undefined : "Agrega al menos un insumo a la factura.";
+  const errorItems = items.length > 0 ? undefined : "Agrega al menos un ítem a la factura.";
 
   const algunoTocado = tocado.numeroFactura || tocado.fechaFactura;
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
@@ -327,13 +762,30 @@ function CompraForm({
     return base.slice(0, 3);
   }, [proveedores, provQuery]);
 
-  const itemSugs = useMemo(() => {
+  const itemSugs = useMemo<InsumoSuggestion[]>(() => {
+    const q = itemNombre.trim().toLowerCase();
+
+    // P14: el buscador mira un catálogo u otro según el tipo de ítem elegido.
+    if (itemTipo === "producto") {
+      // Mismo criterio que con los insumos: sólo productos disponibles.
+      const base = (productos ?? []).filter((p) => p.estado === "Disponible");
+      const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
+      // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
+      // calcular) se usa el precio de venta como monto de referencia.
+      return filtrados.slice(0, 3).map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        unidadMedida: p.unidadVenta || "und",
+        costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
+      }));
+    }
+
     // Filtrar solo por tipo "Insumo" y estado "activo"
     const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
     // Si el campo está vacío, mostrar los primeros 3 insumos disponibles
-    if (itemNombre.trim().length === 0) return soloInsumos.slice(0, 3);
-    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(itemNombre.toLowerCase())).slice(0, 3);
-  }, [insumos, itemNombre]);
+    if (!q) return soloInsumos.slice(0, 3);
+    return soloInsumos.filter((i) => i.nombre.toLowerCase().includes(q)).slice(0, 3);
+  }, [insumos, productos, itemNombre, itemTipo]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -389,10 +841,35 @@ function CompraForm({
     // semillas, por eso el Monto unitario quedaba en 0.
     setItemId(ins.id);
     setItemNombre(ins.nombre);
-    setItemUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
+    // P11: la unidad es la del insumo (no hay select de Medida en la compra);
+    // si viniera vacía se guarda "und" para no dejar la fila en blanco.
+    setItemUnidad(ins.unidadMedida?.trim() || "und");
     setItemPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
     setItemIva(Number(ins.iva ?? 0));
     setItemSugAbierto(false);
+  };
+
+  /** P14: catálogo de productos. Igual que con el insumo, se copian nombre,
+   *  unidad de venta y monto; el producto no tiene IVA propio, así que la
+   *  línea queda en 0 % y el usuario puede ajustarlo en el formulario. */
+  const seleccionarProducto = (p: Producto) => {
+    setItemId(p.id);
+    setItemNombre(p.nombre);
+    setItemUnidad(p.unidadVenta?.trim() || "und");
+    setItemPrecio(Number(p.costoUnitario || p.precioUnitario || 0));
+    setItemIva(0);
+    setItemSugAbierto(false);
+  };
+
+  /** P11: unidad que se guarda en la fila. SIEMPRE la del catálogo del ítem
+   *  seleccionado (insumo o producto); sólo si no hay nada seleccionado se
+   *  cae en lo que tenga el campo o en "und". */
+  const unidadElegida = () => {
+    const delCatalogo =
+      itemTipo === "producto"
+        ? productos?.find((p) => p.id === itemId)?.unidadVenta
+        : insumos.find((i) => i.id === itemId)?.unidadMedida;
+    return delCatalogo?.trim() || itemUnidad.trim() || "und";
   };
 
   const agregarItem = () => {
@@ -409,32 +886,37 @@ function CompraForm({
     // el formulario listo para el siguiente insumo.
     if (editando) {
       if (!itemNombre.trim()) {
-        toast.error("Ingresa el nombre del insumo.");
+        toast.error("Ingresa el nombre del ítem.");
         return;
       }
       if (
         items.some(
           (item) =>
             item.rowId !== editando &&
+            (item.tipoItem ?? "insumo") === itemTipo &&
             item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()
         )
       ) {
-        toast.error("Este insumo ya fue agregado a la factura.");
+        toast.error("Este ítem ya fue agregado a la factura.");
         return;
       }
       actualizarItem(editando, {
         nombre: itemNombre.trim(),
         cantidad: itemCantidad,
-        unidad: itemUnidad,
+        // P11: la unidad vuelve a salir del catálogo, nunca de un select.
+        unidad: unidadElegida(),
         precioUnitario: itemPrecio,
         iva: itemIva,
+        tipoItem: itemTipo,
+        // El ítem puede haber cambiado de catálogo (insumo ↔ producto).
+        idInsumo: itemId,
       });
       limpiarFilaInsumo();
       return;
     }
 
     if (!itemNombre.trim()) {
-      toast.error("Ingresa el nombre del insumo.");
+      toast.error("Ingresa el nombre del ítem.");
       return;
     }
     if (itemCantidad <= 0) {
@@ -445,8 +927,14 @@ function CompraForm({
       toast.error("El precio unitario no puede ser negativo.");
       return;
     }
-    if (items.some((item) => item.nombre.toLowerCase() === itemNombre.trim().toLowerCase())) {
-      toast.error("Este insumo ya fue agregado a la factura.");
+    if (
+      items.some(
+        (item) =>
+          (item.tipoItem ?? "insumo") === itemTipo &&
+          item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()
+      )
+    ) {
+      toast.error("Este ítem ya fue agregado a la factura.");
       return;
     }
 
@@ -456,11 +944,14 @@ function CompraForm({
         rowId: `fact-${Date.now()}`,
         idInsumo: itemId || `INS-FAC-${Date.now()}`,
         nombre: itemNombre.trim(),
-        unidad: itemUnidad,
+        // P11: unidad del insumo/producto seleccionado, o "und".
+        unidad: unidadElegida(),
         cantidad: itemCantidad,
         costoUnitario: itemPrecio,
         precioUnitario: itemPrecio,
         iva: itemIva,
+        // P14: se guarda el tipo para poder mostrarlo en el detalle.
+        tipoItem: itemTipo,
       },
     ]);
 
@@ -468,10 +959,13 @@ function CompraForm({
   };
 
   /** Deja la fila "Agregar insumo" lista para el siguiente insumo: campos en
-   *  cero y foco de vuelta en el buscador de Nombre. */
+   *  cero y foco de vuelta en el buscador de Nombre.
+   *  P11: la unidad vuelve a "und"; el TIPO se conserva para poder agregar
+   *  varios productos seguidos sin volver a elegirlo. */
   const limpiarFilaInsumo = () => {
     setItemNombre("");
     setItemCantidad(1);
+    setItemUnidad("und");
     setItemPrecio(0);
     setItemIva(0);
     setItemId("");
@@ -480,14 +974,18 @@ function CompraForm({
     nombreRef.current?.focus();
   };
 
-  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda. */
-  const editarItem = (row: InsumoSolicitadoRow) => {
+  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda.
+   *  P14: también el tipo, para que el buscador siga mirando el catálogo
+   *  correcto mientras se edita. */
+  const editarItem = (row: ItemFactura) => {
     setEditando(row.rowId);
     setItemNombre(row.nombre);
     setItemCantidad(row.cantidad);
     setItemUnidad(row.unidad);
     setItemPrecio(row.precioUnitario);
     setItemIva(row.iva);
+    setItemId(row.idInsumo.startsWith("INS-FAC-") ? "" : row.idInsumo);
+    setItemTipo(row.tipoItem ?? "insumo");
     setItemSugAbierto(false);
     nombreRef.current?.focus();
   };
@@ -533,7 +1031,7 @@ function CompraForm({
     }
     // El proveedor es opcional: si se escribió, se usa; si no, queda vacío.
     if (items.length === 0) {
-      toast.error("Agrega al menos un insumo recibido.");
+      toast.error("Agrega al menos un ítem a la factura.");
       return;
     }
     if (total <= 0) {
@@ -996,15 +1494,15 @@ function CompraForm({
               )}
               </section>
 
-              {/* Sección 2 — "Agregar insumo": fila con buscador, stepper y
+              {/* Sección 2 — "Agregar ítem": fila con buscador, stepper y
                   botón en una sola línea. En pantalla completa es el ÚLTIMO
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {isPage && <p className={seccionCls}>Agregar insumo</p>}
+                  {isPage && <p className={seccionCls}>Agregar ítem</p>}
                   <CompactInsumoForm
                     containerRef={itemRef}
-                    titulo={isPage ? "" : "Agregar insumo"}
+                    titulo={isPage ? "" : "Agregar ítem"}
                     nombre={itemNombre}
                     onNombreChange={(value) => {
                       setItemNombre(value);
@@ -1024,7 +1522,16 @@ function CompraForm({
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
-                    onSelectSuggestion={(suggestion) => seleccionarInsumo(suggestion as Insumo)}
+                    onSelectSuggestion={(suggestion) => {
+                      if (itemTipo === "producto") {
+                        const p = (productos ?? []).find((x) => x.id === suggestion.id);
+                        // Guarda por si el catálogo cambió mientras estaba
+                        // abierto el desplegable.
+                        if (p) seleccionarProducto(p);
+                        return;
+                      }
+                      seleccionarInsumo(suggestion as Insumo);
+                    }}
                     onCrearInsumo={() => {
                       // Al abrir el modal se cierra el desplegable de
                       // sugerencias: si queda abierto quedaría por encima del
@@ -1035,6 +1542,49 @@ function CompraForm({
                     compacto={isPage}
                     buttonLabel={editando ? "Actualizar" : "Agregar"}
                     variante="compacta"
+                    // P11: la unidad sale del ítem seleccionado, no se elige.
+                    ocultarMedida
+                    // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
+                    ocultarCrearInsumo={itemTipo === "producto"}
+                    placeholder={
+                      itemTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
+                    }
+                    // P14: selector de tipo de ítem en el hueco de Medida.
+                    campoExtra={
+                      <div className="w-[118px]">
+                        <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                          Tipo de ítem
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={itemTipo}
+                            onChange={(e) => {
+                              const nuevo = e.target.value as TipoItem;
+                              if (nuevo === itemTipo) return;
+                              setItemTipo(nuevo);
+                              // Al cambiar de catálogo el ítem cargado ya no
+                              // sirve: se limpia la fila y el buscador empieza
+                              // a mirar la otra lista.
+                              limpiarFilaInsumo();
+                            }}
+                            disabled={ivaIncluido === null}
+                            aria-label="Tipo de ítem"
+                            className="w-full h-9 pl-2.5 pr-7 bg-muted border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 appearance-none cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="insumo">Insumo</option>
+                            <option value="producto">Producto</option>
+                          </select>
+                          {/* El select va "appearance-none": sin esta flecha
+                              no se ve que es desplegable. */}
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] leading-none text-muted-foreground"
+                          >
+                            ▼
+                          </span>
+                        </div>
+                      </div>
+                    }
                   />
                   {/* Aviso de insumos/total: en pantalla completa va justo
                       debajo de la fila (solo empuja la tabla al aparecer); en
@@ -1063,10 +1613,16 @@ function CompraForm({
                   <div className="shrink-0">
                     <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
                       <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
-                        Insumos agregados
+                        Ítems de la factura
                       </p>
+                      {/* P14: el contador desglosa por tipo para que se vea
+                          de insumos y de cuántos productos se trata. */}
                       <span className="text-xs font-medium text-muted-foreground">
-                        {items.length} {items.length === 1 ? "insumo" : "insumos"}
+                        {items.length} {items.length === 1 ? "ítem" : "ítems"}
+                        {nProductos > 0 &&
+                          ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${
+                            nProductos === 1 ? "producto" : "productos"
+                          }`}
                       </span>
                     </div>
                     {ivaIncluido !== null && (
@@ -1138,15 +1694,18 @@ function CompraForm({
                   </div>
                 </div>
               ) : (
-                <InsumosSolicitadosTable
+                // P14: tabla propia con la columna "Tipo": muestra insumos y
+                // productos con cantidad, monto e IVA, y suma LOS DOS con la
+                // misma fórmula (`calcularLineaIva`), así el total de la
+                // factura nunca se queda corto.
+                <TablaItemsFactura
                   items={items}
-                  showActions
+                  onEdit={editarItem}
                   onRemove={eliminarItem}
-                  onUpdate={actualizarItem}
-                  totalLabel="Total pagado"
                   modoIva
                   ivaIncluido={ivaIncluido ?? true}
                   enPagina={isPage}
+                  rowEditando={editando}
                   className={isPage ? "flex-1 min-h-0" : ""}
                 />
               )}
@@ -1256,6 +1815,13 @@ interface NuevaCompraPageProps {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  /** P14: catálogo de productos para poder facturar productos en la compra. */
+  productos?: Producto[];
+  /** Control de inventario al guardar la compra. Opcionales: sin ellos la
+   *  compra se guarda igual y simplemente no se suma el stock (ver
+   *  `handleGuardar`). */
+  setInsumos?: SetCatalogo<Insumo>;
+  setProductos?: SetCatalogo<Producto>;
   onBack: () => void;
 }
 
@@ -1265,6 +1831,9 @@ export function NuevaCompraPage({
   proveedores,
   setProveedores,
   insumos,
+  productos,
+  setInsumos,
+  setProductos,
   onBack,
 }: NuevaCompraPageProps) {
   const handleGuardar = (data: NuevaCompraData) => {
@@ -1290,8 +1859,35 @@ export function NuevaCompraPage({
       totalPagado: data.totalPagado,
     };
 
+    // Compra guardada ⇒ suma el stock de lo comprado. Los updates son
+    // funcionales (dentro de `aplicarStockCompra`) para no pisar estados
+    // concurrentes del panel.
+    const resumen = aplicarStockCompra(data.items, 1, {
+      insumos,
+      productos,
+      setInsumos,
+      setProductos,
+    });
+
+    // `stockAplicado` sólo se marca si de verdad se sumó algo: así una compra
+    // creada sin setters (contexto sin control de inventario) no queda
+    // registrada como "stock aplicado" y su anulación no resta de más.
+    // Si la pantalla algún día admite EDITAR una compra existente, aquí habrá
+    // que hacer el mismo camino que la anulación: restar primero la cantidad
+    // PREVIA de `compra.items` (si `compra.stockAplicado`) y recién después
+    // sumar la nueva, dejando `stockAplicado: true`. Hoy no existe ese flujo:
+    // `CompraForm` sólo se usa en "create" (crear) y en "view" (detalle de
+    // solo lectura), y `editarItem` edita una fila ANTES de guardar, cuando
+    // todavía no se tocó el inventario.
+    if (resumen && resumen.nombres.length > 0) {
+      nueva.stockAplicado = true;
+    }
+
     setGestiones((prev) => [nueva, ...prev]);
     toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
+    if (resumen && resumen.nombres.length > 0) {
+      toast.info(textoStockActualizado(resumen));
+    }
     onBack();
   };
 
@@ -1302,6 +1898,7 @@ export function NuevaCompraPage({
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}
+      productos={productos}
       gestiones={gestiones}
       onClose={onBack}
       onGuardar={handleGuardar}
@@ -1317,8 +1914,15 @@ interface Props {
   ordenes: OrdenCompra[];
   setOrdenes: React.Dispatch<React.SetStateAction<OrdenCompra[]>>;
   insumos: Insumo[];
+  /** Catálogo de productos: necesario para devolver el stock de las líneas
+   *  marcadas como "producto" al anular una compra. */
+  productos?: Producto[];
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
+  /** Control de inventario al anular. Opcionales: sin ellos la anulación
+   *  sólo cambia el estado y NO se revierte stock (no se rompe nada). */
+  setInsumos?: SetCatalogo<Insumo>;
+  setProductos?: SetCatalogo<Producto>;
   onNuevaCompra: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
@@ -1327,7 +1931,8 @@ interface Props {
 }
 
 export function GestionCompraScreen({
-  gestiones, setGestiones, ordenes, setOrdenes, insumos, proveedores, setProveedores,
+  gestiones, setGestiones, ordenes, setOrdenes, insumos, productos, proveedores, setProveedores,
+  setInsumos, setProductos,
   onNuevaCompra,
   canCreate = true,
   canExportExcel = true,
@@ -1399,6 +2004,33 @@ export function GestionCompraScreen({
   };
 
   const handleCambiarEstado = (id: string, next: EstadoGestion, motivo?: string) => {
+    const compra = gestiones.find((g) => g.id === id);
+
+    // ANULACIÓN: hay que devolver al inventario lo que esta compra sumó, para
+    // que el stock vuelva al estado previo. Sólo se hace si llegó a sumarlo
+    // (`stockAplicado`) y todavía no se revirtió (`stockRevertido`): así una
+    // compra creada por otro flujo (la Recepción suma por su propio camino) o
+    // una ya anulada no descuadra el stock restando dos veces.
+    const correspondeRevertir =
+      next === "Anulado" &&
+      !!compra?.stockAplicado &&
+      !compra?.stockRevertido &&
+      compra.estado !== "Anulado";
+
+    // Se calcula ANTES de tocar `gestiones` porque los items a revertir salen
+    // de la versión previa de la compra. Si no hay setters (pantalla montada
+    // sin control de inventario) devuelve `null` y no se marca `stockRevertido`,
+    // de modo que un intento posterior con setters sí pueda revertir.
+    let revertido: ResumenStock | null = null;
+    if (correspondeRevertir && compra) {
+      revertido = aplicarStockCompra(compra.items ?? [], -1, {
+        insumos,
+        productos,
+        setInsumos,
+        setProductos,
+      });
+    }
+
     // Solo se actualiza el estado de la Compra puntual (por su ID).
     // Punto 6: al anular se guarda el motivo (obligatorio en el formulario) y
     // la fecha/hora exacta en la que ocurrió; en los demás cambios se limpian.
@@ -1407,9 +2039,18 @@ export function GestionCompraScreen({
       estado: next,
       motivoAnulacion: next === "Anulado" ? motivo : undefined,
       fechaAnulacion: next === "Anulado" ? new Date().toISOString() : undefined,
+      // Guard anti doble-reversión: queda en true sólo si de verdad se restó
+      // (o si ya no quedaba nada que restar).
+      stockRevertido: correspondeRevertir && revertido ? true : x.stockRevertido,
     } : x)));
     setEstadoConfirm(null);
     setMotivoAnulacion("");
+
+    // Va ANTES del bloque de la orden (que hace `return`): el aviso del stock
+    // tiene que verse siempre que se revierta, haya o no orden asociada.
+    if (revertido && revertido.nombres.length > 0) {
+      toast.info("Stock revertido por anulación de la compra");
+    }
 
     // Caso 2 — Orden de Compra con SOLO una Compra asociada:
     // Al anular esa única Compra, la Orden de Compra asociada también pasa a Anulado.
@@ -1546,7 +2187,7 @@ export function GestionCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-3 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📦</p>
                       <p className="font-medium">No hay gestiones de compra aún</p>
                       <p className="text-xs mt-1">
@@ -1586,7 +2227,7 @@ export function GestionCompraScreen({
                         <p className="text-sm text-foreground break-words" title={nombreMostrar}>{nombreMostrar}</p>
                         {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                       </td>
-                      <td className="px-4 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
+                      <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0
                           ? fmtCOP(g.valorTotal)
                           : <span className="text-muted-foreground font-normal">—</span>}

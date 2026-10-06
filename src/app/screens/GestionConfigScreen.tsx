@@ -10,6 +10,7 @@ import {
 } from "../components/EstadoSelect";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
+import { validarNombre } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -334,6 +335,31 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const [moduloResumen, setModuloResumen] = useState<string | null>(null);
   const [errors,     setErrors]     = useState<{ nombre?: string; modulos?: string }>({});
 
+  // ── P3 — Validación en tiempo real del nombre del rol ──────────────────
+  // Se deriva del valor mientras se escribe (no al enviar), igual que en los
+  // demás módulos: formato razonable con `validarNombre` (letras y espacios)
+  // y duplicado case-insensitive contra `roles`, excluyendo el rol que se
+  // está editando (`rolId`). El campo vacío sin tocar no muestra error: el
+  // envío (handleSave) sigue siendo la red de seguridad para ese caso.
+  const nombreTrim = nombre.trim();
+  const nombreDuplicado = nombreTrim.length > 0 && roles.some(r =>
+    r.id !== rolId && r.nombre.trim().toLowerCase() === nombreTrim.toLowerCase()
+  );
+  const nombreErrorTiempoReal =
+    !nombreTrim
+      ? undefined
+      : validarNombre(nombreTrim)
+        ? "Usa solo letras y espacios, sin espacios dobles"
+        : nombreDuplicado
+          ? "Este rol ya existe"
+          : undefined;
+  // Lo que se pinta bajo el campo: el error en tiempo real manda; si no hay,
+  // el que quedó del último intento de guardar.
+  const nombreError = nombreErrorTiempoReal ?? errors.nombre;
+  // P3: el botón queda bloqueado mientras el nombre sea inválido (incluido el
+  // duplicado "Este rol ya existe"); nunca sin explicación visible.
+  const guardarNombreBloqueado = !!nombreErrorTiempoReal || !!errors.modulos;
+
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
   const isSubOn = (m: string, s: string) => {
@@ -403,7 +429,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     if (!nombre.trim()) errs.nombre = "El nombre del rol es obligatorio";
     else if (roles.some(r =>
       r.nombre.trim().toLowerCase() === nombre.trim().toLowerCase() && r.id !== rolId
-    )) errs.nombre = "Ya existe un rol con este nombre";
+    )) errs.nombre = "Este rol ya existe";
     if (selectedSubs.length === 0) errs.modulos = "Selecciona al menos un módulo o sub-opción";
     if (Object.keys(errs).length) { setErrors(errs); return; }
     onSave(nombre.trim(), desc.trim(), activo, accesos);
@@ -532,10 +558,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
                 <input value={nombre}
+                  // P3: se limpia el error del envío al escribir; el error en
+                  // tiempo real (formato/duplicado) se deriva arriba y se
+                  // pinta debajo del campo mientras el usuario teclea.
                   onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(p => ({ ...p, nombre: undefined })); }}
                   placeholder="Ej: Cajero"
-                  className={`${iCls} ${errors.nombre ? "!border-red-400 !bg-red-50/30" : ""}`} />
-                {errors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{errors.nombre}</p>}
+                  className={`${iCls} ${nombreError ? "!border-red-400 !bg-red-50/30" : ""}`} />
+                {nombreError && <p className="text-xs text-red-500 mt-1 leading-tight">{nombreError}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>
@@ -726,7 +755,12 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-3 border-t border-border shrink-0">
           <button onClick={onClose} className="px-5 py-2 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-          <button onClick={handleSave} className="px-6 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">Guardar rol</button>
+          <button onClick={handleSave}
+            // P3: bloqueado mientras el nombre sea inválido o duplicado
+            // ("Este rol ya existe"), o falte elegir módulos tras un intento.
+            disabled={guardarNombreBloqueado}
+            title={guardarNombreBloqueado ? "Corrige el nombre del rol para guardarlo" : undefined}
+            className={`px-6 py-2 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${guardarNombreBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>Guardar rol</button>
         </div>
       </motion.div>
     </div>
@@ -793,9 +827,28 @@ export function GestionConfigScreen({
     return Object.entries(full).every(([k, acts]) => (accs[k]?.length ?? 0) > 0 && acts.every(a => accs[k]?.includes(a)));
   };
 
+  /**
+   * Regla del usuario: un rol ASIGNADO a usuarios no se puede editar ni
+   * eliminar; si se quiere editar, primero hay que DESACTIVARLO.
+   * Por eso el botón de editar queda deshabilitado solo cuando el rol tiene
+   * usuarios Y sigue activo: con el rol inactivo sí se edita (con usuarios o
+   * sin ellos), y el cambio de estado nunca se bloquea porque es justamente el
+   * camino para poder editarlo después. Eliminar sigue bloqueado siempre que
+   * haya usuarios (eso lo decide `handleDelete`).
+   */
+  const edicionBloqueada = (r: Rol) => (rolUserCounts[r.id] ?? 0) > 0 && r.activo;
+
   const saveRol = (id: string | null, nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
     if (id) {
       const r = roles.find(x => x.id === id);
+      // Guard defensivo: el lápiz de la lista y el botón del detalle ya vienen
+      // deshabilitados con este mismo criterio, pero si el modal se abriera por
+      // otra ruta (o el rol se reactivara mientras está abierto) no se guarda
+      // una edición sobre un rol ACTIVO con usuarios asignados.
+      if (r && r.activo && (rolUserCounts[id] ?? 0) > 0) {
+        toast.error("Este rol está asignado a usuarios; desactívalo para editarlo");
+        return;
+      }
       if (r && rolEsTotal(r) && (!activo || !accesosEsTotal(accesos)) && ultimoTotalCubiertoPor(id)) {
         toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
         return;
@@ -929,10 +982,21 @@ export function GestionConfigScreen({
                       onEdit={
                         r.id === loggedInRolId
                           ? () => {}
-                          : canEdit ? () => setEditItem(r) : undefined
+                          : canEdit
+                            // Rol activo con usuarios: el lápiz queda dibujado
+                            // pero deshabilitado (hay que desactivarlo para
+                            // poder editarlo); sin permiso no se pinta.
+                            ? (edicionBloqueada(r) ? () => {} : () => setEditItem(r))
+                            : undefined
                       }
-                      editDisabled={r.id === loggedInRolId}
-                      editTitle={r.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Editar"}
+                      editDisabled={r.id === loggedInRolId || edicionBloqueada(r)}
+                      editTitle={
+                        r.id === loggedInRolId
+                          ? "No puedes modificar tu propio rol"
+                          : edicionBloqueada(r)
+                            ? "Desactiva el rol para editarlo"
+                            : "Editar"
+                      }
                       onDelete={
                         r.id === loggedInRolId
                           ? () => {}
@@ -1046,18 +1110,22 @@ export function GestionConfigScreen({
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
-                {canEdit && detailItem.id !== loggedInRolId && (
+                {canEdit && detailItem.id !== loggedInRolId && !edicionBloqueada(detailItem) && (
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
                 </button>
                 )}
-                {detailItem.id === loggedInRolId && (
-                  <button disabled title="No puedes modificar tu propio rol"
+                {/* Segunda ruta al modal de edición: se bloquea con el MISMO
+                    criterio que el lápiz de la tabla (rol propio o rol activo
+                    con usuarios, que hay que desactivar para editarlo). */}
+                {detailItem.id === loggedInRolId || (canEdit && edicionBloqueada(detailItem)) ? (
+                  <button disabled
+                    title={detailItem.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Desactiva el rol para editarlo"}
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
                     Editar rol
                   </button>
-                )}
+                ) : null}
                 <button onClick={() => setDetailItem(null)}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                   Cerrar

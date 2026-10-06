@@ -95,6 +95,12 @@ export interface CategoriaProducto {
    * de producto.
    */
   estado?: EstadoCategoria;
+  /**
+   * Texto libre para explicar qué agrupa la categoría (P17a). OPCIONAL y sin
+   * validación: solo el nombre es obligatorio. No lo llevan las categorías
+   * creadas antes de existir el campo.
+   */
+  descripcion?: string;
 }
 
 export type EstadoCategoria = "Activo" | "Inactivo";
@@ -221,6 +227,9 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
   const [formIcono, setFormIcono] = useState("");
+  // Descripción del Crear (P17a): opcional y sin validación, así que vive en
+  // su propio estado y se guarda tal cual (sin más reglas que trim()).
+  const [formDescripcion, setFormDescripcion] = useState("");
   const [grupoIconoSeleccionado, setGrupoIconoSeleccionado] = useState(0);
   // Grupo activo del selector de ícono del modal Editar. Es propio y
   // no reutiliza `grupoIconoSeleccionado` del Crear, para que los
@@ -308,11 +317,19 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     const newId = `CAT-${String(nextNum).padStart(3, "0")}`;
     setCategorias((p) => [
       ...p,
-      { id: newId, nombre: formNombre.trim(), icono: formIcono, estado: formEstado },
+      {
+        id: newId,
+        nombre: formNombre.trim(),
+        icono: formIcono,
+        estado: formEstado,
+        // Opcional (P17a): vacío = sin descripción, no se guarda ruido.
+        descripcion: formDescripcion.trim() || undefined,
+      },
     ]);
     setShowCreate(false);
     setFormNombre("");
     setFormIcono("");
+    setFormDescripcion("");
     setFormEstado("Activo");
     toast.success("Categoría creada correctamente");
   };
@@ -329,12 +346,16 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       if (Object.keys(errs).length) return;
     }
     const estado = editItem.estado ?? "Activo";
+    // La descripción se guarda en las dos ramas: es un dato nuevo (P17a), así
+    // que es editable también en las originales, cuyo bloqueo sigue siendo
+    // solo de nombre e ícono.
+    const descripcion = editItem.descripcion?.trim() || undefined;
     setCategorias((p) =>
       p.map((x) =>
         x.id === editItem.id
           ? esFija
-            ? { ...x, estado }
-            : { ...x, nombre: editItem.nombre.trim(), icono: editItem.icono, estado }
+            ? { ...x, estado, descripcion }
+            : { ...x, nombre: editItem.nombre.trim(), icono: editItem.icono, estado, descripcion }
           : x,
       ),
     );
@@ -368,6 +389,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             onClick={() => {
               setFormNombre("");
               setFormIcono("");
+              setFormDescripcion("");
               setFormEstado("Activo");
               setCreateErrors({});
               setShowCreate(true);
@@ -390,17 +412,21 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+            {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
+                text-xs en mayúsculas, celdas px-4 py-2.5 con texto text-sm y
+                filas de 61 px, idénticas a las de Gestión de Producto. */}
+            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {[
                   "ID",
                   "Nombre Categoría",
+                  "Descripción",
                   "Estado",
                   "Acciones",
                 ].map((h) => (
                   <th
                     key={h}
-                    className="px-3 py-2 text-left font-semibold whitespace-nowrap"
+                    className="px-4 py-2 text-left font-semibold whitespace-nowrap"
                   >
                     {h}
                   </th>
@@ -411,8 +437,8 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
-                    className="px-3 py-8 text-center text-muted-foreground"
+                    colSpan={5}
+                    className="px-4 py-14 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">🏷️</p>
                     <p>No se encontraron categorías</p>
@@ -422,9 +448,9 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                 paged.map((c) => (
                   <tr
                     key={c.id}
-                    className="hover:bg-muted/20 transition-colors"
+                    className="hover:bg-muted/20 transition-colors h-[61px]"
                   >
-                    <td className="px-3 py-2 text-xs font-mono font-semibold text-foreground">
+                    <td className="px-4 py-2.5 text-sm font-mono font-semibold text-foreground">
                       {/* Solo el número: de "CAT-005" muestra "005". El dato
                           `c.id` NO cambia (lo usan CATEGORIAS_FIJAS,
                           ICONOS_FIJOS, borrar/editar y el idCategoria de los
@@ -432,7 +458,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                           `c.id` completo. */}
                       {c.id.replace("CAT-", "")}
                     </td>
-                    <td className="px-3 py-2 text-xs font-medium text-foreground">
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         {iconoDe(c) && (
                           <span aria-hidden="true">{iconoDe(c)}</span>
@@ -440,7 +466,22 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                         {c.nombre}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground">
+                      {/* Descripción (P17a): campo OPCIONAL, así que sin dato
+                          (undefined o en blanco) se muestra un guion en gris
+                          en vez de una celda vacía. El ancho queda acotado y el
+                          texto va en una sola línea con elipsis —el completo se
+                          ve en el tooltip— para que una descripción larga no se
+                          lleve todo el ancho de la tabla ni rompa las filas de
+                          61 px; el resto del ancho lo toma la columna Nombre. */}
+                      <span
+                        className="block max-w-[240px] truncate"
+                        title={c.descripcion?.trim() || undefined}
+                      >
+                        {c.descripcion?.trim() ? c.descripcion : "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
                       {/* Pill de estado (diseño de Proveedores). Elegir la opción
                           contraria pide confirmación, igual que en Gestión de
                           Producto; sin permiso de edición queda la pill sola. */}
@@ -459,7 +500,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                         options={OPCIONES_ESTADO_CATEGORIA}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <ActionIcons
                         onView={() => setDetailItem(c)}
                         onEdit={
@@ -544,29 +585,9 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             confirmLabel="Crear"
           >
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  ID Categoría
-                </label>
-                <div
-                  className={
-                    inputCls +
-                    " bg-muted/60 text-muted-foreground cursor-not-allowed font-mono"
-                  }
-                >
-                  CAT-
-                  {String(
-                    categorias.reduce((max, c) => {
-                      const n = parseInt(c.id.replace("CAT-", ""), 10) || 0;
-                      return Math.max(max, n);
-                    }, 0) + 1,
-                  ).padStart(
-                    3,
-                    "0",
-                  )}{" "}
-                  (automático)
-                </div>
-              </div>
+              {/* Sin campo ID (P17a): el id lo asigna el sistema solo y ya se
+                  ve en el listado y en Ver detalle; en el formulario solo
+                  estorbaba. */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -600,6 +621,20 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     options={OPCIONES_ESTADO_CATEGORIA}
                   />
                 </div>
+              </div>
+              {/* Descripción (P17a): OPCIONAL y sin validación — la única
+                  regla del formulario sigue siendo el nombre. */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Descripción <span className="font-normal">(opcional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={formDescripcion}
+                  onChange={(e) => setFormDescripcion(e.target.value)}
+                  placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
+                  className={inputCls + " resize-y"}
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -654,25 +689,14 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       <AnimatePresence>
         {editItem && (
           <SmModal
-            title={`Editar — ${editItem.id}`}
+            // Sin el ID en el título ni en el formulario (P17a): el código
+            // se ve en el listado y en Ver detalle; aquí basta el nombre.
+            title={`Editar — ${editItem.nombre}`}
             onClose={() => setEditItem(null)}
             onConfirm={handleEdit}
             confirmLabel="Guardar"
           >
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  ID Categoría
-                </label>
-                <div
-                  className={
-                    inputCls +
-                    " bg-muted/60 text-muted-foreground cursor-not-allowed font-mono"
-                  }
-                >
-                  {editItem.id}
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -723,6 +747,23 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     options={OPCIONES_ESTADO_CATEGORIA}
                   />
                 </div>
+              </div>
+              {/* Descripción (P17a): OPCIONAL y sin validación. Se edita
+                  también en las categorías originales: su bloqueo es de nombre
+                  e ícono, no de este dato nuevo. */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Descripción <span className="font-normal">(opcional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={editItem.descripcion ?? ""}
+                  onChange={(e) =>
+                    setEditItem((x) => (x ? { ...x, descripcion: e.target.value } : x))
+                  }
+                  placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
+                  className={inputCls + " resize-y"}
+                />
               </div>
               {!CATEGORIAS_FIJAS.has(editItem.id) && (
                 <div>
@@ -811,6 +852,12 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                   {
                     label: "Nombre Categoría",
                     value: detailItem.nombre,
+                  },
+                  {
+                    label: "Descripción",
+                    // Opcional (P17a): sin dato se muestra un guion, nunca un
+                    // campo vacío ni el ID.
+                    value: detailItem.descripcion || "—",
                   },
                   {
                     label: "Estado",

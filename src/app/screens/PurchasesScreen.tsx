@@ -653,7 +653,7 @@ export function PurchasesScreen() {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-3 text-left font-semibold whitespace-nowrap"
+                    className="px-3 py-3 text-left font-semibold whitespace-nowrap"
                   >
                     {h}
                   </th>
@@ -665,7 +665,7 @@ export function PurchasesScreen() {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-4 py-14 text-center text-muted-foreground"
+                    className="px-3 py-14 text-center text-muted-foreground"
                   >
                     <p className="text-4xl mb-3">📭</p>
                     <p>No se encontraron compras</p>
@@ -677,10 +677,10 @@ export function PurchasesScreen() {
                     key={p.id}
                     className="hover:bg-muted/20 transition-colors"
                   >
-                    <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
+                    <td className="px-3 py-3.5 text-sm font-mono font-semibold text-foreground">
                       {p.id}
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-foreground">
+                    <td className="px-3 py-3.5 text-sm text-foreground">
                       <p className="font-medium">
                         {INITIAL_SUPPLIERS.find(
                           (s) => s.id === p.idProveedor,
@@ -690,28 +690,28 @@ export function PurchasesScreen() {
                         {nitDeProveedor(p.idProveedor)}
                       </p>
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">
+                    <td className="px-3 py-3.5 text-sm text-muted-foreground">
                       {p.fecha}
                     </td>
                     <td
-                      className="px-4 py-3.5 text-sm text-foreground"
+                      className="px-3 py-3.5 text-sm text-foreground"
                       style={{ fontFamily: MONO }}
                     >
                       {fmtCOP(p.iva)}
                     </td>
                     <td
-                      className="px-4 py-3.5 text-sm text-foreground"
+                      className="px-3 py-3.5 text-sm text-foreground"
                       style={{ fontFamily: MONO }}
                     >
                       {fmtCOP(p.subtotal)}
                     </td>
                     <td
-                      className="px-4 py-3.5 text-sm font-bold text-foreground"
+                      className="px-3 py-3.5 text-sm font-bold text-foreground"
                       style={{ fontFamily: MONO }}
                     >
                       {fmtCOP(p.total)}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-3.5">
                       {/* Pill de estado con las mismas transiciones del
                           select nativo que había; anulada queda sin menú. */}
                       <EstadoSelect
@@ -735,7 +735,7 @@ export function PurchasesScreen() {
                         disabled={p.estado === "anulado"}
                       />
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-3 py-3.5">
                       <ActionIcons
                         onView={() => setDetailItem(p)}
                         onEdit={() => abrirEdicion(p)}
