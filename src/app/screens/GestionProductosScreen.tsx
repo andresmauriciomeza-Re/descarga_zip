@@ -13,6 +13,8 @@ import {
   Trash2,
   AlertCircle,
   Check,
+  // Icono del indicador de imágenes múltiples del listado (P13).
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { InsumoSearchField, resolverInsumo } from "../components/InsumoSearchField";
@@ -70,7 +72,16 @@ const ESTADO_PRODUCTO_CLASES: Record<EstadoProducto, string> = {
 
 export interface Producto {
   id: string;
+  /** Imagen "portada": la que leen el menú público, las tarjetas, el carrito
+      y Ver detalle. Se mantiene SIEMPRE sincronizada con la PRIMERA posición
+      de `imagenes` (ver `sincronizarImagenes`), así el resto de la app que
+      todavía usa el campo único no se rompe. */
   imagen: string;
+  /** Imágenes múltiples del producto (P13). Opcional a propósito: los
+      productos de semilla y los guardados en localStorage viejos solo traen
+      `imagen`, y `imagenesDe` los convierte en lista sin tocar el dato. El
+      límite es MAX_IMAGENES (4). */
+  imagenes?: string[];
   nombre: string;
   idCategoria: string;
   tipo: TipoProducto;
@@ -87,6 +98,33 @@ export interface Producto {
   stockDisponible: number;
   estado: EstadoProducto;
 }
+
+/** Límite de imágenes por producto (P13): se eligió 4 (se valoraron 3 y 4)
+    porque con cuatro cabe en una cuadrícula de 2×2 en Ver detalle y de 4 en
+    una fila en Crear/Editar, sin alargar el formulario ni la columna. */
+export const MAX_IMAGENES = 4;
+
+/** Imágenes de un producto como ARREGLO siempre: usa `imagenes` si existe;
+    si no, la única `imagen` (dato viejo o de semilla). Es lo que pintan el
+    indicador del listado y los formularios de Crear/Editar. */
+export const imagenesDe = (p: { imagen: string; imagenes?: string[] }): string[] => {
+  const lista = (p.imagenes ?? []).filter((s) => typeof s === "string" && s.trim() !== "");
+  if (lista.length > 0) return lista;
+  return p.imagen && p.imagen.trim() !== "" ? [p.imagen] : [];
+};
+
+/** Normaliza las imágenes al GUARDAR: quita vacías, respeta MAX_IMAGENES y
+    sincroniza `imagen` = primera imagen. Ese es el contrato de compatibilidad
+    del modelo nuevo con el campo único: el menú público y las tarjetas siguen
+    leyendo `imagen` y ven la portada (la primera de la lista). */
+export const sincronizarImagenes = <
+  T extends { imagen: string; imagenes?: string[] },
+>(
+  p: T,
+): T => {
+  const lista = imagenesDe(p).slice(0, MAX_IMAGENES);
+  return { ...p, imagenes: lista, imagen: lista[0] ?? "" };
+};
 
 const CATEGORIAS_PRODUCTO = [
   { id: "CAT-001", nombre: "Pizzas" },
@@ -712,6 +750,161 @@ function FichaReadOnly({ v, readCls }: { v: FichaVersion; readCls: string }) {
   );
 }
 
+/**
+ * Campo de imágenes múltiples del producto (P13): lista de miniaturas con
+ * vista previa y botón de quitar en cada una, más el alta de una en una con
+ * "Agregar imagen" (por archivo o pegando una URL). El límite es
+ * MAX_IMAGENES (4): al llegar a él los controles de agregar quedan
+ * deshabilitados. La primera posición es la portada que ven el menú y las
+ * tarjetas, por eso lleva la etiqueta "Principal".
+ * En solo lectura (Ver detalle) solo pinta las miniaturas.
+ */
+function CampoImagenes({
+  imagenes,
+  onChange,
+  readOnly = false,
+  inputCls,
+  alto = "h-40",
+}: {
+  imagenes: string[];
+  onChange: (imgs: string[]) => void;
+  readOnly?: boolean;
+  /** Clase del input de URL (la del formulario que lo usa: Crear usa iCls y
+      FormFields usa inputCls). */
+  inputCls: string;
+  /** Alto de la vista previa grande: 40 px en Editar/Ver detalle y 32 px en
+      Crear (mismo alto que traía la foto única de antes). */
+  alto?: string;
+}) {
+  // URL pendiente de agregar. Estado propio para no tener que escribir en el
+  // producto mientras se teclea (antes el input escribía `imagen` en vivo).
+  const [url, setUrl] = useState("");
+  const completa = imagenes.length >= MAX_IMAGENES;
+
+  const agregar = (valor: string) => {
+    const v = valor.trim();
+    if (!v) return;
+    if (completa) {
+      toast.error(`Un producto admite máximo ${MAX_IMAGENES} imágenes`);
+      return;
+    }
+    onChange([...imagenes, v]);
+    setUrl("");
+  };
+
+  // Solo lectura (Ver detalle): sin etiquetas ni controles, solo las fotos.
+  if (readOnly) {
+    if (imagenes.length === 0) return null;
+    if (imagenes.length === 1) {
+      return (
+        <div className={`relative w-full ${alto} rounded-xl overflow-hidden bg-muted border border-border`}>
+          <img src={imagenes[0]} alt="Vista previa" className="w-full h-full object-cover" />
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        {imagenes.map((src, idx) => (
+          <div key={`${src}-${idx}`} className={`relative w-full ${alto} rounded-xl overflow-hidden bg-muted border border-border`}>
+            <img src={src} alt={`Imagen ${idx + 1}`} className="w-full h-full object-cover" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Miniaturas: cada una se quita con su X. */}
+      {imagenes.length > 0 && (
+        <div className="grid grid-cols-4 gap-2 mb-2">
+          {imagenes.map((src, idx) => (
+            <div
+              key={`${src}-${idx}`}
+              className="relative h-24 rounded-xl overflow-hidden bg-muted border border-border"
+            >
+              <img src={src} alt={`Imagen ${idx + 1}`} className="w-full h-full object-cover" />
+              {idx === 0 && (
+                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] font-semibold text-white">
+                  Principal
+                </span>
+              )}
+              <button
+                type="button"
+                title="Quitar imagen"
+                onClick={() => onChange(imagenes.filter((_, i) => i !== idx))}
+                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Alta de una imagen: archivo o URL, siempre con "Agregar imagen". */}
+      <div className="flex gap-2 mb-1">
+        <label
+          className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+            completa ? "opacity-50 pointer-events-none" : ""
+          }`}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Subir archivo
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Se limpia el input para que volver a subir el mismo archivo
+              // dispare onChange (si no, el valor no cambia y no hay evento).
+              e.target.value = "";
+              if (file) agregar(URL.createObjectURL(file));
+            }}
+          />
+        </label>
+        <span className="flex items-center text-xs text-muted-foreground">o</span>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && agregar(url)}
+          placeholder="Pega una URL de imagen..."
+          className={`flex-1 min-w-0 ${inputCls}`}
+        />
+        <button
+          type="button"
+          onClick={() => agregar(url)}
+          disabled={completa || !url.trim()}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+        >
+          <Plus className="w-3.5 h-3.5" /> Agregar imagen
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {imagenes.length}/{MAX_IMAGENES} imágenes · la primera es la portada del menú
+      </p>
+    </div>
+  );
+}
+
+/** Indicador de cuántas imágenes tiene un producto, en la segunda línea de la
+    columna Nombre del listado (P13). Va debajo del nombre (y no a su lado)
+    para no ensanchar la columna ni recortar el nombre. Sin imágenes no se
+    pinta nada, para dejar intactas las filas de los productos de antes. */
+function BadgeImagenes({ p }: { p: Producto }) {
+  const n = imagenesDe(p).length;
+  if (n === 0) return null;
+  return (
+    <span
+      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
+      title={`${n} ${n === 1 ? "imagen" : "imágenes"} del producto · la primera es la portada`}
+    >
+      <ImageIcon className="w-3 h-3" />
+      {n} {n === 1 ? "imagen" : "imágenes"}
+    </span>
+  );
+}
+
 export function GestionProductosScreen({
   productos,
   setProductos,
@@ -764,6 +957,8 @@ export function GestionProductosScreen({
 
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
+    // Lista vacía: las imágenes se agregan una a una con CampoImagenes.
+    imagenes: [],
     nombre: "",
     idCategoria: "",
     tipo: TIPOS_PRODUCTO[0],
@@ -991,7 +1186,9 @@ export function GestionProductosScreen({
 
   // ── Edit-ficha helpers (todo escribe sobre el borrador) ──────────
   const openEdit = (p: Producto) => {
-    setEditItem({ ...p });
+    // Materializa la lista de imágenes: los productos viejos solo traen
+    // `imagen`, y el editor siempre debe trabajar sobre un arreglo.
+    setEditItem({ ...p, imagenes: imagenesDe(p) });
     const guardadas = (fichas[p.id] ?? []).map(copiarFicha);
     setEditFichaVersiones(guardadas);
     // El borrador arranca como copia de la última versión guardada; si el
@@ -1178,7 +1375,9 @@ export function GestionProductosScreen({
         [newId]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, productos)), fechaInicio: new Date().toISOString(), fechaFin: null }],
       }));
     }
-    setProductos((p) => [{ id: newId, ...form }, ...p]);
+    // Sincroniza imágenes antes de guardar: `imagenes` queda completa y
+    // `imagen` = primera, para no romper al resto de la app (P13).
+    setProductos((p) => [sincronizarImagenes({ id: newId, ...form }), ...p]);
     setShowCreate(false);
     setForm(emptyForm());
     resetFichaForm();
@@ -1207,7 +1406,8 @@ export function GestionProductosScreen({
       return;
     }
     setProductos((p) =>
-      p.map((x) => (x.id === editItem.id ? editItem : x)),
+      // Mismo sincronismo de imágenes que al crear: portada = primera foto.
+      p.map((x) => (x.id === editItem.id ? sincronizarImagenes(editItem) : x)),
     );
     // Un solo "Guardar" para producto y ficha: si el borrador cambió frente a
     // la última versión guardada, se cierra esa versión (fechaFin = ahora) y
@@ -1269,12 +1469,16 @@ export function GestionProductosScreen({
     hideUnidad = false,
     readOnly = false,
     lockNombre = false,
+    onImagenes,
   }: {
     values: Omit<Producto, "id">;
     onChange: (f: keyof Omit<Producto, "id">, v: string | number) => void;
     hideUnidad?: boolean;
     readOnly?: boolean;
     lockNombre?: boolean;
+    /** Escribe la lista completa de imágenes (P13). Va aparte de `onChange`
+        porque ese solo admite string | number. En Ver detalle no llega. */
+    onImagenes?: (imgs: string[]) => void;
   }) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       {/* Nombre */}
@@ -1312,53 +1516,22 @@ export function GestionProductosScreen({
           <EstadoBadge estado={values.estado} />
         </div>
       </div>
-      {/* Imagen. En Ver detalle (solo lectura) la etiqueta no se muestra: la
-          foto ya es evidente y el requisito de ese diseño separa la imagen
-          (fija, 160 px) de la cuadrícula de datos. */}
+      {/* Imágenes múltiples del producto (P13): hasta MAX_IMAGENES (4), con
+          vista previa y quitar por cada una. En Ver detalle (solo lectura) la
+          etiqueta no se muestra: la foto ya es evidente y el requisito de ese
+          diseño separa la imagen (fija, 160 px) de la cuadrícula de datos. */}
       <div className="sm:col-span-2">
         {!readOnly && (
           <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-            Imagen del producto
+            Imágenes del producto
           </label>
         )}
-        {!readOnly && (
-          <div className="flex gap-2 mb-2">
-            <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-              Subir archivo
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onChange("imagen", URL.createObjectURL(file));
-                }}
-              />
-            </label>
-            <span className="flex items-center text-xs text-muted-foreground">o</span>
-            <input
-              value={values.imagen.startsWith("blob:") ? "" : values.imagen}
-              onChange={(e) => onChange("imagen", e.target.value)}
-              placeholder="Pega una URL de imagen..."
-              className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-        )}
-        {values.imagen && (
-          <div className="relative w-full h-40 rounded-xl overflow-hidden bg-muted border border-border">
-            <img src={values.imagen} alt="Vista previa" className="w-full h-full object-cover" />
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => onChange("imagen", "")}
-                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+        <CampoImagenes
+          imagenes={imagenesDe(values)}
+          onChange={(imgs) => onImagenes?.(imgs)}
+          readOnly={readOnly}
+          inputCls={inputCls}
+        />
       </div>
       {/* Categoría (se muestra solo el nombre; el id queda interno) */}
       <div>
@@ -1569,32 +1742,16 @@ export function GestionProductosScreen({
                 <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
                   placeholder="Ej: Margarita Clásica" className={iCls} />
               </div>
-              {/* Imagen */}
+              {/* Imágenes del producto (P13): hasta MAX_IMAGENES (4); la
+                  primera es la portada que ven el menú y las tarjetas. */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Imagen del producto</label>
-                <div className="flex gap-2 mb-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                    <Plus className="w-3.5 h-3.5" /> Subir archivo
-                    <input type="file" accept="image/*" className="hidden" onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) setForm(p => ({ ...p, imagen: URL.createObjectURL(file) }));
-                    }} />
-                  </label>
-                  <span className="flex items-center text-xs text-muted-foreground">o</span>
-                  <input value={form.imagen.startsWith("blob:") ? "" : form.imagen}
-                    onChange={e => setForm(p => ({ ...p, imagen: e.target.value }))}
-                    placeholder="Pega una URL de imagen..."
-                    className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </div>
-                {form.imagen && (
-                  <div className="relative w-full h-32 rounded-xl overflow-hidden bg-muted border border-border">
-                    <img src={form.imagen} alt="Vista previa" className="w-full h-full object-cover" />
-                    <button type="button" onClick={() => setForm(p => ({ ...p, imagen: "" }))}
-                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Imágenes del producto</label>
+                <CampoImagenes
+                  imagenes={imagenesDe(form)}
+                  onChange={imgs => setForm(p => ({ ...p, imagenes: imgs, imagen: imgs[0] ?? "" }))}
+                  inputCls={iCls}
+                  alto="h-32"
+                />
               </div>
               {/* Categoría (se muestra solo el nombre; el id queda interno) */}
               <div>
@@ -2043,6 +2200,9 @@ export function GestionProductosScreen({
             {FormFields({
               values: editItem,
               onChange: (f, v) => setEditItem((x) => x && { ...x, [f]: v }),
+              // Escribe la lista completa y re-sincroniza la portada al tocarla.
+              onImagenes: (imgs) =>
+                setEditItem((x) => x && { ...x, imagenes: imgs, imagen: imgs[0] ?? "" }),
               lockNombre: true,
             })}
             </div>
@@ -2394,8 +2554,12 @@ export function GestionProductosScreen({
                         Solo cambia la presentación; `p.id` sigue siendo el
                         identificador interno (Excel, detalle, edición y
                         borrado lo siguen usando tal cual). */}
-                    <td className="px-4 py-2.5 text-sm font-medium text-foreground truncate" title={p.nombre}>
-                      {p.nombre}
+                    <td className="px-4 py-2.5 text-sm font-medium text-foreground" title={p.nombre}>
+                      {/* Nombre y, debajo, el indicador de imágenes múltiples
+                          (P13): "3 imágenes". Va en su propia línea para no
+                          robarle ancho al nombre de la columna fija. */}
+                      <span className="block truncate">{p.nombre}</span>
+                      <BadgeImagenes p={p} />
                     </td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p))}`}>

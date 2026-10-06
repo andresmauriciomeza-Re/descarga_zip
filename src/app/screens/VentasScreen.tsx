@@ -162,6 +162,8 @@ export interface Venta {
   metodoPago?: string;
   comprobante?: string;
   horaRecogida?: string;
+  /** Teléfono del cliente si lo dejó en el formulario de datos del checkout. */
+  telefono?: string;
   historial?: HistorialEntry[];
   devolucionTipo?: DevolucionTipo;
   devolucionResuelta?: boolean;
@@ -429,6 +431,7 @@ export function VentasScreen({
   setPedidos,
   productos,
   onGestionarDevolucion,
+  clientes = [],
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
   canExportExcel = true,
@@ -438,6 +441,9 @@ export function VentasScreen({
   productos: ProductoMenu[];
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
+  /** Clientes registrados en el panel. Se usan para buscar el documento en
+      tiempo real al crear un pedido (§12). */
+  clientes?: { nombre: string; numeroDocumento: string }[];
   canCreate?: boolean;
   canEdit?: boolean;
   canExportExcel?: boolean;
@@ -448,11 +454,6 @@ export function VentasScreen({
     null,
   );
   const [montoRecibido, setMontoRecibido] = useState("");
-  const [confirmEstadoV, setConfirmEstadoV] = useState<{
-    id: string;
-    current: VentaStatus;
-    next: VentaStatus;
-  } | null>(null);
   const [confirmAccionV, setConfirmAccionV] = useState<{
     id: string;
     accion: "anular" | "devolucion";
@@ -470,18 +471,6 @@ export function VentasScreen({
       estado actual y la que se muestra a la derecha de la columna Estado. */
   const horaEstado = (p: Venta) =>
     p.historial?.[p.historial.length - 1]?.hora ?? "—";
-
-  const applyEstadoVenta = (id: string, next: VentaStatus) => {
-    const entry: HistorialEntry = { estado: next, hora: nowHora() };
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? { ...x, estado: next, historial: [...(x.historial ?? []), entry] }
-          : x,
-      ),
-    );
-    toast.success(`Estado cambiado a: ${VENTA_STATUS_LABEL[next]}`);
-  };
 
   /** Anular una venta: el pedido queda en el estado "anulado" y deja de contar
       como venta, sin tocar el módulo de devoluciones. */
@@ -600,6 +589,23 @@ export function VentasScreen({
     "Andrés Castillo",
   ];
 
+  // Índice de documentos conocidos: clientes del panel y ventas previas que
+  // tengan documento. Alimenta la búsqueda en tiempo real del modal "Nuevo
+  // pedido" (§12): mientras el admin escribe, se va filtrando contra estos
+  // documentos y, si coincide exacto, se trae el nombre del cliente.
+  const DOCUMENTOS_CONOCIDOS = useMemo(() => {
+    const mapa = new Map<string, string>();
+    clientes.forEach((c) => {
+      const doc = (c.numeroDocumento ?? "").trim();
+      if (doc && !mapa.has(doc)) mapa.set(doc, c.nombre);
+    });
+    pedidos.forEach((p) => {
+      const doc = (p.documento ?? "").trim();
+      if (doc && !mapa.has(doc)) mapa.set(doc, p.usuario);
+    });
+    return mapa;
+  }, [clientes, pedidos]);
+
   // Interfaz para productos seleccionados en el picker
   interface ProductoSeleccionado {
     id: number;
@@ -628,6 +634,55 @@ export function VentasScreen({
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
+
+    // ── Búsqueda de documento en tiempo real (§12) ──
+    // Mientras el admin escribe el documento, se va filtrando contra los
+    // documentos conocidos (clientes del panel y ventas previas). Si hay una
+    // coincidencia EXACTA, se trae sola el nombre del cliente y se marca el
+    // campo como encontrado. Si no hay ninguna coincidencia exacta, se avisa
+    // y el documento queda como uno nuevo.
+    const [docSugerencias, setDocSugerencias] = useState<
+      { documento: string; nombre: string }[]
+    >([]);
+    const [docExacto, setDocExacto] = useState<string | null>(null);
+    const [docTocado, setDocTocado] = useState(false);
+    /** Último nombre que se trajo solo al coincidir el documento. Sirve para
+        no pisar el nombre que el admin escribió a mano. */
+    const [nombreTraido, setNombreTraido] = useState<string | null>(null);
+
+    const buscarDocumento = (valor: string) => {
+      const doc = valor.trim();
+      setDocTocado(doc.length > 0);
+      if (doc.length < 2) {
+        setDocSugerencias([]);
+        setDocExacto(null);
+        setNombreTraido(null);
+        return;
+      }
+      const coincidencias = [...DOCUMENTOS_CONOCIDOS.entries()]
+        .filter(([d]) => d.includes(doc))
+        .slice(0, 6)
+        .map(([documento, nombre]) => ({ documento, nombre }));
+      setDocSugerencias(coincidencias);
+      const exacto = DOCUMENTOS_CONOCIDOS.get(doc) ?? null;
+      setDocExacto(exacto);
+      // Coincidió el documento EXACTO: se trae el nombre solo si el campo está
+      // vacío o si el nombre actual era el que se había traído antes (así no
+      // se pisa lo que el admin escribió a mano para otro cliente).
+      if (exacto) {
+        const puedeTraer =
+          !usuario.trim() ||
+          !nombreTraido ||
+          usuario.trim() === nombreTraido;
+        if (puedeTraer) {
+          setUsuario(exacto);
+          setUQuery(exacto);
+        }
+        setNombreTraido(exacto);
+      } else {
+        setNombreTraido(null);
+      }
+    };
 
     // Autocomplete state
     const [uQuery, setUQuery] = useState("");
@@ -802,19 +857,70 @@ export function VentasScreen({
           <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 flex-1 min-h-0 overflow-y-auto">
           {/* ── Izquierda: datos del pedido ── */}
           <div className="space-y-4">
-            {/* Documento del cliente */}
-            <div>
+            {/* Documento del cliente — búsqueda en tiempo real */}
+            <div className="relative">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Documento del cliente *
               </label>
               <input
                 value={documento}
-                onChange={(e) => setDocumento(e.target.value)}
-                placeholder="CC o cédula"
+                onChange={(e) => {
+                  const valor = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setDocumento(valor);
+                  buscarDocumento(valor);
+                }}
+                onFocus={() => {
+                  if (documento.trim().length >= 2) buscarDocumento(documento);
+                }}
+                onBlur={() => setTimeout(() => setDocSugerencias([]), 150)}
+                placeholder="Escribe el documento…"
                 inputMode="numeric"
                 className={iCls}
                 autoComplete="off"
               />
+              {/* Coincidencias parciales: se muestran mientras se escribe */}
+              {docSugerencias.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                  {docSugerencias.map((s) => (
+                    <button
+                      key={s.documento}
+                      type="button"
+                      onMouseDown={() => {
+                        setDocumento(s.documento);
+                        setDocExacto(s.nombre);
+                        setUsuario(s.nombre);
+                        setUQuery(s.nombre);
+                        setNombreTraido(s.nombre);
+                        setDocSugerencias([]);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer border-b border-border last:border-0 flex items-center gap-2"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground shrink-0">
+                        {s.documento}
+                      </span>
+                      <span className="truncate">{s.nombre}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Estado de la búsqueda: exacto / parcial / nuevo */}
+              {docTocado && documento.length >= 2 && (
+                <p
+                  className={`text-xs mt-1 font-medium flex items-center gap-1 ${
+                    docExacto
+                      ? "text-emerald-600"
+                      : docSugerencias.length > 0
+                        ? "text-amber-600"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {docExacto
+                    ? `✓ Cliente encontrado: ${docExacto}`
+                    : docSugerencias.length > 0
+                      ? `Coincidencias: ${docSugerencias.length} — sigue escribiendo para el exacto`
+                      : "Documento no registrado — se creará un cliente nuevo"}
+                </p>
+              )}
             </div>
 
             {/* Usuario con autocomplete */}
@@ -1346,31 +1452,20 @@ export function VentasScreen({
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {/* Pill de estado (diseño de Proveedores). Las anuladas
-                          y devoluciones quedan en pill sin menú: se llega a
-                          ellas con sus botones de acción, no eligiéndolas. */}
+                      {/* Pill de estado SOLO LECTURA. El estado no se cambia a
+                          mano desde la tabla: avanza solo con el proceso del
+                          pedido (web → por verificar → por entregar →
+                          completado cuando pasa la hora de recogida; pedido
+                          del admin → por entregar desde el inicio). Se deja
+                          el pill para visualizarlo, pero sin menú ni acción. */}
                       <EstadoSelect
                         value={p.estado}
-                        onChange={(next) => {
-                          if (next === p.estado) return;
-                          setConfirmEstadoV({
-                            id: p.id,
-                            current: p.estado,
-                            next,
-                          });
-                        }}
-                        options={(
-                          VENTA_STATUS_SELECCIONABLES.includes(p.estado)
-                            ? VENTA_STATUS_SELECCIONABLES
-                            : [p.estado, ...VENTA_STATUS_SELECCIONABLES]
-                        ).map((s) => ({
-                          value: s,
-                          label: VENTA_STATUS_LABEL[s],
-                          color: VENTA_STATUS_COLOR[s],
-                        }))}
-                        disabled={
-                          p.estado === "anulado" || p.estado === "perdida"
-                        }
+                        options={[{
+                          value: p.estado,
+                          label: VENTA_STATUS_LABEL[p.estado],
+                          color: VENTA_STATUS_COLOR[p.estado],
+                        }]}
+                        disabled
                       />
                     </td>
                     <td
@@ -1740,24 +1835,6 @@ export function VentasScreen({
               setShowCreate(false);
               toast.success(`Pedido #${newId} creado correctamente`);
             }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Confirmar cambio de estado ── */}
-      <AnimatePresence>
-        {confirmEstadoV && (
-          <ConfirmModal
-            title="Cambiar estado"
-            message={`¿Estás seguro de cambiar el estado de "${VENTA_STATUS_LABEL[confirmEstadoV.current]}" a "${VENTA_STATUS_LABEL[confirmEstadoV.next]}"?`}
-            onConfirm={() => {
-              applyEstadoVenta(
-                confirmEstadoV.id,
-                confirmEstadoV.next,
-              );
-              setConfirmEstadoV(null);
-            }}
-            onCancel={() => setConfirmEstadoV(null)}
           />
         )}
       </AnimatePresence>

@@ -6,7 +6,7 @@ import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "../components
 import { EstadoSelect, type EstadoOption } from "../components/EstadoSelect";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { EstadoHistorialTooltip } from "../components/EstadoHistorialTooltip";
-import { useProveedorForm, soloLetras, siguienteProveedorId } from "../components/useProveedorForm";
+import { useProveedorForm, soloLetras, siguienteProveedorId, type TipoPersona } from "../components/useProveedorForm";
 import { ProveedorFormCampos } from "../components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
@@ -45,6 +45,10 @@ export interface OrdenItem {
   montoIva?: number;
   /** true = insumo agregado en recepción (no venía en la OC original) */
   esNoSolicitado?: boolean;
+  /** P14: qué es el ítem de la factura: insumo del catálogo o producto del
+   *  módulo de productos. Opcional para no romper las órdenes/compras ya
+   *  guardadas (se leen como insumo). */
+  tipoItem?: "insumo" | "producto";
 }
 
 export interface ItemRecibido {
@@ -116,18 +120,22 @@ export interface ProveedorRef {
   email: string;
   direccion: string;
   estado: "activo" | "inactivo";
+  /** Punto 12: opcional para no romper los registros heredados (semillas y
+   *  datos guardados antes del campo); el alta siempre lo trae. "" = sin
+   *  elegir todavía (solo posible en el formulario, nunca en lo guardado). */
+  tipoPersona?: TipoPersona | "";
 }
 
 export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { id: "1", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
-  { id: "2", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { id: "3", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
-  { id: "4", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
-  { id: "5", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo" },
-  { id: "6", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo" },
-  { id: "7", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo" },
-  { id: "8", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo" },
-  { id: "9", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo" },
+  { id: "1", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "2", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "3", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "4", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "5", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo", tipoPersona: "Persona Natural" },
+  { id: "6", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "7", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "8", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
+  { id: "9", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Natural" },
 ];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
@@ -530,6 +538,8 @@ export function NuevoProveedorModal({
       asesorComercial: "",
       direccion: "",
       estado: "activo",
+      // Punto 12: arranca vacío para que el formulario exija elegirlo.
+      tipoPersona: "",
     },
     existentes,
   );
@@ -551,6 +561,9 @@ export function NuevoProveedorModal({
       asesorComercial: form.values.asesorComercial.trim(),
       direccion: form.values.direccion.trim(),
       estado: form.values.estado,
+      // Punto 12: el valor llega tal cual del select (obligatorio: sin él
+      // `formValido` es false y este `onGuardar` no se ejecuta).
+      tipoPersona: form.values.tipoPersona,
     });
   };
 
@@ -2358,7 +2371,7 @@ export function OrdenCompraScreen({
               {paged.length === 0
                 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-3 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">📋</p>
                       <p className="font-medium">No se encontraron órdenes</p>
                     </td>
@@ -2379,8 +2392,8 @@ export function OrdenCompraScreen({
                           <p className="text-sm text-foreground">{o.proveedor}</p>
                           {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
                         </td>
-                        <td className="px-3 py-3.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
-                      <td className="px-3 py-3.5 text-xs">
+                        <td className="px-3 py-3.5 text-sm text-muted-foreground whitespace-nowrap">{o.fecha}</td>
+                      <td className="px-3 py-3.5 text-sm">
                         {facturas.length > 0 ? (
                           <>
                             {facturas.map((f) => (
@@ -2428,7 +2441,8 @@ export function OrdenCompraScreen({
                           </button>
                         </EstadoHistorialTooltip>
                       </td>
-                      <td className="px-4 py-3.5">
+                      {/* P16: padding idéntico al resto de celdas del listado */}
+                      <td className="px-3 py-3.5">
                         <div className="flex items-center gap-1 flex-wrap">
                           <button
                             onClick={() => onVerDetalle(o)}
@@ -2470,6 +2484,9 @@ export function OrdenCompraScreen({
             </tbody>
           </table>
         </div>
+      </div>
+      {/* P15: el paginador queda FUERA de la card para que no herede su
+          fondo/borde y se alinee con el resto de la pantalla. */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center shrink-0">
           <div className="flex items-center gap-1">
@@ -2499,7 +2516,6 @@ export function OrdenCompraScreen({
           </div>
         </div>
       )}
-      </div>
 
       <AnimatePresence>
         {modal && (

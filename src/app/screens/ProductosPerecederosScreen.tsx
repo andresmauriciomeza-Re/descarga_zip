@@ -261,7 +261,7 @@ function downloadXLSX(data: NoConformidad[]) {
 
 function EstadoBadge({ e }: { e: EstadoNC }) {
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
+    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
       {e}
     </span>
   );
@@ -274,7 +274,7 @@ function TipoBadge({ tipo }: { tipo: Tipo }) {
     Venta:    "bg-red-100 text-red-700",
   };
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cfg[tipo]}`}>
+    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${cfg[tipo]}`}>
       {tipo}
     </span>
   );
@@ -288,6 +288,12 @@ interface Props {
   ventasPerdidas: VentaPerdida[];
   insumos: Insumo[];
   productos: Producto[];
+  /**
+   * Escritor del catálogo de productos que vive en App (P17b). Opcional para
+   * no romper el render actual: mientras App no lo pase, registrar la
+   * no conformidad funciona igual y solo falta el movimiento de stock.
+   */
+  setProductos?: React.Dispatch<React.SetStateAction<Producto[]>>;
   ordenesProduccion: OrdenProduccion[];
   noConformidades: NoConformidad[];
   setNoConformidades: React.Dispatch<React.SetStateAction<NoConformidad[]>>;
@@ -297,7 +303,7 @@ interface Props {
   canExportExcel?: boolean;
 }
 
-export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos, ordenesProduccion, noConformidades, setNoConformidades, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
+export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos, setProductos, ordenesProduccion, noConformidades, setNoConformidades, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
   const [page, setPage] = useState(1);
@@ -377,6 +383,42 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   const set = (patch: Partial<Omit<NoConformidad, "id">>) =>
     setForm(f => ({ ...f, ...patch }));
 
+  /**
+   * Movimiento de stock al registrar un producto no conforme (P17b).
+   *
+   * Una no conformidad de tipo "Producto" es una MERMA: esas unidades dejan
+   * de estar disponibles, así que el stock del producto elegido baja aquí
+   * (nunca por debajo de 0, igual que en Orden de Producción).
+   *
+   * Punto de integración con VENTAS: esta pantalla solo recibe las ventas ya
+   * marcadas como pérdida (`ventasPerdidas`) y SIN detalle por producto, y
+   * llegan después de que la venta existió; por eso el descuento por venta no
+   * puede vivir acá. Lo debe hacer el flujo que CONFIRMA la venta
+   * (VentasScreen / App, al crearla) sobre `setProductos`, con la misma regla
+   * stock = max(0, stock − cantidad vendida): así cada venta descuenta una
+   * sola vez y este formulario no duplica el movimiento.
+   *
+   * Mientras App no pase `setProductos`, esta función no hace nada y el
+   * registro de la no conformidad sigue funcionando tal cual.
+   *
+   * Alcance: solo tipo "Producto". Las no conformidades de "Producto insumo"
+   * afectan el `stockActual` del módulo Insumos y necesitarían su propio
+   * `setInsumos`, que esta pantalla no recibe.
+   */
+  const descontarStockMerma = (nombre: string, cantidad: number) => {
+    if (!setProductos) return;
+    if (!nombre.trim() || !Number.isFinite(cantidad) || cantidad <= 0) return;
+    const producto = productos.find(p => p.nombre === nombre);
+    if (!producto) return;
+    const antes = producto.stockDisponible;
+    const despues = Math.max(0, Math.round((antes - cantidad) * 100) / 100);
+    if (despues === antes) return;
+    setProductos(prev =>
+      prev.map(p => (p.id === producto.id ? { ...p, stockDisponible: despues } : p)),
+    );
+    toast.success(`Stock de ${nombre}: ${antes} → ${despues}`);
+  };
+
   const handleCreate = () => {
     if (!form.nombre.trim()) { toast.error("Selecciona un producto."); return; }
     if (!form.tipoNoConformidad.trim()) { toast.error("El motivo es obligatorio."); return; }
@@ -384,6 +426,10 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
     if (form.fechaRegistro > hoy) { toast.error("La fecha de registro no puede ser futura."); return; }
     const newItem: NoConformidad = { id: nextNoConformidadId(noConformidades), ...form };
     setNoConformidades(prev => [newItem, ...prev]);
+    // Merma: el producto registrado sale del stock (P17b).
+    if (newItem.tipo === "Producto") {
+      descontarStockMerma(newItem.nombre, newItem.cantidadAfectada);
+    }
     setShowCreate(false);
     setForm(emptyForm());
     setShowVentaSugg(false);
@@ -422,9 +468,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   const renderFormBody = (readOnly: boolean, previewId?: string) => {
     // En modo consulta lee el registro (viewItem); en modo alta usa el formulario.
     const f = readOnly && viewItem ? viewItem : form;
+    // Selector de producto EXISTENTE (P17b): siempre es un <select> con el
+    // catálogo, nunca texto libre. Se muestra el stock porque es el que baja
+    // cuando la merma se registra (ver descontarStockMerma).
     const opcionesProducto = f.tipo === "Producto insumo"
-      ? insumos.filter(i => i.tipo === "ProductoInsumo").map(i => ({ nombre: i.nombre, unidad: i.unidadMedida }))
-      : productos.filter(p => p.estado !== "Descontinuado").map(p => ({ nombre: p.nombre, unidad: "und" }));
+      ? insumos.filter(i => i.tipo === "ProductoInsumo").map(i => ({ nombre: i.nombre, unidad: i.unidadMedida, stock: i.stockActual }))
+      : productos.filter(p => p.estado !== "Descontinuado").map(p => ({ nombre: p.nombre, unidad: p.unidadVenta || "und", stock: p.stockDisponible }));
     return (
       <div className="space-y-4 px-6 py-5">
         {previewId && (
@@ -539,17 +588,30 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                 </span>
               </div>
             : <div className="relative">
+                {/* SELECT de productos existentes (P17b): el valor que sale
+                    del combo es el nombre exacto del catálogo, así que nunca
+                    se puede escribir un producto que no exista. */}
                 <select value={f.nombre} onChange={e => {
                   const sel = opcionesProducto.find(o => o.nombre === e.target.value);
                   if (sel) set({ nombre: sel.nombre, unidadMedida: sel.unidad });
                   else set({ nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "" });
                 }} className={sCls}>
                   <option value="">Selecciona…</option>
-                  {opcionesProducto.map(o => <option key={o.nombre} value={o.nombre}>{o.nombre}</option>)}
+                  {opcionesProducto.map(o => (
+                    <option key={o.nombre} value={o.nombre}>
+                      {o.nombre} · {o.stock} {o.unidad} en stock
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
               </div>
           }
+          {/* Deja visible el movimiento de stock que implica el registro (P17b). */}
+          {!readOnly && f.tipo === "Producto" && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Al registrar, las unidades afectadas se descuentan del stock de este producto.
+            </p>
+          )}
         </div>
 
         {/* Fila 4: Cantidad afectada | Unidad de medida (automática, solo lectura) */}
@@ -800,10 +862,14 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
         <div className="overflow-x-auto">
           <table className="w-full">
+            {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
+                text-xs en mayúsculas, th px-4 py-2, celdas px-4 py-2.5 con
+                texto text-sm y filas de 61 px (igual que Gestión de Producto
+                y Categoría de Producto). */}
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["N.º", "Tipo", "Producto / Insumo", "Fecha", "Cantidad", "Motivo", "Origen", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -825,28 +891,28 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                   ? `Venta #${item.ventaRef || item.id.split("-")[1] || item.id}`
                   : null;
                 return (
-                  <tr key={item.id} className={`hover:bg-muted/20 transition-colors ${isVenta ? "bg-red-50/30" : ""}`}>
-                    <td className="px-4 py-3.5 text-xs font-mono font-bold text-foreground whitespace-nowrap">{item.id}</td>
-                    <td className="px-4 py-3.5"><TipoBadge tipo={item.tipo} /></td>
-                    <td className="px-4 py-3.5">
+                  <tr key={item.id} className={`hover:bg-muted/20 transition-colors h-[61px] ${isVenta ? "bg-red-50/30" : ""}`}>
+                    <td className="px-4 py-2.5 text-sm font-mono font-bold text-foreground whitespace-nowrap">{item.id}</td>
+                    <td className="px-4 py-2.5"><TipoBadge tipo={item.tipo} /></td>
+                    <td className="px-4 py-2.5">
                       <p className="text-sm font-medium text-foreground">{item.nombre}</p>
                       <p className="text-xs text-muted-foreground">{item.categoria}</p>
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">{item.fechaRegistro}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{item.fechaRegistro}</td>
+                    <td className="px-4 py-2.5 text-sm font-bold text-center text-foreground">
                       {item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">{item.unidadMedida}</span>
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-foreground max-w-36">
+                    <td className="px-4 py-2.5 text-sm text-foreground max-w-36">
                       <p className="font-semibold">{item.tipoNoConformidad}</p>
-                      <p className="text-muted-foreground truncate text-[10px] mt-0.5">{item.descripcionProblema}</p>
+                      <p className="text-muted-foreground truncate text-xs mt-0.5">{item.descripcionProblema}</p>
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       {origen
                         ? <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-muted rounded-lg text-muted-foreground whitespace-nowrap">{origen}</span>
                         : <span className="text-xs text-muted-foreground/40 italic">—</span>
                       }
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-2.5">
                       <ActionIcons
                         onView={() => setViewItem(item)}
                         onDelete={canDelete && !isVenta ? () => setDeleteTarget(item) : undefined}
