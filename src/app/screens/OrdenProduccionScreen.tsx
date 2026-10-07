@@ -144,6 +144,8 @@ export interface OrdenProduccion {
   tiempoPreparacionMin?: number | null;
   /** Marcas contables: garantizan que un movimiento se aplique UNA sola vez. */
   insumosDescontados?: boolean;
+  /** El stock de Productos (pizza elaborada) ya salió al iniciar producción. */
+  productosDescontados?: boolean;
   stockAplicado?: boolean;
   /** Nota de los faltantes con los que se arrancó igual (solo Forma 2). */
   notasFaltantes?: string;
@@ -452,6 +454,75 @@ export function crearOrdenPedido(
   };
 }
 
+/** Ítem de canje de una devolución: producto del menú elegido como reemplazo.
+    El nombre es el del catálogo público (mismo `nombre` que trae el `Producto`
+    del panel, porque el catálogo se arma con `productoACatalogo`). */
+export type ItemReemplazo = { nombre: string; cantidad: number; tamaño?: string };
+
+/** Orden "Pedido de cliente" para el CANJE de una devolución: la OP anterior
+    (vinculada por `ventaId`) queda cancelada y esta reemplaza lo que el
+    cliente se lleva. Nace en "pendiente": el stock del producto nuevo baja
+    recién cuando se pulsa "Iniciar producción", igual que en una venta normal. */
+export function crearOrdenReemplazo(
+  venta: Venta,
+  items: ItemReemplazo[],
+  ctx: { productos: Producto[]; fichas: FichasPorProducto; insumos: Insumo[] },
+  id: string,
+): OrdenProduccion {
+  const lineas: LineaOrden[] = [];
+  const acc = new Map<string, InsumoRequerido>();
+
+  for (const it of items) {
+    const cantidad = it.cantidad || 0;
+    if (cantidad <= 0) continue;
+    const base = it.nombre.split(" — ")[0].trim();
+    const producto =
+      ctx.productos.find((p) => normalizar(p.nombre) === normalizar(base)) ?? null;
+    const ficha = producto ? fichaVigente(ctx.fichas, producto.id) : null;
+
+    lineas.push({
+      idProducto: producto?.id ?? "",
+      productoId: producto?.id ?? null,
+      nombre: producto?.nombre ?? base,
+      unidad: "und",
+      cantidadEstimada: cantidad,
+      tamano: it.tamaño ?? "",
+      porciones: ficha ? cantidad * (ficha.porciones || 0) : undefined,
+      sinFicha: !ficha,
+      pasos: ficha?.pasos?.length ? [...ficha.pasos] : undefined,
+    });
+
+    if (!ficha) continue;
+    for (const r of ficha.insumos) {
+      const req = cantidad * (r.cantidad || 0);
+      const ins = ctx.insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+      const clave = ins?.id ?? normalizar(r.nombre);
+      const previa = acc.get(clave);
+      acc.set(clave, previa
+        ? { ...previa, cantidad: previa.cantidad + req }
+        : { insumoId: clave, nombre: r.nombre, cantidad: req, unidad: r.unidad, noEncontrado: !ins });
+    }
+  }
+
+  return {
+    id,
+    tipo: "pedido",
+    lineas,
+    insumosRequeridos: [...acc.values()],
+    ventaId: venta.id,
+    ventaNumero: venta.id,
+    cliente: venta.usuario,
+    fechaSolicitada: venta.fecha,
+    horaSolicitada: venta.horaRecogida ?? "",
+    estadoOrden: "pendiente",
+    observacion: "Canje por devolución",
+    creadaEn: nowISO(),
+    inicioProduccion: null,
+    entregaEstimada: null,
+    historial: [],
+  };
+}
+
 async function exportExcel(ordenes: OrdenProduccion[]) {
   const fecha = new Date();
   const archivo = await exportarExcelEstilizado({
@@ -709,6 +780,7 @@ function LineaPreparacion({
 // ─────────────────────────── Pantalla ───────────────────────────
 export function OrdenProduccionScreen({
   productos,
+  setProductos,
   insumos,
   setInsumos,
   ventas,
@@ -723,6 +795,10 @@ export function OrdenProduccionScreen({
   canExportExcel = true,
 }: {
   productos: Producto[];
+  /** Stock de Productos terminados: al iniciar una orden tipo "Pedido" se
+      descuenta lo que esa orden va a entregar (el producto solo se calienta,
+      no se genera desde cero). */
+  setProductos: Dispatch<SetStateAction<Producto[]>>;
   insumos: Insumo[];
   setInsumos: Dispatch<SetStateAction<Insumo[]>>;
   ventas: Venta[];
@@ -858,6 +934,7 @@ export function OrdenProduccionScreen({
       descripcionPreparacion,
       tiempoPreparacionMin,
       insumosDescontados: editando?.insumosDescontados,
+      productosDescontados: editando?.productosDescontados,
       stockAplicado: editando?.stockAplicado,
       notasFaltantes: editando?.notasFaltantes,
     };
@@ -931,6 +1008,47 @@ export function OrdenProduccionScreen({
     return true;
   };
 
+  /** Descuento de Productos terminados al iniciar una orden "Pedido de cliente":
+      es lo que esa orden va a entregar (la pizza solo se calienta, no se
+      fabrica de cero), así que su stock baja exactamente una vez, junto con
+      los insumos. Las órdenes "Preparación en lote" no tocan este stock: sus
+      líneas son Productos Insumo. Devuelve el resumen para el toast. */
+  const descontarProductos = (orden: OrdenProduccion): string[] => {
+    if (orden.tipo !== "pedido" || orden.productosDescontados) return [];
+    const req = new Map<string, number>();
+    for (const l of orden.lineas) {
+      const cantidad = l.cantidadEstimada || 0;
+      if (cantidad <= 0) continue;
+      // Mismo criterio que `lineasDeVenta`: por id y, si la línea es vieja, por
+      // nombre normalizado (el detalle trae el tamaño pegado con " — ").
+      const porId = l.productoId ? productos.find((p) => p.id === l.productoId) : undefined;
+      const base = l.nombre.split(" — ")[0].trim();
+      const porNombre = productos.find((p) => normalizar(p.nombre) === normalizar(base));
+      const producto = porId ?? porNombre;
+      if (!producto) continue;
+      req.set(producto.id, (req.get(producto.id) ?? 0) + cantidad);
+    }
+    if (req.size === 0) return [];
+    // El resumen se calcula FUERA del updater para no duplicarlo si React lo
+    // invoca dos veces (modo estricto); el descuento en sí es idempotente
+    // porque vive en la marca `productosDescontados`.
+    const resumen: string[] = [];
+    for (const [pid, cant] of req) {
+      const p = productos.find((x) => x.id === pid);
+      if (!p) continue;
+      const despues = Math.max(0, Math.round((p.stockDisponible - cant) * 1000) / 1000);
+      resumen.push(`${p.nombre} ${despues - p.stockDisponible}`);
+    }
+    setProductos((prev) => prev.map((p) => {
+      const cant = req.get(p.id);
+      if (!cant) return p;
+      // Nunca por debajo de 0, igual que insumos y mermas.
+      const despues = Math.max(0, Math.round((p.stockDisponible - cant) * 1000) / 1000);
+      return { ...p, stockDisponible: despues };
+    }));
+    return resumen;
+  };
+
   const tiempoTotalOrden = (o: OrdenProduccion) => {
     if (o.tipo === "preparacion") {
       const primero = insumos.find((i) => i.id === o.lineas[0]?.idProducto);
@@ -950,8 +1068,8 @@ export function OrdenProduccionScreen({
   const pedirInicio = (id: string) => {
     const orden = ordenes.find((o) => o.id === id);
     if (!orden) return;
-    if (orden.insumosDescontados) {
-      toast.info("Los insumos de esta orden ya se descontaron");
+    if (orden.insumosDescontados || orden.productosDescontados) {
+      toast.info("El stock de esta orden ya se descontó");
       return;
     }
     const falta = faltantesDe(orden, insumos);
@@ -965,11 +1083,14 @@ export function OrdenProduccionScreen({
 
   const iniciar = (id: string, forzar: boolean) => {
     const orden = ordenes.find((o) => o.id === id);
-    if (!orden || orden.insumosDescontados) return;
+    if (!orden || orden.insumosDescontados || orden.productosDescontados) return;
     const nota = forzar
       ? `Inició con faltantes: ${faltantesDe(orden, insumos).map((f) => `${f.nombre} (faltan ${fmtCant(f.falta, f.unidad)})`).join(", ")}`
       : undefined;
     if (!descontarInsumos(orden, forzar)) return;
+    // Los Productos terminados salen del stock aquí, una sola vez: es lo que
+    // la orden va a entregar (la pizza solo se calienta).
+    const bajaron = descontarProductos(orden);
 
     const now = nowISO();
     const actualizado: OrdenProduccion = {
@@ -978,6 +1099,7 @@ export function OrdenProduccionScreen({
       inicioProduccion: now,
       entregaEstimada: addMinutesISO(now, tiempoTotalOrden(orden)),
       insumosDescontados: true,
+      productosDescontados: true,
       notasFaltantes: nota ?? orden.notasFaltantes,
       historial: [...orden.historial, { de: orden.estadoOrden, a: "en-proceso", fechaHora: now }],
     };
@@ -985,7 +1107,9 @@ export function OrdenProduccionScreen({
     setBloqueo(null);
     setArrancarConFaltantes(null);
     if (nota) toast.warning(nota);
-    toast.success(`${id} en proceso — insumos descontados`);
+    toast.success(
+      `${id} en proceso — insumos descontados${bajaron.length ? ` y productos: ${bajaron.join(", ")}` : ""}`,
+    );
   };
 
   const abrirCompletar = (id: string) => {
@@ -1086,9 +1210,9 @@ export function OrdenProduccionScreen({
         return nuevas.length > 0 ? [...nuevas, ...prev] : prev;
       });
     }
-    // TODO stock de productos elaborados = cuántos se pueden armar con los
-    // Productos Insumo disponibles. Las órdenes ya no suben el stock de
-    // Productos, así que este cálculo queda pendiente.
+    // El stock de Productos terminados NO sube al completar: ya salió al
+    // iniciar la orden (`descontarProductos`). Acá solo se registra la
+    // producción real, la merma y el stock de Productos Insumo.
     setCompletarItem(null);
     setReales({});
   };
