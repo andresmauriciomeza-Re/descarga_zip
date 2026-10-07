@@ -12,6 +12,7 @@ import { ActionIcons } from "../components/ActionIcons";
 import { DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Usuario } from "./GestionUsuariosScreen";
+import { type Rol } from "./GestionConfigScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
@@ -47,12 +48,16 @@ export const INITIAL_CLIENTES: Cliente[] = [
   { id:"CLI-010", nombre:"Andrés Castillo",   iniciales:"AC", avatarColor:"bg-blue-500",    correo:"andres.castillo@gmail.com",   tipoDocumento:"CC", numeroDocumento:"10111213", pedidos:6,  activo:true  },
 ];
 
-export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios }: {
+export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   empleados: Empleado[];
   usuarios: Usuario[];
+  /** Roles del sistema: con ellos se dice quién es Administrador. */
+  roles?: Rol[];
+  /** Correo de la cuenta con la que se abrió la sesión (su propio cliente). */
+  sesionCorreo?: string;
 }) {
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
@@ -173,13 +178,52 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const pageActual = Math.min(page, totalPages);
   const paged      = filtered.slice((pageActual-1)*filasPorPagina, pageActual*filasPorPagina);
 
+  // ── Bloqueos del estado de un cliente ─────────────────────────────────
+  // Dos cuentas no se pueden apagar: la del administrador (si no, nadie
+  // entraría al panel) y la propia (el usuario se dejaría fuera de su sesión).
+  const rolDeCorreo = (correo: string): Rol | null => {
+    const em = correo.trim().toLowerCase();
+    const u = usuarios.find((x) => x.correo.trim().toLowerCase() === em);
+    if (!u) return null;
+    return roles.find((r) => r.id === u.rolId) ?? null;
+  };
+  /** ¿El cliente es una cuenta con rol "Administrador"? Se compara por el
+      NOMBRE del rol y no por su id, porque el módulo de Roles permite
+      renombrar los roles: si mañana "Administrador" se llama distinto, el
+      id fijo ya no significaría nada. */
+  const esAdministrador = (c: Cliente) => rolDeCorreo(c.correo)?.nombre === "Administrador";
+  /** ¿Es la cuenta con la que se abrió la sesión? */
+  const esCuentaPropia = (c: Cliente) =>
+    !!sesionCorreo &&
+    c.correo.trim().toLowerCase() === sesionCorreo.trim().toLowerCase();
+  /** Mensaje de error si el estado de este cliente no se puede tocar. */
+  const bloqueoEstado = (c: Cliente): string | null =>
+    esAdministrador(c)
+      ? "No es posible cambiar el estado del administrador"
+      : esCuentaPropia(c)
+        ? "No es posible cambiar el estado de tu propia cuenta"
+        : null;
+  /** Tooltip del control de la lista: el del administrador explica la regla. */
+  const tooltipEstado = (c: Cliente) =>
+    esAdministrador(c) ? "El administrador no puede ser inactivado" : bloqueoEstado(c);
+
   const toggleEstado = (id: string) => {
+    const cliente = clientes.find(c => c.id === id);
+    const motivo = cliente ? bloqueoEstado(cliente) : null;
+    if (motivo) { toast.error(motivo); return; }
     setClientes(p => p.map(c => c.id === id ? { ...c, activo: !c.activo } : c));
     toast.success("Estado del cliente actualizado");
   };
 
   const handleEdit = () => {
     if (!editItem) return;
+    // Si el formulario tocó el estado, se comprueba aquí la misma regla que
+    // en la lista: el administrador y la cuenta propia no se inactivan.
+    const original = clientes.find(c => c.id === editItem.id);
+    if (original && original.activo !== editItem.activo) {
+      const motivo = bloqueoEstado(original);
+      if (motivo) { toast.error(motivo); return; }
+    }
     const errs: { nombre?: string; correo?: string } = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
@@ -387,18 +431,26 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <td className="px-4 py-1.5 text-sm font-bold text-center text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</td>
                   <td className="px-4 py-1.5">
                     {/* Pill de estado (diseño de Proveedores): antes era un
-                        badge y el switch vivía en Acciones. */}
-                    <EstadoSelect
-                      value={c.activo ? "activo" : "inactivo"}
-                      onChange={nuevoEstado => {
-                        if ((nuevoEstado === "activo") === c.activo) return;
-                        toggleEstado(c.id);
-                      }}
-                      options={[
-                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                      ]}
-                    />
+                        badge y el switch vivía en Acciones. La del
+                        administrador y la de la propia cuenta quedan
+                        bloqueadas, con el motivo en el tooltip. */}
+                    <span
+                      title={tooltipEstado(c) ?? undefined}
+                      className="inline-block"
+                    >
+                      <EstadoSelect
+                        value={c.activo ? "activo" : "inactivo"}
+                        disabled={!!bloqueoEstado(c)}
+                        onChange={nuevoEstado => {
+                          if ((nuevoEstado === "activo") === c.activo) return;
+                          toggleEstado(c.id);
+                        }}
+                        options={[
+                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                        ]}
+                      />
+                    </span>
                   </td>
                   <td className="px-4 py-1.5">
                     <ActionIcons

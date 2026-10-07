@@ -11,6 +11,7 @@ import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "../utils/exportExcelEstilizado";
+import { hora12 } from "../utils/hora";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import type { Insumo } from "./GestionInsumosScreen";
 import type { Venta } from "./VentasScreen";
@@ -1754,7 +1755,7 @@ export function OrdenProduccionScreen({
                 {[
                   { l: "Tipo de orden", v: TIPO_LABEL[detailItem.tipo] },
                   { l: "Venta asociada", v: detailItem.ventaNumero ? `${detailItem.ventaNumero}${detailItem.cliente ? ` · ${detailItem.cliente}` : ""}` : "—" },
-                  { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${detailItem.horaSolicitada}` : ""}` : "—" },
+                  { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
                   { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
                   { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
                   { l: "Estado", v: ESTADO_LABEL[detailItem.estadoOrden] },
@@ -2079,7 +2080,7 @@ function CamposPedido({
                 <span className="text-sm font-semibold text-foreground tabular-nums">${(v.total ?? 0).toLocaleString("es-CO")}</span>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                {v.usuario} · {v.fecha}{v.horaRecogida ? ` ${v.horaRecogida}` : ""}
+                {v.usuario} · {v.fecha}{v.horaRecogida ? ` ${hora12(v.horaRecogida)}` : ""}
               </p>
             </button>
           ))}
@@ -2117,7 +2118,7 @@ function CamposPedido({
               </div>
             ))}
             <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
-              Fecha y hora solicitadas: <strong className="text-foreground">{venta.fecha}{venta.horaRecogida ? ` ${venta.horaRecogida}` : ""}</strong> (recogida del cliente)
+              Fecha y hora solicitadas: <strong className="text-foreground">{venta.fecha}{venta.horaRecogida ? ` ${hora12(venta.horaRecogida)}` : ""}</strong> (recogida del cliente)
             </div>
           </div>
 

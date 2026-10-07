@@ -190,7 +190,11 @@ export function ProveedorFormCampos({
   const pideNit = nitLectura === undefined;
 
   return (
-    <div className="space-y-6">
+    // Dos columnas en pantallas anchas: la identificación a la izquierda y la
+    // documentación, el contacto y el representante a la derecha. Así el
+    // formulario entra en el alto del modal y el cuerpo no necesita scroll en
+    // escritorio (en móvil vuelve a una columna).
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-6 items-start">
       <div>
         <p className={seccionCls}>
           Identificación del proveedor
@@ -368,6 +372,10 @@ export function ProveedorFormCampos({
         </div>
       </div>
 
+      {/* Columna DERECHA: lo que va después de la identificación. En Persona
+          Natural solo queda la configuración; la rejilla alinea las dos
+          columnas por arriba, así que el hueco no desordena el formulario. */}
+      <div className="space-y-6">
       {/* ── Persona Jurídica: documentación, contacto y representante ─────── */}
       {esJuridica && (
         <>
@@ -513,6 +521,7 @@ export function ProveedorFormCampos({
             options={OPCIONES_ESTADO}
           />
         </div>
+      </div>
       </div>
     </div>
   );

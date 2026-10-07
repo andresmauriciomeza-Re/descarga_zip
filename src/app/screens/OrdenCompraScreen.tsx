@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "../utils/exportExcelEstilizado";
+import { aplicarStockCompra, recalcularCostoMaximo } from "../utils/inventario";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
@@ -574,9 +575,9 @@ export function NuevoProveedorModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
+        className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
@@ -585,11 +586,13 @@ export function NuevoProveedorModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-6 py-5">
+        {/* Cuerpo con scroll propio SIEMPRE (nunca `lg:overflow-hidden`): el
+            formulario va en dos columnas y, si no cabe, se desplaza aquí. */}
+        <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
           {/* Punto 1: mismo formulario de proveedor que el módulo Proveedores. */}
           <ProveedorFormCampos form={form} />
         </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-border">
+        <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
           <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
@@ -2137,11 +2140,29 @@ export function OrdenCompraScreen({
     setOrdenes(p => p.map(x => x.id === o.id ? conHistorial(x, "Anulado") : x));
 
     // Anular la orden anula también sus facturas: la compra queda cerrada y no
-    // vuelve al estado "Recibido".
-    const anuladas = facturasDeOrden(o.id);
+    // vuelve al estado "Recibido". Al pasarlas a "Anulado" se devuelve al
+    // inventario lo que cada una llegó a sumar (mismo camino que anular la
+    // compra desde Gestión de compra) y se recalcula el costo máximo de los
+    // insumos con las facturas que SIGUEN en "Recibido".
+    const comprasTras = gestiones.map((g) => {
+      if (g.ordenId !== o.id) return g;
+      const revertir = g.estado !== "Anulado" && !!g.stockAplicado && !g.stockRevertido;
+      if (revertir) {
+        aplicarStockCompra(g.items ?? [], -1, { insumos, setInsumos });
+      }
+      return {
+        ...g,
+        estado: "Anulado" as EstadoGestion,
+        // Guard anti doble-reversión, igual que en Gestión de compra.
+        stockRevertido: revertir ? true : g.stockRevertido,
+      };
+    });
+
+    const anuladas = comprasTras.filter((g) => g.ordenId === o.id);
 
     if (anuladas.length > 0) {
-      setGestiones(p => p.map(g => g.ordenId === o.id ? { ...g, estado: "Anulado" as EstadoGestion } : g));
+      setGestiones(() => comprasTras);
+      recalcularCostoMaximo(comprasTras, setInsumos);
     }
 
     setAnularConfirm(null);

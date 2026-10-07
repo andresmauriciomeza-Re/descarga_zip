@@ -14,6 +14,7 @@ import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, ful
 import { type Empleado } from "./GestionEmpleadosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
+import { SelectorRoles } from "../components/SelectorRoles";
 
 const SERIF = "var(--font-titulo)";
 
@@ -34,6 +35,10 @@ export interface Usuario {
   telefono: string;
   tipoDocumento: string;
   numeroDocumento: string;
+  // `rolIds` es la lista de cargos/roles (multi-rol); `rolId` se conserva como
+  // ESPEJO del primer elemento, para los flujos que todavía trabajan con un
+  // solo rol (clientes, semillas, pantallas de solo lectura).
+  rolIds: string[];
   rolId: string;
   rolInternoId?: string;
   activo: boolean;
@@ -41,18 +46,18 @@ export interface Usuario {
 }
 
 export const INIT_USUARIOS: Usuario[] = [
-  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolId:"ROL-001", activo:true  },
-  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolId:"ROL-003", activo:true  },
-  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", rolId:"ROL-003", activo:true  },
-  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", rolId:"ROL-003", activo:true  },
-  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", rolId:"ROL-003", activo:true  },
-  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", rolId:"ROL-003", activo:false },
-  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", rolId:"ROL-003", activo:true  },
-  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", rolId:"ROL-003", activo:true  },
-  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", rolId:"ROL-003", activo:false },
-  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", numeroDocumento:"88990011", rolId:"ROL-002", activo:true  },
-  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", numeroDocumento:"99001122", rolId:"ROL-002", activo:true  },
-  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", rolId:"ROL-003", activo:true  },
+  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolId:"ROL-001", rolIds:["ROL-001"], activo:true  },
+  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolId:"ROL-007", rolIds:["ROL-007"], activo:true  },
+  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", rolId:"ROL-004", rolIds:["ROL-004","ROL-005"], activo:true  },
+  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", rolId:"ROL-006", rolIds:["ROL-006"], activo:true  },
+  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", rolId:"ROL-005", rolIds:["ROL-005"], activo:true  },
+  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", rolId:"ROL-009", rolIds:["ROL-009"], activo:false },
+  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", rolId:"ROL-004", rolIds:["ROL-004"], activo:true  },
+  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", rolId:"ROL-007", rolIds:["ROL-007","ROL-008"], activo:true  },
+  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", rolId:"ROL-008", rolIds:["ROL-008"], activo:false },
+  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", numeroDocumento:"88990011", rolId:"ROL-002", rolIds:["ROL-002"], activo:true  },
+  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", numeroDocumento:"99001122", rolId:"ROL-002", rolIds:["ROL-002"], activo:true  },
+  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", rolId:"ROL-006", rolIds:["ROL-006"], activo:true  },
 ];
 
 // Colores de avatar para los usuarios de alta. La misma paleta que usa Clientes
@@ -74,11 +79,14 @@ const ROL_PALETTE = [
   "bg-teal-100 text-teal-800",
 ];
 
-function rolColor(rolId: string, esCliente: boolean, esEmpleado: boolean) {
-  if (rolId === "ROL-001") return "bg-red-100 text-red-800";
-  if (esEmpleado || rolId === "ROL-003") return "bg-emerald-100 text-emerald-800";
-  if (esCliente) return "bg-gray-100 text-gray-700";
-  const idx = parseInt(rolId.replace("ROL-",""), 10) - 1;
+function rolColor(rol: Rol | null | undefined, esCliente: boolean, esEmpleado: boolean) {
+  // "Administrador"/"Cliente" se reconocen POR NOMBRE (nunca por id): el
+  // administrador puede renombrarlos o restaurar la semilla.
+  const nombre = (rol?.nombre ?? "").trim().toLowerCase();
+  if (nombre === "administrador") return "bg-red-100 text-red-800";
+  if (esEmpleado || nombre === "empleado") return "bg-emerald-100 text-emerald-800";
+  if (esCliente || nombre === "cliente") return "bg-gray-100 text-gray-700";
+  const idx = parseInt((rol?.id ?? "").replace("ROL-",""), 10) - 1;
   return ROL_PALETTE[idx >= 0 ? idx % ROL_PALETTE.length : 0];
 }
 
@@ -87,16 +95,32 @@ function rolLabel(u: Usuario, roles: Rol[], esCliente: boolean, esEmpleado: bool
   // como "Super Administrador", nunca como Cliente ni Empleado, para que la
   // vista de Usuarios no contradiga al módulo de Clientes.
   if (esSuperAdmin(u)) return "Super Administrador";
-  if (u.rolId === "ROL-001") return "Administrador";
-  if (esEmpleado || u.rolId === "ROL-003") return "Cliente/Empleado";
-  if (esCliente) return "Cliente";
-  const rol = roles.find(r => r.id === u.rolId);
-  return rol?.nombre ?? u.rolId;
+  const principal = roles.find(r => r.id === u.rolId);
+  const nombre = (principal?.nombre ?? "").trim().toLowerCase();
+  if (nombre === "administrador") return "Administrador";
+  if (esEmpleado || nombre === "empleado") return "Cliente/Empleado";
+  if (esCliente || nombre === "cliente") return "Cliente";
+  return principal?.nombre ?? u.rolId;
 }
+
+// Clave de cruce Persona ↔ ficha (Empleado/Cliente/Usuario): tipo y número de
+// documento, NUNCA el correo. Dos registros con el mismo correo pero distinto
+// documento son personas distintas, y uno con el mismo documento es la misma
+// aunque cambie de correo. "||" (ambos vacíos) no sirve como clave: sin
+// documento no hay cruce.
+export const claveDoc = (tipo?: string, numero?: string): string =>
+  `${(tipo ?? "").trim().toLowerCase()}||${(numero ?? "").trim()}`;
+
+export const docValida = (k: string) => k !== "||" && k !== "";
 
 // Id con el que se guardan las fichas de Clientes: es el que `usuariosUnificados`
 // (App.tsx) le asigna al unir los listados de Usuarios, Empleados y Clientes.
 const ROL_CLIENTE = "ROL-002";
+
+// El rol "Cliente" se busca POR NOMBRE en la lista guardada; el id de la
+// semilla solo queda como último recurso si el rol fue renombrado/borrado.
+export const idRolCliente = (roles: Rol[]) =>
+  roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id ?? ROL_CLIENTE;
 
 // ── P7/P8 — Cuenta de super administrador ────────────────────────────────
 // El perfil de Gloria (USR-001, gloria@lasirena.com) es la super
@@ -108,26 +132,33 @@ const esSuperAdmin = (u: Usuario): boolean =>
   u.id === "USR-001" || u.correo.trim().toLowerCase() === "gloria@lasirena.com";
 const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
-// Roles reales de una persona para la vista de detalle: el que tiene asignado y,
-// si además está registrada como empleado o como cliente, el que le corresponde
-// por esa ficha. Siempre se leen de `roles` —la lista guardada, no una semilla—
-// y se dedupican por id, así que quien solo tiene un rol, que es el caso normal,
-// ve una sola tabla de permisos.
+// Roles reales de una persona para la vista de detalle: los que trae su
+// `Usuario.rolIds` (o el espejo `rolId`) y, si además está registrada como
+// empleado o como cliente, los de esa ficha. El cruce con las fichas es por
+// TIPO Y NÚMERO DE DOCUMENTO (nunca por correo). Siempre se leen de `roles`
+// —la lista guardada, no una semilla— y se dedupican por id, así que quien
+// solo tiene un rol, que es el caso normal, ve una sola tabla de permisos.
 const rolesDeUsuario = (
   usuario: Usuario,
   roles: Rol[],
   empleados: Empleado[],
   clientes: Cliente[],
 ): Rol[] => {
-  const correo = usuario.correo.trim().toLowerCase();
-  const ids: string[] = [usuario.rolId];
+  const k = claveDoc(usuario.tipoDocumento, usuario.numeroDocumento);
+  const ids: string[] = usuario.rolIds?.length
+    ? [...usuario.rolIds]
+    : [usuario.rolId];
   // P8: el perfil de super administrador conserva el rol Administrador aunque
   // `usuariosUnificados` le haya pisado el rolId a ROL-002 al aparecer en
   // `clientes`; sin esto, el detalle dejaría de mostrar sus permisos reales.
   if (esSuperAdmin(usuario) && !ids.includes("ROL-001")) ids.unshift("ROL-001");
-  const fichaEmpleado = empleados.find(e => e.correo.trim().toLowerCase() === correo);
-  if (fichaEmpleado) ids.push(fichaEmpleado.rolId);
-  if (clientes.some(c => c.correo.trim().toLowerCase() === correo)) ids.push(ROL_CLIENTE);
+  if (docValida(k)) {
+    const fichaEmpleado = empleados.find(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === k);
+    if (fichaEmpleado?.rolIds?.length) ids.push(...fichaEmpleado.rolIds);
+    if (clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === k)) {
+      ids.push(idRolCliente(roles));
+    }
+  }
 
   const unicos: Rol[] = [];
   const vistos = new Set<string>();
@@ -207,9 +238,12 @@ export function GestionUsuariosScreen({
     return Array.from(unicos.values());
   }, [usuarios]);
 
-  // Métricas
+  // Métricas. "Administradores" = personas con ALGÚN rol cuyo nombre sea
+  // Administrador (multi-rol), no solo el `rolId` principal.
   const total = usuariosUnicos.length;
-  const nAdm  = usuariosUnicos.filter(u => u.rolId === "ROL-001").length;
+  const nAdm  = usuariosUnicos.filter(u =>
+    rolesDeUsuario(u, roles, empleados, clientes).some(r => r.nombre.trim().toLowerCase() === "administrador")
+  ).length;
   const nEmp  = empleados.length;
   const nCli  = clientes.length;
 
@@ -217,8 +251,9 @@ export function GestionUsuariosScreen({
     const q = search.toLowerCase();
     return usuariosUnicos.filter(u => {
       const correo = u.correo.trim().toLowerCase();
-      const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
-      const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
+      const claveUU = claveDoc(u.tipoDocumento, u.numeroDocumento);
+      const esCliente = docValida(claveUU) && clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === claveUU);
+      const esEmpleado = docValida(claveUU) && empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === claveUU);
       // P6: la búsqueda y el filtro de rol trabajan con TODOS los roles de la
       // persona (rolesDeUsuario), no solo con el rolId principal, para que un
       // usuario con varios roles se encuentre por cualquiera de ellos.
@@ -294,17 +329,44 @@ export function GestionUsuariosScreen({
     setDetail(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
   };
 
-  // Refleja en el registro Empleado vinculado (por correo) los cambios hechos desde "Usuarios".
+  // Ficha de Empleado de una persona, por TIPO Y NÚMERO DE DOCUMENTO.
+  const fichaEmpleadoDe = (p: { tipoDocumento: string; numeroDocumento: string }) => {
+    const k = claveDoc(p.tipoDocumento, p.numeroDocumento);
+    if (!docValida(k)) return undefined;
+    return empleados.find(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === k);
+  };
+
+  // ¿Esta persona (con los roles que quedarán guardados) tiene ficha de
+  // empleado? Sin ficha no se pueden editar sus cargos desde Usuarios.
+  const tieneFicha = (u: Usuario) => !!fichaEmpleadoDe(u);
+
+  // Abre el modal de edición con los cargos que mandan: los de la ficha de
+  // empleado (fuente de verdad) si existe; si no, los del propio usuario.
+  const abrirEdicion = (u: Usuario) => {
+    const ficha = fichaEmpleadoDe(u);
+    setEditItem({ ...u, rolIds: ficha?.rolIds?.length ? [...ficha.rolIds] : (u.rolIds?.length ? [...u.rolIds] : [u.rolId]) });
+    setEditPrevCorreo(u.correo);
+    setEditErrors({});
+  };
+
+  // Refleja en el registro Empleado vinculado los cambios hechos desde "Usuarios".
+  // El cruce es por DOCUMENTO; los `rolIds` además se copian a la contratación
+  // VIGENTE del historial (fechaFinal vacía), igual que al editar en Empleados.
   const updateEmpleadoLinked = (
-    buscarCorreo: string,
-    patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rolId" | "activo">>,
+    buscar: { tipoDocumento: string; numeroDocumento: string },
+    patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rolIds" | "activo">>,
   ) => {
-    const key = buscarCorreo.trim().toLowerCase();
+    const k = claveDoc(buscar.tipoDocumento, buscar.numeroDocumento);
+    if (!docValida(k)) return;
     setEmpleados(p => p.map(e => {
-      if (e.correo.trim().toLowerCase() !== key) return e;
+      if (claveDoc(e.tipoDocumento, e.numeroDocumento) !== k) return e;
       const nombre = patch.nombre ?? e.nombre;
       const iniciales = nombre.trim().split(" ").filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
-      return { ...e, ...patch, nombre, iniciales };
+      const rolIds = patch.rolIds;
+      const contrataciones = rolIds
+        ? (e.contrataciones ?? []).map(c => c.fechaFinal === "" ? { ...c, rolIds: [...rolIds] } : c)
+        : e.contrataciones;
+      return { ...e, ...patch, nombre, iniciales, contrataciones };
     }));
   };
 
@@ -315,9 +377,11 @@ export function GestionUsuariosScreen({
     const full = fullAccesos();
     return Object.entries(full).every(([k, acts]) => (r.accesos?.[k] ?? []).length > 0 && acts.every(a => r.accesos[k]?.includes(a)));
   };
-  // Usuarios ACTIVOS cuyo rol tiene todos los permisos, para nunca dejar el
+  // Usuarios ACTIVOS con ALGÚN rol total (multi-rol), para nunca dejar el
   // sistema sin nadie con acceso total.
-  const totalesActivos = usuariosUnicos.filter(u => u.activo && rolInfoTotal(u.rolId));
+  const usuarioEsTotal = (u: Usuario) =>
+    rolesDeUsuario(u, roles, empleados, clientes).some(r => rolInfoTotal(r.id));
+  const totalesActivos = usuariosUnicos.filter(u => u.activo && usuarioEsTotal(u));
 
   // Misma regla y mismos efectos para cambiar el estado, sea desde el detalle
   // o desde la pill de la tabla: nunca al usuario actual si es el último con
@@ -330,12 +394,12 @@ export function GestionUsuariosScreen({
       toast.error(`${TITULO_SUPER_ADMIN}: no se puede cambiar su estado.`);
       return;
     }
-    if (!nuevoEstado && usuario.activo && rolInfoTotal(usuario.rolId) && totalesActivos.length === 1) {
+    if (!nuevoEstado && usuario.activo && usuarioEsTotal(usuario) && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
     }
     updateUsuario(usuario.id, { activo: nuevoEstado });
-    updateEmpleadoLinked(usuario.correo, { activo: nuevoEstado });
+    updateEmpleadoLinked(usuario, { activo: nuevoEstado });
     toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
   };
 
@@ -362,6 +426,13 @@ export function GestionUsuariosScreen({
     else { const v = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento); if (v) errs.numeroDocumento = v; }
     if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
+    // CARGO = ROL. Los cargos solo se editan si la persona tiene ficha de
+    // Empleado (ahí vive `rolIds`); sin ficha el campo queda de solo lectura y
+    // se conserva el rol que ya traía.
+    const ficha = fichaEmpleadoDe(editItem);
+    let rolIdsFinal = (editItem.rolIds ?? []).filter(Boolean);
+    if (ficha && rolIdsFinal.length === 0) errs.rolIds = "Asigna al menos un cargo al empleado";
+    if (!ficha && rolIdsFinal.length === 0) rolIdsFinal = editItem.rolId ? [editItem.rolId] : [];
     if (editItem.nombre.trim() && editItem.correo.trim() && editItem.numeroDocumento.trim()) {
       const em = editItem.correo.trim().toLowerCase();
       const dm = editItem.numeroDocumento.trim();
@@ -380,10 +451,16 @@ export function GestionUsuariosScreen({
       if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
     }
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
-    // No quitar el último usuario activo con todos los permisos cambiando su rol.
+    // No quitar el último usuario activo con todos los permisos cambiando sus
+    // roles (multi-rol: basta con que conserve UN rol total).
     const anterior = usuarios.find(u => u.id === editItem.id);
-    const eraTotal = anterior ? rolInfoTotal(anterior.rolId) : false;
-    const seraTotal = rolInfoTotal(editItem.rolId);
+    const borrador: Usuario = {
+      ...editItem,
+      rolIds: rolIdsFinal,
+      rolId: rolIdsFinal[0] ?? editItem.rolId,
+    };
+    const eraTotal = anterior ? usuarioEsTotal(anterior) : false;
+    const seraTotal = usuarioEsTotal(borrador);
     if (eraTotal && !seraTotal && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
@@ -392,16 +469,18 @@ export function GestionUsuariosScreen({
     // cual y el avatar de la tabla, del detalle y de la vista previa seguían
     // mostrando las del nombre viejo. Empleados y Clientes ya lo hacían así.
     const nuevasIniciales = editItem.nombre.trim().split(" ").filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
-    setUsuarios(p => p.map(u => u.id === editItem.id ? { ...editItem, iniciales: nuevasIniciales } : u));
-    updateEmpleadoLinked(editPrevCorreo ?? editItem.correo, {
+    setUsuarios(p => p.map(u => u.id === editItem.id ? { ...borrador, iniciales: nuevasIniciales } : u));
+    const patch: Partial<Pick<Empleado, "nombre" | "correo" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rolIds" | "activo">> = {
       nombre: editItem.nombre,
       correo: editItem.correo,
       telefono: editItem.telefono,
       tipoDocumento: editItem.tipoDocumento,
       numeroDocumento: editItem.numeroDocumento,
-      rolId: editItem.rolId,
       activo: editItem.activo,
-    });
+    };
+    // Solo con ficha se escriben los cargos (y su contratación vigente).
+    if (ficha) patch.rolIds = rolIdsFinal;
+    updateEmpleadoLinked(editItem, patch);
     setEditItem(null);
     setEditPrevCorreo(null);
     setEditErrors({});
@@ -416,7 +495,7 @@ export function GestionUsuariosScreen({
       toast.error(`${TITULO_SUPER_ADMIN}: no se puede eliminar.`);
       return;
     }
-    if (objetivo && objetivo.activo && rolInfoTotal(objetivo.rolId) && totalesActivos.length === 1) {
+    if (objetivo && objetivo.activo && usuarioEsTotal(objetivo) && totalesActivos.length === 1) {
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
     }
@@ -516,6 +595,7 @@ export function GestionUsuariosScreen({
         tipoDocumento: newTipoDoc,
         numeroDocumento: dm,
         rolId: newRolId,
+        rolIds: [newRolId],
         activo: newActivo,
         contrasena: "123456",
       },
@@ -587,11 +667,16 @@ export function GestionUsuariosScreen({
                   <p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p>
                 </td></tr>
               ) : paged.map(u => {
-                const rol = rolInfo(u.rolId);
-                const rolInactivo = rol && !rol.activo;
-                const correo = u.correo.trim().toLowerCase();
-                const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
-                const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
+                const rolesFila = rolesDeUsuario(u, roles, empleados, clientes);
+                const rolInactivo = rolesFila.some(r => !r.activo);
+                const claveU = claveDoc(u.tipoDocumento, u.numeroDocumento);
+                const esCliente = docValida(claveU) && clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === claveU);
+                const esEmpleado = docValida(claveU) && empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === claveU);
+                const esAdmin = esSuperAdmin(u) || rolesFila.some(r => r.nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador");
+                const extrasFila = rolesFila.filter(r => {
+                  const n = r.nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                  return n !== "administrador" && n !== "cliente" && n !== "empleado";
+                });
                 return (
                   <tr key={u.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-1.5">
@@ -607,19 +692,39 @@ export function GestionUsuariosScreen({
                     </td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo}</td>
                     <td className="px-4 py-1.5">
-                      {/* P6: se pintan TODOS los roles que la persona posee en
-                          este momento (rolId del usuario + el de su ficha de
-                          empleado + Cliente si está en `clientes`), no solo el
-                          principal. P8: la super administradora se etiqueta
-                          como "Super Administrador", nunca como Cliente ni
-                          Empleado. */}
+                      {/* Columna "Rol actual": sólo los chips semánticos (sin lista
+                          larga). Administrador → "Super Administrador"; empleado →
+                          "Empleado" + "Cliente" con contador de extras "+N";
+                          sólo cliente → "Cliente". */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {rolesDeUsuario(u, roles, empleados, clientes).map(r => (
-                          <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(r.id, esCliente, esEmpleado)} ${!r.activo ? "opacity-50" : ""}`}>
-                            {esSuperAdmin(u) && r.id === "ROL-001" ? "Super Administrador" : r.nombre}
-                          </span>
-                        ))}
-                        {rolInactivo && (
+                        {esAdmin ? (
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">Super Administrador</span>
+                            {esCliente && (
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">Cliente</span>
+                            )}
+                          </>
+                        ) : esEmpleado ? (
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Empleado</span>
+                            <span className="relative px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
+                              Cliente
+                              {extrasFila.length > 0 && (
+                                <span title={extrasFila.map(r => r.nombre).join(", ")}
+                                  className="absolute -right-[8px] -top-[6px] inline-flex items-center justify-center h-[17px] min-w-[17px] px-1 rounded-full bg-primary text-white text-[10px] font-bold leading-none whitespace-nowrap">
+                                  +{extrasFila.length}
+                                </span>
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          rolesFila.map(r => (
+                            <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rolColor(r, esCliente, esEmpleado)} ${!r.activo ? "opacity-50" : ""}`}>
+                              {r.nombre}
+                            </span>
+                          ))
+                        )}
+                        {rolInactivo && !esAdmin && !esEmpleado && (
                           <span title="Rol inactivo" className="flex items-center shrink-0">
                             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                           </span>
@@ -653,7 +758,7 @@ export function GestionUsuariosScreen({
                           explica el motivo. */}
                       <ActionIcons
                         onView={() => setDetail(u)}
-                        onEdit={canEdit ? () => { setEditItem({ ...u }); setEditPrevCorreo(u.correo); setEditErrors({}); } : undefined}
+                        onEdit={canEdit ? () => abrirEdicion(u) : undefined}
                         editDisabled={canEdit && esSuperAdmin(u)}
                         editTitle={TITULO_SUPER_ADMIN}
                         onDelete={canDelete ? () => setDeleteId(u.id) : undefined}
@@ -701,11 +806,10 @@ export function GestionUsuariosScreen({
           siempre visible con los dos botones. */}
       <AnimatePresence>
         {detail && (() => {
-          const rolPrincipal = rolInfo(detail.rolId);
-          const rolInactivo = !!rolPrincipal && !rolPrincipal.activo;
-          const correo = detail.correo.trim().toLowerCase();
-          const esCliente = clientes.some(c => c.correo.trim().toLowerCase() === correo);
-          const esEmpleado = empleados.some(e => e.correo.trim().toLowerCase() === correo);
+    const correo = detail.correo.trim().toLowerCase();
+    const claveD = claveDoc(detail.tipoDocumento, detail.numeroDocumento);
+    const esCliente = docValida(claveD) && clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === claveD);
+    const esEmpleado = docValida(claveD) && empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === claveD);
           const rolesDetalle = rolesDeUsuario(detail, roles, empleados, clientes);
           return (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
@@ -750,8 +854,8 @@ export function GestionUsuariosScreen({
                         // "Super Administrador".
                         l: "Roles", v: "", ancho: false, chip: undefined,
                         chips: rolesDetalle.map(r => ({
-                          label: esSuperAdmin(detail) && r.id === "ROL-001" ? "Super Administrador" : r.nombre,
-                          color: rolColor(r.id, esCliente, esEmpleado),
+                          label: esSuperAdmin(detail) && r.nombre.trim().toLowerCase() === "administrador" ? "Super Administrador" : r.nombre,
+                          color: rolColor(r, esCliente, esEmpleado),
                           aviso: !r.activo,
                         })),
                       },
@@ -838,7 +942,7 @@ export function GestionUsuariosScreen({
 
                 <div className="flex gap-3 px-5 py-3 border-t border-border shrink-0">
                   {canEdit && (
-                  <button onClick={() => { setDetail(null); setEditItem({ ...detail }); setEditPrevCorreo(detail.correo); setEditErrors({}); }}
+                  <button onClick={() => { setDetail(null); abrirEdicion(detail); }}
                     // P7: la super administradora no se puede editar desde
                     // ningún flujo, incluido este acceso rápido del detalle.
                     disabled={esSuperAdmin(detail)}
@@ -938,44 +1042,54 @@ export function GestionUsuariosScreen({
                 ))}
 
                 <div>
-                  {/* P4: lista VISIBLE de los roles que el usuario posee EN
-                      ESTE MOMENTO (rolId del usuario + el de su ficha de
-                      empleado + Cliente si está en `clientes`), pintada con
-                      `rolesDeUsuario` ANTES de que el usuario agregue o cambie
-                      roles en el select de abajo. */}
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Roles actuales del usuario</label>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {(() => {
-                      const actuales = rolesDeUsuario(editItem, roles, empleados, clientes);
-                      return actuales.length === 0 ? (
-                        <span className="text-xs text-muted-foreground italic">Sin roles registrados</span>
-                      ) : actuales.map(r => (
-                        <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${!r.activo ? "opacity-50" : ""} ${
-                          esSuperAdmin(editItem) && r.id === "ROL-001"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-muted text-foreground border border-border"
-                        }`}>
-                          {esSuperAdmin(editItem) && r.id === "ROL-001" ? "Super Administrador" : r.nombre}
-                          {!r.activo ? " (Inactivo)" : ""}
-                        </span>
-                      ));
-                    })()}
-                  </div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Rol principal (a modificar)</label>
-                  <select
-                    // P7: el rol de la super administradora no se puede cambiar.
-                    disabled={esSuperAdmin(editItem)}
-                    title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
-                    value={editItem.rolId}
-                    onChange={e => setEditItem(x => x && ({ ...x, rolId: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                     {roles.filter(r => r.activo || r.id === editItem.rolId).map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.nombre}{!r.activo ? " (Inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  {/* CARGO = ROL (multi-rol). Con ficha de Empleado se editan los
+                      cargos con el mismo selector que usa la pantalla de
+                      Empleados, y al guardar se reflejan también en la
+                      contratación vigente. Sin ficha el campo es de solo
+                      lectura: para asignar roles hay que registrar primero la
+                      ficha en Gestión de Empleados. */}
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Cargos (roles) <span className="text-primary">*</span>
+                  </label>
+                  {(() => {
+                    const ficha = fichaEmpleadoDe(editItem);
+                    if (ficha && !esSuperAdmin(editItem)) {
+                      return (
+                        <SelectorRoles
+                          roles={roles}
+                          value={editItem.rolIds ?? []}
+                          onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.rolIds) setEditErrors(p => ({ ...p, rolIds: undefined })); }}
+                          error={editErrors.rolIds}
+                        />
+                      );
+                    }
+                    return (
+                      <>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {(() => {
+                            const actuales = rolesDeUsuario(editItem, roles, empleados, clientes);
+                            return actuales.length === 0 ? (
+                              <span className="text-xs text-muted-foreground italic">Sin roles registrados</span>
+                            ) : actuales.map(r => (
+                              <span key={r.id} className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${!r.activo ? "opacity-50" : ""} ${
+                                esSuperAdmin(editItem) && r.nombre.trim().toLowerCase() === "administrador"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-muted text-foreground border border-border"
+                              }`}>
+                                {esSuperAdmin(editItem) && r.nombre.trim().toLowerCase() === "administrador" ? "Super Administrador" : r.nombre}
+                                {!r.activo ? " (Inactivo)" : ""}
+                              </span>
+                            ));
+                          })()}
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-snug">
+                          {esSuperAdmin(editItem)
+                            ? "La cuenta de super administrador no puede cambiar sus cargos."
+                            : "Este usuario no tiene ficha de empleado. Para asignarle roles, regístralo en Gestión de Empleados."}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div>
