@@ -27,22 +27,19 @@ import {
   type EstadoOrden,
   type ProveedorRef,
 } from "./OrdenCompraScreen";
+import {
+  aplicarStockCompra,
+  recalcularCostoMaximo,
+  textoStockActualizado,
+  type ResumenStock,
+  type SetCatalogo,
+} from "../utils/inventario";
 
 // ─── CONTROL DE STOCK DE LAS COMPRAS ─────────────────────────────────────────
-
-/** Estado React de un catálogo del panel (insumos / productos). */
-type SetCatalogo<T> = React.Dispatch<React.SetStateAction<T[]>>;
-
-/** Lo mínimo que necesita el cálculo de stock de una línea de factura: lo
- *  comparten `ItemFactura` (formulario) y `OrdenItem` (lo que queda guardado
- *  en `GestionCompra.items`), así que la misma función sirve para aplicar y
- *  para revertir. */
-type ItemStock = {
-  idInsumo: string;
-  nombre: string;
-  cantidad: number;
-  tipoItem?: TipoItem;
-};
+// Las funciones de inventario (sumar/revertir stock, rellenar `stockMaximo`
+// al recibir y recalcular `costoMaximo`) viven en `utils/inventario.ts` para
+// que la Recepción de compra comparta EXACTAMENTE el mismo camino sin tener
+// que importar esta pantalla.
 
 /**
  * `GestionCompra` se declara en OrdenCompraScreen.tsx (archivo que este cambio
@@ -62,133 +59,6 @@ declare module "./OrdenCompraScreen" {
     stockRevertido?: boolean;
   }
 }
-
-interface OpcionesStock {
-  /** Catálogos ACTUALES: son los que dicen a qué ítem corresponde cada línea. */
-  insumos?: Insumo[];
-  productos?: Producto[];
-  /** Sin setters no hay forma de escribir el inventario: la compra se guarda
-   *  igual y el stock simplemente no se aplica (nadie se entera de nada roto). */
-  setInsumos?: SetCatalogo<Insumo>;
-  setProductos?: SetCatalogo<Producto>;
-}
-
-interface ResumenStock {
-  /** Unidades totales sumadas (signo +1) o restadas (signo -1). */
-  unidades: number;
-  /** Nombres de los ítems que coincidieron con un insumo/producto del catálogo. */
-  nombres: string[];
-}
-
-/** Redondeo a 3 decimales: evita el desfase binario de punto flotante
- *  (0.1 + 0.2 = 0.30000000000000004) al acumular stock. */
-const redondear3 = (n: number) => Math.round(n * 1000) / 1000;
-
-/**
- * Suma (signo 1) o resta (signo -1) en el inventario las cantidades de los
- * ítems de una compra.
- *
- * Por qué existe: guardar una compra es el hecho que incrementa el stock de lo
- * comprado, y anularla debe devolver el inventario al estado previo. Los updates
- * son SIEMPRE funcionales (`prev => ...`) para no pisar estados concurrentes
- * (otra pantalla del panel puede estar actualizando el mismo catálogo en el
- * mismo lote de render).
- *
- * Devuelve `null` cuando no hay setters que tocar y, si los hay, el resumen de
- * lo realmente aplicado (para armar el toast).
- */
-function aplicarStockCompra(
-  items: ItemStock[],
-  signo: 1 | -1,
-  { insumos, productos, setInsumos, setProductos }: OpcionesStock
-): ResumenStock | null {
-  // Sin setters no se puede escribir el catálogo: no se rompe nada, la compra
-  // se guarda igual y aquí no se aplica stock (el llamador además decide no
-  // marcar `stockAplicado`, para que después no intente revertir algo que
-  // nunca sumó).
-  if (!setInsumos && !setProductos) return null;
-
-  // A qué catálogo pertenece cada línea. Si trae `tipoItem` (P14) el dato
-  // manda; si es una compra vieja sin tipo, decide la coincidencia de id. Las
-  // líneas de texto libre (id sintético `INS-FAC-…`) o las de un insumo ya
-  // dado de baja no coinciden con nada: quedan fuera porque no hay stock que
-  // mover en ningún catálogo.
-  const lineasInsumo: ItemStock[] = [];
-  const lineasProducto: ItemStock[] = [];
-  for (const item of items) {
-    if (!item.cantidad) continue;
-    const enInsumo = (insumos ?? []).some((i) => i.id === item.idInsumo);
-    const enProducto = (productos ?? []).some((p) => p.id === item.idInsumo);
-    if (item.tipoItem === "producto") {
-      if (enProducto) lineasProducto.push(item);
-    } else if (item.tipoItem === "insumo") {
-      if (enInsumo) lineasInsumo.push(item);
-    } else if (enInsumo) {
-      lineasInsumo.push(item);
-    } else if (enProducto) {
-      lineasProducto.push(item);
-    }
-  }
-
-  // El resumen sólo cuenta lo que SE PUEDE aplicar (catálogo + setter presente).
-  const lineasAfectadas = [
-    ...(setInsumos ? lineasInsumo : []),
-    ...(setProductos ? lineasProducto : []),
-  ];
-  if (lineasAfectadas.length === 0) return { unidades: 0, nombres: [] };
-
-  // Si la factura trae dos líneas del mismo insumo, se acumulan en una sola
-  // pasada para no depender del orden de los updates.
-  const acumular = (lineas: ItemStock[]) => {
-    const mapa = new Map<string, number>();
-    for (const l of lineas) mapa.set(l.idInsumo, (mapa.get(l.idInsumo) ?? 0) + l.cantidad);
-    return mapa;
-  };
-  const cantInsumo = acumular(lineasInsumo);
-  const cantProducto = acumular(lineasProducto);
-
-  if (setInsumos && cantInsumo.size > 0) {
-    setInsumos((prev) =>
-      prev.map((i) => {
-        const cant = cantInsumo.get(i.id);
-        if (!cant) return i;
-        const total = i.stockActual + signo * cant;
-        // Piso en 0 al restar: una anulación nunca deja el stock en negativo.
-        return { ...i, stockActual: signo < 0 ? Math.max(0, redondear3(total)) : redondear3(total) };
-      })
-    );
-  }
-
-  if (setProductos && cantProducto.size > 0) {
-    setProductos((prev) =>
-      prev.map((p) => {
-        const cant = cantProducto.get(p.id);
-        if (!cant) return p;
-        const total = p.stockDisponible + signo * cant;
-        // Mismo criterio que en insumos: redondeo a 3 decimales y mínimo 0.
-        return { ...p, stockDisponible: signo < 0 ? Math.max(0, redondear3(total)) : redondear3(total) };
-      })
-    );
-  }
-
-  return {
-    unidades: lineasAfectadas.reduce((s, l) => s + Math.abs(l.cantidad), 0),
-    nombres: [...new Set(lineasAfectadas.map((l) => l.nombre))],
-  };
-}
-
-/** Texto del toast al sumar stock: con una línea se nombra el insumo/producto
- *  y con varias se resume (no se satura el toast con 20 nombres). */
-const textoStockActualizado = (r: ResumenStock) => {
-  if (r.nombres.length === 1) {
-    return `Stock actualizado: ${r.unidades} unidades de «${r.nombres[0]}» añadidas al inventario`;
-  }
-  const mostrados = r.nombres.slice(0, 3);
-  const resto = r.nombres.length - mostrados.length;
-  return `Stock actualizado: ${r.nombres.length} ítems añadidos al inventario (${mostrados
-    .map((n) => `«${n}»`)
-    .join(", ")}${resto > 0 ? `, +${resto} más` : ""})`;
-};
 
 const SERIF = "var(--font-titulo)";
 
@@ -1859,15 +1729,19 @@ export function NuevaCompraPage({
       totalPagado: data.totalPagado,
     };
 
-    // Compra guardada ⇒ suma el stock de lo comprado. Los updates son
-    // funcionales (dentro de `aplicarStockCompra`) para no pisar estados
-    // concurrentes del panel.
-    const resumen = aplicarStockCompra(data.items, 1, {
-      insumos,
-      productos,
-      setInsumos,
-      setProductos,
-    });
+    // Compra guardada en "Recibido" ⇒ suma el stock de lo comprado (y de paso
+    // rellena `stockMaximo` si el insumo venía sin techo). Si la compra naciera
+    // anulada no se toca el inventario. Los updates son funcionales (dentro de
+    // `aplicarStockCompra`) para no pisar estados concurrentes del panel.
+    const recibeStock = data.estado === "Recibido";
+    const resumen = recibeStock
+      ? aplicarStockCompra(data.items, 1, {
+          insumos,
+          productos,
+          setInsumos,
+          setProductos,
+        })
+      : null;
 
     // `stockAplicado` sólo se marca si de verdad se sumó algo: así una compra
     // creada sin setters (contexto sin control de inventario) no queda
@@ -1884,6 +1758,12 @@ export function NuevaCompraPage({
     }
 
     setGestiones((prev) => [nueva, ...prev]);
+
+    // Costo máximo: el mayor costo unitario facturado entre las compras que
+    // siguen en "Recibido", ya incluyendo esta recién creada.
+    if (recibeStock) {
+      recalcularCostoMaximo([nueva, ...gestiones], setInsumos);
+    }
     toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
@@ -2043,6 +1923,18 @@ export function GestionCompraScreen({
       // (o si ya no quedaba nada que restar).
       stockRevertido: correspondeRevertir && revertido ? true : x.stockRevertido,
     } : x)));
+
+    // Costo máximo: se recalcula con las compras que SIGUEN en "Recibido", ya
+    // sin la anulada; si ninguna queda, cada insumo queda en 0. El
+    // `stockMaximo` NO se toca: el techo de un insumo no cambia porque se
+    // anule una factura.
+    if (next === "Anulado") {
+      const comprasTras = gestiones.map((x) =>
+        x.id === id ? { ...x, estado: next } : x,
+      );
+      recalcularCostoMaximo(comprasTras, setInsumos);
+    }
+
     setEstadoConfirm(null);
     setMotivoAnulacion("");
 

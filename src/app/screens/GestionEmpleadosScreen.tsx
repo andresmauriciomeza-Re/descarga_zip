@@ -10,8 +10,9 @@ import {
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "../components/campo";
+import { SelectorRoles } from "../components/SelectorRoles";
 import { type Rol } from "./GestionConfigScreen";
-import { type Usuario, DOC_TIPOS, fmtDoc } from "./GestionUsuariosScreen";
+import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "./GestionUsuariosScreen";
 import { type Cliente } from "./GestionClientesScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -22,13 +23,14 @@ const AVATAR_COLORS = [
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
 
-// Una contratación del empleado. `Empleado.cargo/rolId/fechaInicio/fechaFinal`
+// Una contratación del empleado. `Empleado.rolIds/fechaInicio/fechaFinal`
 // guarda SOLO la contratación vigente (lo que ve la tabla); aquí va el
 // historial completo, para no perder los cambios de cargo ni los reingresos.
+// CARGO = ROL: no existe un texto de cargo aparte, cada entrada guarda los
+// roles (cargos) que el empleado tenía en ese período.
 export interface Contratacion {
   id: string;           // "EMP-001-C01", "EMP-001-C02" (C## con 2 dígitos)
-  cargo: string;
-  rolId: string;
+  rolIds: string[];     // cargos/roles de esa contratación (mínimo 1)
   fechaInicio: string;  // YYYY-MM-DD
   fechaFinal: string;   // "" si la contratación sigue vigente
 }
@@ -43,9 +45,8 @@ export interface Empleado {
   tipoDocumento: string;
   numeroDocumento: string;
   contrasena: string;
-  rolId: string;           // Tb_Empleado.Id_rol (FK)
+  rolIds: string[];        // cargos/roles vigentes (fuente de verdad)
   activo: boolean;         // Tb_Empleado.Estado
-  cargo: string;           // Contratacion_empleado.Cargo (contratación vigente)
   fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (vigente)
   fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si sigue activo)
   contrataciones: Contratacion[]; // historial, de la más antigua a la más reciente
@@ -54,17 +55,19 @@ export interface Empleado {
 // Semilla cruda: los empleados sin historial. `INITIAL_EMPLEADOS` le deriva una
 // única contratación inicial a partir de sus propios campos, para que el dato no
 // quede escrito dos veces y ambas copias no puedan desincronizarse.
+// ROL-004 Cajero · ROL-005 Mesera · ROL-006 Domiciliario · ROL-007 Cocinero ·
+// ROL-008 Auxiliar de cocina · ROL-009 Operador de producción.
 const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
-  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolId:"ROL-001", activo:true,  cargo:"Administración",        fechaInicio:"2024-01-15", fechaFinal:"" },
-  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-02-01", fechaFinal:"" },
-  { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-02-10", fechaFinal:"" },
-  { id:"EMP-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-amber-500",   correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-03-05", fechaFinal:"" },
-  { id:"EMP-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Mesera",               fechaInicio:"2024-03-12", fechaFinal:"" },
-  { id:"EMP-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-pink-500",    correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CE", numeroDocumento:"44556677", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Operador de producción", fechaInicio:"2024-01-20", fechaFinal:"2025-06-30" },
-  { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cajero",               fechaInicio:"2024-04-01", fechaFinal:"" },
-  { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Cocinero",             fechaInicio:"2024-04-18", fechaFinal:"" },
-  { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", contrasena:"123456", rolId:"ROL-003", activo:false, cargo:"Auxiliar de cocina",    fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
-  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", contrasena:"123456", rolId:"ROL-003", activo:true,  cargo:"Domiciliario",         fechaInicio:"2024-05-02", fechaFinal:"" },
+  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolIds:["ROL-001"],             activo:true,  fechaInicio:"2024-01-15", fechaFinal:"" },
+  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-01", fechaFinal:"" },
+  { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-10", fechaFinal:"" },
+  { id:"EMP-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-amber-500",   correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", contrasena:"123456", rolIds:["ROL-004","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-03-05", fechaFinal:"" },
+  { id:"EMP-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", contrasena:"123456", rolIds:["ROL-005","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-03-12", fechaFinal:"" },
+  { id:"EMP-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-pink-500",    correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", contrasena:"123456", rolIds:["ROL-003","ROL-002"],             activo:false, fechaInicio:"2024-01-20", fechaFinal:"2025-06-30" },
+  { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", contrasena:"123456", rolIds:["ROL-004","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-04-01", fechaFinal:"" },
+  { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-04-18", fechaFinal:"" },
+  { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", contrasena:"123456", rolIds:["ROL-005","ROL-003","ROL-002"],             activo:false, fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
+  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", contrasena:"123456", rolIds:["ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-05-02", fechaFinal:"" },
 ];
 
 // Cada empleado de la semilla arranca con una contratación inicial (C01) que es
@@ -73,8 +76,7 @@ export const INITIAL_EMPLEADOS: Empleado[] = EMPLEADOS_SEMILLA.map(e => ({
   ...e,
   contrataciones: [{
     id: `${e.id}-C01`,
-    cargo: e.cargo,
-    rolId: e.rolId,
+    rolIds: [...e.rolIds],
     fechaInicio: e.fechaInicio,
     fechaFinal: e.fechaFinal,
   }],
@@ -138,10 +140,7 @@ export function GestionEmpleadosScreen({
   const [showContrat,       setShowContrat]      = useState(false);
   const [ctrEmpleadoId,     setCtrEmpleadoId]    = useState("");
   const [ctrActivo,         setCtrActivo]        = useState(true);
-  const [ctrRolId,          setCtrRolId]         = useState<string>(
-    () => roles.find(r => r.activo)?.id ?? "ROL-003",
-  );
-  const [ctrCargo,          setCtrCargo]         = useState("");
+  const [ctrRolIds,         setCtrRolIds]        = useState<string[]>([]);
   const [ctrFechaInicio,    setCtrFechaInicio]   = useState("");
   const [ctrFechaFinal,     setCtrFechaFinal]    = useState("");
   const [ctrErrors,         setCtrErrors]        = useState<Record<string, string | undefined>>({});
@@ -154,9 +153,7 @@ export function GestionEmpleadosScreen({
   const [newContrasena,   setNewContrasena]   = useState("");
   const [newConfirmar,    setNewConfirmar]    = useState("");
   const [newActivo,       setNewActivo]       = useState(true);
-  const [newRolId,        setNewRolId]        = useState<string>(
-    () => roles.find(r => r.activo)?.id ?? "ROL-003",
-  );
+  const [newRolIds,       setNewRolIds]       = useState<string[]>([]);
   const [newFechaInicio,  setNewFechaInicio]  = useState("");
   const [newFechaFinal,   setNewFechaFinal]   = useState("");
   const [createErrors,    setCreateErrors]    = useState<Record<string, string | undefined>>({});
@@ -165,6 +162,47 @@ export function GestionEmpleadosScreen({
   // Nombre del rol para mostrar. Un empleado sin rol (id vacío o de un rol que
   // ya no existe) se muestra como "-", nunca como un id interno suelto.
   const rolNombre = (rolId: string) => rolInfo(rolId)?.nombre ?? "-";
+  // Cargos = nombres de los roles indicados, en el MISMO orden en que se
+  // guardaron (el primero es el cargo principal, el que usan el buscador y el
+  // orden "por cargo"). Los ids de roles borrados simplemente no aportan texto.
+  const cargosDe = (rolIds?: string[]) =>
+    (rolIds ?? []).map(id => rolNombre(id)).filter(n => n !== "-");
+  // Cargo visible = sólo los roles EXTRA (Cajero, Mesera, creados). Los base
+  // (Empleado, Cliente, Administrador) no estorban: si no hay extra, el cargo
+  // visible es "Empleado".
+  const extrasDe = (rolIds?: string[]) =>
+    cargosDe(rolIds).filter(n => {
+      const x = n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return x !== "empleado" && x !== "cliente" && x !== "administrador";
+    });
+  const cargosMostrados = (rolIds?: string[]) => {
+    const ex = extrasDe(rolIds);
+    return ex.length > 0 ? ex : ["Empleado"];
+  };
+  const primerCargo = (rolIds?: string[]) => cargosMostrados(rolIds)[0] ?? "-";
+
+  // Chips de cargo (máximo 2 + "+N") usados en la tabla. `title` de la caja
+  // lista TODOS los cargos, incluidos los que se ocultan tras el "+N".
+  const chipsCargos = (rolIds: string[], extraCls = "") => {
+    const nombres = cargosMostrados(rolIds);
+    if (nombres.length === 0) return <span className="text-muted-foreground">—</span>;
+    const visibles = nombres.slice(0, 2);
+    const resto = nombres.slice(2);
+    return (
+      <span title={nombres.join(" · ")} className={`inline-flex flex-wrap items-center gap-1 ${extraCls}`}>
+        {visibles.map(n => (
+          <span key={n} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted border border-border text-foreground whitespace-nowrap">
+            {n}
+          </span>
+        ))}
+        {resto.length > 0 && (
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 border border-primary/20 text-primary whitespace-nowrap">
+            +{resto.length}
+          </span>
+        )}
+      </span>
+    );
+  };
 
   // Historial del empleado abierto en el modal de detalle, de la contratación
   // más reciente a la más antigua. Un `empleado` leído de una build anterior
@@ -178,15 +216,21 @@ export function GestionEmpleadosScreen({
   // Cada operación sobre un empleado actualiza (o crea) su registro Usuario vinculado por correo.
   const upsertUsuario = (emp: Empleado, prevCorreo?: string) => {
     setUsuarios(prev => {
-      const kPrev = prevCorreo?.trim().toLowerCase();
-      const kNew  = emp.correo.trim().toLowerCase();
+      // Cruce canónico por tipo y número de documento (que no se editan); el
+      // correo es editable y solo se usa como último recurso para datos viejos.
+      const kDoc = claveDoc(emp.tipoDocumento, emp.numeroDocumento);
+      const kPrevCorreo = prevCorreo?.trim().toLowerCase();
+      const kNewCorreo = emp.correo.trim().toLowerCase();
+      const targetPorCorreo = (kPrevCorreo || kNewCorreo)
+        ? prev.find(u => u.correo.trim().toLowerCase() === kPrevCorreo || u.correo.trim().toLowerCase() === kNewCorreo)
+        : undefined;
       const target =
-        (kPrev && prev.find(u => u.correo.trim().toLowerCase() === kPrev)) ||
-        prev.find(u => u.correo.trim().toLowerCase() === kNew) ||
+        (docValida(kDoc) && prev.find(u => claveDoc(u.tipoDocumento, u.numeroDocumento) === kDoc)) ??
+        targetPorCorreo ??
         null;
       const base: Pick<Usuario,
         "nombre" | "iniciales" | "avatarColor" | "correo" | "telefono" |
-        "tipoDocumento" | "numeroDocumento" | "rolId" | "activo"
+        "tipoDocumento" | "numeroDocumento" | "rolId" | "rolIds" | "activo"
       > = {
         nombre: emp.nombre.trim(),
         iniciales: emp.iniciales,
@@ -195,7 +239,10 @@ export function GestionEmpleadosScreen({
         telefono: emp.telefono.trim(),
         tipoDocumento: emp.tipoDocumento,
         numeroDocumento: emp.numeroDocumento.trim(),
-        rolId: emp.rolId,
+        // `Usuario.rolId` queda como ESPEJO del primer cargo: el multi-rol
+        // vive en `Usuario.rolIds` (que es lo que lee el selector de Usuarios).
+        rolId: emp.rolIds[0] ?? "",
+        rolIds: [...emp.rolIds],
         activo: emp.activo,
       };
       if (target) {
@@ -245,14 +292,14 @@ export function GestionEmpleadosScreen({
     let r = empleados.filter(e => {
       const q = search.toLowerCase();
       const est = e.activo ? "activo" : "inactivo";
-      const rol = rolNombre(e.rolId).toLowerCase();
+      const cargos = cargosMostrados(e.rolIds).join(" ").toLowerCase();
       const matchQ =
         !q ||
         e.nombre.toLowerCase().includes(q) ||
         e.correo.toLowerCase().includes(q) ||
         e.numeroDocumento.toLowerCase().includes(q) ||
         `${e.tipoDocumento} ${e.numeroDocumento}`.toLowerCase().includes(q) ||
-        rol.includes(q) ||
+        cargos.includes(q) ||
         est.includes(q);
       const matchE = filterEstado === "todos" || (filterEstado === "activo" ? e.activo : !e.activo);
       return matchQ && matchE;
@@ -260,11 +307,12 @@ export function GestionEmpleadosScreen({
     // Ni "nombre" ni "cargo" dependen de `activo`: con el filtro en "Todos los
     // estados" los activos y los inactivos quedan intercalados. Se eliminó la
     // ordenación por estado, que solo servía para agruparlos en bloques.
-    // "Cargo" es el nombre del rol asignado, así que la búsqueda y la ordenación
-    // por cargo leen de `rolNombre`. `roles` va en las dependencias porque de él
-    // salen esos nombres: sin él, editar o desactivar un rol dejaría la lista
-    // ordenada y filtrada por el nombre anterior.
-    if (sortBy === "cargo") r = [...r].sort((a,b) => rolNombre(a.rolId).localeCompare(rolNombre(b.rolId)));
+    // "Cargo" = primer cargo (= primer rol de `rolIds`), así que la búsqueda y
+    // la ordenación por cargo leen de `cargosDe`/`primerCargo`. `roles` va en
+    // las dependencias porque de él salen esos nombres: sin él, editar o
+    // desactivar un rol dejaría la lista ordenada y filtrada por el nombre
+    // anterior.
+    if (sortBy === "cargo") r = [...r].sort((a,b) => primerCargo(a.rolIds).localeCompare(primerCargo(b.rolIds)));
     else                    r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
     return r;
   }, [empleados, roles, search, filterEstado, sortBy]);
@@ -359,7 +407,15 @@ export function GestionEmpleadosScreen({
     if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
-    if (!e.rolId) errs.cargo = "Selecciona un cargo";
+    // Siempre base para empleados (salvo super-admin): la regla es estructural,
+    // no se valida como condición de cargo.
+    const rolIdsEditBase = (() => {
+      const eIds = (e.rolIds ?? []).filter(Boolean);
+      if (esSuperAdmin(e)) return eIds;
+      const emp = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
+      const cli = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
+      return [...new Set([...eIds, ...(emp ? [emp] : []), ...(cli ? [cli] : [])])];
+    })();
 
     if (Object.values(errs).some(Boolean)) { setEditErrors(errs); return; }
 
@@ -386,8 +442,17 @@ export function GestionEmpleadosScreen({
     // (p. ej. si su ficha vieja ya venía inactiva). Se fuerza a activa aquí,
     // antes de tocar `empleados` y su Usuario vinculado.
     const activoFinal = esSuperAdmin(e) ? true : e.activo;
-    setEmpleados(p => p.map(x => x.id === e.id ? { ...e, activo: activoFinal, iniciales: nuevasIniciales } : x));
-    upsertUsuario({ ...e, activo: activoFinal, iniciales: nuevasIniciales }, editPrevCorreo ?? undefined);
+    // Los cargos también se reflejan en la contratación VIGENTE del historial
+    // (fechaFinal vacía): si no, el detalle mostraría cargos viejos justo
+    // debajo de los que acaba de guardar. Las contrataciones cerradas no se
+    // tocan: son historia.
+    const contratacionesEdit = (e.contrataciones ?? []).map(c =>
+      c.fechaFinal === "" ? { ...c, rolIds: [...rolIdsEditBase] } : c,
+    );
+    setEmpleados(p => p.map(x => x.id === e.id
+      ? { ...e, rolIds: rolIdsEditBase, contrataciones: contratacionesEdit, activo: activoFinal, iniciales: nuevasIniciales }
+      : x));
+    upsertUsuario({ ...e, rolIds: rolIdsEditBase, activo: activoFinal, iniciales: nuevasIniciales }, editPrevCorreo ?? undefined);
     setEditItem(null);
     setEditPrevCorreo(null);
     setEditErrors({});
@@ -398,7 +463,7 @@ export function GestionEmpleadosScreen({
     setNewNombre(""); setNewCorreo(""); setNewTelefono(""); setNewTipoDoc("CC");
     setNewDocumento(""); setNewContrasena(""); setNewConfirmar("");
     setNewActivo(true);
-    setNewRolId(roles.find(r => r.activo)?.id ?? "ROL-003");
+    setNewRolIds([]);
     setNewFechaInicio(""); setNewFechaFinal(""); setCreateErrors({});
   };
 
@@ -417,7 +482,11 @@ export function GestionEmpleadosScreen({
     else { const v = validarContrasena(newContrasena); if (v) errs.contrasena = v; }
     if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
     else if (newContrasena !== newConfirmar) { errs.confirmar = "Las contraseñas no coinciden"; }
-    if (!newRolId) errs.cargo = "Selecciona un cargo";
+    // Cargo: no hay mínimo de extras, porque "Empleado" siempre acompaña.
+    const rolIdsExtras = newRolIds.filter(Boolean);
+    const empBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
+    const cliBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
+    const rolIdsNuevo = [...new Set([...rolIdsExtras, ...(empBaseId ? [empBaseId] : []), ...(cliBaseId ? [cliBaseId] : [])])];
     if (!newFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (newFechaInicio && newFechaFinal && newFechaFinal < newFechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
@@ -467,17 +536,15 @@ export function GestionEmpleadosScreen({
       tipoDocumento: newTipoDoc,
       numeroDocumento: dm,
       contrasena: newContrasena,
-      rolId: newRolId,
+      rolIds: rolIdsNuevo,
       activo: newActivo,
-      cargo: rolInfo(newRolId)?.nombre ?? "",
       fechaInicio: newFechaInicio,
       fechaFinal: newFechaFinal,
       // El alta es en sí misma la primera contratación: se guarda como registro
       // del historial para que quede desde el mismo momento, no solo implícita.
       contrataciones: [{
         id: nuevoContratacionId(newId, []),
-        cargo: rolInfo(newRolId)?.nombre ?? "",
-        rolId: newRolId,
+        rolIds: [...rolIdsNuevo],
         fechaInicio: newFechaInicio,
         fechaFinal: newFechaFinal,
       }],
@@ -492,14 +559,15 @@ export function GestionEmpleadosScreen({
 
   const resetContratacion = () => {
     setCtrEmpleadoId(""); setCtrActivo(true);
-    setCtrRolId(roles.find(r => r.activo)?.id ?? "ROL-003");
-    setCtrCargo(""); setCtrFechaInicio(""); setCtrFechaFinal("");
+    setCtrRolIds([]);
+    setCtrFechaInicio(""); setCtrFechaFinal("");
     setCtrErrors({});
   };
 
   // Registra una contratación nueva. Añade la entrada al historial SIN tocar las
   // anteriores y, a la vez, deja los campos de contrato del empleado reflejando
   // esta última contratación, que es lo que muestra la tabla.
+  // El cargo ya no es texto libre: es el multi-select de cargos (CARGO = ROL).
   const handleNuevaContratacion = () => {
     const errs: Record<string, string> = {};
     const emp = empleados.find(e => e.id === ctrEmpleadoId);
@@ -507,8 +575,10 @@ export function GestionEmpleadosScreen({
     if (!ctrEmpleadoId) errs.empleado = "Selecciona un empleado";
     else if (!emp) errs.empleado = "El empleado seleccionado no existe";
 
-    if (!ctrRolId) errs.rol = "Selecciona un rol";
-    if (!ctrCargo.trim()) errs.cargo = "El cargo es obligatorio";
+    const rolIdsCtr = ctrRolIds.filter(Boolean);
+    const empBaseIdCtr = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
+    const cliBaseIdCtr = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
+    const rolIdsCtrFull = [...new Set([...rolIdsCtr, ...(empBaseIdCtr ? [empBaseIdCtr] : []), ...(cliBaseIdCtr ? [cliBaseIdCtr] : [])])];
     if (!ctrFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     // Solo tiene sentido si la contratación ya empezó: comparar como texto ISO
     // (YYYY-MM-DD) es equivalente a comparar fechas.
@@ -520,16 +590,14 @@ export function GestionEmpleadosScreen({
 
     const contrato: Contratacion = {
       id: nuevoContratacionId(emp!.id, emp!.contrataciones ?? []),
-      cargo: ctrCargo.trim(),
-      rolId: ctrRolId,
+      rolIds: [...rolIdsCtrFull],
       fechaInicio: ctrFechaInicio,
       fechaFinal: ctrFechaFinal,
     };
 
     const actualizado: Empleado = {
       ...emp!,
-      cargo: contrato.cargo,
-      rolId: contrato.rolId,
+      rolIds: [...contrato.rolIds],
       fechaInicio: contrato.fechaInicio,
       fechaFinal: contrato.fechaFinal,
       // P7: este modal también escribe `activo` (y luego lo sube a su Usuario
@@ -627,7 +695,7 @@ export function GestionEmpleadosScreen({
                   <p className="text-4xl mb-3">👥</p><p>No se encontraron empleados</p>
                 </td></tr>
               ) : paged.map(e => {
-                const rol = rolInfo(e.rolId);
+                const rol = rolInfo(e.rolIds?.[0] ?? "");
                 const tienePerfilCliente = clientes.some(c =>
                   c.correo.trim().toLowerCase() === e.correo.trim().toLowerCase()
                 );
@@ -650,7 +718,7 @@ export function GestionEmpleadosScreen({
                       </div>
                     </td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
-                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{rolNombre(e.rolId)}</td>
+                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{chipsCargos(e.rolIds)}</td>
                     <td className="px-4 py-1.5">
                       {/* Pill de estado (diseño de Proveedores): antes era un
                           badge y el switch vivía en Acciones.
@@ -772,30 +840,20 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Rol <span className="text-primary">*</span>
+                      Cargo <span className="text-primary">*</span>
                     </label>
-                    <select value={ctrRolId}
-                      onChange={e => { setCtrRolId(e.target.value); if (ctrErrors.rol) setCtrErrors(p => ({ ...p, rol: undefined })); }}
-                      className={`${fCls(ctrErrors.rol)} cursor-pointer`}>
-                      {roles.filter(r => r.activo).map(r => (
-                        <option key={r.id} value={r.id}>{r.nombre}</option>
-                      ))}
-                    </select>
-                    {ctrErrors.rol && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.rol}</p>}
+                    {/* CARGO = ROL: un solo campo con los cargos (roles) de esta
+                        contratación; ya no hay un texto de cargo aparte. */}
+                    <SelectorRoles
+                      roles={roles}
+                      value={ctrRolIds}
+                      onChange={ids => { setCtrRolIds(ids); if (ctrErrors.cargo) setCtrErrors(p => ({ ...p, cargo: undefined })); }}
+                      error={ctrErrors.cargo}
+                    />
                   </div>
 
                   {/* Datos de Contratación */}
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Cargo <span className="text-primary">*</span>
-                    </label>
-                    <input type="text" value={ctrCargo}
-                      onChange={e => { setCtrCargo(e.target.value); if (ctrErrors.cargo) setCtrErrors(p => ({ ...p, cargo: undefined })); }}
-                      placeholder="Ej: Cajero"
-                      className={fCls(ctrErrors.cargo)} />
-                    {ctrErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.cargo}</p>}
-                  </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha de inicio <span className="text-primary">*</span>
@@ -805,7 +863,7 @@ export function GestionEmpleadosScreen({
                       className={fCls(ctrErrors.fechaInicio)} />
                     {ctrErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.fechaInicio}</p>}
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha final <span className="text-muted-foreground font-normal">(opcional)</span>
                     </label>
@@ -871,8 +929,11 @@ export function GestionEmpleadosScreen({
                     ))}
                   </div>
                   <div className="space-y-2">
+                    <div className="flex items-start justify-between py-2 border-b border-border gap-4">
+                      <span className="text-sm text-muted-foreground font-medium shrink-0">Cargo</span>
+                      <span className="text-sm font-semibold text-foreground text-right">{chipsCargos(detailItem.rolIds, "justify-end")}</span>
+                    </div>
                     {[
-                      { l: "Cargo", v: rolNombre(detailItem.rolId) },
                       { l: "Fecha inicio", v: detailItem.fechaInicio },
                       { l: "Fecha final", v: detailItem.fechaFinal || "Continúa activo" },
                       { l: "Estado", v: detailItem.activo ? "Activo" : "Inactivo" },
@@ -897,14 +958,14 @@ export function GestionEmpleadosScreen({
                         <div key={c.id}
                           className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
                           <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-sm font-semibold text-foreground">{c.cargo}</span>
+                            <span className="text-sm font-semibold text-foreground">{chipsCargos(c.rolIds)}</span>
                             {i === 0 && (
                               <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
                                 Actual
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground">{rolNombre(c.rolId)}</p>
+                          <p className="text-xs text-muted-foreground">{cargosMostrados(c.rolIds).join(" · ") || "—"}</p>
                           <p className="text-xs text-muted-foreground font-mono mt-1">
                             {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
                           </p>
@@ -1033,20 +1094,18 @@ export function GestionEmpleadosScreen({
                       <option value="inactivo">Inactivo</option>
                     </select>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Cargo <span className="text-primary">*</span>
                     </label>
-                    <select value={newRolId}
-                      onChange={e => { setNewRolId(e.target.value); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
-                      className={`${fCls(createErrors.cargo)} cursor-pointer`}>
-                      {roles.map(r => (
-                        <option key={r.id} value={r.id}>
-                          {r.nombre}{!r.activo ? " (Inactivo)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {createErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.cargo}</p>}
+                    {/* CARGO = ROL: aquí se eligen los cargos (roles) del nuevo
+                        empleado; no hay input de texto libre. */}
+                    <SelectorRoles
+                      roles={roles}
+                      value={newRolIds}
+                      onChange={ids => { setNewRolIds(ids); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
+                      error={createErrors.cargo}
+                    />
                   </div>
 
                   {/* Datos de Contratación */}
@@ -1141,18 +1200,16 @@ export function GestionEmpleadosScreen({
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Cargo</label>
-                  <select value={editItem.rolId}
-                    onChange={e => { setEditItem(x => x && ({ ...x, rolId: e.target.value })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
-                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${editErrors.cargo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}>
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.nombre}{!r.activo ? " (Inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {editErrors.cargo && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.cargo}</p>}
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Cargo <span className="text-primary">*</span>
+                  </label>
+                  <SelectorRoles
+                    roles={roles}
+                    value={editItem.rolIds ?? []}
+                    onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
+                    error={editErrors.cargo}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>

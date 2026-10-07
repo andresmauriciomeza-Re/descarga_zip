@@ -131,6 +131,76 @@ export interface Rol {
   activo: boolean;
 }
 
+// Accesos de referencia de los cargos operativos. Todos incluyen el acceso de
+// lectura al Dashboard (es la puerta de entrada al panel); el resto de
+// módulos/acciones es el que define cada cargo. Se usa tanto en la semilla
+// como en `completarRolesSemilla` (migración de datos viejos).
+const SOLO_DASHBOARD: AccesosMap = { [KEY("Dashboard", "Dashboard")]: ["Ver"] };
+
+const conAcciones = (base: AccesosMap, ks: string[], acts: Accion[]): AccesosMap => {
+  const m: AccesosMap = { ...base };
+  ks.forEach(k => { m[k] = [...acts]; });
+  return m;
+};
+
+// Cargos de la operación (CARGO = ROL): antes eran textos sueltos en la ficha
+// del empleado; hoy son roles dinámicos creados aquí para que el listado, el
+// detalle y el historial puedan mostrarlos como chips derivados de `rolIds`.
+export const ROLES_CARGO: Rol[] = [
+  {
+    id: "ROL-004", nombre: "Cajero",
+    descripcion: "Atiende el punto de venta y la gestión de clientes.", activo: true,
+    accesos: conAcciones(SOLO_DASHBOARD,
+      [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes"), KEY("Ventas", "Devoluciones")],
+      [...ACCIONES]),
+  },
+  {
+    id: "ROL-005", nombre: "Mesera",
+    descripcion: "Toma pedidos en sala y atiende a los clientes.", activo: true,
+    accesos: conAcciones(SOLO_DASHBOARD,
+      [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes")], [...ACCIONES]),
+  },
+  {
+    id: "ROL-006", nombre: "Domiciliario",
+    descripcion: "Entrega de pedidos a domicilio (solo consulta).", activo: true,
+    accesos: { ...SOLO_DASHBOARD, [KEY("Ventas", "Ventas")]: ["Ver"] },
+  },
+  {
+    id: "ROL-007", nombre: "Cocinero",
+    descripcion: "Prepara órdenes de producción y revisa productos.", activo: true,
+    accesos: {
+      ...conAcciones(SOLO_DASHBOARD,
+        [KEY("Producción", "Orden de Producción"), KEY("Producción", "Producto No Conforme")], [...ACCIONES]),
+      [KEY("Producción", "Productos")]: ["Ver"],
+    },
+  },
+  {
+    id: "ROL-008", nombre: "Auxiliar de cocina",
+    descripcion: "Apoya en órdenes de producción e insumos (consulta).", activo: true,
+    accesos: {
+      ...SOLO_DASHBOARD,
+      [KEY("Producción", "Orden de Producción")]: ["Ver", "Editar"],
+      [KEY("Compras", "Insumos")]: ["Ver"],
+    },
+  },
+  {
+    id: "ROL-009", nombre: "Operador de producción",
+    descripcion: "Administra producción, insumos y productos.", activo: true,
+    accesos: conAcciones(SOLO_DASHBOARD,
+      [KEY("Producción", "Orden de Producción"), KEY("Producción", "Productos"),
+       KEY("Compras", "Insumos")], [...ACCIONES]),
+  },
+  {
+    // Destino del cargo legado "Administración": antes era texto libre; hoy es
+    // un rol dinámico con permisos de apoyo administrativo.
+    id: "ROL-010", nombre: "Auxiliar administrativo",
+    descripcion: "Apoya en compras, órdenes de compra, proveedores e insumos.", activo: true,
+    accesos: conAcciones(SOLO_DASHBOARD,
+      [KEY("Compras", "Insumos"), KEY("Compras", "Orden de Compra"),
+       KEY("Compras", "Proveedores"), KEY("Compras", "Compra")], [...ACCIONES]),
+  },
+];
+
 export const INITIAL_ROLES: Rol[] = [
   {
     id: "ROL-001", nombre: "Administrador", descripcion: "Acceso total al sistema.", activo: true,
@@ -144,7 +214,51 @@ export const INITIAL_ROLES: Rol[] = [
     id: "ROL-003", nombre: "Empleado", descripcion: "Acceso operativo al sistema.", activo: true,
     accesos: { [KEY("Ventas","Clientes")]: ["Ver"] },
   },
+  ...ROLES_CARGO,
 ];
+
+// Garantía de semilla sobre datos viejos: una instalación con roles ya
+// guardados en localStorage NO volvería a cargar INITIAL_ROLES, así que los
+// roles de cargo (Cajero, Cocinero…) se fusionan aquí por NOMBRE si faltan.
+// Si el id de la semilla está ocupado por otro rol, se le asigna el siguiente
+// libre: nunca se pisa un rol creado por el administrador.
+export const completarRolesSemilla = (existentes: Rol[]): Rol[] => {
+  // Purga de la semilla vieja: solo se borran los que conservan el nombre Y el
+  // id de la semilla descargada (ROL-006…ROL-010). Un rol de usuario que haya
+  // recibido ese id con OTRO nombre se conserva intacto.
+  const eliminadosKeys = new Set(ROLES_SEMILLA_ELIMINADOS.map(r => `${r.id}||${r.nombre.trim().toLowerCase()}`));
+  const purge = existentes.filter(r => !eliminadosKeys.has(`${r.id}||${r.nombre.trim().toLowerCase()}`));
+  if (purge.length === 0) return INITIAL_ROLES;
+  const salida = [...purge];
+  const usados = new Set(existentes.map(r => r.id));
+  const nombres = new Set(existentes.map(r => r.nombre.trim().toLowerCase()));
+  for (const semilla of INITIAL_ROLES) {
+    const clave = semilla.nombre.trim().toLowerCase();
+    if (nombres.has(clave)) continue;
+    let id = semilla.id;
+    if (usados.has(id)) id = nextRolId(salida);
+    usados.add(id);
+    nombres.add(clave);
+    salida.push({ ...semilla, id });
+  }
+  return salida;
+};
+
+// "Administrador" y "Cliente" se reconocen SIEMPRE por nombre, nunca por id:
+// los ids de roles base solo sirven como ancla de migración, porque el
+// administrador puede renombrarlos o restaurar datos de semilla.
+// "Empleado" también es base para eliminar/inactivar (pero SÍ se edita).
+export const esRolBase = (r?: Rol | null): boolean => {
+  const n = (r?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return n === "administrador" || n === "cliente" || n === "empleado";
+};
+
+// Un rol se puede editar salvo los dos fijos por simplicidad de cuenta:
+// "Administrador" y "Cliente". "Empleado" y todo rol extra/creado sí se editan.
+export const rolEditable = (r?: Rol | null): boolean => {
+  const n = (r?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return n !== "administrador" && n !== "cliente";
+};
 
 // "Permisos" = sub-módulos con al menos un privilegio asignado.
 export const countAccesos = (accesos: AccesosMap) =>
@@ -791,7 +905,7 @@ export function GestionConfigScreen({
   canDelete?: boolean;
   accesosPropios?: AccesosMap;
   loggedInRolId?: string | null;
-  usuarios?: { id: string; rolId: string; activo: boolean }[];
+  usuarios?: { id: string; rolId: string; rolIds?: string[]; activo: boolean }[];
 }) {
   const [page,       setPage]      = useState(1);
   const PER_PAGE = 5;
@@ -827,26 +941,14 @@ export function GestionConfigScreen({
     return Object.entries(full).every(([k, acts]) => (accs[k]?.length ?? 0) > 0 && acts.every(a => accs[k]?.includes(a)));
   };
 
-  /**
-   * Regla del usuario: un rol ASIGNADO a usuarios no se puede editar ni
-   * eliminar; si se quiere editar, primero hay que DESACTIVARLO.
-   * Por eso el botón de editar queda deshabilitado solo cuando el rol tiene
-   * usuarios Y sigue activo: con el rol inactivo sí se edita (con usuarios o
-   * sin ellos), y el cambio de estado nunca se bloquea porque es justamente el
-   * camino para poder editarlo después. Eliminar sigue bloqueado siempre que
-   * haya usuarios (eso lo decide `handleDelete`).
-   */
-  const edicionBloqueada = (r: Rol) => (rolUserCounts[r.id] ?? 0) > 0 && r.activo;
+  // Los roles extra se editan siempre;Administrador y Cliente quedan fijos;
+  // Empleado se edita pero no se elimina/inactiva (los peers protegen con base).
 
   const saveRol = (id: string | null, nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
     if (id) {
       const r = roles.find(x => x.id === id);
-      // Guard defensivo: el lápiz de la lista y el botón del detalle ya vienen
-      // deshabilitados con este mismo criterio, pero si el modal se abriera por
-      // otra ruta (o el rol se reactivara mientras está abierto) no se guarda
-      // una edición sobre un rol ACTIVO con usuarios asignados.
-      if (r && r.activo && (rolUserCounts[id] ?? 0) > 0) {
-        toast.error("Este rol está asignado a usuarios; desactívalo para editarlo");
+      if (r && (r.nombre.trim().toLowerCase() === "administrador" || r.nombre.trim().toLowerCase() === "cliente")) {
+        toast.error("Este rol base no se puede editar");
         return;
       }
       if (r && rolEsTotal(r) && (!activo || !accesosEsTotal(accesos)) && ultimoTotalCubiertoPor(id)) {
@@ -867,23 +969,27 @@ export function GestionConfigScreen({
   };
   // Usuarios ACTIVOS cuyo rol tiene todos los permisos. Si el cambio de un
   // rol/usuario lo dejara en 0, el sistema se queda sin nadie con acceso total.
+  // Multi-rol: basta con que UNO de los roles del usuario sea total.
   const totalesActivos = (usuarios ?? []).filter(u => {
-    const r = roles.find(x => x.id === u.rolId);
-    return u.activo && rolEsTotal(r);
+    const ids = u.rolIds && u.rolIds.length > 0 ? u.rolIds : [u.rolId];
+    return u.activo && ids.some(id => rolEsTotal(roles.find(x => x.id === id)));
   });
   // ¿Esta acción dejaría el sistema sin ningún usuario activo con todos los
   // permisos? ¿El rol indicado cubre a TODOS los totales activos?
   const ultimoTotalCubiertoPor = (rolId: string) => {
     if (totalesActivos.length === 0) return false;
-    return totalesActivos.every(u => u.rolId === rolId);
+    return totalesActivos.every(u => {
+      const ids = u.rolIds && u.rolIds.length > 0 ? u.rolIds : [u.rolId];
+      return ids.includes(rolId);
+    });
   };
 
   const handleDelete = (id: string) => {
     const rol = roles.find(r => r.id === id);
     const asignados = rolUserCounts[id] ?? 0;
-    if (id === "ROL-001" || id === "ROL-002" || asignados > 0) {
+    if (esRolBase(rol) || asignados > 0) {
       toast.error(
-        id === "ROL-001" || id === "ROL-002"
+        esRolBase(rol)
           ? "No se puede eliminar un rol base"
           : `No se puede eliminar el rol porque tiene ${asignados} usuario(s) asignado(s)`,
       );
@@ -953,12 +1059,18 @@ export function GestionConfigScreen({
                         que antes: sin permiso o en el propio rol queda sin
                         menú, y no se puede quedar el sistema sin un usuario
                         activo con todos los permisos. */}
-                    <span
-                      title={r.id === loggedInRolId ? "No puedes modificar tu propio rol" : undefined}
+                      <span
+                      title={
+                        r.id === loggedInRolId
+                          ? "No puedes modificar tu propio rol"
+                          : esRolBase(r) && r.nombre.trim().toLowerCase() === "empleado"
+                            ? "El rol Empleado no se puede inactivar"
+                            : undefined
+                      }
                     >
                       <EstadoSelect
                         value={r.activo ? "activo" : "inactivo"}
-                        disabled={!canEdit || r.id === loggedInRolId}
+                        disabled={!canEdit || r.id === loggedInRolId || esRolBase(r)}
                         onChange={nuevoEstado => {
                           if ((nuevoEstado === "activo") === r.activo) return;
                           const nuevo = nuevoEstado === "activo";
@@ -980,22 +1092,19 @@ export function GestionConfigScreen({
                     <ActionIcons
                       onView={() => setDetailItem(r)}
                       onEdit={
-                        r.id === loggedInRolId
+                        r.id === loggedInRolId || !rolEditable(r)
                           ? () => {}
                           : canEdit
-                            // Rol activo con usuarios: el lápiz queda dibujado
-                            // pero deshabilitado (hay que desactivarlo para
-                            // poder editarlo); sin permiso no se pinta.
-                            ? (edicionBloqueada(r) ? () => {} : () => setEditItem(r))
+                            ? () => setEditItem(r)
                             : undefined
                       }
-                      editDisabled={r.id === loggedInRolId || edicionBloqueada(r)}
+                      editDisabled={r.id === loggedInRolId || !rolEditable(r)}
                       editTitle={
                         r.id === loggedInRolId
                           ? "No puedes modificar tu propio rol"
-                          : edicionBloqueada(r)
-                            ? "Desactiva el rol para editarlo"
-                            : "Editar"
+                          : rolEditable(r)
+                            ? "Editar"
+                            : "Este rol base no se puede editar"
                       }
                       onDelete={
                         r.id === loggedInRolId
@@ -1004,15 +1113,17 @@ export function GestionConfigScreen({
                       }
                       deleteDisabled={
                         r.id === loggedInRolId ||
-                        r.id === "ROL-001" || r.id === "ROL-002" ||
+                        esRolBase(r) ||
                         (rolUserCounts[r.id] ?? 0) > 0
                       }
                       deleteTitle={
                         r.id === loggedInRolId
                           ? "No puedes modificar tu propio rol"
-                          : (rolUserCounts[r.id] ?? 0) > 0
-                            ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)`
-                            : "Eliminar"
+                          : esRolBase(r)
+                            ? "No se puede eliminar un rol base"
+                            : (rolUserCounts[r.id] ?? 0) > 0
+                              ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)`
+                              : "Eliminar"
                       }
                     />
                   </td>
@@ -1110,18 +1221,17 @@ export function GestionConfigScreen({
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
-                {canEdit && detailItem.id !== loggedInRolId && !edicionBloqueada(detailItem) && (
+                {canEdit && detailItem.id !== loggedInRolId && rolEditable(detailItem) && (
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
                 </button>
                 )}
-                {/* Segunda ruta al modal de edición: se bloquea con el MISMO
-                    criterio que el lápiz de la tabla (rol propio o rol activo
-                    con usuarios, que hay que desactivar para editarlo). */}
-                {detailItem.id === loggedInRolId || (canEdit && edicionBloqueada(detailItem)) ? (
+                {/* Segunda ruta al modal de edición: mismo criterio que el lápiz
+                    de la tabla (propio, no editable o sin permiso). */}
+                {detailItem.id === loggedInRolId || !rolEditable(detailItem) ? (
                   <button disabled
-                    title={detailItem.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Desactiva el rol para editarlo"}
+                    title={detailItem.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Este rol base no se puede editar"}
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
                     Editar rol
                   </button>

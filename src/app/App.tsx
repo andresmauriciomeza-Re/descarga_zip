@@ -98,11 +98,12 @@ import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError,
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ResumenTotales } from "./components/ResumenTotales";
 import { VolverArriba } from "./components/VolverArriba";
+import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "./utils/hora";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "./screens/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "./screens/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "./screens/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
-import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Empleado } from "./screens/GestionEmpleadosScreen";
+import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "./screens/GestionConfigScreen";
+import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "./screens/GestionEmpleadosScreen";
 import type { Insumo } from "./screens/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
@@ -113,7 +114,8 @@ import { ESTADO_COLORES } from "./components/EstadoProducto";
 import { EstadoSelect } from "./components/EstadoSelect";
 import { SearchInput } from "./components/SearchInput";
 import { ActionIcons } from "./components/ActionIcons";
-import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, type Usuario } from "./screens/GestionUsuariosScreen";
+import { CambiarRolMenu } from "./components/CambiarRolMenu";
+import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "./screens/GestionUsuariosScreen";
 import { MiPerfilScreen } from "./screens/MiPerfilScreen";
 import { MisPedidosScreen } from "./screens/MisPedidosScreen";
 import type {
@@ -830,6 +832,62 @@ const ADMIN_SCREENS: Screen[] = [
 // Named roles that belong to the public catalog (not the admin panel)
 const PUBLIC_ROLE_NAMES = ["Cliente"];
 
+// Administrador y Cliente se detectan SIEMPRE por el NOMBRE del rol (sin
+// tildes ni mayúsculas), nunca por los ids "ROL-001"/"ROL-002": el administrador
+// puede renombrarlos o restaurar semillas, y los ids son solo anclas de
+// migración para los datos viejos.
+const normalizarNombreRol = (nombre: string) =>
+  nombre
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+const esRolAdministrador = (rol: Rol | null | undefined) =>
+  !!rol && normalizarNombreRol(rol.nombre) === "administrador";
+const esRolCliente = (rol: Rol | null | undefined) =>
+  !!rol && normalizarNombreRol(rol.nombre) === "cliente";
+
+// Clave de persona para el cruce Usuario ↔ Empleado: tipo y número de
+// documento, que el usuario NO puede editar (a diferencia del correo). Si el
+// documento no está, se cae al correo minúsculo como último recurso.
+const clavePersona = (tipoDocumento: string, numeroDocumento: string, correo: string): string => {
+  const k = claveDoc(tipoDocumento, numeroDocumento);
+  return docValida(k) ? `doc:${k}` : `correo:${correo.trim().toLowerCase()}`;
+};
+
+// Rol activo persistido por usuario: un mapa { [usuarioId]: rolId } que se
+// conserva al cerrar sesión para el próximo login.
+const ROL_ACTIVO_STORAGE_KEY = "sivpro.rolActivo.v1";
+const leerRolActivo = (usuarioId: string | null | undefined): string | null => {
+  if (!usuarioId) return null;
+  try {
+    const raw = localStorage.getItem(ROL_ACTIVO_STORAGE_KEY);
+    if (!raw) return null;
+    const m: unknown = JSON.parse(raw);
+    if (m && typeof m === "object" && !Array.isArray(m)) {
+      const v = (m as Record<string, unknown>)[usuarioId];
+      return typeof v === "string" && v ? v : null;
+    }
+  } catch {
+    // Dato corrupto: no hay rol guardado, se usa el primero de la persona.
+  }
+  return null;
+};
+const escribirRolActivo = (usuarioId: string | null | undefined, rolId: string | null) => {
+  if (!usuarioId) return;
+  try {
+    const raw = localStorage.getItem(ROL_ACTIVO_STORAGE_KEY);
+    const m: Record<string, string> = raw
+      ? (JSON.parse(raw) as Record<string, string>)
+      : {};
+    if (rolId) m[usuarioId] = rolId;
+    else delete m[usuarioId];
+    localStorage.setItem(ROL_ACTIVO_STORAGE_KEY, JSON.stringify(m));
+  } catch {
+    // localStorage bloqueado: el cambio de rol vive solo en memoria.
+  }
+};
+
 const SCREEN_META: Partial<
   Record<Screen, { title: string; icon: string; desc: string }>
 > = {
@@ -1088,6 +1146,27 @@ const NAV_SECTIONS = [
 
 const canViewPermission = (accesos: AccesosMap, permKey: string) =>
   accesos[permKey]?.includes("Ver") ?? false;
+
+// Pantallas del panel que dependen de un permiso (todas las de la barra
+// lateral menos "Inicio", que es universal dentro del panel). Se usan para
+// decidir si un rol "tiene pantallas" y para calcular a cuál entrar primero.
+const PANTALLAS_CON_PERMISO = NAV_SECTIONS.flatMap(s => s.items)
+  .filter(i => typeof (i as { permKey?: string }).permKey === "string")
+  .map(i => ({ screen: i.screen, permKey: (i as { permKey?: string }).permKey as string }));
+
+// ¿Este rol/mapa de accesos permite ver AL MENOS UNA pantalla del panel?
+// (No basta con tener permisos de escritura en algo: "tiene pantallas" se
+// define por el privilegio Ver de las pantallas de la barra lateral.)
+const rolTienePantallas = (accesos?: AccesosMap): boolean =>
+  !!accesos && PANTALLAS_CON_PERMISO.some(i => canViewPermission(accesos, i.permKey));
+
+// Pantalla de entrada del panel para un mapa de accesos: el Dashboard si el rol
+// lo puede ver; si no, la primera pantalla permitida siguiendo el orden de la
+// barra lateral; y si no puede ver ninguna, null (ese rol no entra al panel).
+const primeraPantallaPermitida = (accesos: AccesosMap): Screen | null => {
+  if (canViewPermission(accesos, DASHBOARD_PERM_KEY)) return "dashboard";
+  return PANTALLAS_CON_PERMISO.find(i => canViewPermission(accesos, i.permKey))?.screen ?? null;
+};
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
@@ -1500,6 +1579,8 @@ function AdminTopBar({
   userName,
   roleName,
   homeScreen,
+  rolesParaCambiar = [],
+  onCambiarRol,
 }: {
   current: Screen;
   onToggleSidebar: () => void;
@@ -1509,6 +1590,10 @@ function AdminTopBar({
   userName: string;
   roleName: string;
   homeScreen: Screen;
+  /** Roles distintos al activo que SÍ tienen pantallas: los que ofrece el
+   *  menú "Cambiar de rol" (los vacíos no se ofrecen). */
+  rolesParaCambiar?: Rol[];
+  onCambiarRol?: (rolId: string) => void;
 }) {
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
@@ -1563,6 +1648,15 @@ function AdminTopBar({
         )}
       </div>
       <div className="ml-auto flex items-center gap-0">
+        {onCambiarRol && (
+          <div className="mr-1">
+            <CambiarRolMenu
+              roles={rolesParaCambiar}
+              rolActivoNombre={roleName}
+              onSelect={onCambiarRol}
+            />
+          </div>
+        )}
         <button
           onClick={() => navigate("landing")}
           className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
@@ -3008,41 +3102,10 @@ const PAYMENT_INFO: Record<
   },
 };
 
-/** Horario de atención para la recogida, en minutos desde medianoche:
-    de 4:00 PM (960) a 10:00 PM (1320). El cliente puede elegir CUALQUIER
-    minuto dentro de ese lapso —4:22 PM, 6:38 PM…— no solo horas exactas. */
-const HORA_APERTURA = 16 * 60; // 4:00 PM
-const HORA_CIERRE = 22 * 60; // 10:00 PM
-
-/** Convierte "16:00", "6:00 p. m." o "06:00 PM" a minutos desde medianoche.
-    Devuelve null cuando la hora no se puede leer. */
-const minutosDeHora = (texto?: string): number | null => {
-  if (!texto) return null;
-  const m = texto
-    .trim()
-    .toLowerCase()
-    .match(/^(\d{1,2})[:.]?(\d{2})?\s*(a\.?\s?m\.?|p\.?\s?m\.?|am|pm)?$/);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = m[2] ? parseInt(m[2], 10) : 0;
-  const sufijo = (m[3] ?? "").replace(/\s|\./g, "");
-  if (sufijo.startsWith("p") && h < 12) h += 12;
-  if (sufijo.startsWith("a") && h === 12) h = 0;
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
-};
-
-/** "16:22" (o "6:38 p. m.") → "4:22 PM". Si no se puede leer, devuelve el
-    texto tal cual. Se usa para mostrar la hora de recogida con minutos. */
-const etiquetaHora = (valor?: string): string => {
-  if (!valor) return "";
-  const minutos = minutosDeHora(valor);
-  if (minutos === null) return valor;
-  const h24 = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  const h12 = h24 > 12 ? h24 - 12 : h24 === 0 ? 12 : h24;
-  return `${h12}:${String(m).padStart(2, "0")} ${h24 >= 12 ? "PM" : "AM"}`;
-};
+/** El horario de atención, el parser de horas y el formato "6:30 p. m." viven
+    en `utils/hora.ts` para compartirlos con las pantallas que muestran la hora
+    de recogida (Ventas, Mis Pedidos, Producción). La recogida es siempre hoy y
+    el último horario ofrecido es 9:45 p. m. */
 
 function CartScreen({
   cart,
@@ -3137,6 +3200,41 @@ function CartScreen({
     const ahora = new Date().getHours() * 60 + new Date().getMinutes();
     return m <= ahora;
   };
+
+  // ── Horarios que ofrece el selector de recogida ──
+  // La recogida es siempre hoy, así que solo se listan los horarios futuros
+  // dentro del horario de atención (4:00 p. m. – 9:45 p. m.), en intervalos
+  // de 15 minutos. El input nativo desapareció a propósito: mostraba "a. m."
+  // y no se le podía ocultar.
+  const ahoraMinutos = new Date().getHours() * 60 + new Date().getMinutes();
+  const minutosDisponiblesDe = (hora: number) =>
+    MINUTOS_RECOGIDA.filter((m) => hora * 60 + m > ahoraMinutos);
+  const horasDisponibles: number[] = [];
+  for (
+    let h = Math.floor(HORA_APERTURA / 60);
+    h <= Math.floor(HORA_ULTIMA_RECOGIDA / 60);
+    h++
+  ) {
+    if (minutosDisponiblesDe(h).length > 0) horasDisponibles.push(h);
+  }
+  /** true cuando ya cerró el día de hoy: no queda ningún horario que ofrecer. */
+  const sinHorariosHoy = horasDisponibles.length === 0;
+  const [horaSel, minutoSel] = horaRecogida
+    ? [
+        parseInt(horaRecogida.split(":")[0], 10),
+        parseInt(horaRecogida.split(":")[1] ?? "0", 10),
+      ]
+    : [null, null];
+  const seleccionValida =
+    horaSel !== null &&
+    minutoSel !== null &&
+    horasDisponibles.includes(horaSel) &&
+    minutosDisponiblesDe(horaSel).includes(minutoSel);
+  // Si el horario elegido quedó atrás (pasó el tiempo mientras el cliente
+  // revisaba el resumen), la selección se limpia y vuelve a pedirse.
+  useEffect(() => {
+    if (horaRecogida && !seleccionValida) setHoraRecogida("");
+  }, [horaRecogida, seleccionValida]);
 
   // ── Validación del formulario "Datos para enviar tu pedido" ──
   // Se recalcula en cada render, así que el mensaje cambia mientras se escribe;
@@ -3235,7 +3333,7 @@ function CartScreen({
         nombre: nombreCliente,
         documento: guestDocument.trim() || undefined,
         telefono: guestPhone.trim() || undefined,
-        hora: horaRecogida,
+        hora: hora12(horaRecogida),
       });
       clear();
       setLoading(false);
@@ -3260,7 +3358,7 @@ function CartScreen({
   };
 
   if (pedidoConfirmado && pedidoResumen) {
-    const horaEtiqueta = etiquetaHora(pedidoResumen.hora);
+    const horaEtiqueta = hora12(pedidoResumen.hora);
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
@@ -3674,17 +3772,21 @@ function CartScreen({
                     </div>
                   </div>
 
-                  {/* Hora de recogida. Se puede elegir cualquier minuto
-                      dentro del horario de atención: de 4:00 PM a 10:00 PM
-                      (16:00–22:00), no solo horas exactas. */}
+                  {/* Hora de recogida: dos selects (hora y minutos de 15 en
+                      15), siempre en p. m., de 4:00 p. m. a 9:45 p. m., y solo
+                      con los horarios que aún no pasaron hoy. */}
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
                       Hora de recogida
                     </p>
                     <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
                       <p>
-                        Atendemos de <strong className="text-foreground">4:00 PM</strong> a{" "}
-                        <strong className="text-foreground">10:00 PM</strong>
+                        Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
+                        <strong className="text-foreground">10:00 p. m.</strong>
+                      </p>
+                      <p className="text-xs mt-0.5">
+                        El último horario de recogida es{" "}
+                        <strong className="text-foreground">9:45 p. m.</strong>
                       </p>
                     </div>
                     <div
@@ -3695,33 +3797,85 @@ function CartScreen({
                       }`}
                     >
                       <span className="text-base shrink-0">🕐</span>
-                      <input
-                        type="time"
-                        value={horaRecogida}
-                        min="16:00"
-                        max="22:00"
-                        step={60}
-                        aria-label="Hora de recogida, de 4:00 PM a 10:00 PM (puedes elegir los minutos)"
-                        onChange={(e) => setHoraRecogida(e.target.value)}
-                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
-                      />
-                    </div>
-                    {horaRecogida && (
-                      <p
-                        className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${
-                          horaYaPaso(horaRecogida)
-                            ? "text-red-500"
-                            : horaFueraDeRango(horaRecogida)
-                              ? "text-red-500"
-                              : "text-muted-foreground"
-                        }`}
+                      <select
+                        value={seleccionValida && horaSel !== null ? horaSel : ""}
+                        disabled={sinHorariosHoy}
+                        aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
+                        onChange={(e) => {
+                          const nuevaHora = Number(e.target.value);
+                          const minutos = minutosDisponiblesDe(nuevaHora);
+                          const minutoActual = minutos.includes(minutoSel ?? -1)
+                            ? (minutoSel as number)
+                            : minutos[0];
+                          setHoraRecogida(
+                            `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
+                          );
+                        }}
+                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                       >
-                        {horaFueraDeRango(horaRecogida)
-                          ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
-                          : horaYaPaso(horaRecogida)
-                            ? "⚠ Esta hora no está disponible — ya pasó"
-                            : `Recogerás a las ${etiquetaHora(horaRecogida)}`}
+                        <option value="" disabled>
+                          --:--
+                        </option>
+                        {horasDisponibles.map((h) => (
+                          <option key={h} value={h}>
+                            {`${h > 12 ? h - 12 : h}:00 p. m.`}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={
+                          seleccionValida && minutoSel !== null ? minutoSel : ""
+                        }
+                        disabled={
+                          sinHorariosHoy ||
+                          horaSel === null ||
+                          !horasDisponibles.includes(horaSel)
+                        }
+                        aria-label="Minutos de la hora de recogida"
+                        onChange={(e) => {
+                          if (horaSel === null) return;
+                          setHoraRecogida(
+                            `${String(horaSel).padStart(2, "0")}:${String(
+                              Number(e.target.value),
+                            ).padStart(2, "0")}`,
+                          );
+                        }}
+                        className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <option value="" disabled>
+                          --
+                        </option>
+                        {(
+                          horaSel !== null ? minutosDisponiblesDe(horaSel) : []
+                        ).map((m) => (
+                          <option key={m} value={m}>
+                            {String(m).padStart(2, "0")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {sinHorariosHoy ? (
+                      <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
+                        ⚠ Ya no hay horarios disponibles para hoy
                       </p>
+                    ) : (
+                      horaRecogida && (
+                        <p
+                          className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${
+                            horaYaPaso(horaRecogida)
+                              ? "text-red-500"
+                              : horaFueraDeRango(horaRecogida)
+                                ? "text-red-500"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          {horaFueraDeRango(horaRecogida)
+                            ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                            : horaYaPaso(horaRecogida)
+                              ? "⚠ Esta hora no está disponible — ya pasó"
+                              : `Recogerás a las ${hora12(horaRecogida)}`}
+                        </p>
+                      )
                     )}
                   </div>
                 </div>
@@ -3736,6 +3890,10 @@ function CartScreen({
                 </button>
                 <button
                   onClick={() => {
+                    if (sinHorariosHoy) {
+                      toast.error("Ya no hay horarios disponibles para hoy");
+                      return;
+                    }
                     if (!horaRecogida) {
                       toast.error("Por favor ingresa la hora de recogida");
                       return;
@@ -3751,7 +3909,12 @@ function CartScreen({
                     }
                     setCheckoutStep(2);
                   }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 flex items-center justify-center gap-2"
+                  disabled={sinHorariosHoy}
+                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${
+                    sinHorariosHoy
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
                 >
                   Continuar <ArrowRight className="w-4 h-4" />
                 </button>
@@ -4508,7 +4671,9 @@ function LoginScreen({
   onPasswordReset,
 }: {
   navigate: (s: Screen) => void;
-  onLogin: (user: Usuario) => void;
+  // Devuelve { ok, mensaje }: ok=false es la señal para que esta pantalla muestre
+  // el motivo y NO considere la sesión iniciada (p. ej. sin roles activos).
+  onLogin: (user: Usuario) => { ok: boolean; mensaje?: string };
   usuarios: Usuario[];
   darkMode: boolean;
   loginNotice?: boolean;
@@ -4526,6 +4691,9 @@ function LoginScreen({
     email?: string;
     password?: string;
   }>({});
+  // Motivo por el que App rechazó el login (sin roles activos, sin pantallas…):
+  // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
+  const [rechazo, setRechazo] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
 
   const validate = () => {
@@ -4547,6 +4715,7 @@ function LoginScreen({
       console.log("[login] submit detenido por validación");
       return;
     }
+    setRechazo(null);
 
     const trimmedEmail = email.trim().toLowerCase();
     console.log("[login] correo normalizado", trimmedEmail);
@@ -4599,7 +4768,16 @@ function LoginScreen({
         rolId: user.rolId,
       });
       // Navigation and session state are handled by App.tsx.
-      onLogin(user);
+      const respuesta = onLogin(user);
+      if (respuesta && respuesta.ok === false) {
+        // El login fue RECHAZADO en App: muestra el motivo y no navega.
+        console.log("[login] login rechazado", respuesta.mensaje);
+        const mensaje = respuesta.mensaje ?? "Tu cuenta no tiene roles activos. Contacta al administrador.";
+        setRechazo(mensaje);
+        toast.error(mensaje);
+        return;
+      }
+      setRechazo(null);
       const firstName = user.nombre.split(" ")[0];
       toast.success(`¡Bienvenid${user.nombre.split(" ")[0].endsWith("a") ? "a" : "o"}, ${firstName}!`, {
         description: "Has ingresado correctamente.",
@@ -4742,6 +4920,12 @@ function LoginScreen({
           {loading ? "Ingresando..." : "Iniciar sesión"}
         </PrimaryBtn>
         </form>
+
+        {rechazo && (
+          <p className="text-center text-sm font-semibold text-red-600 mb-3">
+            {rechazo}
+          </p>
+        )}
 
         {loginNotice && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
@@ -5336,6 +5520,7 @@ function RegisterScreen({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
         rolId: "ROL-002",
+        rolIds: ["ROL-002"],
         activo: true,
         contrasena: form.password,
       };
@@ -5557,16 +5742,9 @@ function DashboardScreen({
 
   const horaVenta = (venta: Venta) =>
     venta.historial?.[venta.historial.length - 1]?.hora ?? venta.horaRecogida ?? "Sin hora";
-  const minutosHora = (hora: string) => {
-    const match = hora.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-    if (!match) return 0;
-    let hour = Number(match[1]);
-    const minute = Number(match[2]);
-    const period = match[3]?.toUpperCase();
-    if (period === "PM" && hour < 12) hour += 12;
-    if (period === "AM" && hour === 12) hour = 0;
-    return hour * 60 + minute;
-  };
+  // Parser compartido (utils/hora.ts): entiende tanto "18:30" como
+  // "6:30 p. m.", que es el formato en el que se guarda la recogida.
+  const minutosHora = (hora: string) => minutosDeHora(hora) ?? 0;
   const ventasRecientes = ventas
     .map((venta, index) => ({ venta, index }))
     .sort((a, b) => {
@@ -8131,12 +8309,12 @@ const leerRolesPersistidos = (): Rol[] => {
     if (!raw) return INITIAL_ROLES;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
-      return (parsed as Rol[]).map(rol => {
+      return completarRolesSemilla((parsed as Rol[]).map(rol => {
         const renombrado = rol.id === "ROL-003" && rol.nombre === "Usuario"
           ? { ...rol, nombre: "Empleado", descripcion: "Acceso operativo al sistema." }
           : rol;
         return restaurarDescargaExcel(renombrado);
-      });
+      }));
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -8164,6 +8342,8 @@ const esUsuarioValido = (u: unknown): u is Usuario => {
   // Se comprueban también `iniciales` y `avatarColor` porque la tabla las
   // pinta tal cual: un registro corrupto que las traiga ausentes llegaría hasta
   // el avatar en vez de descartarse aquí.
+  // `rolIds` (multi-rol) se acepta ausente en registros viejos: los que solo
+  // traen `rolId` se migran en la normalización de abajo.
   return (
     typeof usr.id === "string" &&
     typeof usr.nombre === "string" &&
@@ -8176,6 +8356,17 @@ const esUsuarioValido = (u: unknown): u is Usuario => {
     typeof usr.rolId === "string" &&
     typeof usr.activo === "boolean"
   );
+};
+
+// Lista de cargos/roles de un registro guardado. Los datos viejos solo traían
+// `rolId` (un solo rol); los nuevos traen `rolIds`. El espejo `rolId` se
+// conserva siempre apuntando al PRIMER rol de la lista.
+const rolIdsDe = (rolIds: unknown, rolId: unknown): string[] => {
+  if (Array.isArray(rolIds)) {
+    const limpio = rolIds.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+    if (limpio.length > 0) return limpio;
+  }
+  return typeof rolId === "string" && rolId.trim() !== "" ? [rolId] : [];
 };
 
 const leerUsuariosPersistidos = (): Usuario[] => {
@@ -8199,11 +8390,17 @@ const leerUsuariosPersistidos = (): Usuario[] => {
       const otrosUsuarios = persistidos
         .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
         .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
-      return [...cuentasPrueba, ...otrosUsuarios].map(u => ({
-        ...u,
-        // Backfill para registros viejos sin contraseña propia.
-        contrasena: u.contrasena ?? "123456",
-      }));
+      return [...cuentasPrueba, ...otrosUsuarios].map(u => {
+        const ids = rolIdsDe(u.rolIds, u.rolId);
+        return {
+          ...u,
+          // Multi-rol + espejo: `rolIds` manda, `rolId` refleja el primero.
+          rolIds: ids,
+          rolId: ids[0] ?? "",
+          // Backfill para registros viejos sin contraseña propia.
+          contrasena: u.contrasena ?? "123456",
+        };
+      });
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -8230,7 +8427,20 @@ const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
 
 const esEmpleadoValido = (e: unknown): e is Empleado => {
   if (!e || typeof e !== "object") return false;
-  const emp = e as Empleado;
+  const emp = e as unknown as {
+    id?: unknown; nombre?: unknown; correo?: unknown; telefono?: unknown;
+    tipoDocumento?: unknown; numeroDocumento?: unknown; activo?: unknown;
+    fechaInicio?: unknown; fechaFinal?: unknown;
+    rolIds?: unknown; rolId?: unknown; cargo?: unknown;
+  };
+  // `rolIds` es el campo nuevo; los registros viejos traían `rolId` + `cargo`
+  // (texto libre), así que se acepta cualquiera de las dos formas para que una
+  // base guardada antes de esta feature no se descarte entera (y con ella el
+  // historial de contrataciones).
+  const tieneCargos =
+    (Array.isArray(emp.rolIds) && emp.rolIds.length > 0) ||
+    typeof emp.rolId === "string" ||
+    typeof emp.cargo === "string";
   return (
     typeof emp.id === "string" &&
     typeof emp.nombre === "string" &&
@@ -8238,30 +8448,111 @@ const esEmpleadoValido = (e: unknown): e is Empleado => {
     typeof emp.telefono === "string" &&
     typeof emp.tipoDocumento === "string" &&
     typeof emp.numeroDocumento === "string" &&
-    typeof emp.rolId === "string" &&
     typeof emp.activo === "boolean" &&
-    typeof emp.cargo === "string" &&
     typeof emp.fechaInicio === "string" &&
-    typeof emp.fechaFinal === "string"
+    typeof emp.fechaFinal === "string" &&
+    tieneCargos
   );
 };
 
-// `contrataciones` se нормаiza en vez de exigirla: si un array quedó guardado
+// CARGO = ROL. Migra un registro viejo (`cargo` texto + `rolId`) al modelo de
+// multi-rol: si el texto del cargo coincide con el NOMBRE de un rol guardado,
+// ese rol es su cargo; si no, se conserva el `rolId` que traía (p. ej. la
+// Administradora, cuyo cargo legado "Administración" no es un rol).
+const migrarCargos = (rolIds: unknown, rolId: unknown, cargo: unknown, roles: Rol[]): string[] => {
+  if (Array.isArray(rolIds)) {
+    const limpio = rolIds.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+    if (limpio.length > 0) return limpio;
+  }
+  if (typeof cargo === "string" && cargo.trim() !== "") {
+    const porNombre = roles.find(r => r.nombre.trim().toLowerCase() === cargo.trim().toLowerCase());
+    if (porNombre) return [porNombre.id];
+    // El cargo legado "Administración" no es un rol: se cambia por el rol
+    // "Auxiliar administrativo". EXCEPCIÓN: si el empleado traía el rol
+    // Administrador (la cuenta de Gloria), se conserva tal cual — "Administración"
+    // era su etiqueta antigua, nunca el cargo de apoyo.
+    const esAdmin = typeof rolId === "string" &&
+      roles.find(r => r.id === rolId)?.nombre.trim().toLowerCase() === "administrador";
+    if (cargo.trim().toLowerCase() === "administración" && !esAdmin) {
+      const auxiliar = roles.find(r => r.nombre.trim().toLowerCase() === "auxiliar administrativo");
+      if (auxiliar) return [auxiliar.id];
+    }
+    // Seeds heredadas con cargos eliminados: se reasignan a Cajero/Mesera (que
+    // sustituyen esos cargos en la nueva semilla).
+    const remap = new Map<string, string>([
+      ["domiciliario", "cajero"], ["auxiliar administrativo", "cajero"],
+      ["cocinero", "mesera"], ["auxiliar de cocina", "mesera"], ["operador de producción", "mesera"],
+    ]);
+    const destino = remap.get(cargo.trim().toLowerCase());
+    if (destino) {
+      const r = roles.find(x => x.nombre.trim().toLowerCase() === destino);
+      if (r) return [r.id];
+    }
+  }
+  return typeof rolId === "string" && rolId.trim() !== "" ? [rolId] : [];
+};
+
+// `contrataciones` se normaliza en vez de exigirla: si un array quedó guardado
 // por una build anterior a esta feature, descartar el registro entero perdería
-// también sus datos de contacto. Un histórico ausente se trata como vacío.
-const normalizarEmpleado = (e: Empleado): Empleado => ({
-  ...e,
-  contrasena: typeof e.contrasena === "string" ? e.contrasena : "123456",
-  contrataciones: Array.isArray(e.contrataciones) ? e.contrataciones : [],
-});
+// también sus datos de contacto. Un histórico ausente se trata como vacío, y
+// cada entrada vieja (`cargo` + `rolId`) se migra a `rolIds` con la misma regla
+// de arriba.
+const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
+  const crudo = e as unknown as {
+    cargo?: unknown; rolId?: unknown; rolIds?: unknown; contrataciones?: unknown;
+  };
+  // Se quitan los campos viejos (`cargo` texto y su `rolId` espejo) para que no
+  // sobrevivan en la memoria ni se re-serialicen al guardar.
+  const { cargo, rolId, rolIds: _legacy, ...resto } = crudo;
+  // Todo empleado tiene SIEMPRE los roles base "Empleado" y "Cliente". La cuenta
+  // de super administrador (Gloria) queda tal cual: no recibe roles de empleado.
+  const esSuperAdmin = e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
+  const peso = (lista: string[]) => {
+    const vivos = lista.filter(id => roles.some(r => r.id === id));
+    // Idros perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesera.
+    const mapId = new Map<string, string>([
+      ["ROL-006", "Cajero"], ["ROL-010", "Cajero"],
+      ["ROL-007", "Mesera"], ["ROL-008", "Mesera"], ["ROL-009", "Mesera"],
+    ]);
+    lista.forEach(id => {
+      const n = mapId.get(id);
+      if (n) {
+        const r = roles.find(x => x.nombre.trim().toLowerCase() === n.toLowerCase());
+        if (r) vivos.push(r.id);
+      }
+    });
+    return esSuperAdmin ? [...new Set(vivos)] : [...new Set([
+      ...vivos,
+      roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id ?? "",
+      roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id ?? "",
+    ].filter(x => x))];
+  };
+  return {
+    ...(resto as unknown as Empleado),
+    rolIds: peso(migrarCargos(crudo.rolIds, rolId, cargo, roles)),
+    contrasena: typeof e.contrasena === "string" ? e.contrasena : "123456",
+    contrataciones: (Array.isArray(crudo.contrataciones) ? crudo.contrataciones : []).map(c => {
+      const vieja = c as unknown as { id?: unknown; fechaInicio?: unknown; fechaFinal?: unknown; cargo?: unknown; rolId?: unknown; rolIds?: unknown };
+      return {
+        id: typeof vieja.id === "string" ? vieja.id : `${crudo as unknown as Empleado["id"]}-C01`,
+        fechaInicio: typeof vieja.fechaInicio === "string" ? vieja.fechaInicio : "",
+        fechaFinal: typeof vieja.fechaFinal === "string" ? vieja.fechaFinal : "",
+        rolIds: peso(migrarCargos(vieja.rolIds, vieja.rolId, vieja.cargo, roles)),
+      };
+    }),
+  };
+};
 
 const leerEmpleadosPersistidos = (): Empleado[] => {
+  // Los roles se leen aparte porque la migración de `cargo` (texto) a `rolIds`
+  // necesita los NOMBRES guardados para empatarlos.
+  const roles = leerRolesPersistidos();
   try {
     const raw = localStorage.getItem(EMPLEADOS_STORAGE_KEY);
     if (!raw) return INITIAL_EMPLEADOS;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esEmpleadoValido)) {
-      return (parsed as Empleado[]).map(normalizarEmpleado);
+      return (parsed as Empleado[]).map(e => normalizarEmpleado(e, roles));
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -8676,17 +8967,23 @@ export default function App() {
   const [categorias, setCategorias] = useState<CategoriaProducto[]>(leerCategoriasPersistidas);
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
+  // Id del rol ACTIVO de la sesión. Se inicializa en el login y lo cambia el
+  // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
+  const [rolActivoId, setRolActivoId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
   const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
 
-  // Mantiene el listado general como la union de las cuentas de empleados y
-  // clientes. Los perfiles que comparten correo siguen siendo una sola cuenta.
+  // Mantiene el listado general como la unión de las cuentas de empleados y
+  // clientes. Los perfiles que coinciden por tipo y número de documento
+  // (`clavePersona`) son una sola cuenta.
   useEffect(() => {
     setUsuarios(prev => {
       const next = [...prev];
-      const porCorreo = new Map(next.map(usuario => [usuario.correo.trim().toLowerCase(), usuario]));
+      const porClave = new Map(
+        next.map(usuario => [clavePersona(usuario.tipoDocumento, usuario.numeroDocumento, usuario.correo), usuario]),
+      );
       let changed = false;
       const siguienteId = () => {
         const max = next.reduce((value, usuario) => {
@@ -8697,7 +8994,7 @@ export default function App() {
       };
 
       empleados.forEach(empleado => {
-        const correo = empleado.correo.trim().toLowerCase();
+        const clave = clavePersona(empleado.tipoDocumento, empleado.numeroDocumento, empleado.correo);
         const base = {
           nombre: empleado.nombre,
           iniciales: empleado.iniciales,
@@ -8706,16 +9003,17 @@ export default function App() {
           telefono: empleado.telefono,
           tipoDocumento: empleado.tipoDocumento,
           numeroDocumento: empleado.numeroDocumento,
-          rolId: empleado.rolId,
+          rolIds: [...empleado.rolIds],
+          rolId: empleado.rolIds[0] ?? "",
           activo: empleado.activo,
         };
-        const existente = porCorreo.get(correo);
+        const existente = porClave.get(clave);
         if (existente) {
           const actualizado = { ...existente, ...base };
           if (JSON.stringify(actualizado) !== JSON.stringify(existente)) {
             const indice = next.findIndex(usuario => usuario.id === existente.id);
             next[indice] = actualizado;
-            porCorreo.set(correo, actualizado);
+            porClave.set(clave, actualizado);
             changed = true;
           }
         } else {
@@ -8726,16 +9024,18 @@ export default function App() {
           // "Restablecer contraseña".
           const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
           next.push(nuevo);
-          porCorreo.set(correo, nuevo);
+          porClave.set(clave, nuevo);
           changed = true;
         }
       });
 
-      const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
+      const clavesEmpleado = new Set(empleados.map(e =>
+        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo),
+      ));
       clientes.forEach(cliente => {
-        const correo = cliente.correo.trim().toLowerCase();
-        if (correosEmpleado.has(correo)) return;
-        const existente = porCorreo.get(correo);
+        const clave = clavePersona(cliente.tipoDocumento, cliente.numeroDocumento, cliente.correo);
+        if (clavesEmpleado.has(clave)) return;
+        const existente = porClave.get(clave);
         const base = {
           nombre: cliente.nombre,
           iniciales: cliente.iniciales,
@@ -8744,7 +9044,8 @@ export default function App() {
           telefono: existente?.telefono ?? "",
           tipoDocumento: cliente.tipoDocumento,
           numeroDocumento: cliente.numeroDocumento,
-          rolId: "ROL-002",
+          rolIds: [idRolCliente(roles)],
+          rolId: idRolCliente(roles),
           activo: cliente.activo,
         };
         if (existente) {
@@ -8752,26 +9053,29 @@ export default function App() {
           if (JSON.stringify(actualizado) !== JSON.stringify(existente)) {
             const indice = next.findIndex(usuario => usuario.id === existente.id);
             next[indice] = actualizado;
-            porCorreo.set(correo, actualizado);
+            porClave.set(clave, actualizado);
             changed = true;
           }
         } else {
           const nuevo = { id: siguienteId(), ...base };
           next.push(nuevo);
-          porCorreo.set(correo, nuevo);
+          porClave.set(clave, nuevo);
           changed = true;
         }
       });
 
       return changed ? next : prev;
     });
-  }, [empleados, clientes]);
+  }, [empleados, clientes, roles]);
 
   // Fuente de lectura del listado general: combina cualquier cuenta existente
-  // con los perfiles de Clientes y Empleados, sin repetir personas por correo.
+  // con los perfiles de Clientes y Empleados, sin repetir personas (por
+  // documento via `clavePersona`).
   const usuariosUnificados = useMemo(() => {
     const next = [...usuarios];
-    const porCorreo = new Map(next.map(usuario => [usuario.correo.trim().toLowerCase(), usuario]));
+    const porClave = new Map(
+      next.map(usuario => [clavePersona(usuario.tipoDocumento, usuario.numeroDocumento, usuario.correo), usuario]),
+    );
     const siguienteId = () => {
       const max = next.reduce((value, usuario) => {
         const numero = parseInt(usuario.id.replace("USR-", ""), 10) || 0;
@@ -8781,7 +9085,7 @@ export default function App() {
     };
 
     empleados.forEach(empleado => {
-      const correo = empleado.correo.trim().toLowerCase();
+      const clave = clavePersona(empleado.tipoDocumento, empleado.numeroDocumento, empleado.correo);
       const base = {
         nombre: empleado.nombre,
         iniciales: empleado.iniciales,
@@ -8790,29 +9094,32 @@ export default function App() {
         telefono: empleado.telefono,
         tipoDocumento: empleado.tipoDocumento,
         numeroDocumento: empleado.numeroDocumento,
-        rolId: empleado.rolId,
+        rolIds: [...empleado.rolIds],
+        rolId: empleado.rolIds[0] ?? "",
         activo: empleado.activo,
       };
-      const existente = porCorreo.get(correo);
+      const existente = porClave.get(clave);
       if (existente) {
         const actualizado = { ...existente, ...base };
         const indice = next.findIndex(usuario => usuario.id === existente.id);
         next[indice] = actualizado;
-        porCorreo.set(correo, actualizado);
+        porClave.set(clave, actualizado);
       } else {
         // Misma regla que en el efecto de arriba: la contraseña se copia SOLO
         // al crear, nunca al actualizar (el listado unificado no debe pisarla).
         const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
         next.push(nuevo);
-        porCorreo.set(correo, nuevo);
+        porClave.set(clave, nuevo);
       }
     });
 
-    const correosEmpleado = new Set(empleados.map(e => e.correo.trim().toLowerCase()));
+    const clavesEmpleado = new Set(empleados.map(e =>
+      clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo),
+    ));
     clientes.forEach(cliente => {
-      const correo = cliente.correo.trim().toLowerCase();
-      const existente = porCorreo.get(correo);
-      if (correosEmpleado.has(correo)) return;
+      const clave = clavePersona(cliente.tipoDocumento, cliente.numeroDocumento, cliente.correo);
+      const existente = porClave.get(clave);
+      if (clavesEmpleado.has(clave)) return;
       const base = {
         nombre: cliente.nombre,
         iniciales: cliente.iniciales,
@@ -8821,23 +9128,24 @@ export default function App() {
         telefono: existente?.telefono ?? "",
         tipoDocumento: cliente.tipoDocumento,
         numeroDocumento: cliente.numeroDocumento,
-        rolId: "ROL-002",
+        rolIds: [idRolCliente(roles)],
+        rolId: idRolCliente(roles),
         activo: cliente.activo,
       };
       if (existente) {
         const actualizado = { ...existente, ...base };
         const indice = next.findIndex(usuario => usuario.id === existente.id);
         next[indice] = actualizado;
-        porCorreo.set(correo, actualizado);
+        porClave.set(clave, actualizado);
       } else {
         const nuevo = { id: siguienteId(), ...base };
         next.push(nuevo);
-        porCorreo.set(correo, nuevo);
+        porClave.set(clave, nuevo);
       }
     });
 
     return next;
-  }, [usuarios, empleados, clientes]);
+  }, [usuarios, empleados, clientes, roles]);
 
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
@@ -8846,78 +9154,99 @@ export default function App() {
   const pedidosUsuarioNombre =
     loggedInUser?.nombre ??
     (userRole === "Cliente" ? "Sebastián Gómez" : "Gloria Inés Vargas");
-  // Un rol DESACTIVADO no concede permisos. El formulario de empleados ya
-  // respetaba este flag al ofrecer roles (`roles.find(r => r.activo)`); el acceso
-  // no, y por eso un rol desactivado seguía dando lo mismo que antes de apagarlo.
-  // Un rol ausente (borrado) también queda sin permisos: antes `!loggedInRol`
-  // concedía acceso TOTAL, de modo que borrar un rol desde Configuración
-  // convertía a sus usuarios en administradores completos. Esos usuarios ahora
-  // caen en la pantalla de "sin permisos" vía `noAccess`.
-  const loggedInRol = loggedInUser
-    ? roles.find(r => r.id === loggedInUser.rolId && r.activo) ?? null
-    : null;
-  const loggedInRoleName = loggedInRol?.nombre ?? userRole;
-  // ── Permisos multi-rol (P5) ─────────────────────────────────────────
-  // Un usuario puede tener VARIOS roles: el de la ficha de usuario (`rolId`),
-  // el de su ficha de empleado (se vincula por correo, igual que
-  // `upsertUsuario`) y —cuando la sesión es de cliente— el rol público
-  // "Cliente". Antes la sesión calculaba accesos SOLO con `user.rolId`, así
-  // que un usuario con dos roles veía únicamente los permisos del primero.
-  // Ahora se fusionan los mapas `accesos` de TODOS esos roles: unión por
-  // clave — si algún rol da "Ver"/"Crear"/etc. en un módulo, el usuario lo
-  // tiene. Un usuario de un solo rol queda igual que antes (unión trivial de
-  // un único mapa), y un rol DESACTIVADO sigue sin conceder nada: `loggedInRol`
-  // de arriba conserva el rol principal para el nombre y el atajo de admin.
+  // ── Sesión multi-rol ───────────────────────────────────────────────
+  // La ficha de empleado de la cuenta de sesión, por DOCUMENTO (el correo es
+  // editable; el documento no). `null` si la persona no tiene ficha.
+  const claveCuentaSesion = loggedInUser
+    ? clavePersona(loggedInUser.tipoDocumento, loggedInUser.numeroDocumento, loggedInUser.correo)
+    : "";
   const correoSesion = loggedInUser?.correo.trim().toLowerCase() ?? "";
-  const rolesIdsSesion: string[] = [];
-  const sumarRolSesion = (rolId?: string | null) => {
-    if (!rolId) return;
-    const rol = roles.find(r => r.id === rolId && r.activo) ?? null;
-    if (rol && !rolesIdsSesion.includes(rol.id)) rolesIdsSesion.push(rol.id);
-  };
-  sumarRolSesion(loggedInUser?.rolId);
-  // Ficha de empleado con el mismo correo: trae su propio `rolId`.
-  sumarRolSesion(
-    empleados.find(e => e.correo.trim().toLowerCase() === correoSesion)?.rolId,
-  );
-  // El rol "Cliente" se fusiona cuando forma parte de la sesión: o es el rol
-  // principal (público) o la cuenta es la legacy de cliente sin ficha en
-  // usuarios (`hasValidSession` más abajo). Así un usuario de un solo rol
-  // operativo no gana permisos de más por el solo hecho de existir el rol.
-  const esSesionCliente =
-    PUBLIC_ROLE_NAMES.includes(loggedInRol?.nombre ?? "") ||
-    (loggedInUser === null && userRole === "Cliente");
-  if (esSesionCliente) {
-    sumarRolSesion(roles.find(r => r.nombre === "Cliente" && r.activo)?.id);
-  }
-  const loggedInAccesos: AccesosMap = rolesIdsSesion.reduce<AccesosMap>((acc, id) => {
-    const mapa = roles.find(r => r.id === id)?.accesos ?? {};
-    for (const [clave, acciones] of Object.entries(mapa)) {
-      const previas = acc[clave] ?? [];
-      acc[clave] = [...previas, ...acciones.filter(a => !previas.includes(a))];
+  const loggedInEmpleado = loggedInUser
+    ? empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuentaSesion) ?? null
+    : null;
+
+  // Roles de la persona en sesión. La fuente es la ficha de empleado si existe
+  // (multi-rol operativo); si no, el propio usuario (cliente, admin o rol
+  // personalizado). Un rol desactivado o borrado no cuenta.
+  const rolIdsSesion: string[] = (() => {
+    if (loggedInEmpleado?.rolIds?.length) return [...loggedInEmpleado.rolIds];
+    if (loggedInUser) {
+      return loggedInUser.rolIds?.length ? [...loggedInUser.rolIds] : [loggedInUser.rolId];
     }
-    return acc;
-  }, {});
-  // El atajo se ancla al rol SEMILLA por id, no por nombre. Así renombrar el rol
-  // no altera el acceso, y ningún rol con permisos parciales puede apropiárselo
-  // por llamarse "Administrador". Cualquier otro rol —incluso con acceso
-  // total— se decide únicamente por sus permisos.
-  const isNamedAdmin = loggedInRol?.id === "ROL-001";
+    // Sesión legacy "Cliente" (p. ej. portal público sin registro de usuario).
+    if (userRole === "Cliente") {
+      const cliente = roles.find(r => esRolCliente(r) && r.activo);
+      return cliente ? [cliente.id] : [];
+    }
+    return [];
+  })();
+  const rolesSesion: Rol[] = [];
+  const rolesSesionVistos = new Set<string>();
+  for (const id of rolIdsSesion) {
+    const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
+    if (r && !rolesSesionVistos.has(r.id)) { rolesSesionVistos.add(r.id); rolesSesion.push(r); }
+  }
+
+  // Rol ACTIVO de la sesión. Prioridad: estado (cambio manual con "Cambiar de
+  // rol") → guardado en localStorage (persiste al cerrar sesión) → primero.
+  const rolActivoIdGuardado = loggedInUser ? leerRolActivo(loggedInUser.id) : null;
+  const rolActivoIdValido =
+    rolActivoId && rolesSesion.some(r => r.id === rolActivoId)
+      ? rolActivoId
+      : rolActivoIdGuardado && rolesSesion.some(r => r.id === rolActivoIdGuardado)
+        ? rolActivoIdGuardado
+        : rolesSesion[0]?.id ?? null;
+  const loggedInRol = rolesSesion.find(r => r.id === rolActivoIdValido) ?? null;
+  const loggedInRoleName = loggedInRol?.nombre ?? userRole;
+  // Permisos SOLO del rol activo: la sesión ya no fusiona los mapas de todos
+  // los roles de la persona.
+  const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
+
+  // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
+  // los id solo son anclas de migración.
+  const isNamedAdmin = esRolAdministrador(loggedInRol);
   const hasDashboardAccess =
     isNamedAdmin || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
-  // True when the logged-in user has a back-office role (not a pure public customer)
-  const isStaff = isLoggedIn && loggedInUser !== null && (
-    empleados.some(e => e.correo.trim().toLowerCase() === loggedInUser.correo.trim().toLowerCase()) ||
-    !PUBLIC_ROLE_NAMES.includes(loggedInRoleName)
+
+  // Cliente público = solo el rol "Cliente" y sin ficha de empleado. El
+  // "Cliente/Empleado" (persona con ficha) ya NO es cliente público: va al
+  // panel y ofrece el cambio de rol.
+  const esClientePublicoSesion =
+    rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
+  const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
+
+  // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
+  // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
+  // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
+  // debe ofrecerlos todos.
+  const rolesParaCambiar = rolesSesion.filter(r =>
+    r.id !== loggedInRol?.id &&
+    !(normalizarNombreRol(r.nombre) === "administrador" || normalizarNombreRol(r.nombre) === "cliente" || normalizarNombreRol(r.nombre) === "empleado"),
   );
 
-  // El usuario de la sesión puede tener ficha de empleado además de la de
-  // usuario. El vínculo entre ambas listas es el correo (ver `upsertUsuario` en
-  // la pantalla de Empleados), porque no comparten identificador.
-  const loggedInEmpleado = loggedInUser
-    ? empleados.find(e => e.correo.trim().toLowerCase() === loggedInUser.correo.trim().toLowerCase()) ?? null
-    : null;
+  const cambiarRolActivo = (rolId: string) => {
+    const siguiente = rolesSesion.find(r => r.id === rolId && r.activo) ?? null;
+    if (!siguiente) return;
+    setRolActivoId(siguiente.id);
+    if (loggedInUser) escribirRolActivo(loggedInUser.id, siguiente.id);
+    setUserRole(siguiente.nombre);
+    toast.success(`Ahora estás como ${siguiente.nombre}`);
+    // Si la pantalla actual ya no está permitida por el rol nuevo, vuelve a la
+    // primera pantalla que ese rol sí permite.
+    const permKeyActual = SCREEN_PERM_KEY[screen];
+    const permitida =
+      screen === "dashboard"
+        ? (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false)
+        : permKeyActual
+          ? (siguiente.accesos[permKeyActual]?.includes("Ver") ?? false)
+          : true; // "inicio" y pantallas sin permKey siempre son un fallback seguro
+    if (!permitida) {
+      const esAdminSiguiente = normalizarNombreRol(siguiente.nombre) === "administrador";
+      const tieneDash = esAdminSiguiente || (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
+      navigate(tieneDash ? "dashboard" : "inicio");
+    }
+  };
 
   // Returns action permissions for a given screen based on the logged-in user's role
   const getPerms = (s: Screen) => {
@@ -9122,15 +9451,18 @@ export default function App() {
   }, [fichasPorProducto]);
 
   // Creación automática de la orden de producción (§3a / P2): cuando una venta
-  // queda en estado "venta" —o sea, el pago quedó verificado— se le crea sola
-  // una orden tipo "Pedido" en Pendiente. Mientras la venta está "por-verificar"
-  // no se crea nada, que es justo cuando NO se prepara.
+  // queda lista para cocinar se le crea sola una orden tipo "Pedido" en
+  // Pendiente. Mientras la venta está "por-verificar" no se crea nada, que es
+  // justo cuando NO se prepara.
   //
-  // El filtro es por ESTADO, no por transición, así que cubre los dos flujos:
+  // El filtro es por ESTADO, no por transición, así que cubre los flujos:
   // - Ventas web: nacen en "por-verificar" (registrarPedido) y, al aprobarlas
   //   en VentasScreen, pasan a "venta" → el efecto reacciona al cambio.
   // - Ventas del admin: VentasScreen las crea directamente en "venta" (vía
   //   setVentas) → el efecto las detecta aunque nunca "pasaron" por otro estado.
+  // - Ventas en Efectivo (solo las que crea el administrador): nacen directas
+  //   en "completado" porque no hay comprobante que verificar, y su orden de
+  //   producción también se crea sola: la pizza igual hay que hacerla.
   // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
   // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
   // orden por producto.
@@ -9138,7 +9470,7 @@ export default function App() {
   // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas
   // "verificadas" de la semilla y de lo que se cargó de localStorage, y no es un
   // cambio de estado sino el arranque. A partir de ahí, cada venta que aparece
-  // en "venta" sin orden genera la suya. La clave anti-duplicados es `ventaId`:
+  // preparada sin orden genera la suya. La clave anti-duplicados es `ventaId`:
   // una venta = una sola orden, y el updater vuelve a comprobarlo contra el
   // estado final por si acaso.
   const vigilaVentasRef = useRef(false);
@@ -9148,7 +9480,10 @@ export default function App() {
       return;
     }
     const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
-    const nuevas = ventas.filter((v) => v.estado === "venta" && !conOrden.has(v.id));
+    const preparable = (v: Venta) =>
+      v.estado === "venta" ||
+      (v.estado === "completado" && v.metodoPago === "Efectivo");
+    const nuevas = ventas.filter((v) => preparable(v) && !conOrden.has(v.id));
     if (nuevas.length === 0) return;
 
     const creada: OrdenProduccion[] = [];
@@ -9212,12 +9547,45 @@ export default function App() {
     navigate("login");
   };
 
-  const handleLogin = (user: Usuario) => {
+  const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
     console.log("[login] handleLogin recibió usuario", {
       id: user.id,
       correo: user.correo,
       rolId: user.rolId,
     });
+
+    // Cruce canónico Usuario ↔ Empleado: documento.
+    const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
+    const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
+    const rolIdsCuenta = (empleado?.rolIds?.length ? empleado.rolIds : (user.rolIds?.length ? user.rolIds : [user.rolId])).filter(Boolean);
+    const rolesActivos: Rol[] = [];
+    const visto = new Set<string>();
+    for (const id of rolIdsCuenta) {
+      const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
+      if (r && !visto.has(r.id)) { visto.add(r.id); rolesActivos.push(r); }
+    }
+    // Cliente público: solo el rol Cliente y sin ficha de empleado → landing
+    // (portal público, nunca el panel).
+    const esClientePublico = rolesActivos.length > 0 && rolesActivos.every(esRolCliente) && empleado === null;
+
+    if (!esClientePublico) {
+      if (rolesActivos.length === 0) {
+        console.log("[login] rechazo: sin roles activos");
+        return { ok: false, mensaje: "Tu cuenta no tiene roles activos. Contacta al administrador." };
+      }
+      // El bloqueo "sin pantallas" ya NO aplica: Inicio siempre está disponible
+      // para cualquiera con cuenta válida. El bloqueo restante es por cuenta
+      // inactiva o rol base Empleado inactivo.
+      const empleadoInactivo = !!empleado ? !empleado.activo : !user.activo;
+      const rolEmpleadoInactivo = roles.some(
+        r => normalizarNombreRol(r.nombre) === "empleado" && !r.activo,
+      );
+      if (empleadoInactivo || rolEmpleadoInactivo) {
+        console.log("[login] rechazo: cuenta o rol base empleado inactivo");
+        return { ok: false, mensaje: "Tu cuenta no tiene roles activos. Contacta al administrador." };
+      }
+    }
+
     setIsLoggedIn(true);
     setLoginNotice(false);
     setLoginEmailPre("");
@@ -9241,7 +9609,7 @@ export default function App() {
       // un pedido normal: número, productos, cliente y recogida.
       setOrderConfirmation({
         id: idVenta,
-        hora: orderToResume.horaRecogida,
+        hora: hora12(orderToResume.horaRecogida),
         nombre: nombrePedido,
         documento: orderToResume.documento?.trim(),
         items: orderToResume.items,
@@ -9260,29 +9628,44 @@ export default function App() {
     const guardado = leerCarritosDeUsuarios()[user.id] ?? [];
     setCart((prev) => fusionarCarritos(prev, guardado));
 
-    const namedRol = roles.find(r => r.id === user.rolId) ?? null;
-    const isEmployee = empleados.some(
-      e => e.correo.trim().toLowerCase() === user.correo.trim().toLowerCase(),
-    );
-    const goPublic = namedRol ? !isEmployee && PUBLIC_ROLE_NAMES.includes(namedRol.nombre) : false;
-    const loginHasDashboard =
-      namedRol?.id === "ROL-001" ||
-      (namedRol?.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
-    const nextRole = goPublic ? "Cliente" : (namedRol?.nombre ?? "Empleado");
-    // P9: el cliente público SIEMPRE cae en la landing. Antes iba al catálogo,
-    // y un rol público no tiene nada que hacer en el back-office: su destino es
-    // la portada. El guard de rutas admin (más abajo) expulsa igual a cualquier
-    // cliente que intente abrir una pantalla del panel.
-    const nextScreen = goPublic
+    // Rol activo inicial: el ÚLTIMO ROL EXTRA usado guardado en localStorage,
+    // si sigue asignado y activo; si no, el primer rol extra; si no hay extras,
+    // el rol base "Empleado".
+    const baseEs = (n: string) => {
+      const x = normalizarNombreRol(n);
+      return x === "administrador" || x === "cliente" || x === "empleado";
+    };
+    const rolesExtra = rolesActivos.filter(r => !baseEs(r.nombre));
+    const rolEmpleadoActivo = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado") ?? null;
+    const guardadoRolId = leerRolActivo(user.id);
+    let rolInicial: Rol | null = null;
+    if (esClientePublico) {
+      rolInicial = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente") ?? rolesActivos[0] ?? null;
+    } else {
+      if (guardadoRolId) {
+        const cand = rolesActivos.find(r => r.id === guardadoRolId);
+        if (cand && !baseEs(cand.nombre) && cand.activo) rolInicial = cand;
+      }
+      if (!rolInicial) rolInicial = rolesExtra[0] ?? rolEmpleadoActivo ?? rolesActivos[0] ?? null;
+    }
+    const inicialId = rolInicial?.id ?? null;
+    setRolActivoId(inicialId);
+    escribirRolActivo(user.id, inicialId);
+    const nextRole = rolInicial?.nombre ?? "Empleado";
+    // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
+    // Dashboard si el rol activo tiene ese permiso; si no, "Inicio" (que
+    // siempre está disponible para empleados y no depende de pantalla asignada).
+    const rolInicialEsAdmin = (rolInicial?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador";
+    const hasDashRolInicial = rolInicialEsAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
+    const nextScreen = esClientePublico
       ? "landing"
-      : loginHasDashboard
+      : hasDashRolInicial
         ? "dashboard"
         : "inicio";
 
     console.log("[login] rol y navegación", {
-      rol: namedRol?.nombre ?? "sin rol",
-      isEmployee,
-      isStaff: isEmployee || !PUBLIC_ROLE_NAMES.includes(namedRol?.nombre ?? ""),
+      rol: rolInicial?.nombre ?? "sin rol",
+      esClientePublico,
       nextRole,
       nextScreen,
     });
@@ -9292,6 +9675,7 @@ export default function App() {
       console.log("[login] navegando", nextScreen);
       navigate(nextScreen);
     }
+    return { ok: true };
   };
 
   const quickAdd = (product: Product) => {
@@ -9364,7 +9748,9 @@ export default function App() {
       estado: "por-verificar" as VentaStatus,
       metodoPago,
       comprobante,
-      horaRecogida,
+      // Se guarda ya en formato 12 h ("6:30 p. m."): así todas las pantallas
+      // muestran la recogida igual, sin depender del locale del navegador.
+      horaRecogida: hora12(horaRecogida),
       // El historial es lo que alimenta la columna "Hora de estado" del panel
       // de ventas: sin esta entrada el pedido aparecería sin hora.
       historial: [
@@ -9451,6 +9837,7 @@ export default function App() {
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
+      setRolActivoId(null);
       navigate(destino, { replace: true });
       if (!silenciarAviso) {
         toast.success("Has cerrado sesión correctamente");
@@ -9527,8 +9914,7 @@ export default function App() {
   // línea comparaba `userRole === "Administrador"`, así que un rol personalizado
   // caía en `false` y el guard de abajo lo expulsaba a la landing. Es el mismo
   // criterio de "cliente público" que ya usa el `goPublic` del login.
-  const esClientePublico =
-    PUBLIC_ROLE_NAMES.includes(loggedInRoleName) && loggedInEmpleado === null;
+  const esClientePublico = esClientePublicoSesion;
   const isAdminRole = hasValidSession && !esClientePublico;
   const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
   const isAuth = screen === "login" || screen === "register";
@@ -9676,6 +10062,8 @@ export default function App() {
             userName={loggedInUserName}
             roleName={loggedInRoleName}
             homeScreen={adminHomeScreen}
+            rolesParaCambiar={rolesParaCambiar}
+            onCambiarRol={isStaff ? cambiarRolActivo : undefined}
           />
         )}
 
@@ -10068,9 +10456,23 @@ export default function App() {
                   userRole={userRole}
                   roles={roles}
                   setRoles={setRoles}
-                  rolUserCounts={Object.fromEntries(
-                    roles.map(r => [r.id, usuarios.filter(u => u.rolId === r.id).length])
-                  )}
+                  rolUserCounts={(() => {
+                    const counts: Record<string, number> = {};
+                    const sumar = (id: string) => { counts[id] = (counts[id] ?? 0) + 1; };
+                    empleados.forEach(e => e.rolIds.forEach(sumar));
+                    usuariosUnificados.forEach(u => {
+                      // Los que YA tienen ficha ya se contaron por empleado: solo
+                      // cuentan los que NO tienen (rol personalizado, cliente, etc.).
+                      const tieneFicha = empleados.some(e =>
+                        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) ===
+                        clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo),
+                      );
+                      if (tieneFicha) return;
+                      const ids = u.rolIds?.length ? u.rolIds : [u.rolId];
+                      ids.forEach(sumar);
+                    });
+                    return counts;
+                  })()}
                   canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
                   canCreate={getPerms("gestion-roles").canCreate}
                   canEdit={getPerms("gestion-roles").canEdit}
@@ -10092,6 +10494,8 @@ export default function App() {
                   setClientes={setClientes}
                   empleados={empleados}
                   usuarios={usuarios}
+                  roles={roles}
+                  sesionCorreo={correoSesion}
                 />
               )}
                {screen === "users" && (
@@ -10162,6 +10566,8 @@ export default function App() {
                   onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                  rolesParaCambiar={rolesParaCambiar}
+                  onCambiarRol={cambiarRolActivo}
                   inStore
                 />
               )}
@@ -10191,6 +10597,8 @@ export default function App() {
                   onPasswordSaved={trasCambiarContrasena}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                  rolesParaCambiar={rolesParaCambiar}
+                  onCambiarRol={cambiarRolActivo}
                 />
               )}
               {screen === "tech-sheet" && <RecetasScreen />}

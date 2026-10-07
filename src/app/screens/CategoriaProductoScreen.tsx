@@ -369,8 +369,10 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     toast.success("Categoría eliminada");
   };
 
+  // Ancho amplio (igual que Proveedores/Gestión de Insumos): el listado usa
+  // el ancho completo del panel en vez del antiguo max-w-3xl.
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -475,7 +477,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                           lleve todo el ancho de la tabla ni rompa las filas de
                           61 px; el resto del ancho lo toma la columna Nombre. */}
                       <span
-                        className="block max-w-[240px] truncate"
+                        className="block max-w-[420px] truncate"
                         title={c.descripcion?.trim() || undefined}
                       >
                         {c.descripcion?.trim() ? c.descripcion : "—"}
