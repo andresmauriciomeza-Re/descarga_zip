@@ -133,6 +133,7 @@ import {
   OrdenProduccionScreen,
   INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
   crearOrdenPedido,
+  crearOrdenReemplazo,
   siguienteOrdenId,
   normalizarNombre,
   type OrdenProduccion,
@@ -6744,11 +6745,30 @@ const nuevaDevolucion = (dev: Venta): EstadoDevolucion => ({
 function DevolucionesScreen({
   pedidos,
   setPedidos,
+  productos,
+  setProductos,
+  ordenes,
+  setOrdenes,
+  fichasPorProducto,
+  insumos,
+  categorias,
   abrirDevolucionId,
   onAbierta,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
+  /** Catálogo de Productos terminados: la devolución mueve su stock (el sabor
+      que entra de vuelta) y puede reemplazarlo por otro. */
+  productos: Producto[];
+  setProductos: React.Dispatch<React.SetStateAction<Producto[]>>;
+  /** Órdenes de producción: una devolución cancela la orden de la venta y,
+      si hay canje, crea la orden del producto nuevo. */
+  ordenes: OrdenProduccion[];
+  setOrdenes: React.Dispatch<React.SetStateAction<OrdenProduccion[]>>;
+  fichasPorProducto: FichasPorProducto;
+  insumos: Insumo[];
+  /** Para armar el selector de canje con el catálogo vivo (no el mock). */
+  categorias: CategoriaProducto[];
   /** Venta a gestionar al entrar. La tabla de ventas la pasa para no obligar a
       buscarla de nuevo entre las pendientes. */
   abrirDevolucionId?: string | null;
@@ -6763,6 +6783,13 @@ function DevolucionesScreen({
   // `paso` es solo qué panel está abierto — no decide nada, porque ninguna
   // elección se confirma hasta que se pulsa el botón "Confirmar".
   const [activa, setActiva] = useState<EstadoDevolucion | null>(null);
+  // Corta el doble clic en "Confirmar": el stock y las órdenes se mueven una
+  // sola vez por devolución. Se libera al cambiar `activa` (al abrir la
+  // siguiente devolución o al cerrarla tras confirmar).
+  const confirmarRef = useRef(false);
+  useEffect(() => {
+    confirmarRef.current = false;
+  }, [activa]);
   const [detalleDevolucion, setDetalleDevolucion] = useState<Venta | null>(null);
   // Categoría activa en el selector de canje. Filtrar por categoría es lo que
   // permite ver todos los productos a la vez, sin barra de desplazamiento.
@@ -6891,8 +6918,19 @@ function DevolucionesScreen({
   };
 
   // Categorías del catálogo, en el orden del menú, para el selector de canje.
+  // El canje se arma con el catálogo VIVO (`productos` + `productoACatalogo`),
+  // igual que "Ver Menú": así el nombre del producto elegido es exactamente el
+  // del panel ("Pizza Jamon") y al confirmar la devolución se puede devolver el
+  // stock y crear la orden del producto nuevo sin traducciones de nombre.
+  const canjeCatalogo = useMemo(
+    () =>
+      productos
+        .filter((p) => p.estado === "Disponible")
+        .map((p) => productoACatalogo(p, categorias)),
+    [productos, categorias],
+  );
   const categoriasCanje = (() => {
-    const disponibles = PRODUCTS.filter((p) => p.status === "disponible");
+    const disponibles = canjeCatalogo;
     const conocidas = SECCIONES_MENU.map((s) => s.categoria);
     const enOrden = conocidas.filter((c) => disponibles.some((p) => p.category === c));
     const nuevas = [...new Set(disponibles.map((p) => p.category))].filter(
@@ -6900,7 +6938,7 @@ function DevolucionesScreen({
     );
     return ["Todas", ...enOrden, ...nuevas];
   })();
-  const disponiblesCanje = PRODUCTS.filter((p) => p.status === "disponible");
+  const disponiblesCanje = canjeCatalogo;
   const porCategoria = disponiblesCanje.filter((p) => catCanje === "Todas" || p.category === catCanje);
   // Si la categoría elegida no tiene nada disponible se muestran todos, para no
   // dejar el panel de canje en blanco.
@@ -6965,7 +7003,17 @@ function DevolucionesScreen({
         })
         .filter((n): n is string => n !== null)
     : [];
-  const puedeConfirmar = !!activa && totalDevueltos > 0 && lineasSinMotivo.length === 0;
+  // "Cambio de sabor" exige canje: sin producto nuevo no hay sabor que
+  // reemplazar al que entra de vuelta (el caso sin canje es devolver en dinero).
+  const cambioSaborSinCanje =
+    !!activa &&
+    totalComp === 0 &&
+    detalleAct.some(
+      (_d, i) =>
+        (activa.devueltos[i] ?? 0) > 0 && activa.motivos[i]?.motivo === "Cambio de sabor",
+    );
+  const puedeConfirmar =
+    !!activa && totalDevueltos > 0 && lineasSinMotivo.length === 0 && !cambioSaborSinCanje;
   const modoGlobal: DevolucionTipo =
     totalComp > 0 && (dineroADar > 0 || dineroARecibir > 0)
       ? "mixto"
@@ -6983,6 +7031,11 @@ function DevolucionesScreen({
   for (const nombre of lineasSinMotivo) {
     faltan.push(`Indica el motivo de la devolución de «${nombre}» (obligatorio).`);
   }
+  if (cambioSaborSinCanje) {
+    faltan.push(
+      "El motivo «Cambio de sabor» necesita un producto de canje: elige el sabor nuevo.",
+    );
+  }
 
   const confirmarDevolucion = () => {
     if (!activa || !devActiva) return;
@@ -6997,6 +7050,11 @@ function DevolucionesScreen({
       return;
     }
     if (!puedeConfirmar) return;
+    // Anti doble clic: los movimientos de stock y de órdenes se aplican UNA vez,
+    // aunque se dispare una segunda confirmación antes del re-render. Se libera
+    // al abrir/cerrar la devolución (efecto sobre `activa`).
+    if (confirmarRef.current) return;
+    confirmarRef.current = true;
     const devStr = detalleAct
       .map((d, i) => {
         const q = activa.devueltos[i] ?? 0;
@@ -7013,6 +7071,111 @@ function DevolucionesScreen({
     ]
       .filter(Boolean)
       .join(" · ");
+
+    // ── Movimiento de stock y órdenes de la devolución (§flujo Ventas) ──
+    // Regla de stock: el producto solo se calienta, así que su stock ya salió
+    // (o no) al INICIAR la orden de producción de la venta. Aquí solo se
+    // aplica lo que corresponde según el motivo de cada línea:
+    // - "Cambio de sabor" / "Producto incorrecto" / "Otro": el producto que
+    //   entra de vuelta se suma SOLO si la orden ya lo había descontado.
+    // - "Producto malo": nunca vuelve al stock; si aún no había salido, sale
+    //   ahora (queda eliminado).
+    // La orden ORIGINAL de la venta: si la devolución ya generó un canje, la
+    // nueva orden comparte `ventaId`, así que se excluye por su observación.
+    const opVenta = ordenes.find(
+      (o) => o.ventaId === devActiva.id && o.observacion !== "Canje por devolución",
+    );
+    const lineasDev = detalleAct
+      .map((d, i) => ({
+        d,
+        q: activa.devueltos[i] ?? 0,
+        motivo: activa.motivos[i]?.motivo ?? "",
+      }))
+      .filter((x) => x.q > 0);
+    const esCambioSabor = lineasDev.some((x) => x.motivo === "Cambio de sabor");
+
+    const productoDeLinea = (d: (typeof detalleAct)[number]): Producto | undefined => {
+      const porId = d.productoId
+        ? productos.find((p) => p.id === d.productoId)
+        : undefined;
+      const base = d.nombre.split(" — ")[0].trim();
+      return (
+        porId ??
+        productos.find((p) => normalizarNombre(p.nombre) === normalizarNombre(base))
+      );
+    };
+
+    const sumas = new Map<string, number>();
+    const bajas = new Map<string, number>();
+    for (const { d, q, motivo } of lineasDev) {
+      const prod = productoDeLinea(d);
+      if (!prod) continue;
+      if (motivo === "Producto malo") {
+        if (!opVenta?.productosDescontados) {
+          bajas.set(prod.id, (bajas.get(prod.id) ?? 0) + q);
+        }
+      } else if (opVenta?.productosDescontados) {
+        sumas.set(prod.id, (sumas.get(prod.id) ?? 0) + q);
+      }
+    }
+    if (sumas.size > 0 || bajas.size > 0) {
+      setProductos((prev) =>
+        prev.map((p) => {
+          const s = sumas.get(p.id) ?? 0;
+          const b = bajas.get(p.id) ?? 0;
+          if (s === 0 && b === 0) return p;
+          const stockDisponible = Math.max(
+            0,
+            Math.round((p.stockDisponible + s - b) * 1000) / 1000,
+          );
+          return { ...p, stockDisponible };
+        }),
+      );
+    }
+
+    // Cancelación de la orden de la venta: en "Cambio de sabor" siempre (la
+    // orden original ya no se entrega); en el resto de motivos solo si aún
+    // está pendiente (así no se descuenta stock por una orden muerta).
+    if (opVenta && (esCambioSabor || opVenta.estadoOrden === "pendiente")) {
+      setOrdenes((prev) =>
+        prev.map((o) =>
+          o.id === opVenta.id && o.estadoOrden !== "cancelada"
+            ? {
+                ...o,
+                estadoOrden: "cancelada" as const,
+                historial: [
+                  ...o.historial,
+                  {
+                    de: o.estadoOrden,
+                    a: "cancelada" as const,
+                    fechaHora: new Date().toISOString(),
+                  },
+                ],
+              }
+            : o,
+        ),
+      );
+    }
+
+    // Orden del canje: el producto nuevo entra a producción y su stock se
+    // descuenta cuando se pulse "Iniciar producción" en esa orden, igual que
+    // en cualquier venta. Si no hay canje (todo en dinero), no se crea nada.
+    if (activa.compensacion.length > 0) {
+      const nueva = crearOrdenReemplazo(
+        devActiva,
+        activa.compensacion,
+        { productos, fichas: fichasPorProducto, insumos },
+        siguienteOrdenId(ordenes),
+      );
+      setOrdenes((prev) =>
+        prev.some((o) => o.id === nueva.id) ? prev : [nueva, ...prev],
+      );
+      import("sonner").then(({ toast }) =>
+        toast.success(
+          `Orden de producción ${nueva.id} creada para el canje de ${devActiva.id}`,
+        ),
+      );
+    }
 
     setResumen({
       unidadesDevueltas: totalDevueltos,
@@ -8381,6 +8544,44 @@ const esNoConformidadValida = (x: unknown) =>
 const leerNoConformidadesPersistidas = () =>
   leerListaPersistida<NoConformidad>(NO_CONFORMIDADES_STORAGE_KEY, INITIAL_NO_CONFORMIDADES, esNoConformidadValida);
 
+// ── Persistencia del stock de Productos (por SESIÓN) ──────────────────
+// A diferencia del resto, este va en `sessionStorage`: el descuento de stock
+// sobrevive al F5 (recargas y las 45 → 40 siguen ahí) pero se borra al cerrar
+// la pestaña/navegación del navegador. Así, al volver a arrancar `npm run` el
+// stock vuelve a la semilla (45 pizzas de jamón, 50 peperoni, …), que es el
+// comportamiento pedido sin backend.
+const PRODUCTOS_STORAGE_KEY = "sivpro.productos.v1";
+
+const esProductoValido = (x: unknown) =>
+  esObjeto(x) &&
+  typeof x.id === "string" &&
+  typeof x.nombre === "string" &&
+  typeof x.stockDisponible === "number";
+
+const leerProductosPersistidos = (): Producto[] => {
+  try {
+    const raw = sessionStorage.getItem(PRODUCTOS_STORAGE_KEY);
+    if (!raw) return INITIAL_PRODUCTOS;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esProductoValido)) {
+      return parsed as Producto[];
+    }
+  } catch {
+    // Datos corruptos o sessionStorage bloqueado: se cae a la semilla.
+  }
+  return INITIAL_PRODUCTOS;
+};
+
+/** ¿Esta sesión arranca con stock de Productos ya guardado? Se consulta en el
+    primer render (antes de que el efecto de escritura rellene el storage). */
+const hayStockDeSesion = (): boolean => {
+  try {
+    return sessionStorage.getItem(PRODUCTOS_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+};
+
 const leerFichasPersistidas = () => {
   try {
     const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
@@ -8656,7 +8857,12 @@ export default function App() {
   // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
   // `Producto` quedaron importados y sin usar, y App reventaba con
   // "ReferenceError: productos is not defined" al renderizar el dashboard.
-  const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
+  const [productos, setProductos] = useState<Producto[]>(leerProductosPersistidos);
+  // Capturado en el primer render: si la sesión arranca SIN stock persistido,
+  // el catálogo volvió a la semilla y las marcas "productosDescontados" de las
+  // órdenes guardadas en localStorage apuntan a descuentos que ya no existen
+  // (el efecto de abajo las limpia para no duplicar movimientos).
+  const arranqueSinStock = useRef(!hayStockDeSesion());
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido.
@@ -8674,6 +8880,14 @@ export default function App() {
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
   const [categorias, setCategorias] = useState<CategoriaProducto[]>(leerCategoriasPersistidas);
+  // Catálogo del picker de pedidos (VentasScreen) y del canje de devoluciones,
+  // armado con el estado `productos` en vez del mock `PRODUCTS`: los nombres
+  // ("Pizza Jamon") son los del panel, así el detalle de la venta resuelve el
+  // Producto real (id y stock) al crear la orden de producción.
+  const productosMenu = useMemo(
+    () => productos.map((p) => productoACatalogo(p, categorias)),
+    [productos, categorias],
+  );
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
@@ -9120,6 +9334,34 @@ export default function App() {
       // El almacenamiento puede estar bloqueado o sin cuota.
     }
   }, [fichasPorProducto]);
+
+  // Stock de Productos: se escribe en sessionStorage (ver PRODUCTOS_STORAGE_KEY)
+  // para que un F5 conserve el descuento pero un cierre de pestaña lo reinicie.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PRODUCTOS_STORAGE_KEY, JSON.stringify(productos));
+    } catch {
+      // El almacenamiento puede estar bloqueado o sin cuota: el stock sigue
+      // en memoria durante la sesión.
+    }
+  }, [productos]);
+
+  // Arranque con stock fresco (sesión nueva): las órdenes de la sesión anterior
+  // quedaron en localStorage con `productosDescontados`, pero el stock de
+  // Productos ya volvió a la semilla. Sin limpiarla, una devolución pendiente
+  // "repondría" unidades que nunca salieron (45 → 50). Solo se toca esta marca:
+  // insumos y el resto del flujo siguen persistidos como hasta ahora.
+  useEffect(() => {
+    if (!arranqueSinStock.current) return;
+    arranqueSinStock.current = false;
+    setOrdenesProduccion((prev) =>
+      prev.some((o) => o.productosDescontados)
+        ? prev.map((o) =>
+            o.productosDescontados ? { ...o, productosDescontados: false } : o,
+          )
+        : prev,
+    );
+  }, []);
 
   // Creación automática de la orden de producción (§3a / P2): cuando una venta
   // queda en estado "venta" —o sea, el pago quedó verificado— se le crea sola
@@ -10032,7 +10274,7 @@ export default function App() {
                   {...getPerms("ventas-pedidos")}
                   pedidos={ventas}
                   setPedidos={setVentas}
-                  productos={PRODUCTS}
+                  productos={productosMenu}
                   clientes={clientes}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />
@@ -10041,6 +10283,13 @@ export default function App() {
                 <DevolucionesScreen
                   pedidos={ventas}
                   setPedidos={setVentas}
+                  productos={productos}
+                  setProductos={setProductos}
+                  ordenes={ordenesProduccion}
+                  setOrdenes={setOrdenesProduccion}
+                  fichasPorProducto={fichasPorProducto}
+                  insumos={insumos}
+                  categorias={categorias}
                   abrirDevolucionId={devolucionAAbrir}
                   onAbierta={() => setDevolucionAAbrir(null)}
                 />
@@ -10123,6 +10372,7 @@ export default function App() {
                 <OrdenProduccionScreen
                   {...getPerms("production-orders")}
                   productos={productos}
+                  setProductos={setProductos}
                   insumos={insumos}
                   setInsumos={setInsumos}
                   ventas={ventas}
