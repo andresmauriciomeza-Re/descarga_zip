@@ -14,6 +14,7 @@ import { InsumosSolicitadosTable } from "../components/InsumosSolicitadosTable";
 import { EstadoSelect } from "../components/EstadoSelect";
 import { SearchInput } from "../components/SearchInput";
 import { ActionIcons } from "../components/ActionIcons";
+import { useFilasPorPagina } from "../hooks/useFilasPorPagina";
 import { BotonDescargarExcel } from "../components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
@@ -190,7 +191,6 @@ const textoStockActualizado = (r: ResumenStock) => {
 };
 
 const SERIF = "var(--font-titulo)";
-const PER_PAGE = 5;
 
 const ESTADO_CONFIG: Record<EstadoGestion, string> = {
   "Recibido":   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
@@ -1968,8 +1968,19 @@ export function GestionCompraScreen({
     }),
     [gestiones, search, ordenes]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
+  // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
+  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
+
+  const totalPages = Math.ceil(filtered.length / filasPorPagina);
+  const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
+  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
+
+  // Si al recalcular filas por página la página actual queda fuera de rango,
+  // se salta a la última página válida.
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
 
   /** Orden de compra relacionada con la compra del diálogo de confirmación. */
   const estadoOrdenConfirm = estadoConfirm
@@ -2118,8 +2129,8 @@ export function GestionCompraScreen({
   };
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-5xl mx-auto min-h-full flex flex-col">
-      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
+    <div className="px-4 md:px-6 pt-5 pb-4 max-w-5xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-4 mb-4 shrink-0 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Gestión de Compras
@@ -2150,14 +2161,26 @@ export function GestionCompraScreen({
         />
       </div>
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
-        <div className="overflow-auto">
-           <table className="w-full min-w-[720px]">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+      {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
+          (se pagina en filas que quepan, useFilasPorPagina); sólo queda scroll
+          horizontal en tablet y scroll vertical en movil (tarjetas). El
+          paginador queda fijo debajo, siempre visible y por encima del footer. */}
+      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
+        <div
+          ref={scrollerRef}
+          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
+        >
+          {/* Escritorio/tablet (>=768px): tabla. La columna Fecha sólo existe
+              desde 1440px; por debajo va bajo el N° de Factura. */}
+          <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[720px]">
+            <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["N° Factura", "Fecha", "Nombre", "Total", "Estado", "Acciones"].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[17%] min-[1440px]:w-[13%]">N° Factura</th>
+                <th className="hidden min-[1440px]:table-cell px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[10%]">Fecha</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[30%] min-[1440px]:w-[28%]">Nombre</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[15%]">Total</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[20%] min-[1440px]:w-[19%]">Estado</th>
+                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[15%] min-[1440px]:w-[15%]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -2178,8 +2201,8 @@ export function GestionCompraScreen({
                   // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
                   const prov = g.proveedorId
                     ? proveedores.find(p => p.id === g.proveedorId)
-                    : proveedores.find(p => 
-                        p.nombre === (g.proveedor || orden?.proveedor) || 
+                    : proveedores.find(p =>
+                        p.nombre === (g.proveedor || orden?.proveedor) ||
                         p.nombre.toLowerCase() === (g.proveedor || orden?.proveedor)?.toLowerCase() ||
                         p.nombre.toLowerCase().includes((g.proveedor || orden?.proveedor)?.toLowerCase() || '') ||
                         (g.proveedor || orden?.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
@@ -2187,25 +2210,29 @@ export function GestionCompraScreen({
                   const nit = prov?.nit ?? "";
                   const nombreMostrar = prov?.nombre || g.proveedor || orden?.proveedor || "—";
                   return (
-                    <tr key={g.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-3 py-3.5 text-sm">
+                    <tr key={g.id} className="group hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3.5 text-xs sticky left-0 z-10 bg-card group-hover:bg-muted/20">
                         {g.numeroFactura
                           ? <span className="font-mono font-semibold text-foreground">{g.numeroFactura}</span>
                           : <span className="text-muted-foreground">—</span>}
+                        {/* Sólo hasta 1439px: la fecha va bajo el N° de factura */}
+                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap min-[1440px]:hidden">
+                          {g.fechaFactura || "—"}
+                        </p>
                       </td>
-                      <td className="px-3 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                      <td className="hidden min-[1440px]:table-cell px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {g.fechaFactura || "—"}
                       </td>
-                      <td className="px-3 py-3.5 text-sm text-foreground">
-                        <p className="text-sm text-foreground">{nombreMostrar}</p>
-                        {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
+                      <td className="px-4 py-3.5 text-sm overflow-hidden">
+                        <p className="text-sm text-foreground break-words" title={nombreMostrar}>{nombreMostrar}</p>
+                        {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                       </td>
                       <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
                         {g.valorTotal > 0
                           ? fmtCOP(g.valorTotal)
                           : <span className="text-muted-foreground font-normal">—</span>}
                       </td>
-                      <td className="px-3 py-3.5">
+                      <td className="px-4 py-3.5 overflow-hidden">
                         <EstadoSelect
                           value={g.estado}
                           onChange={(nuevoEstado) => {
@@ -2219,7 +2246,7 @@ export function GestionCompraScreen({
                           disabled={g.estado === "Anulado"}
                         />
                       </td>
-                      <td className="px-3 py-3.5">
+                      <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                         <button
                           onClick={() => setDetail(g)}
                           title="Ver detalle"
@@ -2233,39 +2260,119 @@ export function GestionCompraScreen({
                 })}
             </tbody>
           </table>
-        </div>
-      </div>
-      {/* P15: el paginador queda FUERA de la card para que no herede su
-          fondo/borde y se alinee con el resto de la pantalla. */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <button
-                key={n}
-                onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-              >
-                {n}
-              </button>
-            ))}
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+
+          {/* Celular (<768px): cada compra como tarjeta. */}
+          <div className="md:hidden divide-y divide-border">
+            {paged.length === 0
+              ? (
+                <div className="px-4 py-12 text-center text-muted-foreground">
+                  <p className="text-4xl mb-3">📦</p>
+                  <p className="font-medium">No hay gestiones de compra aún</p>
+                  <p className="text-xs mt-1">
+                    Se crean al recibir una Orden de Compra o manualmente con «+ Crear Compra»
+                  </p>
+                </div>
+              )
+              : paged.map(g => {
+                const orden = getOrden(g.ordenId);
+                const prov = g.proveedorId
+                  ? proveedores.find(p => p.id === g.proveedorId)
+                  : proveedores.find(p =>
+                      p.nombre === (g.proveedor || orden?.proveedor) ||
+                      p.nombre.toLowerCase() === (g.proveedor || orden?.proveedor)?.toLowerCase() ||
+                      p.nombre.toLowerCase().includes((g.proveedor || orden?.proveedor)?.toLowerCase() || '') ||
+                      (g.proveedor || orden?.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
+                    );
+                const nit = prov?.nit ?? "";
+                const nombreMostrar = prov?.nombre || g.proveedor || orden?.proveedor || "—";
+                return (
+                  <div key={g.id} className="p-4">
+                    {/* N° de factura y estado arriba */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        {g.numeroFactura
+                          ? <p className="text-sm font-mono font-semibold text-foreground">{g.numeroFactura}</p>
+                          : <p className="text-sm text-muted-foreground">—</p>}
+                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{g.fechaFactura || "—"}</p>
+                      </div>
+                      <EstadoSelect
+                        value={g.estado}
+                        onChange={(nuevoEstado) => {
+                          if (nuevoEstado === g.estado) return;
+                          pedirCambiarEstado(g.id, nuevoEstado);
+                        }}
+                        options={[
+                          { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
+                          { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
+                        ]}
+                        disabled={g.estado === "Anulado"}
+                        className="shrink-0"
+                      />
+                    </div>
+
+                    {/* Proveedor con NIT */}
+                    <div className="mt-2.5 min-w-0">
+                      <p className="text-sm text-foreground break-words">{nombreMostrar}</p>
+                      {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
+                    </div>
+
+                    {/* Total */}
+                    <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl bg-muted/50 border border-border px-3 py-2">
+                      <span className="text-xs text-muted-foreground">Total</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {g.valorTotal > 0
+                          ? fmtCOP(g.valorTotal)
+                          : <span className="text-muted-foreground font-normal">—</span>}
+                      </span>
+                    </div>
+
+                    {/* Ver detalle */}
+                    <div className="mt-2.5 flex items-center justify-end">
+                      <button
+                        onClick={() => setDetail(g)}
+                        title="Ver detalle"
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
-      )}
+
+        {/* Paginador fijo dentro de la card: no se pierde con el scroll. */}
+        {filtered.length > filasPorPagina && (
+          <div className="shrink-0 border-t border-border flex items-center justify-center px-3 py-2">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={pageActual === 1}
+                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                <button
+                  key={n}
+                  onClick={() => setPage(n)}
+                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={pageActual === totalPages}
+                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <AnimatePresence>
         {detail && (

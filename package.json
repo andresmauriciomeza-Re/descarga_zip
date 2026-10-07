@@ -40,7 +40,6 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
-    "@types/qrcode": "^1.5.6",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -73,6 +72,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "4.7.0",
     "playwright": "^1.63.0",
     "puppeteer": "^25.12.0",
