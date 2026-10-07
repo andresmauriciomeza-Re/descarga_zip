@@ -45,6 +45,10 @@ export interface Insumo {
   stockActual: number;
   stockMinimo: number;
   stockMaximo: number;
+  /** Mayor costo unitario facturado entre las compras que siguen en
+      "Recibido" (lo recalcula `utils/inventario.ts` al recibir y al anular).
+      Vacío = todavía no se ha comprado: se muestra "—". */
+  costoMaximo?: number;
   categoriaId: string;
   estado: "activo" | "inactivo";
   composicion?: ProductoInsumoInsumo[];
@@ -356,6 +360,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         { header: "Stock Mínimo", valor: (i) => i.stockMinimo, alineacion: "right" },
         { header: "Stock Máximo", valor: (i) => i.stockMaximo, alineacion: "right" },
         { header: "Costo Unitario", valor: (i) => (i.tipo === "ProductoInsumo" ? "-" : i.costoUnitario), numFmt: "$#,##0", alineacion: "right" },
+        { header: "Costo Máximo", valor: (i) => (i.tipo === "ProductoInsumo" || !i.costoMaximo ? "-" : i.costoMaximo), numFmt: "$#,##0", alineacion: "right" },
         { header: "Estado", valor: (i) => (i.estado === "activo" ? "Activo" : "Inactivo"), esEstado: true },
       ],
     });
@@ -795,20 +800,21 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <table className="w-full table-fixed">
           <colgroup>
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "22%" }} />
             <col style={{ width: "7%" }} />
             <col style={{ width: "11%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "8%" }} />
+            <col style={{ width: "19%" }} />
+            <col style={{ width: "6%" }} />
             <col style={{ width: "10%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "10%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "9%" }} />
           </colgroup>
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
-              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "STOCK MÁX.", "COSTO UNIT.", "ESTADO", "ACCIONES"].map(h => (
+              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "STOCK MÁX.", "COSTO UNIT.", "COSTO MÁX.", "ESTADO", "ACCIONES"].map(h => (
                 <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -816,7 +822,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
           <tbody className="divide-y divide-border">
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-14 text-center text-muted-foreground">
+                <td colSpan={11} className="px-3 py-14 text-center text-muted-foreground">
                   <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p className="font-medium">No hay resultados</p>
                 </td>
@@ -862,6 +868,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
                   <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMaximo}</td>
                   <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
+                  {/* Costo máximo: lo que más se ha pagado entre las compras
+                      recibidas. "—" mientras no haya ninguna. */}
+                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">
+                    {esProductoInsumo || !insumo.costoMaximo ? "-" : fmtCOP(insumo.costoMaximo)}
+                  </td>
                   <td className="px-3 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). Mantiene el
                         flujo de siempre: elegir la opción contraria pide la
@@ -1491,6 +1502,12 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Precio Unitario</label>
                             <p className="text-sm font-mono font-bold text-foreground">{d.precioUnitario !== null ? fmtCOP(d.precioUnitario) : "-"}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Costo máximo</label>
+                            <p className="text-sm font-mono text-muted-foreground">{d.costoMaximo ? fmtCOP(d.costoMaximo) : "-"}</p>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">

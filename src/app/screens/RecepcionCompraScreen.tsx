@@ -3,6 +3,11 @@ import { AnimatePresence } from "motion/react";
 import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
 import { calcularLineaIva } from "../utils/iva";
+import {
+  aplicarStockCompra,
+  recalcularCostoMaximo,
+  textoStockActualizado,
+} from "../utils/inventario";
 import type { Insumo } from "./GestionInsumosScreen";
 import { UnidadSelect } from "../components/UnidadSelect";
 import { ActionIcons } from "../components/ActionIcons";
@@ -571,26 +576,38 @@ export function RecepcionCompraScreen({
     const prov = proveedores.find(p => p.nombre === orden.proveedor);
     const proveedorId = prov?.id;
 
-    setGestiones((prev) => [
-      {
-        id: nuevoId,
-        ordenId: orden.id,
-        proveedor: orden.proveedor,
-        proveedorId,
-        numeroFactura: numeroFactura.trim(),
-        fechaFactura,
-        valorTotal,
-        estado: "Recibido",
-        items: itemsFactura,
-        // Punto 1: la recepción SIEMPRE guarda como "precios sin IVA".
-        // El Monto unitario es base, el IVA se calcula y suma aparte.
-        ivaIncluido: false,
-        subtotalSinIva: subtotalSinIvaFactura,
-        totalIva: totalIvaGuardado,
-        totalPagado: valorTotal,
-      },
-      ...prev,
-    ]);
+    const nuevaCompra: GestionCompra = {
+      id: nuevoId,
+      ordenId: orden.id,
+      proveedor: orden.proveedor,
+      proveedorId,
+      numeroFactura: numeroFactura.trim(),
+      fechaFactura,
+      valorTotal,
+      estado: "Recibido",
+      items: itemsFactura,
+      // Punto 1: la recepción SIEMPRE guarda como "precios sin IVA".
+      // El Monto unitario es base, el IVA se calcula y suma aparte.
+      ivaIncluido: false,
+      subtotalSinIva: subtotalSinIvaFactura,
+      totalIva: totalIvaGuardado,
+      totalPagado: valorTotal,
+    };
+
+    // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido (y
+    // rellena `stockMaximo` si el insumo venía sin techo). Mismo camino que
+    // la Nueva compra, para que las dos formas de facturar entren igual al
+    // inventario.
+    const resumen = aplicarStockCompra(itemsFactura, 1, { insumos, setInsumos });
+    if (resumen && resumen.nombres.length > 0) {
+      nuevaCompra.stockAplicado = true;
+    }
+
+    // Costo máximo del insumo: el mayor costo unitario entre las compras que
+    // siguen en "Recibido", incluida esta recién creada.
+    recalcularCostoMaximo([nuevaCompra, ...gestiones], setInsumos);
+
+    setGestiones((prev) => [nuevaCompra, ...prev]);
 
     // 2) Acumulado de la OC: facturas anteriores + esta.
     const acum = new Map<
@@ -660,6 +677,9 @@ export function RecepcionCompraScreen({
         ? `Factura ${numeroFactura.trim()} guardada · OC ${orden.id} completada`
         : `Factura ${numeroFactura.trim()} guardada · ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
     );
+    if (resumen && resumen.nombres.length > 0) {
+      toast.info(textoStockActualizado(resumen));
+    }
 
     onBack();
   };

@@ -4,6 +4,8 @@ import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, Shiel
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "./GestionEmpleadosScreen";
 import { DOC_TIPOS } from "./GestionUsuariosScreen";
+import { CambiarRolMenu } from "../components/CambiarRolMenu";
+import { type Rol } from "./GestionConfigScreen";
 import { filtrarCorreo, validarCorreo, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "../components/campo";
 
 const SERIF = "var(--font-titulo)";
@@ -42,9 +44,13 @@ interface Props {
   // Nombre del rol asociado a cada contratación (mismo criterio que el detalle
   // en la pantalla de Empleados). Sin esto el id crudo se vería en pantalla.
   rolNombreDe?: (rolId: string) => string;
+  /** Roles distintos al activo que SÍ tienen pantallas: los que ofrece el
+   *  menú "Cambiar de rol". */
+  rolesParaCambiar?: Rol[];
+  onCambiarRol?: (rolId: string) => void;
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, onUpdatePassword, onPasswordSaved, inStore = false, contrataciones, rolNombreDe }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, onUpdatePassword, onPasswordSaved, inStore = false, contrataciones, rolNombreDe, rolesParaCambiar, onCambiarRol }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -136,9 +142,17 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <h2 className="text-xl font-bold text-foreground truncate" style={{ fontFamily: SERIF }}>
               {nombre}
             </h2>
-            <span className={`inline-block mt-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${rolColor}`}>
-              {loggedInRoleName}
-            </span>
+            {rolesParaCambiar && rolesParaCambiar.length > 0 && onCambiarRol ? (
+              <CambiarRolMenu
+                roles={rolesParaCambiar}
+                rolActivoNombre={loggedInRoleName}
+                onSelect={onCambiarRol}
+              />
+            ) : (
+              <span className={`inline-block mt-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${rolColor}`}>
+                {loggedInRoleName}
+              </span>
+            )}
           </div>
           {!editando && (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
@@ -284,7 +298,13 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                     <div key={c.id}
                       className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-sm font-semibold text-foreground">{c.cargo}</span>
+                        <span className="flex items-center gap-1 flex-wrap">
+                          {c.rolIds.map(id => (
+                            <span key={id} className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted border border-border text-foreground">
+                              {rolNombreDe ? rolNombreDe(id) : id}
+                            </span>
+                          ))}
+                        </span>
                         {i === 0 && (
                           <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
                             Actual
@@ -292,7 +312,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {rolNombreDe ? rolNombreDe(c.rolId) : c.rolId}
+                        {c.rolIds.map(id => (rolNombreDe ? rolNombreDe(id) : id)).join(" · ") || "—"}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono mt-1">
                         {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
@@ -327,11 +347,11 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <button
-                onClick={() => navigate(inStore ? "landing" : "dashboard")}
+                onClick={() => navigate(isStaff ? adminHomeScreen : inStore ? "landing" : "dashboard")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Volver al inicio
+                {isStaff ? "Volver al panel de control" : "Volver al inicio"}
               </button>
               {inStore && isStaff && (
               <button

@@ -817,18 +817,21 @@ export function SuppliersScreen({
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4"
+                className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
               >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Proveedor</h3>
                   <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="px-6 py-5">
+                {/* Cuerpo con scroll propio SIEMPRE: el formulario va en dos
+                    columnas y, si la ventana no alcanza, se desplaza aquí sin
+                    perder la cabecera ni los botones. */}
+                <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
                   {/* Punto 1: mismo formulario de proveedor que el de Orden de
                       Compra y el de Compra (mismas reglas y validación en vivo). */}
                   <ProveedorFormCampos form={proveedorForm} />
                 </div>
-                <div className="flex gap-3 px-6 py-4 border-t border-border">
+                <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
                   <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
                   <button
                     onClick={handleCreate}
@@ -850,13 +853,13 @@ export function SuppliersScreen({
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4"
+                className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
               >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h3>
                   <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="px-6 py-5">
+                <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
                   {editItem && (
                     <ProveedorFormCampos
                       form={editForm}
@@ -866,7 +869,7 @@ export function SuppliersScreen({
                     />
                   )}
                 </div>
-                <div className="flex gap-3 px-6 py-4 border-t border-border">
+                <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
                   <button onClick={() => setEditItem(null)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
                   <button onClick={handleEdit} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">Guardar</button>
                 </div>

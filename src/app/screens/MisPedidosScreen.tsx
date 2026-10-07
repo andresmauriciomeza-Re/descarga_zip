@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Venta, VentaStatus } from "./VentasScreen";
+import { hora12 } from "../utils/hora";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -231,7 +232,7 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu }: Props) {
                       <Dato
                         Icon={Clock}
                         titulo="Hora de recogida"
-                        valor={p.horaRecogida}
+                        valor={hora12(p.horaRecogida)}
                       />
                     )}
                     {p.metodoPago && (

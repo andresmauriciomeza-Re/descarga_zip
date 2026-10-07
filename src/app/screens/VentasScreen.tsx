@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState, useMemo } from "react";
+import { hora12 } from "../utils/hora";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -507,6 +508,26 @@ export function VentasScreen({
     toast.success("Devolución registrada");
   };
 
+  /** Cambio de estado desde el menú de la columna Estado. Solo se ofrecen los
+      estados seleccionables (Por verificar, Por entregar, Completado); la
+      devolución y la anulación siguen yendo por sus botones, que además
+      marcan campos propios de la devolución. Cada cambio queda en el
+      historial, que es lo que alimenta la columna "Hora de estado". */
+  const cambiarEstado = (id: string, estado: VentaStatus) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado,
+              historial: [...(x.historial ?? []), { estado, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.success(`Estado actualizado: ${VENTA_STATUS_LABEL[estado]}`);
+  };
+
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
   const exportExcel = () => {
@@ -516,7 +537,7 @@ export function VentasScreen({
         cliente: p.usuario,
         documento: p.documento ?? "",
         fecha: p.fecha,
-        horaRecogida: p.horaRecogida ?? "",
+        horaRecogida: hora12(p.horaRecogida),
         productos: p.productos,
         cantidad: p.cantidad,
         total: fmtCOP(p.total),
@@ -803,7 +824,11 @@ export function VentasScreen({
         return;
       }
       // El pago se recibe en el momento, así que el pedido nace verificado.
-      const finalEstado: VentaStatus = "venta";
+      // Efectivo es el único método que no deja comprobante por verificar
+      // (el dinero queda en caja), así que ese pedido nace directamente
+      // "Completado": es el efectivo automático del pedido tomado en el local.
+      const finalEstado: VentaStatus =
+        metodoPago === "Efectivo" ? "completado" : "venta";
       const detalle: DetalleProd[] = selProductos.map((p) => ({
         nombre: `${p.nombre} — ${p.tamaño}`,
         precio: p.precio,
@@ -1437,7 +1462,7 @@ export function VentasScreen({
                       {p.horaRecogida ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          {p.horaRecogida}
+                          {hora12(p.horaRecogida)}
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">
@@ -1452,20 +1477,24 @@ export function VentasScreen({
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {/* Pill de estado SOLO LECTURA. El estado no se cambia a
-                          mano desde la tabla: avanza solo con el proceso del
-                          pedido (web → por verificar → por entregar →
-                          completado cuando pasa la hora de recogida; pedido
-                          del admin → por entregar desde el inicio). Se deja
-                          el pill para visualizarlo, pero sin menú ni acción. */}
+                      {/* Estado editable. El flujo del checkout se conserva:
+                          la venta web nace "Por verificar" y el admin la
+                          aprueba con el botón Verificar (→ Por entregar).
+                          Desde el menú se pasa a Por entregar o Completado
+                          cuando el pedido ya no avanza solo. La devolución y
+                          la anulación no están aquí: van con sus botones de
+                          acción, y en la columna no se ofrece ninguna acción
+                          de eliminar. */}
                       <EstadoSelect
                         value={p.estado}
-                        options={[{
-                          value: p.estado,
-                          label: VENTA_STATUS_LABEL[p.estado],
-                          color: VENTA_STATUS_COLOR[p.estado],
-                        }]}
-                        disabled
+                        options={VENTA_STATUS_SELECCIONABLES.map((s) => ({
+                          value: s,
+                          label: VENTA_STATUS_LABEL[s],
+                          color: VENTA_STATUS_COLOR[s],
+                        }))}
+                        onChange={(nuevo) => {
+                          if (nuevo !== p.estado) cambiarEstado(p.id, nuevo);
+                        }}
                       />
                     </td>
                     <td
@@ -1654,7 +1683,7 @@ export function VentasScreen({
                       {detailItem.horaRecogida && (
                         <div>
                           <p className="text-xs text-muted-foreground font-medium mb-0.5">Hora de recogida</p>
-                          <p className="text-sm font-semibold text-foreground">🕐 {detailItem.horaRecogida}</p>
+                          <p className="text-sm font-semibold text-foreground">🕐 {hora12(detailItem.horaRecogida)}</p>
                         </div>
                       )}
                       <div>
