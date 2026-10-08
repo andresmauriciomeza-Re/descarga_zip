@@ -6078,7 +6078,7 @@ function DashboardScreen({
                       <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
                         {fmt(venta.total)}
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{horaVenta(venta)}</td>
+                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{hora12(horaVenta(venta))}</td>
                     </tr>
                   ))
                 )}
