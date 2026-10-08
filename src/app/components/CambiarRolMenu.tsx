@@ -3,10 +3,7 @@ import { Check, ChevronsUpDown, UserCog, User } from "lucide-react";
 import { type Rol } from "../screens/GestionConfigScreen";
 
 // Menú "Cambiar de rol" del encabezado (y de Mi perfil).
-//
-// El padre solo pasa los roles que SE PUEDEN ofrecer: activos, con pantalla
-// asignada y distintos del rol activo. Los roles sin pantallas no aparecen
-// aquí, así que no se puede entrar a un rol vacío desde este menú.
+// El padre pasa los roles extra activos distintos del rol activo.
 export function CambiarRolMenu({
   roles,
   rolActivoNombre,
@@ -33,7 +30,14 @@ export function CambiarRolMenu({
     };
   }, [open]);
 
-  if (roles.length === 0) return null;
+  if (roles.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs font-semibold text-foreground">
+        <UserCog className="w-4 h-4 text-primary" />
+        <span className="hidden sm:inline max-w-[140px] truncate">{rolActivoNombre}</span>
+      </span>
+    );
+  }
 
   return (
     <div className="relative" ref={box} onClick={e => e.stopPropagation()}>

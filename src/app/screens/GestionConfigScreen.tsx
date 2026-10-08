@@ -131,74 +131,37 @@ export interface Rol {
   activo: boolean;
 }
 
-// Accesos de referencia de los cargos operativos. Todos incluyen el acceso de
-// lectura al Dashboard (es la puerta de entrada al panel); el resto de
-// módulos/acciones es el que define cada cargo. Se usa tanto en la semilla
-// como en `completarRolesSemilla` (migración de datos viejos).
-const SOLO_DASHBOARD: AccesosMap = { [KEY("Dashboard", "Dashboard")]: ["Ver"] };
-
 const conAcciones = (base: AccesosMap, ks: string[], acts: Accion[]): AccesosMap => {
   const m: AccesosMap = { ...base };
   ks.forEach(k => { m[k] = [...acts]; });
   return m;
 };
 
-// Cargos de la operación (CARGO = ROL): antes eran textos sueltos en la ficha
-// del empleado; hoy son roles dinámicos creados aquí para que el listado, el
-// detalle y el historial puedan mostrarlos como chips derivados de `rolIds`.
 export const ROLES_CARGO: Rol[] = [
   {
     id: "ROL-004", nombre: "Cajero",
     descripcion: "Atiende el punto de venta y la gestión de clientes.", activo: true,
-    accesos: conAcciones(SOLO_DASHBOARD,
+    accesos: conAcciones({},
       [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes"), KEY("Ventas", "Devoluciones")],
       [...ACCIONES]),
   },
   {
     id: "ROL-005", nombre: "Mesera",
     descripcion: "Toma pedidos en sala y atiende a los clientes.", activo: true,
-    accesos: conAcciones(SOLO_DASHBOARD,
+    accesos: conAcciones({},
       [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes")], [...ACCIONES]),
   },
-  {
-    id: "ROL-006", nombre: "Domiciliario",
-    descripcion: "Entrega de pedidos a domicilio (solo consulta).", activo: true,
-    accesos: { ...SOLO_DASHBOARD, [KEY("Ventas", "Ventas")]: ["Ver"] },
-  },
-  {
-    id: "ROL-007", nombre: "Cocinero",
-    descripcion: "Prepara órdenes de producción y revisa productos.", activo: true,
-    accesos: {
-      ...conAcciones(SOLO_DASHBOARD,
-        [KEY("Producción", "Orden de Producción"), KEY("Producción", "Producto No Conforme")], [...ACCIONES]),
-      [KEY("Producción", "Productos")]: ["Ver"],
-    },
-  },
-  {
-    id: "ROL-008", nombre: "Auxiliar de cocina",
-    descripcion: "Apoya en órdenes de producción e insumos (consulta).", activo: true,
-    accesos: {
-      ...SOLO_DASHBOARD,
-      [KEY("Producción", "Orden de Producción")]: ["Ver", "Editar"],
-      [KEY("Compras", "Insumos")]: ["Ver"],
-    },
-  },
-  {
-    id: "ROL-009", nombre: "Operador de producción",
-    descripcion: "Administra producción, insumos y productos.", activo: true,
-    accesos: conAcciones(SOLO_DASHBOARD,
-      [KEY("Producción", "Orden de Producción"), KEY("Producción", "Productos"),
-       KEY("Compras", "Insumos")], [...ACCIONES]),
-  },
-  {
-    // Destino del cargo legado "Administración": antes era texto libre; hoy es
-    // un rol dinámico con permisos de apoyo administrativo.
-    id: "ROL-010", nombre: "Auxiliar administrativo",
-    descripcion: "Apoya en compras, órdenes de compra, proveedores e insumos.", activo: true,
-    accesos: conAcciones(SOLO_DASHBOARD,
-      [KEY("Compras", "Insumos"), KEY("Compras", "Orden de Compra"),
-       KEY("Compras", "Proveedores"), KEY("Compras", "Compra")], [...ACCIONES]),
-  },
+];
+
+// Roles de la semilla anterior que se purgan de datos viejos. Solo se eliminan
+// si coinciden nombre Y id: un rol creado por el usuario que haya recibido uno
+// de estos ids se conserva intacto.
+export const ROLES_SEMILLA_ELIMINADOS: Rol[] = [
+  { id: "ROL-006", nombre: "Domiciliario", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-007", nombre: "Cocinero", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-008", nombre: "Auxiliar de cocina", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-009", nombre: "Operador de producción", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-010", nombre: "Auxiliar administrativo", descripcion: "", activo: true, accesos: {} },
 ];
 
 export const INITIAL_ROLES: Rol[] = [
@@ -212,20 +175,15 @@ export const INITIAL_ROLES: Rol[] = [
   },
   {
     id: "ROL-003", nombre: "Empleado", descripcion: "Acceso operativo al sistema.", activo: true,
-    accesos: { [KEY("Ventas","Clientes")]: ["Ver"] },
+    accesos: {},
   },
   ...ROLES_CARGO,
 ];
 
-// Garantía de semilla sobre datos viejos: una instalación con roles ya
-// guardados en localStorage NO volvería a cargar INITIAL_ROLES, así que los
-// roles de cargo (Cajero, Cocinero…) se fusionan aquí por NOMBRE si faltan.
-// Si el id de la semilla está ocupado por otro rol, se le asigna el siguiente
-// libre: nunca se pisa un rol creado por el administrador.
+// Garantía de semilla sobre datos viejos: fusiona los roles de la semilla que
+// falten por NOMBRE. Si el id está ocupado, asigna el siguiente libre.
 export const completarRolesSemilla = (existentes: Rol[]): Rol[] => {
-  // Purga de la semilla vieja: solo se borran los que conservan el nombre Y el
-  // id de la semilla descargada (ROL-006…ROL-010). Un rol de usuario que haya
-  // recibido ese id con OTRO nombre se conserva intacto.
+  // Purga: solo se borran los que coinciden nombre Y id (ROL-006…ROL-010).
   const eliminadosKeys = new Set(ROLES_SEMILLA_ELIMINADOS.map(r => `${r.id}||${r.nombre.trim().toLowerCase()}`));
   const purge = existentes.filter(r => !eliminadosKeys.has(`${r.id}||${r.nombre.trim().toLowerCase()}`));
   if (purge.length === 0) return INITIAL_ROLES;
@@ -646,7 +604,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
       <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
         className="bg-card rounded-2xl w-full max-w-5xl shadow-2xl border border-border flex flex-col"
-        style={{ maxHeight: "calc(100vh - 2rem)" }}>
+        style={{ maxHeight: "calc(100dvh - 2rem)" }}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
@@ -654,17 +612,16 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
 
-        {/* Two-column body — fills remaining height.
+        {/* Two-column body — cada columna tiene su propio scroll.
             `min-w-0` en las dos columnas: sin él, el `min-content` de la
             grilla de 3 columnas empujaba a la columna izquierda más allá del
             50% y el desborde partía el modal en dos. */}
         <div
-          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pb-4"
-          style={{ maxHeight: "calc(100vh - 160px)" }}
+          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-hidden"
         >
 
-          {/* ── LEFT 50%: split into top (info) + bottom (modules) ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border shrink-0">
+          {/* ── LEFT 50%: Información + Módulos, con scroll propio ── */}
+          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border overflow-y-auto">
 
             {/* TOP: Información del rol */}
             <div className="px-5 py-3 space-y-2.5 shrink-0">
@@ -782,8 +739,8 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
             </div>
           </div>
 
-          {/* ── RIGHT 50%: Permisos CRUD ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4">
+          {/* ── RIGHT 50%: Permisos CRUD — scroll independiente ── */}
+          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-hidden">
            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
              Asignar permisos al rol
            </p>
