@@ -81,6 +81,7 @@ import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
 import pizzaDefinitivaCompleta from "@/assets/img/pizzaDefinitivaCompleta.png";
 import imgPremio from "@/assets/img/Premio.png";
 import imgQuatro from "@/assets/img/Quatro.png";
+import StatsMarquee from "@/features/landing/components/StatsMarquee";
 import {
   Bar,
   BarChart,
@@ -1303,7 +1304,7 @@ function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer shrink-0 group"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11" />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
           <div className="leading-none">
             <p
               className="font-bold text-[17px] text-foreground leading-tight"
@@ -1865,56 +1866,7 @@ function LandingScreen({
 
       {/* ── SECCIÓN 1: Estadísticas ── */}
       <section className="bg-[#DC2626] py-12 md:py-14">
-        <div className="max-w-5xl mx-auto px-6">
-          {/* 3 columnas, no 4: la cuarta quedaba vacía en escritorio y el
-              grupo se corría hacia la izquierda de la franja. Al ocupar cada
-              estadística una columna, el bloque queda centrado en el contenedor
-              y con el mismo espacio a ambos lados. */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-            {[
-              {
-                emoji: "📦",
-                value: "+5.200",
-                label: "Ventas entregadas",
-                className: "",
-              },
-              {
-                emoji: "⚡",
-                value: "25 min",
-                label: "Entrega promedio",
-                className: "",
-              },
-              {
-                emoji: "🏆",
-                value: "30 años",
-                label: "De tradición",
-                // En el grid de 2 columnas de mobile esta cae sola en la
-                // segunda fila y quedaba pegada a la izquierda; al ocupar las
-                // dos columnas se centra sola. En escritorio vuelve a ocupar
-                // una sola columna.
-                className: "col-span-2 md:col-span-1",
-              },
-            ].map(({ emoji, value, label, className }) => (
-              <div
-                key={label}
-                className={`flex flex-col items-center gap-2 text-center ${className}`}
-              >
-                <span className="text-4xl leading-none">
-                  {emoji}
-                </span>
-                <p
-                  className="text-3xl md:text-4xl font-bold text-white mt-1 leading-none"
-                  style={{ fontFamily: MONO }}
-                >
-                  {value}
-                </p>
-                <p className="text-white/75 text-sm font-medium">
-                  {label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <StatsMarquee />
       </section>
 
       {/* ── SECCIÓN 2: Categorías ── */}
@@ -2213,11 +2165,11 @@ function LandingScreen({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-8">
             {/* Brand */}
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <img
                   src={logoBlanco}
                   alt="Logo"
-                  className="w-8 h-8 rounded-full object-contain"
+                  className="w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-full object-contain shrink-0"
                 />
                 <span
                   className="font-bold text-lg text-white"

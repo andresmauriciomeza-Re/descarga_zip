@@ -1,0 +1,40 @@
+/* Letrero de estadísticas de la landing: movimiento continuo de derecha a
+   izquierda. Velocidad constante de 50 px/s en cualquier ancho de pantalla:
+   cada ítem mide w-52 (208 px) y cada grupo 3 × 208 = 624 px; un conjunto
+   son 5 grupos = 3120 px (supera los 2560 px de la pantalla más ancha);
+   el track lleva dos conjuntos (6240 px) y avanza -50% (= un conjunto) en
+   62.4 s (3120 px / 50 px·s⁻¹). El bucle empalma sin saltos porque el
+   segundo conjunto es una réplica exacta del primero. */
+
+@keyframes stats-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.stats-marquee-mask {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+
+.stats-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: stats-marquee 62.4s linear infinite;
+  will-change: transform;
+}
+
+.stats-marquee-track:hover,
+.stats-marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-marquee-track {
+    animation: none;
+  }
+}
