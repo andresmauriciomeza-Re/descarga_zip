@@ -1303,7 +1303,7 @@ function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer shrink-0 group"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-cover shrink-0 w-11 h-11" />
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11" />
           <div className="leading-none">
             <p
               className="font-bold text-[17px] text-foreground leading-tight"
