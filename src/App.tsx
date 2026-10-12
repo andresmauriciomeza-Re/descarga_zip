@@ -102,6 +102,9 @@ import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import type { Screen } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { borrarToken, login as loginApi } from "@/shared/services/authService";
+import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
@@ -2937,6 +2940,7 @@ function CartScreen({
     0,
   );
   const [comprobante, setComprobante] = useState<string>("");
+  const { subir, subiendo } = useSubirArchivo();
   const [horaRecogida, setHoraRecogida] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
@@ -3065,10 +3069,10 @@ function CartScreen({
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) =>
-      setComprobante(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    e.target.value = "";
+    void subir(file, "comprobantes").then((url) => {
+      if (url) setComprobante(url);
+    });
   };
 
   /** Último paso: registra la venta con los datos del formulario (invitado)
@@ -3982,14 +3986,15 @@ function CartScreen({
                   ) : (
                     <button
                       onClick={() => fileRef.current?.click()}
-                      className="w-full flex flex-col items-center justify-center gap-3 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 cursor-pointer transition-all group"
+                      disabled={subiendo}
+                      className="w-full flex flex-col items-center justify-center gap-3 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 cursor-pointer transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div className="w-12 h-12 rounded-xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
                         <ImageIcon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                       <div className="text-center">
                         <p className="text-sm font-semibold text-foreground">
-                          Haz clic para subir
+                          {subiendo ? "Subiendo..." : "Haz clic para subir"}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           JPG, PNG o PDF · máx 10 MB
@@ -4448,10 +4453,36 @@ function AuthLayout({
 
 // ─────────────────────────── LOGIN ───────────────────────────
 
+/** Puente API → estado local: arma la ficha `Usuario` que conoce el panel a
+    partir del usuario que devolvió el backend y el rol local equivalente. */
+const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario => {
+  const partes = usuarioApi.nombre.trim().split(/\s+/);
+  const iniciales = (
+    partes.length > 1
+      ? (partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")
+      : (partes[0] ?? "").slice(0, 2)
+  ).toUpperCase();
+  return {
+    id: String(usuarioApi.id),
+    nombre: usuarioApi.nombre,
+    iniciales,
+    avatarColor: AVATAR_PALETTE[0],
+    correo: usuarioApi.correo,
+    telefono: usuarioApi.telefono ?? "",
+    tipoDocumento: usuarioApi.tipoDocumento ?? (usuarioApi.documento ? "CC" : ""),
+    numeroDocumento: usuarioApi.documento ?? "",
+    rolIds: [rolLocal.id],
+    rolId: rolLocal.id,
+    activo: true,
+  };
+};
+
 function LoginScreen({
   navigate,
   onLogin,
   usuarios,
+  roles,
+  onUsuarioNuevo,
   darkMode,
   loginNotice,
   initialEmail,
@@ -4462,6 +4493,11 @@ function LoginScreen({
   // el motivo y NO considere la sesión iniciada (p. ej. sin roles activos).
   onLogin: (user: Usuario) => { ok: boolean; mensaje?: string };
   usuarios: Usuario[];
+  /** Roles locales: con ellos el puente traduce `usuarios.rol` del API al id
+      de rol del panel. */
+  roles: Rol[];
+  /** Registra en el estado `usuarios` la ficha armada con datos del API. */
+  onUsuarioNuevo: (user: Usuario) => void;
   darkMode: boolean;
   loginNotice?: boolean;
   /** Correo que queda escrito al llegar desde el cambio de contraseña:
@@ -4487,89 +4523,90 @@ function LoginScreen({
     const e: typeof errors = {};
     e.email = validarCorreo(email) ?? undefined;
     e.password = password ? undefined : "La contraseña es obligatoria";
-    console.log("[login] resultado de validación", {
-      email: email.trim().toLowerCase(),
-      valido: !e.email && !e.password,
-      errores: e,
-    });
     setErrors(e);
     return !e.email && !e.password;
   };
 
-  const handleLogin = () => {
-    console.log("[login] inicio del submit", { email, passwordPresent: Boolean(password) });
+  const handleLogin = async () => {
     if (!validate()) {
       console.log("[login] submit detenido por validación");
       return;
     }
     setRechazo(null);
-
-    const trimmedEmail = email.trim().toLowerCase();
-    console.log("[login] correo normalizado", trimmedEmail);
-
-    // Look up against the local user directory.
-    const user = usuarios.find(u => u.correo.trim().toLowerCase() === trimmedEmail);
-    console.log("[login] usuario encontrado", user ? {
-      id: user.id,
-      correo: user.correo,
-      rolId: user.rolId,
-      activo: user.activo,
-    } : null);
-
-    if (!user) {
-      console.log("[login] credenciales inválidas: usuario no encontrado");
-      setErrors({
-        email: "Credenciales incorrectas",
-        password: "Verifica tu correo y contraseña",
-      });
-      return;
-    }
-
-    if (!user.activo) {
-      console.log("[login] credenciales rechazadas: cuenta inactiva");
-      setErrors({
-        email: "Credenciales incorrectas",
-        password: "Verifica tu correo y contraseña",
-      });
-      toast.error("Tu cuenta está inactiva. Contacta al administrador.");
-      return;
-    }
-
-    // All system users store their own password; default for accounts
-    // created before password tracking was added.
-    if (password !== (user.contrasena ?? "123456")) {
-      console.log("[login] credenciales inválidas: contraseña incorrecta");
-      setErrors({
-        email: "Credenciales incorrectas",
-        password: "Verifica tu correo y contraseña",
-      });
-      return;
-    }
-
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      console.log("[login] credenciales correctas; llamando a onLogin", {
-        id: user.id,
-        correo: user.correo,
-        rolId: user.rolId,
-      });
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const { usuario: usuarioApi } = await loginApi(trimmedEmail, password);
+
+      // Puente API → estado local: la sesión, los roles y el menú siguen
+      // resolviendo contra el listado local de cuentas.
+      const correoApi = (usuarioApi.correo || trimmedEmail).trim().toLowerCase();
+      const user = usuarios.find(
+        u => u.correo.trim().toLowerCase() === correoApi,
+      );
+
+      if (user && !user.activo) {
+        console.log("[login] credenciales rechazadas: cuenta inactiva");
+        borrarToken();
+        setErrors({
+          email: "Credenciales incorrectas",
+          password: "Verifica tu correo y contraseña",
+        });
+        toast.error("Tu cuenta está inactiva. Contacta al administrador.");
+        return;
+      }
+
+      let cuenta: Usuario;
+      if (user) {
+        cuenta = user;
+      } else {
+        const nombreRolApi = (usuarioApi.rol ?? "").trim();
+        const rolLocal = roles.find(
+          r => normalizarNombreRol(r.nombre) === normalizarNombreRol(nombreRolApi),
+        );
+        if (!rolLocal) {
+          console.log("[login] rechazo: sin rol local equivalente");
+          borrarToken();
+          toast.error("Tu cuenta no tiene un rol configurado en el panel.");
+          return;
+        }
+        cuenta = construirUsuarioLocal(usuarioApi, rolLocal);
+        onUsuarioNuevo(cuenta);
+      }
+
       // Navigation and session state are handled by App.tsx.
-      const respuesta = onLogin(user);
+      const respuesta = onLogin(cuenta);
       if (respuesta && respuesta.ok === false) {
         // El login fue RECHAZADO en App: muestra el motivo y no navega.
         console.log("[login] login rechazado", respuesta.mensaje);
+        borrarToken();
         const mensaje = respuesta.mensaje ?? "Tu cuenta no tiene roles activos. Contacta al administrador.";
         setRechazo(mensaje);
         toast.error(mensaje);
         return;
       }
       setRechazo(null);
-      const firstName = user.nombre.split(" ")[0];
-      toast.success(`¡Bienvenid${user.nombre.split(" ")[0].endsWith("a") ? "a" : "o"}, ${firstName}!`, {
+      const firstName = cuenta.nombre.split(" ")[0];
+      toast.success(`¡Bienvenid${firstName.endsWith("a") ? "a" : "o"}, ${firstName}!`, {
         description: "Has ingresado correctamente.",
       });
-    }, 1500);
+    } catch (err) {
+      const status = (err as ApiErrorConEstado).status;
+      const mensaje = err instanceof Error ? err.message : "No se pudo conectar con el servidor.";
+      if (status === 401) {
+        console.log("[login] credenciales inválidas");
+        setErrors({
+          email: "Credenciales incorrectas",
+          password: "Verifica tu correo y contraseña",
+        });
+      } else {
+        // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
+        // extrajo el texto que corresponde.
+        toast.error(mensaje);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -6767,6 +6804,7 @@ const AUTH_STORAGE_KEYS = [
   "role",
   "permissions",
   "sivpro.token",
+  "sivpro.token.v1",
   "sivpro.user",
   "sivpro.role",
   "sivpro.permissions",
@@ -7631,12 +7669,23 @@ export default function App() {
     navigate("login");
   };
 
+  /** Puente API → estado local: la ficha que arma el login cuando el correo
+      no existía en el listado. Sin estar en `usuarios`, `loggedInUser` no
+      resolvería y la sesión se cerraría sola. */
+  const agregarUsuarioLocal = (nuevo: Usuario) => {
+    setUsuarios((prev) =>
+      prev.some(
+        (u) =>
+          u.id === nuevo.id ||
+          u.correo.trim().toLowerCase() === nuevo.correo.trim().toLowerCase(),
+      )
+        ? prev
+        : [...prev, nuevo],
+    );
+  };
+
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
-    console.log("[login] handleLogin recibió usuario", {
-      id: user.id,
-      correo: user.correo,
-      rolId: user.rolId,
-    });
+    console.log("[login] handleLogin recibió usuario");
 
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
@@ -7918,6 +7967,7 @@ export default function App() {
       // La sesión local debe cerrarse aunque el servidor no responda.
     } finally {
       clearAuthStorage();
+      borrarToken();
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
@@ -8277,6 +8327,8 @@ export default function App() {
                   <LoginScreen
                     navigate={navigate}
                     usuarios={usuarios}
+                    roles={roles}
+                    onUsuarioNuevo={agregarUsuarioLocal}
                     darkMode={darkMode}
                     loginNotice={loginNotice}
                     initialEmail={loginEmailPre}

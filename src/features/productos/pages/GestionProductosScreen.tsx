@@ -28,6 +28,7 @@ import {
   type EstadoProducto,
 } from "@/shared/components/EstadoProducto";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -779,6 +780,7 @@ function CampoImagenes({
   // URL pendiente de agregar. Estado propio para no tener que escribir en el
   // producto mientras se teclea (antes el input escribía `imagen` en vivo).
   const [url, setUrl] = useState("");
+  const { subir, subiendo } = useSubirArchivo();
   const completa = imagenes.length >= MAX_IMAGENES;
 
   const agregar = (valor: string) => {
@@ -845,21 +847,24 @@ function CampoImagenes({
       <div className="flex gap-2 mb-1">
         <label
           className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
-            completa ? "opacity-50 pointer-events-none" : ""
+            completa || subiendo ? "opacity-50 pointer-events-none" : ""
           }`}
         >
           <Plus className="w-3.5 h-3.5" />
-          Subir archivo
+          {subiendo ? "Subiendo..." : "Subir archivo"}
           <input
             type="file"
             accept="image/*"
             className="hidden"
+            disabled={subiendo || completa}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              // Se limpia el input para que volver a subir el mismo archivo
-              // dispare onChange (si no, el valor no cambia y no hay evento).
               e.target.value = "";
-              if (file) agregar(URL.createObjectURL(file));
+              if (file) {
+                void subir(file, "productos").then((url) => {
+                  if (url) agregar(url);
+                });
+              }
             }}
           />
         </label>

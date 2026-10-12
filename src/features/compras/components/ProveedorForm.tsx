@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactNode } from "react";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { MensajeError } from "@/shared/components/campo";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   filtrarNit,
   filtrarNumeroDocumento,
@@ -136,11 +137,11 @@ export function ProveedorFormCampos({
   const alTocar = (campo: CampoTexto) => () => form.marcarTocado(campo);
 
   /**
-   * Cámara de Comercio (adjunto). Mismo patrón de FileReader que la evidencia
-   * de ProductosPerecederos/App: el archivo se guarda en dos campos,
-   * `camaraComercioNombre` (para mostrarlo) y `camaraComercioArchivo` (dataURL).
-   * El archivo se rechaza ANTES de leerlo: convertir un PDF de 40 MB en dataURL
-   * dejaría el estado de React pesado; en ese caso se guarda solo el nombre y
+   * Cámara de Comercio (adjunto). El archivo se sube al backend y la URL
+   * resultante se guarda en `camaraComercioArchivo`; el nombre del archivo
+   * se guarda en `camaraComercioNombre` para mostrarlo.
+   * El archivo se rechaza ANTES de subirlo: un PDF de 40 MB no debería
+   * intentarse subir; en ese caso se guarda solo el nombre y
    * `useProveedorForm` lo convierte en el error que se pinta debajo.
    */
   const alAdjuntar = (e: ChangeEvent<HTMLInputElement>) => {
@@ -150,26 +151,21 @@ export function ProveedorFormCampos({
     const tipoOk = file.type === "application/pdf" || file.type.startsWith("image/");
     const extensionOk = /\.(pdf|jpe?g|png|webp)$/i.test(file.name);
     if ((!tipoOk && !extensionOk) || file.size > 5 * 1024 * 1024) {
-      // Se guardan juntos (React 18 agrupa los dos setCampo): el nombre queda
-      // y el contenido en "", que es lo que la validación traduce en error.
       form.setCampo("camaraComercioNombre", file.name);
       form.setCampo("camaraComercioArchivo", "");
       e.target.value = "";
       return;
     }
-    const reader = new FileReader();
-    // Nombre y contenido se escriben en el MISMO turno: si el nombre se
-    // guardara antes, habría un render intermedio con nombre y sin archivo y
-    // se parpadearía el error "No se pudo cargar el archivo".
-    reader.onload = ev => {
-      form.setCampo("camaraComercioNombre", file.name);
-      form.setCampo("camaraComercioArchivo", String(ev.target?.result ?? ""));
-    };
-    reader.onerror = () => {
-      form.setCampo("camaraComercioNombre", file.name);
-      form.setCampo("camaraComercioArchivo", "");
-    };
-    reader.readAsDataURL(file);
+    e.target.value = "";
+    void subir(file, "proveedores").then((url) => {
+      if (url) {
+        form.setCampo("camaraComercioNombre", file.name);
+        form.setCampo("camaraComercioArchivo", url);
+      } else {
+        form.setCampo("camaraComercioNombre", file.name);
+        form.setCampo("camaraComercioArchivo", "");
+      }
+    });
   };
 
   /** Quitar el adjunto. La fecha se limpia con él: deja de tener sentido
@@ -180,6 +176,8 @@ export function ProveedorFormCampos({
     form.setCampo("camaraComercioArchivo", "");
     form.setCampo("fechaExpedicionCamara", "");
   };
+
+  const { subir, subiendo } = useSubirArchivo();
 
   const v = form.values;
   const esNatural = v.tipoPersona === "Persona Natural";
@@ -391,11 +389,12 @@ export function ProveedorFormCampos({
                   type="file"
                   accept="application/pdf,image/*"
                   onChange={alAdjuntar}
-                  className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")}`}
+                  disabled={subiendo}
+                  className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <span className="text-[10px] text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
-                    {v.camaraComercioNombre || "PDF o imagen (JPG, PNG) hasta 5 MB"}
+                    {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG) hasta 5 MB")}
                   </span>
                   {v.camaraComercioNombre && (
                     <button
