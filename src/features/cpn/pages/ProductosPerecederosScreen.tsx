@@ -13,6 +13,7 @@ import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -312,6 +313,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<NoConformidad | null>(null);
   const [form, setForm] = useState<Omit<NoConformidad, "id">>(emptyForm());
+  const { subir, subiendo } = useSubirArchivo();
 
   // Autocomplete state for ventaRef
   const [showVentaSugg, setShowVentaSugg] = useState(false);
@@ -459,9 +461,10 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
       e.target.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = ev => set({ evidencia: ev.target?.result as string });
-    reader.readAsDataURL(file);
+    e.target.value = "";
+    void subir(file, "no-conformes").then((url) => {
+      if (url) set({ evidencia: url });
+    });
   };
 
   // ── FormBody rendered as plain function call (not JSX component) to preserve focus ──
@@ -716,7 +719,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
               ? <img src={f.evidencia} alt="evidencia" className="w-full max-h-48 object-cover rounded-xl border border-border mt-1" />
               : <p className="text-sm text-muted-foreground/50 italic py-2">Sin evidencia adjunta</p>
             : <>
-                <input type="file" accept="image/jpeg,image/png" ref={fileRef} className="hidden" onChange={handleFile} />
+                <input type="file" accept="image/jpeg,image/png" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
                 {f.evidencia ? (
                   <div className="relative rounded-xl overflow-hidden border border-border h-32">
                     <img src={f.evidencia} alt="evidencia" className="w-full h-full object-cover" />
@@ -727,10 +730,10 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                   </div>
                 ) : (
                   <>
-                    <button onClick={() => fileRef.current?.click()}
-                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer">
+                    <button onClick={() => fileRef.current?.click()} disabled={subiendo}
+                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                       <Upload className="w-5 h-5" />
-                      <span className="text-xs font-medium">Subir imagen de evidencia</span>
+                      <span className="text-xs font-medium">{subiendo ? "Subiendo..." : "Subir imagen de evidencia"}</span>
                     </button>
                     <p className="text-[11px] text-muted-foreground mt-1.5 text-center">JPG o PNG · máx 5 MB</p>
                   </>

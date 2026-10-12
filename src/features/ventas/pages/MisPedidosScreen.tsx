@@ -250,7 +250,7 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu }: Props) {
                   </div>
 
                   {/* Comprobante */}
-                  {p.comprobante && p.comprobante.startsWith("data:image") && (
+                  {p.comprobante && (p.comprobante.startsWith("data:image") || p.comprobante.startsWith("http://") || p.comprobante.startsWith("https://")) && (
                     <div>
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
                         Comprobante de pago
