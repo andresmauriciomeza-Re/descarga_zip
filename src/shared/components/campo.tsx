@@ -30,10 +30,18 @@ export function inputCls(err?: string, base: string = ""): string {
  * Parrafo de error debajo del campo. No ocupa espacio cuando no hay error.
  * `leading-tight` recorta la altura cuando el texto envuelve a dos lineas, que
  * es lo que descuadraba las grillas de dos columnas.
+ *
+ * `id` es el que referencian `aria-describedby` de cada campo cuando hay
+ * error (ver hook `useValidacionFormulario`). El rojo lleva variante `dark`
+ * para mantener contraste legible sobre fondo oscuro.
  */
-export function MensajeError({ err }: { err?: string }) {
+export function MensajeError({ err, id }: { err?: string; id?: string }) {
   if (!err) return null;
-  return <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{err}</p>;
+  return (
+    <p id={id} className="text-xs text-red-500 dark:text-red-400 mt-1 ml-0.5 leading-tight">
+      {err}
+    </p>
+  );
 }
 
 /**
@@ -53,6 +61,9 @@ export function PasswordField({
   autoComplete,
   onKeyDown,
   pad = "pr-11",
+  inputRef,
+  ariaInvalid,
+  ariaDescribedBy,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -71,6 +82,13 @@ export function PasswordField({
    * de 8 a 32px desde el borde, asi que 36px le sigue dejando 4px de aire.
    */
   pad?: string;
+  /** Callback ref al input: registra el campo en `useValidacionFormulario`
+   *  para poder enfocarlo (trampa de Tab y foco al primer inválido). */
+  inputRef?: (el: HTMLInputElement | null) => void;
+  /** `aria-invalid` cuando el campo tiene error. */
+  ariaInvalid?: boolean;
+  /** Id del mensaje de error asociado (`aria-describedby`). */
+  ariaDescribedBy?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -82,6 +100,9 @@ export function PasswordField({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete={autoComplete}
+        ref={inputRef}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         className={`${cls} ${pad}`}
       />
       <button
@@ -139,6 +160,7 @@ export function filtrarCorreo(valor: string): string {
 export function validarNombre(v: string): string | null {
   if (!v.trim()) return "El nombre completo es obligatorio";
   if (!RE_NOMBRE.test(v)) return "Usa solo letras y espacios, sin espacios dobles";
+  if (v.trim().length < 3) return "El nombre completo debe tener al menos 3 caracteres";
   return null;
 }
 

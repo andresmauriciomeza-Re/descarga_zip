@@ -102,6 +102,7 @@ import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hor
 import type { Screen } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { useValidacionFormulario, trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
 import { borrarToken, login as loginApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
@@ -2955,6 +2956,11 @@ function CartScreen({
   /** true apenas se intenta avanzar con el formulario inválido: así aparecen
       todos los errores juntos aunque el campo no se haya tocado. */
   const [intentoDatos, setIntentoDatos] = useState(false);
+  // Trampa de Tab, foco al primer inválido y aria (lógica compartida). El
+  // teléfono es opcional: entra al orden solo para el foco, sin trampa.
+  const validacionDatos = useValidacionFormulario([
+    "documento", "nombre", "telefono",
+  ]);
   const [loading, setLoading] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] = useState(
     Boolean(confirmationData),
@@ -3032,9 +3038,20 @@ function CartScreen({
   const errDocumento = validarDocumento(guestDocument, "CC");
   const errNombre = validarNombre(guestName);
   const errTelefono = validarTelefonoOpcional(guestPhone);
-  const verErrDoc = tocadoDoc || intentoDatos ? errDocumento : null;
-  const verErrNom = tocadoNombre || intentoDatos ? errNombre : null;
-  const verErrTel = tocadoTel || intentoDatos ? errTelefono : null;
+  // El hook suma sus propios campos "visibles" (trampa de Tab / envío) a los
+  // flags `tocado*` y `intentoDatos` que ya usaba este formulario.
+  const verErrDoc =
+    tocadoDoc || intentoDatos || validacionDatos.estaVisible("documento")
+      ? errDocumento
+      : null;
+  const verErrNom =
+    tocadoNombre || intentoDatos || validacionDatos.estaVisible("nombre")
+      ? errNombre
+      : null;
+  const verErrTel =
+    tocadoTel || intentoDatos || validacionDatos.estaVisible("telefono")
+      ? errTelefono
+      : null;
   const datosValidos = !errDocumento && !errNombre && !errTelefono;
 
   // QR de pago de la cuenta elegida (Nequi o Bancolombia). Se genera en el
@@ -3142,6 +3159,12 @@ function CartScreen({
           errTelefono ??
           "Revisa los datos de tu pedido",
       );
+      // Muestra todos los errores y lleva el foco al primer campo inválido.
+      validacionDatos.enfocarPrimero({
+        documento: errDocumento,
+        nombre: errNombre,
+        telefono: errTelefono,
+      });
       return;
     }
     setCheckoutStep(1);
@@ -3755,16 +3778,21 @@ function CartScreen({
                         setTocadoDoc(true);
                       }}
                       onBlur={() => setTocadoDoc(true)}
+                      onKeyDown={validacionDatos.onKeyDownCampo("documento", {
+                        validar: () => errDocumento,
+                      })}
                       placeholder="Ej: 1234567890"
                       inputMode="numeric"
-                      aria-invalid={Boolean(verErrDoc)}
+                      ref={validacionDatos.refCampo("documento")}
+                      {...validacionDatos.ariaCampo("documento", verErrDoc)}
                       className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
                         verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
                       }`}
                     />
                     <p
+                      id={verErrDoc ? validacionDatos.idError("documento") : undefined}
                       className={`text-xs mt-1 ${
-                        verErrDoc ? "text-red-500" : "text-muted-foreground"
+                        verErrDoc ? "text-red-500 dark:text-red-400" : "text-muted-foreground"
                       }`}
                     >
                       {verErrDoc ?? "Entre 6 y 10 dígitos"}
@@ -3783,14 +3811,20 @@ function CartScreen({
                         setTocadoNombre(true);
                       }}
                       onBlur={() => setTocadoNombre(true)}
+                      onKeyDown={validacionDatos.onKeyDownCampo("nombre", {
+                        validar: () => errNombre,
+                      })}
                       placeholder="Ej: Laura Martínez"
-                      aria-invalid={Boolean(verErrNom)}
+                      ref={validacionDatos.refCampo("nombre")}
+                      {...validacionDatos.ariaCampo("nombre", verErrNom)}
                       className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
                         verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
                       }`}
                     />
                     {verErrNom && (
-                      <p className="text-xs text-red-500 mt-1">{verErrNom}</p>
+                      <p id={validacionDatos.idError("nombre")} className="text-xs text-red-500 dark:text-red-400 mt-1">
+                        {verErrNom}
+                      </p>
                     )}
                   </div>
 
@@ -3811,13 +3845,16 @@ function CartScreen({
                       onBlur={() => setTocadoTel(true)}
                       placeholder="Ej: 310 555 1234"
                       inputMode="tel"
-                      aria-invalid={Boolean(verErrTel)}
+                      ref={validacionDatos.refCampo("telefono")}
+                      {...validacionDatos.ariaCampo("telefono", verErrTel)}
                       className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
                         verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
                       }`}
                     />
                     {verErrTel && (
-                      <p className="text-xs text-red-500 mt-1">{verErrTel}</p>
+                      <p id={validacionDatos.idError("telefono")} className="text-xs text-red-500 dark:text-red-400 mt-1">
+                        {verErrTel}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -4577,11 +4614,15 @@ function LoginScreen({
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
 
+  // Trampa de Tab, foco al primer inválido y aria (lógica compartida).
+  const validacion = useValidacionFormulario(["email", "password"]);
+
   const validate = () => {
     const e: typeof errors = {};
     e.email = validarCorreo(email) ?? undefined;
     e.password = password ? undefined : "La contraseña es obligatoria";
     setErrors(e);
+    if (e.email || e.password) validacion.enfocarPrimero(e);
     return !e.email && !e.password;
   };
 
@@ -4753,13 +4794,17 @@ function LoginScreen({
               }}
               type="email"
               placeholder="gloria@lasirena.com"
+              ref={validacion.refCampo("email")}
+              onKeyDown={validacion.onKeyDownCampo("email", {
+                errores: errors,
+                validar: () => validarCorreo(email),
+                aplicar: (campo, err) =>
+                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+              })}
               className={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              {...validacion.ariaCampo("email", errors.email)}
             />
-            {errors.email && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
-                {errors.email}
-              </p>
-            )}
+            <MensajeError id={validacion.idError("email")} err={errors.email} />
           </div>
           <div>
             <label className="block text-sm font-semibold text-foreground mb-1">
@@ -4776,13 +4821,21 @@ function LoginScreen({
                }}
               placeholder="••••••••"
               autoComplete="current-password"
+              inputRef={validacion.refCampo("password")}
+              onKeyDown={validacion.onKeyDownCampo("password", {
+                errores: errors,
+                validar: () =>
+                  password ? null : "La contraseña es obligatoria",
+                aplicar: (campo, err) =>
+                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+              })}
+              ariaInvalid={Boolean(errors.password)}
+              ariaDescribedBy={
+                errors.password ? validacion.idError("password") : undefined
+              }
               cls={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
             />
-            {errors.password && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">
-                {errors.password}
-              </p>
-            )}
+            <MensajeError id={validacion.idError("password")} err={errors.password} />
           </div>
           <div className="text-right">
             <button
@@ -4862,6 +4915,12 @@ function ForgotPasswordModal({
   // recalcula mientras se escribe.
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
+  // Trampa de Tab, foco al primer inválido y aria (lógica compartida).
+  // El paso OTP no usa refs: sus casillas se enfocan por id.
+  const validacion = useValidacionFormulario([
+    "forgotEmail", "code", "newPass", "confirm",
+  ]);
+
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -4887,12 +4946,15 @@ function ForgotPasswordModal({
     const err = validarCorreo(forgotEmail);
     if (err) {
       setErrores({ forgotEmail: err });
+      validacion.enfocarPrimero({ forgotEmail: err });
       return;
     }
     // Sin cuenta no hay nada que restablecer: se avisa antes de los tres pasos.
     const clave = forgotEmail.trim().toLowerCase();
     if (!usuarios.some((u) => u.correo.trim().toLowerCase() === clave)) {
-      setErrores({ forgotEmail: "No existe una cuenta con ese correo" });
+      const cuentaErr = "No existe una cuenta con ese correo";
+      setErrores({ forgotEmail: cuentaErr });
+      validacion.enfocarPrimero({ forgotEmail: cuentaErr });
       return;
     }
     setErrores({});
@@ -4919,6 +4981,9 @@ function ForgotPasswordModal({
     const fullCode = code.join("");
     if (fullCode.length < 6) {
       setErrores({ code: "Ingresa el código completo" });
+      // Foco a la primera casilla vacía: es el primer campo inválido.
+      const primeraVacia = code.findIndex((c) => !c);
+      document.getElementById(`otp-${primeraVacia < 0 ? 5 : primeraVacia}`)?.focus();
       return;
     }
     setErrores({});
@@ -4954,9 +5019,9 @@ function ForgotPasswordModal({
           : "border-border"
     }`;
   const estadoNew: "ok" | "err" | "neutro" =
-    newPass.length === 0 ? "neutro" : passwordError ? "err" : "ok";
+    passwordError || errores.newPass ? "err" : newPass.length === 0 ? "neutro" : "ok";
   const estadoConfirm: "ok" | "err" | "neutro" =
-    confirmVacio ? "neutro" : confirmError ? "err" : "ok";
+    confirmError || errores.confirm ? "err" : confirmVacio ? "neutro" : "ok";
 
   const changePassword = () => {
     if (loading || !todoValido) return;
@@ -4995,6 +5060,12 @@ function ForgotPasswordModal({
   const handleCodeKey = (i: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !code[i] && i > 0) {
       document.getElementById(`otp-${i - 1}`)?.focus();
+    }
+    // Tab se mueve entre casillas; solo se bloquea al salir de la última
+    // con el código incompleto (el foco se queda y aparece el error).
+    if (trampaTabOTP(e, i === 5, code.join("").length >= 6)) {
+      setErrores((p) => ({ ...p, code: "Ingresa el código completo" }));
+      document.getElementById("otp-5")?.focus();
     }
   };
 
@@ -5051,9 +5122,17 @@ function ForgotPasswordModal({
                 }}
                 type="email"
                 placeholder="gloria@lasirena.com"
+                ref={validacion.refCampo("forgotEmail")}
+                onKeyDown={validacion.onKeyDownCampo("forgotEmail", {
+                  errores,
+                  validar: () => validarCorreo(forgotEmail),
+                  aplicar: (campo, err) =>
+                    setErrores((p) => ({ ...p, [campo]: err ?? "" })),
+                })}
                 className={inputCls(errores.forgotEmail)}
+                {...validacion.ariaCampo("forgotEmail", errores.forgotEmail)}
               />
-              <MensajeError err={errores.forgotEmail} />
+              <MensajeError id={validacion.idError("forgotEmail")} err={errores.forgotEmail} />
             </div>
             <button
               onClick={sendCode}
@@ -5106,6 +5185,9 @@ function ForgotPasswordModal({
                   onKeyDown={(e) => handleCodeKey(i, e)}
                   maxLength={1}
                   inputMode="numeric"
+                  aria-label={`Dígito ${i + 1} de 6 del código de verificación`}
+                  aria-invalid={errores.code ? true : undefined}
+                  aria-describedby={errores.code ? "code-error" : undefined}
                   className={`w-10 h-12 text-center text-lg font-bold bg-muted rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground ${
                     errores.code ? "border-red-400 bg-red-50/30" : "border-border"
                   }`}
@@ -5113,7 +5195,7 @@ function ForgotPasswordModal({
               ))}
             </div>
             <div className="-mt-4 mb-4">
-              <MensajeError err={errores.code} />
+              <MensajeError id="code-error" err={errores.code} />
             </div>
             <button
               onClick={verifyCode}
@@ -5170,15 +5252,36 @@ function ForgotPasswordModal({
                   onChange={(v) => {
                     setNewPass(v);
                     setErrorGuardado(null);
+                    // Si la trampa de Tab había dejado un error escrito, al
+                    // corregir el valor se limpia para que no quede pegado.
+                    setErrores((p) => (p.newPass ? { ...p, newPass: "" } : p));
                   }}
-                  onKeyDown={enviarConEnter}
+                  onKeyDown={(e) => {
+                    validacion.onKeyDownCampo("newPass", {
+                      errores,
+                      validar: () => validarContrasena(newPass),
+                      aplicar: (campo, err) =>
+                        setErrores((p) => ({ ...p, [campo]: err ?? "" })),
+                    })(e);
+                    enviarConEnter(e);
+                  }}
                   placeholder="Mínimo 8 caracteres"
                   autoComplete="new-password"
                   cls={clsCampo(estadoNew)}
+                  inputRef={validacion.refCampo("newPass")}
+                  ariaInvalid={Boolean(passwordError ?? errores.newPass)}
+                  ariaDescribedBy={
+                    passwordError ?? errores.newPass
+                      ? validacion.idError("newPass")
+                      : undefined
+                  }
                 />
                 {/* Lista de requisitos que se marca mientras se escribe. */}
                 <RequisitosContrasena valor={newPass} />
-                <MensajeError err={passwordError ?? undefined} />
+                <MensajeError
+                  id={validacion.idError("newPass")}
+                  err={passwordError ?? errores.newPass ?? undefined}
+                />
                 {errorGuardado && <MensajeError err={errorGuardado} />}
               </div>
               <div>
@@ -5187,13 +5290,43 @@ function ForgotPasswordModal({
                 </label>
                 <PasswordField
                   value={confirm}
-                  onChange={setConfirm}
-                  onKeyDown={enviarConEnter}
+                  onChange={(v) => {
+                    setConfirm(v);
+                    setErrores((p) => (p.confirm ? { ...p, confirm: "" } : p));
+                  }}
+                  onKeyDown={(e) => {
+                    validacion.onKeyDownCampo("confirm", {
+                      errores,
+                      validar: () =>
+                        confirm === newPass
+                          ? null
+                          : "Las contraseñas no coinciden",
+                      aplicar: (campo, err) =>
+                        setErrores((p) => ({ ...p, [campo]: err ?? "" })),
+                    })(e);
+                    enviarConEnter(e);
+                  }}
                   placeholder="Repite tu contraseña"
                   autoComplete="new-password"
                   cls={clsCampo(estadoConfirm)}
+                  inputRef={validacion.refCampo("confirm")}
+                  ariaInvalid={Boolean(confirmError || errores.confirm)}
+                  ariaDescribedBy={
+                    confirmError || errores.confirm
+                      ? validacion.idError("confirm")
+                      : undefined
+                  }
                 />
-                {confirmError && <MensajeError err="Las contraseñas no coinciden" />}
+                {(confirmError || errores.confirm) && (
+                  <MensajeError
+                    id={validacion.idError("confirm")}
+                    err={
+                      confirmError
+                        ? "Las contraseñas no coinciden"
+                        : errores.confirm || undefined
+                    }
+                  />
+                )}
                 {confirmCoincide && (
                   <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
                     <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
@@ -5339,6 +5472,51 @@ function RegisterScreen({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setVal(k)(soloDigitos(e.target.value));
 
+  // ── Trampa de Tab, foco al primer inválido y aria ──
+  // Lógica compartida en src/shared/hooks/useValidacionFormulario.ts. El
+  // orden coincide con el del tabulador de la tarjeta.
+  const validacion = useValidacionFormulario([
+    "docType", "docNum", "name", "email", "phone", "password", "confirm",
+  ]);
+
+  /** Validador en vivo de cada campo, para que la trampa de Tab no dependa
+   *  de que el error ya esté calculado en `errores` (campo vacío y sin
+   *  tocar todavía). Mismas reglas que `register`. */
+  const validadorDe = (k: string): (() => string | null) => {
+    switch (k) {
+      case "docType":
+        return () => (form.docType ? null : "Selecciona el tipo de documento");
+      case "docNum":
+        return () => validarDocumento(form.docNum, form.docType);
+      case "name":
+        return () => validarNombre(form.name);
+      case "email":
+        return () => validarCorreo(form.email);
+      case "phone":
+        return () => validarTelefono(form.phone);
+      case "password":
+        return () => validarContrasena(form.password);
+      case "confirm":
+        return () =>
+          form.password !== form.confirm ? "Las contraseñas no coinciden" : null;
+    }
+  };
+
+  /** onKeyDown de cada campo: Tab con error no sale del campo (el error se
+   *  escribe en `errores` para pintarlo) y Enter en las contraseñas envía,
+   *  igual que antes. Shift+Tab y el clic con el mouse no se tocan. */
+  const teclaEnRegistro =
+    (campo: string) =>
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      validacion.onKeyDownCampo(campo, {
+        errores,
+        validar: validadorDe(campo),
+        aplicar: (c, err) => setErrores((p) => ({ ...p, [c]: err ?? "" })),
+      })(e);
+      if (e.key === "Enter" && (campo === "password" || campo === "confirm"))
+        register();
+    };
+
   const register = () => {
     const errs: Record<string, string> = {};
 
@@ -5382,7 +5560,12 @@ function RegisterScreen({
       errs.confirm = "Las contraseñas no coinciden";
 
     setErrores(errs);
-    if (Object.values(errs).some(Boolean)) return;
+    if (Object.values(errs).some(Boolean)) {
+      // Con errores no se envía: se muestran todos y el foco va al primer
+      // campo inválido (los mensajes ya se pintan desde `errores`).
+      validacion.enfocarPrimero(errs);
+      return;
+    }
 
     setLoading(true);
     setTimeout(() => {
@@ -5417,21 +5600,6 @@ function RegisterScreen({
       );
       navigate("login");
      }, 1500);
-   };
-
-   const registerInvalid =
-     Boolean(validarNombre(form.name)) ||
-     Boolean(validarCorreo(form.email)) ||
-     Boolean(validarTelefono(form.phone)) ||
-     Boolean(validarDocumento(form.docNum, form.docType)) ||
-     Boolean(validarContrasena(form.password)) ||
-     !form.confirm ||
-     form.password !== form.confirm;
-
-   /** Enter en los campos de contraseña crea la cuenta; `register` es quien
-    *  decide si hay errores, así que nunca envía un formulario incompleto. */
-   const enviarConEnterRegistro = (e: React.KeyboardEvent<HTMLInputElement>) => {
-     if (e.key === "Enter") register();
    };
 
    return (
@@ -5477,6 +5645,7 @@ function RegisterScreen({
               </label>
               <select
                 value={form.docType}
+                ref={validacion.refCampo("docType")}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
@@ -5484,7 +5653,9 @@ function RegisterScreen({
                   }
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
+                onKeyDown={teclaEnRegistro("docType")}
                 className={inputCls(errores.docType, "cursor-pointer")}
+                {...validacion.ariaCampo("docType", errores.docType)}
               >
                 {DOC_OPTIONS.map((opt) => (
                   <option key={opt.code} value={opt.code}>
@@ -5492,7 +5663,7 @@ function RegisterScreen({
                   </option>
                 ))}
               </select>
-              <MensajeError err={errores.docType} />
+              <MensajeError id={validacion.idError("docType")} err={errores.docType} />
             </div>
             <div className="flex-1 min-w-0">
               <label className="block text-sm font-semibold mb-1 text-foreground">
@@ -5504,9 +5675,12 @@ function RegisterScreen({
                 type="text"
                  inputMode="numeric"
                  placeholder="Ej: 12345678"
+                ref={validacion.refCampo("docNum")}
+                onKeyDown={teclaEnRegistro("docNum")}
                 className={inputCls(errores.docNum)}
+                {...validacion.ariaCampo("docNum", errores.docNum)}
               />
-              <MensajeError err={errores.docNum} />
+              <MensajeError id={validacion.idError("docNum")} err={errores.docNum} />
             </div>
           </div>
           {[
@@ -5552,11 +5726,14 @@ function RegisterScreen({
                 <PasswordField
                   value={form[key]}
                   onChange={setVal(key)}
-                  onKeyDown={enviarConEnterRegistro}
+                  onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
                   cls={inputCls(errores[key])}
                   pad="pr-9"
+                  inputRef={validacion.refCampo(key)}
+                  ariaInvalid={Boolean(errores[key])}
+                  ariaDescribedBy={errores[key] ? validacion.idError(key) : undefined}
                 />
               ) : (
                 <input
@@ -5565,10 +5742,13 @@ function RegisterScreen({
                   type={type}
                   inputMode={numeric ? "numeric" : undefined}
                   placeholder={placeholder}
+                  ref={validacion.refCampo(key)}
+                  onKeyDown={teclaEnRegistro(key)}
                   className={inputCls(errores[key])}
+                  {...validacion.ariaCampo(key, errores[key])}
                 />
               )}
-              <MensajeError err={errores[key]} />
+              <MensajeError id={validacion.idError(key)} err={errores[key]} />
             </div>
           ))}
 
@@ -5598,7 +5778,7 @@ function RegisterScreen({
           onClick={register}
           size="md"
           className="w-full mb-1"
-           disabled={loading || registerInvalid || Object.values(errores).some(Boolean)}
+           disabled={loading}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
