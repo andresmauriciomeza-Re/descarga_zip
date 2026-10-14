@@ -60,8 +60,8 @@ import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
 import imgCocaCola from "@/assets/img/Coca-Cola.png";
-import fondoDefinitivo from "@/assets/img/fondoDefinitivo.png";
-import fondoDefinitivoNegro from "@/assets/img/fondoDefinitivoNegro.png";
+import fondoBienvenidoDark from "@/assets/img/bienvenido-la-sirena-dark.webp";
+import fondoBienvenidoLight from "@/assets/img/bienvenido-la-sirena-light.webp";
 import pizzaHero from "@/assets/img/image-23.png";
 import imagenLocal from "@/assets/img/imagen_local.png";
 import lasanaCarne from "@/assets/img/lasaña_carne.png";
@@ -78,7 +78,6 @@ import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
 import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
 import pizzaPollo from "@/assets/img/pizza_pollo.png";
 import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
-import pizzaDefinitivaCompleta from "@/assets/img/pizzaDefinitivaCompleta.png";
 import imgPremio from "@/assets/img/Premio.png";
 import imgQuatro from "@/assets/img/Quatro.png";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
@@ -4353,95 +4352,154 @@ function AuthLayout({
   contentClassName: string;
   darkMode: boolean;
 }) {
+  const RELLENO_CLARO =
+    "linear-gradient(to bottom, #85613f 0%, #b57740 15%, #4c4a08 35%, #944a1a 50%, #391101 66%, #ca7331 85%, #2a0c01 100%)";
+  const RELLENO_OSCURO =
+    "linear-gradient(to bottom, #1e120a 0%, #482710 15%, #17120a 30%, #391503 50%, #0a0200 66%, #401b08 85%, #000000 100%)";
+  const FUNDIDO_BORDE = "linear-gradient(to right, #000 92%, transparent 100%)";
   return (
     <div className="relative min-h-screen bg-muted">
-      {/* Fondo unico de TODA la pantalla. Antes eran dos columnas (la foto a la
-          izquierda, el formulario a la derecha); ahora el fondo es la imagen
-          entera y la tarjeta flota encima, alineada a la derecha.
+      {/* Fondo unico de TODA la pantalla, con IMAGEN POR TEMA.
 
-           `fondoDefinitivo.png` y `fondoDefinitivoNegro.png` (1536x1024, ratio
-           1.5) son patrones ilustrados de ingredientes, no fotos: son puramente
-           decorativos. Vienen en
-          Format24bppRgb, SIN canal alfa, y ningun pixel muestreado baja de
-          A250, asi que no puede transparentarse ni dejar ver el `body`.
+          `bienvenido-la-sirena-light.webp` (1672x941) y
+          `bienvenido-la-sirena-dark.webp` (1671x941) son las dos versiones de la
+          misma escena de bienvenida: logo de Pizzeria La Sirena, titulo,
+          subtitulo y tres beneficios a la IZQUIERDA; el lado derecho (horno y
+          cocina) es decoracion pura y es donde se apoya la tarjeta.
 
-          Por eso el `bg-muted` del contenedor es solo una red de seguridad para
-          el instante en que la imagen aun no ha llegado: son 1.9 MB y se emiten
-          como archivo aparte, no inlined. En operacion normal la imagen tapa el
-          100% del contenedor y ese color no se ve nunca. Ojo con la tentacion
-          de oscurecerlo: el patron es 83.5% casi blanco (luminancia media
-          234.3), asi que un respaldo oscuro daria un salto dark->light mas
-          fuerte que el blanco que se queria evitar.
+          Se usan los .webp (226 KB y 205 KB) y no los .png originales (2.26 MB y
+          2.08 MB) porque el peso al vuelo se reduce ~90%. Los .png renombrados
+          siguen en `src/assets/img/` como respaldo, pero NO se importan, asi que
+          no entran al build.
 
-          `object-cover` llena los dos ejes, asi que no puede quedar nada sin
-          cubrir. El `object-center` es casi una formalidad: el patron es
-          uniforme (las nueve regiones de una rejilla 3x3 miden 13-19% de color)
-          y su centro de masa esta en (48.9%, 50.5%), o sea centrado. Antes
-          llevaba `object-left` porque la foto de la pizza vivia en el 32%
-          izquierdo y sin eso se veia la mesa vacia de la derecha; con un
-          patron repartido por todo el lienzo eso ya no aplica y `center`
-          describe lo que realmente pasa.
+          POR QUE DOS CAPAS Y NO UN `src={darkMode ? a : b}`:
+          con un solo `<img>` el cambio de tema obliga a descargar la imagen nueva
+          en ese preciso instante, y hasta que llega se ve el `bg-muted` del
+          contenedor (fondo "vacio"). Aqui las DOS capas estan siempre en el DOM,
+          asi que el navegador las precarga al montar la pantalla. El cambio de
+          tema es entonces solo un `opacity`, sin peticion nueva y sin parpadeo.
 
-          El recorte es el de siempre: con ratio 1.5, a 16:9 y 16:10 manda el
-          ancho y se ve el lienzo entero de lado a lado, perdiendo 143px
-          verticales a 1366x768 y 200px a 1920x1080; en 4:3 y 5:4 (1024x768,
-          1280x1024) manda el alto y se ve el 89% del ancho; en movil vertical
-          baja al 31%. Al ser textura repartida, cualquier recorte se ve bien.
+          `transition-opacity duration-500` da el fundido. `darkMode` llega por
+          prop desde el `useState` de App, asi que al pulsar la luna la capa
+          visible se cruza al instante y sin recargar la pagina.
 
-           Las tarjetas usan `bg-card` y sus inputs `bg-muted`, por lo que ambos
-           adoptan automaticamente los tokens correspondientes al modo activo.
-           En claro la separacion depende casi por completo de la sombra
-           (`shadow-xl` / `shadow-2xl`), porque el `border-border` es solo
-           rgba(0,0,0,0.08).
+          POR QUE `background-size: auto 100%` Y NO `cover`:
+          con `cover` la imagen llena los DOS ejes, asi que en una ventana mas
+          ANCHA que su ratio (1.777) se escalaba por el ancho y rebasaba el alto:
+          se recortaba el logo por arriba y los tres beneficios por abajo. Con
+          `auto 100%` la altura SIEMPRE se ve entera (logo, titulo, subtitulo y
+          beneficios incluidos) y lo que sobra es ancho, no alto.
 
-          El `alt` va vacio a proposito: esto es decorativo y anunciarlo a un
-          lector de pantalla es ruido. No se pierde nada porque TODO el texto
-          de los formularios esta dentro de las tarjetas, que si se anuncian. */}
-      <img
-        src={darkMode ? fondoDefinitivoNegro : fondoDefinitivo}
-        alt=""
+          ESTRUCTURA DE CADA CAPA (relleno + imagen enmascarada):
+
+          1) El div exterior lleva `background: RELLENO_*`, un degradado VERTICAL
+             cuyos paradas son los tonos muestreados en el borde derecho de cada
+             imagen (franja de 40px, de arriba a abajo: pared clara -> beige ->
+             horno -> madera de la mesa -> sombra). Ese mismo degradado rellena
+             todo el hueco que queda a la derecha cuando la ventana es mas ancha
+             que 1.777, y al coincidir con los colores reales del filo no se
+             percibe un panel de color pegado a la foto.
+
+          2) El div interior es la imagen, con `aspect-ratio` propio: su alto es
+             el 100% del contenedor y su ancho se deduce de la relacion natural,
+             es decir EXACTAMENTE el ancho de la foto. Gracias a eso el
+             `mask-image` (3) cae siempre sobre el borde derecho real de la
+             imagen, exista o no hueco.
+
+          3) `mask-image: linear-gradient(to right, #000 92%, transparent 100%)`
+             desvanece el filo derecho de la imagen: los ultimos 8% de su ancho
+             se funden hacia transparente y dejan ver el `RELLENO_*` de atras.
+             Es el degradado horizontal suave que evita el corte brusco.
+
+          `background-position: left center` + `background-repeat: no-repeat`
+          anclan la foto al borde IZQUIERDO, que es donde vive todo su texto:
+          cuando la imagen resulta mas ancha que la ventana se recorta por la
+          derecha (decoracion) y nunca por logo ni textos. `overflow-hidden` en
+          el exterior es lo que recorta ese desbordamiento.
+
+          El `bg-muted` del contenedor se conserva como red de seguridad para el
+          breve instante en que aun no ha llegado ninguna de las dos.
+
+          Sin `alt` ni `role="img"`: es decorativo y anunciarlo a un lector de
+          pantalla es ruido. No se pierde nada porque TODO el texto de los
+          formularios vive dentro de las tarjetas, que si se anuncian. */}
+      <div
         aria-hidden="true"
-        className="absolute inset-0 z-0 w-full h-full object-cover object-center"
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
+          darkMode ? "opacity-0" : "opacity-100"
+        }`}
+        style={{ background: RELLENO_CLARO }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: "100%",
+            aspectRatio: "1672 / 941",
+            backgroundImage: `url(${fondoBienvenidoLight})`,
+            backgroundSize: "auto 100%",
+            backgroundPosition: "left center",
+            backgroundRepeat: "no-repeat",
+            maskImage: FUNDIDO_BORDE,
+            WebkitMaskImage: FUNDIDO_BORDE,
+          }}
+        />
+      </div>
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
+          darkMode ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ background: RELLENO_OSCURO }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: "100%",
+            aspectRatio: "1671 / 941",
+            backgroundImage: `url(${fondoBienvenidoDark})`,
+            backgroundSize: "auto 100%",
+            backgroundPosition: "left center",
+            backgroundRepeat: "no-repeat",
+            maskImage: FUNDIDO_BORDE,
+            WebkitMaskImage: FUNDIDO_BORDE,
+          }}
+        />
+      </div>
+
+      {/* Velo SOLO EN MOVIL Y TABLET (`lg:hidden`).
+
+          A partir de 1024px la tarjeta se ancla a la derecha (`sm:justify-end`
+          + `lg:justify-end`) y hay ancho de sobra para que convivan la tarjeta y
+          la zona izquierda de la imagen, que es la que lleva logo y textos.
+
+          Por debajo de eso la tarjeta ocupa casi todo el ancho y queda montada
+          sobre la imagen completa, donde ademas puede recortarse la parte
+          superior/inferior del texto segun la altura del viewport. El velo baja
+          el contraste del fondo para que la tarjeta (opaca: `bg-card`) separe
+          claramente del fondo en AMBOS temas.
+
+          Va en negro para los dos temas a proposito: en claro un velo claro
+          (p. ej. `bg-background/60`, blanco) acercaria el fondo al color de la
+          tarjeta y empeoraria justo el separacion que se quiere lograr. En
+          oscuro la imagen ya es oscura, pero el velo refuerza el contraste con
+          los textos claros del formulario. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-10 bg-black/30 dark:bg-black/55 lg:hidden"
       />
 
-      {/* Capa de la pizza, ENTRE el fondo y la tarjeta (`z-10`; el fondo es
-          `z-0` y el contenido `z-20`, asi que el orden queda explicito y no
-          depende del DOM).
+      {/* Capa del contenido, la mas alta de las tres (fondo `z-0`, velo `z-10`,
+          contenido `z-20`). El orden va explicito en el `z-index` y no depende
+          del orden del DOM.
 
-           `pizzaDefinitivaCompleta.png` (612x407) contiene la pizza circular
-           completa. Su fondo es transparente (incluidas las esquinas), asi que
-           se integra con ambos patrones de fondo sin formar un recuadro blanco.
-           El import de `pizzaDefinitiva.png` se conserva por compatibilidad con
-           la referencia anterior, pero esta imagen ya no se utiliza.
-
-           El ancho conserva el calculo sobre el hueco disponible junto a la
-           tarjeta, con un factor intermedio de `1.55` y un tope de `115vh`.
-           `left-[1vw]` separa la pizza del borde izquierdo ahora que ya no hace
-           falta ocultar un corte recto. `max-w-none` evita que el preflight de
-           Tailwind limite el lienzo de la imagen.
-
-          `pointer-events-none` porque el lienzo transparente se extiende por
-          debajo de la tarjeta y sin esto bloquearia los clics;
-          `draggable={false}` para que no aparezca la imagen fantasma al
-          arrastrar. `hidden lg:block` porque bajo 1024px la tarjeta es de ancho
-          completo y no hay hueco: ahi se ve solo el patron. Sin blur, sin scale,
-          sin opacity, a plena intensidad como el fondo. */}
-      <img
-        src={pizzaDefinitivaCompleta}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-        className="pointer-events-none absolute left-[1vw] top-1/2 z-10 hidden w-[min(calc((100vw_-_584px)*1.55),115vh)] max-w-none -translate-y-1/2 select-none lg:block"
-      />
-
-      {/* Capa del contenido, la mas alta de las tres (`z-20`; fondo `z-0` y
-          pizza `z-10`). Antes de la capa de la pizza esto era `z-10` y el orden
-          del DOM ya bastaba, pero con tres capas superpuestas queda explicito y
-          no depende de que alguien reordene el JSX.
-
-          `min-h-screen` y no `h-screen`: asi la pagina hace scroll normal
-          cuando la tarjeta no cabe, en vez de recortarse, y el fondo se estira
-          acompanando. */}
+          `min-h-screen` y no `h-screen`: asi la pagina hace scroll normal cuando
+          la tarjeta no cabe, en vez de recortarse, y el fondo la acompana
+          porque las capas son `inset-0` del contenedor: al crecer este, crecen
+          ellas y con `auto 100%` la foto vuelve a ocupar el alto completo. */}
       <div className={`relative z-20 flex min-h-screen ${contentClassName}`}>
         {children}
       </div>
@@ -4611,7 +4669,7 @@ function LoginScreen({
 
   return (
     <AuthLayout
-      contentClassName="items-start justify-center lg:justify-end px-4 py-6 lg:px-8"
+      contentClassName="items-start justify-center sm:justify-end px-4 sm:px-6 py-6 lg:px-8"
       darkMode={darkMode}
       overlay={
         <AnimatePresence>
@@ -4625,9 +4683,10 @@ function LoginScreen({
         </AnimatePresence>
       }
     >
-      {/* Contenido del login. El fondo, la pizza y el `z-index` de esta capa
-          viven en `AuthLayout` (mas arriba): aqui solo va la tarjeta y las
-          clases de posicionamiento que se le pasan en `contentClassName`.
+      {/* Contenido del login. El fondo por tema, el velo de movil y el
+          `z-index` de esta capa viven en `AuthLayout` (mas arriba): aqui solo va
+          la tarjeta y las clases de posicionamiento que se le pasan en
+          `contentClassName`.
 
           `items-start` + `my-auto` en la tarjeta en vez de `items-center`: con
           el centrado clasico de flex, una tarjeta mas alta que la pantalla se
@@ -4636,18 +4695,22 @@ function LoginScreen({
           espacio sobrante (centrado) y valen 0 cuando no hay, dejando la
           tarjeta arriba y todo accesible con scroll.
 
-          `lg:justify-end` manda la tarjeta a la derecha en escritorio; por
-          debajo de 544px la tarjeta es de ancho completo, asi que ahi el
-          `justify-center` no se nota. `px-4 lg:px-8` son los margenes.
+          `sm:justify-end` manda la tarjeta a la derecha ya desde 640px y no
+          solo desde `lg`: el fondo de La Sirena ancla a la IZQUIERDA su logo y
+          sus textos, y empujar la tarjeta al borde derecho cuanto antes es lo
+          que evita que se monte sobre ellos en tablet. Por debajo de 544px la
+          tarjeta es de ancho completo, asi que ahi el `justify-center` no se
+          nota. `px-4 sm:px-6 lg:px-8` son los margenes.
 
-          OJO: el fondo no es solo decorativo aqui, porque el ancho de la pizza
-          se calcula sobre el hueco que deja la tarjeta (`100vw - 584px`).
-          Quitar el `lg:justify-end` haria que la pizza se le metiera debajo de
-          la tarjeta en pantallas anchas. */}
+          El ancho baja de `max-w-lg` a `max-w-md` entre 640px y 1024px: en ese
+          tramo (tablet apaisada y portatiles angostos) los 512px de `max-w-lg`
+          dejaban muy poco lienzo libre a la izquierda. Con 448px la tarjeta
+          sigue comoda y deja ver mas de la imagen. En movil (`w-full` manda) y
+          en escritorio (`lg:max-w-lg`) no cambia nada respecto a antes. */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-lg p-5"
+        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md lg:max-w-lg p-5"
       >
         <button
           onClick={() => navigate("landing")}
@@ -5372,15 +5435,17 @@ function RegisterScreen({
    };
 
    return (
-    <AuthLayout contentClassName="items-start justify-center px-4 py-4 lg:justify-end lg:px-8 lg:py-0" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 sm:px-6 py-4 lg:px-8 lg:py-0" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-4"
+        className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-3"
       >
-        <div className="text-center mb-2">
+        <div className="text-center mb-1">
           {/* El logo va exactamente igual que en Login (`h-14`,
-              `mb-2`): mismo tratamiento visual en las dos pantallas de auth. */}
+              `mb-2`): mismo tratamiento visual en las dos pantallas de auth.
+              NO se reduce aqui aunque la tarjeta gane alto con ello: romperia
+              la paridad con Login, que no debe tocarse. */}
           <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
 
           <h1
@@ -5389,17 +5454,22 @@ function RegisterScreen({
           >
             Crear cuenta
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-0.5">
             Completa tus datos para registrarte
           </p>
         </div>
 
-        {/* Grid y no `space-y`: hace falta para que "Correo electronico" y
-            "Telefono" compartan fila y el formulario quepa sin scroll a
-            1366x768. El flag `full` de cada descriptor marca los campos que
-            ocupan las 2 columnas; en movil (<640px) el grid cae a 1 columna y
-            todo se apila igual que antes. */}
-        <div className="grid gap-x-3 gap-y-1 sm:grid-cols-2 mb-1">
+        {/* Grid y no `space-y`: hace falta para que los campos puedan COMPARTIR
+            fila. Tres parejas ya la comparten: Tipo doc + Numero (fila propia
+            arriba), Correo + Teléfono y, desde este cambio, Contraseña +
+            Confirmar contraseña. El flag `full` de cada descriptor marca los
+            campos que se llevan las 2 columnas (hoy solo "Nombre completo").
+            En movil (<640px) el grid cae a 1 columna y todo se apila.
+
+            `gap-y-0.5` es el espaciado entre filas: con el de antes (`gap-y-1`)
+            la tarjeta crecia 8px mas sin que se notara, porque el label ya
+            separa el campo anterior del siguiente. */}
+        <div className="grid gap-x-3 gap-y-0.5 sm:grid-cols-2 mb-1">
           <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
             <div className="sm:w-48 sm:shrink-0">
               <label className="block text-sm font-semibold mb-1 text-foreground">
@@ -5466,14 +5536,12 @@ function RegisterScreen({
               key: "password" as const,
                placeholder: "Mínimo 8 caracteres",
               type: "password",
-              full: true,
             },
             {
               label: "Confirmar contraseña",
               key: "confirm" as const,
               placeholder: "Repite tu contraseña",
               type: "password",
-              full: true,
             },
           ].map(({ label, key, placeholder, type, numeric, full }) => (
             <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
@@ -5488,6 +5556,7 @@ function RegisterScreen({
                   placeholder={placeholder}
                   autoComplete="new-password"
                   cls={inputCls(errores[key])}
+                  pad="pr-9"
                 />
               ) : (
                 <input
@@ -5500,11 +5569,29 @@ function RegisterScreen({
                 />
               )}
               <MensajeError err={errores[key]} />
-              {/* Lista de requisitos en tiempo real (solo bajo la contraseña:
-                  la confirmación ya tiene su propio mensaje). */}
-              {key === "password" && <RequisitosContrasena valor={form.password} />}
             </div>
           ))}
+
+          {/* Lista de requisitos en tiempo real, como FILA PROPIA de ancho
+              completo justo debajo de la pareja Contraseña / Confirmar.
+
+              Antes vivia dentro de la celda de Contraseña: eso convertia esa
+              fila en la mas alta de la tarjeta (162px de los 669 totales) y
+              era la principal razon por la que el formulario crecia. Al sacarla
+              a su propia fila y pasarla a cuadrícula, las 5 reglas caben en 2
+              lineas en vez de 5 y la pareja de contraseñas ocupa una sola fila.
+
+              `grid-cols-1 sm:grid-cols-2`: a 2 columnas cada una mide ~202px y
+              la cadena mas larga ("Al menos una letra mayuscula", ~162px + icono
+              14 + hueco 6 = 182px) entra sin envolver; a 3 columnas serian 130px
+              y TODAVIA envolveria, subiendo la fila en vez de bajarla. En movil
+              (<640px) vuelve a 1 columna, donde hay ancho de sobra. */}
+          <div className="sm:col-span-2 min-w-0">
+            <RequisitosContrasena
+              valor={form.password}
+              className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1"
+            />
+          </div>
         </div>
 
         <PrimaryBtn

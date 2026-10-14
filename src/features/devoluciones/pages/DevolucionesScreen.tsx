@@ -247,7 +247,7 @@ export function DevolucionesScreen({
   // igual que "Ver Menú": así el nombre del producto elegido es exactamente el
   // del panel ("Pizza Jamon") y al confirmar la devolución se puede devolver el
   // stock y crear la orden del producto nuevo sin traducciones de nombre.
-  const canjeCatalogo = useMemo(
+  const canjeCatalogo: Product[] = useMemo(
     () =>
       productos
         .filter((p) => p.estado === "Disponible")
@@ -528,7 +528,7 @@ export function DevolucionesScreen({
     );
   };
 
-  const devolucionDetalle = detalleDevolucion
+  const devolucionDetalle: Venta = detalleDevolucion
     ? pedidos.find((p) => p.id === detalleDevolucion.id) ?? detalleDevolucion
     : null;
   const totalDetalleDevolucion =
