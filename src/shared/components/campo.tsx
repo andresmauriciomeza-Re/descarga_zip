@@ -52,6 +52,7 @@ export function PasswordField({
   cls,
   autoComplete,
   onKeyDown,
+  pad = "pr-11",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -60,6 +61,16 @@ export function PasswordField({
   autoComplete?: string;
   /** Opcional: sirve para enviar con Enter cuando todo el formulario es válido. */
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /**
+   * Reserva a la derecha para el icono del ojo. El default `pr-11` (44px) es
+   * el que usan Login, Mi Perfil y los modales: alli hay ancho de sobra.
+   *
+   * El registro lo baja a `pr-9` (36px) porque ahi cada columna de la tarjeta
+   * mide ~205px: con 44px de reserva solo quedaban 145px de texto y el
+   * placeholder "Repite tu contrasena" (146px) se recortaba. El boton ocupa
+   * de 8 a 32px desde el borde, asi que 36px le sigue dejando 4px de aire.
+   */
+  pad?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -71,7 +82,7 @@ export function PasswordField({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className={`${cls} pr-11`}
+        className={`${cls} ${pad}`}
       />
       <button
         type="button"
@@ -221,6 +232,12 @@ export function faltantesContrasena(v: string): string[] {
  * Lista de requisitos en tiempo real. Ícono gris mientras la regla no se
  * cumple y check verde en cuanto se cumple; se pinta mientras se escribe, no
  * al enviar el formulario.
+ *
+ * `className` REEMPLAZA las clases de layout, no se suman a ellas: el valor
+ * por defecto trae `space-y-1`, que en un `grid` añadiría un margin-top extra
+ * por fila y descuadraría el hueco. Quien pase su propio layout se lleva el
+ * `mt-2` tambien. Hoy solo Registro lo usa (para pasar una cuadrícula de 2
+ * columnas); Cambiar contraseña no lo pasa y conserva la lista vertical.
  */
 export function RequisitosContrasena({
   valor,
@@ -230,7 +247,7 @@ export function RequisitosContrasena({
   className?: string;
 }) {
   return (
-    <ul className={`mt-2 space-y-1 ${className ?? ""}`}>
+    <ul className={className ?? "mt-2 space-y-1"}>
       {REGLAS_CONTRASENA.map((regla) => {
         const ok = regla.ok(valor);
         return (
