@@ -103,7 +103,7 @@ import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hor
 import type { Screen } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { borrarToken, login as loginApi } from "@/shared/services/authService";
+import { borrarToken, login as loginApi, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
@@ -4486,7 +4486,6 @@ function LoginScreen({
   darkMode,
   loginNotice,
   initialEmail,
-  onPasswordReset,
 }: {
   navigate: (s: Screen) => void;
   // Devuelve { ok, mensaje }: ok=false es la señal para que esta pantalla muestre
@@ -4503,9 +4502,6 @@ function LoginScreen({
   /** Correo que queda escrito al llegar desde el cambio de contraseña:
    *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
   initialEmail?: string;
-  /** Escribe la contraseña nueva en `usuarios` (en memoria) para la cuenta
-   *  con ese correo. */
-  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
@@ -4618,8 +4614,6 @@ function LoginScreen({
           {showForgot && (
             <ForgotPasswordModal
               onClose={() => setShowForgot(false)}
-              usuarios={usuarios}
-              onPasswordReset={onPasswordReset}
             />
           )}
         </AnimatePresence>
@@ -4771,19 +4765,7 @@ function LoginScreen({
   );
 }
 
-function ForgotPasswordModal({
-  onClose,
-  usuarios,
-  onPasswordReset,
-}: {
-  onClose: () => void;
-  /** Directorio de cuentas: sirve para avisar antes de enviar un código a un
-   *  correo que no existe. */
-  usuarios: Usuario[];
-  /** Escribe la contraseña nueva en `usuarios` (en memoria) y devuelve "ok"
-   *  si encontró la cuenta. */
-  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
-}) {
+function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<
     "email" | "code" | "password" | "done"
   >("email");
@@ -4820,39 +4802,48 @@ function ForgotPasswordModal({
     }, 1000);
   };
 
-  const sendCode = () => {
+  const sendCode = async () => {
     const err = validarCorreo(forgotEmail);
     if (err) {
       setErrores({ forgotEmail: err });
       return;
     }
-    // Sin cuenta no hay nada que restablecer: se avisa antes de los tres pasos.
-    const clave = forgotEmail.trim().toLowerCase();
-    if (!usuarios.some((u) => u.correo.trim().toLowerCase() === clave)) {
-      setErrores({ forgotEmail: "No existe una cuenta con ese correo" });
-      return;
-    }
+    // El backend siempre responde 200 exista o no el correo (para no revelar
+    // cuentas), así que el aviso de éxito es neutro y no depende del resultado.
+    const correo = forgotEmail.trim().toLowerCase();
     setErrores({});
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await solicitarCodigoRecuperacion(correo);
       setStep("code");
-      toast.success("Código enviado a " + forgotEmail);
+      toast.success("Si el correo está registrado, te enviamos un código.");
       startCooldown();
-    }, 1200);
-  };
-
-  const resendCode = () => {
-    if (resendCooldown > 0) return;
-    setLoading(true);
-    setTimeout(() => {
+    } catch (e) {
+      // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
+      // extrajo el texto; no se avanza de paso.
+      toast.error((e as Error).message);
+    } finally {
       setLoading(false);
-      toast.success("Código reenviado a " + forgotEmail);
-      startCooldown();
-    }, 1000);
+    }
   };
 
-  const verifyCode = () => {
+  const resendCode = async () => {
+    if (resendCooldown > 0) return;
+    const correo = forgotEmail.trim().toLowerCase();
+    setLoading(true);
+    try {
+      await solicitarCodigoRecuperacion(correo);
+      toast.success("Si el correo está registrado, te enviamos un código.");
+      startCooldown();
+    } catch (e) {
+      // El cooldown solo se reinicia si el backend aceptó la solicitud.
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCode = async () => {
     const fullCode = code.join("");
     if (fullCode.length < 6) {
       setErrores({ code: "Ingresa el código completo" });
@@ -4860,10 +4851,31 @@ function ForgotPasswordModal({
     }
     setErrores({});
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await verificarCodigoRecuperacion(
+        forgotEmail.trim().toLowerCase(),
+        fullCode,
+      );
+      if (res.valido !== true) {
+        // Defensa: el contrato manda 400, pero un 200 con valido=false se
+        // trata igual que código inválido y no se avanza.
+        setErrores({ code: "El código es incorrecto o venció." });
+        return;
+      }
       setStep("password");
-    }, 1000);
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        setErrores({ code: err.message });
+      } else {
+        // 429 y fallo de conexión: se avisa y se vuelve al correo, porque el
+        // código no se pudo validar.
+        toast.error(err.message);
+        if (err.status === 429) setStep("email");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Validación en tiempo real del paso "Nueva contraseña" ───────────
@@ -4895,22 +4907,44 @@ function ForgotPasswordModal({
   const estadoConfirm: "ok" | "err" | "neutro" =
     confirmVacio ? "neutro" : confirmError ? "err" : "ok";
 
-  const changePassword = () => {
+  const changePassword = async () => {
     if (loading || !todoValido) return;
+    setErrores({});
+    setErrorGuardado(null);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      // Escribe la contraseña de la cuenta con ese correo en la lista
-      // `usuarios` (en memoria: igual que el cambio desde Mi perfil, este
-      // prototipo no guarda credenciales en localStorage).
-      const res = onPasswordReset?.(forgotEmail.trim().toLowerCase(), newPass) ?? "no-existe";
-      if (res !== "ok") {
-        setErrorGuardado("No existe una cuenta con ese correo");
-        return;
-      }
-      setErrores({});
+    try {
+      // Guardado real contra el backend: el código ya se verificó en el paso
+      // anterior, pero el servidor lo vuelve a validar. La contraseña nueva no
+      // se guarda en estado, localStorage ni consola.
+      await restablecerContrasena(
+        forgotEmail.trim().toLowerCase(),
+        code.join(""),
+        newPass,
+      );
       setStep("done");
-    }, 1200);
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        // Caducó o quedó invalidado entre pasos: se pide de nuevo.
+        setErrores({ code: err.message });
+        setStep("code");
+      } else if (err.message === "La contraseña no cumple los requisitos.") {
+        setErrores({ newPass: err.message });
+      } else if (err.status === 429) {
+        // Demasiadas solicitudes: se reinicia el flujo desde el correo.
+        toast.error(err.message);
+        setCode(["", "", "", "", "", ""]);
+        setNewPass("");
+        setConfirm("");
+        setStep("email");
+      } else {
+        // Fallo de conexión u otro error del servidor: se reintenta desde
+        // este mismo paso sin perder el código.
+        setErrorGuardado(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   /** Enter envía cuando todo es válido. */
@@ -5107,6 +5141,7 @@ function ForgotPasswordModal({
                   onChange={(v) => {
                     setNewPass(v);
                     setErrorGuardado(null);
+                    setErrores((p) => ({ ...p, newPass: "" }));
                   }}
                   onKeyDown={enviarConEnter}
                   placeholder="Mínimo 8 caracteres"
@@ -5116,6 +5151,8 @@ function ForgotPasswordModal({
                 {/* Lista de requisitos que se marca mientras se escribe. */}
                 <RequisitosContrasena valor={newPass} />
                 <MensajeError err={passwordError ?? undefined} />
+                {/* Rechazo del backend que el validador local no cubre. */}
+                {errores.newPass && <MensajeError err={errores.newPass} />}
                 {errorGuardado && <MensajeError err={errorGuardado} />}
               </div>
               <div>
@@ -5276,7 +5313,7 @@ function RegisterScreen({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setVal(k)(soloDigitos(e.target.value));
 
-  const register = () => {
+  const register = async () => {
     const errs: Record<string, string> = {};
 
     if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
@@ -5322,38 +5359,100 @@ function RegisterScreen({
     if (Object.values(errs).some(Boolean)) return;
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const maxId = usuarios.reduce((max, u) => {
-        const n = parseInt(u.id.replace("USR-", ""), 10);
-        return Number.isNaN(n) ? max : Math.max(max, n);
-      }, 0);
-      const nameParts = form.name.trim().split(/\s+/);
-      const iniciales =
-        (nameParts.length > 1
-          ? (nameParts[0][0] ?? "") + (nameParts[1][0] ?? "")
-          : nameParts[0].slice(0, 2)
-        ).toUpperCase();
-      const nuevoUsuario: Usuario = {
-        id: "USR-" + (maxId + 1),
-        nombre: form.name.trim(),
-        iniciales,
-        avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
-        correo: form.email.trim().toLowerCase(),
-        telefono: form.phone.trim(),
+    try {
+      await registrarCliente({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
-        rolId: "ROL-002",
-        rolIds: ["ROL-002"],
-        activo: true,
+        nombre: form.name.trim(),
+        correo: form.email.trim().toLowerCase(),
+        telefono: form.phone.trim(),
         contrasena: form.password,
-      };
-       setUsuarios(p => [...p, nuevoUsuario]);
-       toast.success(
-        "¡Cuenta creada exitosamente! Ya puedes ingresar.",
-      );
+      });
+
+      const correoNuevo = form.email.trim().toLowerCase();
+      if (!usuarios.some((u) => u.correo.trim().toLowerCase() === correoNuevo)) {
+        const maxId = usuarios.reduce((max, u) => {
+          const n = parseInt(u.id.replace("USR-", ""), 10);
+          return Number.isNaN(n) ? max : Math.max(max, n);
+        }, 0);
+        const nameParts = form.name.trim().split(/\s+/);
+        const iniciales =
+          (nameParts.length > 1
+            ? (nameParts[0][0] ?? "") + (nameParts[1][0] ?? "")
+            : nameParts[0].slice(0, 2)
+          ).toUpperCase();
+        const nuevoUsuario: Usuario = {
+          id: "USR-" + (maxId + 1),
+          nombre: form.name.trim(),
+          iniciales,
+          avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
+          correo: correoNuevo,
+          telefono: form.phone.trim(),
+          tipoDocumento: form.docType,
+          numeroDocumento: form.docNum.trim(),
+          rolId: "ROL-002",
+          rolIds: ["ROL-002"],
+          activo: true,
+        };
+        setUsuarios((p) => [...p, nuevoUsuario]);
+      }
+      toast.success("¡Cuenta creada exitosamente! Ya puedes ingresar.");
       navigate("login");
-     }, 1500);
+    } catch (e) {
+      const mensaje =
+        e instanceof Error ? e.message : "No se pudo conectar con el servidor.";
+      // Llaves del mapa verificadas contra `errs` de las validaciones locales
+      // y contra el JSX de RegisterScreen: docType y docNum se leen en sus
+      // inputs y name/email/phone/password en el map de campos; son las
+      // mismas llaves, así que el texto del backend cae en su <MensajeError>.
+      const mapa: Record<string, { campo: string; texto: string }> = {
+        "Este documento ya está registrado.": {
+          campo: "docNum",
+          texto: "Este documento ya está registrado",
+        },
+        "El número de documento no es válido.": {
+          campo: "docNum",
+          texto: "El número de documento no es válido",
+        },
+        "Tipo de documento no válido.": {
+          campo: "docType",
+          texto: "Tipo de documento no válido",
+        },
+        "El nombre no es válido.": {
+          campo: "name",
+          texto: "El nombre no es válido",
+        },
+        "Este correo ya está registrado.": {
+          campo: "email",
+          texto: "Este correo ya está registrado",
+        },
+        "Ingresa un correo válido y sin espacios.": {
+          campo: "email",
+          texto: "Ingresa un correo válido y sin espacios",
+        },
+        "El teléfono debe tener 10 dígitos y comenzar por 3.": {
+          campo: "phone",
+          texto: "El teléfono debe tener 10 dígitos y comenzar por 3",
+        },
+        "La contraseña no cumple los requisitos.": {
+          campo: "password",
+          texto: "La contraseña no cumple los requisitos",
+        },
+      };
+      const hit = mapa[mensaje];
+      if (hit) {
+        setErrores((prev) => ({ ...prev, [hit.campo]: hit.texto }));
+        // El selector de tipo doc borra su error inline al cambiar de tipo,
+        // así que su mensaje del servidor se refuerza además en toast.
+        if (hit.campo === "docType") toast.error(mensaje);
+      } else {
+        // 429, sin conexión, 500, 503 u otros: el texto ya viene del
+        // interceptor y no se navega.
+        toast.error(mensaje);
+      }
+    } finally {
+      setLoading(false);
+    }
    };
 
    const registerInvalid =
@@ -8001,28 +8100,6 @@ export default function App() {
     }
   };
 
-  /** Mismo cambio de contraseña, pero por correo: lo usa "¿Olvidaste tu
-   *  contraseña?". Actualiza todas las cuentas con ese correo y avisa si no
-   *  existe ninguna, para no simular una recuperación sobre una cuenta inexistente. */
-  const restablecerContrasena = (
-    correo: string,
-    nuevaContrasena: string,
-  ): "ok" | "no-existe" => {
-    const clave = correo.trim().toLowerCase();
-    const existe = usuarios.some(
-      (u) => u.correo.trim().toLowerCase() === clave,
-    );
-    if (!existe) return "no-existe";
-    setUsuarios((prev) =>
-      prev.map((u) =>
-        u.correo.trim().toLowerCase() === clave
-          ? { ...u, contrasena: nuevaContrasena }
-          : u,
-      ),
-    );
-    return "ok";
-  };
-
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
    *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
    *  conserva) y llegada a "Iniciar sesión" con el correo ya escrito. */
@@ -8332,7 +8409,6 @@ export default function App() {
                     darkMode={darkMode}
                     loginNotice={loginNotice}
                     initialEmail={loginEmailPre}
-                    onPasswordReset={restablecerContrasena}
                     onLogin={handleLogin}
                 />
               )}

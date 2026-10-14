@@ -12,7 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
       devOptions: {
-        enabled: false,
+        enabled: true,
+        suppressWarnings: true,
       },
       includeManifestIcons: false,
       manifest: {
@@ -53,6 +54,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html}', 'icons/*.png'],
         globIgnores: ['**/img/**'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3.5 * 1024 * 1024,
         runtimeCaching: [

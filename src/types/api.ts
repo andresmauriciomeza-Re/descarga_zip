@@ -16,6 +16,10 @@ export interface ApiErrorBody {
   };
 }
 
+export interface MensajeResponse {
+  mensaje: string;
+}
+
 export interface PermisoApi {
   modulo: string;
   nombre: string;
@@ -36,6 +40,26 @@ export interface UsuarioApi {
 export interface LoginResponse {
   token: string;
   usuario: UsuarioApi;
+}
+
+/** Payload de POST /auth/register. */
+export interface RegistroRequest {
+  tipoDocumento: string;
+  numeroDocumento: string;
+  nombre: string;
+  correo: string;
+  telefono: string;
+  contrasena: string;
+}
+
+/** Respuesta de POST /auth/register: no trae token, solo la ficha creada. */
+export interface RegistroResponse {
+  usuario: {
+    id: string;
+    nombre: string;
+    correo: string;
+    rol: string;
+  };
 }
 
 /** Error re-lanzado por el interceptor de `shared/services/api.ts`: conserva

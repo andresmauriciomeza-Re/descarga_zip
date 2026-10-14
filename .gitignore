@@ -46,3 +46,4 @@ Thumbs.db
 
 # Cobertura de tests
 coverage/
+dev-dist
