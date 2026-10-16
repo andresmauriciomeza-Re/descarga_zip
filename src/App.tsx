@@ -4439,26 +4439,35 @@ function AuthLayout({
           `auto 100%` la altura SIEMPRE se ve entera (logo, titulo, subtitulo y
           beneficios incluidos) y lo que sobra es ancho, no alto.
 
-          ESTRUCTURA DE CADA CAPA (relleno + imagen enmascarada):
+          ESTRUCTURA DE CADA CAPA (respaldo + copia desenfocada + imagen
+          enmascarada):
 
-          1) El div exterior lleva `background: RELLENO_*`, un degradado VERTICAL
-             cuyos paradas son los tonos muestreados en el borde derecho de cada
-             imagen (franja de 40px, de arriba a abajo: pared clara -> beige ->
-             horno -> madera de la mesa -> sombra). Ese mismo degradado rellena
-             todo el hueco que queda a la derecha cuando la ventana es mas ancha
-             que 1.777, y al coincidir con los colores reales del filo no se
-             percibe un panel de color pegado a la foto.
+          1) El div exterior lleva `background: RELLENO_*`, un degradado
+             VERTICAL cuyos paradas son los tonos muestreados en el borde
+             derecho de cada imagen. Hoy es SOLO un respaldo por si la imagen
+             tarda en cargar; el relleno visible del hueco derecho lo pinta la
+             copia desenfocada (2).
 
-          2) El div interior es la imagen, con `aspect-ratio` propio: su alto es
-             el 100% del contenedor y su ancho se deduce de la relacion natural,
-             es decir EXACTAMENTE el ancho de la foto. Gracias a eso el
-             `mask-image` (3) cae siempre sobre el borde derecho real de la
-             imagen, exista o no hueco.
+          2) La capa intermedia es una COPIA de la misma imagen del tema con
+             `background-size: cover` y `background-position: right center`,
+             que llena TODO el viewport (incluido el hueco a la derecha cuando
+             la ventana es mas ancha que 1.777) con el lado derecho (horno,
+             cocina) desenfocado. `filter: blur(24px)` difumina y
+             `transform: scale(1.1)` evita que el blur deje bordes claros en
+             las esquinas (el `overflow-hidden` del exterior lo recorta).
 
-          3) `mask-image: linear-gradient(to right, #000 92%, transparent 100%)`
+          3) El div de la imagen principal es igual que siempre, con
+             `aspect-ratio` propio: su alto es el 100% del contenedor y su
+             ancho se deduce de la relacion natural, es decir EXACTAMENTE el
+             ancho de la foto. Gracias a eso el `mask-image` (4) cae siempre
+             sobre el borde derecho real de la imagen, exista o no hueco.
+
+          4) `mask-image: linear-gradient(to right, #000 92%, transparent 100%)`
              desvanece el filo derecho de la imagen: los ultimos 8% de su ancho
-             se funden hacia transparente y dejan ver el `RELLENO_*` de atras.
-             Es el degradado horizontal suave que evita el corte brusco.
+             se funden hacia transparente y dejan ver la copia desenfocada (2)
+             de atras. Es el degradado horizontal suave que evita el corte
+             brusco y hace que el texto pintado de la foto (que vive a la
+             IZQUIERDA, lejos del filo) nunca se recorte.
 
           `background-position: left center` + `background-repeat: no-repeat`
           anclan la foto al borde IZQUIERDO, que es donde vive todo su texto:
@@ -4482,6 +4491,17 @@ function AuthLayout({
         <div
           style={{
             position: "absolute",
+            inset: 0,
+            backgroundImage: `url(${fondoBienvenidoLight})`,
+            backgroundSize: "cover",
+            backgroundPosition: "right center",
+            filter: "blur(24px)",
+            transform: "scale(1.1)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
             left: 0,
             top: 0,
             height: "100%",
@@ -4502,6 +4522,17 @@ function AuthLayout({
         }`}
         style={{ background: RELLENO_OSCURO }}
       >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: `url(${fondoBienvenidoDark})`,
+            backgroundSize: "cover",
+            backgroundPosition: "right center",
+            filter: "blur(24px)",
+            transform: "scale(1.1)",
+          }}
+        />
         <div
           style={{
             position: "absolute",
@@ -4713,7 +4744,7 @@ function LoginScreen({
 
   return (
     <AuthLayout
-      contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8"
+      contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8 lg:pr-16 xl:pr-24"
       darkMode={darkMode}
       overlay={
         <AnimatePresence>
@@ -5757,7 +5788,7 @@ function RegisterScreen({
    };
 
    return (
-    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-24" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
