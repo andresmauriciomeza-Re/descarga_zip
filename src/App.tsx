@@ -4405,21 +4405,23 @@ function AuthLayout({
     "linear-gradient(to bottom, #85613f 0%, #b57740 15%, #4c4a08 35%, #944a1a 50%, #391101 66%, #ca7331 85%, #2a0c01 100%)";
   const RELLENO_OSCURO =
     "linear-gradient(to bottom, #1e120a 0%, #482710 15%, #17120a 30%, #391503 50%, #0a0200 66%, #401b08 85%, #000000 100%)";
-  const FUNDIDO_BORDE = "linear-gradient(to right, #000 92%, transparent 100%)";
   return (
     <div className="relative min-h-screen bg-muted">
       {/* Fondo unico de TODA la pantalla, con IMAGEN POR TEMA.
 
-          `bienvenido-la-sirena-light.webp` (1672x941) y
-          `bienvenido-la-sirena-dark.webp` (1671x941) son las dos versiones de la
-          misma escena de bienvenida: logo de Pizzeria La Sirena, titulo,
-          subtitulo y tres beneficios a la IZQUIERDA; el lado derecho (horno y
-          cocina) es decoracion pura y es donde se apoya la tarjeta.
+          `bienvenido-la-sirena-light.webp` (1994x789) y
+          `bienvenido-la-sirena-dark.webp` (1993x789) son las dos versiones de la
+          misma escena de bienvenida EXTENDIDA (~2.5:1): logo de Pizzeria La
+          Sirena, titulo, subtitulo y tres beneficios a la IZQUIERDA; el lado
+          derecho (horno y cocina) es decoracion pura y es donde se apoya la
+          tarjeta. Su ratio ya cubre holgadamente cualquier escritorio, asi que
+          NO hace falta relleno lateral, copia desenfocada ni mascara de
+          fundido: una sola capa `cover` basta.
 
-          Se usan los .webp (226 KB y 205 KB) y no los .png originales (2.26 MB y
-          2.08 MB) porque el peso al vuelo se reduce ~90%. Los .png renombrados
-          siguen en `src/assets/img/` como respaldo, pero NO se importan, asi que
-          no entran al build.
+          Se usan los .webp (252 KB y 222 KB) y no los .png originales (2.42 MB
+          y 2.20 MB) porque el peso al vuelo se reduce ~90%. Los .png siguen en
+          `src/assets/img/` como respaldo, pero NO se importan, asi que no
+          entran al build.
 
           POR QUE DOS CAPAS Y NO UN `src={darkMode ? a : b}`:
           con un solo `<img>` el cambio de tema obliga a descargar la imagen nueva
@@ -4432,48 +4434,20 @@ function AuthLayout({
           prop desde el `useState` de App, asi que al pulsar la luna la capa
           visible se cruza al instante y sin recargar la pagina.
 
-          POR QUE `background-size: auto 100%` Y NO `cover`:
-          con `cover` la imagen llena los DOS ejes, asi que en una ventana mas
-          ANCHA que su ratio (1.777) se escalaba por el ancho y rebasaba el alto:
-          se recortaba el logo por arriba y los tres beneficios por abajo. Con
-          `auto 100%` la altura SIEMPRE se ve entera (logo, titulo, subtitulo y
-          beneficios incluidos) y lo que sobra es ancho, no alto.
+          CADA CAPA ES UN SOLO DIV HIJO con la imagen del tema:
 
-          ESTRUCTURA DE CADA CAPA (respaldo + copia desenfocada + imagen
-          enmascarada):
+          - `background-size: cover` + `background-position: left center` +
+            `background-repeat: no-repeat` llenan TODO el viewport manteniendo
+            el ratio natural. Gracias al anclaje a la IZQUIERDA, el logo, el
+            titulo, el subtitulo y los tres beneficios (que viven en esa banda
+            izquierda de la foto) SIEMPRE se ven completos y nunca se recortan
+            por ese lado. Cuando la ventana es mas ancha que ~2.5:1 lo que se
+            recorta es solo decoracion por la derecha; `overflow-hidden` del
+            exterior recorta ese desbordamiento.
 
-          1) El div exterior lleva `background: RELLENO_*`, un degradado
-             VERTICAL cuyos paradas son los tonos muestreados en el borde
-             derecho de cada imagen. Hoy es SOLO un respaldo por si la imagen
-             tarda en cargar; el relleno visible del hueco derecho lo pinta la
-             copia desenfocada (2).
-
-          2) La capa intermedia es una COPIA de la misma imagen del tema con
-             `background-size: cover` y `background-position: right center`,
-             que llena TODO el viewport (incluido el hueco a la derecha cuando
-             la ventana es mas ancha que 1.777) con el lado derecho (horno,
-             cocina) desenfocado. `filter: blur(24px)` difumina y
-             `transform: scale(1.1)` evita que el blur deje bordes claros en
-             las esquinas (el `overflow-hidden` del exterior lo recorta).
-
-          3) El div de la imagen principal es igual que siempre, con
-             `aspect-ratio` propio: su alto es el 100% del contenedor y su
-             ancho se deduce de la relacion natural, es decir EXACTAMENTE el
-             ancho de la foto. Gracias a eso el `mask-image` (4) cae siempre
-             sobre el borde derecho real de la imagen, exista o no hueco.
-
-          4) `mask-image: linear-gradient(to right, #000 92%, transparent 100%)`
-             desvanece el filo derecho de la imagen: los ultimos 8% de su ancho
-             se funden hacia transparente y dejan ver la copia desenfocada (2)
-             de atras. Es el degradado horizontal suave que evita el corte
-             brusco y hace que el texto pintado de la foto (que vive a la
-             IZQUIERDA, lejos del filo) nunca se recorte.
-
-          `background-position: left center` + `background-repeat: no-repeat`
-          anclan la foto al borde IZQUIERDO, que es donde vive todo su texto:
-          cuando la imagen resulta mas ancha que la ventana se recorta por la
-          derecha (decoracion) y nunca por logo ni textos. `overflow-hidden` en
-          el exterior es lo que recorta ese desbordamiento.
+          - El div exterior lleva `background: RELLENO_*`, un degradado VERTICAL
+            cuyos paradas son los tonos muestreados en el borde derecho de cada
+            imagen. Hoy es SOLO un respaldo por si la imagen tarda en cargar.
 
           El `bg-muted` del contenedor se conserva como red de seguridad para el
           breve instante en que aun no ha llegado ninguna de las dos.
@@ -4494,24 +4468,8 @@ function AuthLayout({
             inset: 0,
             backgroundImage: `url(${fondoBienvenidoLight})`,
             backgroundSize: "cover",
-            backgroundPosition: "right center",
-            filter: "blur(24px)",
-            transform: "scale(1.1)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            height: "100%",
-            aspectRatio: "1672 / 941",
-            backgroundImage: `url(${fondoBienvenidoLight})`,
-            backgroundSize: "auto 100%",
             backgroundPosition: "left center",
             backgroundRepeat: "no-repeat",
-            maskImage: FUNDIDO_BORDE,
-            WebkitMaskImage: FUNDIDO_BORDE,
           }}
         />
       </div>
@@ -4528,24 +4486,8 @@ function AuthLayout({
             inset: 0,
             backgroundImage: `url(${fondoBienvenidoDark})`,
             backgroundSize: "cover",
-            backgroundPosition: "right center",
-            filter: "blur(24px)",
-            transform: "scale(1.1)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            height: "100%",
-            aspectRatio: "1671 / 941",
-            backgroundImage: `url(${fondoBienvenidoDark})`,
-            backgroundSize: "auto 100%",
             backgroundPosition: "left center",
             backgroundRepeat: "no-repeat",
-            maskImage: FUNDIDO_BORDE,
-            WebkitMaskImage: FUNDIDO_BORDE,
           }}
         />
       </div>
@@ -4744,7 +4686,7 @@ function LoginScreen({
 
   return (
     <AuthLayout
-      contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8 lg:pr-16 xl:pr-24"
+      contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8 lg:pr-16 xl:pr-12"
       darkMode={darkMode}
       overlay={
         <AnimatePresence>
@@ -5788,7 +5730,7 @@ function RegisterScreen({
    };
 
    return (
-    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-24" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
