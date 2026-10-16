@@ -136,9 +136,6 @@ const RE_TELEFONO = /^3\d{9}$/;
 const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
 
 export const MIN_CONTRASENA = 8;
-/** Tope del backend: 72 caracteres y también 72 bytes en UTF-8 (una "á"
-    ocupa 2 bytes), así que ambas medidas se validan con la misma regla. */
-export const MAX_CONTRASENA = 72;
 
 export function validarCorreo(v: string): string | null {
   if (!v.trim()) return "El correo es obligatorio";
@@ -193,11 +190,16 @@ export function validarTelefonoOpcional(v: string): string | null {
  *
  * El mismo array alimenta la lista en tiempo real y el validador, de modo que
  * no puede existir una regla visible que el guardado no compruebe (ni una regla
- * oculta que bloquee el botón sin explicación). Se usa en Cambiar contraseña,
- * Registro, Restablecer contraseña y alta de empleados.
+ * oculta que bloquee el botón sin explicación). Se usa en Crear cuenta,
+ * Restablecer contraseña y Cambiar contraseña (Mi perfil y altas de empleados).
  *
- * Los caracteres especiales se PERMITEN pero no se exigen: por eso esta lista
- * no tiene regla de carácter especial.
+ * Cinco reglas fijas: mínimo 8 caracteres, mayúscula (Ñ incluida), número,
+ * minúscula (ñ incluida) y sin espacios. El carácter especial se PERMITE pero
+ * no se exige: por eso esta lista no tiene regla de carácter especial.
+ *
+ * El ORDEN importa: es el orden de lectura del checklist del registro, que se
+ * maqueta en 2 columnas con `grid-flow-col grid-rows-3` (llena columna por
+ * columna): izquierda = largo, mayúscula, número; derecha = minúscula, espacios.
  */
 export type ReglaContrasena = {
   id: string;
@@ -211,35 +213,27 @@ export type ReglaContrasena = {
 export const REGLAS_CONTRASENA: ReglaContrasena[] = [
   {
     id: "largo",
-    texto: `Entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
-    mensaje: `La contraseña debe tener entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
-    ok: (v) => v.length >= MIN_CONTRASENA && v.length <= MAX_CONTRASENA,
-  },
-  {
-    id: "bytes",
-    texto: `Máximo ${MAX_CONTRASENA} bytes`,
-    mensaje: `La contraseña no puede superar ${MAX_CONTRASENA} bytes`,
-    // El backend cuenta bytes UTF-8 (una "á" ocupa 2), no solo caracteres.
-    // `v.length > 0` evita pintar la regla en verde con el campo vacío.
-    ok: (v) => v.length > 0 && new TextEncoder().encode(v).length <= MAX_CONTRASENA,
+    texto: `Mínimo ${MIN_CONTRASENA} caracteres`,
+    mensaje: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`,
+    ok: (v) => v.length >= MIN_CONTRASENA,
   },
   {
     id: "mayuscula",
     texto: "Al menos una letra mayúscula",
     mensaje: "Debe incluir al menos una letra mayúscula",
-    ok: (v) => /[A-Z]/.test(v),
-  },
-  {
-    id: "minuscula",
-    texto: "Al menos una letra minúscula",
-    mensaje: "Debe incluir al menos una letra minúscula",
-    ok: (v) => /[a-z]/.test(v),
+    ok: (v) => /\p{Lu}/u.test(v),
   },
   {
     id: "numero",
     texto: "Al menos un número",
     mensaje: "Debe incluir al menos un número",
     ok: (v) => /\d/.test(v),
+  },
+  {
+    id: "minuscula",
+    texto: "Al menos una letra minúscula",
+    mensaje: "Debe incluir al menos una letra minúscula",
+    ok: (v) => /\p{Ll}/u.test(v),
   },
   // `v.length > 0` evita pintar "Sin espacios" en verde con el campo vacío.
   {
