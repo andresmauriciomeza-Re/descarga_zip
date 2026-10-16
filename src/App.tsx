@@ -5921,16 +5921,17 @@ function RegisterScreen({
               completo justo debajo de la pareja Contraseña / Confirmar.
 
               `flex-wrap` la deja en COMO MAXIMO 2 filas dentro de los ~484px
-              de contenido de la tarjeta (fila 1 = largo, mayuscula,
-              minuscula; fila 2 = numero, espacios). Los `order-*` por
-              `nth-child` reordenan solo A LA VISTA el array de
-              REGLAS_CONTRASENA (que va numero antes que minuscula) sin tocar
-              campo.tsx, donde ese orden sigue sirviendo a las demas pantallas
-              que listan los requisitos en vertical. */}
+              de contenido de la tarjeta (fila 1 = largo, mayuscula, espacios;
+              fila 2 = minuscula, numero). `justify-start` las alinea a la
+              izquierda. Los `order-*` por `nth-child` reordenan solo A LA
+              VISTA el array de REGLAS_CONTRASENA (que va numero antes que
+              minuscula, y espacios al final) sin tocar campo.tsx, donde ese
+              orden sigue sirviendo a las demas pantallas que listan los
+              requisitos en vertical. */}
           <div className="sm:col-span-2 min-w-0">
             <RequisitosContrasena
               valor={form.password}
-              className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 [&>li:nth-child(1)]:order-1 [&>li:nth-child(2)]:order-2 [&>li:nth-child(3)]:order-4 [&>li:nth-child(4)]:order-3 [&>li:nth-child(5)]:order-5"
+              className="mt-1 flex flex-wrap justify-start gap-x-3 gap-y-1 [&>li:nth-child(1)]:order-1 [&>li:nth-child(2)]:order-2 [&>li:nth-child(5)]:order-3 [&>li:nth-child(4)]:order-4 [&>li:nth-child(3)]:order-5"
             />
           </div>
         </div>
