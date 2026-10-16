@@ -160,6 +160,21 @@ export function filtrarCorreo(valor: string): string {
   return `${filtrado.slice(0, arroba)}@${filtrado.slice(arroba + 1).replace(/@/g, "")}`;
 }
 
+/** Validación básica de correo para Crear/Editar Cliente: solo comprueba el
+    formato "texto@dominio.con.punto" (ej.: algo@dominio.co), sin restricción
+    de dominios. A diferencia de `validarCorreo` (registro/login), aquí no se
+    exige una lista blanca de dominios. */
+export function validarCorreoBasico(v: string): string | null {
+  if (!v.trim()) return "El correo es obligatorio";
+  if (v !== v.trim() || v.includes(" ")) return "Ingresa un correo válido y sin espacios";
+  if (!RE_CORREO.test(v) || (v.match(/@/g) ?? []).length !== 1)
+    return "Ingresa un correo válido (ej.: algo@dominio.co)";
+  const [local] = v.toLowerCase().split("@");
+  if (!local || local.startsWith(".") || local.endsWith("."))
+    return "La parte antes del @ no puede estar vacía ni empezar o terminar con punto";
+  return null;
+}
+
 export function validarNombre(v: string): string | null {
   if (!v.trim()) return "El nombre completo es obligatorio";
   if (!RE_NOMBRE.test(v)) return "Usa solo letras y espacios, sin espacios dobles";

@@ -48,15 +48,19 @@ export const domingoDe = (d: Date): Date => agregarDias(lunesDe(d), 6);
 export const inicioDeMes = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), 1);
 export const finDeMes = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() + 1, 0);
 
-/** Filtro global del Dashboard y de Estadísticas. */
-export type Periodo = "semana" | "mes" | "total";
+/** Filtro global del Dashboard y de Estadísticas: Diario · Semanal · Mensual. */
+export type Periodo = "dia" | "semana" | "mes";
 
-/** Rango ISO [desde, hasta] de un periodo. `null` = histórico completo. */
+/** Rango ISO [desde, hasta] de un periodo. "dia" = hoy, "semana" = lunes a
+    domingo de la semana actual, "mes" = mes actual. */
 export const rangoDePeriodo = (
   periodo: Periodo,
   ref: Date = new Date(),
-): { desde: FechaISO; hasta: FechaISO } | null => {
-  if (periodo === "total") return null;
+): { desde: FechaISO; hasta: FechaISO } => {
+  if (periodo === "dia") {
+    const hoy = fechaISO(ref);
+    return { desde: hoy, hasta: hoy };
+  }
   if (periodo === "semana") {
     const lunes = lunesDe(ref);
     return { desde: fechaISO(lunes), hasta: fechaISO(agregarDias(lunes, 6)) };
@@ -72,7 +76,6 @@ export const enPeriodo = (
 ): boolean => {
   if (!esFechaISO(fecha)) return false;
   const rango = rangoDePeriodo(periodo, ref);
-  if (!rango) return true;
   return enRango(fecha, rango.desde, rango.hasta);
 };
 
@@ -88,4 +91,4 @@ export const anioDe = (fecha: FechaISO): string => fecha.slice(0, 4);
 
 /** Texto bajo cada número del Dashboard según el periodo activo. */
 export const etiquetaPeriodo = (periodo: Periodo): string =>
-  periodo === "semana" ? "Esta semana" : periodo === "mes" ? "Este mes" : "Histórico";
+  periodo === "dia" ? "Hoy" : periodo === "semana" ? "Esta semana" : "Este mes";

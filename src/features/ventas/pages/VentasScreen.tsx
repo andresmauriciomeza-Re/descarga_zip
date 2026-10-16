@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from "react";
+﻿import React, { useEffect, useState, useMemo, useRef } from "react";
 import { hora12 } from "@/shared/utils/hora";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -19,15 +19,19 @@ import {
   Ban,
   Undo2,
   CalendarDays,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
 
@@ -126,11 +130,52 @@ function ConfirmModal({
 
 // ─────────────────────────── VENTAS TYPES & DATA ───────────────────────────
 
-export type VentaStatus = "venta" | "perdida" | "por-verificar" | "completado" | "anulado";
+export type VentaStatus =
+  | "venta"
+  | "perdida"
+  | "por-verificar"
+  | "completado"
+  | "anulado"
+  | "rechazado"
+  | "en-espera";
 
 /** "anulado" y "perdida" ya no se eligen desde el desplegable de estado de la
     tabla: se aplican con los botones de acción (anular / devolución). */
 export const VENTA_STATUS_MANUALES: VentaStatus[] = ["perdida", "anulado"];
+
+/** Estados que solo asigna el flujo de verificación (nunca el selector):
+    "rechazado" (rechazo con motivo) y "en-espera" (falta completar el pago). */
+export const VENTA_STATUS_FLUJO: VentaStatus[] = ["rechazado", "en-espera"];
+
+/** Motivos estandarizados de rechazo de pago. */
+export type MotivoRechazo = "comprobante-falso" | "dinero-faltante";
+
+export const MOTIVOS_RECHAZO: { value: MotivoRechazo; label: string }[] = [
+  { value: "comprobante-falso", label: "Comprobante falso" },
+  { value: "dinero-faltante", label: "Dinero faltante" },
+];
+
+export const MOTIVO_RECHAZO_LABEL: Record<MotivoRechazo, string> = {
+  "comprobante-falso": "Comprobante falso",
+  "dinero-faltante": "Dinero faltante",
+};
+
+/** Un comprobante de una venta: el inicial de pago o el del dinero faltante. */
+export interface ComprobanteVenta {
+  url: string;
+  tipo: "pago" | "faltante";
+  fecha: string;
+  hora: string;
+}
+
+/** Devuelve los comprobantes de una venta en orden (pago inicial primero).
+    Es compatible con ventas viejas que solo traen `comprobante` (un string):
+    en ese caso se trata como un único comprobante de pago. */
+export const comprobantesDe = (v: Venta): ComprobanteVenta[] => {
+  if (v.comprobantes && v.comprobantes.length > 0) return v.comprobantes;
+  if (v.comprobante) return [{ url: v.comprobante, tipo: "pago", fecha: v.fecha, hora: "" }];
+  return [];
+};
 
 export interface HistorialEntry { estado: VentaStatus; hora: string; }
 
@@ -176,6 +221,15 @@ export interface Venta {
   devolucionMotivo?: string;
   /** Motivo de cada línea devuelta, indexado por posición del detalle. */
   devolucionMotivos?: Record<string, { motivo: string; descripcion: string }>;
+  /** Comprobantes de la venta (pago inicial y dinero faltante). Opcional por
+      compatibilidad con ventas viejas: si no está, se usa `comprobante`. */
+  comprobantes?: ComprobanteVenta[];
+  /** Motivo por el que se rechazó el pago (solo en estado "rechazado"). */
+  motivoRechazo?: MotivoRechazo;
+  /** Valor que falta por pagar cuando la venta quedó "en-espera". */
+  montoFaltante?: number;
+  /** URL del comprobante con el que el admin devolvió el dinero al cliente. */
+  comprobanteDevolucion?: string;
 }
 
 /** Colores de estado de la venta, con variante dark (fondo translúcido
@@ -187,6 +241,10 @@ const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
   "por-verificar": "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
   completado:      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
   anulado:         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  rechazado:       "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  // Naranja/violeta, deliberadamente distinto a los demás para que "en espera"
+  // no se confunda con "por verificar" (ámbar) ni con "devolución" (naranja).
+  "en-espera":     "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300",
 };
 
 const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
@@ -195,13 +253,32 @@ const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
   "por-verificar": "Por verificar",
   completado:      "Completado",
   anulado:         "Anulado",
+  rechazado:       "Rechazado",
+  "en-espera":     "En espera",
 };
 
-/** Estados ofrecidos por el desplegable de la tabla: los anulados y las
-    devoluciones se aplican con sus botones de acción, no eligiéndolos a mano. */
-export const VENTA_STATUS_SELECCIONABLES: VentaStatus[] = (
-  Object.keys(VENTA_STATUS_LABEL) as VentaStatus[]
-).filter((s) => !VENTA_STATUS_MANUALES.includes(s));
+/** Etiquetas PARA EL CLIENTE de cada estado (tabla de la sección 3). El panel
+    admin usa `VENTA_STATUS_LABEL`; el portal del cliente estas. */
+export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
+  "por-verificar": "Verificando pago",
+  venta:           "Listo para recoger",
+  completado:      "Entregado",
+  rechazado:       "Rechazado",
+  "en-espera":     "Falta completar el pago",
+  perdida:         "Devolución",
+  anulado:         "Anulado",
+};
+
+/** Estados ofrecidos por el desplegable de la tabla, en el orden fijo del
+    flujo de verificación: Por verificar → Por entregar → Completado. Los
+    anulados y las devoluciones se aplican con sus botones de acción, y los
+    estados "rechazado"/"en-espera" los asigna el flujo (nunca el selector);
+    por eso no aparecen aquí. */
+export const VENTA_STATUS_SELECCIONABLES: VentaStatus[] = [
+  "por-verificar",
+  "venta",
+  "completado",
+];
 
 /** Métodos de pago. "Efectivo" solo existe para los pedidos que genera el
     administrador (pedidos tomados en el local). */
@@ -469,7 +546,21 @@ export function VentasScreen({
   const [detailItem, setDetailItem] = useState<Venta | null>(
     null,
   );
-  const [montoRecibido, setMontoRecibido] = useState("");
+  // ── Verificación de pago (Fase 3) ──
+  // Motivo elegido en el panel de verificación (vacío = ninguno).
+  const [motivoSel, setMotivoSel] = useState<MotivoRechazo | "">("");
+  // Confirmación simple (aprobar / rechazar por comprobante falso).
+  const [confirmVerif, setConfirmVerif] = useState<"aprobar" | "rechazar-falso" | null>(null);
+  // Modal "Pedir dinero faltante" (estado En espera).
+  const [modalFaltante, setModalFaltante] = useState(false);
+  const [montoFaltanteValor, setMontoFaltanteValor] = useState("");
+  // Modal "Devolución del dinero recibido" (rechazo por dinero faltante).
+  const [modalDevolucion, setModalDevolucion] = useState(false);
+  const [devolUrl, setDevolUrl] = useState<string | null>(null);
+  const { subir: subirDevol, subiendo: subiendoDevol } = useSubirArchivo();
+  const devolFileRef = useRef<HTMLInputElement | null>(null);
+  /** Imagen abierta en el visor ampliado (comprobante u otro). */
+  const [visorSrc, setVisorSrc] = useState<string | null>(null);
   const [confirmAccionV, setConfirmAccionV] = useState<{
     id: string;
     accion: "anular" | "devolucion";
@@ -487,6 +578,99 @@ export function VentasScreen({
       estado actual y la que se muestra a la derecha de la columna Estado. */
   const horaEstado = (p: Venta) =>
     p.historial?.[p.historial.length - 1]?.hora ?? "—";
+
+  // ── Flujo de verificación de pago (Fase 3) ──
+
+  /** Limpia todo el estado transitorio del panel/modal de verificación. */
+  const resetVerificacion = () => {
+    setMotivoSel("");
+    setConfirmVerif(null);
+    setModalFaltante(false);
+    setMontoFaltanteValor("");
+    setModalDevolucion(false);
+    setDevolUrl(null);
+  };
+
+  const abrirDetalle = (v: Venta) => {
+    resetVerificacion();
+    setDetailItem(v);
+  };
+  const cerrarDetalle = () => {
+    resetVerificacion();
+    setDetailItem(null);
+  };
+
+  /** Aprobar el pago: la venta pasa a "Por entregar" (listo para recoger). */
+  const aprobarPago = (id: string) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? { ...x, estado: "venta" as VentaStatus, historial: [...(x.historial ?? []), { estado: "venta" as VentaStatus, hora: nowHora() }] }
+          : x,
+      ),
+    );
+    toast.success("Pago aprobado — listo para entregar");
+    cerrarDetalle();
+  };
+
+  /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución. */
+  const rechazarPorFalso = (id: string) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado: "rechazado" as VentaStatus,
+              motivoRechazo: "comprobante-falso" as MotivoRechazo,
+              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.error("Pago rechazado — comprobante falso");
+    cerrarDetalle();
+  };
+
+  /** Pedir el dinero faltante: la venta pasa a "En espera" con el monto. */
+  const pedirFaltante = (id: string) => {
+    const monto = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado: "en-espera" as VentaStatus,
+              motivoRechazo: "dinero-faltante" as MotivoRechazo,
+              montoFaltante: monto,
+              historial: [...(x.historial ?? []), { estado: "en-espera" as VentaStatus, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.info(`Se solicitó el faltante de ${fmtCOP(monto)}`);
+    cerrarDetalle();
+  };
+
+  /** Rechazar por dinero faltante: guarda el comprobante de devolución y la
+      venta queda "Rechazado" (estado final). */
+  const rechazarPorDinero = (id: string) => {
+    if (!devolUrl) return;
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              estado: "rechazado" as VentaStatus,
+              motivoRechazo: "dinero-faltante" as MotivoRechazo,
+              comprobanteDevolucion: devolUrl,
+              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
+            }
+          : x,
+      ),
+    );
+    toast.error("Pago rechazado — dinero devuelto al cliente");
+    cerrarDetalle();
+  };
 
   /** Anular una venta: el pedido queda en el estado "anulado" y deja de contar
       como venta, sin tocar el módulo de devoluciones. */
@@ -1529,7 +1713,13 @@ export function VentasScreen({
                 paged.map((p) => (
                   <tr
                     key={p.id}
-                    className={`transition-colors ${p.estado === "por-verificar" ? "bg-amber-50/60 hover:bg-amber-50" : "hover:bg-muted/20"}`}
+                    className={`transition-colors ${
+                      p.estado === "por-verificar"
+                        ? "bg-amber-50/60 hover:bg-amber-50"
+                        : p.estado === "en-espera"
+                          ? "bg-violet-50/60 hover:bg-violet-50"
+                          : "hover:bg-muted/20"
+                    }`}
                   >
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
                       <div className="flex items-center gap-2">
@@ -1571,11 +1761,20 @@ export function VentasScreen({
                           de eliminar. */}
                       <EstadoSelect
                         value={p.estado}
-                        options={VENTA_STATUS_SELECCIONABLES.map((s) => ({
-                          value: s,
-                          label: VENTA_STATUS_LABEL[s],
-                          color: VENTA_STATUS_COLOR[s],
-                        }))}
+                        disabled={VENTA_STATUS_FLUJO.includes(p.estado)}
+                        options={[
+                          // Si el estado lo asignó el flujo (rechazado /
+                          // en-espera), se muestra como única opción (solo
+                          // pill, sin menú) para que el badge no se pierda.
+                          ...(VENTA_STATUS_FLUJO.includes(p.estado)
+                            ? [{ value: p.estado, label: VENTA_STATUS_LABEL[p.estado], color: VENTA_STATUS_COLOR[p.estado] }]
+                            : []),
+                          ...VENTA_STATUS_SELECCIONABLES.map((s) => ({
+                            value: s,
+                            label: VENTA_STATUS_LABEL[s],
+                            color: VENTA_STATUS_COLOR[s],
+                          })),
+                        ]}
                         onChange={(nuevo) => {
                           if (nuevo !== p.estado) cambiarEstado(p.id, nuevo);
                         }}
@@ -1591,7 +1790,7 @@ export function VentasScreen({
                       <div className="flex items-center gap-1.5">
                         {p.estado === "por-verificar" && (
                           <button
-                            onClick={() => { setDetailItem(p); setMontoRecibido(""); }}
+                            onClick={() => abrirDetalle(p)}
                             title="Verificar pago"
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors cursor-pointer text-xs font-semibold"
                           >
@@ -1600,15 +1799,13 @@ export function VentasScreen({
                           </button>
                         )}
                         <ActionIcons
-                          onView={() => {
-                            setDetailItem(p);
-                            setMontoRecibido("");
-                          }}
+                          onView={() => abrirDetalle(p)}
                         />
                         {/* Anular venta: la deja en estado "anulado". Un círculo con
                             la línea en diagonal dice "anular" mejor que una papelera,
-                            que parecía borrar el pedido. */}
-                        {p.estado !== "anulado" && p.estado !== "perdida" && (
+                            que parecía borrar el pedido. Una venta rechazada es
+                            final: no se anula ni se devuelve. */}
+                        {p.estado !== "anulado" && p.estado !== "perdida" && p.estado !== "rechazado" && (
                           <button
                             onClick={() =>
                               setConfirmAccionV({ id: p.id, accion: "anular" })
@@ -1620,7 +1817,7 @@ export function VentasScreen({
                           </button>
                         )}
                         {/* Registrar devolución: pasa la venta a "Devolución". */}
-                        {p.estado !== "anulado" && p.estado !== "perdida" && (
+                        {p.estado !== "anulado" && p.estado !== "perdida" && p.estado !== "rechazado" && (
                           <button
                             onClick={() =>
                               setConfirmAccionV({ id: p.id, accion: "devolucion" })
@@ -1691,7 +1888,7 @@ export function VentasScreen({
               {/* Top bar */}
               <div className="flex items-center gap-3 mb-6">
                 <button
-                  onClick={() => { setDetailItem(null); setMontoRecibido(""); }}
+                  onClick={cerrarDetalle}
                   className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -1811,31 +2008,103 @@ export function VentasScreen({
 
                 {/* COL 3 — Comprobante + verificación */}
                 <div className="space-y-5">
-                  <div className="bg-card border border-border rounded-2xl p-5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Comprobante de transferencia
-                    </p>
-                    {detailItem.comprobante ? (
-                      <div className="rounded-xl overflow-hidden border border-border bg-muted">
-                        <img src={detailItem.comprobante} alt="Comprobante" className="w-full object-contain max-h-60" />
+                  {/* Comprobante(s) de transferencia: si hay más de uno (pago
+                      inicial + dinero faltante), se muestran rotulados. */}
+                  {(() => {
+                    const comps = comprobantesDe(detailItem);
+                    const etiquetas = ["Comprobante 1 — Pago inicial", "Comprobante 2 — Dinero faltante"];
+                    return (
+                      <div className="bg-card border border-border rounded-2xl p-5">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                          Comprobante de transferencia
+                        </p>
+                        {comps.length > 0 ? (
+                          <div className="space-y-3">
+                            {comps.map((c, i) => (
+                              <div key={i}>
+                                {comps.length > 1 && (
+                                  <p className="text-[11px] font-semibold text-foreground mb-1">
+                                    {etiquetas[i] ?? `Comprobante ${i + 1}`}
+                                    {(c.fecha || c.hora) && (
+                                      <span className="text-muted-foreground font-normal">
+                                        {" · "}
+                                        {c.fecha}{c.hora ? ` ${c.hora}` : ""}
+                                      </span>
+                                    )}
+                                  </p>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setVisorSrc(c.url)}
+                                  title="Ampliar comprobante"
+                                  className="block w-full rounded-xl overflow-hidden border border-border bg-muted cursor-zoom-in hover:border-primary/40 transition-colors"
+                                >
+                                  <img src={c.url} alt="Comprobante" className="w-full object-contain max-h-60" />
+                                  <span className="block text-[11px] text-muted-foreground py-1">Clic para ampliar</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-2 py-10 rounded-xl border-2 border-dashed border-border text-center">
+                            <ImageIcon className="w-7 h-7 text-muted-foreground/40" />
+                            <p className="text-sm text-muted-foreground">Sin comprobante</p>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center gap-2 py-10 rounded-xl border-2 border-dashed border-border text-center">
-                        <ImageIcon className="w-7 h-7 text-muted-foreground/40" />
-                        <p className="text-sm text-muted-foreground">Sin comprobante</p>
+                    );
+                  })()}
+
+                  {/* Rechazado: motivo y comprobante de devolución. */}
+                  {detailItem.estado === "rechazado" && (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ShieldX className="w-4 h-4 text-red-600 shrink-0" />
+                        <p className="text-sm font-semibold text-red-900">Pago rechazado</p>
                       </div>
-                    )}
-                  </div>
+                      <p className="text-sm text-red-800 mb-1">
+                        Motivo:{" "}
+                        <span className="font-semibold">
+                          {detailItem.motivoRechazo ? MOTIVO_RECHAZO_LABEL[detailItem.motivoRechazo] : "—"}
+                        </span>
+                      </p>
+                      {detailItem.comprobanteDevolucion && (
+                        <div className="mt-3">
+                          <p className="text-[11px] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
+                          <button
+                            type="button"
+                            onClick={() => setVisorSrc(detailItem.comprobanteDevolucion ?? null)}
+                            title="Ampliar comprobante de devolución"
+                            className="block w-full rounded-xl overflow-hidden border border-red-200 bg-white cursor-zoom-in hover:border-red-400 transition-colors"
+                          >
+                            <img src={detailItem.comprobanteDevolucion} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
+                            <span className="block text-[11px] text-red-700 py-1">Clic para ampliar</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* En espera: se solicitó el dinero faltante. */}
+                  {detailItem.estado === "en-espera" && (
+                    <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-4 h-4 text-violet-600 shrink-0" />
+                        <p className="text-sm font-semibold text-violet-900">Falta completar el pago</p>
+                      </div>
+                      <p className="text-sm text-violet-800">
+                        Se solicitó al cliente un faltante de{" "}
+                        <span className="font-bold">{fmtCOP(detailItem.montoFaltante ?? 0)}</span>. El pedido
+                        espera el comprobante del dinero restante.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Verificación de pago */}
                   {detailItem.estado === "por-verificar" && (() => {
                     const totalVenta = detailItem.total ||
                       (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
-                    const recibido = parseInt(montoRecibido.replace(/\D/g, "")) || 0;
-                    const diferencia = recibido - totalVenta;
-                    const coincide = recibido > 0 && diferencia === 0;
-                    const excede   = recibido > 0 && diferencia > 0;
-                    const falta    = recibido > 0 && diferencia < 0;
+                    const pagoInicial = detailItem.montoFaltante ? totalVenta - detailItem.montoFaltante : null;
                     return (
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
                         <div className="flex items-center gap-2 mb-4">
@@ -1847,48 +2116,74 @@ export function VentasScreen({
                             <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Total a cobrar</p>
                             <p className="text-xl font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(totalVenta)}</p>
                           </div>
-                          <div className={`rounded-xl border px-4 py-3 ${coincide ? "bg-emerald-50 border-emerald-200" : excede ? "bg-blue-50 border-blue-200" : falta ? "bg-red-50 border-red-200" : "bg-white border-amber-200"}`}>
-                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Monto recibido</p>
-                            <input
-                              type="number" min="0"
-                              placeholder="Ingresa el valor..."
-                              value={montoRecibido}
-                              onChange={(e) => setMontoRecibido(e.target.value)}
-                              className="w-full bg-transparent text-xl font-bold text-foreground focus:outline-none placeholder:text-muted-foreground/50 placeholder:text-sm placeholder:font-normal"
-                              style={{ fontFamily: MONO }}
-                            />
-                          </div>
-                          {recibido > 0 && (
-                            <p className={`text-xs font-semibold flex items-center gap-1.5 ${coincide ? "text-emerald-700" : excede ? "text-blue-700" : "text-red-600"}`}>
-                              {coincide && "✓ El monto coincide exactamente"}
-                              {excede   && `↑ Sobran ${fmtCOP(diferencia)} — verifique si hay vuelto`}
-                              {falta    && `✗ Faltan ${fmtCOP(-diferencia)} — el pago está incompleto`}
-                            </p>
+                          {pagoInicial !== null && (
+                            <>
+                              <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
+                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Pagado inicialmente</p>
+                                <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(pagoInicial)}</p>
+                              </div>
+                              <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
+                                <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Faltante solicitado</p>
+                                <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(detailItem.montoFaltante ?? 0)}</p>
+                              </div>
+                            </>
                           )}
+                          {/* Motivo (solo si se va a rechazar). */}
+                          <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
+                            <label className="block text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-1">
+                              Motivo
+                            </label>
+                            <select
+                              value={motivoSel}
+                              onChange={(e) => setMotivoSel(e.target.value as MotivoRechazo | "")}
+                              className="w-full bg-transparent text-sm text-foreground focus:outline-none cursor-pointer"
+                            >
+                              <option value="">Selecciona un motivo (solo si vas a rechazar)</option>
+                              {MOTIVOS_RECHAZO.map((m) => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
+
+                        {/* Botones según el motivo. */}
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
-                              const entry: HistorialEntry = { estado: "perdida", hora: nowHora() };
-                              setPedidos((prev) => prev.map((x) => x.id === detailItem.id ? { ...x, estado: "perdida" as VentaStatus, historial: [...(x.historial ?? []), entry] } : x));
-                              toast.error("Pago rechazado — marcado como Devolución");
-                              setDetailItem(null); setMontoRecibido("");
+                              if (motivoSel === "dinero-faltante") { setModalDevolucion(true); return; }
+                              if (motivoSel === "comprobante-falso") setConfirmVerif("rechazar-falso");
                             }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 cursor-pointer transition-colors active:scale-95"
+                            disabled={motivoSel === ""}
+                            title={motivoSel === "" ? "Selecciona un motivo" : "Rechazar pago"}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-700 text-xs font-semibold transition-colors active:scale-95 ${
+                              motivoSel === ""
+                                ? "bg-red-50/50 opacity-50 cursor-not-allowed"
+                                : "bg-red-50 hover:bg-red-100 cursor-pointer"
+                            }`}
                           >
                             <ShieldX className="w-3.5 h-3.5" /> Rechazar
                           </button>
-                          <button
-                            onClick={() => {
-                              const entry: HistorialEntry = { estado: "venta", hora: nowHora() };
-                              setPedidos((prev) => prev.map((x) => x.id === detailItem.id ? { ...x, estado: "venta" as VentaStatus, historial: [...(x.historial ?? []), entry] } : x));
-                              toast.success("Pago aprobado — listo para entregar");
-                              setDetailItem(null); setMontoRecibido("");
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 cursor-pointer transition-colors active:scale-95"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" /> Aprobar
-                          </button>
+                          {motivoSel === "dinero-faltante" ? (
+                            <button
+                              onClick={() => setModalFaltante(true)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5" /> Pedir dinero faltante
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmVerif("aprobar")}
+                              disabled={motivoSel !== ""}
+                              title={motivoSel !== "" ? "No puedes aprobar con un motivo de rechazo" : "Aprobar pago"}
+                              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white text-xs font-semibold transition-colors active:scale-95 ${
+                                motivoSel !== ""
+                                  ? "bg-emerald-600/50 opacity-50 cursor-not-allowed"
+                                  : "bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                              }`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" /> Aprobar
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1946,6 +2241,178 @@ export function VentasScreen({
             }}
             onCancel={() => setConfirmAccionV(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Verificación: confirmar Aprobar / Rechazar por comprobante falso ── */}
+      <AnimatePresence>
+        {confirmVerif && detailItem && (
+          <ConfirmModal
+            title={confirmVerif === "aprobar" ? "Aprobar pago" : "Rechazar pago"}
+            tone={confirmVerif === "aprobar" ? "aviso" : "peligro"}
+            message={
+              confirmVerif === "aprobar"
+                ? "¿Aprobar el pago? La venta pasará a Por entregar (listo para recoger)."
+                : "¿Rechazar el pago por comprobante falso? La venta quedará como Rechazado (estado final)."
+            }
+            onConfirm={() => {
+              if (confirmVerif === "aprobar") aprobarPago(detailItem.id);
+              else rechazarPorFalso(detailItem.id);
+              setConfirmVerif(null);
+            }}
+            onCancel={() => setConfirmVerif(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Pedir dinero faltante (→ En espera) ── */}
+      <AnimatePresence>
+        {modalFaltante && detailItem && (() => {
+          const totalVenta = detailItem.total ||
+            (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
+          const monto = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
+          const valido = monto > 0 && monto < totalVenta;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <p className="font-bold text-foreground">Pedir dinero faltante</p>
+                  <button onClick={() => setModalFaltante(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="p-5 space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    El pedido pasa a <span className="font-semibold">En espera</span> y el cliente podrá enviar el comprobante del dinero restante.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Valor faltante *
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Ej.: 25000"
+                      value={montoFaltanteValor ? fmtCOP(monto) : ""}
+                      onChange={(e) => setMontoFaltanteValor(e.target.value.replace(/\D/g, ""))}
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:border-primary"
+                      style={{ fontFamily: MONO }}
+                    />
+                    {monto > 0 && !valido && (
+                      <p className="text-xs text-red-600 mt-1">
+                        El faltante debe ser mayor a $0 y menor al total ({fmtCOP(totalVenta)}).
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 px-5 pb-5">
+                  <button
+                    onClick={() => setModalFaltante(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => { if (valido) pedirFaltante(detailItem.id); }}
+                    disabled={!valido}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${valido ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ── Rechazar por dinero faltante: devolución del dinero recibido ── */}
+      <AnimatePresence>
+        {modalDevolucion && detailItem && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <p className="font-bold text-foreground">Devolución del dinero recibido</p>
+                <button onClick={() => setModalDevolucion(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Sube el comprobante de la transferencia con la que se devuelve el dinero al cliente (a la misma cuenta). Es obligatorio para rechazar.
+                </p>
+                <input
+                  ref={devolFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void subirDevol(file, "comprobantes").then((url) => { if (url) setDevolUrl(url); });
+                    e.target.value = "";
+                  }}
+                />
+                {devolUrl ? (
+                  <div className="relative rounded-xl overflow-hidden border border-border">
+                    {devolUrl.startsWith("data:application/pdf") || devolUrl.endsWith(".pdf") ? (
+                      <div className="flex items-center gap-2 p-3 text-sm text-foreground">
+                        <FileText className="w-4 h-4 text-primary" /> Comprobante de devolución adjunto
+                      </div>
+                    ) : (
+                      <img src={devolUrl} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
+                    )}
+                    <button
+                      onClick={() => setDevolUrl(null)}
+                      className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+                      aria-label="Quitar comprobante"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => devolFileRef.current?.click()}
+                    disabled={subiendoDevol}
+                    className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border text-center hover:border-primary/40 cursor-pointer transition-colors"
+                  >
+                    <Upload className="w-6 h-6 text-muted-foreground/50" />
+                    <span className="text-sm font-semibold text-foreground">
+                      {subiendoDevol ? "Subiendo..." : "Subir comprobante de devolución"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx 5 MB</span>
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 px-5 pb-5">
+                <button
+                  onClick={() => setModalDevolucion(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { if (devolUrl && !subiendoDevol) rechazarPorDinero(detailItem.id); }}
+                  disabled={!devolUrl || subiendoDevol}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${devolUrl && !subiendoDevol ? "bg-red-600 hover:bg-red-700 cursor-pointer" : "bg-red-600/50 opacity-50 cursor-not-allowed"}`}
+                >
+                  Rechazar y devolver
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -2057,6 +2524,13 @@ export function VentasScreen({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Visor ampliado del comprobante (clic en la miniatura del detalle). */}
+      <VisorImagen
+        src={visorSrc}
+        alt="Comprobante de pago"
+        onClose={() => setVisorSrc(null)}
+      />
     </div>
   );
 }
