@@ -4744,13 +4744,17 @@ function LoginScreen({
           completo, asi que ahi el `justify-center` no se nota. `px-4` son los
           margenes laterales (16px) y `lg:px-8` los ensancha en escritorio.
 
-          El ancho es `max-w-[720px]`, el MISMO que la tarjeta de Crear cuenta:
-          ambas pantallas de auth se ven identicas en cualquier breakpoint. En
-          movil `w-full` manda y la tarjeta llena el ancho disponible. */}
+          El ancho es `max-w-[480px]`, propio de esta pantalla: el login es un
+          formulario corto (2 campos) y una tarjeta angosta no se monta sobre
+          el logo de La Sirena ni sobre los tres beneficios del pie de la
+          imagen. Crear cuenta usa `max-w-[540px]`, un poco mas ancho por su
+          grilla de 2 columnas pero aun asi compacto para que quepe en un
+          viewport de 1280x720. En movil `w-full` manda y la
+          tarjeta llena el ancho disponible. */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[720px] px-5 py-8 sm:px-12 sm:py-10"
+        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8"
       >
         <button
           onClick={() => navigate("landing")}
@@ -4759,8 +4763,8 @@ function LoginScreen({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-      <div className="text-center mb-4">
-        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-[72px] w-auto object-contain mx-auto mb-3" />
+      <div className="text-center mb-6">
+        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground"
@@ -4768,22 +4772,18 @@ function LoginScreen({
           >
             Bienvenido a La Sirena
           </h1>
-          <p className="text-muted-foreground text-sm mt-3">
+          <p className="text-muted-foreground text-sm mt-2">
             Ingresa tus datos para continuar
           </p>
         </div>
 
-        {/* Campos en 1 columna con tope de 520px centrado: al ampliar la
-            tarjeta a 720px, sin este tope los labels y el placeholder del
-            correo quedarian absurdamente largos. */}
         <form
           onSubmit={(event) => {
             event.preventDefault();
             handleLogin();
           }}
-          className="mx-auto w-full max-w-[520px]"
         >
-        <div className="space-y-5 mb-3">
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-foreground mb-2">
               Correo electrónico
@@ -4840,21 +4840,21 @@ function LoginScreen({
             />
             <MensajeError id={validacion.idError("password")} err={errors.password} />
           </div>
-          <div className="text-right">
-            <button
-              type="button"
-              onClick={() => setShowForgot(true)}
-              className="text-sm text-primary font-medium hover:underline cursor-pointer"
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
-          </div>
+        </div>
+        <div className="text-right mt-2">
+          <button
+            type="button"
+            onClick={() => setShowForgot(true)}
+            className="text-sm text-primary font-medium hover:underline cursor-pointer"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
         </div>
 
         <PrimaryBtn
           type="submit"
           size="md"
-          className="w-full mt-6 h-[52px]"
+          className="w-full mt-5 h-12"
           disabled={loading}
         >
           {loading ? (
@@ -5757,42 +5757,55 @@ function RegisterScreen({
    };
 
    return (
-    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[720px] px-5 py-8 sm:px-12 sm:py-10"
+        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4"
       >
-        <div className="text-center mb-4">
-          {/* El logo va exactamente igual que en Login (`h-[72px]`,
-              `mb-3`): mismo tratamiento visual en las dos pantallas de auth. */}
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-[72px] w-auto object-contain mx-auto mb-3" />
+        <button
+          onClick={() => navigate("landing")}
+          title="Volver al inicio"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="text-center mb-3">
+          {/* El logo va en `h-10` (40px) con `mb-1`: el registro es la tarjeta
+              mas alta de las dos pantallas de auth, y el area visible real del
+              equipo (Windows 150% + Chrome con pestañas) es de ~1280x585, muy
+              inferior al viewport nominal. El login, mas corto, conserva su
+              `h-16`. */}
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-10 w-auto object-contain mx-auto mb-1" />
 
           <h1
-            className="text-2xl font-bold text-foreground"
+            className="text-xl font-bold text-foreground"
             style={{ fontFamily: SERIF }}
           >
             Crear cuenta
           </h1>
-          <p className="text-muted-foreground text-sm mt-3">
-            Completa tus datos para registrarte
-          </p>
+          {/* Subtitulo "Completa tus datos para registrarte" eliminado: con el
+              area visible real de ~1280x585 la tarjeta no cabia sin scroll y
+              este era el unico bloque que podia quitarse sin tocar inputs,
+              textos ni logo. */}
         </div>
 
         {/* Grid y no `space-y`: hace falta para que los campos puedan COMPARTIR
-            fila. Fila 1 = Tipo doc + Numero (flex dentro de una celda de ancho
-            completo), Fila 2 = Nombre completo (ancho completo), Fila 3 =
-            Correo + Telefono, Fila 4 = Contrasena + Confirmar, Fila 5 =
-            checklist de requisitos. El flag `full` de cada descriptor marca los
-            campos que se llevan las 2 columnas (hoy solo "Nombre completo").
-            En movil (<640px) el grid cae a 1 columna y todo se apila.
+            fila. Fila 1 = Tipo doc + Numero (grid `3fr_2fr` dentro de una celda
+            de ancho completo: Tipo doc mas ancho para que el label del select
+            no se corte, Numero mas corto), Fila 2 = Nombre completo (ancho
+            completo), Fila 3 = Correo + Telefono, Fila 4 = Contrasena +
+            Confirmar, Fila 5 = checklist de requisitos. El flag `full` de cada
+            descriptor marca los campos que se llevan las 2 columnas (hoy solo
+            "Nombre completo"). En movil (<640px) el grid cae a 1 columna y
+            todo se apila.
 
-            `gap-x-6` (24px) separa las dos columnas y `gap-y-5` (20px) las
-            filas; `mb-2` (8px) dentro de cada celda separa label e input. */}
-        <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-5">
-            <div className="sm:w-56 sm:shrink-0">
-              <label className="block text-sm font-semibold mb-2 text-foreground">
+            `gap-x-3` (12px) separa las dos columnas y `gap-y-2` (8px) las
+            filas; `mb-1` (4px) dentro de cada celda separa label e input. */}
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
+          <div className="sm:col-span-2 grid gap-3 sm:grid-cols-[3fr_2fr]">
+            <div className="min-w-0">
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 Tipo doc.
               </label>
               <select
@@ -5806,7 +5819,7 @@ function RegisterScreen({
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
                 onKeyDown={teclaEnRegistro("docType")}
-                className={inputCls(errores.docType, "cursor-pointer h-12")}
+                className={inputCls(errores.docType, "cursor-pointer h-10 pl-3 pr-8")}
                 {...validacion.ariaCampo("docType", errores.docType)}
               >
                 {OPCIONES_TIPO_DOCUMENTO.map((opt) => (
@@ -5817,8 +5830,8 @@ function RegisterScreen({
               </select>
               <MensajeError id={validacion.idError("docType")} err={errores.docType} />
             </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-sm font-semibold mb-2 text-foreground">
+            <div className="min-w-0">
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 Número de documento
               </label>
               <input
@@ -5829,7 +5842,7 @@ function RegisterScreen({
                  placeholder="Ej: 12345678"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
-                className={inputCls(errores.docNum, "h-12")}
+                className={inputCls(errores.docNum, "h-10")}
                 {...validacion.ariaCampo("docNum", errores.docNum)}
               />
               <MensajeError id={validacion.idError("docNum")} err={errores.docNum} />
@@ -5871,7 +5884,7 @@ function RegisterScreen({
             },
           ].map(({ label, key, placeholder, type, numeric, full }) => (
             <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
-              <label className="block text-sm font-semibold mb-2 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground">
                 {label}
               </label>
               {type === "password" ? (
@@ -5881,7 +5894,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
-                  cls={inputCls(errores[key], "h-12")}
+                  cls={inputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
                   ariaInvalid={Boolean(errores[key])}
@@ -5896,7 +5909,7 @@ function RegisterScreen({
                   placeholder={placeholder}
                   ref={validacion.refCampo(key)}
                   onKeyDown={teclaEnRegistro(key)}
-                  className={inputCls(errores[key], "h-12")}
+                  className={inputCls(errores[key], "h-10")}
                   {...validacion.ariaCampo(key, errores[key])}
                 />
               )}
@@ -5907,16 +5920,17 @@ function RegisterScreen({
           {/* Lista de requisitos en tiempo real, como FILA PROPIA de ancho
               completo justo debajo de la pareja Contraseña / Confirmar.
 
-              La cuadrícula de 2 columnas se llena con `grid-flow-col` +
-              `grid-rows-3`: los ítems se colocan columna por columna, así el
-              orden del array (largo, mayúscula, número, minúscula, espacios)
-              se lee izquierda-arriba hacia abajo y luego la segunda columna,
-              tal como pide el diseño. `gap-2` (8px) separa los ítems entre sí.
-              En movil (<640px) vuelve a 1 columna, donde hay ancho de sobra. */}
+              `flex-wrap` la deja en COMO MAXIMO 2 filas dentro de los ~484px
+              de contenido de la tarjeta (fila 1 = largo, mayuscula,
+              minuscula; fila 2 = numero, espacios). Los `order-*` por
+              `nth-child` reordenan solo A LA VISTA el array de
+              REGLAS_CONTRASENA (que va numero antes que minuscula) sin tocar
+              campo.tsx, donde ese orden sigue sirviendo a las demas pantallas
+              que listan los requisitos en vertical. */}
           <div className="sm:col-span-2 min-w-0">
             <RequisitosContrasena
               valor={form.password}
-              className="mt-2 grid gap-2 sm:grid-cols-2 sm:grid-flow-col sm:grid-rows-3"
+              className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 [&>li:nth-child(1)]:order-1 [&>li:nth-child(2)]:order-2 [&>li:nth-child(3)]:order-4 [&>li:nth-child(4)]:order-3 [&>li:nth-child(5)]:order-5"
             />
           </div>
         </div>
@@ -5924,7 +5938,7 @@ function RegisterScreen({
         <PrimaryBtn
           onClick={register}
           size="md"
-          className="w-full mt-6 h-[52px]"
+          className="w-full mt-3 h-10 min-h-0!"
            disabled={loading || !formValido}
         >
           {loading ? (
@@ -5935,7 +5949,7 @@ function RegisterScreen({
           {loading ? "Creando cuenta..." : "Crear cuenta"}
         </PrimaryBtn>
 
-        <p className="text-center text-sm text-muted-foreground mt-4">
+        <p className="text-center text-sm text-muted-foreground mt-2">
           {"¿Ya tienes cuenta? "}
           <button
             onClick={() => navigate("login")}
