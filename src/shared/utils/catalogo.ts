@@ -31,13 +31,13 @@ export const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + 
 /** Tamaños del menú público para un producto del panel: se derivan SIEMPRE del
     precio de venta (`precioUnitario`), para que crear o editar el precio en
     Gestión de Productos se refleje en el detalle público y en el carrito:
-    - Pizza (CAT-001): Mediano = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
+    - Pizza (CAT-001): Mediana = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
     - Lasaña (CAT-002): Normal = precio de venta.
     - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
 export const sizesDeProducto = (p: Producto): Product["sizes"] =>
   p.idCategoria === "CAT-001"
     ? [
-        { label: "Mediano", price: p.precioUnitario },
+        { label: "Mediana", price: p.precioUnitario },
         { label: "Grande", price: p.precioUnitario + RECARGO_TAMANO_GRANDE },
       ]
     : p.idCategoria === "CAT-002"

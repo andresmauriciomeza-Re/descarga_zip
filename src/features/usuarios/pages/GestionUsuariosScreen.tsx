@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, ChevronLeft, ChevronRight, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
+import { Search, X, RefreshCw, AlertTriangle, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import {
@@ -9,20 +9,19 @@ import {
   ESTADO_INACTIVO_COLOR,
 } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, fullAccesos } from "@/features/roles/pages/GestionConfigScreen";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 
 const SERIF = "var(--font-titulo)";
 
-export const DOC_TIPOS = [
-  { code: "CC", label: "Cédula de Ciudadanía" },
-  { code: "CE", label: "Cédula de Extranjería" },
-  { code: "PP", label: "Pasaporte" },
-];
+export const DOC_TIPOS = OPCIONES_TIPO_DOCUMENTO;
 
 export const fmtDoc = (tipo: string, numero: string) => `${tipo} ${numero}`;
 
@@ -48,16 +47,7 @@ export interface Usuario {
 export const INIT_USUARIOS: Usuario[] = [
   { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolId:"ROL-001", rolIds:["ROL-001"], activo:true  },
   { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolId:"ROL-007", rolIds:["ROL-007"], activo:true  },
-  { id:"USR-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-red-500",     correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", rolId:"ROL-004", rolIds:["ROL-004","ROL-005"], activo:true  },
-  { id:"USR-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-emerald-500", correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", rolId:"ROL-006", rolIds:["ROL-006"], activo:true  },
-  { id:"USR-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", rolId:"ROL-005", rolIds:["ROL-005"], activo:true  },
-  { id:"USR-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-amber-500",   correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", rolId:"ROL-009", rolIds:["ROL-009"], activo:false },
-  { id:"USR-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-pink-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", rolId:"ROL-004", rolIds:["ROL-004"], activo:true  },
-  { id:"USR-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", rolId:"ROL-007", rolIds:["ROL-007","ROL-008"], activo:true  },
-  { id:"USR-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-teal-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", rolId:"ROL-008", rolIds:["ROL-008"], activo:false },
   { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", numeroDocumento:"88990011", rolId:"ROL-002", rolIds:["ROL-002"], activo:true  },
-  { id:"USR-011", nombre:"Valentina Mora",      iniciales:"VM", avatarColor:"bg-red-500",     correo:"valmora@hotmail.com",          telefono:"317 012 3456", tipoDocumento:"CC", numeroDocumento:"99001122", rolId:"ROL-002", rolIds:["ROL-002"], activo:true  },
-  { id:"USR-012", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", rolId:"ROL-006", rolIds:["ROL-006"], activo:true  },
 ];
 
 // Colores de avatar para los usuarios de alta. La misma paleta que usa Clientes
@@ -274,55 +264,17 @@ export function GestionUsuariosScreen({
     });
   }, [usuariosUnicos, search, filterRol, filterEst, roles, clientes, empleados]);
 
-  // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
-  // interno, así que el paginador es la única forma de ver más usuarios.
-  // Se mide la tarjeta, que al ser `flex-1 min-h-0` dentro de una cadena
-  // bloqueada a `h-dvh` tiene un alto que NO depende de cuántas filas haya,
-  // de modo que no hay bucle de realimentación entre medición y render.
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [filasPorPagina, setFilasPorPagina] = useState(6);
-  const hayFilasRef = useRef(false);
-  hayFilasRef.current = filtered.length > 0;
+  // 5 usuarios por página (unificado con el resto de listados): la tabla
+  // nunca lleva scroll interno, la navegación es solo por el paginador.
+  const PER_PAGE = 5;
 
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const medir = () => {
-      // Sin resultados la única <tr> es la de "No se encontraron", que mide
-      // distinto: se conserva el último valor válido en vez de calcular con ella.
-      if (!hayFilasRef.current) return;
-      const thead = card.querySelector("thead");
-      const fila  = card.querySelector("tbody tr");
-      if (!(thead instanceof HTMLElement) || !(fila instanceof HTMLElement)) return;
-      const altoFila = fila.offsetHeight;
-      if (altoFila <= 0) return;
-      const disponible = card.clientHeight - thead.offsetHeight;
-      // `divide-y` pone 1px entre filas que el offsetHeight de la primera fila
-      // no incluye, así que el divisor lleva ese +1 y el numerador lo compensa.
-      // Sin piso mínimo: si se forzara un mínimo mayor de lo que cabe, la última
-      // fila de cada página quedaría recortada por el `overflow-hidden` de la
-      // tarjeta sin poder alcanzarla con el paginador (estaría en la misma
-      // página), que es peor que un paginador más largo.
-      const n = Math.max(1, Math.floor((disponible + 1) / (altoFila + 1)));
-      setFilasPorPagina(prev => (prev === n ? prev : n));
-    };
-    medir();
-    const ro = new ResizeObserver(medir);
-    ro.observe(card);
-    return () => ro.disconnect();
-  }, []);
-
-  // Si al encoger la ventana caben menos filas por página, la página actual
-  // puede quedar fuera de rango: se vuelve a la primera.
-  useEffect(() => { setPage(1); }, [filasPorPagina]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
   // se reduce (p. ej. al apagar un switch con un filtro de estado activo, o al
   // eliminar un usuario) `page` quedaría fuera de rango, la tabla saldría vacía
   // y la paginación se ocultaría, dejando al usuario sin forma de volver.
   const pageActual = Math.min(page, totalPages);
-  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
   const updateUsuario = (id: string, patch: Partial<Usuario>) => {
     setUsuarios(p => p.map(u => u.id === id ? { ...u, ...patch } : u));
@@ -439,10 +391,12 @@ export function GestionUsuariosScreen({
       const clave = `${editItem.tipoDocumento}||${dm}`.toLowerCase();
       const ancla = editPrevCorreo?.trim().toLowerCase();
       const otro = (correo: string) => correo.trim().toLowerCase() !== ancla;
+      // Un correo vacío nunca coincide con otro vacío: sin el `!== ""`, todos
+      // los registros sin correo serían "la misma persona".
       const correoDup =
-        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && u.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => otro(e.correo) && e.correo.trim().toLowerCase() === em) ||
-        clientes.some(c => otro(c.correo) && c.correo.trim().toLowerCase() === em);
+        usuarios.some(u => u.id !== editItem.id && otro(u.correo) && u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => otro(e.correo) && e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => otro(c.correo) && c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em);
       const docDup =
         usuarios.some(u => u.id !== editItem.id && otro(u.correo) && `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
         empleados.some(e => otro(e.correo) && `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
@@ -530,9 +484,9 @@ export function GestionUsuariosScreen({
     } else {
       const em = newCorreo.trim().toLowerCase();
       const dupCorreo =
-        usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
-        clientes.some(c => c.correo.trim().toLowerCase() === em);
+        usuarios.some(u => u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em);
       if (dupCorreo) errs.correo = "Este correo ya está registrado";
     }
 
@@ -619,7 +573,7 @@ export function GestionUsuariosScreen({
   }
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
         <div>
@@ -652,8 +606,9 @@ export function GestionUsuariosScreen({
       {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
           el número de filas por página se calcula arriba para que siempre quepan
           enteras y la navegación sea solo por el paginador. */}
-      <div ref={cardRef} className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
-        <table className="w-full">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
               {["Usuario","Correo","Rol actual","Estado","Acciones"].map(h => (
@@ -770,33 +725,13 @@ export function GestionUsuariosScreen({
                 );
               })}
             </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
-      {/* Paginación */}
+      {/* Paginación (unificada, fuera de la card) */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center shrink-0">
-          {/* Los controles se muestran siempre, incluso con una sola página: con
-              las filas por página adaptativas puede dar 1 sola página, y ocultarlos
-              dejaría la tabla sin ninguna señal de que la lista estaba completa.
-              Con una sola página ambas flechas salen deshabilitadas (disabled:opacity-40). */}
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={pageActual === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-              <ChevronLeft className="w-4 h-4"/>
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
-              <button key={n} onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                {n}
-              </button>
-            ))}
-            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={pageActual === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-              <ChevronRight className="w-4 h-4"/>
-            </button>
-          </div>
-        </div>
+        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* ── Modal: Ver detalle ──
@@ -994,7 +929,7 @@ export function GestionUsuariosScreen({
                 </div>
 
                 <div className="flex gap-3 items-start">
-                  <div className="w-32 shrink-0">
+                  <div className="w-56 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                     <select
                       disabled
@@ -1002,7 +937,7 @@ export function GestionUsuariosScreen({
                       onChange={e => { setEditItem(x => x && ({ ...x, tipoDocumento: e.target.value })); if (editErrors.tipoDocumento) setEditErrors(p => ({ ...p, tipoDocumento: undefined })); }}
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed"
                     >
-                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                     </select>
                     {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
@@ -1094,18 +1029,19 @@ export function GestionUsuariosScreen({
 
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                  <select
-                    // P7: el estado de la super administradora no se puede
-                    // cambiar desde el modal de edición tampoco.
+                  {/* P7: el estado de la super administradora no se puede
+                      cambiar desde el modal de edición tampoco.
+                      Punto 3.2: 2 opciones → control segmentado. */}
+                  <SegmentadoButtons
                     disabled={esSuperAdmin(editItem)}
                     title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
-                    value={editItem.activo ? "activo" : "inactivo"}
-                    onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <option value="activo">Activo</option>
-                    <option value="inactivo">Inactivo</option>
-                  </select>
+                    valor={editItem.activo ? "activo" : "inactivo"}
+                    onChange={valor => setEditItem(x => x && ({ ...x, activo: valor === "activo" }))}
+                    opciones={[
+                      { valor: "activo", etiqueta: "Activo" },
+                      { valor: "inactivo", etiqueta: "Inactivo" },
+                    ]}
+                  />
                 </div>
                 </div>
               </div>
@@ -1159,8 +1095,8 @@ export function GestionUsuariosScreen({
 
                 <div className="px-5 py-4 space-y-4">
                   {/* Documento */}
-                  <div className="flex gap-3 items-start">
-                    <div className="w-32 shrink-0">
+                   <div className="flex gap-3 items-start">
+                    <div className="w-56 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
                         Tipo de documento <span className="text-primary">*</span>
                       </label>
@@ -1169,7 +1105,7 @@ export function GestionUsuariosScreen({
                          onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                       >
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                       </select>
                       {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
                     </div>
@@ -1266,14 +1202,15 @@ export function GestionUsuariosScreen({
 
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                    <select
-                      value={newActivo ? "activo" : "inactivo"}
-                      onChange={e => setNewActivo(e.target.value === "activo")}
-                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-                    >
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
+                    {/* Punto 3.2: 2 opciones → control segmentado */}
+                    <SegmentadoButtons
+                      valor={newActivo ? "activo" : "inactivo"}
+                      onChange={valor => setNewActivo(valor === "activo")}
+                      opciones={[
+                        { valor: "activo", etiqueta: "Activo" },
+                        { valor: "inactivo", etiqueta: "Inactivo" },
+                      ]}
+                    />
                   </div>
                   </div>
                 </div>

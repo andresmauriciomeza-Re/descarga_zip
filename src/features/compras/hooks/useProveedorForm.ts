@@ -447,7 +447,7 @@ export function useProveedorForm(
       const archivo = (values.camaraComercioNombre ?? "").trim();
       if (archivo) {
         if (!/\.(pdf|jpe?g|png|webp)$/i.test(archivo)) {
-          e.camaraComercioArchivo = "Adjunta un archivo PDF o una imagen (JPG, PNG).";
+          e.camaraComercioArchivo = "Adjunta un archivo PDF o una imagen (JPG, PNG, WEBP).";
         } else if (!(values.camaraComercioArchivo ?? "")) {
           e.camaraComercioArchivo = "No se pudo cargar el archivo: máximo 5 MB.";
         } else if ((values.camaraComercioArchivo ?? "").length > ADJUNTO_MAX_CHARS) {

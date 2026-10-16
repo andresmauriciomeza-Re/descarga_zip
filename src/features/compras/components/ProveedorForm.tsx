@@ -1,6 +1,8 @@
 import type { ChangeEvent, ReactNode } from "react";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { MensajeError } from "@/shared/components/campo";
+import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   filtrarNit,
@@ -214,24 +216,23 @@ export function ProveedorFormCampos({
 
           {/* Punto 12: Tipo de persona (obligatorio). Ocupa las dos columnas
               para no despegar la identificación de la rejilla de 2 que comparten
-              los tres formularios. De aquí cuelgan los dos bloques de campos. */}
+              los tres formularios. De aquí cuelgan los dos bloques de campos.
+              Punto 3.1: dos opciones → control segmentado con aria-pressed. */}
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
               Tipo de persona {req}
             </label>
-            <select
-              value={v.tipoPersona}
-              onChange={(e) => {
+            <SegmentadoButtons
+              valor={v.tipoPersona}
+              onChange={(valor) => {
                 form.marcarTocado("tipoPersona");
-                form.setCampo("tipoPersona", e.target.value as ProveedorFormValues["tipoPersona"]);
+                form.setCampo("tipoPersona", valor as ProveedorFormValues["tipoPersona"]);
               }}
-              onBlur={() => form.marcarTocado("tipoPersona")}
-              className={`${inputCls} cursor-pointer transition-colors ${form.campoCls("tipoPersona")}`}
-            >
-              <option value="">Selecciona el tipo de persona</option>
-              <option value="Persona Natural">Persona Natural</option>
-              <option value="Persona Jurídica">Persona Jurídica</option>
-            </select>
+              opciones={[
+                { valor: "Persona Natural", etiqueta: "Persona Natural" },
+                { valor: "Persona Jurídica", etiqueta: "Persona Jurídica" },
+              ]}
+            />
             <MensajeError err={form.obtenerError("tipoPersona")} />
           </div>
 
@@ -263,14 +264,17 @@ export function ProveedorFormCampos({
                   className={`${inputCls} transition-colors ${form.campoCls("apellidos")}`}
                 />
               </Campo>
-              <SelectCampo
-                form={form}
-                label={<>Tipo de documento {req}</>}
-                campo="tipoDocumento"
-                valor={v.tipoDocumento ?? ""}
-                opciones={TIPOS_DOCUMENTO}
-                vacio="Selecciona el tipo de documento"
-              />
+              {/* Punto 3.1: CC/CE/Pasaporte son 3 opciones → segmentado. */}
+              <Campo form={form} label={<>Tipo de documento {req}</>} campo="tipoDocumento">
+                <SegmentadoButtons
+                  valor={v.tipoDocumento ?? ""}
+                  onChange={(valor) => {
+                    form.marcarTocado("tipoDocumento");
+                    form.setCampo("tipoDocumento", valor as ProveedorFormValues["tipoDocumento"]);
+                  }}
+                  opciones={TIPOS_DOCUMENTO.map(d => ({ valor: d, etiqueta: etiquetaTipoDocumento(d) }))}
+                />
+              </Campo>
               <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
                 <input
                   value={v.numeroDocumento ?? ""}
@@ -387,14 +391,14 @@ export function ProveedorFormCampos({
               >
                 <input
                   type="file"
-                  accept="application/pdf,image/*"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
                   onChange={alAdjuntar}
                   disabled={subiendo}
                   className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <span className="text-[10px] text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
-                    {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG) hasta 5 MB")}
+                    {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG, WEBP) hasta 5 MB")}
                   </span>
                   {v.camaraComercioNombre && (
                     <button
@@ -486,14 +490,18 @@ export function ProveedorFormCampos({
                   className={`${inputCls} transition-colors ${form.campoCls("repLegalApellidos")}`}
                 />
               </Campo>
-              <SelectCampo
-                form={form}
-                label={<>Tipo de documento {req}</>}
-                campo="repLegalTipoDocumento"
-                valor={v.repLegalTipoDocumento ?? ""}
-                opciones={TIPOS_DOCUMENTO}
-                vacio="Selecciona el tipo de documento"
-              />
+              {/* Punto 3.1: mismo control segmentado que el tipo de documento
+                  de Persona Natural (consistencia dentro del mismo formulario). */}
+              <Campo form={form} label={<>Tipo de documento {req}</>} campo="repLegalTipoDocumento">
+                <SegmentadoButtons
+                  valor={v.repLegalTipoDocumento ?? ""}
+                  onChange={(valor) => {
+                    form.marcarTocado("repLegalTipoDocumento");
+                    form.setCampo("repLegalTipoDocumento", valor as ProveedorFormValues["repLegalTipoDocumento"]);
+                  }}
+                  opciones={TIPOS_DOCUMENTO.map(d => ({ valor: d, etiqueta: etiquetaTipoDocumento(d) }))}
+                />
+              </Campo>
               <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">
                 <input
                   value={v.repLegalNumeroDocumento ?? ""}

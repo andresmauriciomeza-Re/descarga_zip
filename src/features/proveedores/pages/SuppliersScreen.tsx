@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
@@ -15,7 +15,7 @@ import {
 } from "@/shared/components/EstadoSelect";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import type { ProveedorRef } from "@/features/orden-compra/pages/OrdenCompraScreen";
-import { useFilasPorPagina } from "@/features/compras/hooks/useFilasPorPagina";
+import { Paginador } from "@/shared/components/Paginador";
 
 const SERIF = "var(--font-titulo)";
 
@@ -151,8 +151,10 @@ const emptySupplier = (): ProveedorFormValues => ({
   direccion: "",
   asesorComercial: "",
   estado: "activo",
-  // Punto 12: sin elegir: la validación exige que el usuario lo elija.
-  tipoPersona: "",
+  // Punto 3.1: el alta arranca con "Persona Natural" preseleccionado; en
+  // edición el valor lo manda el proveedor guardado (editForm.reset() lo
+  // re-siembra desde editItem) y aquí no interviene.
+  tipoPersona: "Persona Natural",
   // Persona Natural.
   nombres: "",
   apellidos: "",
@@ -364,10 +366,8 @@ export function SuppliersScreen({
   const [form, setForm] = useState(emptySupplier());
 
   const [page, setPage] = useState(1);
-  // Máximo 5 proveedores por página: las filas por página se calculan según el
-  // alto disponible (ResizeObserver, useFilasPorPagina). La tabla nunca hace
-  // scroll por sí sola, la única forma de ver el resto es el paginador de abajo.
-  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
+  // 5 proveedores por página (unificado con el resto de listados).
+  const PER_PAGE = 5;
 
   // Nota: La lógica anterior que consultaba si el proveedor tenía compras u
   // órdenes asociadas para decidir si se podían editar el NIT y el nombre fue
@@ -388,12 +388,12 @@ export function SuppliersScreen({
     [suppliers, search],
   );
 
-  const totalPages = Math.ceil(filtered.length / filasPorPagina);
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
   // Página efectiva recortada al rango: si el total baja (borrado o filtro),
   // `page` puede quedar fuera de rango durante un render y la tabla saldría
   // vacía. Así nunca se pinta una página inexistente.
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
   // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
   // más allá de la última página: la tabla salía vacía sin mensaje de "sin
@@ -596,7 +596,7 @@ export function SuppliersScreen({
   // cada render, React remontaba todos los inputs y se perdía el foco.
 
   return (
-    <div className="px-4 py-3 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="px-4 py-3 h-full min-h-0 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shrink-0">
         <div>
@@ -616,29 +616,26 @@ export function SuppliersScreen({
       {/* Search */}
       <div className="relative mb-4 shrink-0 max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
+        <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
           placeholder="Buscar por NIT, nombre, asesor o email..."
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
       {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
-          (se pagina en filas que quepan, useFilasPorPagina); sólo queda scroll
-          horizontal en tablet y scroll vertical en móvil (tarjetas). El
-          paginador queda fijo debajo, siempre visible y por encima del footer.
+          (se pagina en filas fijas de 5); sólo queda scroll horizontal en
+          tablet y scroll vertical en móvil (tarjetas). El paginador queda
+          fuera y debajo de la card.
           `table-fixed` con anchos % por <th> reparte las columnas; la columna
           Teléfono sólo existe desde 1440px (debajo va bajo Contacto). */}
       <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div
-          ref={scrollerRef}
-          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
-        >
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="px-4 py-14 text-center text-muted-foreground">
               <p className="text-4xl mb-3">🚛</p>
               <p>No se encontraron proveedores</p>
             </div>
           ) : (
-            <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[800px]">
+            <table className="hidden md:table w-full table-fixed md:min-w-[800px]">
               <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[24%] min-[1440px]:w-[22%]">Nombre</th>
@@ -769,45 +766,12 @@ export function SuppliersScreen({
         </div>
       )}
         </div>
-
-      {/* Paginador fijo dentro de la card: no se pierde con el scroll.
-          Sólo aparece con más de 5 proveedores filtrados. Sólo flechas ‹ › sin
-          texto; la página actual en un círculo rojo del tema (bg-primary). */}
-      {filtered.length > filasPorPagina && (
-        <div className="shrink-0 border-t border-border flex items-center justify-center gap-1 px-3 py-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={pageActual === 1}
-            aria-label="Página anterior"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-            <button
-              key={n}
-              onClick={() => setPage(n)}
-              aria-current={n === pageActual ? "page" : undefined}
-              className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${
-                n === pageActual
-                  ? "bg-primary text-white"
-                  : "text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={pageActual === totalPages}
-            aria-label="Página siguiente"
-            className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
       </div>
+
+      {/* Paginador fuera y debajo de la card (unificado). */}
+      {filtered.length > 0 && (
+        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+      )}
 
       {/* ── Modal: Crear Proveedor (centrado, 2 columnas) ── */}
       <AnimatePresence>

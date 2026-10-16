@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronLeft, ChevronRight, Briefcase, X, UserPlus } from "lucide-react";
+import { Briefcase, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import {
   EstadoSelect,
@@ -8,6 +8,8 @@ import {
   ESTADO_INACTIVO_COLOR,
 } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
@@ -55,19 +57,11 @@ export interface Empleado {
 // Semilla cruda: los empleados sin historial. `INITIAL_EMPLEADOS` le deriva una
 // única contratación inicial a partir de sus propios campos, para que el dato no
 // quede escrito dos veces y ambas copias no puedan desincronizarse.
-// ROL-004 Cajero · ROL-005 Mesera · ROL-006 Domiciliario · ROL-007 Cocinero ·
+// ROL-004 Cajero · ROL-005 Mesero · ROL-006 Domiciliario · ROL-007 Cocinero ·
 // ROL-008 Auxiliar de cocina · ROL-009 Operador de producción.
 const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
   { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolIds:["ROL-001"],             activo:true,  fechaInicio:"2024-01-15", fechaFinal:"" },
   { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-01", fechaFinal:"" },
-  { id:"EMP-003", nombre:"María González",      iniciales:"MG", avatarColor:"bg-emerald-500", correo:"maria.gonzalez@gmail.com",     telefono:"315 123 4567", tipoDocumento:"CC", numeroDocumento:"11223344", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-10", fechaFinal:"" },
-  { id:"EMP-004", nombre:"Carlos Martínez",     iniciales:"CM", avatarColor:"bg-amber-500",   correo:"carlos.m@hotmail.com",         telefono:"320 987 6543", tipoDocumento:"CC", numeroDocumento:"22334455", contrasena:"123456", rolIds:["ROL-004","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-03-05", fechaFinal:"" },
-  { id:"EMP-005", nombre:"Ana Rodríguez",       iniciales:"AR", avatarColor:"bg-purple-500",  correo:"ana.rodriguez@outlook.com",    telefono:"318 765 4321", tipoDocumento:"CC", numeroDocumento:"33445566", contrasena:"123456", rolIds:["ROL-005","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-03-12", fechaFinal:"" },
-  { id:"EMP-006", nombre:"Jorge Vargas",        iniciales:"JV", avatarColor:"bg-pink-500",    correo:"jorge.vargas@gmail.com",       telefono:"301 234 5678", tipoDocumento:"CC", numeroDocumento:"44556677", contrasena:"123456", rolIds:["ROL-003","ROL-002"],             activo:false, fechaInicio:"2024-01-20", fechaFinal:"2025-06-30" },
-  { id:"EMP-007", nombre:"Patricia Soto",       iniciales:"PS", avatarColor:"bg-teal-500",    correo:"patricia.soto@yahoo.com",      telefono:"305 678 9012", tipoDocumento:"CC", numeroDocumento:"55667788", contrasena:"123456", rolIds:["ROL-004","ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-04-01", fechaFinal:"" },
-  { id:"EMP-008", nombre:"Luis Herrera",        iniciales:"LH", avatarColor:"bg-indigo-500",  correo:"lherrera@gmail.com",           telefono:"312 345 6789", tipoDocumento:"CC", numeroDocumento:"66778899", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-04-18", fechaFinal:"" },
-  { id:"EMP-009", nombre:"Sandra Ríos",         iniciales:"SR", avatarColor:"bg-blue-500",    correo:"sandrios@gmail.com",           telefono:"316 890 1234", tipoDocumento:"CC", numeroDocumento:"77889900", contrasena:"123456", rolIds:["ROL-005","ROL-003","ROL-002"],             activo:false, fechaInicio:"2024-02-25", fechaFinal:"2025-03-15" },
-  { id:"EMP-010", nombre:"Andrés Castillo",     iniciales:"AC", avatarColor:"bg-emerald-500", correo:"andres.castillo@gmail.com",    telefono:"314 567 8901", tipoDocumento:"CC", numeroDocumento:"10111213", contrasena:"123456", rolIds:["ROL-003","ROL-002"],             activo:true,  fechaInicio:"2024-05-02", fechaFinal:"" },
 ];
 
 // Cada empleado de la semilla arranca con una contratación inicial (C01) que es
@@ -167,7 +161,7 @@ export function GestionEmpleadosScreen({
   // orden "por cargo"). Los ids de roles borrados simplemente no aportan texto.
   const cargosDe = (rolIds?: string[]) =>
     (rolIds ?? []).map(id => rolNombre(id)).filter(n => n !== "-");
-  // Cargo visible = sólo los roles EXTRA (Cajero, Mesera, creados). Los base
+  // Cargo visible = sólo los roles EXTRA (Cajero, Mesero, creados). Los base
   // (Empleado, Cliente, Administrador) no estorban: si no hay extra, el cargo
   // visible es "Empleado".
   const extrasDe = (rolIds?: string[]) =>
@@ -317,55 +311,17 @@ export function GestionEmpleadosScreen({
     return r;
   }, [empleados, roles, search, filterEstado, sortBy]);
 
-  // Filas por página adaptadas al alto disponible: la tabla nunca lleva scroll
-  // interno, así que el paginador es la única forma de ver más empleados.
-  // Se mide la tarjeta, que al ser `flex-1 min-h-0` dentro de una cadena
-  // bloqueada a `h-dvh` tiene un alto que NO depende de cuántas filas haya,
-  // de modo que no hay bucle de realimentación entre medición y render.
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [filasPorPagina, setFilasPorPagina] = useState(6);
-  const hayFilasRef = useRef(false);
-  hayFilasRef.current = filtered.length > 0;
+  // 5 empleados por página (unificado con el resto de listados): la tabla
+  // nunca lleva scroll interno, la navegación es solo por el paginador.
+  const PER_PAGE = 5;
 
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const medir = () => {
-      // Sin resultados la única <tr> es la de "No se encontraron", que mide
-      // distinto: se conserva el último valor válido en vez de calcular con ella.
-      if (!hayFilasRef.current) return;
-      const thead = card.querySelector("thead");
-      const fila  = card.querySelector("tbody tr");
-      if (!(thead instanceof HTMLElement) || !(fila instanceof HTMLElement)) return;
-      const altoFila = fila.offsetHeight;
-      if (altoFila <= 0) return;
-      const disponible = card.clientHeight - thead.offsetHeight;
-      // `divide-y` pone 1px entre filas que el offsetHeight de la primera fila
-      // no incluye, así que el divisor lleva ese +1 y el numerador lo compensa.
-      // Sin piso mínimo: si se forzara un mínimo mayor de lo que cabe, la última
-      // fila de cada página quedaría recortada por el `overflow-hidden` de la
-      // tarjeta sin poder alcanzarla con el paginador (estaría en la misma
-      // página), que es peor que un paginador más largo.
-      const n = Math.max(1, Math.floor((disponible + 1) / (altoFila + 1)));
-      setFilasPorPagina(prev => (prev === n ? prev : n));
-    };
-    medir();
-    const ro = new ResizeObserver(medir);
-    ro.observe(card);
-    return () => ro.disconnect();
-  }, []);
-
-  // Si al encoger la ventana caben menos filas por página, la página actual
-  // puede quedar fuera de rango: se vuelve a la primera.
-  useEffect(() => { setPage(1); }, [filasPorPagina]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / filasPorPagina));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
   // se reduce (p. ej. al apagar un switch con un filtro de estado activo) `page`
   // quedaría fuera de rango, la tabla saldría vacía y la paginación se ocultaría,
   // dejando al usuario sin forma de volver.
   const pageActual = Math.min(page, totalPages);
-  const paged      = filtered.slice((pageActual-1)*filasPorPagina, pageActual*filasPorPagina);
+  const paged      = filtered.slice((pageActual-1)*PER_PAGE, pageActual*PER_PAGE);
 
   const toggleEstado = (id: string) => {
     const cur = empleados.find(e => e.id === id);
@@ -632,7 +588,7 @@ export function GestionEmpleadosScreen({
   const ctrEsSuperAdmin = !!ctrEmpleado && esSuperAdmin(ctrEmpleado);
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
@@ -671,7 +627,7 @@ export function GestionEmpleadosScreen({
           <option value="activo">Activo</option>
           <option value="inactivo">Inactivo</option>
         </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} className={iCls}>
+        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className={iCls}>
           <option value="nombre">Ordenar por nombre</option>
           <option value="cargo">Ordenar por cargo</option>
         </select>
@@ -680,8 +636,9 @@ export function GestionEmpleadosScreen({
       {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
           el número de filas por página se calcula arriba para que siempre quepan
           enteras y la navegación sea solo por el paginador. */}
-      <div ref={cardRef} className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
-        <table className="w-full">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
               {["Empleado","Correo","Cargo","Estado","Acciones"].map(h => (
@@ -750,33 +707,13 @@ export function GestionEmpleadosScreen({
                 );
               })}
             </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
-      {/* Paginación */}
+      {/* Paginación (unificada, fuera de la card) */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center shrink-0">
-          {/* Los controles se muestran siempre, incluso con una sola página: con
-              las filas por página adaptativas puede dar 1 sola página, y ocultarlos
-              dejaría la tabla sin ninguna señal de que la lista estaba completa.
-              Con una sola página ambas flechas salen deshabilitadas (disabled:opacity-40). */}
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={pageActual === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
-              <button key={n} onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>
-                {n}
-              </button>
-            ))}
-            <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={pageActual === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* Modal: Nueva contratación */}
@@ -828,15 +765,18 @@ export function GestionEmpleadosScreen({
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     {/* P7: si el empleado elegido es Gloria, el estado no se
                         puede tocar (el guard de handleNuevaContratacion además
-                        lo fuerza a activo al guardar). */}
-                    <select value={ctrActivo ? "activo" : "inactivo"}
+                        lo fuerza a activo al guardar).
+                        Punto 3.2: 2 opciones → control segmentado. */}
+                    <SegmentadoButtons
+                      valor={ctrActivo ? "activo" : "inactivo"}
+                      onChange={valor => setCtrActivo(valor === "activo")}
                       disabled={ctrEsSuperAdmin}
                       title={ctrEsSuperAdmin ? TITULO_SUPER_ADMIN : undefined}
-                      onChange={e => setCtrActivo(e.target.value === "activo")}
-                      className={`${fCls()} cursor-pointer disabled:cursor-not-allowed disabled:opacity-70`}>
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
+                      opciones={[
+                        { valor: "activo", etiqueta: "Activo" },
+                        { valor: "inactivo", etiqueta: "Inactivo" },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -1008,12 +948,12 @@ export function GestionEmpleadosScreen({
                   {/* Datos de cuenta */}
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
                   <div className="col-span-2 flex gap-2 items-start">
-                    <div className="w-32 shrink-0">
+                    <div className="w-56 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                       <select value={newTipoDoc}
                        onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                       </select>
                       {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
                     </div>
@@ -1087,12 +1027,15 @@ export function GestionEmpleadosScreen({
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                    <select value={newActivo ? "activo" : "inactivo"}
-                      onChange={e => setNewActivo(e.target.value === "activo")}
-                      className={`${fCls()} cursor-pointer`}>
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
+                    {/* Punto 3.2: 2 opciones → control segmentado */}
+                    <SegmentadoButtons
+                      valor={newActivo ? "activo" : "inactivo"}
+                      onChange={valor => setNewActivo(valor === "activo")}
+                      opciones={[
+                        { valor: "activo", etiqueta: "Activo" },
+                        { valor: "inactivo", etiqueta: "Inactivo" },
+                      ]}
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
@@ -1171,11 +1114,11 @@ export function GestionEmpleadosScreen({
                   </div>
                 </div>
                 <div className="col-span-2 flex gap-2 items-start">
-                  <div className="w-32 shrink-0">
+                  <div className="w-56 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <select disabled value={editItem.tipoDocumento}
                       className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
-                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.code}</option>)}
+                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                     </select>
                     {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
@@ -1213,18 +1156,20 @@ export function GestionEmpleadosScreen({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                  <select
-                    // P7: el estado de Gloria no se puede cambiar desde el
-                    // modal de edición tampoco (el resto de sus datos sí se
-                    // puede editar). El tooltip explica el motivo.
+                  {/* P7: el estado de Gloria no se puede cambiar desde el
+                      modal de edición tampoco (el resto de sus datos sí se
+                      puede editar). El tooltip explica el motivo.
+                      Punto 3.2: 2 opciones → control segmentado. */}
+                  <SegmentadoButtons
                     disabled={esSuperAdmin(editItem)}
                     title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
-                    value={esSuperAdmin(editItem) || editItem.activo ? "activo" : "inactivo"}
-                    onChange={e => setEditItem(x => x && ({ ...x, activo: e.target.value === "activo" }))}
-                    className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
-                    <option value="activo">Activo</option>
-                    <option value="inactivo">Inactivo</option>
-                  </select>
+                    valor={esSuperAdmin(editItem) || editItem.activo ? "activo" : "inactivo"}
+                    onChange={valor => setEditItem(x => x && ({ ...x, activo: valor === "activo" }))}
+                    opciones={[
+                      { valor: "activo", etiqueta: "Activo" },
+                      { valor: "inactivo", etiqueta: "Inactivo" },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>

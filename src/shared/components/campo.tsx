@@ -136,6 +136,9 @@ const RE_TELEFONO = /^3\d{9}$/;
 const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
 
 export const MIN_CONTRASENA = 8;
+/** Tope del backend: 72 caracteres y también 72 bytes en UTF-8 (una "á"
+    ocupa 2 bytes), así que ambas medidas se validan con la misma regla. */
+export const MAX_CONTRASENA = 72;
 
 export function validarCorreo(v: string): string | null {
   if (!v.trim()) return "El correo es obligatorio";
@@ -208,9 +211,17 @@ export type ReglaContrasena = {
 export const REGLAS_CONTRASENA: ReglaContrasena[] = [
   {
     id: "largo",
-    texto: `Mínimo ${MIN_CONTRASENA} caracteres`,
-    mensaje: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`,
-    ok: (v) => v.length >= MIN_CONTRASENA,
+    texto: `Entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
+    mensaje: `La contraseña debe tener entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
+    ok: (v) => v.length >= MIN_CONTRASENA && v.length <= MAX_CONTRASENA,
+  },
+  {
+    id: "bytes",
+    texto: `Máximo ${MAX_CONTRASENA} bytes`,
+    mensaje: `La contraseña no puede superar ${MAX_CONTRASENA} bytes`,
+    // El backend cuenta bytes UTF-8 (una "á" ocupa 2), no solo caracteres.
+    // `v.length > 0` evita pintar la regla en verde con el campo vacío.
+    ok: (v) => v.length > 0 && new TextEncoder().encode(v).length <= MAX_CONTRASENA,
   },
   {
     id: "mayuscula",

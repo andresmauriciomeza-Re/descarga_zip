@@ -71,6 +71,10 @@ export interface CompactInsumoFormProps {
   /** P11: en la Nueva compra la unidad NO se elige a mano: siempre es la del
    *  insumo seleccionado (o "und"), así que el select de Medida se oculta. */
   ocultarMedida?: boolean;
+  /** Punto 3.3 (Orden de Compra): la Medida se muestra como texto de SOLO
+   *  LECTURA — la define el ítem del catálogo y no se edita ni al agregar ni
+   *  al editar una fila. Sustituye al UnidadSelect sin ocultar el campo. */
+  medidaSoloLectura?: boolean;
   /** P14: control propio del formulario que ocupa el hueco de Medida (p. ej.
    *  el selector de tipo de ítem Insumo / Producto de la Nueva compra). Va sin
    *  envolver: quien lo pasa define su propio label, ancho y controles. */
@@ -107,6 +111,7 @@ export function CompactInsumoForm({
   buttonLabel = "Agregar",
   variante = "normal",
   ocultarMedida = false,
+  medidaSoloLectura = false,
   campoExtra,
   ocultarCrearInsumo = false,
 }: CompactInsumoFormProps) {
@@ -239,19 +244,35 @@ export function CompactInsumoForm({
             <div className={esCompacta ? "w-[80px] flex-none" : "w-[96px]"}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>Medida</label>
 
-              <UnidadSelect
-                value={unidad}
-                onChange={onUnidadChange}
-                disabled={bloqueado || unidadDisabled}
-                ariaLabel="Medida"
-                fieldClassName={
-                  readOnly
-                    ? "bg-muted/40 border border-border text-foreground h-10"
-                    : esCompacta
-                      ? "bg-muted border border-border text-foreground h-9 rounded-lg"
-                      : unidadCampoCls
-                }
-              />
+              {medidaSoloLectura ? (
+                /* Punto 3.3: texto de solo lectura — la medida la define el
+                   ítem del catálogo, no se edita ni al agregar ni al editar. */
+                <div
+                  title="La medida la define el ítem del catálogo"
+                  className={
+                    (esCompacta
+                      ? "w-full h-9 px-2.5 rounded-lg text-xs "
+                      : "w-full h-10 px-3 rounded-xl text-sm ") +
+                    "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
+                  }
+                >
+                  {unidad}
+                </div>
+              ) : (
+                <UnidadSelect
+                  value={unidad}
+                  onChange={onUnidadChange}
+                  disabled={bloqueado || unidadDisabled}
+                  ariaLabel="Medida"
+                  fieldClassName={
+                    readOnly
+                      ? "bg-muted/40 border border-border text-foreground h-10"
+                      : esCompacta
+                        ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                        : unidadCampoCls
+                  }
+                />
+              )}
             </div>
           )}
 

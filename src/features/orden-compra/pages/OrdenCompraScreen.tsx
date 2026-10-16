@@ -1,25 +1,27 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { motion, AnimatePresence } from "motion/react";
-import { CompactInsumoForm, UNIDADES } from "@/features/compras/components/CompactInsumoForm";
+import { CompactInsumoForm, UNIDADES, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { useProveedorForm, soloLetras, siguienteProveedorId, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
 import {
-  Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft, ChevronLeft, ChevronRight,
+  Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
-import { aplicarStockCompra, recalcularCostoMaximo } from "@/features/compras/services/inventario";
+import { aplicarStockCompra } from "@/features/compras/services/inventario";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { useFilasPorPagina } from "@/features/compras/hooks/useFilasPorPagina";
+import { Paginador } from "@/shared/components/Paginador";
 
 const SERIF = "var(--font-titulo)";
 
@@ -539,8 +541,10 @@ export function NuevoProveedorModal({
       asesorComercial: "",
       direccion: "",
       estado: "activo",
-      // Punto 12: arranca vacío para que el formulario exija elegirlo.
-      tipoPersona: "",
+      // Punto 3.1: igual que el alta del módulo Proveedores, el formulario
+      // arranca con "Persona Natural" preseleccionado (el control segmentado
+      // permite cambiar a Jurídica en un toque).
+      tipoPersona: "Persona Natural",
     },
     existentes,
   );
@@ -562,8 +566,9 @@ export function NuevoProveedorModal({
       asesorComercial: form.values.asesorComercial.trim(),
       direccion: form.values.direccion.trim(),
       estado: form.values.estado,
-      // Punto 12: el valor llega tal cual del select (obligatorio: sin él
-      // `formValido` es false y este `onGuardar` no se ejecuta).
+      // Punto 3.1: el valor llega del control segmentado (preseleccionado en
+      // "Persona Natural"; sin él `formValido` es false y este `onGuardar`
+      // no se ejecuta).
       tipoPersona: form.values.tipoPersona,
     });
   };
@@ -644,20 +649,22 @@ export function insumoDeAlta(ins: NuevoInsumoCreado): Insumo {
     tipo: "Insumo",
     stockActual: 0,
     stockMinimo: 0,
-    stockMaximo: 0,
     categoriaId: "",
     estado: "activo",
   };
 }
 
 export function OrdenModal({
-  mode, orden, proveedores, insumos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
+  mode, orden, proveedores, insumos, productos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
   onCrearInsumo,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
   proveedores: ProveedorRef[];
   insumos: Insumo[];
+  /** Punto 3.3: catálogo de productos del módulo de Productos — la otra mitad
+   *  del selector "Tipo de ítem" (Insumo | Producto) del formulario. */
+  productos?: Producto[];
   /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
   tipo?: "orden" | "compra";
   /** Renderiza el formulario como una página independiente en vez de modal. */
@@ -732,6 +739,9 @@ export function OrdenModal({
   const [aPrecio, setAPrecio] = useState(0);
   const [aIva, setAIva] = useState(0);
   const [aFromCat, setAFromCat] = useState(false);
+  // Punto 3.3: tipo de ítem del formulario (botones Insumo | Producto). Por
+  // defecto "insumo", como manda el plan.
+  const [aTipoItem, setATipoItem] = useState<"insumo" | "producto">("insumo");
   // Id del insumo elegido del catálogo. Antes `addItem` fabricaba
   // `idInsumo: INS-${Date.now()}`, un id que no existía en el catálogo: se perdía
   // el enlace que Recepción usa para no volver a ofrecer un insumo ya recibido y
@@ -757,7 +767,7 @@ export function OrdenModal({
     isCompra && !form.numeroFactura?.trim()
       ? "El número de factura es obligatorio."
       : undefined;
-  const errorItems = form.items.length > 0 ? undefined : "Agrega al menos un insumo a la orden.";
+  const errorItems = form.items.length > 0 ? undefined : "Agrega al menos un ítem a la orden.";
 
   const formValido =
     !errorProveedor && !errorFecha && !errorNumeroFactura && !errorItems && !!form.estado;
@@ -774,11 +784,28 @@ export function OrdenModal({
   const campoCls = (error?: string) =>
     `${isPage ? iPaginaCls : iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<InsumoSuggestion[]>(() => {
+    const q = aNombre.trim().toLowerCase();
+
+    // Punto 3.3: el buscador mira un catálogo u otro según el tipo de ítem
+    // elegido (mismo criterio que la Nueva compra).
+    if (aTipoItem === "producto") {
+      const base = (productos ?? []).filter((p) => p.estado === "Disponible");
+      const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
+      // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
+      // calcular) se usa el precio de venta como monto de referencia.
+      return filtrados.slice(0, 3).map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        unidadMedida: p.unidadVenta || "und",
+        costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
+      }));
+    }
+
     const soloInsumos = insumos.filter(i => (i.tipo ?? "Insumo") === "Insumo" && i.estado === "activo");
-    if (aNombre.trim().length === 0) return soloInsumos.slice(0, 3);
-    return soloInsumos.filter(i => i.nombre.toLowerCase().includes(aNombre.toLowerCase())).slice(0, 3);
-  }, [insumos, aNombre]);
+    if (q.length === 0) return soloInsumos.slice(0, 3);
+    return soloInsumos.filter(i => i.nombre.toLowerCase().includes(q)).slice(0, 3);
+  }, [insumos, productos, aNombre, aTipoItem]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -810,6 +837,19 @@ export function OrdenModal({
     setAShowSug(false);
   };
 
+  /** Punto 3.3: catálogo de productos. Igual que con el insumo, se copian
+   *  nombre, unidad de venta y monto; el producto no tiene IVA propio, así que
+   *  la línea queda en 0 % y el usuario puede ajustarlo en el formulario. */
+  const seleccionarProducto = (p: Producto) => {
+    setANombre(p.nombre);
+    setAUnidad(p.unidadVenta?.trim() || "und");
+    setAPrecio(Number(p.costoUnitario || p.precioUnitario || 0));
+    setAIva(0);
+    setAInsumoId(p.id);
+    setAFromCat(true);
+    setAShowSug(false);
+  };
+
   // Punto 5: "+ Crear insumo" (primera opción del combo). Crea el insumo en el
   // catálogo vía el padre y lo selecciona en "Agregar insumo" con su unidad,
   // monto e IVA — igual que si se hubiera elegido una sugerencia existente.
@@ -830,9 +870,9 @@ export function OrdenModal({
     // Modo edición (lápiz de la tabla): la fila está cargada arriba, así que
     // solo se reemplaza y se deja el formulario listo para el siguiente.
     if (editando) {
-      if (!aNombre.trim()) { toast.error("Ingresa el nombre del insumo."); return; }
-      if (form.items.some(i => i.rowId !== editando && i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
-        toast.error("Este insumo ya está en la orden.");
+      if (!aNombre.trim()) { toast.error("Ingresa el nombre del ítem."); return; }
+      if (form.items.some(i => i.rowId !== editando && (i.tipoItem ?? "insumo") === aTipoItem && i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
+        toast.error("Este ítem ya está en la orden.");
         return;
       }
       actualizarItem(editando, {
@@ -841,14 +881,18 @@ export function OrdenModal({
         unidad: aUnidad,
         precioUnitario: aPrecio,
         iva: aIva,
+        // Punto 3.3: el ítem puede haber cambiado de catálogo (insumo ↔
+        // producto) mientras estaba cargado en el formulario.
+        tipoItem: aTipoItem,
+        ...(aInsumoId ? { idInsumo: aInsumoId } : {}),
       });
       limpiarFilaInsumo();
       return;
     }
 
-    if (!aNombre.trim()) { toast.error("Ingresa el nombre del insumo."); return; }
-    if (form.items.some(i => i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
-      toast.error("Este insumo ya está en la orden.");
+    if (!aNombre.trim()) { toast.error("Ingresa el nombre del ítem."); return; }
+    if (form.items.some(i => (i.tipoItem ?? "insumo") === aTipoItem && i.nombre.toLowerCase() === aNombre.trim().toLowerCase())) {
+      toast.error("Este ítem ya está en la orden.");
       return;
     }
     // Se conserva el id del catálogo cuando la línea viene de una sugerencia; si
@@ -868,6 +912,8 @@ export function OrdenModal({
         costoUnitario: aPrecio,
         precioUnitario: aPrecio,
         iva: aIva,
+        // Punto 3.3: la fila guarda de qué catálogo salió (insumo/producto).
+        tipoItem: aTipoItem,
       }],
     });
     limpiarFilaInsumo();
@@ -936,7 +982,7 @@ export function OrdenModal({
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
-    if (form.items.length === 0) { toast.error("Agrega al menos un insumo."); return; }
+    if (form.items.length === 0) { toast.error("Agrega al menos un ítem."); return; }
     onGuardar(form);
   };
 
@@ -1240,15 +1286,15 @@ export function OrdenModal({
                 </div>
               </section>
 
-              {/* Sección 2 — "Agregar insumo": fila con buscador, stepper y
+              {/* Sección 2 — "Agregar ítem": fila con buscador, stepper y
                   botón en una sola línea. En pantalla completa es el ÚLTIMO
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {isPage && <p className={seccionCls}>Agregar insumo</p>}
+                  {isPage && <p className={seccionCls}>Agregar ítem</p>}
                   <CompactInsumoForm
                     containerRef={sugRef}
-                    titulo={isPage ? "" : "Agregar insumo"}
+                    titulo={isPage ? "" : "Agregar ítem"}
                     nombre={aNombre}
                     onNombreChange={(value) => {
                       setANombre(value);
@@ -1261,7 +1307,9 @@ export function OrdenModal({
                     onCantidadChange={setACant}
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
-                    unidadDisabled={aFromCat}
+                    // Punto 3.3: la Medida es texto de SOLO LECTURA (la define
+                    // el ítem del catálogo), en vez del UnidadSelect editable.
+                    medidaSoloLectura
                     precio={aPrecio}
                     onPrecioChange={setAPrecio}
                     iva={aIva}
@@ -1269,7 +1317,16 @@ export function OrdenModal({
                     onAgregar={addItem}
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
-                    onSelectSuggestion={(suggestion) => selectSug(suggestion as Insumo)}
+                    onSelectSuggestion={(suggestion) => {
+                      if (aTipoItem === "producto") {
+                        const p = (productos ?? []).find((x) => x.id === suggestion.id);
+                        // Guarda por si el catálogo cambió mientras estaba
+                        // abierto el desplegable.
+                        if (p) seleccionarProducto(p);
+                        return;
+                      }
+                      selectSug(suggestion as Insumo);
+                    }}
                     onCrearInsumo={() => {
                       setAShowSug(false);
                       setShowNuevoInsumo(true);
@@ -1277,6 +1334,36 @@ export function OrdenModal({
                     compacto={isPage}
                     buttonLabel={editando ? "Actualizar" : "Agregar"}
                     variante="compacta"
+                    // Punto 3.3: el atajo "+ Crear insumo" sólo aplica a insumos.
+                    ocultarCrearInsumo={aTipoItem === "producto"}
+                    placeholder={
+                      aTipoItem === "producto" ? "Buscar producto..." : "Buscar insumo..."
+                    }
+                    // Punto 3.3: selector de tipo de ítem en el hueco junto a
+                    // Medida; 2 opciones → control segmentado (Insumo por defecto).
+                    campoExtra={
+                      <div className="min-w-[118px]">
+                        <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                          Tipo de ítem
+                        </label>
+                        <SegmentadoButtons
+                          valor={aTipoItem}
+                          onChange={(valor) => {
+                            const nuevo = valor as "insumo" | "producto";
+                            if (nuevo === aTipoItem) return;
+                            setATipoItem(nuevo);
+                            // Al cambiar de catálogo el ítem cargado ya no
+                            // sirve: se limpia la fila y el buscador empieza
+                            // a mirar la otra lista.
+                            limpiarFilaInsumo();
+                          }}
+                          opciones={[
+                            { valor: "insumo", etiqueta: "Insumo" },
+                            { valor: "producto", etiqueta: "Producto" },
+                          ]}
+                        />
+                      </div>
+                    }
                   />
                   {/* Aviso de insumos: en pantalla completa va justo debajo de
                       la fila (solo empuja la tabla al aparecer); en el modal,
@@ -1290,7 +1377,7 @@ export function OrdenModal({
               )}
               </div>
 
-              {/* Columna DERECHA (50 %) — insumos solicitados, totales y
+              {/* Columna DERECHA (50 %) — ítems de la orden, totales y
                   botones. Separada de la izquierda por una línea vertical. */}
               <div
                 className={
@@ -1299,15 +1386,16 @@ export function OrdenModal({
                     : "flex flex-col gap-5"
                 }
               >
-                {/* Cabecera de la tabla: contador */}
+                {/* Cabecera de la tabla: contador. Punto 3.3: la orden admite
+                    insumos Y productos, así que se habla de "ítems". */}
                 {isPage && !isView && (
                   <div className="shrink-0">
                     <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
                       <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
-                        Insumos solicitados
+                        Ítems de la orden
                       </p>
                       <span className="text-xs font-medium text-muted-foreground">
-                        {form.items.length} {form.items.length === 1 ? "insumo" : "insumos"}
+                        {form.items.length} {form.items.length === 1 ? "ítem" : "ítems"}
                       </span>
                     </div>
                   </div>
@@ -1380,6 +1468,13 @@ export function OrdenModal({
                     totalLabel="Total estimado"
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
+                    // Punto 3.3: mismas columnas literales que la Nueva compra
+                    // (Nombre | Cantidad | Medida | Monto unitario | IVA |
+                    // Acciones) — sin Subtotal por fila — y texto vacío en
+                    // "ítems" porque la orden admite insumos y productos.
+                    titulo="Ítems de la orden"
+                    mostrarSubtotal={false}
+                    textoVacioPagina="Aún no has agregado ítems"
                   />
 
                   {/* Acciones: en pantalla completa van al final de ESTA columna
@@ -1482,6 +1577,8 @@ interface NuevaOrdenCompraPageProps {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  /** Punto 3.3: catálogo de productos para el selector "Tipo de ítem". */
+  productos: Producto[];
   /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
@@ -1496,6 +1593,7 @@ export function NuevaOrdenCompraPage({
   proveedores,
   setProveedores,
   insumos,
+  productos,
   setInsumos,
   onNuevoProveedor,
   onBack,
@@ -1576,6 +1674,7 @@ export function NuevaOrdenCompraPage({
       fullPage
       proveedores={proveedores}
       insumos={insumos}
+      productos={productos}
       onClose={onBack}
       onGuardar={handleGuardar}
       onNuevoProveedor={handleNuevoProveedor}
@@ -2064,11 +2163,11 @@ export function OrdenCompraScreen({
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
   // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
-  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
+  const PER_PAGE = 5;
 
-  const totalPages = Math.ceil(filtered.length / filasPorPagina);
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
   useEffect(() => {
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
@@ -2142,8 +2241,7 @@ export function OrdenCompraScreen({
     // Anular la orden anula también sus facturas: la compra queda cerrada y no
     // vuelve al estado "Recibido". Al pasarlas a "Anulado" se devuelve al
     // inventario lo que cada una llegó a sumar (mismo camino que anular la
-    // compra desde Gestión de compra) y se recalcula el costo máximo de los
-    // insumos con las facturas que SIGUEN en "Recibido".
+    // compra desde Gestión de compra).
     const comprasTras = gestiones.map((g) => {
       if (g.ordenId !== o.id) return g;
       const revertir = g.estado !== "Anulado" && !!g.stockAplicado && !g.stockRevertido;
@@ -2162,7 +2260,6 @@ export function OrdenCompraScreen({
 
     if (anuladas.length > 0) {
       setGestiones(() => comprasTras);
-      recalcularCostoMaximo(comprasTras, setInsumos);
     }
 
     setAnularConfirm(null);
@@ -2352,7 +2449,7 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="px-4 md:px-6 pt-3 pb-2 max-w-6xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="px-4 md:px-6 pt-3 pb-2 h-full min-h-0 flex flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-4 mb-3 shrink-0 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
@@ -2390,19 +2487,15 @@ export function OrdenCompraScreen({
       </div>
 
       {/* La card ocupa todo el alto que queda bajo el header y el buscador. La
-          tabla NO hace scroll vertical: se pagina en filas que quepan
-          (useFilasPorPagina); sólo queda scroll horizontal en tablet y scroll
-          vertical en móvil (tarjetas). El paginador queda fijo debajo:
-          siempre visible y por encima del footer. */}
+          tabla NO hace scroll vertical: se pagina en filas fijas de 5; sólo
+          queda scroll horizontal en tablet y scroll vertical en móvil
+          (tarjetas). El paginador queda fuera y debajo de la card. */}
       <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div
-          ref={scrollerRef}
-          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
-        >
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           {/* Escritorio/tablet (>=768px): tabla. Las 3 columnas de dinero y la
               fecha sólo existen desde 1440px; por debajo se fusionan en Total y
               la fecha va bajo el N° de orden. */}
-          <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[780px]">
+          <table className="hidden md:table w-full table-fixed md:min-w-[780px]">
             <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[16%] min-[1440px]:w-[9%]">N° Orden</th>
@@ -2674,39 +2767,12 @@ export function OrdenCompraScreen({
               })}
           </div>
         </div>
-
-        {/* Paginador fijo dentro de la card: no se pierde con el scroll. */}
-        {filtered.length > filasPorPagina && (
-          <div className="shrink-0 border-t border-border flex items-center justify-center gap-1 px-3 py-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={pageActual === 1}
-              aria-label="Página anterior"
-              className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <button
-                key={n}
-                onClick={() => setPage(n)}
-                aria-current={n === pageActual ? "page" : undefined}
-                className={`w-8 h-8 rounded-full text-sm font-semibold cursor-pointer transition-colors ${n === pageActual ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                {n}
-              </button>
-            ))}
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={pageActual === totalPages}
-              aria-label="Página siguiente"
-              className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Paginador fuera y debajo de la card (unificado). */}
+      {filtered.length > 0 && (
+        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+      )}
 
       <AnimatePresence>
         {modal && (
@@ -2973,13 +3039,14 @@ export function OrdenDetallePage({
     ultimoCambio?.fechaHora ?? orden.recepcion?.fechaRecepcion ?? orden.fecha
   );
 
-  /** Las tablas miden según sus filas; solo con muchas filas scrollean solas. */
+  /** Las tablas miden según sus filas; solo con muchas filas scrollean solas.
+      En móvil (columnas apiladas) siempre pueden desplazar en horizontal. */
   const FILAS_SCROLL = 15;
   const claseTabla = (filas: number) =>
-    `rounded-xl border border-border ${filas > FILAS_SCROLL ? "max-h-[55vh] overflow-y-auto" : "overflow-hidden"}`;
+    `rounded-xl border border-border ${filas > FILAS_SCROLL ? "max-h-[55vh] overflow-auto" : "overflow-x-auto"}`;
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
         <button
@@ -3002,10 +3069,10 @@ export function OrdenDetallePage({
         </div>
       </div>
 
-      {/* Dos columnas */}
-      <div className="flex-1 min-h-0 flex gap-0 overflow-hidden">
+      {/* Dos columnas — apiladas en móvil, fila desde lg */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 overflow-y-auto lg:overflow-hidden">
         {/* Columna izquierda — Orden de Compra */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pr-6">
+        <div className="flex-1 min-w-0 flex flex-col lg:overflow-y-auto lg:pr-6">
           <div className="flex items-center gap-3 mb-4 shrink-0">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Orden de Compra
@@ -3045,7 +3112,7 @@ export function OrdenDetallePage({
               <div className="h-px flex-1 bg-border" />
             </div>
             <div className={claseTabla(orden.items.length)}>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[560px]">
                 <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider sticky top-0">
                   <tr>
                     {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (
@@ -3089,11 +3156,11 @@ export function OrdenDetallePage({
           </div>
         </div>
 
-        {/* Línea vertical divisoria */}
-        <div className="w-px bg-border mx-0" />
+        {/* Divisor — horizontal apilado, vertical en fila */}
+        <div className="h-px w-full lg:h-auto lg:w-px bg-border shrink-0" />
 
         {/* Columna derecha — Facturas */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pl-6">
+        <div className="flex-1 min-w-0 flex flex-col lg:overflow-y-auto lg:pl-6">
           <div className="flex items-center gap-3 mb-4 shrink-0">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Facturas
@@ -3159,7 +3226,7 @@ export function OrdenDetallePage({
                         <div className="h-px flex-1 bg-border" />
                       </div>
                       <div className={claseTabla(solicitados.length)}>
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm min-w-[560px]">
                           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider sticky top-0">
                             <tr>
                               {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (
@@ -3202,7 +3269,7 @@ export function OrdenDetallePage({
                           <div className="h-px flex-1 bg-amber-200" />
                         </div>
                         <div className={claseTabla(noSolicitados.length).replace("border-border", "border-amber-200")}>
-                          <table className="w-full text-sm">
+                          <table className="w-full text-sm min-w-[560px]">
                             <thead className="bg-amber-50/50 text-xs text-amber-700 uppercase tracking-wider sticky top-0">
                               <tr>
                                 {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (

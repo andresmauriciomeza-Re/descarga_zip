@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import {
   aplicarStockCompra,
-  recalcularCostoMaximo,
   textoStockActualizado,
 } from "@/features/compras/services/inventario";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -594,18 +593,13 @@ export function RecepcionCompraScreen({
       totalPagado: valorTotal,
     };
 
-    // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido (y
-    // rellena `stockMaximo` si el insumo venía sin techo). Mismo camino que
-    // la Nueva compra, para que las dos formas de facturar entren igual al
-    // inventario.
+    // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido. Mismo
+    // camino que la Nueva compra, para que las dos formas de facturar entren
+    // igual al inventario.
     const resumen = aplicarStockCompra(itemsFactura, 1, { insumos, setInsumos });
     if (resumen && resumen.nombres.length > 0) {
       nuevaCompra.stockAplicado = true;
     }
-
-    // Costo máximo del insumo: el mayor costo unitario entre las compras que
-    // siguen en "Recibido", incluida esta recién creada.
-    recalcularCostoMaximo([nuevaCompra, ...gestiones], setInsumos);
 
     setGestiones((prev) => [nuevaCompra, ...prev]);
 
@@ -685,7 +679,7 @@ export function RecepcionCompraScreen({
   };
 
   return (
-    <div className="px-6 pt-5 pb-4 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
         <button
@@ -777,7 +771,7 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[480px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -944,7 +938,7 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[560px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -1079,7 +1073,8 @@ export function RecepcionCompraScreen({
 
                 {itemsExtra.length > 0 && (
                   <div className="border border-border rounded-xl overflow-hidden mb-3">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[560px]">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="px-3 py-2 text-left text-xs">
@@ -1225,6 +1220,7 @@ export function RecepcionCompraScreen({
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
 
@@ -1329,7 +1325,7 @@ export function RecepcionCompraScreen({
                         value={exUnidad}
                         onChange={setExUnidad}
                         ariaLabel="Medida"
-                        fieldClassName="bg-muted border border-border text-foreground h-[34px] rounded-lg"
+                        fieldClassName="bg-muted border border-border text-foreground h-11 rounded-lg"
                       />
                     </div>
 
@@ -1369,7 +1365,7 @@ export function RecepcionCompraScreen({
 
                     <button
                       onClick={addExtra}
-                      className="flex-none inline-flex h-[34px] items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
+                      className="flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Agregar

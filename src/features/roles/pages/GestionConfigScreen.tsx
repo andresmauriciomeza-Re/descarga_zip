@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Check, ChevronLeft, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
+import { X, Check, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import {
@@ -9,8 +9,10 @@ import {
   ESTADO_INACTIVO_COLOR,
 } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { validarNombre } from "@/shared/components/campo";
+import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/nombreRol";
 
 const SERIF = "var(--font-titulo)";
 
@@ -26,7 +28,10 @@ export const MENU_TREE = [
 // ── Celdas de la grilla de módulos ──────────────────────────────────────
 // Replican el orden de las secciones del sidebar del Admin (NAV_SECTIONS en
 // App.tsx): Dashboard · Configuración · Usuarios · Compras · Producción ·
-// Ventas. "Usuarios" es una celda propia porque en el sidebar lo es, pero NO es
+// Ventas. "Dashboard" ya no es celda §3: la gráfica es exclusiva del
+// Administrador y la clave "Dashboard::Dashboard" se quita a los demás roles
+// al leer de localStorage (App.tsx), así que no es asignable.
+// "Usuarios" es una celda propia porque en el sidebar lo es, pero NO es
 // un módulo nuevo: sigue siendo la sub-opción `Configuración::Usuarios` de
 // MENU_TREE, igual que la nombra el `permKey` del sidebar y el guard de ruta.
 // Por eso `modulo` + `subs` apuntan a algo que ya existe y ninguna clave de
@@ -34,7 +39,6 @@ export const MENU_TREE = [
 type Celda = { nombre: string; modulo: string; subs?: string[] };
 
 const CELDAS: Celda[] = [
-  { nombre: "Dashboard",     modulo: "Dashboard" },
   { nombre: "Configuración", modulo: "Configuración", subs: ["Roles"] },
   // El sidebar agrupa Usuarios y Empleados bajo una sección "Usuarios", de ahí
   // que compartan celda. Sigue siendo "un módulo simple" en permisos: cada
@@ -46,8 +50,9 @@ const CELDAS: Celda[] = [
 ];
 
 // Sub-opciones que gobierna una celda: las declaradas, o todas las del módulo.
-// Con MENU_TREE intacto, las 6 celdas cubren las 15 sub-opciones sin dejar
-// ninguna huérfana (1+1+2+4+4+3), así que todas siguen siendo asignables.
+// Con MENU_TREE intacto, las 5 celdas cubren las 14 sub-opciones asignables
+// (1+1+2+4+4+3 sin "Dashboard": su celda se eliminó en §3), así que todas
+// siguen siendo asignables.
 const subsDeCelda = (c: Celda): string[] =>
   c.subs ?? MENU_TREE.find(m => m.modulo === c.modulo)!.subs;
 
@@ -56,7 +61,6 @@ const subsDeCelda = (c: Celda): string[] =>
 // el engranaje. Son los mismos iconos que usa el sidebar. Una celda sin entrada
 // aquí se sigue mostrando por su nombre, solo sin icono.
 const CELDA_ICONOS: Record<string, typeof Home> = {
-  Dashboard:     Home,
   Configuración: Settings,
   Usuarios:      Users,
   Compras:       ShoppingBag,
@@ -83,8 +87,10 @@ export type AccesosMap = Record<string, Accion[]>;
 
 export const KEY = (modulo: string, sub: string) => `${modulo}::${sub}`;
 
-// Dashboard es configurable, pero solo admite el permiso de lectura. Inicio
-// sigue siendo universal y no depende de esta entrada del editor de roles.
+// §3: "Dashboard" ya no es un permiso asignable (la celda salió de CELDAS);
+// MODULOS_SOLO_LECTURA queda solo para leer claves legacy "Dashboard::Dashboard"
+// que aún existan en datos guardados. Inicio sigue siendo universal y no
+// depende de esta entrada del editor de roles.
 export const MODULOS_SOLO_LECTURA = ["Dashboard"];
 
 // Sub-módulos cuyo listado se puede descargar a Excel, por `permKey` completo
@@ -146,7 +152,7 @@ export const ROLES_CARGO: Rol[] = [
       [...ACCIONES]),
   },
   {
-    id: "ROL-005", nombre: "Mesera",
+    id: "ROL-005", nombre: "Mesero",
     descripcion: "Toma pedidos en sala y atiende a los clientes.", activo: true,
     accesos: conAcciones({},
       [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes")], [...ACCIONES]),
@@ -184,14 +190,16 @@ export const INITIAL_ROLES: Rol[] = [
 // falten por NOMBRE. Si el id está ocupado, asigna el siguiente libre.
 export const completarRolesSemilla = (existentes: Rol[]): Rol[] => {
   // Purga: solo se borran los que coinciden nombre Y id (ROL-006…ROL-010).
-  const eliminadosKeys = new Set(ROLES_SEMILLA_ELIMINADOS.map(r => `${r.id}||${r.nombre.trim().toLowerCase()}`));
-  const purge = existentes.filter(r => !eliminadosKeys.has(`${r.id}||${r.nombre.trim().toLowerCase()}`));
+  const eliminadosKeys = new Set(ROLES_SEMILLA_ELIMINADOS.map(r => `${r.id}||${claveGeneroRol(r.nombre)}`));
+  const purge = existentes.filter(r => !eliminadosKeys.has(`${r.id}||${claveGeneroRol(r.nombre)}`));
   if (purge.length === 0) return INITIAL_ROLES;
   const salida = [...purge];
   const usados = new Set(existentes.map(r => r.id));
-  const nombres = new Set(existentes.map(r => r.nombre.trim().toLowerCase()));
+  // La comparación es por clave de género: "Mesero" y "Mesera" son UN rol, así
+  // la semilla no agrega un segundo rol por diferencia de género.
+  const nombres = new Set(existentes.map(r => claveGeneroRol(r.nombre)));
   for (const semilla of INITIAL_ROLES) {
-    const clave = semilla.nombre.trim().toLowerCase();
+    const clave = claveGeneroRol(semilla.nombre);
     if (nombres.has(clave)) continue;
     let id = semilla.id;
     if (usados.has(id)) id = nextRolId(salida);
@@ -410,27 +418,45 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   // ── P3 — Validación en tiempo real del nombre del rol ──────────────────
   // Se deriva del valor mientras se escribe (no al enviar), igual que en los
   // demás módulos: formato razonable con `validarNombre` (letras y espacios)
-  // y duplicado case-insensitive contra `roles`, excluyendo el rol que se
-  // está editando (`rolId`). El campo vacío sin tocar no muestra error: el
-  // envío (handleSave) sigue siendo la red de seguridad para ese caso.
+  // y duplicado por CLAVE DE GÉNERO contra `roles` (un solo rol agrupa a
+  // hombres y mujeres: "Mesero" y "Mesera" son el mismo rol), excluyendo el
+  // rol que se está editando (`rolId`). También rechaza formas femeninas
+  // (con su sugerencia genérica) y formas dobles ("Mesero o mesera").
+  // El campo vacío sin tocar no muestra error: el envío (handleSave) sigue
+  // siendo la red de seguridad para ese caso.
   const nombreTrim = nombre.trim();
-  const nombreDuplicado = nombreTrim.length > 0 && roles.some(r =>
-    r.id !== rolId && r.nombre.trim().toLowerCase() === nombreTrim.toLowerCase()
-  );
+  const claveNueva = nombreTrim ? claveGeneroRol(nombreTrim) : "";
+  const rolExistente = claveNueva
+    ? roles.find(r => r.id !== rolId && claveGeneroRol(r.nombre) === claveNueva)
+    : undefined;
+  const sugerida = nombreTrim ? sugerenciaGenerica(nombreTrim) : null;
+  const errFemenina = sugerida
+    ? `Usa la forma genérica del cargo: «${sugerida}»`
+    : null;
+  const doble = nombreTrim ? formaDobleGenerica(nombreTrim) : null;
   const nombreErrorTiempoReal =
     !nombreTrim
       ? undefined
       : validarNombre(nombreTrim)
         ? "Usa solo letras y espacios, sin espacios dobles"
-        : nombreDuplicado
-          ? "Este rol ya existe"
-          : undefined;
+        : rolExistente
+          ? `Ya existe el rol «${rolExistente.nombre}». Un solo rol agrupa a hombres y mujeres.`
+          : doble
+            ? `Un solo nombre agrupa a todos: usa «${doble}»`
+            : errFemenina ?? undefined;
   // Lo que se pinta bajo el campo: el error en tiempo real manda; si no hay,
   // el que quedó del último intento de guardar.
   const nombreError = nombreErrorTiempoReal ?? errors.nombre;
-  // P3: el botón queda bloqueado mientras el nombre sea inválido (incluido el
-  // duplicado "Este rol ya existe"); nunca sin explicación visible.
+  // P3: el botón queda bloqueado mientras el nombre tenga cualquiera de estos
+  // errores (formato, duplicado, forma doble o femenina); nunca sin
+  // explicación visible.
   const guardarNombreBloqueado = !!nombreErrorTiempoReal || !!errors.modulos;
+  /** Reemplaza el texto del campo por su forma genérica (botón "Usar «…»"). */
+  const aplicarSugerencia = () => {
+    if (!sugerida) return;
+    setNombre(sugerida);
+    setErrors(p => ({ ...p, nombre: undefined }));
+  };
 
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
@@ -498,13 +524,17 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
   const handleSave = () => {
     const errs: { nombre?: string; modulos?: string } = {};
-    if (!nombre.trim()) errs.nombre = "El nombre del rol es obligatorio";
-    else if (roles.some(r =>
-      r.nombre.trim().toLowerCase() === nombre.trim().toLowerCase() && r.id !== rolId
-    )) errs.nombre = "Este rol ya existe";
+    const aGuardar = nombre.trim();
+    if (!aGuardar) errs.nombre = "El nombre del rol es obligatorio";
+    else if (validarNombre(aGuardar)) errs.nombre = "Usa solo letras y espacios, sin espacios dobles";
+    else if (rolExistente) errs.nombre = `Ya existe el rol «${rolExistente.nombre}». Un solo rol agrupa a hombres y mujeres.`;
+    else if (doble) errs.nombre = `Un solo nombre agrupa a todos: usa «${doble}»`;
+    else if (errFemenina) errs.nombre = errFemenina;
     if (selectedSubs.length === 0) errs.modulos = "Selecciona al menos un módulo o sub-opción";
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    onSave(nombre.trim(), desc.trim(), activo, accesos);
+    // Al crear y al editar el nombre se guarda con forma genérica y
+    // normalizado ("repartidor" → "Repartidor", "CAJERO " → "Cajero").
+    onSave(formatearNombreRol(aGuardar), desc.trim(), activo, accesos);
   };
 
   const renderPermissionDetails = (celda: Celda) => {
@@ -630,12 +660,25 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
                 <input value={nombre}
                   // P3: se limpia el error del envío al escribir; el error en
-                  // tiempo real (formato/duplicado) se deriva arriba y se
-                  // pinta debajo del campo mientras el usuario teclea.
+                  // tiempo real (formato/duplicado/forma femenina o doble) se
+                  // deriva arriba y se pinta debajo del campo.
                   onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(p => ({ ...p, nombre: undefined })); }}
                   placeholder="Ej: Cajero"
                   className={`${iCls} ${nombreError ? "!border-red-400 !bg-red-50/30" : ""}`} />
-                {nombreError && <p className="text-xs text-red-500 mt-1 leading-tight">{nombreError}</p>}
+                {nombreError && (
+                  <div className="mt-1">
+                    <p className="text-xs text-red-500 leading-tight">{nombreError}</p>
+                    {sugerida && nombreError === errFemenina && (
+                      <button
+                        type="button"
+                        onClick={aplicarSugerencia}
+                        className="mt-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-border bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                      >
+                        Usar «{sugerida}»
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>
@@ -676,7 +719,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 Ver permisos
               </button>
               <div
-                className="grid grid-cols-2 md:grid-cols-3"
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
                 style={{ display: "grid", gap: "12px", gridAutoRows: "1fr", boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
               >
                 {CELDAS.map(celda => {
@@ -972,7 +1015,7 @@ export function GestionConfigScreen({
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
            <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión de Roles</h1>
@@ -1092,20 +1135,7 @@ export function GestionConfigScreen({
       </div>
 
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronLeft className="w-4 h-4"/></button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(n=>(
-                <button key={n} onClick={()=>setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n===page?"bg-primary text-white":"hover:bg-muted text-muted-foreground"}`}>{n}</button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronRight className="w-4 h-4"/></button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       <AnimatePresence>
@@ -1150,14 +1180,14 @@ export function GestionConfigScreen({
                 <div className="pt-4 space-y-4">
                 {/* Datos del rol en cuadrícula de 2 columnas: Nombre | Estado /
                     Usuarios asignados | (Descripción ocupa las 2 columnas). */}
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                   {[
                     { l: "Nombre",            v: detailItem.nombre,                     ancho: false },
                     { l: "Estado",            v: detailItem.activo ? "Activo" : "Inactivo", ancho: false },
                     { l: "Usuarios",          v: textoUsuariosAsignados(rolUserCounts[detailItem.id] ?? 0), ancho: false },
                     { l: "Descripción",       v: detailItem.descripcion || "—",            ancho: true },
                   ].map(({ l, v, ancho }) => (
-                    <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "col-span-2" : ""}`}>
+                    <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "sm:col-span-2" : ""}`}>
                       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</span>
                       <span className="text-sm font-semibold text-foreground break-words">{v}</span>
                     </div>

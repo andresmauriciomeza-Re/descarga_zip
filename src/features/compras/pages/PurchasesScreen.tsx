@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Pencil, X, Check, ChevronLeft, ChevronRight, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Search, Pencil, X, Check, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { INITIAL_SUPPLIERS } from "@/features/proveedores/pages/SuppliersScreen";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 
 const SERIF = "var(--font-titulo)";
@@ -606,7 +607,7 @@ export function PurchasesScreen() {
   const createTotal = createSub + formIva;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -631,7 +632,10 @@ export function PurchasesScreen() {
       {/* Search */}
       <SearchInput
         value={search}
-        onChange={setSearch}
+        onChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         placeholder="Buscar por ID o proveedor..."
       />
 
@@ -758,42 +762,7 @@ export function PurchasesScreen() {
         </div>
       </div>
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from(
-                { length: totalPages },
-                (_, i) => i + 1,
-              ).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* ══ Modal: CREAR COMPRA ══ */}

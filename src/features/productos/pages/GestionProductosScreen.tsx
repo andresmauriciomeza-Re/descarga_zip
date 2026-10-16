@@ -3,13 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Plus,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
   Eye,
   EyeOff,
-  Edit2,
   Trash2,
   AlertCircle,
   Check,
@@ -17,8 +12,20 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
+import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
+import {
+  copiarFicha,
+  emptyFichaVersion,
+  fichaTieneCambios,
+  numeroNuevoFicha,
+  porcionesReferencia,
+  siguienteNumeroFicha,
+  type FichaVersion,
+  type FichasPorProducto,
+  type PorcionesTamano,
+} from "@/shared/utils/fichas";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
+import { Paginador } from "@/shared/components/Paginador";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import {
@@ -33,22 +40,54 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import {
+  CONFIG_CATEGORIA,
+  configDeCategoria,
+  type ConfigCategoria,
+} from "@/shared/utils/configCategoria";
+
+export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
+export type { ConfigCategoria } from "@/shared/utils/configCategoria";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
 
 // ─────────────────────────── GESTIÓN PRODUCTOS ───────────────────────────
 
-/** "Producto insumo": se elabora con insumos y lleva ficha técnica (pizzas,
-    lasañas). "Producto": se revende tal como se compra, sin ficha (gaseosas). */
-export const TIPOS_PRODUCTO = ["Producto insumo", "Producto"] as const;
+/** Los DOS tipos de producto. Quien los define es la CATEGORÍA del producto
+    (ver `CONFIG_CATEGORIA`): las que se elaboran con insumos y llevan ficha
+    técnica son "Producto insumo" (pizzas, lasañas) y las que se revenden tal
+    como se compran son "Producto terminado" (gaseosas) — mismo vocabulario que
+    usa Orden de Producción. */
+export const TIPOS_PRODUCTO = ["Producto insumo", "Producto terminado"] as const;
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 
-/** Tipo del producto con respaldo para datos viejos sin `tipo`: las
-    categorías CAT-001 y CAT-002 son "Producto insumo" y el resto "Producto". */
-export const tipoDe = (p: { idCategoria: string; tipo?: TipoProducto }): TipoProducto => {
+/** Texto explicativo de cada tipo, para los `title` de las pastillas y las
+    líneas de ayuda bajo el selector de categoría. */
+export const descTipo = (t: TipoProducto): string =>
+  t === TIPOS_PRODUCTO[0]
+    ? "Producto insumo: se elabora con insumos y lleva ficha técnica"
+    : "Producto terminado: se revende tal como se compra, sin ficha";
+
+/** Tipo del producto. Manda la categoría configurada (`configDeCategoria`),
+    porque es ella quien define el tipo; si no tiene configuración, lo guardado
+    cuando ya está en el vocabulario nuevo. El dato viejo "Producto de reventa"
+    se traduce al índice 1 (el tipo sin ficha) y cualquier otro valor antiguo
+    ("Producto") cae al respaldo por nombre y, sin configuración, al tipo sin
+    ficha. `nombreCategoria` es el nombre visible de la categoría y habilita el
+    respaldo por nombre. */
+export const tipoDe = (
+  p: {
+    idCategoria: string;
+    tipo?: TipoProducto | "Producto de reventa" | "Producto";
+  },
+  nombreCategoria?: string,
+): TipoProducto => {
+  const cfg = configDeCategoria(p.idCategoria, nombreCategoria);
+  if (cfg) return cfg.tipo;
   if (p.tipo === TIPOS_PRODUCTO[0] || p.tipo === TIPOS_PRODUCTO[1]) return p.tipo;
-  return p.idCategoria === "CAT-001" || p.idCategoria === "CAT-002" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
+  // Dato viejo ("Producto de reventa", "Producto"): tipo sin ficha (índice 1).
+  return TIPOS_PRODUCTO[1];
 };
 
 /** Pastilla de color por tipo (índice, detalle, Crear/Editar). */
@@ -304,316 +343,60 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
 ];
 
-export interface RInsumo { nombre: string; cantidad: number; unidad: string; }
+// ─────────────────────────── Modelo de la ficha técnica ───────────────────────────
+// El modelo único vive en `@/shared/utils/fichas` (lo comparten este módulo,
+// Compras > Insumos y el componente FichaTecnicaEditor). Aquí solo se
+// reexportan los símbolos que ya importaban App y Orden de Producción.
+export { INITIAL_FICHAS, normalizarIdsFicha } from "@/shared/utils/fichas";
+export type { FichaVersion, FichasPorProducto } from "@/shared/utils/fichas";
 
-/** Tamaños que admite la lista "Porciones por tamaño" de la ficha. */
-export const TAMANOS_FICHA = ["Grande", "Mediana", "Normal"] as const;
-export type TamanoFicha = (typeof TAMANOS_FICHA)[number];
-export interface PorcionesTamano { tamano: TamanoFicha; porciones: number; }
+/** Etiqueta del tamaño único de una ficha cuya categoría no está en
+    CONFIG_CATEGORIA: una sola fila con la etiqueta fija "Único" (solo se
+    editan sus porciones). */
+const TAMANO_UNICO = "Único";
 
-export interface FichaVersion {
-  version: number;
-  idReceta: string;
-  tiempoPreparacion: number;
-  porciones: number;
-  /** Porciones por tamaño (campo nuevo, opcional y solo de Crear). `porciones`
-      siempre refleja la PRIMERA fila: es el que siguen leyendo Detalle,
-      Editar, el cálculo de stock y Orden de Producción. */
-  porcionesPorTamano?: PorcionesTamano[];
-  insumos: RInsumo[];
-  pasos: string[];
-  fechaInicio: string;
-  fechaFin: string | null;
-}
-/** Fichas técnicas por id de producto, indexadas por producto. Vive en App
-    (lo consume OrdenProduccionScreen para calcular qué se consume en un pedido). */
-export type FichasPorProducto = Record<string, FichaVersion[]>;
+/** Filas de "Porciones por tamaño" de una categoría: las que define
+    CONFIG_CATEGORIA (con sus porciones precargadas) o, sin configuración,
+    la fila única "Único" con 1 porción. */
+const filasTamanoDe = (cfg: ConfigCategoria | null): PorcionesTamano[] =>
+  cfg?.tamanos ? cfg.tamanos.map((f) => ({ ...f })) : [{ tamano: TAMANO_UNICO, porciones: 1 }];
 
-/** Ficha de ejemplo para que un pedido tenga insumos que descontar desde el
-    primer arranque. Apunta a insumos REALES del catálogo: las fichas guardan el
-    nombre del insumo (no su id) y ese nombre es el que se busca después. */
-const UNIDADES_FICHA = ["kg", "g", "lt", "ml", "und", "paq", "caja"];
+/** Las etiquetas fijas que recibe `FichaTecnicaEditor.tamanoFijo` para una
+    categoría (el orden de CONFIG_CATEGORIA o ["Único"]). */
+const tamanoFijoDe = (cfg: ConfigCategoria | null): string[] =>
+  filasTamanoDe(cfg).map((f) => f.tamano);
 
-/** Copia profunda de una versión de ficha: el borrador de Editar nunca toca
-    las versiones ya guardadas. */
-export const copiarFicha = (v: FichaVersion): FichaVersion => ({
-  ...v,
-  insumos: v.insumos.map((i) => ({ ...i })),
-  pasos: [...v.pasos],
-});
-
-/** Compara solo el contenido editable de la ficha (no versión ni fechas):
-    si nada de esto cambió al guardar, no se crea una versión nueva. */
-export const fichaTieneCambios = (a: FichaVersion, b: FichaVersion): boolean =>
-  a.tiempoPreparacion !== b.tiempoPreparacion ||
-  a.porciones !== b.porciones ||
-  JSON.stringify(a.insumos) !== JSON.stringify(b.insumos) ||
-  JSON.stringify(a.pasos) !== JSON.stringify(b.pasos);
-
-/** Sin fichas de ejemplo: los productos de fábrica nacen SIN ficha técnica y la
-    primera que se cree recibe el ID 001 (ver `siguienteNumeroFicha`). */
-export const INITIAL_FICHAS: FichasPorProducto = {};
-
-/** Mueve un elemento de una lista una posicion. Funcion pura: no muta la entrada. */
-export function moverEnLista<T>(lista: T[], desde: number, dir: -1 | 1): T[] {
-  const hasta = desde + dir;
-  if (desde < 0 || desde >= lista.length || hasta < 0 || hasta >= lista.length) return lista;
-  const copia = [...lista];
-  [copia[desde], copia[hasta]] = [copia[hasta], copia[desde]];
-  return copia;
-}
-
-/**
- * Fila en edición de un insumo de la ficha: la cantidad se corrige con un
- * input de borde visible y botones −/+, la unidad con un select visible, y se
- * confirma con ✓ o se descarta con ✗. Los cambios locales solo se aplican al
- * borrador al aceptar.
- */
-function InsumoFilaEditable({
-  ins,
-  onSave,
-  onCancel,
-}: {
-  ins: RInsumo;
-  onSave: (r: RInsumo) => void;
-  onCancel: () => void;
-}) {
-  const [cantidad, setCantidad] = useState(ins.cantidad);
-  const [unidad, setUnidad] = useState(ins.unidad);
-  const inputNumCls =
-    "w-20 px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-  return (
-    <>
-      <td className="px-3 py-2 text-sm font-medium text-foreground">{ins.nombre}</td>
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            title="Disminuir"
-            onClick={() => setCantidad((c) => Math.max(0, Math.round((c - 0.1) * 100) / 100))}
-            className="w-6 h-6 shrink-0 rounded-lg border border-border bg-card text-sm font-bold text-foreground hover:bg-muted cursor-pointer transition-colors"
-          >
-            −
-          </button>
-          <input
-            autoFocus
-            type="number"
-            min={0}
-            step={0.1}
-            value={cantidad}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n) && n >= 0) setCantidad(n);
-            }}
-            className={inputNumCls}
-          />
-          <button
-            type="button"
-            title="Aumentar"
-            onClick={() => setCantidad((c) => Math.round((c + 0.1) * 100) / 100)}
-            className="w-6 h-6 shrink-0 rounded-lg border border-border bg-card text-sm font-bold text-foreground hover:bg-muted cursor-pointer transition-colors"
-          >
-            +
-          </button>
-        </div>
-      </td>
-      <td className="px-3 py-2">
-        <select
-          value={unidad}
-          onChange={(e) => setUnidad(e.target.value)}
-          className="px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none cursor-pointer"
-        >
-          {UNIDADES_FICHA.map((u) => <option key={u}>{u}</option>)}
-        </select>
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            title="Aceptar"
-            onClick={() => onSave({ nombre: ins.nombre, cantidad, unidad })}
-            className="p-1.5 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 cursor-pointer transition-colors"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            title="Cancelar"
-            onClick={onCancel}
-            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </td>
-    </>
-  );
-}
-
-/**
- * Tabla "Insumos de la receta", con el mismo patrón de la tabla de insumos de
- * Orden de Compra: lápiz (Editar) y basurero (Eliminar). Con el lápiz la fila
- * pasa a edición en el sitio (solo una fila a la vez). En versiones
- * históricas (`editable = false`) no se muestran ni lápiz ni basurero.
- */
-function InsumosFichaTable({
-  insumos,
-  editable,
-  editandoIdx,
-  onEdit,
-  onChange,
-  onRemove,
-}: {
-  insumos: RInsumo[];
-  editable: boolean;
-  editandoIdx: number | null;
-  onEdit: (idx: number | null) => void;
-  onChange: (idx: number, patch: Partial<RInsumo>) => void;
-  onRemove: (idx: number) => void;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full">
-        <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-          <tr>
-            <th className="px-3 py-2 text-left font-semibold">Insumo</th>
-            <th className="px-3 py-2 text-left font-semibold">Cantidad</th>
-            <th className="px-3 py-2 text-left font-semibold">Unidad</th>
-            {editable && <th className="px-3 py-2 text-left font-semibold">Acciones</th>}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {insumos.map((ins, idx) => (
-            <tr key={`${ins.nombre}-${idx}`} className="bg-muted/40">
-              {editable && editandoIdx === idx ? (
-                <InsumoFilaEditable
-                  key={idx}
-                  ins={ins}
-                  onSave={(r) => {
-                    onChange(idx, r);
-                    onEdit(null);
-                  }}
-                  onCancel={() => onEdit(null)}
-                />
-              ) : (
-                <>
-                  <td className="px-3 py-2 text-sm font-medium text-foreground">{ins.nombre}</td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground font-mono">{ins.cantidad}</td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground font-mono">{ins.unidad}</td>
-                  {editable && (
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          title="Editar"
-                          onClick={() => onEdit(idx)}
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Eliminar"
-                          onClick={() => onRemove(idx)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function emptyFichaVersion(n: number, fechaInicio?: string): FichaVersion {
-  return {
-    version: n,
-    // Vacío: el ID real se asigna al GUARDAR (número de ficha consecutivo y
-    // único). Mientras tanto la pantalla muestra el que le tocaría.
-    idReceta: "",
-    tiempoPreparacion: 0,
-    porciones: 1,
-    insumos: [],
-    pasos: [],
-    fechaInicio: fechaInicio ?? new Date().toISOString(),
-    fechaFin: null,
-  };
-}
-
-/** Número de una ficha, tal como se muestra: "001". Es el ÚNICO punto donde el
-    dato se convierte en texto visible, así que también tolera los IDs viejos
-    guardados como "REC-001". */
-export const numeroDeFicha = (idReceta: string): string =>
-  idReceta.replace("REC-", "").padStart(3, "0").trim();
-
-/** Número con que se vería una ficha recién guardada. */
-const numeroNuevoFicha = (n: number): string => String(n).padStart(3, "0");
-
-/** Siguiente número de ficha: mayor sufijo + 1, calculado SOBRE LAS FICHAS DE
-    PRODUCTOS QUE EXISTEN. Las huérfanas (de un producto ya borrado) no consumen
-    número, así la secuencia se mantiene consecutiva, sin huecos y arrancando
-    en 001. */
-export const siguienteNumeroFicha = (fichas: FichasPorProducto, productos: Producto[]): number => {
-  const existentes = new Set(productos.map((p) => p.id));
-  return (
-    Object.entries(fichas)
-      .filter(([idProducto]) => existentes.has(idProducto))
-      .flatMap(([, versiones]) => versiones.map((v) => parseInt(numeroDeFicha(v.idReceta), 10) || 0))
-      .reduce((max, n) => Math.max(max, n), 0) + 1
-  );
+/** Borrador de la ficha en Crear: v1 vacía con las filas de tamaño de la
+    categoría elegida (o "Único" si todavía no hay categoría). El resto de
+    pantallas sigue usando `emptyFichaVersion`. */
+const nuevoBorradorFicha = (cfg: ConfigCategoria | null = null): FichaVersion => {
+  const filas = filasTamanoDe(cfg);
+  return { ...emptyFichaVersion(1), porcionesPorTamano: filas, porciones: filas[0].porciones };
 };
 
-/** ID visible de una ficha: su número si ya existe; si es un borrador sin
-    guardar (producto sin ficha), el que le tocará al guardarse. */
-export const idFichaVisible = (v: FichaVersion, fichas: FichasPorProducto, productos: Producto[]): string =>
-  v.idReceta ? numeroDeFicha(v.idReceta) : numeroNuevoFicha(siguienteNumeroFicha(fichas, productos));
-
-/** Fechas fijas con que venían las fichas de ejemplo del código: la primera
-    semilla usaba "2024-01-01" y las siguientes "2026-01-15T00:00:00.000Z".
-    Una ficha real siempre guarda `new Date().toISOString()`, así que con estas
-    dos marcas se reconocen las fichas semilla que quedaron en localStorage y
-    se descartan al cargar: no deben seguir ocupando número. */
-const FECHAS_FICHA_SEMILLA = ["2024-01-01", "2026-01-15T00:00:00.000Z"];
-
-/** Limpia y reasigna los ID de las fichas leídas de localStorage. Se aplican
-    dos reglas, en este orden:
-    1. Se DESCARTAN las fichas de productos que ya no existen (huérfanas) y
-       las fichas semilla del código viejo: ninguna debe seguir consumiendo
-       número de ficha.
-    2. A las que quedan se les reasigna un ID único y consecutivo siguiendo el
-       orden del id de producto: todas las versiones de un producto comparten
-       el mismo número. Solo cambia `idReceta`; versiones, fechas y contenido
-       quedan intactos. Así también se corrigen los "REC-001" duplicados que
-       dejó el dato viejo. */
-export const normalizarIdsFicha = (fichas: FichasPorProducto, idsExistentes?: string[]): FichasPorProducto => {
-  const ordenId = (id: string) => parseInt(id.replace(/\D+/g, ""), 10) || 0;
-  const existentes = idsExistentes ? new Set(idsExistentes) : null;
-  const salida: FichasPorProducto = {};
-  let n = 1;
-  for (const id of Object.keys(fichas).sort((a, b) => ordenId(a) - ordenId(b))) {
-    if (existentes && !existentes.has(id)) continue;
-    const versiones = fichas[id].filter((v) => !FECHAS_FICHA_SEMILLA.includes(v.fechaInicio));
-    if (versiones.length === 0) continue;
-    const idFicha = numeroNuevoFicha(n++);
-    salida[id] = versiones.map((v) => ({ ...v, idReceta: idFicha }));
+/** Ajusta las filas de tamaño de un BORRADOR a la categoría elegida:
+    el resultado tiene EXACTAMENTE las etiquetas de CONFIG_CATEGORIA (una
+    fila "Normal" de pizza desaparece, por ejemplo) conservando las
+    porciones cuya etiqueta siga existiendo y completando las que falten con
+    el valor por defecto; `porciones` (la que leen Detalle, el stock y
+    Orden de Producción) sigue siendo la PRIMERA fila. Fuera de
+    CONFIG_CATEGORIA colapsa a la fila única "Único" con la etiqueta fija.
+    Solo se aplica a borradores: las versiones guardadas no se tocan. */
+const ajustarFilasTamano = (v: FichaVersion, cfg: ConfigCategoria | null): FichaVersion => {
+  const actuales = v.porcionesPorTamano ?? [];
+  if (cfg?.tamanos) {
+    const filas = cfg.tamanos.map((d) => actuales.find((a) => a.tamano === d.tamano) ?? { ...d });
+    return { ...v, porcionesPorTamano: filas, porciones: filas[0].porciones };
   }
-  return salida;
+  if (cfg) {
+    // Reventa (Bebidas): la ficha no se muestra, las filas quedan intactas.
+    return v;
+  }
+  // Sin configuración: fila única "Único" (etiqueta fija); las porciones de
+  // la primera fila actual se conservan.
+  const unica: PorcionesTamano = { tamano: TAMANO_UNICO, porciones: actuales[0]?.porciones ?? 1 };
+  return { ...v, porcionesPorTamano: [unica], porciones: unica.porciones };
 };
-
-/** Borrador de la ficha en Crear: v1 vacía con la primera fila de
-    "Porciones por tamaño" (Grande, 1 porción, igual que el valor único de
-    antes). El resto de pantallas sigue usando `emptyFichaVersion`. */
-const nuevoBorradorFicha = (): FichaVersion => ({
-  ...emptyFichaVersion(1),
-  porcionesPorTamano: [{ tamano: TAMANOS_FICHA[0], porciones: 1 }],
-});
 
 /** Regla mínima de una ficha de Producto insumo: al menos un insumo y
     porciones >= 1 (en el campo único y en cada fila por tamaño). */
@@ -666,87 +449,6 @@ function VersionPills({
           </span>
         </button>
       ))}
-    </div>
-  );
-}
-
-/** Vista de solo lectura de una versión de la ficha: la usan Ver detalle y,
-    para las versiones históricas, la pantalla Editar.
-    En Ver detalle la columna derecha no tiene scroll: los bloques de arriba
-    son `shrink-0` y la LISTA DE PASOS (y solo ella) crece con el espacio
-    libre y desplaza dentro de su propio recuadro cuando la receta es larga. */
-function FichaReadOnly({ v, readCls }: { v: FichaVersion; readCls: string }) {
-  return (
-    <div className="flex flex-col gap-2 min-h-0 flex-1">
-      <div className="shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground mb-0.5">ID</p>
-        {/* Solo el número ("001"): el dato viejo con prefijo lo limpia la misma función. */}
-        <div className={readCls}>{numeroDeFicha(v.idReceta)}</div>
-      </div>
-      {/* Tiempo de preparación y Porciones en una sola fila (2 columnas). */}
-      <div className="shrink-0 grid grid-cols-2 gap-3">
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</p>
-          <div className={readCls}>{v.tiempoPreparacion}</div>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</p>
-          {v.porcionesPorTamano?.map((pt, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">{pt.tamano}</span>
-              <span className="text-sm text-foreground">{pt.porciones}</span>
-            </div>
-          ))}
-          {!v.porcionesPorTamano?.length && (
-            <span className="text-xs text-muted-foreground">Normal: {v.porciones}</span>
-          )}
-        </div>
-      </div>
-      {/* Insumos: tabla compacta (Insumo | Cantidad | Unidad) con filas de
-          menor alto en lugar de las tarjetas apiladas. */}
-      <div className="shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground mb-1">Insumos</p>
-        {v.insumos.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Sin insumos registrados</p>
-        ) : (
-          <div className="rounded-xl overflow-hidden border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider">
-                  <th className="px-3 py-1 text-left font-semibold">Insumo</th>
-                  <th className="px-3 py-1 text-right font-semibold">Cantidad</th>
-                  <th className="px-3 py-1 text-right font-semibold">Unidad</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-muted/40">
-                {v.insumos.map((ins, idx) => (
-                  <tr key={idx}>
-                    <td className="px-3 py-1 font-medium text-foreground">{ins.nombre}</td>
-                    <td className="px-3 py-1 text-right text-xs text-muted-foreground font-mono">{ins.cantidad}</td>
-                    <td className="px-3 py-1 text-right text-xs text-muted-foreground font-mono">{ins.unidad}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      {/* Pasos: lista numerada compacta. Es el ÚNICO scroller del detalle. */}
-      <div className="flex flex-col min-h-0 flex-1">
-        <p className="shrink-0 text-xs font-semibold text-muted-foreground mb-1">Preparación (pasos de elaboración)</p>
-        {(v.pasos ?? []).length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Sin pasos registrados</p>
-        ) : (
-          <ol className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1">
-            {(v.pasos ?? []).map((paso, idx) => (
-              <li key={idx} className="flex items-start gap-2 px-3 py-1 bg-muted/40 rounded-xl border border-border">
-                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
-                <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
     </div>
   );
 }
@@ -819,7 +521,7 @@ function CampoImagenes({
     <div>
       {/* Miniaturas: cada una se quita con su X. */}
       {imagenes.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 mb-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
           {imagenes.map((src, idx) => (
             <div
               key={`${src}-${idx}`}
@@ -973,17 +675,26 @@ export function GestionProductosScreen({
     estado: "Disponible",
   });
   const [form, setForm] = useState(emptyForm());
-  // "¿Tiene ficha técnica?" (Crear): null = sin selección; de ahí sale el tipo
-  // (Sí = Producto insumo, No = Producto). Se valida en tiempo real.
+    // "¿Tiene ficha técnica?" (Crear): solo aparece cuando la categoría NO está
+  // en CONFIG_CATEGORIA; null = sin respuesta. De ahí sale el tipo (Sí =
+  // Producto insumo, No = Producto terminado). Con categoría configurada
+  // el tipo lo da la categoría y este estado queda en null.
   const [formTieneFicha, setFormTieneFicha] = useState<"si" | "no" | null>(null);
   const [tieneFichaError, setTieneFichaError] = useState("");
   // Oculta la columna de ficha en Crear/Editar sin borrar lo diligenciado:
   // la ficha se guarda igual con el botón principal.
   const [fichaOculta, setFichaOculta] = useState(false);
+  // Cambio de categoría en Crear pendiente de confirmación (nueva categoría
+  // elegida); el select solo se actualiza cuando se confirma.
+  const [confirmCategoria, setConfirmCategoria] = useState<string | null>(null);
+  // Igual, para Editar.
+  const [confirmCategoriaEdit, setConfirmCategoriaEdit] = useState<string | null>(null);
 
   // Ficha técnica state
   const fichas = fichasExternas;
   const setFichas = setFichasExternas;
+  // Respuesta a "¿Tiene ficha técnica?" (solo categorías sin configuración):
+  // además de marcar la respuesta, fija el tipo del producto.
   const elegirTieneFicha = (v: "si" | "no") => {
     setFormTieneFicha(v);
     setTieneFichaError("");
@@ -994,15 +705,6 @@ export function GestionProductosScreen({
   // el producto (no se crean versiones antes de que el producto exista). El
   // botón "Guardar Ficha Técnica" solo valida y lo marca como guardado.
   const [fichaBorrador, setFichaBorrador] = useState<FichaVersion>(nuevoBorradorFicha);
-  const [fichaInsumoNombre, setFichaInsumoNombre] = useState("");
-  const [fichaInsumoCantidad, setFichaInsumoCantidad] = useState(1);
-  const [fichaInsumoUnidad, setFichaInsumoUnidad] = useState("kg");
-  // Insumo elegido en el buscador. Mientras sea null solo hay texto escrito, y
-  // esa búsqueda no cuenta como selección al agregar.
-  const [fichaInsumoSel, setFichaInsumoSel] = useState<Insumo | null>(null);
-  // Fila de la tabla de insumos abierta en edición (crear). Solo una a la vez.
-  const [fichaEditandoIdx, setFichaEditandoIdx] = useState<number | null>(null);
-  const [fichaPaso, setFichaPaso] = useState("");
   // Confirmación del modal "Guardar Ficha Técnica" y marca de guardada: se
   // compara con el borrador actual, así que cualquier edición posterior la
   // invalida sola.
@@ -1016,97 +718,10 @@ export function GestionProductosScreen({
   // cierra la versión vigente y el borrador queda como la versión N+1.
   const [editFichaVersiones, setEditFichaVersiones] = useState<FichaVersion[]>([]);
   const [editFichaBorrador, setEditFichaBorrador] = useState<FichaVersion>(emptyFichaVersion(1));
-  const [editFichaInsumoNombre, setEditFichaInsumoNombre] = useState("");
-  const [editFichaInsumoCantidad, setEditFichaInsumoCantidad] = useState(1);
-  const [editFichaInsumoUnidad, setEditFichaInsumoUnidad] = useState("kg");
-  const [editFichaInsumoSel, setEditFichaInsumoSel] = useState<Insumo | null>(null);
-  // Fila de la tabla de insumos abierta en edición (editar). Solo una a la vez.
-  const [editFichaEditandoIdx, setEditFichaEditandoIdx] = useState<number | null>(null);
-  const [editFichaPaso, setEditFichaPaso] = useState("");
-
   const resetFichaForm = () => {
     setFichaBorrador(nuevoBorradorFicha());
-    setFichaInsumoNombre("");
-    setFichaInsumoCantidad(1);
-    setFichaInsumoUnidad("kg");
-    setFichaInsumoSel(null);
-    setFichaPaso("");
     setConfirmGuardarFicha(false);
     setFichaGuardadaEn(null);
-  };
-
-  const updateFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
-    setFichaBorrador(prev => ({ ...prev, [field]: value }));
-
-  // ── "Porciones por tamaño" (solo el borrador de Crear) ─────────────
-  const filasTamano = (): PorcionesTamano[] =>
-    fichaBorrador.porcionesPorTamano ?? [{ tamano: TAMANOS_FICHA[0], porciones: fichaBorrador.porciones }];
-
-  /** Escribe las filas y mantiene `porciones` = primera fila, para que el
-      resto de pantallas siga leyendo el campo de siempre. */
-  const setFilasTamano = (filas: PorcionesTamano[]) =>
-    setFichaBorrador(prev => ({ ...prev, porcionesPorTamano: filas, porciones: filas[0].porciones }));
-
-  const addTamano = () => {
-    const usados = filasTamano().map((f) => f.tamano);
-    const libre = TAMANOS_FICHA.find((t) => !usados.includes(t));
-    if (!libre) return;
-    setFilasTamano([...filasTamano(), { tamano: libre, porciones: 1 }]);
-  };
-
-  const removeTamano = (idx: number) => {
-    const filas = filasTamano();
-    if (filas.length > 1) setFilasTamano(filas.filter((_, i) => i !== idx));
-  };
-
-  // Elige el tamaño de una fila; un tamaño ya usado en otra fila queda
-  // deshabilitado y aquí se descarta por seguridad.
-  const updateTamano = (idx: number, tamano: TamanoFicha) => {
-    const filas = filasTamano();
-    if (filas.some((f, i) => i !== idx && f.tamano === tamano)) return;
-    setFilasTamano(filas.map((f, i) => (i === idx ? { ...f, tamano } : f)));
-  };
-
-  const updatePorcionesTamano = (idx: number, n: number) => {
-    if (!Number.isFinite(n) || n < 0) return;
-    setFilasTamano(filasTamano().map((f, i) => (i === idx ? { ...f, porciones: n } : f)));
-  };
-
-  // ── "Porciones por tamaño" para Editar (igual que Crear, pero sobre
-  //     editFichaBorrador). Si la ficha antigua solo tenía un número de
-  //     porciones, se muestra como una fila con tamaño "Normal". ─────
-  const editFilasTamano = (): PorcionesTamano[] =>
-    editFichaBorrador.porcionesPorTamano ??
-    [{ tamano: TAMANOS_FICHA[2], porciones: editFichaBorrador.porciones }];
-
-  const editSetFilasTamano = (filas: PorcionesTamano[]) =>
-    setEditFichaBorrador(prev => ({ ...prev, porcionesPorTamano: filas, porciones: filas[0].porciones }));
-
-  const editAddTamano = () => {
-    const usados = editFilasTamano().map((f) => f.tamano);
-    const libre = TAMANOS_FICHA.find((t) => !usados.includes(t));
-    if (!libre) return;
-    editSetFilasTamano([...editFilasTamano(), { tamano: libre, porciones: 1 }]);
-  };
-
-  const editRemoveTamano = (idx: number) => {
-    const filas = editFilasTamano();
-    if (filas.length > 1) editSetFilasTamano(filas.filter((_, i) => i !== idx));
-  };
-
-  // Elige el tamaño de una fila; un tamaño ya usado en otra fila queda
-  // deshabilitado y aquí se descarta por seguridad.
-  const editUpdateTamano = (idx: number, tamano: TamanoFicha) => {
-    const filas = editFilasTamano();
-    if (filas.some((f, i) => i !== idx && f.tamano === tamano)) return;
-    editSetFilasTamano(filas.map((f, i) => (i === idx ? { ...f, tamano } : f)));
-  };
-
-  const editUpdatePorcionesTamano = (idx: number, n: number) => {
-    if (!Number.isFinite(n) || n < 0) return;
-    editSetFilasTamano(
-      editFilasTamano().map((f, i) => (i === idx ? { ...f, porciones: n } : f)),
-    );
   };
 
   // ── Guardar ficha técnica (Crear) ──────────────────────────────────
@@ -1126,69 +741,6 @@ export function GestionProductosScreen({
     toast.success("Ficha técnica guardada");
   };
 
-  // Al elegir del buscador se autocompleta la "Medida" con la unidad
-  // del catálogo; sigue siendo editable a mano después.
-  const seleccionarFichaInsumo = (ins: Insumo) => {
-    setFichaInsumoSel(ins);
-    setFichaInsumoNombre(ins.nombre);
-    setFichaInsumoUnidad(
-      UNIDADES_FICHA.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES_FICHA[0]
-    );
-  };
-
-  const seleccionarEditFichaInsumo = (ins: Insumo) => {
-    setEditFichaInsumoSel(ins);
-    setEditFichaInsumoNombre(ins.nombre);
-    setEditFichaInsumoUnidad(
-      UNIDADES_FICHA.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES_FICHA[0]
-    );
-  };
-
-  // Solo se agrega un insumo que exista en el catálogo: o se seleccionó del
-  // buscador, o el texto escrito coincide exactamente con un insumo real.
-  // Nunca se admite texto libre.
-  const addFichaInsumo = () => {
-    const ins = fichaInsumoSel ?? resolverInsumo(insumos, fichaInsumoNombre);
-    if (!ins) {
-      toast.error("Selecciona un insumo del catálogo de Insumos");
-      return;
-    }
-    // No se puede repetir un insumo en la ficha: se edita en la tabla.
-    if (fichaBorrador.insumos.some((i) => i.nombre === ins.nombre)) {
-      toast.error("Este insumo ya está en la ficha; edítalo en la tabla");
-      return;
-    }
-    setFichaBorrador(prev => ({
-      ...prev,
-      insumos: [...prev.insumos, { nombre: ins.nombre, cantidad: fichaInsumoCantidad, unidad: fichaInsumoUnidad }],
-    }));
-    setFichaInsumoNombre(""); setFichaInsumoCantidad(1); setFichaInsumoSel(null);
-  };
-
-  const removeFichaInsumo = (idx: number) =>
-    setFichaBorrador(prev => ({ ...prev, insumos: prev.insumos.filter((_, j) => j !== idx) }));
-
-  // Corrige en el sitio la cantidad/unidad de un insumo ya agregado.
-  const updateFichaInsumo = (idx: number, patch: Partial<RInsumo>) =>
-    setFichaBorrador(prev => ({
-      ...prev,
-      insumos: prev.insumos.map((ins, j) => (j === idx ? { ...ins, ...patch } : ins)),
-    }));
-
-  // Reordena los pasos de preparacion. El numero de cada paso se recalcula solo
-  // porque la lista se renderiza con la posicion (idx + 1).
-  const moverFichaPaso = (idx: number, dir: -1 | 1) =>
-    setFichaBorrador(prev => ({ ...prev, pasos: moverEnLista(prev.pasos, idx, dir) }));
-
-  const addFichaPaso = () => {
-    if (!fichaPaso.trim()) return;
-    setFichaBorrador(prev => ({ ...prev, pasos: [...prev.pasos, fichaPaso.trim()] }));
-    setFichaPaso("");
-  };
-
-  const removeFichaPaso = (idx: number) =>
-    setFichaBorrador(prev => ({ ...prev, pasos: prev.pasos.filter((_, j) => j !== idx) }));
-
   // ── Edit-ficha helpers (todo escribe sobre el borrador) ──────────
   const openEdit = (p: Producto) => {
     // Materializa la lista de imágenes: los productos viejos solo traen
@@ -1197,58 +749,15 @@ export function GestionProductosScreen({
     const guardadas = (fichas[p.id] ?? []).map(copiarFicha);
     setEditFichaVersiones(guardadas);
     // El borrador arranca como copia de la última versión guardada; si el
-    // producto aún no tiene ficha, parte de una v1 vacía.
-    setEditFichaBorrador(guardadas.length > 0 ? copiarFicha(guardadas[guardadas.length - 1]) : emptyFichaVersion(1));
+    // producto aún no tiene ficha, parte de una v1 vacía. Los tamaños se
+    // ajustan a la categoría del producto SOLO en este borrador: las
+    // versiones guardadas nunca se tocan.
+    const base = guardadas.length > 0 ? copiarFicha(guardadas[guardadas.length - 1]) : emptyFichaVersion(1);
+    setEditFichaBorrador(ajustarFilasTamano(base, configDeCategoria(p.idCategoria, catName(p.idCategoria))));
     setEditFichaSel("borrador");
     setFichaOculta(false);
-    setEditFichaInsumoNombre("");
-    setEditFichaInsumoCantidad(1);
-    setEditFichaInsumoUnidad("kg");
-    setEditFichaInsumoSel(null);
-    setEditFichaPaso("");
+    setConfirmCategoriaEdit(null);
   };
-
-  const updateEditFichaField = (field: keyof Omit<FichaVersion, "insumos" | "version">, value: string | number) =>
-    setEditFichaBorrador(prev => ({ ...prev, [field]: value }));
-
-  const addEditFichaInsumo = () => {
-    const ins = editFichaInsumoSel ?? resolverInsumo(insumos, editFichaInsumoNombre);
-    if (!ins) {
-      toast.error("Selecciona un insumo del catálogo de Insumos");
-      return;
-    }
-    // No se puede repetir un insumo en la ficha: se edita en la tabla.
-    if (editFichaBorrador.insumos.some((i) => i.nombre === ins.nombre)) {
-      toast.error("Este insumo ya está en la ficha; edítalo en la tabla");
-      return;
-    }
-    setEditFichaBorrador(prev => ({
-      ...prev,
-      insumos: [...prev.insumos, { nombre: ins.nombre, cantidad: editFichaInsumoCantidad, unidad: editFichaInsumoUnidad }],
-    }));
-    setEditFichaInsumoNombre(""); setEditFichaInsumoCantidad(1); setEditFichaInsumoSel(null);
-  };
-
-  const removeEditFichaInsumo = (idx: number) =>
-    setEditFichaBorrador(prev => ({ ...prev, insumos: prev.insumos.filter((_, j) => j !== idx) }));
-
-  const updateEditFichaInsumo = (idx: number, patch: Partial<RInsumo>) =>
-    setEditFichaBorrador(prev => ({
-      ...prev,
-      insumos: prev.insumos.map((ins, j) => (j === idx ? { ...ins, ...patch } : ins)),
-    }));
-
-  const moverEditFichaPaso = (idx: number, dir: -1 | 1) =>
-    setEditFichaBorrador(prev => ({ ...prev, pasos: moverEnLista(prev.pasos, idx, dir) }));
-
-  const addEditFichaPaso = () => {
-    if (!editFichaPaso.trim()) return;
-    setEditFichaBorrador(prev => ({ ...prev, pasos: [...prev.pasos, editFichaPaso.trim()] }));
-    setEditFichaPaso("");
-  };
-
-  const removeEditFichaPaso = (idx: number) =>
-    setEditFichaBorrador(prev => ({ ...prev, pasos: prev.pasos.filter((_, j) => j !== idx) }));
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
@@ -1272,6 +781,66 @@ export function GestionProductosScreen({
     return [...activas, actual ?? { id: valorActual, nombre: "Sin categoría" }];
   };
 
+  /** Configuración de una categoría con los nombres visibles de este módulo
+      (id primero y nombre como respaldo, ver `configDeCategoria`). */
+  const cfgDe = (id: string): ConfigCategoria | null =>
+    configDeCategoria(id, catName(id));
+
+  // ── Cambio de categoría en Crear ─────────────────────────────────
+  // La categoría define el tipo del producto y los tamaños de su ficha: si el
+  // borrador ya tiene contenido o porciones se pide confirmación antes de
+  // reajustar los tamaños; el select solo cambia al confirmar.
+  const solicitarCambioCategoriaCrear = (nueva: string) => {
+    if (nueva === form.idCategoria) return;
+    if (!fichaConContenido(fichaBorrador)) {
+      aplicarCategoriaCrear(nueva);
+      return;
+    }
+    setConfirmCategoria(nueva);
+  };
+  const aplicarCategoriaCrear = (nueva: string) => {
+    const cfg = configDeCategoria(nueva, catName(nueva));
+    setForm((p) => ({
+      ...p,
+      idCategoria: nueva,
+      // Con categoría configurada el tipo es de la categoría; sin ella queda
+      // en Producto insumo hasta que se responda "¿Tiene ficha técnica?".
+      tipo: cfg ? cfg.tipo : TIPOS_PRODUCTO[0],
+    }));
+    setFormTieneFicha(null);
+    setTieneFichaError("");
+    setFichaBorrador((v) => ajustarFilasTamano(v, cfg));
+    // La marca de "ficha guardada" compara contra el borrador anterior.
+    setConfirmGuardarFicha(false);
+    setFichaGuardadaEn(null);
+    setConfirmCategoria(null);
+  };
+
+  // ── Cambio de categoría en Editar ─────────────────────────────────
+  // Misma regla que en Crear; además, un producto con historial de ficha no
+  // puede cambiarse a una categoría sin ficha (perdería su historial).
+  const solicitarCambioCategoriaEdit = (nueva: string) => {
+    if (!editItem || nueva === editItem.idCategoria) return;
+    const cfgNueva = configDeCategoria(nueva, catName(nueva));
+    const conHistorial = (fichas[editItem.id]?.length ?? 0) > 0;
+    if (cfgNueva?.tipo === TIPOS_PRODUCTO[1] && conHistorial) {
+      toast.error(`No se puede cambiar a ${catName(nueva)} porque este producto ya tiene historial de ficha técnica`);
+      return;
+    }
+    if (!fichaConContenido(editFichaBorrador)) {
+      aplicarCategoriaEdit(nueva);
+      return;
+    }
+    setConfirmCategoriaEdit(nueva);
+  };
+  const aplicarCategoriaEdit = (nueva: string) => {
+    const cfg = configDeCategoria(nueva, catName(nueva));
+    setEditItem((x) => x && ({ ...x, idCategoria: nueva, tipo: cfg ? cfg.tipo : x.tipo }));
+    setEditFichaBorrador((v) => ajustarFilasTamano(v, cfg));
+    setEditFichaSel("borrador");
+    setConfirmCategoriaEdit(null);
+  };
+
   /** Palabra con que se muestra el stock ("2 pizzas", "1 lasaña", "24 und"). */
   const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
     if (p.idCategoria === "CAT-001") return n === 1 ? "pizza" : "pizzas";
@@ -1286,9 +855,9 @@ export function GestionProductosScreen({
   };
 
   const ayudaStock = (p: Producto): string =>
-    tipoDe(p) === TIPOS_PRODUCTO[0]
+    tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
       ? "Se actualiza al completar órdenes de producción"
-      : // TODO: el stock de los productos de reventa se actualizará con las
+      : // TODO: el stock de los productos terminados se actualizará con las
         // compras (módulo Compras). No implementado aún.
         "Se actualizará con las compras";
 
@@ -1307,7 +876,7 @@ export function GestionProductosScreen({
       ),
       columnas: [
         { header: "Nombre", valor: (p) => p.nombre },
-        { header: "Tipo", valor: (p) => tipoDe(p) },
+        { header: "Tipo", valor: (p) => tipoDe(p, catName(p.idCategoria)) },
         { header: "Categoría", valor: (p) => catName(p.idCategoria) },
         { header: "Precio de venta", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
         { header: "Stock", valor: (p) => p.stockDisponible, numFmt: "#,##0" },
@@ -1326,11 +895,11 @@ export function GestionProductosScreen({
     // interno y ya no se muestra).
     return productos.filter(
       (p) =>
-        (filtroTipo === "Todos" || tipoDe(p) === filtroTipo) &&
+        (filtroTipo === "Todos" || tipoDe(p, catName(p.idCategoria)) === filtroTipo) &&
         (filtroEstado === "Todos" || p.estado === filtroEstado) &&
         (p.nombre.toLowerCase().includes(q) ||
           catName(p.idCategoria).toLowerCase().includes(q) ||
-          tipoDe(p).toLowerCase().includes(q)),
+          tipoDe(p, catName(p.idCategoria)).toLowerCase().includes(q)),
     );
   }, [productos, search, filtroTipo, filtroEstado]);
 
@@ -1347,17 +916,33 @@ export function GestionProductosScreen({
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
+  // IDs que ya tienen ficha propia: los productos del menú y los Productos
+  // Insumo de Compras comparten el mismo mapa `fichas`, así que la numeración
+  // de fichas (001, 002, …) tiene que contar los dos tipos de registro.
+  const idsConFicha = [
+    ...productos.map((p) => p.id),
+    ...insumos.filter((i) => i.tipo === "ProductoInsumo").map((i) => i.id),
+  ];
+
   const handleCreate = () => {
-    // "¿Tiene ficha técnica?" es lo primero que se decide y es obligatorio.
-    if (formTieneFicha === null) {
-      setTieneFichaError("Selecciona si el producto tiene ficha técnica");
-      toast.error("Selecciona si el producto tiene ficha técnica");
-      return;
-    }
+    // Primero la categoría (es la que define el tipo y los tamaños) y el
+    // nombre; la pregunta "¿Tiene ficha técnica?" solo aplica cuando la
+    // categoría NO está en CONFIG_CATEGORIA.
     if (!form.nombre || !form.idCategoria) {
       toast.error("Nombre y categoría son obligatorios");
       return;
     }
+    const cfg = cfgDe(form.idCategoria);
+    if (!cfg && formTieneFicha === null) {
+      setTieneFichaError("Selecciona si el producto tiene ficha técnica");
+      toast.error("Selecciona si el producto tiene ficha técnica");
+      return;
+    }
+    // Tipo final: de la categoría cuando está configurada; si no, de la
+    // respuesta a "¿Tiene ficha técnica?" (Sí = Producto insumo, No =
+    // Producto terminado).
+    const tipoFinal: TipoProducto =
+      cfg ? cfg.tipo : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
     // `length + 1` reutilizaba un id existente si se había borrado un producto del
     // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
     // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
@@ -1367,8 +952,8 @@ export function GestionProductosScreen({
     }, 0) + 1;
     const newId = `PROD-${String(nextNum).padStart(3, "0")}`;
     // Un Producto insumo no se guarda sin su ficha: al menos 1 insumo y
-    // porciones >= 1 en cada tamaño. Un Producto (reventa) nunca guarda ficha.
-    if (tipoDe(form) === TIPOS_PRODUCTO[0]) {
+    // porciones >= 1 en cada tamaño. Un Producto terminado nunca guarda ficha.
+    if (tipoFinal === TIPOS_PRODUCTO[0]) {
       if (!fichaCumpleMinimo(fichaBorrador)) {
         // Si la ficha estaba oculta, se vuelve a mostrar sola con el error.
         setFichaOculta(false);
@@ -1377,50 +962,59 @@ export function GestionProductosScreen({
       }
       setFichas(prev => ({
         ...prev,
-        [newId]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, productos)), fechaInicio: new Date().toISOString(), fechaFin: null }],
+        [newId]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)), destino: { tipo: "producto", productoId: newId }, fechaInicio: new Date().toISOString(), fechaFin: null }],
       }));
     }
     // Sincroniza imágenes antes de guardar: `imagenes` queda completa y
     // `imagen` = primera, para no romper al resto de la app (P13).
-    setProductos((p) => [sincronizarImagenes({ id: newId, ...form }), ...p]);
+    setProductos((p) => [sincronizarImagenes({ id: newId, ...form, tipo: tipoFinal }), ...p]);
     setShowCreate(false);
     setForm(emptyForm());
     resetFichaForm();
     setFormTieneFicha(null);
     setTieneFichaError("");
+    setConfirmCategoria(null);
     toast.success("Producto creado correctamente");
   };
 
   const handleEdit = () => {
     if (!editItem) return;
-    // Un Producto insumo con historial de ficha no puede pasar a "Producto".
+    const cfg = cfgDe(editItem.idCategoria);
+    // Tipo final: con categoría configurada manda la categoría (y corrige
+    // cualquier `tipo` viejo guardado); sin configuración, la respuesta a
+    // "¿Tiene ficha técnica?" o la derivación de `tipoDe`.
+    const tipoFinal: TipoProducto =
+      cfg ? cfg.tipo : tipoDe(editItem, catName(editItem.idCategoria));
+    // Un producto con historial de ficha no puede pasar a una categoría sin
+    // ficha: perdería su historial. Es el respaldo del bloqueo que ya hace
+    // `solicitarCambioCategoriaEdit` al elegir la categoría.
     const original = productos.find((x) => x.id === editItem.id);
     if (
       original &&
-      tipoDe(original) === TIPOS_PRODUCTO[0] &&
-      tipoDe(editItem) === TIPOS_PRODUCTO[1] &&
+      tipoDe(original, catName(original.idCategoria)) === TIPOS_PRODUCTO[0] &&
+      tipoFinal === TIPOS_PRODUCTO[1] &&
       (fichas[editItem.id]?.length ?? 0) > 0
     ) {
-      toast.error("No se puede cambiar el tipo porque este producto ya tiene historial de ficha técnica");
+      toast.error(`No se puede cambiar a ${catName(editItem.idCategoria)} porque este producto ya tiene historial de ficha técnica`);
       return;
     }
-    if (tipoDe(editItem) === TIPOS_PRODUCTO[0] && (editFichaBorrador.insumos.length === 0 || editFichaBorrador.porciones < 1)) {
+    if (tipoFinal === TIPOS_PRODUCTO[0] && !fichaCumpleMinimo(editFichaBorrador)) {
       // Si la ficha estaba oculta, se vuelve a mostrar sola con el error.
       setFichaOculta(false);
-      toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo");
+      toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo y porciones de 1 en adelante");
       return;
     }
     setProductos((p) =>
       // Mismo sincronismo de imágenes que al crear: portada = primera foto.
-      p.map((x) => (x.id === editItem.id ? sincronizarImagenes(editItem) : x)),
+      p.map((x) => (x.id === editItem.id ? sincronizarImagenes({ ...editItem, tipo: tipoFinal }) : x)),
     );
     // Un solo "Guardar" para producto y ficha: si el borrador cambió frente a
     // la última versión guardada, se cierra esa versión (fechaFin = ahora) y
     // el borrador entra como la versión N+1. Si no cambió, no se crea nada y
-    // las versiones guardadas quedan intactas. Un "Producto" nunca guarda
-    // versiones.
+    // las versiones guardadas quedan intactas. Un Producto terminado nunca
+    // guarda versiones.
     const ultima = editFichaVersiones[editFichaVersiones.length - 1];
-    if (tipoDe(editItem) === TIPOS_PRODUCTO[0] && ultima) {
+    if (tipoFinal === TIPOS_PRODUCTO[0] && ultima) {
       if (fichaTieneCambios(editFichaBorrador, ultima)) {
         const now = new Date().toISOString();
         const n = ultima.version + 1;
@@ -1442,14 +1036,15 @@ export function GestionProductosScreen({
           ],
         }));
       }
-    } else if (tipoDe(editItem) === TIPOS_PRODUCTO[0] && fichaConContenido(editFichaBorrador)) {
+    } else if (tipoFinal === TIPOS_PRODUCTO[0] && fichaConContenido(editFichaBorrador)) {
       // El producto no tenía ficha: el borrador se guarda como v1.
       setFichas(prev => ({
         ...prev,
-          [editItem.id]: [{ ...editFichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, productos)), fechaInicio: new Date().toISOString(), fechaFin: null }],
+          [editItem.id]: [{ ...editFichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)), destino: { tipo: "producto", productoId: editItem.id }, fechaInicio: new Date().toISOString(), fechaFin: null }],
       }));
     }
     setEditItem(null);
+    setConfirmCategoriaEdit(null);
     toast.success("Producto actualizado");
   };
 
@@ -1475,6 +1070,7 @@ export function GestionProductosScreen({
     readOnly = false,
     lockNombre = false,
     onImagenes,
+    trasCategoria,
   }: {
     values: Omit<Producto, "id">;
     onChange: (f: keyof Omit<Producto, "id">, v: string | number) => void;
@@ -1484,8 +1080,31 @@ export function GestionProductosScreen({
     /** Escribe la lista completa de imágenes (P13). Va aparte de `onChange`
         porque ese solo admite string | number. En Ver detalle no llega. */
     onImagenes?: (imgs: string[]) => void;
+    /** Bloque que va INMEDIATAMENTE después de Categoría (Editar pasa aquí
+        la pregunta "¿Tiene ficha técnica?" de las categorías sin config). */
+    trasCategoria?: React.ReactNode;
   }) => (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {/* Categoría: PRIMER campo de "Datos del producto" (se muestra solo el
+          nombre; el id queda interno) porque es la que define el tipo del
+          producto y los tamaños de su ficha técnica. */}
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+          Categoría *
+        </label>
+        <select
+          value={values.idCategoria}
+          onChange={(e) => onChange("idCategoria", e.target.value)}
+          disabled={readOnly}
+          className={readOnly ? roCls : inputCls + " cursor-pointer"}
+        >
+          <option value="" disabled>Selecciona una categoría</option>
+          {opcionesCategoria(values.idCategoria).map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
+      </div>
+      {trasCategoria}
       {/* Nombre */}
       <div className="sm:col-span-2">
         <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
@@ -1499,15 +1118,16 @@ export function GestionProductosScreen({
           className={readOnly || lockNombre ? roCls : inputCls}
         />
       </div>
-      {/* Tipo (solo lectura aquí; en Crear/Editar se define con "¿Tiene ficha
-          técnica?"). Comparte fila con Estado en la cuadrícula de 2 columnas. */}
+      {/* Tipo (solo lectura aquí; lo define la categoría del producto, o la
+          pregunta "¿Tiene ficha técnica?" si la categoría no está en
+          CONFIG_CATEGORIA). Comparte fila con Estado en la cuadrícula. */}
       <div>
         <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
           Tipo
         </label>
         <div>
-          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(values))}`}>
-            {tipoDe(values)}
+          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(values, catName(values.idCategoria)))}`}>
+            {tipoDe(values, catName(values.idCategoria))}
           </span>
         </div>
       </div>
@@ -1537,23 +1157,6 @@ export function GestionProductosScreen({
           readOnly={readOnly}
           inputCls={inputCls}
         />
-      </div>
-      {/* Categoría (se muestra solo el nombre; el id queda interno) */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Categoría *
-        </label>
-        <select
-          value={values.idCategoria}
-          onChange={(e) => onChange("idCategoria", e.target.value)}
-          disabled={readOnly}
-          className={readOnly ? roCls : inputCls + " cursor-pointer"}
-        >
-          <option value="" disabled>Selecciona una categoría</option>
-          {opcionesCategoria(values.idCategoria).map((c) => (
-            <option key={c.id} value={c.id}>{c.nombre}</option>
-          ))}
-        </select>
       </div>
       {/* Precio de venta al público (precioUnitario): es el precio que
           muestran el listado, el Excel y el menú público. El costo
@@ -1652,9 +1255,21 @@ export function GestionProductosScreen({
 
   // ── Pantalla completa Crear Producto ──────────────────────────────
   if (showCreate) {
-    const activeV = fichaBorrador;
-    const filasTam = filasTamano();
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    // Categoría elegida: define el tipo y los tamaños de la ficha. La pregunta
+    // "¿Tiene ficha técnica?" solo existe para categorías SIN configuración.
+    const cfgCrear = cfgDe(form.idCategoria);
+    const mostrarPregunta = form.idCategoria !== "" && !cfgCrear;
+    const llevaFichaCrear = cfgCrear
+      ? cfgCrear.tipo === TIPOS_PRODUCTO[0]
+      : formTieneFicha === "si";
+    const mostrarEditor = form.idCategoria !== "" && llevaFichaCrear;
+    // Reventa definida (por categoría o por la respuesta): no hay ficha que
+    // ocultar/mostrar, así que el botón queda deshabilitado.
+    const sinFichaDefinitiva = (cfgCrear?.tipo === TIPOS_PRODUCTO[1]) || formTieneFicha === "no";
+    const tipoCrear: TipoProducto | null = cfgCrear
+      ? cfgCrear.tipo
+      : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : formTieneFicha === "no" ? TIPOS_PRODUCTO[1] : null;
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -1666,20 +1281,20 @@ export function GestionProductosScreen({
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Producto Insumo</h1>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear producto</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setFichaOculta(v => !v)}
-              disabled={formTieneFicha === "no"}
-              title={formTieneFicha === "no" ? "Este producto no lleva ficha técnica" : undefined}
+              disabled={sinFichaDefinitiva}
+              title={sinFichaDefinitiva ? "Este producto no lleva ficha técnica" : undefined}
               className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
-            <button onClick={() => { setShowCreate(false); setForm(emptyForm()); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); }}
+            <button onClick={() => { setShowCreate(false); setForm(emptyForm()); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -1703,42 +1318,55 @@ export function GestionProductosScreen({
                 hasta `27rem`; más allá el sobrante queda abajo para no abrir huecos
                 exagerados entre los campos ni obligar a scroll con la imagen puesta. */}
             <div className="flex-1 min-h-0 max-h-[27rem] overflow-y-auto flex flex-col justify-between gap-4">
-              {/* ¿Tiene ficha técnica? — obligatorio, define el tipo */}
+              {/* Categoría — PRIMER campo: la categoría define el tipo del
+                  producto y los tamaños de su ficha técnica. */}
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {(["si", "no"] as const).map((op) => (
-                    <button
-                      key={op}
-                      type="button"
-                      onClick={() => elegirTieneFicha(op)}
-                      className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors cursor-pointer ${
-                        formTieneFicha === op
-                          ? "bg-primary text-white border-primary"
-                          : "bg-muted text-muted-foreground border-border hover:bg-border"
-                      }`}
-                    >
-                      {op === "si" ? "Sí" : "No"}
-                    </button>
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
+                <select value={form.idCategoria} onChange={e => solicitarCambioCategoriaCrear(e.target.value)}
+                  className={iCls + " cursor-pointer"}>
+                  <option value="" disabled>Selecciona una categoría</option>
+                  {opcionesCategoria(form.idCategoria).map(c => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
                   ))}
-                  {formTieneFicha && (
+                </select>
+                {/* Tipo resultante: de la categoría (CONFIG_CATEGORIA) o de la
+                    respuesta a "¿Tiene ficha técnica?". */}
+                {tipoCrear && (
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     <span
-                      className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(form))}`}
-                      title={tipoDe(form) === TIPOS_PRODUCTO[0] ? "Producto insumo: se elabora con insumos" : "Producto: se revende tal como se compra"}
+                      className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoCrear)}`}
+                      title={descTipo(tipoCrear)}
                     >
-                      {tipoDe(form)}
+                      {tipoCrear}
                     </span>
-                  )}
-                </div>
-                {formTieneFicha && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {tipoDe(form) === TIPOS_PRODUCTO[0]
-                      ? "Producto insumo: se elabora con insumos"
-                      : "Producto: se revende tal como se compra"}
-                  </p>
+                    <span className="text-xs text-muted-foreground">{descTipo(tipoCrear)}</span>
+                  </div>
                 )}
-                {tieneFichaError && (
-                  <p className="text-xs text-red-500 mt-1 leading-tight">{tieneFichaError}</p>
+                {/* ¿Tiene ficha técnica? — solo cuando la categoría NO está
+                    configurada (así el tipo lo decide quien crea el producto). */}
+                {mostrarPregunta && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(["si", "no"] as const).map((op) => (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => elegirTieneFicha(op)}
+                          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors cursor-pointer ${
+                            formTieneFicha === op
+                              ? "bg-primary text-white border-primary"
+                              : "bg-muted text-muted-foreground border-border hover:bg-border"
+                          }`}
+                        >
+                          {op === "si" ? "Sí" : "No"}
+                        </button>
+                      ))}
+                    </div>
+                    {tieneFichaError && (
+                      <p className="text-xs text-red-500 mt-1 leading-tight">{tieneFichaError}</p>
+                    )}
+                  </div>
                 )}
               </div>
               {/* Nombre */}
@@ -1758,17 +1386,6 @@ export function GestionProductosScreen({
                   alto="h-32"
                 />
               </div>
-              {/* Categoría (se muestra solo el nombre; el id queda interno) */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
-                <select value={form.idCategoria} onChange={e => setForm(p => ({ ...p, idCategoria: e.target.value }))}
-                  className={iCls + " cursor-pointer"}>
-                  <option value="" disabled>Selecciona una categoría</option>
-                  {opcionesCategoria(form.idCategoria).map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
-              </div>
               {/* Precio de venta (precioUnitario; el stock NO se escribe aquí:
                   todo producto nuevo empieza en 0 y lo actualiza el sistema).
                   El costo no se toca: ver el TODO de la interfaz Producto. */}
@@ -1785,12 +1402,14 @@ export function GestionProductosScreen({
           {/* La ficha técnica scrollea por dentro; el botón "Guardar Ficha
               Técnica" vive FUERA del scroller (footer de la columna), así que
               siempre queda visible y nunca tapa el input de pasos. Solo se
-              activa si "¿Tiene ficha técnica?" es Sí. Al ocultarla, la columna
-              colapsa con una animación de 0,2 s y NO se borra lo diligenciado. */}
+              activa si el producto lleva ficha (categoría con ficha, o
+              respuesta "Sí" en categorías sin configuración). Al ocultarla, la
+              columna colapsa con una animación de 0,2 s y NO se borra lo
+              diligenciado. */}
           <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
             fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
           }`}>
-            {formTieneFicha !== "si" ? (
+            {!mostrarEditor ? (
               <div className="flex-1 min-h-0 flex flex-col">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
                 <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/40 rounded-2xl border border-border p-6 select-none">
@@ -1798,9 +1417,11 @@ export function GestionProductosScreen({
                     <span className="text-2xl">📋</span>
                   </div>
                   <p className="text-sm font-semibold text-muted-foreground">
-                    {formTieneFicha === "no"
-                      ? "Este producto no lleva ficha técnica"
-                      : "Primero indica arriba si el producto tiene ficha técnica"}
+                    {!form.idCategoria
+                      ? "Primero elige la categoría del producto"
+                      : cfgCrear?.tipo === TIPOS_PRODUCTO[1] || formTieneFicha === "no"
+                        ? "Este producto no lleva ficha técnica"
+                        : "Responde arriba si el producto tiene ficha técnica"}
                   </p>
                 </div>
               </div>
@@ -1824,149 +1445,19 @@ export function GestionProductosScreen({
                 La ficha se guarda como <span className="font-bold text-foreground">v1</span> junto con el producto.
               </p>
 
-              <div className="space-y-4">
-                {/* El ID se asigna al guardar: el número que sigue (001, 002, …)
-                    sobre todas las fichas. Aquí se previsualiza, en solo lectura,
-                    con el mismo formato que muestran Editar y Ver detalle. */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID</label>
-                  <input value={idFichaVisible(activeV, fichas, productos)} readOnly tabIndex={-1}
-                    className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
-                    <input type="number" min={0} value={activeV.tiempoPreparacion}
-                      onChange={e => updateFichaField("tiempoPreparacion", Number(e.target.value))} className={iCls} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
-                    <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
-                      <span className="flex-1 min-w-0">Tamaño</span>
-                      <span className="w-20 shrink-0">Porciones</span>
-                      <span className="w-6 shrink-0" />
-                    </div>
-                    <div className="space-y-2">
-                      {filasTam.map((fila, idx) => (
-                        <div key={fila.tamano} className="flex items-center gap-2">
-                          <select
-                            value={fila.tamano}
-                            onChange={e => updateTamano(idx, e.target.value as TamanoFicha)}
-                            aria-label="Tamaño"
-                            className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
-                            {TAMANOS_FICHA.map(t => (
-                              <option key={t} value={t} disabled={filasTam.some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
-                            ))}
-                          </select>
-                          <input type="number" min={1} value={fila.porciones} aria-label="Porciones"
-                            onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
-                            className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                          <button type="button" title="Quitar tamaño" onClick={() => removeTamano(idx)}
-                            disabled={filasTam.length === 1}
-                            className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={addTamano} disabled={filasTam.length === TAMANOS_FICHA.length}
-                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                      <Plus className="w-3.5 h-3.5" /> Agregar tamaño
-                    </button>
-                  </div>
-                </div>
-
-                {/* Insumos */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
-                  {activeV.insumos.length > 0 && (
-                    <div className="mb-3">
-                      <InsumosFichaTable
-                        insumos={activeV.insumos}
-                        editable={true}
-                        editandoIdx={fichaEditandoIdx}
-                        onEdit={setFichaEditandoIdx}
-                        onChange={updateFichaInsumo}
-                        onRemove={removeFichaInsumo}
-                      />
-                    </div>
-                  )}
-                  {activeV.insumos.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
-                  )}
-                  {/* Add insumo row */}
-                  <div className="flex items-end gap-2">
-                    <InsumoSearchField
-                      insumos={insumos}
-                      valor={fichaInsumoNombre}
-                      onValorChange={v => { setFichaInsumoNombre(v); setFichaInsumoSel(null); }}
-                      onSelect={seleccionarFichaInsumo}
-                    />
-                    <div className="w-20">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
-                      <input type="number" min={0.1} step={0.1} value={fichaInsumoCantidad}
-                        onChange={e => setFichaInsumoCantidad(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
-                      <select value={fichaInsumoUnidad} onChange={e => setFichaInsumoUnidad(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                        {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <button onClick={addFichaInsumo} title="Agregar insumo"
-                      className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Pasos de elaboración */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
-                  {activeV.pasos.length > 0 && (
-                    <ol className="space-y-1.5 mb-3">
-                      {activeV.pasos.map((paso, idx) => (
-                        <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                          <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
-                          <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button onClick={() => moverFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
-                              className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => moverFichaPaso(idx, 1)} disabled={idx === activeV.pasos.length - 1} title="Bajar paso"
-                              className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <button onClick={() => removeFichaPaso(idx)} title="Eliminar paso"
-                            className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                  {activeV.pasos.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
-                  )}
-                  <div className="flex gap-2">
-                    <input value={fichaPaso} onChange={e => setFichaPaso(e.target.value)}
-                      placeholder="Describe un paso de la elaboración"
-                      onKeyDown={e => e.key === "Enter" && addFichaPaso()}
-                      className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    <button onClick={addFichaPaso}
-                      className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <FichaTecnicaEditor
+                ficha={fichaBorrador}
+                onChange={setFichaBorrador}
+                insumos={insumos}
+                modo="producto"
+                inputCls={iCls}
+                    /* Los tamaños los define la categoría (o la fila única
+                       "Único" de etiqueta fija, si no está configurada). */
+                    tamanoFijo={tamanoFijoDe(cfgCrear)}
+                  />
             </div>
             )}
-            {formTieneFicha === "si" && (
+            {mostrarEditor && (
               <div className="shrink-0 pt-4">
                 <button type="button" onClick={solicitarGuardarFicha}
                   className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
@@ -1986,6 +1477,17 @@ export function GestionProductosScreen({
               confirmLabel="Sí"
               onConfirm={confirmarGuardarFicha}
               onCancel={() => setConfirmGuardarFicha(false)}
+            />
+          )}
+          {/* ── Confirmar cambio de categoría (reajusta los tamaños de la
+               ficha; solo se llega aquí si el borrador ya tiene contenido) ── */}
+          {confirmCategoria && (
+            <ConfirmDeleteModal
+              title="Cambiar categoría"
+              message="Los tamaños de la ficha técnica se ajustarán a la nueva categoría. ¿Cambiar de categoría?"
+              confirmLabel="Sí"
+              onConfirm={() => aplicarCategoriaCrear(confirmCategoria)}
+              onCancel={() => setConfirmCategoria(null)}
             />
           )}
         </AnimatePresence>
@@ -2033,7 +1535,7 @@ export function GestionProductosScreen({
               respaldo: con los datos compactados caben sin barra en las dos
               resoluciones objetivo; si algo no cupiera, desplaza la columna
               (nunca la página). */}
-          <div className={`${tipoDe(detailItem) === TIPOS_PRODUCTO[0] ? "w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
+          <div className={`${tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] ? "w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Datos del producto</p>
             {FormFields({
               values: detailItem,
@@ -2046,7 +1548,7 @@ export function GestionProductosScreen({
                 quepa en 1366×768 sin barra en la columna. */}
             {(() => {
               const vigente = fichaVigente(detailItem.id);
-              const conFicha = tipoDe(detailItem) === TIPOS_PRODUCTO[0] && vigente;
+              const conFicha = tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] && vigente;
               return (
                 <div className="mt-3 pt-3 border-t border-border">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Stock</p>
@@ -2057,10 +1559,10 @@ export function GestionProductosScreen({
                     {conFicha && (
                       <>
                         <span className="text-muted-foreground">
-                          · {detailItem.stockDisponible * vigente.porciones} porciones
+                          · {detailItem.stockDisponible * porcionesReferencia(vigente)} porciones
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          ({vigente.porciones} porciones por unidad, ficha v{vigente.version})
+                          ({porcionesReferencia(vigente)} porciones por unidad, ficha v{vigente.version})
                         </span>
                       </>
                     )}
@@ -2072,10 +1574,10 @@ export function GestionProductosScreen({
           </div>
 
           {/* COLUMNA DERECHA: ficha técnica (solo Producto insumo; un
-              "Producto" de reventa no lleva ficha y no se muestra la sección).
+              Producto terminado no lleva ficha y no se muestra la sección).
               Sin scroll propio: la única barra posible es la de la lista de
               pasos, dentro de su recuadro, cuando la receta es larga. */}
-          {tipoDe(detailItem) === TIPOS_PRODUCTO[0] && (
+          {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] && (
           <div className="w-1/2 px-8 py-4 min-h-0 flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between mb-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
@@ -2098,7 +1600,7 @@ export function GestionProductosScreen({
                 }`}>
                   {fichaV.fechaFin ? "Versión histórica" : "Versión vigente"}
                 </span>
-                <FichaReadOnly v={fichaV} readCls={readCls} />
+                <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
               </div>
             )}
           </div>
@@ -2110,6 +1612,12 @@ export function GestionProductosScreen({
 
   // ── Pantalla completa Editar Producto ─────────────────────────────
   if (editItem) {
+    // La categoría define el tipo y los tamaños de la ficha; sin
+    // configuración manda la respuesta a "¿Tiene ficha técnica?".
+    const cfgEditar = cfgDe(editItem.idCategoria);
+    const tipoEditar: TipoProducto =
+      cfgEditar ? cfgEditar.tipo : tipoDe(editItem, catName(editItem.idCategoria));
+    const llevaFichaEditar = tipoEditar === TIPOS_PRODUCTO[0];
     return (
       /* Misma estructura que Crear Producto: alto fijo sobre el viewport
          (AdminTopBar h-14 + footer del admin) y cada columna scrollea
@@ -2118,20 +1626,20 @@ export function GestionProductosScreen({
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Modifica los datos del producto</p>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setFichaOculta(v => !v)}
-              disabled={tipoDe(editItem) !== TIPOS_PRODUCTO[0]}
-              title={tipoDe(editItem) !== TIPOS_PRODUCTO[0] ? "Este producto no lleva ficha técnica" : undefined}
+              disabled={!llevaFichaEditar}
+              title={!llevaFichaEditar ? "Este producto no lleva ficha técnica" : undefined}
               className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
-            <button onClick={() => setEditItem(null)}
+            <button onClick={() => { setEditItem(null); setConfirmCategoriaEdit(null); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -2152,63 +1660,69 @@ export function GestionProductosScreen({
             <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
             <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-            {/* ¿Tiene ficha técnica? — bloqueado si ya hay versiones guardadas */}
-            {(() => {
-              const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
-              return (
-                <div className="mb-4">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {(["si", "no"] as const).map((op) => {
-                      const activo = (tipoDe(editItem) === TIPOS_PRODUCTO[0]) === (op === "si");
-                      return (
-                        <button
-                          key={op}
-                          type="button"
-                          disabled={tieneHistorialFicha}
-                          title={tieneHistorialFicha ? "Este producto ya tiene historial de ficha técnica" : undefined}
-                          onClick={() =>
-                            setEditItem((x) =>
-                              x && { ...x, tipo: op === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1] }
-                            )
-                          }
-                          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
-                            activo
-                              ? "bg-primary text-white border-primary"
-                              : "bg-muted text-muted-foreground border-border hover:bg-border"
-                          } ${tieneHistorialFicha ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                        >
-                          {op === "si" ? "Sí" : "No"}
-                        </button>
-                      );
-                    })}
-                    <span
-                      className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(editItem))}`}
-                      title={tipoDe(editItem) === TIPOS_PRODUCTO[0] ? "Producto insumo: se elabora con insumos" : "Producto: se revende tal como se compra"}
-                    >
-                      {tipoDe(editItem)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {tipoDe(editItem) === TIPOS_PRODUCTO[0]
-                      ? "Producto insumo: se elabora con insumos"
-                      : "Producto: se revende tal como se compra"}
-                  </p>
-                  {tieneHistorialFicha && (
-                    <p className="text-[11px] text-muted-foreground mt-1 italic">
-                      Bloqueado: el producto ya tiene historial de ficha técnica.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
             {FormFields({
               values: editItem,
-              onChange: (f, v) => setEditItem((x) => x && { ...x, [f]: v }),
+              onChange: (f, v) => {
+                // La categoría tiene reglas propias (confirmación al cambiar
+                // y bloqueo hacia categorías sin ficha con historial).
+                if (f === "idCategoria") {
+                  solicitarCambioCategoriaEdit(String(v));
+                  return;
+                }
+                setEditItem((x) => x && { ...x, [f]: v });
+              },
               // Escribe la lista completa y re-sincroniza la portada al tocarla.
               onImagenes: (imgs) =>
                 setEditItem((x) => x && { ...x, imagenes: imgs, imagen: imgs[0] ?? "" }),
               lockNombre: true,
+              // "¿Tiene ficha técnica?" — solo para categorías SIN
+              // configuración (si no, el tipo lo da la categoría) y
+              // bloqueada si ya hay versiones guardadas.
+              trasCategoria: cfgEditar ? null : (() => {
+                const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
+                return (
+                  <div className="sm:col-span-2 mt-1">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(["si", "no"] as const).map((op) => {
+                        const activo = (tipoEditar === TIPOS_PRODUCTO[0]) === (op === "si");
+                        return (
+                          <button
+                            key={op}
+                            type="button"
+                            disabled={tieneHistorialFicha}
+                            title={tieneHistorialFicha ? "Este producto ya tiene historial de ficha técnica" : undefined}
+                            onClick={() =>
+                              setEditItem((x) =>
+                                x && { ...x, tipo: op === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1] }
+                              )
+                            }
+                            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+                              activo
+                                ? "bg-primary text-white border-primary"
+                                : "bg-muted text-muted-foreground border-border hover:bg-border"
+                            } ${tieneHistorialFicha ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            {op === "si" ? "Sí" : "No"}
+                          </button>
+                        );
+                      })}
+                      <span
+                        className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoEditar)}`}
+                        title={descTipo(tipoEditar)}
+                      >
+                        {tipoEditar}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{descTipo(tipoEditar)}</p>
+                    {tieneHistorialFicha && (
+                      <p className="text-[11px] text-muted-foreground mt-1 italic">
+                        Bloqueado: el producto ya tiene historial de ficha técnica.
+                      </p>
+                    )}
+                  </div>
+                );
+              })(),
             })}
             </div>
             </div>
@@ -2216,10 +1730,10 @@ export function GestionProductosScreen({
 
           {/* COLUMNA DERECHA: ficha técnica. Solo el borrador es editable;
               las versiones guardadas se ven en solo lectura con fondo gris.
-              Un "Producto" de reventa no lleva ficha: la sección queda
+              Un Producto terminado no lleva ficha: la sección queda
               deshabilitada con el mensaje correspondiente. Al ocultarla, la
               columna colapsa con animación de 0,2 s sin borrar los datos. */}
-          {tipoDe(editItem) !== TIPOS_PRODUCTO[0] ? (
+          {!llevaFichaEditar ? (
             <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
               fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
             }`}>
@@ -2285,148 +1799,27 @@ export function GestionProductosScreen({
                         Usar como base
                       </button>
                     </div>
-                    <FichaReadOnly
+                    <FichaTecnicaDetalle
                       v={vSel}
                       readCls="w-full px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-muted-foreground"
+                      modo="producto"
                     />
                   </div>
                   </div>
                 ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
                 <div className="space-y-4 flex-1">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">ID</label>
-                    <input value={idFichaVisible(activeEV, fichas, productos)} readOnly tabIndex={-1}
-                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
-                      <input type="number" min={0} value={activeEV.tiempoPreparacion}
-                        onChange={e => updateEditFichaField("tiempoPreparacion", Number(e.target.value))} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
-                      <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
-                        <span className="flex-1 min-w-0">Tamaño</span>
-                        <span className="w-20 shrink-0">Porciones</span>
-                        <span className="w-6 shrink-0" />
-                      </div>
-                      <div className="space-y-2">
-                        {editFilasTamano().map((fila, idx) => (
-                          <div key={fila.tamano} className="flex items-center gap-2">
-                            <select
-                              value={fila.tamano}
-                              onChange={e => editUpdateTamano(idx, e.target.value as TamanoFicha)}
-                              aria-label="Tamaño"
-                              className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
-                              {TAMANOS_FICHA.map(t => (
-                                <option key={t} value={t} disabled={editFilasTamano().some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
-                              ))}
-                            </select>
-                            <input type="number" min={1} value={fila.porciones} aria-label="Porciones"
-                              onChange={e => editUpdatePorcionesTamano(idx, Number(e.target.value))}
-                              className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                            <button type="button" title="Quitar tamaño" onClick={() => editRemoveTamano(idx)}
-                              disabled={editFilasTamano().length === 1}
-                              className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={editAddTamano} disabled={editFilasTamano().length === TAMANOS_FICHA.length}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                        <Plus className="w-3.5 h-3.5" /> Agregar tamaño
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
-                    {activeEV.insumos.length > 0 && (
-                      <div className="mb-3">
-                        <InsumosFichaTable
-                          insumos={activeEV.insumos}
-                          editable={true}
-                          editandoIdx={editFichaEditandoIdx}
-                          onEdit={setEditFichaEditandoIdx}
-                          onChange={updateEditFichaInsumo}
-                          onRemove={removeEditFichaInsumo}
-                        />
-                      </div>
-                    )}
-                    {activeEV.insumos.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
-                    )}
-                    <div className="flex items-end gap-2">
-                      <InsumoSearchField
-                        insumos={insumos}
-                        valor={editFichaInsumoNombre}
-                        onValorChange={v => { setEditFichaInsumoNombre(v); setEditFichaInsumoSel(null); }}
-                        onSelect={seleccionarEditFichaInsumo}
-                      />
-                      <div className="w-20">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
-                        <input type="number" min={0.1} step={0.1} value={editFichaInsumoCantidad}
-                          onChange={e => setEditFichaInsumoCantidad(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      </div>
-                      <div className="w-24">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
-                        <select value={editFichaInsumoUnidad} onChange={e => setEditFichaInsumoUnidad(e.target.value)}
-                          className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                          {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-                        </select>
-                      </div>
-                      <button onClick={addEditFichaInsumo} title="Agregar insumo"
-                        className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Pasos de elaboración */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
-                    {activeEV.pasos.length > 0 && (
-                      <ol className="space-y-1.5 mb-3">
-                        {activeEV.pasos.map((paso, idx) => (
-                          <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                            <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
-                            <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <button onClick={() => moverEditFichaPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
-                                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => moverEditFichaPaso(idx, 1)} disabled={idx === activeEV.pasos.length - 1} title="Bajar paso"
-                                className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                            <button onClick={() => removeEditFichaPaso(idx)} title="Eliminar paso"
-                              className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                    {activeEV.pasos.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic mb-3">Sin pasos agregados</p>
-                    )}
-                    <div className="flex gap-2">
-                      <input value={editFichaPaso} onChange={e => setEditFichaPaso(e.target.value)}
-                        placeholder="Describe un paso de la elaboración"
-                        onKeyDown={e => e.key === "Enter" && addEditFichaPaso()}
-                        className="flex-1 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      <button onClick={addEditFichaPaso}
-                        className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                   </div>
-                 </div>
+                  <FichaTecnicaEditor
+                    ficha={editFichaBorrador}
+                    onChange={setEditFichaBorrador}
+                    insumos={insumos}
+                    modo="producto"
+                    inputCls={inputCls}
+                    /* Los tamaños los define la categoría (o la fila única
+                       "Único" de etiqueta fija, si no está configurada). */
+                    tamanoFijo={tamanoFijoDe(cfgEditar)}
+                  />
+                </div>
                  </div>
                 )}
 
@@ -2435,12 +1828,26 @@ export function GestionProductosScreen({
             );
           })()}
         </div>
+
+        {/* ── Confirmar cambio de categoría (reajusta los tamaños de la
+             ficha; solo se llega aquí si el borrador ya tiene contenido) ── */}
+        <AnimatePresence>
+          {confirmCategoriaEdit && (
+            <ConfirmDeleteModal
+              title="Cambiar categoría"
+              message="Los tamaños de la ficha técnica se ajustarán a la nueva categoría. ¿Cambiar de categoría?"
+              confirmLabel="Sí"
+              onConfirm={() => aplicarCategoriaEdit(confirmCategoriaEdit)}
+              onCancel={() => setConfirmCategoriaEdit(null)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }
 
   return (
-    <div className="px-6 py-5 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -2464,6 +1871,7 @@ export function GestionProductosScreen({
                 setFormTieneFicha(null);
                 setTieneFichaError("");
                 setFichaOculta(false);
+                setConfirmCategoria(null);
                 setShowCreate(true);
               }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
@@ -2478,13 +1886,19 @@ export function GestionProductosScreen({
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchInput
           value={search}
-          onChange={setSearch}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
           placeholder="Buscar por nombre, categoría o tipo..."
           wrapperClassName="max-w-sm flex-1"
         />
         <select
           value={filtroTipo}
-          onChange={(e) => setFiltroTipo(e.target.value as "Todos" | TipoProducto)}
+          onChange={(e) => {
+            setFiltroTipo(e.target.value as "Todos" | TipoProducto);
+            setPage(1);
+          }}
           aria-label="Filtrar por tipo"
           className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
         >
@@ -2495,7 +1909,10 @@ export function GestionProductosScreen({
         </select>
         <select
           value={filtroEstado}
-          onChange={(e) => setFiltroEstado(e.target.value as "Todos" | EstadoProducto)}
+          onChange={(e) => {
+            setFiltroEstado(e.target.value as "Todos" | EstadoProducto);
+            setPage(1);
+          }}
           aria-label="Filtrar por estado"
           className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
         >
@@ -2509,14 +1926,14 @@ export function GestionProductosScreen({
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
+          <table className="w-full table-fixed min-w-[900px]">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
                     Crear/Editar (aquí solo ocupaba ancho y alto). */}
-                {/* Los anchos suman SIEMPRE 100 %: la tabla es `w-full
-                    table-fixed`, así que el ancho total no cambia y no
-                    aparece scroll horizontal. El ID entra primero (5,5 %) y
+                {/* Los anchos suman SIEMPRE 100 % de la tabla. `min-w-[900px]`
+                    hace que por debajo de ese ancho aparezca scroll horizontal
+                    en vez de apretar las columnas. El ID entra primero (5,5 %) y
                     se compensa sobre todo en Stock, que era la que más
                     sobrante tenía. Estado y Acciones quedan intactas. */}
                 {[
@@ -2538,7 +1955,7 @@ export function GestionProductosScreen({
                 ))}
               </tr>
             </thead>
-            <tbody className={`divide-y divide-border ${filtered.length > 0 ? "min-h-[305px]" : ""}`}>
+            <tbody className="divide-y divide-border">
               {filtered.length === 0 ? (
                 <tr>
                   <td
@@ -2567,12 +1984,12 @@ export function GestionProductosScreen({
                       <BadgeImagenes p={p} />
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p))}`}>
-                        {tipoDe(p)}
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p, catName(p.idCategoria)))}`}>
+                        {tipoDe(p, catName(p.idCategoria))}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      {tipoDe(p) === TIPOS_PRODUCTO[0] ? (
+                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
                         (fichas[p.id]?.length ?? 0) > 0 ? (
                           <button
                             onClick={() => {
@@ -2616,16 +2033,16 @@ export function GestionProductosScreen({
                           páginas. El detalle completo queda en el tooltip. */}
                       <span
                         className="block"
-                        title={`${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}${tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) ? ` · ${p.stockDisponible * fichaVigente(p.id)!.porciones} porciones` : ""}`}
+                        title={`${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}${tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) ? ` · ${p.stockDisponible * porcionesReferencia(fichaVigente(p.id)!)} porciones` : ""}`}
                       >
                         <span
                           className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
                         >
                           {p.stockDisponible} {palabraStock(p, p.stockDisponible)}
                         </span>
-                        {tipoDe(p) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) && (
+                        {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) && (
                           <span className="block text-xs leading-4 text-muted-foreground whitespace-nowrap">
-                            {p.stockDisponible * fichaVigente(p.id)!.porciones} porciones
+                            {p.stockDisponible * porcionesReferencia(fichaVigente(p.id)!)} porciones
                           </span>
                         )}
                       </span>
@@ -2668,42 +2085,7 @@ export function GestionProductosScreen({
       </div>
 
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from(
-                { length: totalPages },
-                (_, i) => i + 1,
-              ).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
 

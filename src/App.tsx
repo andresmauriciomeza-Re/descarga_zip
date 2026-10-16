@@ -55,7 +55,7 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Component, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
@@ -103,9 +103,11 @@ import type { Screen } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario, trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
-import { borrarToken, login as loginApi } from "@/shared/services/authService";
+import { borrarToken, login as loginApi, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
-import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto, ICONOS_FIJOS } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
+import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "@/features/roles/pages/GestionConfigScreen";
@@ -116,12 +118,15 @@ import {
   INITIAL_INSUMOS,
 } from "@/features/insumos/pages/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
+import { migrarFichasLegacy } from "@/shared/utils/fichas";
+import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { ESTADO_COLORES } from "@/shared/components/EstadoProducto";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
-import { DOC_TIPOS, GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
+import { GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
@@ -152,9 +157,7 @@ import {
   PurchasesScreen
 } from "@/features/compras/pages/PurchasesScreen";
 import { RecepcionCompraScreen } from "@/features/orden-compra/pages/RecepcionCompraScreen";
-import { RecetasScreen } from "@/features/productos/pages/RecetasScreen";
 import {
-  HOURLY_TODAY,
   SalesChartScreen,
 } from "@/features/dashboard/pages/SalesChartScreen";
 import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
@@ -220,7 +223,7 @@ interface Order {
 // ─────────────────────────── MOCK DATA ───────────────────────────
 
 const SIZES_DEFAULT = [
-  { label: "Mediano", price: 14000 },
+  { label: "Mediana", price: 14000 },
   { label: "Grande", price: 16000 },
 ];
 
@@ -648,7 +651,6 @@ const ADMIN_SCREENS: Screen[] = [
   "suppliers",
   "production-orders",
   "finished-products",
-  "tech-sheet",
   "sales",
   // custom screens
   "gestion-roles",
@@ -794,11 +796,6 @@ const SCREEN_META: Partial<
     title: "Producto Terminado",
     icon: "✅",
     desc: "Controla los productos listos para entregar.",
-  },
-  "tech-sheet": {
-    title: "Ficha Técnica",
-    icon: "📋",
-    desc: "Documenta recetas y procesos de producción.",
   },
   sales: {
     title: "Gestión de Ventas",
@@ -1003,7 +1000,6 @@ const rolTienePantallas = (accesos?: AccesosMap): boolean =>
 // lo puede ver; si no, la primera pantalla permitida siguiendo el orden de la
 // barra lateral; y si no puede ver ninguna, null (ese rol no entra al panel).
 const primeraPantallaPermitida = (accesos: AccesosMap): Screen | null => {
-  if (canViewPermission(accesos, DASHBOARD_PERM_KEY)) return "dashboard";
   return PANTALLAS_CON_PERMISO.find(i => canViewPermission(accesos, i.permKey))?.screen ?? null;
 };
 
@@ -1084,21 +1080,23 @@ function GhostBtn({
 function Sidebar({
   current,
   navigate,
-  collapsed,
-  setCollapsed,
+  abierto,
+  onClose,
   darkMode,
   userRole,
   accesos,
   isNamedAdmin,
   hasDashboardAccess,
   esMovil = false,
-  abierto = true,
   onCerrarMovil,
+  firstNavRef,
 }: {
   current: Screen;
   navigate: (s: Screen) => void;
-  collapsed: boolean;
-  setCollapsed: (v: boolean) => void;
+  /** true = menú visible; false = totalmente oculto (fuera de pantalla). */
+  abierto: boolean;
+  /** Cierra el menú (escritorio) y devuelve el foco al botón hamburguesa. */
+  onClose: () => void;
   darkMode: boolean;
   userRole: string;
   accesos: AccesosMap;
@@ -1106,9 +1104,9 @@ function Sidebar({
   hasDashboardAccess: boolean;
   /** true en viewport < 768px: el aside pasa a panel deslizante. */
   esMovil?: boolean;
-  /** Estado del panel deslizante en móvil (false = fuera de pantalla). */
-  abierto?: boolean;
   onCerrarMovil?: () => void;
+  /** Ref mutable que recibe la primera opción del menú al abrir (para el foco). */
+  firstNavRef?: { current: HTMLButtonElement | null };
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     ventas: true,
@@ -1121,6 +1119,26 @@ function Sidebar({
     navigate(s);
     if (esMovil) onCerrarMovil?.();
   };
+  const asideRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  // Con el menú oculto queda fuera de pantalla pero seguiría siendo enfocable
+  // con Tab: se marca inert + aria-hidden. Al abrir se registra la primera
+  // opción para mover el foco desde el botón hamburguesa.
+  useLayoutEffect(() => {
+    const el = asideRef.current;
+    if (!el) return;
+    if (abierto) {
+      el.removeAttribute("inert");
+      el.removeAttribute("aria-hidden");
+      if (firstNavRef) {
+        firstNavRef.current = navRef.current?.querySelector("button") ?? null;
+      }
+    } else {
+      el.setAttribute("inert", "");
+      el.setAttribute("aria-hidden", "true");
+      if (firstNavRef) firstNavRef.current = null;
+    }
+  }, [abierto, firstNavRef]);
   const active = (s: Screen) =>
     current === s ||
     (s === "orden-compra" && current === "nueva-orden-compra") ||
@@ -1134,52 +1152,42 @@ function Sidebar({
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-all duration-300 ${collapsed ? "w-16" : "w-60"} ${
-        esMovil
-          ? `max-w-[80vw] ${abierto ? "translate-x-0" : "-translate-x-full"}`
-          : "translate-x-0"
-      }`}
+      ref={asideRef}
+      role="navigation"
+      aria-label="Menú principal"
+      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${
+        esMovil ? "max-w-[80vw]" : ""
+      } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
     >
       {/* Header */}
-      <div
-        className={`flex items-center border-b border-sidebar-border shrink-0 ${collapsed ? "justify-center px-2 py-4" : "gap-3 px-4 py-5"}`}
-      >
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border shrink-0">
         <div className="relative shrink-0">
           <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-10 h-10" />
-          {collapsed && (
-            <button
-              onClick={() => setCollapsed(false)}
-              className="absolute -right-1.5 -bottom-1.5 w-5 h-5 bg-sidebar border border-sidebar-border rounded-full flex items-center justify-center text-sidebar-foreground/60 hover:text-sidebar-foreground cursor-pointer shadow-sm"
-            >
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
         </div>
-        {!collapsed && (
-          <>
-            <div className="overflow-hidden leading-none">
-              <p
-                className="font-bold text-sm text-sidebar-foreground"
-                style={{ fontFamily: SERIF }}
-              >
-                La Sirena
-              </p>
-              <p className="text-[11px] text-sidebar-foreground/40 mt-0.5">
-                S.I.V.PRO
-              </p>
-            </div>
-            <button
-              onClick={() => setCollapsed(true)}
-              className="ml-auto p-1 rounded text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          </>
-        )}
+        <div className="overflow-hidden leading-none">
+          <p
+            className="font-bold text-sm text-sidebar-foreground"
+            style={{ fontFamily: SERIF }}
+          >
+            La Sirena
+          </p>
+          <p className="text-[11px] text-sidebar-foreground/40 mt-0.5">
+            S.I.V.PRO
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-auto p-1 rounded text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
+          aria-label="Cerrar menú"
+          title="Cerrar menú"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Scrollable nav */}
       <nav
+        ref={navRef}
         className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5"
         style={{ scrollbarWidth: "none" }}
       >
@@ -1211,7 +1219,7 @@ function Sidebar({
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                   >
                     <it.Icon className="w-4 h-4 shrink-0" />
-                    {!collapsed && <span>{it.label}</span>}
+                    <span>{it.label}</span>
                   </button>
                 ))}
               </div>
@@ -1227,17 +1235,13 @@ function Sidebar({
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer mt-2 ${groupActive ? "text-primary" : "text-sidebar-foreground/35 hover:text-sidebar-foreground/60"}`}
               >
                 <sec.Icon className="w-4 h-4 shrink-0" />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{sec.label}</span>
-                    <ChevronDown
-                      className={`w-3 h-3 transition-transform ${open[sec.key] ? "rotate-180" : ""}`}
-                    />
-                  </>
-                )}
+                <span className="flex-1 text-left">{sec.label}</span>
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform ${open[sec.key] ? "rotate-180" : ""}`}
+                />
               </button>
 
-              {!collapsed && open[sec.key] && (
+              {open[sec.key] && (
                 <div className="ml-2 border-l border-sidebar-border pl-2 space-y-0.5 mt-0.5">
                   {allItems.map((it) => (
                     <button
@@ -1301,21 +1305,24 @@ function PublicNav({
           : "bg-card shadow-sm"
       }`}
     >
-      <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-6 h-full flex flex-wrap items-center justify-between gap-x-3">
         {/* Logo */}
         <button
           onClick={() => navigate("landing")}
-          className="flex items-center gap-3 cursor-pointer shrink-0 group"
+          className="flex items-center gap-3 cursor-pointer group min-w-0"
         >
           <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
-          <div className="leading-none">
+          {/* Punto 1.1: `min-w-0` + `truncate` — a 375 px el texto cede y se
+              corta con puntos en vez de empujar el botón de tema fuera de la
+              pantalla. */}
+          <div className="leading-none min-w-0">
             <p
-              className="font-bold text-[17px] text-foreground leading-tight"
+              className="font-bold text-[17px] text-foreground leading-tight truncate"
               style={{ fontFamily: SERIF }}
             >
               La Sirena
             </p>
-            <p className="text-[11px] text-muted-foreground font-medium tracking-wide mt-0.5">
+            <p className="hidden sm:block text-[11px] text-muted-foreground font-medium tracking-wide mt-0.5 truncate">
               Pizza · Desde 1994
             </p>
           </div>
@@ -1383,9 +1390,10 @@ function PublicNav({
           ) : (
             <button
               onClick={onLogin}
-              className="px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20"
+              className="px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
-              Iniciar sesión
+              <span className="sm:hidden">Entrar</span>
+              <span className="hidden sm:inline">Iniciar sesión</span>
             </button>
           )}
 
@@ -1412,6 +1420,8 @@ function PublicNav({
 function AdminTopBar({
   current,
   onToggleSidebar,
+  menuVisible,
+  menuButtonRef,
   navigate,
   darkMode,
   setDarkMode,
@@ -1423,6 +1433,10 @@ function AdminTopBar({
 }: {
   current: Screen;
   onToggleSidebar: () => void;
+  /** true si el menú está visible (para aria-label / aria-expanded). */
+  menuVisible: boolean;
+  /** Ref del propio botón hamburguesa (el foco vuelve aquí al cerrar). */
+  menuButtonRef: { current: HTMLButtonElement | null };
   navigate: (s: Screen) => void;
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
@@ -1456,7 +1470,6 @@ function AdminTopBar({
     suppliers: "Proveedores",
     "production-orders": "Órdenes de producción",
     "finished-products": "Producto terminado",
-    "tech-sheet": "Ficha técnica",
     sales: "Gestión de ventas",
     "supply-categories": "Categorías de insumos",
     "product-categories": "Categorías de productos",
@@ -1465,22 +1478,26 @@ function AdminTopBar({
   return (
     <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border h-14 flex items-center px-4 gap-2 shadow-sm">
       <button
+        ref={menuButtonRef}
         onClick={onToggleSidebar}
-        className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+        className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+        aria-label={menuVisible ? "Cerrar menú" : "Abrir menú"}
+        title={menuVisible ? "Cerrar menú" : "Abrir menú"}
+        aria-expanded={menuVisible}
       >
         <Menu className="w-5 h-5" />
       </button>
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
+      <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2 min-w-0 overflow-hidden">
         <button
           onClick={() => navigate(homeScreen)}
-          className="hover:text-foreground transition-colors cursor-pointer"
+          className="hover:text-foreground transition-colors cursor-pointer shrink-0"
         >
           {homeScreen === "dashboard" ? "Dashboard" : "Inicio"}
         </button>
         {current !== "dashboard" && (
           <>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-foreground font-medium">
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-foreground font-medium min-w-0 truncate">
               {labels[current] ?? current}
             </span>
           </>
@@ -1498,13 +1515,13 @@ function AdminTopBar({
         )}
         <button
           onClick={() => navigate("landing")}
-          className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
         >
           <Store className="w-5 h-5" />
         </button>
         <button
           onClick={() => setDarkMode(!darkMode)}
-          className="p-2 rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
           title={darkMode ? "Modo claro" : "Modo oscuro"}
         >
           {darkMode ? (
@@ -1576,7 +1593,7 @@ function BottomNav({
                 </span>
               )}
             </div>
-            <span className="text-xs font-medium">{label}</span>
+            <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">{label}</span>
           </button>
         ))}
         <button
@@ -1765,7 +1782,7 @@ function LandingScreen({
 
         {/* Contenido sobre la zona oscura izquierda */}
         <div className="relative z-10 w-full min-h-screen flex items-center">
-          <div className="px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl">
+          <div className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl">
             <motion.div
               initial={{ opacity: 0, y: 36 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1827,7 +1844,7 @@ function LandingScreen({
                   franja roja de ancho completo de más abajo: esa se mantiene
                   igual y las dos conviven. Va dentro de la columna izquierda,
                   debajo de los botones. */}
-              <div className="mt-10 inline-flex items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
+              <div className="mt-10 flex flex-wrap w-full items-stretch justify-between gap-x-4 gap-y-2 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
                 {[
                   {
                     value: "+5.200",
@@ -1873,8 +1890,8 @@ function LandingScreen({
       </section>
 
       {/* ── SECCIÓN 2: Categorías ── */}
-      <section className="bg-muted py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="bg-muted pt-16 md:pt-20 pb-10 md:pb-12">
+        <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Heading */}
           <div className="text-center mb-12">
             <h2
@@ -1888,35 +1905,30 @@ function LandingScreen({
             </p>
           </div>
 
-          {/* Cards — una sola fila con scroll horizontal en todos los
-              tamaños. La barra se oculta (scrollbarWidth / webkit) pero el
-              scroll sigue funcionando con mouse, trackpad y táctil; el
-              scroll-snap alinea las tarjetas al desplazarse. */}
-          <div
-            className="flex flex-nowrap gap-4 overflow-x-auto pb-2 max-w-2xl mx-auto w-full snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
-            style={{
-              scrollbarWidth: "none",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
+          {/* Cards — grid 3/2/1 columnas al ancho completo del contenedor
+              (mismo ancho que "Las favoritas"), cards de alto mínimo generoso. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {categorias
               .filter((c) => estadoDe(c) !== "Inactivo")
               .map((c) => (
                 <button
                   key={c.id}
                   onClick={() => onCategoryNavigate(c.nombre)}
-                  className="group flex-shrink-0 w-40 snap-start bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center gap-3 px-4 py-6"
+                  className="group min-h-[220px] md:min-h-[260px] bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-3 px-4 py-6"
                 >
-                  <span className="text-4xl leading-none">
-                    {c.id === "CAT-001"
-                      ? ICONOS_FIJOS["CAT-001"]
-                      : c.id === "CAT-002"
-                        ? ICONOS_FIJOS["CAT-002"]
-                        : c.id === "CAT-003"
-                          ? ICONOS_FIJOS["CAT-003"]
-                          : c.icono || ""}
-                  </span>
-                  <p className="text-foreground text-sm font-semibold text-center leading-snug">
+                  {/* Imagen de la categoría 140×140 (§5): resuelve la imagen
+                      fija de las originales, la que se eligió al crearla y,
+                      en datos viejos, el emoji como texto. */}
+                  <ImagenCategoria
+                    clave={claveImagenDe(c)}
+                    className="w-[140px] h-[140px]"
+                    alt={c.nombre}
+                    emojiClassName="text-[96px] leading-none"
+                  />
+                  <p
+                    className="text-xl font-bold text-foreground text-center leading-snug"
+                    style={{ fontFamily: SERIF }}
+                  >
                     {c.nombre}
                   </p>
                 </button>
@@ -1926,12 +1938,12 @@ function LandingScreen({
       </section>
 
       {/* ── SECCIÓN 3: Las favoritas de nuestros clientes ── */}
-      <section className="bg-muted py-16 md:py-20">
+      <section className="bg-muted pt-10 md:pt-12 pb-16 md:pb-20">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Header row */}
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-10">
             <h2
-              className="text-2xl md:text-3xl font-bold text-foreground"
+              className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
             >
               Las favoritas de nuestros clientes
@@ -2492,7 +2504,7 @@ function CatalogScreen({
 
   const agregarAlCarrito = (p: Product) => {
     quickAdd(p);
-    // Una pizza se agrega con su tamaño por defecto (Mediano) y eso se dice en
+    // Una pizza se agrega con su tamaño por defecto (Mediana) y eso se dice en
     // el toast; las lasañas y bebidas conservan su mensaje original.
     const tamano = p.sizes.length > 1 ? ` ${sizeDe(p, 0).label}` : "";
     toast.success(`${p.name}${tamano} agregada al carrito`, {
@@ -2742,7 +2754,7 @@ function ProductDetailScreen({
 
           {/* Tamaño: las bebidas no tienen selector (botella 2.5 L) y las
               lasañas tienen una única presentación fija "Normal". Solo las
-              pizzas ofrecen una elección real entre Mediano y Grande. */}
+              pizzas ofrecen una elección real entre Mediana y Grande. */}
           {product.sizes.length > 0 && (
             <div className="mb-6">
               <h3 className="font-bold mb-3 text-foreground">
@@ -3997,7 +4009,7 @@ function CartScreen({
                   <input
                     ref={fileRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     className="sr-only"
                     onChange={handleFileChange}
                   />
@@ -4033,7 +4045,7 @@ function CartScreen({
                           {subiendo ? "Subiendo..." : "Haz clic para subir"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          JPG, PNG o PDF · máx 10 MB
+                          JPG, PNG, WEBP o PDF · máx 5 MB
                         </p>
                       </div>
                     </button>
@@ -4124,9 +4136,9 @@ function ClientProfileScreen({
   const iCls = (err?: string) =>
     `w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
 
-  const tipoDocumento = DOC_TIPOS.find(t => t.code === loggedInUser?.tipoDocumento)?.label
-    ?? loggedInUser?.tipoDocumento
-    ?? "—";
+  const tipoDocumento = loggedInUser?.tipoDocumento
+    ? etiquetaTipoDocumento(loggedInUser.tipoDocumento)
+    : "—";
 
   const handleGuardar = () => {
     const ec = validarCorreo(correo);
@@ -4581,7 +4593,6 @@ function LoginScreen({
   darkMode,
   loginNotice,
   initialEmail,
-  onPasswordReset,
 }: {
   navigate: (s: Screen) => void;
   // Devuelve { ok, mensaje }: ok=false es la señal para que esta pantalla muestre
@@ -4598,9 +4609,6 @@ function LoginScreen({
   /** Correo que queda escrito al llegar desde el cambio de contraseña:
    *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
   initialEmail?: string;
-  /** Escribe la contraseña nueva en `usuarios` (en memoria) para la cuenta
-   *  con ese correo. */
-  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
 }) {
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
@@ -4628,7 +4636,6 @@ function LoginScreen({
 
   const handleLogin = async () => {
     if (!validate()) {
-      console.log("[login] submit detenido por validación");
       return;
     }
     setRechazo(null);
@@ -4645,7 +4652,6 @@ function LoginScreen({
       );
 
       if (user && !user.activo) {
-        console.log("[login] credenciales rechazadas: cuenta inactiva");
         borrarToken();
         setErrors({
           email: "Credenciales incorrectas",
@@ -4664,7 +4670,6 @@ function LoginScreen({
           r => normalizarNombreRol(r.nombre) === normalizarNombreRol(nombreRolApi),
         );
         if (!rolLocal) {
-          console.log("[login] rechazo: sin rol local equivalente");
           borrarToken();
           toast.error("Tu cuenta no tiene un rol configurado en el panel.");
           return;
@@ -4677,7 +4682,6 @@ function LoginScreen({
       const respuesta = onLogin(cuenta);
       if (respuesta && respuesta.ok === false) {
         // El login fue RECHAZADO en App: muestra el motivo y no navega.
-        console.log("[login] login rechazado", respuesta.mensaje);
         borrarToken();
         const mensaje = respuesta.mensaje ?? "Tu cuenta no tiene roles activos. Contacta al administrador.";
         setRechazo(mensaje);
@@ -4693,7 +4697,6 @@ function LoginScreen({
       const status = (err as ApiErrorConEstado).status;
       const mensaje = err instanceof Error ? err.message : "No se pudo conectar con el servidor.";
       if (status === 401) {
-        console.log("[login] credenciales inválidas");
         setErrors({
           email: "Credenciales incorrectas",
           password: "Verifica tu correo y contraseña",
@@ -4717,8 +4720,6 @@ function LoginScreen({
           {showForgot && (
             <ForgotPasswordModal
               onClose={() => setShowForgot(false)}
-              usuarios={usuarios}
-              onPasswordReset={onPasswordReset}
             />
           )}
         </AnimatePresence>
@@ -4887,19 +4888,7 @@ function LoginScreen({
   );
 }
 
-function ForgotPasswordModal({
-  onClose,
-  usuarios,
-  onPasswordReset,
-}: {
-  onClose: () => void;
-  /** Directorio de cuentas: sirve para avisar antes de enviar un código a un
-   *  correo que no existe. */
-  usuarios: Usuario[];
-  /** Escribe la contraseña nueva en `usuarios` (en memoria) y devuelve "ok"
-   *  si encontró la cuenta. */
-  onPasswordReset?: (correo: string, nuevaContrasena: string) => "ok" | "no-existe";
-}) {
+function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<
     "email" | "code" | "password" | "done"
   >("email");
@@ -4942,42 +4931,49 @@ function ForgotPasswordModal({
     }, 1000);
   };
 
-  const sendCode = () => {
+  const sendCode = async () => {
     const err = validarCorreo(forgotEmail);
     if (err) {
       setErrores({ forgotEmail: err });
       validacion.enfocarPrimero({ forgotEmail: err });
       return;
     }
-    // Sin cuenta no hay nada que restablecer: se avisa antes de los tres pasos.
-    const clave = forgotEmail.trim().toLowerCase();
-    if (!usuarios.some((u) => u.correo.trim().toLowerCase() === clave)) {
-      const cuentaErr = "No existe una cuenta con ese correo";
-      setErrores({ forgotEmail: cuentaErr });
-      validacion.enfocarPrimero({ forgotEmail: cuentaErr });
-      return;
-    }
+    // El backend siempre responde 200 exista o no el correo (para no revelar
+    // cuentas), así que el aviso de éxito es neutro y no depende del resultado.
+    const correo = forgotEmail.trim().toLowerCase();
     setErrores({});
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await solicitarCodigoRecuperacion(correo);
       setStep("code");
-      toast.success("Código enviado a " + forgotEmail);
+      toast.success("Si el correo está registrado, te enviamos un código.");
       startCooldown();
-    }, 1200);
-  };
-
-  const resendCode = () => {
-    if (resendCooldown > 0) return;
-    setLoading(true);
-    setTimeout(() => {
+    } catch (e) {
+      // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
+      // extrajo el texto; no se avanza de paso.
+      toast.error((e as Error).message);
+    } finally {
       setLoading(false);
-      toast.success("Código reenviado a " + forgotEmail);
-      startCooldown();
-    }, 1000);
+    }
   };
 
-  const verifyCode = () => {
+  const resendCode = async () => {
+    if (resendCooldown > 0) return;
+    const correo = forgotEmail.trim().toLowerCase();
+    setLoading(true);
+    try {
+      await solicitarCodigoRecuperacion(correo);
+      toast.success("Si el correo está registrado, te enviamos un código.");
+      startCooldown();
+    } catch (e) {
+      // El cooldown solo se reinicia si el backend aceptó la solicitud.
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCode = async () => {
     const fullCode = code.join("");
     if (fullCode.length < 6) {
       setErrores({ code: "Ingresa el código completo" });
@@ -4988,10 +4984,31 @@ function ForgotPasswordModal({
     }
     setErrores({});
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await verificarCodigoRecuperacion(
+        forgotEmail.trim().toLowerCase(),
+        fullCode,
+      );
+      if (res.valido !== true) {
+        // Defensa: el contrato manda 400, pero un 200 con valido=false se
+        // trata igual que código inválido y no se avanza.
+        setErrores({ code: "El código es incorrecto o venció." });
+        return;
+      }
       setStep("password");
-    }, 1000);
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        setErrores({ code: err.message });
+      } else {
+        // 429 y fallo de conexión: se avisa y se vuelve al correo, porque el
+        // código no se pudo validar.
+        toast.error(err.message);
+        if (err.status === 429) setStep("email");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Validación en tiempo real del paso "Nueva contraseña" ───────────
@@ -5023,22 +5040,44 @@ function ForgotPasswordModal({
   const estadoConfirm: "ok" | "err" | "neutro" =
     confirmError || errores.confirm ? "err" : confirmVacio ? "neutro" : "ok";
 
-  const changePassword = () => {
+  const changePassword = async () => {
     if (loading || !todoValido) return;
+    setErrores({});
+    setErrorGuardado(null);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      // Escribe la contraseña de la cuenta con ese correo en la lista
-      // `usuarios` (en memoria: igual que el cambio desde Mi perfil, este
-      // prototipo no guarda credenciales en localStorage).
-      const res = onPasswordReset?.(forgotEmail.trim().toLowerCase(), newPass) ?? "no-existe";
-      if (res !== "ok") {
-        setErrorGuardado("No existe una cuenta con ese correo");
-        return;
-      }
-      setErrores({});
+    try {
+      // Guardado real contra el backend: el código ya se verificó en el paso
+      // anterior, pero el servidor lo vuelve a validar. La contraseña nueva no
+      // se guarda en estado, localStorage ni consola.
+      await restablecerContrasena(
+        forgotEmail.trim().toLowerCase(),
+        code.join(""),
+        newPass,
+      );
       setStep("done");
-    }, 1200);
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        // Caducó o quedó invalidado entre pasos: se pide de nuevo.
+        setErrores({ code: err.message });
+        setStep("code");
+      } else if (err.message === "La contraseña no cumple los requisitos.") {
+        setErrores({ newPass: err.message });
+      } else if (err.status === 429) {
+        // Demasiadas solicitudes: se reinicia el flujo desde el correo.
+        toast.error(err.message);
+        setCode(["", "", "", "", "", ""]);
+        setNewPass("");
+        setConfirm("");
+        setStep("email");
+      } else {
+        // Fallo de conexión u otro error del servidor: se reintenta desde
+        // este mismo paso sin perder el código.
+        setErrorGuardado(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   /** Enter envía cuando todo es válido. */
@@ -5391,12 +5430,6 @@ function ForgotPasswordModal({
 
 // ─────────────────────────── REGISTER ───────────────────────────
 
-const DOC_OPTIONS = [
-  { code: "CC",  label: "CC · Cédula de Ciudadanía" },
-  { code: "CE",  label: "CE · Cédula de Extranjería" },
-  { code: "PP",  label: "PP · Pasaporte" },
-];
-
 const AVATAR_PALETTE = [
   "bg-red-500",
   "bg-blue-500",
@@ -5414,6 +5447,7 @@ function RegisterScreen({
   setUsuarios,
   empleados,
   clientes,
+  setClientes,
   darkMode,
 }: {
   navigate: (s: Screen) => void;
@@ -5421,6 +5455,7 @@ function RegisterScreen({
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   empleados: Empleado[];
   clientes: Cliente[];
+  setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   darkMode: boolean;
 }) {
   const [form, setForm] = useState({
@@ -5517,7 +5552,7 @@ function RegisterScreen({
         register();
     };
 
-  const register = () => {
+  const register = async () => {
     const errs: Record<string, string> = {};
 
     if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
@@ -5536,20 +5571,25 @@ function RegisterScreen({
 
     if (!errs.docNum) {
       const clave = `${form.docType}||${docTrim}`.toLowerCase();
-
+      // §1.3: un documento que solo existe en un cliente (o usuario) SIN correo
+      // — el que nació en una venta — no bloquea el registro: se completa esa
+      // misma persona con sus datos al final. Con correo ya puesto sí cuenta
+      // como documento registrado.
       const docDuplicado =
-        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
-        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
-        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
+        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave && u.correo.trim() !== "") ||
+        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave && e.correo.trim() !== "") ||
+        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave && c.correo.trim() !== "");
       if (docDuplicado) errs.docNum = "Este documento ya está registrado";
     }
 
     if (!errs.email) {
       const em = form.email.trim().toLowerCase();
+      // Un correo vacío nunca coincide con otro correo vacío: si no, todos los
+      // registros sin correo serían "la misma persona".
       const correoDuplicado =
-        usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => e.correo.trim().toLowerCase() === em) ||
-        clientes.some(c => c.correo.trim().toLowerCase() === em);
+        usuarios.some(u => u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em) ||
+        empleados.some(e => e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
+        clientes.some(c => c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em);
       if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
 
@@ -5568,38 +5608,135 @@ function RegisterScreen({
     }
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      const maxId = usuarios.reduce((max, u) => {
-        const n = parseInt(u.id.replace("USR-", ""), 10);
-        return Number.isNaN(n) ? max : Math.max(max, n);
-      }, 0);
-      const nameParts = form.name.trim().split(/\s+/);
-      const iniciales =
-        (nameParts.length > 1
-          ? (nameParts[0][0] ?? "") + (nameParts[1][0] ?? "")
-          : nameParts[0].slice(0, 2)
-        ).toUpperCase();
-      const nuevoUsuario: Usuario = {
-        id: "USR-" + (maxId + 1),
-        nombre: form.name.trim(),
-        iniciales,
-        avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
-        correo: form.email.trim().toLowerCase(),
-        telefono: form.phone.trim(),
+    try {
+      await registrarCliente({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
-        rolId: "ROL-002",
-        rolIds: ["ROL-002"],
-        activo: true,
+        nombre: form.name.trim(),
+        correo: form.email.trim().toLowerCase(),
+        telefono: form.phone.trim(),
         contrasena: form.password,
-      };
-       setUsuarios(p => [...p, nuevoUsuario]);
-       toast.success(
-        "¡Cuenta creada exitosamente! Ya puedes ingresar.",
+      });
+
+      const correoNuevo = form.email.trim().toLowerCase();
+      // §1.3: si el documento pertenece a un cliente creado desde una venta
+      // (sin correo), el registro lo COMPLETA en vez de duplicarlo: se llena
+      // su correo — obligatorio, o la sincronización volvería a dejar el
+      // usuario sin correo — y el usuario que creó esa sincronización se
+      // actualiza (correo, teléfono y contraseña) en lugar de crearse otro.
+      const claveDocRegistro = `${form.docType}||${docTrim}`.toLowerCase();
+      const mismaDoc = (x: { tipoDocumento: string; numeroDocumento: string }) =>
+        `${x.tipoDocumento}||${x.numeroDocumento}`.toLowerCase() === claveDocRegistro;
+      const clienteSinCorreo = clientes.find(c => mismaDoc(c) && c.correo.trim() === "");
+      if (clienteSinCorreo) {
+        setClientes(prev =>
+          prev.map(c => (c.id === clienteSinCorreo.id ? { ...c, correo: correoNuevo } : c)),
+        );
+      }
+      const usuarioExistente = usuarios.find(
+        u => u.correo.trim().toLowerCase() === correoNuevo && u.correo.trim() !== "",
       );
+      if (!usuarioExistente) {
+        const usuarioPorDoc = usuarios.find(u => mismaDoc(u) && u.correo.trim() === "");
+        if (usuarioPorDoc) {
+          // Misma persona ya presente en Gestión de Usuarios (vino de la
+          // sincronización con el cliente): se actualiza, no se duplica.
+          setUsuarios(p =>
+            p.map(u =>
+              u.id === usuarioPorDoc.id
+                ? {
+                    ...u,
+                    correo: correoNuevo,
+                    telefono: form.phone.trim(),
+                    contrasena: form.password,
+                  }
+                : u,
+            ),
+          );
+        } else {
+          const maxId = usuarios.reduce((max, u) => {
+            const n = parseInt(u.id.replace("USR-", ""), 10);
+            return Number.isNaN(n) ? max : Math.max(max, n);
+          }, 0);
+          const nameParts = form.name.trim().split(/\s+/);
+          const iniciales =
+            (nameParts.length > 1
+              ? (nameParts[0][0] ?? "") + (nameParts[1][0] ?? "")
+              : nameParts[0].slice(0, 2)
+            ).toUpperCase();
+          const nuevoUsuario: Usuario = {
+            id: "USR-" + (maxId + 1),
+            nombre: form.name.trim(),
+            iniciales,
+            avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
+            correo: correoNuevo,
+            telefono: form.phone.trim(),
+            tipoDocumento: form.docType,
+            numeroDocumento: form.docNum.trim(),
+            rolId: "ROL-002",
+            rolIds: ["ROL-002"],
+            activo: true,
+          };
+          setUsuarios((p) => [...p, nuevoUsuario]);
+        }
+      }
+      toast.success("¡Cuenta creada exitosamente! Ya puedes ingresar.");
       navigate("login");
-     }, 1500);
+    } catch (e) {
+      const mensaje =
+        e instanceof Error ? e.message : "No se pudo conectar con el servidor.";
+      // Llaves del mapa verificadas contra `errs` de las validaciones locales
+      // y contra el JSX de RegisterScreen: docType y docNum se leen en sus
+      // inputs y name/email/phone/password en el map de campos; son las
+      // mismas llaves, así que el texto del backend cae en su <MensajeError>.
+      const mapa: Record<string, { campo: string; texto: string }> = {
+        "Este documento ya está registrado.": {
+          campo: "docNum",
+          texto: "Este documento ya está registrado",
+        },
+        "El número de documento no es válido.": {
+          campo: "docNum",
+          texto: "El número de documento no es válido",
+        },
+        "Tipo de documento no válido.": {
+          campo: "docType",
+          texto: "Tipo de documento no válido",
+        },
+        "El nombre no es válido.": {
+          campo: "name",
+          texto: "El nombre no es válido",
+        },
+        "Este correo ya está registrado.": {
+          campo: "email",
+          texto: "Este correo ya está registrado",
+        },
+        "Ingresa un correo válido y sin espacios.": {
+          campo: "email",
+          texto: "Ingresa un correo válido y sin espacios",
+        },
+        "El teléfono debe tener 10 dígitos y comenzar por 3.": {
+          campo: "phone",
+          texto: "El teléfono debe tener 10 dígitos y comenzar por 3",
+        },
+        "La contraseña no cumple los requisitos.": {
+          campo: "password",
+          texto: "La contraseña no cumple los requisitos",
+        },
+      };
+      const hit = mapa[mensaje];
+      if (hit) {
+        setErrores((prev) => ({ ...prev, [hit.campo]: hit.texto }));
+        // El selector de tipo doc borra su error inline al cambiar de tipo,
+        // así que su mensaje del servidor se refuerza además en toast.
+        if (hit.campo === "docType") toast.error(mensaje);
+      } else {
+        // 429, sin conexión, 500, 503 u otros: el texto ya viene del
+        // interceptor y no se navega.
+        toast.error(mensaje);
+      }
+    } finally {
+      setLoading(false);
+    }
    };
 
    return (
@@ -5639,7 +5776,7 @@ function RegisterScreen({
             separa el campo anterior del siguiente. */}
         <div className="grid gap-x-3 gap-y-0.5 sm:grid-cols-2 mb-1">
           <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
-            <div className="sm:w-48 sm:shrink-0">
+            <div className="sm:w-56 sm:shrink-0">
               <label className="block text-sm font-semibold mb-1 text-foreground">
                 Tipo doc.
               </label>
@@ -5657,7 +5794,7 @@ function RegisterScreen({
                 className={inputCls(errores.docType, "cursor-pointer")}
                 {...validacion.ariaCampo("docType", errores.docType)}
               >
-                {DOC_OPTIONS.map((opt) => (
+                {OPCIONES_TIPO_DOCUMENTO.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -5889,7 +6026,7 @@ function ManageProductsScreen() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1
@@ -6048,49 +6185,12 @@ function ManageProductsScreen() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <p className="text-sm text-muted-foreground">
-              {(page - 1) * PER + 1}–
-              {Math.min(page * PER, filtered.length)} de{" "}
-              {filtered.length}
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from(
-                { length: totalPages },
-                (_, i) => i + 1,
-              ).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer transition-colors ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Pagination (unificada, fuera de la card) */}
+      {filtered.length > 0 && (
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      )}
 
       {/* Delete confirm */}
       <AnimatePresence>
@@ -6323,6 +6423,8 @@ function OrdersScreen({
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("todos");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 5;
 
   const filtered = useMemo(
     () =>
@@ -6338,6 +6440,15 @@ function OrdersScreen({
     [orders, search, statusF],
   );
 
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paged = filtered.slice(
+    Math.max(0, (page - 1) * PER_PAGE),
+    page * PER_PAGE,
+  );
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), Math.max(1, totalPages)));
+  }, [totalPages]);
+
   const updateStatus = (id: string, s: Order["status"]) => {
     setOrders((p) =>
       p.map((o) => (o.id === id ? { ...o, status: s } : o)),
@@ -6346,7 +6457,7 @@ function OrdersScreen({
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       <div className="mb-6">
         <h1
           className="text-3xl font-bold text-foreground"
@@ -6362,13 +6473,19 @@ function OrdersScreen({
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <SearchInput
           value={search}
-          onChange={setSearch}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
           placeholder="Buscar por cliente o código..."
           wrapperClassName="flex-1 max-w-sm"
         />
         <select
           value={statusF}
-          onChange={(e) => setStatusF(e.target.value)}
+          onChange={(e) => {
+            setStatusF(e.target.value);
+            setPage(1);
+          }}
           className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer"
         >
           <option value="todos">Todos los estados</option>
@@ -6392,7 +6509,7 @@ function OrdersScreen({
             </p>
           </div>
         ) : (
-          filtered.map((order) => (
+          paged.map((order) => (
             <div
               key={order.id}
               className="bg-card border border-border rounded-2xl overflow-hidden"
@@ -6508,6 +6625,15 @@ function OrdersScreen({
           ))
         )}
       </div>
+
+      {/* Paginación (unificada, fuera de la card) */}
+      {filtered.length > 0 && (
+        <Paginador
+          pagina={page}
+          totalPaginas={totalPages}
+          onCambio={setPage}
+        />
+      )}
     </div>
   );
 }
@@ -6618,12 +6744,33 @@ const leerRolesPersistidos = (): Rol[] => {
     if (!raw) return INITIAL_ROLES;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
-      return completarRolesSemilla((parsed as Rol[]).map(rol => {
+      const lista = (parsed as Rol[]).map(rol => {
         const renombrado = rol.id === "ROL-003" && rol.nombre === "Usuario"
           ? { ...rol, nombre: "Empleado", descripcion: "Acceso operativo al sistema." }
           : rol;
         return restaurarDescargaExcel(renombrado);
-      }));
+      });
+      // §2: el rol guardado "Mesera" se renombra a "Mesero" ANTES de completar
+      // la semilla, o `completarRolesSemilla` agregaría un segundo rol. Se
+      // compara el nombre normalizado exacto (sin tildes, minúsculas, trim);
+      // NO con `claveGeneroRol`, porque "mesera" y "mesero" dan la misma clave
+      // y el rol se encontraría a sí mismo. Si ya existe un "Mesero", el
+      // "Mesera" se deja como está y la semilla no duplica por clave de género.
+      const normalizar = (v: string) =>
+        v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      // §3: "Dashboard" ya no es un permiso asignable: se le quita la clave
+      // "Dashboard::Dashboard" a todo rol que no sea Administrador.
+      const listaSinDashboard = lista.map(rol => {
+        if (normalizar(rol.nombre) === "administrador") return rol;
+        const accesosSinDash: AccesosMap = { ...rol.accesos };
+        delete accesosSinDash[DASHBOARD_PERM_KEY];
+        return { ...rol, accesos: accesosSinDash };
+      });
+      const yaHayMesero = listaSinDashboard.some(r => normalizar(r.nombre) === "mesero");
+      const listaFinal = yaHayMesero
+        ? listaSinDashboard
+        : listaSinDashboard.map(r => (normalizar(r.nombre) === "mesera" ? { ...r, nombre: "Mesero" } : r));
+      return completarRolesSemilla(listaFinal);
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -6644,6 +6791,18 @@ const leerRolesPersistidos = (): Rol[] => {
 // Para vaciar la clave a mano: localStorage.removeItem(USUARIOS_STORAGE_KEY).
 const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
 const CUENTAS_PRUEBA_IDS = new Set(["USR-001", "USR-002", "USR-010"]);
+
+const DOCS_SEMILLA_PURGAR: ReadonlySet<string> = new Set([
+  "cc||11223344",
+  "cc||22334455",
+  "cc||33445566",
+  "cc||44556677",
+  "cc||55667788",
+  "cc||66778899",
+  "cc||77889900",
+  "cc||99001122",
+  "cc||10111213",
+]);
 
 const esUsuarioValido = (u: unknown): u is Usuario => {
   if (!u || typeof u !== "object") return false;
@@ -6698,6 +6857,7 @@ const leerUsuariosPersistidos = (): Usuario[] => {
         }));
       const otrosUsuarios = persistidos
         .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
+        .filter((usuario) => !DOCS_SEMILLA_PURGAR.has(`${(usuario.tipoDocumento ?? "").trim().toLowerCase()}||${(usuario.numeroDocumento ?? "").trim()}`))
         .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
       return [...cuentasPrueba, ...otrosUsuarios].map(u => {
         const ids = rolIdsDe(u.rolIds, u.rolId);
@@ -6786,11 +6946,11 @@ const migrarCargos = (rolIds: unknown, rolId: unknown, cargo: unknown, roles: Ro
       const auxiliar = roles.find(r => r.nombre.trim().toLowerCase() === "auxiliar administrativo");
       if (auxiliar) return [auxiliar.id];
     }
-    // Seeds heredadas con cargos eliminados: se reasignan a Cajero/Mesera (que
+    // Seeds heredadas con cargos eliminados: se reasignan a Cajero/Mesero (que
     // sustituyen esos cargos en la nueva semilla).
     const remap = new Map<string, string>([
       ["domiciliario", "cajero"], ["auxiliar administrativo", "cajero"],
-      ["cocinero", "mesera"], ["auxiliar de cocina", "mesera"], ["operador de producción", "mesera"],
+      ["cocinero", "mesero"], ["auxiliar de cocina", "mesero"], ["operador de producción", "mesero"],
     ]);
     const destino = remap.get(cargo.trim().toLowerCase());
     if (destino) {
@@ -6818,10 +6978,10 @@ const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
   const esSuperAdmin = e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
   const peso = (lista: string[]) => {
     const vivos = lista.filter(id => roles.some(r => r.id === id));
-    // Idros perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesera.
+    // Ids perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesero.
     const mapId = new Map<string, string>([
       ["ROL-006", "Cajero"], ["ROL-010", "Cajero"],
-      ["ROL-007", "Mesera"], ["ROL-008", "Mesera"], ["ROL-009", "Mesera"],
+      ["ROL-007", "Mesero"], ["ROL-008", "Mesero"], ["ROL-009", "Mesero"],
     ]);
     lista.forEach(id => {
       const n = mapId.get(id);
@@ -6861,7 +7021,9 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
     if (!raw) return INITIAL_EMPLEADOS;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esEmpleadoValido)) {
-      return (parsed as Empleado[]).map(e => normalizarEmpleado(e, roles));
+      return (parsed as Empleado[])
+        .filter(e => !DOCS_SEMILLA_PURGAR.has(`${(e.tipoDocumento ?? "").trim().toLowerCase()}||${(e.numeroDocumento ?? "").trim()}`))
+        .map(e => normalizarEmpleado(e, roles));
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
@@ -6969,6 +7131,29 @@ const leerOrdenesPersistidas = () =>
   leerListaPersistida<OrdenProduccion>(ORDENES_PRODUCCION_STORAGE_KEY, INITIAL_ORDENES_PRODUCCION, esOrdenProduccionValida);
 const leerInsumosPersistidos = () =>
   leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
+
+/** Arranque del catálogo de insumos: manda lo guardado (orden y contenido) y
+    la semilla solo completa los campos que falten en un registro viejo, así
+    una base anterior no pierde stock ni categorías. Si no hay nada guardado
+    (primer arranque o storage corrupto) se usa la semilla completa. */
+const mezclarInsumosPersistidos = (): Insumo[] => {
+  try {
+    const guardados = leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, [], esInsumoValido);
+    if (guardados.length === 0) return INITIAL_INSUMOS;
+    return guardados.map((g) => {
+      const semilla = INITIAL_INSUMOS.find((s) => s.id === g.id);
+      // Registros viejos de `sivpro.insumos.v1` traen `stockMaximo` y
+      // `costoMaximo`, campos que ya no existen en el modelo: se descartan
+      // aquí para no arrastrarlos durante la sesión ni reescribirlos.
+      const limpio: Record<string, unknown> = { ...(semilla ? { ...semilla, ...g } : g) };
+      delete limpio.stockMaximo;
+      delete limpio.costoMaximo;
+      return limpio as unknown as Insumo;
+    });
+  } catch {
+    return INITIAL_INSUMOS;
+  }
+};
 const leerVentasPersistidas = () =>
   leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
 const esNoConformidadValida = (x: unknown) =>
@@ -6987,7 +7172,12 @@ const leerNoConformidadesPersistidas = () =>
 // la pestaña/navegación del navegador. Así, al volver a arrancar `npm run` el
 // stock vuelve a la semilla (45 pizzas de jamón, 50 peperoni, …), que es el
 // comportamiento pedido sin backend.
-const PRODUCTOS_STORAGE_KEY = "sivpro.productos.v1";
+// §6: la clave sube a v2 porque el vocabulario de tipos de producto cambió
+// ("Producto terminado"/"Producto de reventa" → "Producto insumo"/"Producto
+// terminado"): los productos guardados en v1 se descartan y vuelven a la
+// semilla, evitando que un "Producto terminado" viejo (con ficha) se lea como
+// el nuevo "Producto terminado" (sin ficha).
+const PRODUCTOS_STORAGE_KEY = "sivpro.productos.v2";
 
 const esProductoValido = (x: unknown) =>
   esObjeto(x) &&
@@ -7024,14 +7214,11 @@ const leerFichasPersistidas = () => {
     const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
     if (!raw) return INITIAL_FICHAS;
     const parsed: unknown = JSON.parse(raw);
-    // La limpieza descarta las fichas de productos que ya no existen y las
-    // fichas semilla del código viejo (no deben seguir ocupando número), y
-    // luego reasigna los ID de ficha de forma consecutiva: corrige los
-    // "REC-001" duplicados del dato viejo sin tocar versiones ni contenido.
-    // Los productos no se persisten: al recargar vuelven a la semilla, así que
-    // los ID válidos aquí son los de INITIAL_PRODUCTOS.
-    if (esFichasValidas(parsed))
-      return normalizarIdsFicha(parsed as FichasPorProducto, INITIAL_PRODUCTOS.map((p) => p.id));
+    // Solo se valida la forma. La limpieza (descartar huérfanas y fichas
+    // semilla) y la reasignación de ID se hacen en el arranque del estado,
+    // donde ya están disponibles TODOS los IDs de la sesión: productos del
+    // menú e insumos (los Productos Insumo también tienen ficha).
+    if (esFichasValidas(parsed)) return parsed as FichasPorProducto;
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
   }
@@ -7270,6 +7457,7 @@ export default function App() {
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
+  const [ordenAAbrir, setOrdenAAbrir] = useState<string | null>(null);
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
@@ -7305,7 +7493,22 @@ export default function App() {
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido.
   const [fichasPorProducto, setFichasPorProducto] =
-    useState<FichasPorProducto>(leerFichasPersistidas);
+    useState<FichasPorProducto>(() => {
+      // Migración al modelo único + normalización de IDs, UNA sola vez y con
+      // los IDs reales de esta sesión (productos del menú e insumos, porque
+      // los Productos Insumo también guardan ficha). Migrar antes de
+      // normalizar hace que las fichas recién creadas desde el legado ya
+      // entren con número en la serie.
+      const insumosSemilla = mezclarInsumosPersistidos();
+      const idsExistentes = [
+        ...leerProductosPersistidos().map((p) => p.id),
+        ...insumosSemilla.map((i) => i.id),
+      ];
+      return normalizarIdsFicha(
+        migrarFichasLegacy(leerFichasPersistidas(), insumosSemilla),
+        idsExistentes,
+      );
+    });
   // Órdenes de producción. Antes vivían dentro de OrdenProduccionScreen, así que
   // se perdían al salir del módulo y no había forma de crear el pedido solo.
   const [ordenesProduccion, setOrdenesProduccion] =
@@ -7566,8 +7769,9 @@ export default function App() {
   // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
   // los id solo son anclas de migración.
   const isNamedAdmin = esRolAdministrador(loggedInRol);
-  const hasDashboardAccess =
-    isNamedAdmin || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
+  // §3: el Dashboard es EXCLUSIVO del Administrador (detectado por nombre del
+  // rol); ya no depende del permiso "Dashboard::Dashboard".
+  const hasDashboardAccess = isNamedAdmin;
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
 
   // Cliente público = solo el rol "Cliente" y sin ficha de empleado. El
@@ -7594,18 +7798,18 @@ export default function App() {
     setUserRole(siguiente.nombre);
     toast.success(`Ahora estás como ${siguiente.nombre}`);
     // Si la pantalla actual ya no está permitida por el rol nuevo, vuelve a la
-    // primera pantalla que ese rol sí permite.
+    // primera pantalla que ese rol sí permite. "dashboard" solo lo es si el rol
+    // siguiente es Administrador (§3).
+    const esAdminSiguiente = normalizarNombreRol(siguiente.nombre) === "administrador";
     const permKeyActual = SCREEN_PERM_KEY[screen];
     const permitida =
       screen === "dashboard"
-        ? (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false)
+        ? esAdminSiguiente
         : permKeyActual
           ? (siguiente.accesos[permKeyActual]?.includes("Ver") ?? false)
           : true; // "inicio" y pantallas sin permKey siempre son un fallback seguro
     if (!permitida) {
-      const esAdminSiguiente = normalizarNombreRol(siguiente.nombre) === "administrador";
-      const tieneDash = esAdminSiguiente || (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
-      navigate(tieneDash ? "dashboard" : "inicio");
+      navigate(esAdminSiguiente ? "dashboard" : "inicio");
     }
   };
 
@@ -7624,12 +7828,78 @@ export default function App() {
     };
   };
 
-  const [sidebarCollapsed, setSidebarCollapsed] =
-    useState(false);
+  // Un solo estado para escritorio: true = menú completo visible,
+  // false = menú totalmente oculto (sin franja de íconos). Se persiste en
+  // localStorage; en celular no se guarda (el drawer siempre arranca cerrado).
+  const [menuAbierto, setMenuAbierto] = useState(() => {
+    try {
+      const v = localStorage.getItem("sivpro.menuAbierto.v1");
+      return v === null ? true : v !== "false";
+    } catch {
+      return true;
+    }
+  });
   // En celular/tablet el sidebar no cabe (240px fijos sobre ~375px de ancho):
   // se oculta y el botón del topbar lo abre como panel deslizante.
   const esMovil = useIsMobile();
   const [sidebarMovilAbierto, setSidebarMovilAbierto] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const firstNavRef = useRef<HTMLButtonElement | null>(null);
+
+  // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
+  // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
+  const hasValidSession = isLoggedIn && (
+    userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
+  );
+
+  // Un cliente público (rol "Cliente" y sin ficha de empleado) es el único que no
+  // entra al panel. Cualquier otro rol —incluidos los ROL-00X personalizados—
+  // entra según SUS permisos, sin programarlos nombre por nombre: antes esta
+  // línea comparaba `userRole === "Administrador"`, así que un rol personalizado
+  // caía en `false` y el guard de abajo lo expulsaba a la landing. Es el mismo
+  // criterio de "cliente público" que ya usa el `goPublic` del login.
+  const esClientePublico = esClientePublicoSesion;
+  const isAdminRole = hasValidSession && !esClientePublico;
+  const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
+
+  // Guardar la preferencia de menú en escritorio (no en celular).
+  useEffect(() => {
+    if (esMovil) return;
+    try {
+      localStorage.setItem("sivpro.menuAbierto.v1", String(menuAbierto));
+    } catch {
+      // almacenamiento no disponible (modo privado, cuota llena, etc.)
+    }
+  }, [menuAbierto, esMovil]);
+
+  // Si la ventana pasa de móvil a escritorio con el drawer abierto, se cierra.
+  useEffect(() => {
+    if (!esMovil) setSidebarMovilAbierto(false);
+  }, [esMovil]);
+
+  // Mientras el drawer móvil está abierto la página de fondo no se desplaza.
+  // El cleanup también restaura el overflow al desmontar.
+  useEffect(() => {
+    if (!isAdmin || !esMovil || !sidebarMovilAbierto) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isAdmin, esMovil, sidebarMovilAbierto]);
+
+  // Escape cierra el drawer móvil y devuelve el foco al botón hamburguesa.
+  useEffect(() => {
+    if (!isAdmin || !esMovil || !sidebarMovilAbierto) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSidebarMovilAbierto(false);
+        setTimeout(() => menuButtonRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isAdmin, esMovil, sidebarMovilAbierto]);
   const [darkMode, setDarkMode] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
@@ -7649,7 +7919,7 @@ export default function App() {
     INITIAL_GESTIONES,
   );
   const [insumos, setInsumos] =
-    useState<Insumo[]>(INITIAL_INSUMOS);
+    useState<Insumo[]>(() => mezclarInsumosPersistidos());
   const [proveedores, setProveedores] = useState<ProveedorRef[]>(
     PROVEEDORES_INIT,
   );
@@ -7930,6 +8200,13 @@ export default function App() {
     navigate("devoluciones");
   };
 
+  /** Desde Insumos, "Programar producción" salta a Orden de Producción con el
+      modal de crear ya abierto y el Producto Insumo preseleccionado. */
+  const abrirOrdenProduccion = (idProductoInsumo: string) => {
+    setOrdenAAbrir(idProductoInsumo);
+    navigate("production-orders");
+  };
+
   const openLogin = () => {
     setLoginNotice(false);
     setLoginEmailPre("");
@@ -7938,22 +8215,77 @@ export default function App() {
 
   /** Puente API → estado local: la ficha que arma el login cuando el correo
       no existía en el listado. Sin estar en `usuarios`, `loggedInUser` no
-      resolvería y la sesión se cerraría sola. */
+      resolvería y la sesión se cerraría sola. Un correo vacío nunca compara
+      igual a otro vacío: si no, todos los usuarios sin correo serían "el
+      mismo". */
   const agregarUsuarioLocal = (nuevo: Usuario) => {
+    const em = (v: string) => v.trim().toLowerCase();
     setUsuarios((prev) =>
       prev.some(
         (u) =>
           u.id === nuevo.id ||
-          u.correo.trim().toLowerCase() === nuevo.correo.trim().toLowerCase(),
+          (em(u.correo) !== "" && em(u.correo) === em(nuevo.correo)),
       )
         ? prev
         : [...prev, nuevo],
     );
   };
 
-  const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
-    console.log("[login] handleLogin recibió usuario");
+  /** §1 — Al registrar una venta desde el panel, el cliente se crea (o se le
+      suma un pedido) ANTES de guardar la venta. Reglas:
+      - Ya existe como cliente → +1 pedido, sin tocar el nombre.
+      - Existe solo como usuario o empleado → no se crea nada nuevo.
+      - No existe en ningún lado → Cliente nuevo (correo vacío, que después
+        se completa en el registro público). */
+  const registrarClienteVenta = (
+    datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
+  ): "creado" | "existente" => {
+    const tipo = datos.tipoDocumento.trim();
+    const numero = datos.numeroDocumento.trim();
+    const clave = `${tipo.toLowerCase()}||${numero}`;
+    const mismaClave = (c: { tipoDocumento?: string; numeroDocumento?: string }) =>
+      `${(c.tipoDocumento ?? "").trim().toLowerCase()}||${(c.numeroDocumento ?? "").trim()}` === clave;
 
+    if (clientes.some(mismaClave)) {
+      setClientes((prev) =>
+        prev.map((c) => (mismaClave(c) ? { ...c, pedidos: c.pedidos + 1 } : c)),
+      );
+      return "existente";
+    }
+    if (usuariosUnificados.some(mismaClave)) return "existente";
+
+    const nombre = datos.nombre.trim();
+    const iniciales = nombre
+      .split(/\s+/)
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+    setClientes((prev) => {
+      const maxNum = prev.reduce(
+        (max, c) => Math.max(max, parseInt(c.id.replace("CLI-", "")) || 0),
+        0,
+      );
+      return [
+        {
+          id: `CLI-${String(maxNum + 1).padStart(3, "0")}`,
+          nombre,
+          iniciales,
+          avatarColor: AVATAR_PALETTE[prev.length % AVATAR_PALETTE.length],
+          correo: "",
+          tipoDocumento: tipo,
+          numeroDocumento: numero,
+          pedidos: 1,
+          activo: true,
+        },
+        ...prev,
+      ];
+    });
+    return "creado";
+  };
+
+  const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
@@ -7970,7 +8302,6 @@ export default function App() {
 
     if (!esClientePublico) {
       if (rolesActivos.length === 0) {
-        console.log("[login] rechazo: sin roles activos");
         return { ok: false, mensaje: "Tu cuenta no tiene roles activos. Contacta al administrador." };
       }
       // El bloqueo "sin pantallas" ya NO aplica: Inicio siempre está disponible
@@ -7981,7 +8312,6 @@ export default function App() {
         r => normalizarNombreRol(r.nombre) === "empleado" && !r.activo,
       );
       if (empleadoInactivo || rolEmpleadoInactivo) {
-        console.log("[login] rechazo: cuenta o rol base empleado inactivo");
         return { ok: false, mensaje: "Tu cuenta no tiene roles activos. Contacta al administrador." };
       }
     }
@@ -8053,26 +8383,19 @@ export default function App() {
     escribirRolActivo(user.id, inicialId);
     const nextRole = rolInicial?.nombre ?? "Empleado";
     // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
-    // Dashboard si el rol activo tiene ese permiso; si no, "Inicio" (que
-    // siempre está disponible para empleados y no depende de pantalla asignada).
+    // Dashboard solo si el rol activo es Administrador (§3); si no, "Inicio"
+    // (que siempre está disponible para empleados y no depende de pantalla
+    // asignada).
     const rolInicialEsAdmin = (rolInicial?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador";
-    const hasDashRolInicial = rolInicialEsAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
+    const hasDashRolInicial = rolInicialEsAdmin;
     const nextScreen = esClientePublico
       ? "landing"
       : hasDashRolInicial
         ? "dashboard"
         : "inicio";
 
-    console.log("[login] rol y navegación", {
-      rol: rolInicial?.nombre ?? "sin rol",
-      esClientePublico,
-      nextRole,
-      nextScreen,
-    });
-
     setUserRole(nextRole);
     if (!orderToResume) {
-      console.log("[login] navegando", nextScreen);
       navigate(nextScreen);
     }
     return { ok: true };
@@ -8171,7 +8494,7 @@ export default function App() {
         tamaño: i.size,
         // El id del producto del catálogo de Productos. Se guarda para que la
         // Orden de Producción no tenga que deducir el producto del nombre
-        // ("Pizza Peperoni — Mediano"); si el nombre no está en el catálogo
+        // ("Pizza Peperoni — Mediana"); si el nombre no está en el catálogo
         // queda sin id y se resuelve por nombre.
         productoId: productos.find((p) => normalizarNombre(p.nombre) === normalizarNombre(i.product.name))?.id,
       })),
@@ -8268,28 +8591,6 @@ export default function App() {
     }
   };
 
-  /** Mismo cambio de contraseña, pero por correo: lo usa "¿Olvidaste tu
-   *  contraseña?". Actualiza todas las cuentas con ese correo y avisa si no
-   *  existe ninguna, para no simular una recuperación sobre una cuenta inexistente. */
-  const restablecerContrasena = (
-    correo: string,
-    nuevaContrasena: string,
-  ): "ok" | "no-existe" => {
-    const clave = correo.trim().toLowerCase();
-    const existe = usuarios.some(
-      (u) => u.correo.trim().toLowerCase() === clave,
-    );
-    if (!existe) return "no-existe";
-    setUsuarios((prev) =>
-      prev.map((u) =>
-        u.correo.trim().toLowerCase() === clave
-          ? { ...u, contrasena: nuevaContrasena }
-          : u,
-      ),
-    );
-    return "ok";
-  };
-
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
    *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
    *  conserva) y llegada a "Iniciar sesión" con el correo ya escrito. */
@@ -8303,21 +8604,6 @@ export default function App() {
     await logout({ silenciarAviso: true, destino: "login" });
   };
 
-  // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
-  // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
-  const hasValidSession = isLoggedIn && (
-    userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
-  );
-
-  // Un cliente público (rol "Cliente" y sin ficha de empleado) es el único que no
-  // entra al panel. Cualquier otro rol —incluidos los ROL-00X personalizados—
-  // entra según SUS permisos, sin programarlos nombre por nombre: antes esta
-  // línea comparaba `userRole === "Administrador"`, así que un rol personalizado
-  // caía en `false` y el guard de abajo lo expulsaba a la landing. Es el mismo
-  // criterio de "cliente público" que ya usa el `goPublic` del login.
-  const esClientePublico = esClientePublicoSesion;
-  const isAdminRole = hasValidSession && !esClientePublico;
-  const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
   const isAuth = screen === "login" || screen === "register";
 
   useEffect(() => {
@@ -8365,6 +8651,11 @@ export default function App() {
   if (isLoggedIn && isAdminRole && screen === "inicio" && hasDashboardAccess) {
     setTimeout(() => navigate("dashboard"), 0);
   }
+  // §3: el detalle de la gráfica (sales-chart) solo lo abre el Administrador;
+  // si otro rol llega ahí, se le devuelve a "inicio".
+  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !isNamedAdmin) {
+    setTimeout(() => navigate("inicio"), 0);
+  }
   if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "inicio" && screen !== "profile" && screen !== "store-profile") {
     // Toda pantalla de administración con permKey queda cubierta por esta regla.
     // La lista legacy ADMIN_ONLY_SCREENS se eliminó: sus tres pantallas
@@ -8379,9 +8670,9 @@ export default function App() {
   const sideW = isAdmin
     ? esMovil
       ? ""
-      : sidebarCollapsed
-        ? "ml-16"
-        : "ml-60"
+      : menuAbierto
+        ? "ml-60"
+        : "ml-0"
     : "";
 
   const isLockedScreen = isAdmin && (
@@ -8417,21 +8708,27 @@ export default function App() {
         <Sidebar
           current={screen}
           navigate={navigate}
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
+          abierto={esMovil ? sidebarMovilAbierto : menuAbierto}
+          onClose={() => {
+            setMenuAbierto(false);
+            setTimeout(() => menuButtonRef.current?.focus(), 0);
+          }}
           darkMode={darkMode}
            userRole={userRole}
            accesos={loggedInAccesos}
-           isNamedAdmin={isNamedAdmin}
-           hasDashboardAccess={hasDashboardAccess}
-           esMovil={esMovil}
-           abierto={sidebarMovilAbierto}
-           onCerrarMovil={() => setSidebarMovilAbierto(false)}
+          isNamedAdmin={isNamedAdmin}
+          hasDashboardAccess={hasDashboardAccess}
+          esMovil={esMovil}
+          onCerrarMovil={() => {
+            setSidebarMovilAbierto(false);
+            setTimeout(() => menuButtonRef.current?.focus(), 0);
+          }}
+          firstNavRef={firstNavRef}
         />
       )}
 
       <div
-        className={`transition-all duration-300 ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden" : ""}`}
+        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden" : ""}`}
       >
         {/* Public navbar */}
         {!isAdmin && !isAuth && (
@@ -8452,11 +8749,23 @@ export default function App() {
         {isAdmin && (
           <AdminTopBar
             current={screen}
-            onToggleSidebar={() =>
-              esMovil
-                ? setSidebarMovilAbierto((p) => !p)
-                : setSidebarCollapsed((p) => !p)
-            }
+            onToggleSidebar={() => {
+              if (esMovil) {
+                if (!sidebarMovilAbierto) {
+                  setSidebarMovilAbierto(true);
+                  requestAnimationFrame(() => firstNavRef.current?.focus());
+                } else {
+                  setSidebarMovilAbierto(false);
+                }
+              } else if (!menuAbierto) {
+                setMenuAbierto(true);
+                requestAnimationFrame(() => firstNavRef.current?.focus());
+              } else {
+                setMenuAbierto(false);
+              }
+            }}
+            menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
+            menuButtonRef={menuButtonRef}
             navigate={navigate}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
@@ -8599,7 +8908,6 @@ export default function App() {
                     darkMode={darkMode}
                     loginNotice={loginNotice}
                     initialEmail={loginEmailPre}
-                    onPasswordReset={restablecerContrasena}
                     onLogin={handleLogin}
                 />
               )}
@@ -8610,6 +8918,7 @@ export default function App() {
                   setUsuarios={setUsuarios}
                   empleados={empleados}
                   clientes={clientes}
+                  setClientes={setClientes}
                   darkMode={darkMode}
                 />
               )}
@@ -8639,6 +8948,14 @@ export default function App() {
                 <DashboardScreen
                   navigate={navigate}
                   ventas={ventas}
+                  gestiones={gestiones}
+                  ordenes={ordenes}
+                  noConformidades={noConformidades}
+                  productos={productos}
+                  insumos={insumos}
+                  proveedores={proveedores}
+                  ordenesProduccion={ordenesProduccion}
+                  clientes={clientes}
                   loggedInUser={loggedInUser}
                   loggedInRoleName={loggedInRoleName}
                   tieneRolActivo={loggedInRol !== null}
@@ -8719,6 +9036,7 @@ export default function App() {
                   proveedores={proveedores}
                   setProveedores={setProveedores}
                   insumos={insumos}
+                  productos={productos}
                   setInsumos={setInsumos}
                   onBack={() => {
                     setOrdenAEditar(null);
@@ -8825,6 +9143,9 @@ export default function App() {
                   setPedidos={setVentas}
                   productos={productosMenu}
                   clientes={clientes}
+                  usuarios={usuariosUnificados}
+                  empleados={empleados}
+                  onRegistrarClienteVenta={registrarClienteVenta}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />
               )}
@@ -8894,6 +9215,9 @@ export default function App() {
               )}
               {screen === "sales-chart" && (
                 <SalesChartScreen
+                  ventas={ventas}
+                  gestiones={gestiones}
+                  ordenes={ordenes}
                   onBack={() => navigate(adminHomeScreen)}
                 />
               )}
@@ -8946,6 +9270,8 @@ export default function App() {
                   setOrdenes={setOrdenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
+                  abrirOrdenId={ordenAAbrir}
+                  setOrdenAAbrir={setOrdenAAbrir}
                 />
               )}
               {screen === "finished-products" && (
@@ -9012,12 +9338,18 @@ export default function App() {
                   onCambiarRol={cambiarRolActivo}
                 />
               )}
-              {screen === "tech-sheet" && <RecetasScreen />}
               {screen === "supplies" && (
                 <GestionInsumosScreen
                   {...getPerms("supplies")}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  fichas={fichasPorProducto}
+                  setFichas={setFichasPorProducto}
+                  idsConFicha={[
+                    ...productos.map((p) => p.id),
+                    ...insumos.map((i) => i.id),
+                  ]}
+                  abrirOrdenProduccion={abrirOrdenProduccion}
                 />
               )}
               {isAdmin &&
@@ -9038,7 +9370,6 @@ export default function App() {
                   "production-orders",
                   "finished-products",
                   "profile",
-                  "tech-sheet",
                   "supplies",
                   "sales-chart",
                   "perecederos",
@@ -9102,6 +9433,34 @@ export default function App() {
       <style>{`
         ::-webkit-scrollbar { display: none; }
         * { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 4.5 — Contenedores de tabla: scrollbar fina SIEMPRE visible, aunque
+           el resto de la app oculte la suya. Las reglas por clase ganan en
+           especificidad a las globales de arriba. */
+        .overflow-x-auto, .overflow-auto {
+          -ms-overflow-style: auto;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(117, 117, 117, 0.55) transparent;
+        }
+        .overflow-x-auto::-webkit-scrollbar,
+        .overflow-auto::-webkit-scrollbar {
+          display: block;
+          width: 6px;
+          height: 6px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track,
+        .overflow-auto::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb,
+        .overflow-auto::-webkit-scrollbar-thumb {
+          background-color: rgba(117, 117, 117, 0.55);
+          border-radius: 9999px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+        .overflow-auto::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(117, 117, 117, 0.85);
+        }
       `}</style>
     </div>
   );
