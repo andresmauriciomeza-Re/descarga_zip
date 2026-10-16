@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
-import type { GestionCompra } from "@/features/orden-compra/pages/OrdenCompraScreen";
 
 /** Estado React de un catálogo del panel (insumos / productos). */
 export type SetCatalogo<T> = Dispatch<SetStateAction<T[]>>;
@@ -49,12 +48,6 @@ export const redondear3 = (n: number) => Math.round(n * 1000) / 1000;
  * son SIEMPRE funcionales (`prev => ...`) para no pisar estados concurrentes
  * (otra pantalla del panel puede estar actualizando el mismo catálogo en el
  * mismo lote de render).
- *
- * Al SUMAR se aprovecha para rellenar `stockMaximo` cuando el insumo llegó sin
- * configurar (0 / vacío): recién entonces se conoce un techo real (el stock que
- * acaba de entrar). Si ya tiene techo NO se toca, aunque el stock lo supere: eso
- * es exactamente la alerta "Excede máx.", que avisa en vez de mover el límite.
- * Al RESTAR (anulación) `stockMaximo` tampoco se toca.
  *
  * Devuelve `null` cuando no hay setters que tocar y, si los hay, el resumen de
  * lo realmente aplicado (para armar el toast).
@@ -116,10 +109,7 @@ export function aplicarStockCompra(
         if (!cant) return i;
         const total = i.stockActual + signo * cant;
         const stockActual = signo < 0 ? Math.max(0, redondear3(total)) : redondear3(total);
-        // `stockMaximo` solo se rellena si venía vacío (0 / sin definir) y
-        // únicamente al recibir; nunca se baja ni se sube después.
-        const stockMaximo = signo > 0 && !i.stockMaximo ? stockActual : i.stockMaximo;
-        return { ...i, stockActual, stockMaximo };
+        return { ...i, stockActual };
       })
     );
   }
@@ -140,42 +130,6 @@ export function aplicarStockCompra(
     unidades: lineasAfectadas.reduce((s, l) => s + Math.abs(l.cantidad), 0),
     nombres: [...new Set(lineasAfectadas.map((l) => l.nombre))],
   };
-}
-
-/**
- * Recalcula `costoMaximo` de cada insumo con las compras que hoy están en
- * "Recibido": es el mayor costo unitario facturado entre esas compras, o 0 si
- * ya no queda ninguna (todas anuladas o el insumo nunca se compró).
- *
- * Se recalcula SIEMPRE desde cero en vez de "subir el máximo" al recibir, para
- * que anular una compra devuelva el costo al valor anterior sin tener que
- * guardar el histórico de cada factura. Llamarlo con la lista de compras
- * DESPUÉS del cambio de estado (la compra anulada ya no debe contar).
- */
-export function recalcularCostoMaximo(
-  compras: GestionCompra[],
-  setInsumos?: SetCatalogo<Insumo>
-) {
-  if (!setInsumos) return;
-
-  const maximoPorInsumo = new Map<string, number>();
-  for (const compra of compras) {
-    if (compra.estado !== "Recibido") continue;
-    for (const item of compra.items ?? []) {
-      const costo = item.costoUnitario ?? 0;
-      if (!costo) continue;
-      const actual = maximoPorInsumo.get(item.idInsumo) ?? 0;
-      if (costo > actual) maximoPorInsumo.set(item.idInsumo, costo);
-    }
-  }
-
-  setInsumos((prev) =>
-    prev.map((i) => {
-      const nuevo = maximoPorInsumo.get(i.id) ?? 0;
-      if ((i.costoMaximo ?? 0) === nuevo) return i;
-      return { ...i, costoMaximo: nuevo };
-    })
-  );
 }
 
 /** Texto del toast al sumar stock: con una línea se nombra el insumo/producto

@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "@/features/empleados/pages/GestionEmpleadosScreen";
-import { DOC_TIPOS } from "@/features/usuarios/pages/GestionUsuariosScreen";
+import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { filtrarCorreo, validarCorreo, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "@/shared/components/campo";
@@ -108,9 +108,9 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
   const nombre    = loggedInUser?.nombre    ?? "—";
   const iniciales = loggedInUser?.iniciales ?? "?";
   const avatarBg  = loggedInUser?.avatarColor ?? "bg-primary";
-  const tipoDocumento = DOC_TIPOS.find(t => t.code === loggedInUser?.tipoDocumento)?.label
-    ?? loggedInUser?.tipoDocumento
-    ?? "—";
+  const tipoDocumento = loggedInUser?.tipoDocumento
+    ? etiquetaTipoDocumento(loggedInUser.tipoDocumento)
+    : "—";
 
   const rolColor = loggedInRoleName === "Administrador"
     ? "bg-primary/10 text-primary"

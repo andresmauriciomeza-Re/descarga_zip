@@ -6,183 +6,33 @@ import {
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
+import type { Venta } from "@/features/ventas/pages/VentasScreen";
+import type { GestionCompra, OrdenCompra, OrdenItem } from "@/features/orden-compra/pages/OrdenCompraScreen";
+import {
+  esFechaISO,
+  hoyISO,
+} from "@/shared/utils/fechas";
+
 const SERIF = "var(--font-titulo)";
-const TODAY = { y: 2026, m: 8, d: 20 };
 const DOW_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MON_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const CLOSED_DOW = [1, 2, 3]; // Lun, Mar, Mié
-
-const MONTHS_NAV = [
-  { year: 2026, month: 6, label: "Junio 2026" },
-  { year: 2026, month: 7, label: "Julio 2026" },
-  { year: 2026, month: 8, label: "Agosto 2026" },
-];
 
 // ── helpers ──────────────────────────────────────────────────────────
 function fmtCOP(n: number) { return "$" + Math.round(n).toLocaleString("es-CO"); }
 function getDow(y: number, m: number, d: number) { return new Date(y, m - 1, d).getDay(); }
-function closedDay(y: number, m: number, d: number) { return CLOSED_DOW.includes(getDow(y, m, d)); }
-function futureDay(y: number, m: number, d: number) {
-  return new Date(y, m - 1, d) > new Date(TODAY.y, TODAY.m - 1, TODAY.d);
+function futureDay(y: number, m: number, d: number, hoy: Date) {
+  return new Date(y, m - 1, d) > hoy;
 }
-function todayDay(y: number, m: number, d: number) {
-  return y === TODAY.y && m === TODAY.m && d === TODAY.d;
+function todayDay(y: number, m: number, d: number, hoy: Date) {
+  return y === hoy.getFullYear() && m === hoy.getMonth() + 1 && d === hoy.getDate();
 }
 
-// ── Sales data: products sold per open day ───────────────────────────
-const SALES: Record<string, Record<number, number>> = {
-  "2026-6": {
-    4: 68, 5: 84, 6: 97, 7: 71,
-    11: 74, 12: 91, 13: 103, 14: 78,
-    18: 82, 19: 95, 20: 108, 21: 69,
-    25: 79, 26: 88, 27: 95, 28: 73,
-  },
-  "2026-7": {
-    2: 71, 3: 86, 4: 99, 5: 74,
-    9: 77, 10: 92, 11: 106, 12: 80,
-    16: 83, 17: 95, 18: 112, 19: 76,
-    23: 75, 24: 90, 25: 104, 26: 79,
-    30: 82, 31: 94,
-  },
-  "2026-8": {
-    1: 45, 2: 52,
-    6: 71, 7: 89, 8: 94, 9: 38,
-    13: 85, 14: 102, 15: 67, 16: 43,
-    20: 34,
-  },
-};
-
-// Price per product per day (14,000–16,000 COP)
-const PRICE: Record<string, Record<number, number>> = {
-  "2026-6": {
-    4: 15200, 5: 14800, 6: 15500, 7: 14300,
-    11: 15000, 12: 15300, 13: 14700, 14: 15100,
-    18: 14900, 19: 15400, 20: 15600, 21: 14500,
-    25: 15000, 26: 14800, 27: 15200, 28: 14600,
-  },
-  "2026-7": {
-    2: 15100, 3: 14900, 4: 15400, 5: 14700,
-    9: 15000, 10: 15200, 11: 15500, 12: 14800,
-    16: 14600, 17: 15300, 18: 15700, 19: 14400,
-    23: 15000, 24: 14900, 25: 15100, 26: 15300,
-    30: 15200, 31: 14800,
-  },
-  "2026-8": {
-    1: 14500, 2: 15000,
-    6: 14800, 7: 15200, 8: 15500, 9: 14300,
-    13: 15000, 14: 15400, 15: 14700, 16: 15100,
-    20: 15000,
-  },
-};
-
-// ── Compras data: weekly purchase costs (COP) ────────────────────────
-const COMPRAS_W: Record<string, number[]> = {
-  "2026-6": [2450000, 2680000, 2750000, 2560000, 0],
-  "2026-7": [2310000, 2540000, 2780000, 2620000, 1250000],
-  "2026-8": [1920000, 2380000, 1450000, 0, 0],
-};
-
-type CItem = { nombre: string; cantidad: number; unidad: string; precio: number };
-
-const COMPRAS_ITEMS: Record<string, CItem[][]> = {
-  "2026-6": [
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 40,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 30,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 120, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 8,   unidad: "kg",  precio: 25000 },
-      { nombre: "Bebidas 350ml",      cantidad: 96,  unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 44,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 32,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 130, unidad: "und", precio: 3500  },
-      { nombre: "Jamón Serrano",      cantidad: 5,   unidad: "kg",  precio: 32000 },
-      { nombre: "Bebidas 350ml",      cantidad: 104, unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 46,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 34,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 135, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 10,  unidad: "kg",  precio: 25000 },
-      { nombre: "Albahaca Fresca",    cantidad: 3,   unidad: "kg",  precio: 9000  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 42,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 30,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 125, unidad: "und", precio: 3500  },
-      { nombre: "Aceitunas Negras",   cantidad: 8,   unidad: "kg",  precio: 14000 },
-      { nombre: "Bebidas 350ml",      cantidad: 100, unidad: "und", precio: 2500  },
-    ],
-    [],
-  ],
-  "2026-7": [
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 38,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 28,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 115, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 7,   unidad: "kg",  precio: 25000 },
-      { nombre: "Bebidas 350ml",      cantidad: 90,  unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 42,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 31,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 128, unidad: "und", precio: 3500  },
-      { nombre: "Champiñones",        cantidad: 15,  unidad: "kg",  precio: 12000 },
-      { nombre: "Bebidas 350ml",      cantidad: 98,  unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 48,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 35,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 140, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 11,  unidad: "kg",  precio: 25000 },
-      { nombre: "Pimentón",           cantidad: 10,  unidad: "kg",  precio: 5000  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 43,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 32,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 128, unidad: "und", precio: 3500  },
-      { nombre: "Jamón Serrano",      cantidad: 6,   unidad: "kg",  precio: 32000 },
-      { nombre: "Bebidas 350ml",      cantidad: 104, unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 20,  unidad: "kg",  precio: 18000 },
-      { nombre: "Masa Pre-elaborada", cantidad: 60,  unidad: "und", precio: 3500  },
-      { nombre: "Bebidas 350ml",      cantidad: 48,  unidad: "und", precio: 2500  },
-    ],
-  ],
-  "2026-8": [
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 36,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 27,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 110, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 7,   unidad: "kg",  precio: 25000 },
-      { nombre: "Bebidas 350ml",      cantidad: 88,  unidad: "und", precio: 2500  },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 42,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 30,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 125, unidad: "und", precio: 3500  },
-      { nombre: "Pepperoni",          cantidad: 9,   unidad: "kg",  precio: 25000 },
-      { nombre: "Champiñones",        cantidad: 12,  unidad: "kg",  precio: 12000 },
-    ],
-    [
-      { nombre: "Queso Mozzarella",   cantidad: 28,  unidad: "kg",  precio: 18000 },
-      { nombre: "Salsa de Tomate",    cantidad: 20,  unidad: "lt",  precio: 8000  },
-      { nombre: "Masa Pre-elaborada", cantidad: 85,  unidad: "und", precio: 3500  },
-      { nombre: "Bebidas 350ml",      cantidad: 68,  unidad: "und", precio: 2500  },
-    ],
-    [], [],
-  ],
-};
-
-// ── Build week structure dynamically ─────────────────────────────────
+// ── Build week structure dynamically (datos reales) ──────────────────
 interface DayEntry {
   day: number;
   label: string;
   ventas: number;
   revenue: number;
-  isClosed: boolean;
   isToday: boolean;
   isFuture: boolean;
 }
@@ -193,12 +43,16 @@ interface WeekEntry {
   days: DayEntry[];
   totalVentas: number;
   totalRevenue: number;
+  /** true = todos los días de la semana ya pasaron (solo entonces se muestra %). */
+  terminada: boolean;
 }
 
-function buildWeeks(year: number, month: number): WeekEntry[] {
-  const key = `${year}-${month}`;
-  const sales = SALES[key] ?? {};
-  const prices = PRICE[key] ?? {};
+function buildWeeks(
+  year: number,
+  month: number,
+  porFecha: Map<string, { unidades: number; ingresos: number }>,
+  hoy: Date,
+): WeekEntry[] {
   const daysInMonth = new Date(year, month, 0).getDate();
   const abbr = MON_ES[month - 1].slice(0, 3).toLowerCase();
   const weeks: WeekEntry[] = [];
@@ -208,13 +62,21 @@ function buildWeeks(year: number, month: number): WeekEntry[] {
     const days: DayEntry[] = [];
     for (let d = start; d <= end; d++) {
       const dow = getDow(year, month, d);
-      const closed = CLOSED_DOW.includes(dow);
-      const future = futureDay(year, month, d);
-      const today = todayDay(year, month, d);
-      const ventas = closed || future ? 0 : (sales[d] ?? 0);
-      const price = prices[d] ?? 15000;
-      days.push({ day: d, label: `${DOW_ES[dow]} ${d}`, ventas, revenue: ventas * price, isClosed: closed, isToday: today, isFuture: future });
+      const future = futureDay(year, month, d, hoy);
+      const today = todayDay(year, month, d, hoy);
+      const dato = porFecha.get(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+      days.push({
+        day: d,
+        label: `${DOW_ES[dow]} ${d}`,
+        ventas: future ? 0 : (dato?.unidades ?? 0),
+        revenue: future ? 0 : (dato?.ingresos ?? 0),
+        isToday: today,
+        isFuture: future,
+      });
     }
+    const ultimoDia = new Date(year, month - 1, end);
+    const ultimoPasado = new Date(ultimoDia.getFullYear(), ultimoDia.getMonth(), ultimoDia.getDate())
+      < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     weeks.push({
       idx,
       label: `Semana ${idx + 1}`,
@@ -222,6 +84,7 @@ function buildWeeks(year: number, month: number): WeekEntry[] {
       days,
       totalVentas: days.reduce((s, d) => s + d.ventas, 0),
       totalRevenue: days.reduce((s, d) => s + d.revenue, 0),
+      terminada: ultimoPasado,
     });
   }
   return weeks;
@@ -238,7 +101,7 @@ function ChartTooltip({ active, payload, label, isCOP }: { active?: boolean; pay
   );
 }
 
-// ── Custom XAxis tick (shows "No abrimos" for closed days) ───────────
+// ── Custom XAxis tick (hoy en rojo) ──────────────────────────────────
 function WeekTick({ x, y, payload, days }: { x?: number; y?: number; payload?: { index: number; value: string }; days: DayEntry[] }) {
   if (x === undefined || y === undefined || !payload) return null;
   const entry = days[payload?.index ?? 0];
@@ -247,16 +110,12 @@ function WeekTick({ x, y, payload, days }: { x?: number; y?: number; payload?: {
       <text x={0} y={0} dy={14} textAnchor="middle" fill={entry?.isToday ? "#C62828" : "var(--foreground)"} fontSize={10} fontWeight={entry?.isToday ? "bold" : "normal"}>
         {payload.value}
       </text>
-      {entry?.isClosed && (
-        <text x={0} y={0} dy={26} textAnchor="middle" fill="var(--muted-foreground)" fontSize={8} fontStyle="italic">No abrimos</text>
-      )}
     </g>
   );
 }
 
 // ── Bar color helper ─────────────────────────────────────────────────
 function barFill(d: DayEntry) {
-  if (d.isClosed) return "transparent";
   if (d.isFuture) return "var(--border)";
   if (d.isToday)  return "#ef5350";
   return "#C62828";
@@ -268,10 +127,12 @@ function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras
   onVentas: () => void; onCompras: () => void;
   prevWeek?: WeekEntry; isCompras: boolean;
 }) {
-  const delta = prevWeek && prevWeek.totalVentas > 0
+  // Sin % si la semana no terminó o si no hay semana previa con ventas:
+  // así nunca aparece un "-100%" de una semana a medio camino.
+  const delta = prevWeek && prevWeek.totalVentas > 0 && week.terminada
     ? Math.round(((week.totalVentas - prevWeek.totalVentas) / prevWeek.totalVentas) * 100)
     : null;
-  const noData = week.days.every(d => d.isFuture || d.isClosed);
+  const noData = week.days.every(d => d.isFuture) && comprasTotal === 0;
   const hasCom = comprasTotal > 0;
 
   return (
@@ -314,9 +175,9 @@ function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras
                 dataKey="ventas"
                 radius={[3,3,0,0]}
                 isAnimationActive={false}
-                shape={(props: any) => {
-                  const { x, y, width, height, index } = props;
-                  const fill = barFill(week.days[index]);
+                shape={(props) => {
+                  const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
+                  const fill = barFill(week.days[index ?? 0]);
                   return <rect x={x} y={y} width={width} height={height} fill={fill} rx={3} ry={3} />;
                 }}
               />
@@ -350,7 +211,7 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
         <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ventas · {week.range}</p>
           <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
         </div>
@@ -365,17 +226,17 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={week.days} barSize={32} margin={{ top: 8, bottom: 8, left: -16, right: 8 }}>
             <CartesianGrid key="grid" vertical={false} stroke="var(--border)" />
-            <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...props} days={week.days} />} axisLine={false} tickLine={false} height={40} />
+            <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...(props as { x?: number; y?: number; payload?: { index: number; value: string } })} days={week.days} />} axisLine={false} tickLine={false} height={40} />
             <YAxis key="y" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip key="tip" content={(p) => <ChartTooltip {...p as any} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
+            <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
             <Bar
               key="bar"
               dataKey="ventas"
               radius={[4,4,0,0]}
               isAnimationActive={false}
-              shape={(props: any) => {
-                const { x, y, width, height, index } = props;
-                const fill = barFill(week.days[index]);
+              shape={(props) => {
+                const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
+                const fill = barFill(week.days[index ?? 0]);
                 return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />;
               }}
             />
@@ -397,23 +258,17 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
         </div>
         {week.days.map((d, i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
-            <span className={`w-16 shrink-0 text-sm font-semibold ${d.isToday ? "text-primary" : d.isClosed ? "text-muted-foreground/40" : d.isFuture ? "text-muted-foreground/50" : "text-foreground"}`}>
+            <span className={`w-16 shrink-0 text-sm font-semibold ${d.isToday ? "text-primary" : d.isFuture ? "text-muted-foreground/50" : "text-foreground"}`}>
               {d.label}
             </span>
-            {d.isClosed ? (
-              <span className="text-xs text-muted-foreground/50 italic">No abrimos</span>
-            ) : (
-              <>
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.round((d.ventas / maxV) * 100)}%`, background: d.isToday ? "#ef5350" : "#C62828", opacity: d.isFuture ? 0 : 1 }} />
-                </div>
-                <span className="w-28 text-right text-sm shrink-0">
-                  {d.isFuture ? <span className="text-muted-foreground/40">—</span> : (
-                    <><span className="font-bold text-foreground">{d.ventas}</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
-                  )}
-                </span>
-              </>
-            )}
+            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${Math.round((d.ventas / maxV) * 100)}%`, background: d.isToday ? "#ef5350" : "#C62828", opacity: d.isFuture ? 0 : 1 }} />
+            </div>
+            <span className="w-28 text-right text-sm shrink-0">
+              {d.isFuture ? <span className="text-muted-foreground/40">—</span> : (
+                <><span className="font-bold text-foreground">{d.ventas}</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
+              )}
+            </span>
           </div>
         ))}
       </div>
@@ -422,21 +277,19 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
 }
 
 // ── Week detail: Compras ─────────────────────────────────────────────
-function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items: CItem[]; total: number; onBack: () => void }) {
-  const computed = items.reduce((s, x) => s + x.cantidad * x.precio, 0);
-  const displayTotal = computed > 0 ? computed : total;
+function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items: OrdenItem[]; total: number; onBack: () => void }) {
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Compras · {week.range}</p>
           <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-blue-700">{fmtCOP(displayTotal)}</p>
+          <p className="text-2xl font-bold text-blue-700">{fmtCOP(total)}</p>
           <p className="text-xs text-muted-foreground">total en insumos</p>
         </div>
       </div>
@@ -453,7 +306,7 @@ function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items:
             <p className="text-xs text-muted-foreground">{items.length} ítems</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[560px]">
               <thead className="bg-muted/50">
                 <tr>{["Insumo","Cantidad","Precio unit.","Subtotal"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{h}</th>
@@ -464,15 +317,15 @@ function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items:
                   <tr key={i} className="hover:bg-muted/20">
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{x.nombre}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{x.cantidad} {x.unidad}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{fmtCOP(x.precio)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">{fmtCOP(x.cantidad * x.precio)}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{fmtCOP(x.costoUnitario)}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">{fmtCOP(x.cantidad * x.costoUnitario)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-muted/30 border-t border-border">
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-sm font-bold text-foreground">Total</td>
-                  <td className="px-4 py-3 text-sm font-bold text-blue-700 tabular-nums">{fmtCOP(displayTotal)}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-blue-700 tabular-nums">{fmtCOP(total)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -484,24 +337,100 @@ function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items:
 }
 
 // ── Main screen ───────────────────────────────────────────────────────
-export function SalesChartScreen({ onBack }: { onBack: () => void }) {
+export function SalesChartScreen({
+  ventas,
+  gestiones,
+  onBack,
+}: {
+  ventas: Venta[];
+  gestiones: GestionCompra[];
+  /** Órdenes de compra cableadas desde App.tsx (reservadas para el módulo). */
+  ordenes?: OrdenCompra[];
+  onBack: () => void;
+}) {
   const [tab, setTab] = useState<"ventas" | "compras">("ventas");
-  const [monthIdx, setMonthIdx] = useState(2); // 0=Jun, 1=Jul, 2=Aug
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [detailMode, setDetailMode] = useState<"ventas" | "compras">("ventas");
 
-  const { year, month, label } = MONTHS_NAV[monthIdx];
+  const hoy = new Date();
+  const hoyStr = hoyISO();
+
+  // Índice real de ventas por fecha (excluye anuladas y devueltas).
+  const porFecha = new Map<string, { unidades: number; ingresos: number }>();
+  ventas.forEach((v) => {
+    if (!esFechaISO(v.fecha) || v.estado === "anulado" || v.estado === "perdida") return;
+    const dato = porFecha.get(v.fecha) ?? { unidades: 0, ingresos: 0 };
+    dato.unidades += v.detalle?.reduce((s, d) => s + d.cantidad, 0) ?? v.cantidad ?? 0;
+    dato.ingresos += v.total;
+    porFecha.set(v.fecha, dato);
+  });
+
+  // Compras no anuladas indexadas por fecha de factura.
+  const gestionesValidas = gestiones.filter((g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura));
+  const comprasPorFecha = new Map<string, { total: number; items: OrdenItem[] }>();
+  gestionesValidas.forEach((g) => {
+    const dato = comprasPorFecha.get(g.fechaFactura) ?? { total: 0, items: [] };
+    dato.total += g.valorTotal;
+    dato.items.push(...(g.items ?? []));
+    comprasPorFecha.set(g.fechaFactura, dato);
+  });
+
+  // ── Meses navegables REALES: del primer mes con datos al mes actual ──
+  const fechasDatos = [
+    ...ventas.map((v) => v.fecha),
+    ...gestiones.map((g) => g.fechaFactura),
+  ].filter(esFechaISO);
+  const primeraFecha = fechasDatos.length
+    ? fechasDatos.reduce((a, b) => (a < b ? a : b))
+    : hoyStr;
+  const claveMesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+  const clavePrimerMes = primeraFecha.slice(0, 7) < claveMesActual ? primeraFecha.slice(0, 7) : claveMesActual;
+
+  const mesesDisponibles: { year: number; month: number; label: string }[] = [];
+  {
+    let y = Number(clavePrimerMes.slice(0, 4));
+    let m = Number(clavePrimerMes.slice(5, 7));
+    while (y < hoy.getFullYear() || (y === hoy.getFullYear() && m <= hoy.getMonth() + 1)) {
+      mesesDisponibles.push({ year: y, month: m, label: `${MON_ES[m - 1]} ${y}` });
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+  }
+
+  const [mesClave, setMesClave] = useState(claveMesActual);
+  const idxMes = Math.max(
+    0,
+    mesesDisponibles.findIndex((m) => `${m.year}-${String(m.month).padStart(2, "0")}` === mesClave),
+  );
+  const { year, month, label } = mesesDisponibles[idxMes] ?? mesesDisponibles[mesesDisponibles.length - 1];
   const key = `${year}-${month}`;
-  const weeks = buildWeeks(year, month);
-  const comprasW = COMPRAS_W[key] ?? [];
-  const comprasItems = COMPRAS_ITEMS[key] ?? [];
+  const weeks = buildWeeks(year, month, porFecha, hoy);
+
+  const comprasDeLaSemana = (week: WeekEntry) => {
+    const desde = new Date(year, month - 1, week.days[0].day);
+    const hasta = new Date(year, month - 1, week.days[week.days.length - 1].day);
+    let total = 0;
+    const items: OrdenItem[] = [];
+    comprasPorFecha.forEach((dato, fecha) => {
+      const d = new Date(`${fecha}T00:00:00`);
+      if (d >= desde && d <= hasta) {
+        total += dato.total;
+        items.push(...dato.items);
+      }
+    });
+    return { total, items };
+  };
+  const comprasSemana = weeks.map(comprasDeLaSemana);
 
   const monthTotalVentas = weeks.reduce((s, w) => s + w.totalVentas, 0);
   const monthTotalRevenue = weeks.reduce((s, w) => s + w.totalRevenue, 0);
-  const monthTotalCompras = comprasW.reduce((s, v) => s + v, 0);
+  const monthTotalCompras = comprasSemana.reduce((s, c) => s + c.total, 0);
 
   const changeMonth = (dir: -1 | 1) => {
-    setMonthIdx(i => Math.max(0, Math.min(2, i + dir)));
+    const n = idxMes + dir;
+    if (n < 0 || n >= mesesDisponibles.length) return;
+    const m = mesesDisponibles[n];
+    setMesClave(`${m.year}-${String(m.month).padStart(2, "0")}`);
     setSelectedWeek(null);
   };
 
@@ -514,10 +443,10 @@ export function SalesChartScreen({ onBack }: { onBack: () => void }) {
     `px-5 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${tab === t ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"}`;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       <AnimatePresence mode="wait">
         {selectedWeek === null ? (
-          <motion.div key="month-view" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+          <motion.div key={`month-${key}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
             {/* Back + title */}
             <div className="mb-6">
               <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer mb-2">
@@ -537,14 +466,14 @@ export function SalesChartScreen({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
-            {/* Month navigation */}
-            <div className="flex items-center justify-between mb-5">
+            {/* Month navigation — wrap para no desbordar en móvil */}
+            <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <button onClick={() => changeMonth(-1)} disabled={monthIdx === 0} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors">
+                <button onClick={() => changeMonth(-1)} disabled={idxMes === 0} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes anterior">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <h2 className="text-lg font-bold text-foreground min-w-36 text-center">{label}</h2>
-                <button onClick={() => changeMonth(1)} disabled={monthIdx === 2} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors">
+                <button onClick={() => changeMonth(1)} disabled={idxMes === mesesDisponibles.length - 1} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes siguiente">
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
@@ -576,7 +505,7 @@ export function SalesChartScreen({ onBack }: { onBack: () => void }) {
                 <WeekCard
                   key={week.idx}
                   week={week}
-                  comprasTotal={comprasW[i] ?? 0}
+                  comprasTotal={comprasSemana[i]?.total ?? 0}
                   onVentas={() => openDetail(i, "ventas")}
                   onCompras={() => openDetail(i, "compras")}
                   prevWeek={i > 0 ? weeks[i - 1] : undefined}
@@ -595,8 +524,8 @@ export function SalesChartScreen({ onBack }: { onBack: () => void }) {
           <ComprasDetail
             key={`compras-${selectedWeek}`}
             week={weeks[selectedWeek]}
-            items={comprasItems[selectedWeek] ?? []}
-            total={comprasW[selectedWeek] ?? 0}
+            items={comprasSemana[selectedWeek]?.items ?? []}
+            total={comprasSemana[selectedWeek]?.total ?? 0}
             onBack={() => setSelectedWeek(null)}
           />
         )}
@@ -604,13 +533,3 @@ export function SalesChartScreen({ onBack }: { onBack: () => void }) {
     </div>
   );
 }
-
-// ── Mini chart data for Dashboard (today: 4pm–10pm) ──────────────────
-export const HOURLY_TODAY = [
-  { hora: "4pm",  ventas: 3 },
-  { hora: "5pm",  ventas: 6 },
-  { hora: "6pm",  ventas: 8 },
-  { hora: "7pm",  ventas: 7 },
-  { hora: "8pm",  ventas: 6 },
-  { hora: "9pm",  ventas: 4 },
-];

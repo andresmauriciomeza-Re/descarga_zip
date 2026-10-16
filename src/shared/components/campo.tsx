@@ -30,10 +30,18 @@ export function inputCls(err?: string, base: string = ""): string {
  * Parrafo de error debajo del campo. No ocupa espacio cuando no hay error.
  * `leading-tight` recorta la altura cuando el texto envuelve a dos lineas, que
  * es lo que descuadraba las grillas de dos columnas.
+ *
+ * `id` es el que referencian `aria-describedby` de cada campo cuando hay
+ * error (ver hook `useValidacionFormulario`). El rojo lleva variante `dark`
+ * para mantener contraste legible sobre fondo oscuro.
  */
-export function MensajeError({ err }: { err?: string }) {
+export function MensajeError({ err, id }: { err?: string; id?: string }) {
   if (!err) return null;
-  return <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{err}</p>;
+  return (
+    <p id={id} className="text-xs text-red-500 dark:text-red-400 mt-1 ml-0.5 leading-tight">
+      {err}
+    </p>
+  );
 }
 
 /**
@@ -52,6 +60,10 @@ export function PasswordField({
   cls,
   autoComplete,
   onKeyDown,
+  pad = "pr-11",
+  inputRef,
+  ariaInvalid,
+  ariaDescribedBy,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -60,6 +72,23 @@ export function PasswordField({
   autoComplete?: string;
   /** Opcional: sirve para enviar con Enter cuando todo el formulario es válido. */
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /**
+   * Reserva a la derecha para el icono del ojo. El default `pr-11` (44px) es
+   * el que usan Login, Mi Perfil y los modales: alli hay ancho de sobra.
+   *
+   * El registro lo baja a `pr-9` (36px) porque ahi cada columna de la tarjeta
+   * mide ~205px: con 44px de reserva solo quedaban 145px de texto y el
+   * placeholder "Repite tu contrasena" (146px) se recortaba. El boton ocupa
+   * de 8 a 32px desde el borde, asi que 36px le sigue dejando 4px de aire.
+   */
+  pad?: string;
+  /** Callback ref al input: registra el campo en `useValidacionFormulario`
+   *  para poder enfocarlo (trampa de Tab y foco al primer inválido). */
+  inputRef?: (el: HTMLInputElement | null) => void;
+  /** `aria-invalid` cuando el campo tiene error. */
+  ariaInvalid?: boolean;
+  /** Id del mensaje de error asociado (`aria-describedby`). */
+  ariaDescribedBy?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -71,7 +100,10 @@ export function PasswordField({
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className={`${cls} pr-11`}
+        ref={inputRef}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        className={`${cls} ${pad}`}
       />
       <button
         type="button"
@@ -104,6 +136,9 @@ const RE_TELEFONO = /^3\d{9}$/;
 const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
 
 export const MIN_CONTRASENA = 8;
+/** Tope del backend: 72 caracteres y también 72 bytes en UTF-8 (una "á"
+    ocupa 2 bytes), así que ambas medidas se validan con la misma regla. */
+export const MAX_CONTRASENA = 72;
 
 export function validarCorreo(v: string): string | null {
   if (!v.trim()) return "El correo es obligatorio";
@@ -128,6 +163,7 @@ export function filtrarCorreo(valor: string): string {
 export function validarNombre(v: string): string | null {
   if (!v.trim()) return "El nombre completo es obligatorio";
   if (!RE_NOMBRE.test(v)) return "Usa solo letras y espacios, sin espacios dobles";
+  if (v.trim().length < 3) return "El nombre completo debe tener al menos 3 caracteres";
   return null;
 }
 
@@ -175,9 +211,17 @@ export type ReglaContrasena = {
 export const REGLAS_CONTRASENA: ReglaContrasena[] = [
   {
     id: "largo",
-    texto: `Mínimo ${MIN_CONTRASENA} caracteres`,
-    mensaje: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`,
-    ok: (v) => v.length >= MIN_CONTRASENA,
+    texto: `Entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
+    mensaje: `La contraseña debe tener entre ${MIN_CONTRASENA} y ${MAX_CONTRASENA} caracteres`,
+    ok: (v) => v.length >= MIN_CONTRASENA && v.length <= MAX_CONTRASENA,
+  },
+  {
+    id: "bytes",
+    texto: `Máximo ${MAX_CONTRASENA} bytes`,
+    mensaje: `La contraseña no puede superar ${MAX_CONTRASENA} bytes`,
+    // El backend cuenta bytes UTF-8 (una "á" ocupa 2), no solo caracteres.
+    // `v.length > 0` evita pintar la regla en verde con el campo vacío.
+    ok: (v) => v.length > 0 && new TextEncoder().encode(v).length <= MAX_CONTRASENA,
   },
   {
     id: "mayuscula",
@@ -221,6 +265,12 @@ export function faltantesContrasena(v: string): string[] {
  * Lista de requisitos en tiempo real. Ícono gris mientras la regla no se
  * cumple y check verde en cuanto se cumple; se pinta mientras se escribe, no
  * al enviar el formulario.
+ *
+ * `className` REEMPLAZA las clases de layout, no se suman a ellas: el valor
+ * por defecto trae `space-y-1`, que en un `grid` añadiría un margin-top extra
+ * por fila y descuadraría el hueco. Quien pase su propio layout se lleva el
+ * `mt-2` tambien. Hoy solo Registro lo usa (para pasar una cuadrícula de 2
+ * columnas); Cambiar contraseña no lo pasa y conserva la lista vertical.
  */
 export function RequisitosContrasena({
   valor,
@@ -230,7 +280,7 @@ export function RequisitosContrasena({
   className?: string;
 }) {
   return (
-    <ul className={`mt-2 space-y-1 ${className ?? ""}`}>
+    <ul className={className ?? "mt-2 space-y-1"}>
       {REGLAS_CONTRASENA.map((regla) => {
         const ok = regla.ok(valor);
         return (

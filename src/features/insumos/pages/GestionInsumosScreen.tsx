@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Pencil, Trash2, X, Check, Package, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X, Check, Package, AlertTriangle, ChefHat } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
@@ -11,7 +11,21 @@ import {
   ESTADO_INACTIVO_COLOR,
 } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
+import {
+  copiarFicha,
+  emptyFichaVersion,
+  fichaDesdeLegacyInsumo,
+  fichaTieneCambios,
+  numeroNuevoFicha,
+  siguienteNumeroFicha,
+  type FichaVersion,
+  type FichasPorProducto,
+  type PorcionesTamano,
+} from "@/shared/utils/fichas";
+import { CONFIG_CATEGORIA } from "@/shared/utils/configCategoria";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -44,18 +58,18 @@ export interface Insumo {
   tipo: string;
   stockActual: number;
   stockMinimo: number;
-  stockMaximo: number;
-  /** Mayor costo unitario facturado entre las compras que siguen en
-      "Recibido" (lo recalcula `utils/inventario.ts` al recibir y al anular).
-      Vacío = todavía no se ha comprado: se muestra "—". */
-  costoMaximo?: number;
   categoriaId: string;
   estado: "activo" | "inactivo";
+  /** ── Datos legacy ────────────────────────────────────────────────
+      La ficha técnica única (fichas.ts) es la fuente de verdad desde la
+      unificación. Estos tres campos ya no se editan ni se sincronizan: quedan
+      como el respaldo de los registros creados antes de la unificación y solo
+      los lee el fallback de Orden de Producción para líneas muy viejas. */
   composicion?: ProductoInsumoInsumo[];
   descripcion?: string;
-  /** Tiempo de preparación del Producto Insumo, en minutos. Opcional: si queda
-      vacío, las órdenes de "Preparación en lote" muestran "Sin tiempo definido".
-      Solo aplica a `tipo === "ProductoInsumo"`. */
+  /** Tiempo de preparación legacy, en minutos. Solo aplica a
+      `tipo === "ProductoInsumo"`; las órdenes nuevas lo toman del snapshot de
+      la ficha. */
   tiempoPreparacion?: number;
 }
 
@@ -76,16 +90,16 @@ export interface ProductoInsumo {
 }
 
 export const INITIAL_INSUMOS: Insumo[] = [
-  { id: "INS-001", nombre: "Queso Mozzarella", unidadMedida: "kg", costoUnitario: 18000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 25, stockMinimo: 10, stockMaximo: 50, categoriaId: "CINS-001", estado: "activo" },
-  { id: "INS-003", nombre: "Pepperoni", unidadMedida: "kg", costoUnitario: 25000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 8, stockMinimo: 5, stockMaximo: 20, categoriaId: "CINS-002", estado: "activo" },
-  { id: "INS-005", nombre: "Champiñones", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 5, stockMaximo: 15, categoriaId: "CINS-003", estado: "activo" },
-  { id: "INS-006", nombre: "Harina", unidadMedida: "kg", costoUnitario: 4500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 40, stockMinimo: 20, stockMaximo: 120, categoriaId: "CINS-004", estado: "activo" },
-  { id: "INS-007", nombre: "Agua", unidadMedida: "lt", costoUnitario: 400, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 120, stockMinimo: 40, stockMaximo: 300, categoriaId: "CINS-004", estado: "activo" },
-  { id: "INS-008", nombre: "Aceite", unidadMedida: "lt", costoUnitario: 9000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 12, stockMinimo: 4, stockMaximo: 30, categoriaId: "CINS-004", estado: "activo" },
-  { id: "INS-009", nombre: "Levadura", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 2, stockMinimo: 1, stockMaximo: 6, categoriaId: "CINS-004", estado: "activo" },
-  { id: "INS-010", nombre: "Aguacate", unidadMedida: "kg", costoUnitario: 9500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 18, stockMinimo: 8, stockMaximo: 40, categoriaId: "CINS-003", estado: "activo" },
-  { id: "INS-011", nombre: "Cebolla", unidadMedida: "kg", costoUnitario: 3500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 6, stockMinimo: 3, stockMaximo: 15, categoriaId: "CINS-003", estado: "activo" },
-  { id: "INS-012", nombre: "Limón", unidadMedida: "lt", costoUnitario: 5000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 2, stockMaximo: 10, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-001", nombre: "Queso Mozzarella", unidadMedida: "kg", costoUnitario: 18000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 25, stockMinimo: 10, categoriaId: "CINS-001", estado: "activo" },
+  { id: "INS-003", nombre: "Pepperoni", unidadMedida: "kg", costoUnitario: 25000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 8, stockMinimo: 5, categoriaId: "CINS-002", estado: "activo" },
+  { id: "INS-005", nombre: "Champiñones", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 5, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-006", nombre: "Harina", unidadMedida: "kg", costoUnitario: 4500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 40, stockMinimo: 20, categoriaId: "CINS-004", estado: "activo" },
+  { id: "INS-007", nombre: "Agua", unidadMedida: "lt", costoUnitario: 400, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 120, stockMinimo: 40, categoriaId: "CINS-004", estado: "activo" },
+  { id: "INS-008", nombre: "Aceite", unidadMedida: "lt", costoUnitario: 9000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 12, stockMinimo: 4, categoriaId: "CINS-004", estado: "activo" },
+  { id: "INS-009", nombre: "Levadura", unidadMedida: "kg", costoUnitario: 12000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 2, stockMinimo: 1, categoriaId: "CINS-004", estado: "activo" },
+  { id: "INS-010", nombre: "Aguacate", unidadMedida: "kg", costoUnitario: 9500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 18, stockMinimo: 8, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-011", nombre: "Cebolla", unidadMedida: "kg", costoUnitario: 3500, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 6, stockMinimo: 3, categoriaId: "CINS-003", estado: "activo" },
+  { id: "INS-012", nombre: "Limón", unidadMedida: "lt", costoUnitario: 5000, precioUnitario: null, iva: null, tipo: "Insumo", stockActual: 4, stockMinimo: 2, categoriaId: "CINS-003", estado: "activo" },
   // Productos Insumo: lo que Gloria prepara en lote, refrigera y consume la
   // cocina. Cada uno lleva su receta (`composicion`, cantidades POR 1 unidad),
   // su descripción de preparación y su tiempo. Son los únicos que una orden
@@ -93,7 +107,7 @@ export const INITIAL_INSUMOS: Insumo[] = [
   {
     id: "PIN-001", nombre: "Guacamole", unidadMedida: "lt", costoUnitario: 0,
     precioUnitario: null, iva: null, tipo: "ProductoInsumo",
-    stockActual: 8, stockMinimo: 5, stockMaximo: 20, categoriaId: "-", estado: "activo",
+    stockActual: 8, stockMinimo: 5, categoriaId: "-", estado: "activo",
     composicion: [
       { id: "INS-010", categoriaId: "CINS-003", nombre: "Aguacate", cantidad: 2, unidadMedida: "kg" },
       { id: "INS-011", categoriaId: "CINS-003", nombre: "Cebolla", cantidad: 0.2, unidadMedida: "kg" },
@@ -105,7 +119,7 @@ export const INITIAL_INSUMOS: Insumo[] = [
   {
     id: "PIN-002", nombre: "Salsa de Tomate", unidadMedida: "lt", costoUnitario: 0,
     precioUnitario: null, iva: null, tipo: "ProductoInsumo",
-    stockActual: 30, stockMinimo: 15, stockMaximo: 60, categoriaId: "-", estado: "activo",
+    stockActual: 30, stockMinimo: 15, categoriaId: "-", estado: "activo",
     composicion: [
       { id: "INS-005", categoriaId: "CINS-003", nombre: "Champiñones", cantidad: 1, unidadMedida: "kg" },
     ],
@@ -115,7 +129,7 @@ export const INITIAL_INSUMOS: Insumo[] = [
   {
     id: "PIN-003", nombre: "Masa Pre-elaborada", unidadMedida: "und", costoUnitario: 0,
     precioUnitario: null, iva: null, tipo: "ProductoInsumo",
-    stockActual: 4, stockMinimo: 20, stockMaximo: 100, categoriaId: "-", estado: "activo",
+    stockActual: 4, stockMinimo: 20, categoriaId: "-", estado: "activo",
     composicion: [
       { id: "INS-006", categoriaId: "CINS-004", nombre: "Harina", cantidad: 0.5, unidadMedida: "kg" },
       { id: "INS-007", categoriaId: "CINS-004", nombre: "Agua", cantidad: 0.3, unidadMedida: "lt" },
@@ -129,6 +143,11 @@ export const INITIAL_INSUMOS: Insumo[] = [
 
 const UNIDADES = ["kg", "lt", "und"];
 
+/** ¿Este Producto Insumo tiene ficha vigente? Las fichas viven en App
+    (prop de este componente), no en el módulo. */
+const fichaVigente = (fichas: FichasPorProducto, insumo: Insumo): boolean =>
+  (fichas[insumo.id] ?? []).some((v) => !v.fechaFin);
+
 // ─────────────────────────── Helpers ───────────────────────────
 const fmtCOP = (n: number): string =>
   `$${n.toLocaleString("es-CO")}`;
@@ -136,12 +155,38 @@ const fmtCOP = (n: number): string =>
 const esStockBajo = (insumo: Insumo): boolean =>
   insumo.stockActual < insumo.stockMinimo;
 
-const excedeMaximo = (insumo: Insumo): boolean =>
-  insumo.stockActual > insumo.stockMaximo;
-
 const formatearId = (id: string): string => {
   const match = id.match(/(\d+)$/);
   return match ? match[1] : id;
+};
+
+// ─── Producto Insumo: categoría y tamaños de la ficha ───────────────────────
+/** Categorías admitidas para un Producto Insumo: solo las que llevan ficha
+    (Pizzas y Lasañas). Bebidas (reventa) queda fuera de este módulo. */
+const CATEGORIAS_PI = [
+  { id: "CAT-001", nombre: "Pizzas" },
+  { id: "CAT-002", nombre: "Lasañas" },
+] as const;
+
+const categoriaPIValida = (id: string): boolean =>
+  CATEGORIAS_PI.some(c => c.id === id);
+
+/** Filas "Porciones por tamaño" que define la categoría del Producto Insumo
+    (CONFIG_CATEGORIA): Mediana/Grande para Pizzas, Normal para Lasañas. */
+const filasDeCategoriaPI = (categoriaId: string): PorcionesTamano[] =>
+  CONFIG_CATEGORIA[categoriaId]?.tamanos?.map(f => ({ ...f })) ?? [];
+
+/** Ajusta el borrador de la ficha a la categoría elegida: las filas quedan
+    EXACTAMENTE con las etiquetas de CONFIG_CATEGORIA (conservando las
+    porciones de las que sigan existiendo y completando las que falten con el
+    valor precargado); `porciones` sigue siendo la PRIMERA fila. */
+const ajustarFilasPI = (v: FichaVersion, categoriaId: string): FichaVersion => {
+  const actuales = v.porcionesPorTamano ?? [];
+  const filas = filasDeCategoriaPI(categoriaId).map(
+    d => actuales.find(a => a.tamano === d.tamano) ?? { ...d },
+  );
+  if (filas.length === 0) return v;
+  return { ...v, porcionesPorTamano: filas, porciones: filas[0].porciones };
 };
 
 /**
@@ -247,11 +292,20 @@ function ConfirmDialog({
 interface Props {
   insumos: Insumo[];
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
+  /** Fichas técnicas única por id de registro (PROD-### / PIN-###). */
+  fichas: FichasPorProducto;
+  setFichas: React.Dispatch<React.SetStateAction<FichasPorProducto>>;
+  /** IDs de registros que pueden tener ficha (productos del menú y Productos
+      Insumo): con ellos se numera la siguiente ficha sin huecos. */
+  idsConFicha: string[];
   productosInsumo?: ProductoInsumo[];
   setProductosInsumo?: React.Dispatch<React.SetStateAction<ProductoInsumo[]>>;
+  /** Navega a Orden de Producción con el modal ya abierto y este producto
+      preseleccionado. */
+  abrirOrdenProduccion?: (idProductoInsumo: string) => void;
 }
 
-export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = [], setProductosInsumo }: Props) {
+export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, idsConFicha, productosInsumo = [], setProductosInsumo, abrirOrdenProduccion }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -269,24 +323,19 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   const [unidad, setUnidad] = useState(UNIDADES[0]);
   const [stockActual, setStockActual] = useState(0);
   const [stockMinimo, setStockMinimo] = useState(0);
-  const [stockMaximo, setStockMaximo] = useState(0);
   const [costoUnitario, setCostoUnitario] = useState(0);
 
   // Form state - Producto Insumo
   const [piNombre, setPiNombre] = useState("");
-  const [piDescripcion, setPiDescripcion] = useState("");
-  const [piInsumos, setPiInsumos] = useState<ProductoInsumoInsumo[]>([]);
-  const [piEditandoIdx, setPiEditandoIdx] = useState<number | null>(null);
-  const [piCategoriaId, setPiCategoriaId] = useState(CATEGORIAS_INSUMO[0].id);
-  const [piInsumoId, setPiInsumoId] = useState("");
-  const [piCantidad, setPiCantidad] = useState(1);
-  const [piUnidad, setPiUnidad] = useState(UNIDADES[0]);
+  // Categoría del Producto Insumo (solo Pizzas/Lasañas): define los tamaños
+  // fijos de su ficha técnica vía CONFIG_CATEGORIA.
+  const [piCategoriaId, setPiCategoriaId] = useState<string>(CATEGORIAS_PI[0].id);
+  // Ficha técnica única del Producto Insumo (la comparte con Producción >
+  // Productos y con Orden de Producción). Todo lo editable vive aquí.
+  const [piFicha, setPiFicha] = useState<FichaVersion>(emptyFichaVersion(1));
   const [piStockActual, setPiStockActual] = useState(0);
   const [piStockMinimo, setPiStockMinimo] = useState(0);
-  const [piStockMaximo, setPiStockMaximo] = useState(0);
   const [piUnidadMedida, setPiUnidadMedida] = useState(UNIDADES[0]);
-  // Tiempo de preparación en minutos. Opcional ("" = sin dato).
-  const [piTiempo, setPiTiempo] = useState("");
 
   // Confirmación
   const [confirmState, setConfirmState] = useState<{
@@ -358,9 +407,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         { header: "Unidad", valor: (i) => i.unidadMedida },
         { header: "Stock Actual", valor: (i) => i.stockActual, alineacion: "right" },
         { header: "Stock Mínimo", valor: (i) => i.stockMinimo, alineacion: "right" },
-        { header: "Stock Máximo", valor: (i) => i.stockMaximo, alineacion: "right" },
         { header: "Costo Unitario", valor: (i) => (i.tipo === "ProductoInsumo" ? "-" : i.costoUnitario), numFmt: "$#,##0", alineacion: "right" },
-        { header: "Costo Máximo", valor: (i) => (i.tipo === "ProductoInsumo" || !i.costoMaximo ? "-" : i.costoMaximo), numFmt: "$#,##0", alineacion: "right" },
         { header: "Estado", valor: (i) => (i.estado === "activo" ? "Activo" : "Inactivo"), esEstado: true },
       ],
     });
@@ -376,7 +423,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
     setUnidad(UNIDADES[0]);
     setStockActual(0);
     setStockMinimo(0);
-    setStockMaximo(0);
     setCostoUnitario(0);
     setShowModal(true);
   };
@@ -391,17 +437,26 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       setEditingId(insumo.id);
       setEditandoProducto(true);
       setPiNombre(insumo.nombre);
-      setPiDescripcion(insumo.descripcion || "");
-      setPiInsumos(insumo.composicion ? [...insumo.composicion] : []);
-      setPiEditandoIdx(null);
-      setPiCategoriaId(CATEGORIAS_INSUMO[0].id);
-      setPiInsumoId("");
-      setPiUnidad(UNIDADES[0]);
+      // La ficha sale de las versiones guardadas (borrador = copia de la
+      // última) o, si aún no existe, de los campos legacy del propio insumo.
+      const guardadas = (fichas[insumo.id] ?? []).map(copiarFicha);
+      const ultima = guardadas[guardadas.length - 1];
+      const base = ultima ?? fichaDesdeLegacyInsumo(insumo);
+      // Categoría guardada si es de las admitidas (Pizzas/Lasañas); los
+      // registros viejos (categoriaId "-") nacen como Pizzas.
+      const catId = categoriaPIValida(insumo.categoriaId)
+        ? insumo.categoriaId
+        : CATEGORIAS_PI[0].id;
+      setPiCategoriaId(catId);
+      const borrador: FichaVersion = base
+        ? { ...base, destino: { tipo: "producto-insumo", insumoId: insumo.id } }
+        : { ...emptyFichaVersion(1), destino: { tipo: "producto-insumo", insumoId: insumo.id } };
+      // Los tamaños del borrador se ajustan a la categoría (misma regla que
+      // Crear/Editar Producto en Producción > Productos).
+      setPiFicha(ajustarFilasPI(borrador, catId));
       setPiStockActual(insumo.stockActual);
       setPiStockMinimo(insumo.stockMinimo);
-      setPiStockMaximo(insumo.stockMaximo);
       setPiUnidadMedida(insumo.unidadMedida);
-      setPiTiempo(insumo.tiempoPreparacion ? String(insumo.tiempoPreparacion) : "");
       setShowProductoModal(true);
     } else {
       // Editar insumo normal
@@ -412,7 +467,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       setUnidad(insumo.unidadMedida);
       setStockActual(insumo.stockActual);
       setStockMinimo(insumo.stockMinimo);
-      setStockMaximo(insumo.stockMaximo);
       setCostoUnitario(insumo.costoUnitario);
       setShowModal(true);
     }
@@ -425,39 +479,25 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
     }
 
     if (editingId) {
-      // Punto 10: estas validaciones SOLO aplican en edición. En la creación
-      // ya no se piden Stock máximo ni Costo unitario (quedan en 0 y se
-      // cargan después), así que exigirles un valor bloqueaba el alta.
-      if (stockMaximo <= 0) {
-        toast.error("El stock máximo debe ser mayor a 0.");
-        return;
-      }
-      if (stockMaximo < stockMinimo) {
-        toast.error("El stock máximo no puede ser menor al stock mínimo.");
-        return;
-      }
       if (costoUnitario < 0) {
         toast.error("El costo unitario no puede ser negativo.");
         return;
       }
 
-      // En edición solo se actualiza stockMaximo; el costoUnitario y los demás
-      // campos conservan su valor original aunque el formulario los envíe
-      // modificados (no se confía solo en el disabled del HTML).
+      // En edición solo se actualizan el stock actual y el stock mínimo; el
+      // costoUnitario y los demás campos conservan su valor original aunque
+      // el formulario los envíe modificados (no se confía solo en el disabled
+      // del HTML).
       const original = insumos.find(i => i.id === editingId);
       if (!original) return;
-      // Validación: el stock actual no puede exceder el nuevo máximo.
-      if (original.stockActual > stockMaximo) {
-        toast.error("El stock actual no puede exceder el nuevo stock máximo.");
-        return;
-      }
       setInsumos(prev => prev.map(i =>
         i.id === editingId
-          ? { ...i, stockMaximo, costoUnitario: original.costoUnitario }
+          ? { ...i, stockActual, stockMinimo }
           : i
       ));
-      if (esStockBajo(original)) {
-        toast.warning(`Alerta: el stock de ${original.nombre} está bajo (${original.stockActual} ${original.unidadMedida}, mínimo ${original.stockMinimo} ${original.unidadMedida})`, { duration: 6000 });
+      const actualizado: Insumo = { ...original, stockActual, stockMinimo };
+      if (esStockBajo(actualizado)) {
+        toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 6000 });
       } else {
         toast.success(`Insumo "${original.nombre}" actualizado`);
       }
@@ -473,12 +513,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         categoriaId,
         unidadMedida: unidad,
         // Punto 10: la creación ya no pide estos tres campos, así que nacen
-        // en 0 (el stock se carga después de crear el insumo y el máximo y el
-        // costo se escriben desde Editar). Los estados siguen en 0 porque
-        // `openCreate` los limpia y los campos están ocultos.
+        // en 0 (el stock se carga después de crear el insumo y el costo se
+        // escribe desde Editar). Los estados siguen en 0 porque `openCreate`
+        // los limpia y los campos están ocultos.
         stockActual,
         stockMinimo,
-        stockMaximo,
         costoUnitario,
         precioUnitario: null,
         iva: null,
@@ -531,76 +570,19 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   // ─────────────────────────── Producto Insumo ───────────────────────────
   const openCreateProducto = () => {
     setPiNombre("");
-    setPiDescripcion("");
-    setPiInsumos([]);
-    setPiEditandoIdx(null);
-    setPiCategoriaId(CATEGORIAS_INSUMO[0].id);
-    setPiInsumoId("");
-    setPiUnidad(UNIDADES[0]);
+    setPiCategoriaId(CATEGORIAS_PI[0].id);
+    // Borrador con las filas de la categoría por defecto (Pizzas: Mediana y
+    // Grande), igual que "Crear Producto" en Producción > Productos.
+    const filas = filasDeCategoriaPI(CATEGORIAS_PI[0].id);
+    setPiFicha({
+      ...emptyFichaVersion(1),
+      porcionesPorTamano: filas,
+      porciones: filas[0]?.porciones ?? 1,
+    });
     setPiStockActual(0);
     setPiStockMinimo(0);
-    setPiStockMaximo(0);
     setPiUnidadMedida(UNIDADES[0]);
-    setPiTiempo("");
     setShowProductoModal(true);
-  };
-
-  const insumosFiltradosPorCategoria = useMemo(() => {
-    return insumos.filter(i => i.categoriaId === piCategoriaId && i.estado === "activo");
-  }, [insumos, piCategoriaId]);
-
-  const agregarInsumoProducto = () => {
-    if (!piInsumoId) {
-      toast.error("Selecciona un insumo.");
-      return;
-    }
-    if (piCantidad <= 0) {
-      toast.error("La cantidad debe ser mayor a 0.");
-      return;
-    }
-    const ins = insumos.find(i => i.id === piInsumoId);
-    if (!ins) return;
-
-    if (piEditandoIdx !== null) {
-      setPiInsumos(prev => prev.map((p, idx) =>
-        idx === piEditandoIdx
-          ? { id: ins.id, categoriaId: piCategoriaId, nombre: ins.nombre, cantidad: piCantidad, unidadMedida: piUnidad }
-          : p
-      ));
-      setPiEditandoIdx(null);
-    } else {
-      const existente = piInsumos.find(p => p.id === piInsumoId);
-      if (existente) {
-        setPiInsumos(prev => prev.map(p =>
-          p.id === piInsumoId
-            ? { ...p, cantidad: p.cantidad + piCantidad }
-            : p
-        ));
-        toast.info(`Se sumó la cantidad a "${ins.nombre}"`);
-      } else {
-        setPiInsumos(prev => [...prev, { id: ins.id, categoriaId: piCategoriaId, nombre: ins.nombre, cantidad: piCantidad, unidadMedida: piUnidad }]);
-      }
-    }
-    setPiInsumoId("");
-    setPiCantidad(1);
-    setPiUnidad(UNIDADES[0]);
-  };
-
-  const editarInsumoProducto = (idx: number) => {
-    const item = piInsumos[idx];
-    setPiEditandoIdx(idx);
-    setPiCategoriaId(item.categoriaId);
-    setPiInsumoId(item.id);
-    setPiCantidad(item.cantidad);
-    setPiUnidad(item.unidadMedida);
-  };
-
-  const eliminarInsumoProducto = (idx: number) => {
-    setPiInsumos(prev => prev.filter((_, i) => i !== idx));
-    if (piEditandoIdx === idx) {
-      setPiEditandoIdx(null);
-      setPiInsumoId("");
-    }
   };
 
   const handleCrearProducto = () => {
@@ -608,24 +590,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
       toast.error("El nombre es obligatorio.");
       return;
     }
-    if (piStockMaximo <= 0) {
-      toast.error("El stock máximo debe ser mayor a 0.");
-      return;
-    }
-    if (piStockMaximo < piStockMinimo) {
-      toast.error("El stock máximo no puede ser menor al stock mínimo.");
-      return;
-    }
-    if (piStockActual > piStockMaximo) {
-      toast.error("El stock actual no puede ser mayor al stock máximo.");
-      return;
-    }
-    if (piInsumos.length === 0) {
+    if (piFicha.insumos.length === 0) {
       toast.error("Agrega al menos un insumo.");
-      return;
-    }
-    if (piTiempo !== "" && (!Number.isFinite(Number(piTiempo)) || Number(piTiempo) < 0)) {
-      toast.error("El tiempo de preparación debe ser un número de minutos válido.");
       return;
     }
     setConfirmState({
@@ -644,27 +610,50 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
   const ejecutarConfirmacion = () => {
     if (confirmState.tipo === "crear-producto") {
       if (editandoProducto) {
-        // Editar producto insumo: solo actualizar stockMaximo, composicion y descripcion
+        if (!editingId) return;
+        // Editar producto insumo: ficha técnica única. Las versiones solo
+        // crecen si el borrador cambió frente a la última.
         const original = insumos.find(i => i.id === editingId);
         if (!original) return;
-        setInsumos(prev => prev.map(i =>
-          i.id === editingId
-            ? {
-                ...i,
-                stockMaximo: piStockMaximo,
-                composicion: piInsumos,
-                descripcion: piDescripcion.trim() || undefined,
-                tiempoPreparacion: piTiempo === "" ? undefined : Number(piTiempo),
-              }
-            : i
-        ));
+        const versiones = fichas[editingId] ?? [];
+        const ultima = versiones[versiones.length - 1];
+        const ahora = new Date().toISOString();
+        if (!ultima) {
+          // Nunca tuvo ficha guardada: el borrador entra como v1.
+          setFichas(prev => ({
+            ...prev,
+            [editingId]: [{
+              ...piFicha,
+              version: 1,
+              idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
+              destino: { tipo: "producto-insumo", insumoId: editingId },
+              fechaInicio: ahora,
+              fechaFin: null,
+            }],
+          }));
+        } else if (fichaTieneCambios(piFicha, ultima)) {
+          setFichas(prev => ({
+            ...prev,
+            [editingId]: [
+              ...versiones.map((v, i) =>
+                i === versiones.length - 1 ? { ...v, fechaFin: ahora } : v
+              ),
+              {
+                ...piFicha,
+                version: ultima.version + 1,
+                idReceta: ultima.idReceta,
+                destino: { tipo: "producto-insumo", insumoId: editingId },
+                fechaInicio: ahora,
+                fechaFin: null,
+              },
+            ],
+          }));
+        }
         toast.success(`Producto Insumo "${original.nombre}" actualizado`);
         setShowProductoModal(false);
         setEditandoProducto(false);
         setPiNombre("");
-        setPiDescripcion("");
-        setPiTiempo("");
-        setPiInsumos([]);
+        setPiFicha(emptyFichaVersion(1));
       } else {
         // Crear nuevo producto insumo
         const maxNum = insumos.reduce((max, i) => {
@@ -683,28 +672,38 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
           tipo: "ProductoInsumo",
           stockActual: piStockActual,
           stockMinimo: piStockMinimo,
-          stockMaximo: piStockMaximo,
-          categoriaId: "-",
+          categoriaId: piCategoriaId,
           estado: "activo",
-          composicion: piInsumos,
-          descripcion: piDescripcion.trim() || undefined,
-          tiempoPreparacion: piTiempo === "" ? undefined : Number(piTiempo),
         };
         setInsumos(prev => [nuevo, ...prev]);
-        toast.success(`Producto Insumo "${piNombre}" creado`);
+        // La ficha del Producto Insumo nace junto con el registro, con el
+        // siguiente número de la serie compartida (001, 002, …).
+        setFichas(prev => ({
+          ...prev,
+          [newId]: [{
+            ...piFicha,
+            version: 1,
+            idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
+            destino: { tipo: "producto-insumo", insumoId: newId },
+            fechaInicio: new Date().toISOString(),
+            fechaFin: null,
+          }],
+        }));
+        toast.success(`Producto Insumo "${piNombre}" creado`, {
+          action: {
+            label: "Programar producción",
+            onClick: () => abrirOrdenProduccion?.(newId),
+          },
+        });
         setShowProductoModal(false);
         setPiNombre("");
-        setPiDescripcion("");
-        setPiTiempo("");
-        setPiInsumos([]);
+        setPiFicha(emptyFichaVersion(1));
       }
     } else if (confirmState.tipo === "cancelar-producto") {
       setShowProductoModal(false);
       setEditandoProducto(false);
       setPiNombre("");
-      setPiDescripcion("");
-      setPiTiempo("");
-      setPiInsumos([]);
+      setPiFicha(emptyFichaVersion(1));
     } else if (confirmState.tipo === "cambiar-estado" && confirmState.id && confirmState.nuevoEstado) {
       setInsumos(prev => prev.map(i =>
         i.id === confirmState.id ? { ...i, estado: confirmState.nuevoEstado! } : i
@@ -736,11 +735,172 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         )
       : [];
 
+  // ── Pantalla completa Crear/Editar Producto Insumo ──────────────────────
+  // Calca de "Crear Producto" (Producción > Productos): early-return, alto
+  // exacto sobre el viewport y dos columnas con divide-x. La ficha técnica
+  // siempre está visible a la derecha (sin botón ocultar); sus tamaños los
+  // define la categoría elegida vía CONFIG_CATEGORIA (Pizzas: Mediana y
+  // Grande · Lasañas: Normal).
+  if (showProductoModal) {
+    const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    const tamanosPI = filasDeCategoriaPI(piCategoriaId).map(f => f.tamano);
+    const confirmPI =
+      confirmState.tipo === "crear-producto" || confirmState.tipo === "cancelar-producto";
+    return (
+      /* Igual que Crear Producto: el alto es el viewport menos el AdminTopBar
+         (3.5rem) y el footer del admin en cada breakpoint; cada columna
+         scrollea por dentro, nunca la página. */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+        {/* Cabecera fija: no crece ni genera scroll */}
+        <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
+              {editandoProducto ? "Editar Producto Insumo" : "Crear Producto Insumo"}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {editandoProducto
+                ? "Solo se puede modificar la ficha técnica"
+                : "Completa los datos del producto y su ficha técnica"}
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCancelarProducto}
+              className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCrearProducto}
+              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+            >
+              {editandoProducto ? "Guardar cambios" : "Crear"}
+            </button>
+          </div>
+        </div>
+
+        {/* Two columns: cada columna scrollea por dentro, nunca la página */}
+        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
+          {/* ── COLUMNA IZQUIERDA: datos del producto insumo ── */}
+          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+            <div className="flex flex-col flex-1 min-h-0 w-full max-w-2xl">
+              <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                Datos del producto insumo
+              </p>
+              <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+                {/* Categoría — solo Pizzas y Lasañas: define los tamaños de
+                    la ficha técnica (Bebidas, de reventa, queda fuera). */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
+                  <select
+                    value={piCategoriaId}
+                    onChange={e => {
+                      const sig = e.target.value;
+                      setPiCategoriaId(sig);
+                      setPiFicha(prev => ajustarFilasPI(prev, sig));
+                    }}
+                    disabled={editandoProducto}
+                    className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : " cursor-pointer")}
+                  >
+                    {CATEGORIAS_PI.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    La ficha técnica se muestra con sus tamaños: {tamanosPI.join(" / ") || "—" }.
+                  </p>
+                </div>
+                {/* Nombre */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Nombre del Producto Insumo *</label>
+                  <input
+                    value={piNombre}
+                    onChange={e => setPiNombre(e.target.value)}
+                    placeholder="Ej: Salsa de tomate preparada"
+                    disabled={editandoProducto}
+                    className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : "")}
+                  />
+                </div>
+                {/* Stock actual + Stock mínimo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad (stock actual) *</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      value={piStockActual}
+                      onChange={e => setPiStockActual(Number(e.target.value))}
+                      disabled={editandoProducto}
+                      className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : "")}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Stock Mínimo *</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={piStockMinimo}
+                      onChange={e => setPiStockMinimo(Number(e.target.value))}
+                      disabled={editandoProducto}
+                      className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : "")}
+                    />
+                  </div>
+                </div>
+                {/* Unidad de medida */}
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Unidad de Medida</label>
+                  <select
+                    value={piUnidadMedida}
+                    onChange={e => setPiUnidadMedida(e.target.value)}
+                    disabled={editandoProducto}
+                    className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : " cursor-pointer")}
+                  >
+                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── COLUMNA DERECHA: ficha técnica (siempre visible) ── */}
+          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+              <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                Ficha Técnica
+              </p>
+              <FichaTecnicaEditor
+                ficha={piFicha}
+                onChange={setPiFicha}
+                insumos={insumos}
+                modo="insumo"
+                inputCls={iCls}
+                /* Los tamaños los define la categoría (CONFIG_CATEGORIA). */
+                tamanoFijo={tamanosPI}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Confirmación del flujo (crear / cancelar) ── */}
+        <AnimatePresence>
+          {confirmPI && (
+            <ConfirmDialog
+              mensaje={confirmState.mensaje}
+              onConfirmar={ejecutarConfirmacion}
+              onCancelar={cancelarConfirmacion}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   // ─────────────────────────── Render ───────────────────────────
   return (
-    <div className="px-6 pt-5 pb-4 max-w-6xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-5 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-5 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             Gestión de Insumos
@@ -798,23 +958,22 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
 
       {/* Table */}
       <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
-        <table className="w-full table-fixed">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <colgroup>
             <col style={{ width: "7%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "23%" }} />
+            <col style={{ width: "6%" }} />
             <col style={{ width: "11%" }} />
-            <col style={{ width: "19%" }} />
-            <col style={{ width: "6%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "12%" }} />
             <col style={{ width: "10%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "6%" }} />
-            <col style={{ width: "9%" }} />
+            <col style={{ width: "11%" }} />
           </colgroup>
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
-              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "STOCK MÁX.", "COSTO UNIT.", "COSTO MÁX.", "ESTADO", "ACCIONES"].map(h => (
+              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "COSTO UNIT.", "ESTADO", "ACCIONES"].map(h => (
                 <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -822,7 +981,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
           <tbody className="divide-y divide-border">
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-14 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-14 text-center text-muted-foreground">
                   <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p className="font-medium">No hay resultados</p>
                 </td>
@@ -830,7 +989,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
             ) : paged.map(insumo => {
               const esProductoInsumo = insumo.tipo === "ProductoInsumo";
               const stockBajo = insumo.estado === "activo" && esStockBajo(insumo);
-              const excede = insumo.estado === "activo" && excedeMaximo(insumo);
               const inactivo = insumo.estado === "inactivo";
               return (
                 <tr key={insumo.id} className={`hover:bg-muted/20 dark:hover:bg-muted/10 transition-colors ${inactivo ? "opacity-50" : ""}`}>
@@ -853,12 +1011,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                           Stock bajo
                         </span>
                       )}
-                      {excede && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
-                          Excede máx.
-                        </span>
-                      )}
-                      {!stockBajo && !excede && insumo.estado === "activo" && (
+                      {!stockBajo && insumo.estado === "activo" && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
                           OK
                         </span>
@@ -866,13 +1019,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     </div>
                   </td>
                   <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
-                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMaximo}</td>
                   <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
-                  {/* Costo máximo: lo que más se ha pagado entre las compras
-                      recibidas. "—" mientras no haya ninguna. */}
-                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">
-                    {esProductoInsumo || !insumo.costoMaximo ? "-" : fmtCOP(insumo.costoMaximo)}
-                  </td>
                   <td className="px-3 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). Mantiene el
                         flujo de siempre: elegir la opción contraria pide la
@@ -890,52 +1037,41 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     />
                   </td>
                   <td className="px-3 py-3.5">
-                    <ActionIcons
-                      onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
-                      onEdit={() => openEdit(insumo)}
-                      editDisabled={inactivo}
-                      editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
-                      onDelete={() => setConfirmState({ tipo: "eliminar", mensaje: "", id: insumo.id })}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <ActionIcons
+                        onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
+                        onEdit={() => openEdit(insumo)}
+                        editDisabled={inactivo}
+                        editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
+                        onDelete={() => setConfirmState({ tipo: "eliminar", mensaje: "", id: insumo.id })}
+                      />
+                      {esProductoInsumo && (
+                        <button
+                          onClick={() => abrirOrdenProduccion?.(insumo.id)}
+                          disabled={!fichaVigente(fichas, insumo) || inactivo}
+                          title={
+                            inactivo ? "Producto Insumo inactivo" :
+                            !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
+                            "Programar producción"
+                          }
+                          className="p-1.5 rounded-lg hover:bg-purple-50 text-muted-foreground hover:text-purple-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ChefHat className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Pagination */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* ─────────────────────────── Modal Crear/Editar Insumo ─────────────────────────── */}
@@ -958,7 +1094,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   </button>
                 </div>
                 {editingId && (
-                  <p className="text-xs text-muted-foreground mt-1">Solo se puede modificar el stock máximo.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Solo se pueden modificar el stock actual y el stock mínimo.</p>
                 )}
               </div>
               <div className="px-6 py-5 space-y-4">
@@ -978,7 +1114,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                   />
                 </div>
                 {/* Categoría + Unidad */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría</label>
                     <select
@@ -1013,9 +1149,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                     />
                   </div>
                 </div>
-                {/* Punto 10: el Stock Actual solo se pide al EDITAR (al crear
-                    el stock se carga después de dar de alta el insumo). */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Punto 10: el Stock Actual solo aparece al EDITAR (al crear
+                    el stock se carga después de dar de alta el insumo). Es
+                    editable, igual que el Stock Mínimo: son los únicos campos
+                    que cambian en edición. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {editingId && (
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Actual</label>
@@ -1024,51 +1162,22 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                         min={0}
                         value={stockActual}
                         onChange={e => setStockActual(Number(e.target.value))}
-                        disabled={!!editingId}
-                        className={`w-full px-3 py-2.5 rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                          editingId ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed" : "bg-muted dark:bg-input"
-                        }`}
+                        className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground bg-muted dark:bg-input focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                   )}
                   {/* En creación toma las dos columnas: no está el Stock Actual. */}
-                  <div className={editingId ? "" : "col-span-2"}>
+                  <div className={editingId ? "" : "sm:col-span-2"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
                     <input
                       type="number"
                       min={0}
                       value={stockMinimo}
                       onChange={e => setStockMinimo(Number(e.target.value))}
-                      disabled={!!editingId}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                        editingId
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                      }`}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
-                    {!editingId && stockMinimo > stockMaximo && stockMaximo > 0 && (
-                      <p className="text-xs text-red-500 mt-1">No puede ser mayor al stock máximo.</p>
-                    )}
                   </div>
                 </div>
-                {/* Punto 10: Stock Máximo y Costo Unitario también se quitan
-                    de la CREACIÓN; en la EDICIÓN siguen igual (el máximo es
-                    el único campo editable del formulario). */}
-                {editingId && (
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Máximo *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={stockMaximo}
-                      onChange={e => setStockMaximo(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    {stockActual > stockMaximo && stockMaximo > 0 && (
-                      <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
-                    )}
-                  </div>
-                )}
                 {editingId && (
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Costo Unitario (COP)</label>
@@ -1107,256 +1216,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
         )}
       </AnimatePresence>
 
-      {/* ─────────────────────────── Modal Crear Producto Insumo ─────────────────────────── */}
-      <AnimatePresence>
-        {showProductoModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col"
-            >
-              <div className="px-6 py-4 border-b border-border shrink-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                    {editandoProducto ? "Editar Producto Insumo" : "Crear Producto Insumo"}
-                  </h3>
-                  <button onClick={() => setShowProductoModal(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {editandoProducto && (
-                  <p className="text-xs text-muted-foreground mt-1">Solo se pueden modificar el stock máximo, los insumos que lo componen y la descripción.</p>
-                )}
-              </div>
-              <div className="px-6 py-5 space-y-4 overflow-y-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
-                {/* Nombre */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre del Producto Insumo *</label>
-                  <input
-                    value={piNombre}
-                    onChange={e => setPiNombre(e.target.value)}
-                    placeholder="Ej: Salsa de tomate preparada"
-                    disabled={editandoProducto}
-                    className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                      editandoProducto
-                        ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                    }`}
-                  />
-                </div>
-
-                {/* Cantidad, Stock Mínimo, Stock Máximo, Unidad */}
-                <div className="grid grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Cantidad (stock actual) *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.1"
-                      value={piStockActual}
-                      onChange={e => setPiStockActual(Number(e.target.value))}
-                      disabled={editandoProducto}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                        editandoProducto
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                      }`}
-                    />
-                    {!editandoProducto && piStockActual > piStockMaximo && piStockMaximo > 0 && (
-                      <p className="text-xs text-red-500 mt-1">No puede ser mayor al stock máximo.</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={piStockMinimo}
-                      onChange={e => setPiStockMinimo(Number(e.target.value))}
-                      disabled={editandoProducto}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                        editandoProducto
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                      }`}
-                    />
-                    {!editandoProducto && piStockMinimo > piStockMaximo && piStockMaximo > 0 && (
-                      <p className="text-xs text-red-500 mt-1">No puede ser mayor al stock máximo.</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Máximo *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={piStockMaximo}
-                      onChange={e => setPiStockMaximo(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    {editandoProducto && piStockActual > piStockMaximo && piStockMaximo > 0 && (
-                      <p className="text-xs text-red-500 mt-1">El stock actual no puede ser mayor al stock máximo.</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida</label>
-                    <select
-                      value={piUnidadMedida}
-                      onChange={e => setPiUnidadMedida(e.target.value)}
-                      disabled={editandoProducto}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                        editandoProducto
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground cursor-pointer"
-                      }`}
-                    >
-                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Bloque de agregar insumo - siempre visible */}
-                <div className="p-4 bg-muted/40 dark:bg-muted/20 border border-border rounded-xl">
-                  <div className="grid grid-cols-5 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría de Insumo</label>
-                      <select
-                        value={piCategoriaId}
-                        onChange={e => { setPiCategoriaId(e.target.value); setPiInsumoId(""); }}
-                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
-                      >
-                        {CATEGORIAS_INSUMO.map(c => (
-                          <option key={c.id} value={c.id}>{c.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre del Insumo</label>
-                      <select
-                        value={piInsumoId}
-                        onChange={e => setPiInsumoId(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {insumosFiltradosPorCategoria.map(i => (
-                          <option key={i.id} value={i.id}>{i.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Cantidad</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        value={piCantidad}
-                        onChange={e => setPiCantidad(Number(e.target.value))}
-                        placeholder="0"
-                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida</label>
-                      <select
-                        value={piUnidad}
-                        onChange={e => setPiUnidad(e.target.value)}
-                        className="w-full px-3 py-2 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none cursor-pointer"
-                      >
-                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={agregarInsumoProducto}
-                        className="w-full py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
-                      >
-                        {piEditandoIdx !== null ? "Actualizar" : "Agregar"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Lista de insumos agregados */}
-                  {piInsumos.length > 0 && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {piInsumos.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-muted/30 dark:bg-muted/20 border border-border rounded-xl">
-                          <div>
-                            <div className="text-sm font-semibold text-foreground">{item.nombre}</div>
-                            <div className="text-xs text-muted-foreground">{categoriaNombre(item.categoriaId)} · {item.cantidad} {item.unidadMedida}</div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => editarInsumoProducto(idx)}
-                              title="Editar"
-                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => eliminarInsumoProducto(idx)}
-                              title="Eliminar"
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Descripción */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Descripción de la preparación</label>
-                  <textarea
-                    value={piDescripcion}
-                    onChange={e => setPiDescripcion(e.target.value)}
-                    placeholder="Describe cómo se prepara este producto insumo..."
-                    rows={3}
-                    className="w-full px-3 py-2.5 bg-muted dark:bg-input rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                  />
-                </div>
-
-                {/* Tiempo de preparación: lo consume la Orden de Producción
-                    ("Preparación en lote") para calcular el tiempo estimado. */}
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                    Tiempo de preparación (min) <span className="text-muted-foreground/60">(opcional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={piTiempo}
-                    onChange={e => setPiTiempo(e.target.value)}
-                    placeholder="Sin tiempo definido"
-                    className="w-full px-3 py-2.5 bg-muted rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-                <button
-                  onClick={handleCancelarProducto}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCrearProducto}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2"
-                >
-                  <Check className="w-4 h-4" />
-                  {editandoProducto ? "Guardar cambios" : "Crear"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* ─────────────────────────── Modal Detalle ─────────────────────────── */}
       <AnimatePresence>
         {showDetalleModal && detalleItem && (
@@ -1384,6 +1243,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                 {(() => {
                   if ("tipo" in detalleItem && (detalleItem as ProductoInsumo).tipo === "ProductoInsumo") {
                     const d = detalleItem as Insumo;
+                    const guardadas = fichas[d.id] ?? [];
+                    const fv = guardadas.length > 0 ? guardadas[guardadas.length - 1] : fichaDesdeLegacyInsumo(d);
                     return (
                       <>
                         <div>
@@ -1395,20 +1256,18 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                           <p className="text-sm text-foreground">{d.nombre}</p>
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción de la preparación</label>
-                          {d.descripcion ? (
-                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">{d.descripcion}</p>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Ficha técnica</label>
+                          {fv ? (
+                            <FichaTecnicaDetalle
+                              v={fv}
+                              readCls="w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground"
+                              modo="insumo"
+                            />
                           ) : (
-                            <p className="text-sm text-muted-foreground italic">Sin descripción</p>
+                            <p className="text-sm text-muted-foreground italic">Sin ficha técnica</p>
                           )}
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Tiempo de preparación</label>
-                          <p className="text-sm text-foreground">
-                            {d.tiempoPreparacion ? `${d.tiempoPreparacion} min` : <span className="text-muted-foreground italic">Sin tiempo definido</span>}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
                             <p className="text-sm font-mono font-bold text-foreground">{d.stockActual} {d.unidadMedida}</p>
@@ -1418,17 +1277,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                             <p className="text-sm text-foreground">{d.unidadMedida}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Mínimo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.stockMinimo}</p>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Máximo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.stockMaximo}</p>
-                          </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Mínimo</label>
+                          <p className="text-sm font-mono text-muted-foreground">{d.stockMinimo}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                             <p className={`text-sm font-mono font-bold ${d.estado === "activo" ? "text-emerald-600" : "text-gray-500"}`}>
@@ -1436,17 +1289,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                             </p>
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Insumos</label>
-                          <div className="space-y-1">
-                            {d.composicion?.map((ins, idx) => (
-                              <div key={idx} className="text-sm text-foreground">
-                                {ins.nombre} · {ins.cantidad} {ins.unidadMedida}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Costo Unitario</label>
                             <p className="text-sm font-mono font-bold text-foreground">-</p>
@@ -1474,7 +1317,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                           <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
                           <p className="text-sm text-foreground">{categoriaNombre(d.categoriaId)}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad</label>
                             <p className="text-sm text-foreground">{d.unidadMedida}</p>
@@ -1484,17 +1327,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                             <p className="text-sm font-mono font-bold text-foreground">{d.stockActual}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Mínimo</label>
                             <p className="text-sm font-mono text-muted-foreground">{d.stockMinimo}</p>
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Máximo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.stockMaximo}</p>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">IVA</label>
+                            <p className="text-sm font-mono font-bold text-foreground">{d.iva !== null ? `${d.iva}%` : "-"}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Costo Unitario</label>
                             <p className="text-sm font-mono font-bold text-foreground">{fmtCOP(d.costoUnitario)}</p>
@@ -1504,21 +1347,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                             <p className="text-sm font-mono font-bold text-foreground">{d.precioUnitario !== null ? fmtCOP(d.precioUnitario) : "-"}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Costo máximo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.costoMaximo ? fmtCOP(d.costoMaximo) : "-"}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">IVA</label>
-                            <p className="text-sm font-mono font-bold text-foreground">{d.iva !== null ? `${d.iva}%` : "-"}</p>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                            <p className="text-sm font-mono font-bold text-foreground">{d.estado === "activo" ? "Activo" : "Inactivo"}</p>
-                          </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
+                          <p className="text-sm font-mono font-bold text-foreground">{d.estado === "activo" ? "Activo" : "Inactivo"}</p>
                         </div>
                       </>
                     );
@@ -1526,6 +1357,20 @@ export function GestionInsumosScreen({ insumos, setInsumos, productosInsumo = []
                 })()}
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-border">
+                {(() => {
+                  if (!("tipo" in detalleItem && (detalleItem as ProductoInsumo).tipo === "ProductoInsumo")) return null;
+                  const d = detalleItem as Insumo;
+                  return (
+                    <button
+                      onClick={() => { setShowDetalleModal(false); abrirOrdenProduccion?.(d.id); }}
+                      disabled={!fichaVigente(fichas, d) || d.estado === "inactivo"}
+                      title={d.estado === "inactivo" ? "Producto Insumo inactivo" : !fichaVigente(fichas, d) ? "Registra su ficha técnica primero" : "Programar producción"}
+                      className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Programar producción
+                    </button>
+                  );
+                })()}
                 <button
                   onClick={() => setShowDetalleModal(false)}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"

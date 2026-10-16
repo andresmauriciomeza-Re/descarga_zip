@@ -3,14 +3,13 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MensajeError } from "@/shared/components/campo";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import {
   EstadoSelect,
@@ -18,7 +17,12 @@ import {
   ESTADO_INACTIVO_COLOR,
   type EstadoOption,
 } from "@/shared/components/EstadoSelect";
-import { GRUPOS_ICONOS } from "@/features/categoria-productos/services/iconosCategoria";
+import {
+  claveImagenDe,
+  IMAGENES_CATEGORIA,
+  esImagenContenida,
+} from "@/features/categoria-productos/services/imagenesCategoria";
+import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 
 const SERIF = "var(--font-titulo)";
 
@@ -83,9 +87,11 @@ export interface CategoriaProducto {
   id: string;
   nombre: string;
   /**
-   * Emoji con el que la categoría aparece en el landing. Es opcional a
-   * propósito: solo lo llevan las categorías creadas desde acá. Las tres
-   * originales conservan su ícono fijo, escrito en App.tsx.
+   * Clave "img:…" de `IMAGENES_CATEGORIA` con la que la categoría aparece en
+   * el landing, en la tabla y en el detalle (§5). Es opcional a propósito:
+   * solo lo llevan las categorías creadas desde acá. Las tres originales
+   * conservan su imagen fija, resuelta por id en `IMAGEN_FIJA_CATEGORIA`.
+   * (Antes guardaba un emoji; los datos viejos siguen pintándose como texto.)
    */
   icono?: string;
   /**
@@ -125,29 +131,13 @@ export const INITIAL_CATEGORIAS: CategoriaProducto[] = [
 
 /**
  * Las tres originales no son editables: su nombre está escrito en el catálogo
- * público y su ícono en el landing, así que cambiarlos aquí dejaría la tarjeta
+ * público y su imagen en el landing, así que cambiarlos aquí dejaría la tarjeta
  * y el filtro del catálogo mostrando cosas distintas. Se pueden borrar, como
  * hoy, pero no renombrar.
  */
 const CATEGORIAS_FIJAS = new Set(["CAT-001", "CAT-002", "CAT-003"]);
 
 const MAX_NOMBRE = 30;
-
-/**
- * Emoji con el que se pinta una categoría en la tabla y en el detalle. Las tres
- * originales no llevan `icono` en los datos —el suyo vive en el landing—, así
- * que aquí se repiten los mismos literales solo para mostrarlos, sin tocar la
- * semilla ni lo que está guardado. Las nuevas usan el que se les eligió al
- * crearlas, y si alguna no tuviera ícono ni equivalente se queda sin pintar.
- */
-export const ICONOS_FIJOS: Record<string, string> = {
-  "CAT-001": "🍕",
-  "CAT-002": "🍝",
-  "CAT-003": "🥤",
-};
-
-const iconoDe = (c: CategoriaProducto) =>
-  c.icono || ICONOS_FIJOS[c.id] || "";
 
 /**
  * Clave de comparación de nombres: sin mayúsculas, sin tildes y sin espacios
@@ -226,15 +216,11 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     useState<CategoriaProducto | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formNombre, setFormNombre] = useState("");
+  // Clave "img:…" de la imagen elegida en el modal Crear (§5).
   const [formIcono, setFormIcono] = useState("");
   // Descripción del Crear (P17a): opcional y sin validación, así que vive en
   // su propio estado y se guarda tal cual (sin más reglas que trim()).
   const [formDescripcion, setFormDescripcion] = useState("");
-  const [grupoIconoSeleccionado, setGrupoIconoSeleccionado] = useState(0);
-  // Grupo activo del selector de ícono del modal Editar. Es propio y
-  // no reutiliza `grupoIconoSeleccionado` del Crear, para que los
-  // dos modales no se pisen entre sí.
-  const [grupoIconoEdicion, setGrupoIconoEdicion] = useState(0);
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   // Estado que se guarda al crear: empieza en Activo. El de Editar viaja en
@@ -255,7 +241,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     "w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
     (err ? "border-red-400 bg-red-50/30" : "bg-muted border-border");
 
-  /** Valida nombre e ícono contra el resto de categorías. `ignorarId` deja
+  /** Valida nombre e imagen contra el resto de categorías. `ignorarId` deja
       fuera al propio registro para que al editar no se detecte a sí mismo. */
   const validarCategoria = (
     nombre: string,
@@ -273,7 +259,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       )
     )
       errs.nombre = "Ese nombre ya está registrado";
-    if (!icono) errs.icono = "Selecciona un ícono";
+    if (!icono) errs.icono = "Selecciona una imagen";
     return errs;
   };
 
@@ -337,9 +323,9 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   const handleEdit = () => {
     if (!editItem) return;
     const esFija = CATEGORIAS_FIJAS.has(editItem.id);
-    // Las originales conservan nombre e ícono (el suyo está escrito en el
-    // landing), así que no se valida lo que no se puede tocar: solo cambia su
-    // estado.
+    // Las originales conservan nombre e imagen (la suya es fija por id, en
+    // IMAGEN_FIJA_CATEGORIA), así que no se valida lo que no se puede tocar:
+    // solo cambia su estado.
     if (!esFija) {
       const errs = validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
       setEditErrors(errs);
@@ -372,7 +358,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   // Ancho amplio (igual que Proveedores/Gestión de Insumos): el listado usa
   // el ancho completo del panel en vez del antiguo max-w-3xl.
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -406,7 +392,10 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       {/* Search */}
       <SearchInput
         value={search}
-        onChange={setSearch}
+        onChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         placeholder="Buscar por ID o nombre..."
       />
 
@@ -455,16 +444,19 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     <td className="px-4 py-2.5 text-sm font-mono font-semibold text-foreground">
                       {/* Solo el número: de "CAT-005" muestra "005". El dato
                           `c.id` NO cambia (lo usan CATEGORIAS_FIJAS,
-                          ICONOS_FIJOS, borrar/editar y el idCategoria de los
-                          productos), y el buscador sigue comparando contra
-                          `c.id` completo. */}
+                          IMAGEN_FIJA_CATEGORIA, borrar/editar y el idCategoria
+                          de los productos), y el buscador sigue comparando
+                          contra `c.id` completo. */}
                       {c.id.replace("CAT-", "")}
                     </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground">
-                      <span className="inline-flex items-center gap-1.5">
-                        {iconoDe(c) && (
-                          <span aria-hidden="true">{iconoDe(c)}</span>
-                        )}
+                      <span className="inline-flex items-center gap-2">
+                        {/* Imagen 32×32 (§5): la fila sigue midiendo 61 px. */}
+                        <ImagenCategoria
+                          clave={claveImagenDe(c)}
+                          className="w-8 h-8 shrink-0"
+                          alt={c.nombre}
+                        />
                         {c.nombre}
                       </span>
                     </td>
@@ -510,20 +502,6 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                             ? () => {
                                 setEditErrors({});
                                 setEditItem({ ...c });
-                                // Grupo del selector donde vive el ícono
-                                // actual, para que al abrir Editar el
-                                // grupo activo sea el del ícono de la
-                                // categoría (índice 0 si no se encuentra).
-                                const iconoActual =
-                                  c.icono || ICONOS_FIJOS[c.id] || "";
-                                setGrupoIconoEdicion(
-                                  Math.max(
-                                    0,
-                                    GRUPOS_ICONOS.findIndex((g) =>
-                                      g.iconos.includes(iconoActual),
-                                    ),
-                                  ),
-                                );
                               }
                             : undefined
                         }
@@ -539,42 +517,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
       </div>
 
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from(
-                { length: totalPages },
-                (_, i) => i + 1,
-              ).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* ── Crear ── */}
@@ -590,7 +533,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               {/* Sin campo ID (P17a): el id lo asigna el sistema solo y ya se
                   ve en el listado y en Ver detalle; en el formulario solo
                   estorbaba. */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
                     Nombre Categoría *
@@ -640,43 +583,34 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Ícono *
+                  Imagen *
                 </label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {GRUPOS_ICONOS.map((grupo, idx) => (
+                {/* Galería de imágenes (§5): miniaturas de 56×56 con la misma
+                    selección por borde que antes usaba los emojis. */}
+                <div className="grid grid-cols-6 gap-2 mb-2">
+                  {Object.entries(IMAGENES_CATEGORIA).map(([clave, url]) => (
                     <button
-                      key={grupo.nombre}
+                      key={clave}
                       type="button"
-                      onClick={() => setGrupoIconoSeleccionado(idx)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                        grupoIconoSeleccionado === idx
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-border"
-                      }`}
-                    >
-                      {grupo.nombre}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
-                  {GRUPOS_ICONOS[grupoIconoSeleccionado].iconos.map((icono) => (
-                    <button
-                      key={icono}
-                      type="button"
-                      title={icono}
-                      aria-label={icono}
-                      aria-pressed={formIcono === icono}
+                      title={clave}
+                      aria-label={clave}
+                      aria-pressed={formIcono === clave}
                       onClick={() => {
-                        setFormIcono(icono);
+                        setFormIcono(clave);
                         setCreateErrors((p) => ({ ...p, icono: "" }));
                       }}
-                      className={`shrink-0 aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
-                        formIcono === icono
+                      className={`shrink-0 w-14 h-14 rounded-xl border overflow-hidden transition-colors cursor-pointer ${
+                        formIcono === clave
                           ? "border-primary bg-primary/10"
                           : "border-border bg-muted hover:bg-border"
                       }`}
                     >
-                      {icono}
+                      <img
+                        src={url}
+                        alt={clave}
+                        loading="lazy"
+                        className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
+                      />
                     </button>
                   ))}
                 </div>
@@ -699,7 +633,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             confirmLabel="Guardar"
           >
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
                     Nombre Categoría *
@@ -770,47 +704,37 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               {!CATEGORIAS_FIJAS.has(editItem.id) && (
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Ícono *
+                    Imagen *
                   </label>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {GRUPOS_ICONOS.map((grupo, idx) => (
+                  {/* Misma galería que el Crear, con la imagen actual ya
+                      marcada (§5). Las categorías originales no la muestran:
+                      su imagen es fija. */}
+                  <div className="grid grid-cols-6 gap-2 mb-2">
+                    {Object.entries(IMAGENES_CATEGORIA).map(([clave, url]) => (
                       <button
-                        key={grupo.nombre}
+                        key={clave}
                         type="button"
-                        onClick={() => setGrupoIconoEdicion(idx)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                          grupoIconoEdicion === idx
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:bg-border"
+                        title={clave}
+                        aria-label={clave}
+                        aria-pressed={editItem.icono === clave}
+                        onClick={() => {
+                          setEditItem((x) => (x ? { ...x, icono: clave } : x));
+                          setEditErrors((p) => ({ ...p, icono: "" }));
+                        }}
+                        className={`shrink-0 w-14 h-14 rounded-xl border overflow-hidden transition-colors cursor-pointer ${
+                          editItem.icono === clave
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-muted hover:bg-border"
                         }`}
                       >
-                        {grupo.nombre}
+                        <img
+                          src={url}
+                          alt={clave}
+                          loading="lazy"
+                          className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
+                        />
                       </button>
                     ))}
-                  </div>
-                  <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
-                    {GRUPOS_ICONOS[grupoIconoEdicion].iconos.map(
-                      (icono) => (
-                        <button
-                          key={icono}
-                          type="button"
-                          title={icono}
-                          aria-label={icono}
-                          aria-pressed={editItem.icono === icono}
-                          onClick={() => {
-                            setEditItem((x) => (x ? { ...x, icono } : x));
-                            setEditErrors((p) => ({ ...p, icono: "" }));
-                          }}
-                          className={`shrink-0 aspect-square rounded-xl border text-xl leading-none transition-colors cursor-pointer ${
-                            editItem.icono === icono
-                              ? "border-primary bg-primary/10"
-                              : "border-border bg-muted hover:bg-border"
-                          }`}
-                        >
-                          {icono}
-                        </button>
-                      ),
-                    )}
                   </div>
                   <MensajeError err={editErrors.icono} />
                 </div>
@@ -872,14 +796,19 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                       />
                     ),
                   },
-                  ...(iconoDe(detailItem)
-                    ? [
-                        {
-                          label: "Ícono",
-                          value: iconoDe(detailItem),
-                        },
-                      ]
-                    : []),
+                  {
+                    label: "Imagen",
+                    // Imagen 48×48 (§5): presente en toda categoría, incluidas
+                    // las originales, cuya imagen se resuelve por id.
+                    value: (
+                      <ImagenCategoria
+                        clave={claveImagenDe(detailItem)}
+                        className="w-12 h-12"
+                        alt={detailItem.nombre}
+                        emojiClassName="text-3xl"
+                      />
+                    ),
+                  },
                 ].map(({ label, value }) => (
                   <div
                     key={label}

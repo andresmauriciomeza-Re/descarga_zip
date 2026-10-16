@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Search, Eye, X, ArrowLeft, ChevronLeft, ChevronRight,
+  Search, Eye, X, ArrowLeft,
   Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,9 +12,10 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import { CompactInsumoForm, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
 import { InsumosSolicitadosTable } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { useFilasPorPagina } from "@/features/compras/hooks/useFilasPorPagina";
+import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
@@ -29,17 +30,15 @@ import {
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 import {
   aplicarStockCompra,
-  recalcularCostoMaximo,
   textoStockActualizado,
   type ResumenStock,
   type SetCatalogo,
 } from "@/features/compras/services/inventario";
 
 // ─── CONTROL DE STOCK DE LAS COMPRAS ─────────────────────────────────────────
-// Las funciones de inventario (sumar/revertir stock, rellenar `stockMaximo`
-// al recibir y recalcular `costoMaximo`) viven en `utils/inventario.ts` para
-// que la Recepción de compra comparta EXACTAMENTE el mismo camino sin tener
-// que importar esta pantalla.
+// Las funciones de inventario (sumar/revertir stock) viven en
+// `services/inventario.ts` para que la Recepción de compra comparta
+// EXACTAMENTE el mismo camino sin tener que importar esta pantalla.
 
 /**
  * `GestionCompra` se declara en OrdenCompraScreen.tsx (archivo que este cambio
@@ -178,34 +177,18 @@ export interface NuevaCompraData {
 
 // ─── P14: TABLA DE ÍTEMAS DE LA FACTURA ──────────────────────────────────────
 
-/** Badge del tipo de ítem (P14): "Insumo" en gris y "Producto" en violeta,
- *  para distinguir de un vistazo qué se está comprando en cada fila. */
-function TipoItemBadge({ tipo }: { tipo: TipoItem }) {
-  const esProducto = tipo === "producto";
-  return (
-    <span
-      className={`inline-block px-1 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${
-        esProducto
-          ? "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300"
-          : "bg-muted text-muted-foreground"
-      }`}
-    >
-      {esProducto ? "Producto" : "Insumo"}
-    </span>
-  );
-}
-
 /**
- * P14: tabla de los ítems agregados en la Nueva compra, con columna "Tipo".
+ * P14: tabla de los ítems agregados en la Nueva compra.
  *
- * Es LOCAL y no reutiliza `InsumosSolicitadosTable` porque esa tabla es
- * compartida con la Orden de Compra y la Recepción (que sólo manejan insumos)
- * y no puede tocarse para mostrar el tipo de cada fila. Los cálculos son los
- * mismos: `calcularLineaIva` con la opción de precios elegida, de modo que la
- * suma incluye por igual insumos y productos.
+ * Punto 3.3: columnas LITERALES del plan — Nombre | Cantidad | Medida |
+ * Monto unitario | IVA | Acciones (editar/eliminar) — con el resumen
+ * Subtotal / IVA / Total debajo.
  *
- * El lápiz NO edita en línea: carga la fila en el formulario de la izquierda
- * (`editarItem`), que es para lo que existe ese estado.
+ * Es LOCAL y no reutiliza `InsumosSolicitadosTable` porque el lápiz NO edita
+ * en línea: carga la fila en el formulario de la izquierda (`editarItem`),
+ * que es para lo que existe ese estado. Los cálculos son los mismos:
+ * `calcularLineaIva` con la opción de precios elegida, de modo que la suma
+ * incluye por igual insumos y productos.
  */
 function TablaItemsFactura({
   items,
@@ -254,17 +237,15 @@ function TablaItemsFactura({
     { baseSinIva: 0, montoIva: 0, total: 0 }
   );
 
-  // La suma de anchos fijos (405 px) es casi la misma que la tabla que
-  // reemplaza, así que "Ítem" sigue teniendo ~95 px de sobra a 1366×768 y la
-  // tabla NO muestra scroll horizontal. La unidad va debajo de la cantidad
-  // (P14 sólo pide tipo, cantidad, precio e IVA) para no robarle ancho al nombre.
-  const headers = ["Tipo", "Ítem", "Cantidad", "Monto unitario", "IVA", "Subtotal"];
+  // Punto 3.3: columnas LITERALES del plan. La suma de anchos fijos (248 px +
+  // acciones) deja ~250 px de sobra para "Nombre" a 1366×768, así que la tabla
+  // NO muestra scroll horizontal; la Medida va en su propia columna.
+  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario", "IVA"];
   const ANCHOS: Record<string, number> = {
-    Tipo: 80,
-    Cantidad: 50,
+    Cantidad: 64,
+    Medida: 56,
     "Monto unitario": 68,
     IVA: 60,
-    Subtotal: 83,
   };
   const ANCHO_ACCIONES = 64;
   const columnCount = headers.length + 1;
@@ -349,22 +330,15 @@ function TablaItemsFactura({
                       editandoFila ? "bg-primary/5" : ""
                     }`}
                   >
-                    <td className={td + " text-center"}>
-                      <TipoItemBadge tipo={row.tipoItem ?? "insumo"} />
-                    </td>
                     <td className={td + " text-sm font-medium text-foreground"}>
                       <div className="line-clamp-2 break-words" title={row.nombre}>
                         {row.nombre}
                       </div>
                     </td>
-                    <td className={td + " text-sm"}>
-                      <span className="block">{row.cantidad}</span>
-                      {/* La unidad viaja debajo: ahorra una columna completa
-                          y la fila sigue diciendo en qué medida se compró. */}
-                      <span className="block text-[10px] leading-tight text-muted-foreground">
-                        {row.unidad}
-                      </span>
-                    </td>
+                    <td className={td + " text-sm"}>{row.cantidad}</td>
+                    {/* Punto 3.3: Medida en su propia columna (solo lectura;
+                        la define el ítem del catálogo). */}
+                    <td className={td + " text-xs text-muted-foreground"}>{row.unidad}</td>
                     <td className={td + " text-sm whitespace-nowrap"}>
                       {fmtCOP(row.precioUnitario)}
                     </td>
@@ -373,9 +347,6 @@ function TablaItemsFactura({
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
                       </p>
-                    </td>
-                    <td className={td + " text-sm font-semibold whitespace-nowrap"}>
-                      {fmtCOP(l.subtotalConIva)}
                     </td>
                     <td className={td + " whitespace-nowrap"}>
                       <div className="flex items-center gap-1">
@@ -957,7 +928,7 @@ function CompraForm({
       <div
         className={
           isPage
-            ? "w-full p-4 max-w-[1200px] mx-auto h-full flex flex-col overflow-hidden"
+            ? "w-full px-4 sm:px-6 py-4 h-full flex flex-col overflow-hidden"
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -1056,9 +1027,9 @@ function CompraForm({
                 <div
                   className={`grid gap-4 shrink-0 ${
                     isView
-                      ? "grid-cols-2 md:grid-cols-3"
+                      ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
                       : isPage
-                        ? "grid-cols-2"
+                        ? "grid-cols-1 sm:grid-cols-2"
                         : "grid-cols-1 md:grid-cols-3"
                   }`}
                 >
@@ -1419,40 +1390,30 @@ function CompraForm({
                     placeholder={
                       itemTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
                     }
-                    // P14: selector de tipo de ítem en el hueco de Medida.
+                    // P14 + punto 3.2: selector de tipo de ítem en el hueco
+                    // de Medida; 2 opciones → control segmentado.
                     campoExtra={
-                      <div className="w-[118px]">
+                      <div className="min-w-[118px]">
                         <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
                           Tipo de ítem
                         </label>
-                        <div className="relative">
-                          <select
-                            value={itemTipo}
-                            onChange={(e) => {
-                              const nuevo = e.target.value as TipoItem;
-                              if (nuevo === itemTipo) return;
-                              setItemTipo(nuevo);
-                              // Al cambiar de catálogo el ítem cargado ya no
-                              // sirve: se limpia la fila y el buscador empieza
-                              // a mirar la otra lista.
-                              limpiarFilaInsumo();
-                            }}
-                            disabled={ivaIncluido === null}
-                            aria-label="Tipo de ítem"
-                            className="w-full h-9 pl-2.5 pr-7 bg-muted border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 appearance-none cursor-pointer disabled:opacity-50"
-                          >
-                            <option value="insumo">Insumo</option>
-                            <option value="producto">Producto</option>
-                          </select>
-                          {/* El select va "appearance-none": sin esta flecha
-                              no se ve que es desplegable. */}
-                          <span
-                            aria-hidden
-                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] leading-none text-muted-foreground"
-                          >
-                            ▼
-                          </span>
-                        </div>
+                        <SegmentadoButtons
+                          valor={itemTipo}
+                          onChange={(valor) => {
+                            const nuevo = valor as TipoItem;
+                            if (nuevo === itemTipo) return;
+                            setItemTipo(nuevo);
+                            // Al cambiar de catálogo el ítem cargado ya no
+                            // sirve: se limpia la fila y el buscador empieza
+                            // a mirar la otra lista.
+                            limpiarFilaInsumo();
+                          }}
+                          disabled={ivaIncluido === null}
+                          opciones={[
+                            { valor: "insumo", etiqueta: "Insumo" },
+                            { valor: "producto", etiqueta: "Producto" },
+                          ]}
+                        />
                       </div>
                     }
                   />
@@ -1729,10 +1690,10 @@ export function NuevaCompraPage({
       totalPagado: data.totalPagado,
     };
 
-    // Compra guardada en "Recibido" ⇒ suma el stock de lo comprado (y de paso
-    // rellena `stockMaximo` si el insumo venía sin techo). Si la compra naciera
-    // anulada no se toca el inventario. Los updates son funcionales (dentro de
-    // `aplicarStockCompra`) para no pisar estados concurrentes del panel.
+    // Compra guardada en "Recibido" ⇒ suma el stock de lo comprado. Si la
+    // compra naciera anulada no se toca el inventario. Los updates son
+    // funcionales (dentro de `aplicarStockCompra`) para no pisar estados
+    // concurrentes del panel.
     const recibeStock = data.estado === "Recibido";
     const resumen = recibeStock
       ? aplicarStockCompra(data.items, 1, {
@@ -1759,11 +1720,6 @@ export function NuevaCompraPage({
 
     setGestiones((prev) => [nueva, ...prev]);
 
-    // Costo máximo: el mayor costo unitario facturado entre las compras que
-    // siguen en "Recibido", ya incluyendo esta recién creada.
-    if (recibeStock) {
-      recalcularCostoMaximo([nueva, ...gestiones], setInsumos);
-    }
     toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
@@ -1850,11 +1806,11 @@ export function GestionCompraScreen({
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
   // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
-  const { scrollerRef, tablaRef, filasPorPagina, permitirScrollY } = useFilasPorPagina();
+  const PER_PAGE = 5;
 
-  const totalPages = Math.ceil(filtered.length / filasPorPagina);
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * filasPorPagina, pageActual * filasPorPagina);
+  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
   // Si al recalcular filas por página la página actual queda fuera de rango,
   // se salta a la última página válida.
@@ -1923,17 +1879,6 @@ export function GestionCompraScreen({
       // (o si ya no quedaba nada que restar).
       stockRevertido: correspondeRevertir && revertido ? true : x.stockRevertido,
     } : x)));
-
-    // Costo máximo: se recalcula con las compras que SIGUEN en "Recibido", ya
-    // sin la anulada; si ninguna queda, cada insumo queda en 0. El
-    // `stockMaximo` NO se toca: el techo de un insumo no cambia porque se
-    // anule una factura.
-    if (next === "Anulado") {
-      const comprasTras = gestiones.map((x) =>
-        x.id === id ? { ...x, estado: next } : x,
-      );
-      recalcularCostoMaximo(comprasTras, setInsumos);
-    }
 
     setEstadoConfirm(null);
     setMotivoAnulacion("");
@@ -2021,7 +1966,7 @@ export function GestionCompraScreen({
   };
 
   return (
-    <div className="px-4 md:px-6 pt-5 pb-4 max-w-5xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="px-4 md:px-6 pt-5 pb-4 h-full min-h-0 flex flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-4 mb-4 shrink-0 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
@@ -2054,17 +1999,14 @@ export function GestionCompraScreen({
       </div>
 
       {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
-          (se pagina en filas que quepan, useFilasPorPagina); sólo queda scroll
-          horizontal en tablet y scroll vertical en movil (tarjetas). El
-          paginador queda fijo debajo, siempre visible y por encima del footer. */}
+          (se pagina en filas fijas de 5); sólo queda scroll horizontal en
+          tablet y scroll vertical en movil (tarjetas). El paginador queda
+          fuera y debajo de la card. */}
       <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div
-          ref={scrollerRef}
-          className={`flex-1 min-h-0 overflow-x-auto ${permitirScrollY ? "overflow-y-auto" : "overflow-y-auto md:overflow-y-hidden"}`}
-        >
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
           {/* Escritorio/tablet (>=768px): tabla. La columna Fecha sólo existe
               desde 1440px; por debajo va bajo el N° de Factura. */}
-          <table ref={tablaRef} className="hidden md:table w-full table-fixed md:min-w-[720px]">
+          <table className="hidden md:table w-full table-fixed md:min-w-[720px]">
             <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[17%] min-[1440px]:w-[13%]">N° Factura</th>
@@ -2233,38 +2175,12 @@ export function GestionCompraScreen({
               })}
           </div>
         </div>
-
-        {/* Paginador fijo dentro de la card: no se pierde con el scroll. */}
-        {filtered.length > filasPorPagina && (
-          <div className="shrink-0 border-t border-border flex items-center justify-center px-3 py-2">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={pageActual === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === pageActual ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={pageActual === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Paginador fuera y debajo de la card (unificado). */}
+      {filtered.length > 0 && (
+        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+      )}
 
       <AnimatePresence>
         {detail && (

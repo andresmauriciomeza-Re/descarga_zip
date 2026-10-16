@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, X, ChevronLeft, ChevronRight,
+  Plus, X,
   Upload, ShoppingCart, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
@@ -450,9 +452,9 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const esImagenValida = ["image/jpeg", "image/jpg", "image/png"].includes(file.type);
+    const esImagenValida = ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type);
     if (!esImagenValida) {
-      toast.error("Solo se permiten imágenes JPG o PNG.");
+      toast.error("Solo se permiten imágenes JPG, PNG o WEBP.");
       e.target.value = "";
       return;
     }
@@ -487,7 +489,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         )}
 
         {/* Fila 1: Fecha de registro | Tipo */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
             {readOnly
@@ -517,8 +519,8 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
 
         {/* Fila 2: Orden de producción relacionada | Venta relacionada (según el tipo) */}
         {!readOnly && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`relative ${f.tipo === "Producto insumo" ? "col-span-2" : ""}`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`relative ${f.tipo === "Producto insumo" ? "sm:col-span-2" : ""}`}>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción relacionada (opcional)</label>
               <input
                 value={f.ordenRef || ""}
@@ -618,7 +620,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         </div>
 
         {/* Fila 4: Cantidad afectada | Unidad de medida (automática, solo lectura) */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
             {readOnly
@@ -678,13 +680,21 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
             <div className="p-3 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-                <select value={f.tipoSolucion ?? ""} onChange={e => set({ tipoSolucion: e.target.value })} className={sCls}>
-                  <option value="">Selecciona…</option>
-                  {TIPOS_SOLUCION.map(t => {
+                {/* Punto 3.2: 3 opciones → control segmentado; "Reembolso"
+                    sigue bloqueado sin venta relacionada (motivo en tooltip). */}
+                <SegmentadoButtons
+                  valor={f.tipoSolucion ?? ""}
+                  onChange={valor => set({ tipoSolucion: valor })}
+                  opciones={TIPOS_SOLUCION.map(t => {
                     const bloqueado = t === "Reembolso al cliente" && !(f.tipo === "Producto" && f.ventaRef);
-                    return <option key={t} value={t} disabled={bloqueado} title={bloqueado ? "Requiere una venta relacionada" : undefined}>{t}</option>;
+                    return {
+                      valor: t,
+                      etiqueta: t,
+                      deshabilitada: bloqueado,
+                      titulo: bloqueado ? "Requiere una venta relacionada" : undefined,
+                    };
                   })}
-                </select>
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
@@ -696,7 +706,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         )}
 
         {readOnly && (f.ventaRef || f.ordenRef) && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {f.ventaRef && (
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Venta de origen</label>
@@ -719,7 +729,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
               ? <img src={f.evidencia} alt="evidencia" className="w-full max-h-48 object-cover rounded-xl border border-border mt-1" />
               : <p className="text-sm text-muted-foreground/50 italic py-2">Sin evidencia adjunta</p>
             : <>
-                <input type="file" accept="image/jpeg,image/png" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
                 {f.evidencia ? (
                   <div className="relative rounded-xl overflow-hidden border border-border h-32">
                     <img src={f.evidencia} alt="evidencia" className="w-full h-full object-cover" />
@@ -735,7 +745,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                       <Upload className="w-5 h-5" />
                       <span className="text-xs font-medium">{subiendo ? "Subiendo..." : "Subir imagen de evidencia"}</span>
                     </button>
-                    <p className="text-[11px] text-muted-foreground mt-1.5 text-center">JPG o PNG · máx 5 MB</p>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 text-center">JPG, PNG o WEBP · máx 5 MB</p>
                   </>
                 )}
               </>
@@ -757,7 +767,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
       </div>
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">Información de la venta</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de venta</label>
             <p className="text-sm font-semibold text-foreground font-mono">{item.ventaRef || item.id.split("-")[1] || item.id}</p>
@@ -820,7 +830,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -929,20 +939,9 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         </div>
       </div>
 
-      {/* Pagination */}
-      {filtered.length > 0 && totalPages > 1 && (
-        <div className="flex items-center justify-center mt-4">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronLeft className="w-4 h-4" /></button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-              <button key={n} onClick={() => setPage(n)}
-                className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}>{n}</button>
-            ))}
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"><ChevronRight className="w-4 h-4" /></button>
-          </div>
-        </div>
+      {/* Pagination (unificada) */}
+      {filtered.length > 0 && (
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
 

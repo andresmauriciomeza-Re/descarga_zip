@@ -6,7 +6,6 @@ import {
   X,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   Check,
   Clock,
   AlertCircle,
@@ -23,8 +22,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
+import { filtrarDocumento, validarDocumento } from "@/shared/components/campo";
+import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
@@ -420,7 +422,7 @@ export const INITIAL_VENTAS: Venta[] = [
       { estado: "completado", hora: "6:35 PM" },
     ],
     detalle: [
-      { nombre: "Pizza Tocineta — Mediano", precio: 15000, cantidad: 1, imagen: "/src/assets/img/image-5.png" },
+      { nombre: "Pizza Tocineta — Mediana", precio: 15000, cantidad: 1, imagen: "/src/assets/img/image-5.png" },
     ],
   },
 ];
@@ -433,6 +435,9 @@ export function VentasScreen({
   productos,
   onGestionarDevolucion,
   clientes = [],
+  usuarios = [],
+  empleados = [],
+  onRegistrarClienteVenta,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
   canExportExcel = true,
@@ -444,7 +449,17 @@ export function VentasScreen({
   onGestionarDevolucion: (id: string) => void;
   /** Clientes registrados en el panel. Se usan para buscar el documento en
       tiempo real al crear un pedido (§12). */
-  clientes?: { nombre: string; numeroDocumento: string }[];
+  clientes?: { nombre: string; tipoDocumento?: string; numeroDocumento: string }[];
+  /** Usuarios y empleados del sistema: alimentan la misma búsqueda de
+      documento para saber si la persona ya existe antes de crear un cliente. */
+  usuarios?: { nombre: string; tipoDocumento: string; numeroDocumento: string }[];
+  empleados?: { nombre: string; tipoDocumento: string; numeroDocumento: string }[];
+  /** §1: crea o actualiza el cliente antes de guardar la venta. Devuelve
+      "creado" si nació un Cliente nuevo y "existente" si ya estaba (como
+      cliente, usuario o empleado). */
+  onRegistrarClienteVenta?: (
+    datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
+  ) => "creado" | "existente";
   canCreate?: boolean;
   canEdit?: boolean;
   canExportExcel?: boolean;
@@ -610,22 +625,38 @@ export function VentasScreen({
     "Andrés Castillo",
   ];
 
-  // Índice de documentos conocidos: clientes del panel y ventas previas que
-  // tengan documento. Alimenta la búsqueda en tiempo real del modal "Nuevo
-  // pedido" (§12): mientras el admin escribe, se va filtrando contra estos
-  // documentos y, si coincide exacto, se trae el nombre del cliente.
-  const DOCUMENTOS_CONOCIDOS = useMemo(() => {
+  // Índice de documentos conocidos: clientes, usuarios y empleados (se
+  // compara tipo + número de documento) más las ventas previas (solo número).
+  // Alimenta la búsqueda en tiempo real del modal "Nuevo pedido" (§12): si
+  // coincide exacto, se trae sola el nombre de la persona.
+  type DocConocido = { tipo: string; numero: string; nombre: string };
+  const DOCS_CONOCIDOS = useMemo<DocConocido[]>(() => {
+    const salida: DocConocido[] = [];
+    const vistos = new Set<string>();
+    const add = (tipo: string, numero: string, nombre: string) => {
+      const n = (numero ?? "").trim();
+      if (!n) return;
+      const t = (tipo ?? "").trim();
+      const clave = `${t.toLowerCase()}||${n}`;
+      if (vistos.has(clave)) return;
+      vistos.add(clave);
+      salida.push({ tipo: t, numero: n, nombre });
+    };
+    clientes.forEach((c) => add(c.tipoDocumento ?? "", c.numeroDocumento, c.nombre));
+    usuarios.forEach((u) => add(u.tipoDocumento, u.numeroDocumento, u.nombre));
+    empleados.forEach((e) => add(e.tipoDocumento, e.numeroDocumento, e.nombre));
+    return salida;
+  }, [clientes, usuarios, empleados]);
+  // Ventas previas: solo traen el número, sin tipo, así que se indexan aparte
+  // para seguir trayendo el nombre cuando se repite un documento conocido.
+  const DOCS_VENTAS_PREVIAS = useMemo(() => {
     const mapa = new Map<string, string>();
-    clientes.forEach((c) => {
-      const doc = (c.numeroDocumento ?? "").trim();
-      if (doc && !mapa.has(doc)) mapa.set(doc, c.nombre);
-    });
     pedidos.forEach((p) => {
       const doc = (p.documento ?? "").trim();
       if (doc && !mapa.has(doc)) mapa.set(doc, p.usuario);
     });
     return mapa;
-  }, [clientes, pedidos]);
+  }, [pedidos]);
 
   // Interfaz para productos seleccionados en el picker
   interface ProductoSeleccionado {
@@ -644,9 +675,13 @@ export function VentasScreen({
     onConfirm,
   }: {
     onClose: () => void;
-    onConfirm: (v: Omit<Venta, "id">) => void;
+    onConfirm: (
+      v: Omit<Venta, "id">,
+      resultadoCliente: "creado" | "existente",
+    ) => void;
   }) => {
     const [documento, setDocumento] = useState("");
+    const [tipoDocumento, setTipoDocumento] = useState("CC");
     const [usuario, setUsuario] = useState("");
     // La fecha no es un campo: el pedido se toma hoy, así que se calcula al
     // guardar. Sin estado no hay forma de editarla.
@@ -662,16 +697,16 @@ export function VentasScreen({
     // coincidencia EXACTA, se trae sola el nombre del cliente y se marca el
     // campo como encontrado. Si no hay ninguna coincidencia exacta, se avisa
     // y el documento queda como uno nuevo.
-    const [docSugerencias, setDocSugerencias] = useState<
-      { documento: string; nombre: string }[]
-    >([]);
+    const [docSugerencias, setDocSugerencias] = useState<DocConocido[]>([]);
     const [docExacto, setDocExacto] = useState<string | null>(null);
     const [docTocado, setDocTocado] = useState(false);
     /** Último nombre que se trajo solo al coincidir el documento. Sirve para
         no pisar el nombre que el admin escribió a mano. */
     const [nombreTraido, setNombreTraido] = useState<string | null>(null);
 
-    const buscarDocumento = (valor: string) => {
+    // `tipo` se recibe aparte porque al cambiar el select el estado todavía no
+    // se ha actualizado en el cierre que llama a esta función.
+    const buscarDocumento = (valor: string, tipo: string = tipoDocumento) => {
       const doc = valor.trim();
       setDocTocado(doc.length > 0);
       if (doc.length < 2) {
@@ -680,12 +715,24 @@ export function VentasScreen({
         setNombreTraido(null);
         return;
       }
-      const coincidencias = [...DOCUMENTOS_CONOCIDOS.entries()]
-        .filter(([d]) => d.includes(doc))
-        .slice(0, 6)
-        .map(([documento, nombre]) => ({ documento, nombre }));
-      setDocSugerencias(coincidencias);
-      const exacto = DOCUMENTOS_CONOCIDOS.get(doc) ?? null;
+      // Coincidencias parciales: contra tipo+número (clientes, usuarios y
+      // empleados) y contra el número de las ventas previas.
+      const parciales = DOCS_CONOCIDOS.filter((d) => d.numero.includes(doc));
+      const enDocs = new Set(parciales.map((d) => d.numero));
+      const previas: DocConocido[] = [];
+      DOCS_VENTAS_PREVIAS.forEach((nombre, numero) => {
+        if (numero.includes(doc) && !enDocs.has(numero)) {
+          previas.push({ tipo: "", numero, nombre });
+        }
+      });
+      setDocSugerencias([...parciales, ...previas].slice(0, 6));
+      const clave = `${tipo.trim().toLowerCase()}||${doc}`;
+      const exacto =
+        DOCS_CONOCIDOS.find(
+          (d) => `${d.tipo.toLowerCase()}||${d.numero}` === clave,
+        )?.nombre ??
+        DOCS_VENTAS_PREVIAS.get(doc) ??
+        null;
       setDocExacto(exacto);
       // Coincidió el documento EXACTO: se trae el nombre solo si el campo está
       // vacío o si el nombre actual era el que se había traído antes (así no
@@ -811,8 +858,9 @@ export function VentasScreen({
         toast.error("El nombre del cliente es obligatorio");
         return;
       }
-      if (!documento.trim()) {
-        toast.error("El documento del cliente es obligatorio");
+      const errDoc = validarDocumento(documento, tipoDocumento);
+      if (errDoc) {
+        toast.error(errDoc);
         return;
       }
       if (selProductos.length === 0) {
@@ -823,6 +871,15 @@ export function VentasScreen({
         toast.error("Selecciona el método de pago");
         return;
       }
+      // §1: primero se registra (o actualiza) el cliente con su tipo de
+      // documento y DESPUÉS se crea la venta.
+      const resultadoCliente: "creado" | "existente" = onRegistrarClienteVenta
+        ? onRegistrarClienteVenta({
+            tipoDocumento,
+            numeroDocumento: documento.trim(),
+            nombre: usuario.trim(),
+          })
+        : "existente";
       // El pago se recibe en el momento, así que el pedido nace verificado.
       // Efectivo es el único método que no deja comprobante por verificar
       // (el dinero queda en caja), así que ese pedido nace directamente
@@ -835,18 +892,21 @@ export function VentasScreen({
         cantidad: p.cantidad,
                         imagen: productos.find((x) => x.id === p.id)?.image,
       }));
-      onConfirm({
-        usuario: usuario.trim(),
-        documento: documento.trim(),
-        fecha,
-        estado: finalEstado,
-        productos: productosStr,
-        cantidad: cantidadTotal,
-        total: totalCalculado,
-        detalle,
-        metodoPago,
-        historial: [{ estado: finalEstado, hora: nowHora() }],
-      });
+      onConfirm(
+        {
+          usuario: usuario.trim(),
+          documento: documento.trim(),
+          fecha,
+          estado: finalEstado,
+          productos: productosStr,
+          cantidad: cantidadTotal,
+          total: totalCalculado,
+          detalle,
+          metodoPago,
+          historial: [{ estado: finalEstado, hora: nowHora() }],
+        },
+        resultadoCliente,
+      );
     };
 
     const iCls =
@@ -887,47 +947,68 @@ export function VentasScreen({
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Documento del cliente *
               </label>
-              <input
-                value={documento}
-                onChange={(e) => {
-                  const valor = e.target.value.replace(/\D/g, "").slice(0, 10);
-                  setDocumento(valor);
-                  buscarDocumento(valor);
-                }}
-                onFocus={() => {
-                  if (documento.trim().length >= 2) buscarDocumento(documento);
-                }}
-                onBlur={() => setTimeout(() => setDocSugerencias([]), 150)}
-                placeholder="Escribe el documento…"
-                inputMode="numeric"
-                className={iCls}
-                autoComplete="off"
-              />
-              {/* Coincidencias parciales: se muestran mientras se escribe */}
-              {docSugerencias.length > 0 && (
-                <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-                  {docSugerencias.map((s) => (
-                    <button
-                      key={s.documento}
-                      type="button"
-                      onMouseDown={() => {
-                        setDocumento(s.documento);
-                        setDocExacto(s.nombre);
-                        setUsuario(s.nombre);
-                        setUQuery(s.nombre);
-                        setNombreTraido(s.nombre);
-                        setDocSugerencias([]);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer border-b border-border last:border-0 flex items-center gap-2"
-                    >
-                      <span className="font-mono text-xs text-muted-foreground shrink-0">
-                        {s.documento}
-                      </span>
-                      <span className="truncate">{s.nombre}</span>
-                    </button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={tipoDocumento}
+                  onChange={(e) => {
+                    setTipoDocumento(e.target.value);
+                    buscarDocumento(documento, e.target.value);
+                  }}
+                  aria-label="Tipo de documento"
+                  className="px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer w-full sm:w-56 shrink-0"
+                >
+                  {OPCIONES_TIPO_DOCUMENTO.map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.label}
+                    </option>
                   ))}
+                </select>
+                <div className="relative flex-1 min-w-0">
+                  <input
+                    value={documento}
+                    onChange={(e) => {
+                      const valor = filtrarDocumento(e.target.value, tipoDocumento);
+                      setDocumento(valor);
+                      buscarDocumento(valor);
+                    }}
+                    onFocus={() => {
+                      if (documento.trim().length >= 2) buscarDocumento(documento);
+                    }}
+                    onBlur={() => setTimeout(() => setDocSugerencias([]), 150)}
+                    placeholder="Escribe el documento…"
+                    inputMode="numeric"
+                    className={`${iCls} w-full`}
+                    autoComplete="off"
+                  />
+                  {/* Coincidencias parciales: se muestran mientras se escribe */}
+                  {docSugerencias.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                      {docSugerencias.map((s) => (
+                        <button
+                          key={`${s.tipo}||${s.numero}`}
+                          type="button"
+                          onMouseDown={() => {
+                            setDocumento(s.numero);
+                            if (s.tipo) setTipoDocumento(s.tipo);
+                            setDocExacto(s.nombre);
+                            setUsuario(s.nombre);
+                            setUQuery(s.nombre);
+                            setNombreTraido(s.nombre);
+                            setDocSugerencias([]);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer border-b border-border last:border-0 flex items-center gap-2"
+                        >
+                          <span className="font-mono text-xs text-muted-foreground shrink-0">
+                            {s.tipo ? `${s.tipo} ` : ""}
+                            {s.numero}
+                          </span>
+                          <span className="truncate">{s.nombre}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
               {/* Estado de la búsqueda: exacto / parcial / nuevo */}
               {docTocado && documento.length >= 2 && (
                 <p
@@ -1340,7 +1421,7 @@ export function VentasScreen({
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -1401,7 +1482,10 @@ export function VentasScreen({
       {/* Search */}
       <SearchInput
         value={search}
-        onChange={setSearch}
+        onChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         placeholder="Buscar por #, cliente o producto..."
       />
 
@@ -1590,42 +1674,7 @@ export function VentasScreen({
       </div>
 
       {filtered.length > 0 && (
-        <div className="flex items-center justify-center mt-4">
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from(
-                { length: totalPages },
-                (_, i) => i + 1,
-              ).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${n === page ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
 
       {/* ── Ver detalle — pantalla completa ── */}
@@ -1856,13 +1905,17 @@ export function VentasScreen({
         {showCreate && (
           <VentaModal
             onClose={() => setShowCreate(false)}
-            onConfirm={(v) => {
+            onConfirm={(v, resultadoCliente) => {
               const maxId = Math.max(0, ...pedidos.map((p) => parseInt(p.id) || 0));
               const newId = String(maxId + 1);
               const initHistorial: HistorialEntry[] = [{ estado: v.estado, hora: nowHora() }];
               setPedidos((prev) => [{ id: newId, ...v, historial: initHistorial }, ...prev]);
               setShowCreate(false);
-              toast.success(`Pedido #${newId} creado correctamente`);
+              toast.success(
+                resultadoCliente === "creado"
+                  ? `Cliente ${v.usuario} creado y pedido #${newId} registrado`
+                  : `Pedido #${newId} creado correctamente`,
+              );
             }}
           />
         )}

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { UNIDADES } from "@/features/compras/components/CompactInsumoForm";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 
 export interface InsumoSolicitadoRow {
@@ -48,7 +47,9 @@ const sufijoIva = (
   </span>
 );
 
-type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "unidad" | "precioUnitario" | "iva">;
+// Punto 3.3: la medida NO es editable (la define el ítem del catálogo), así
+// que el borrador de edición solo trae cantidad, monto e IVA.
+type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "precioUnitario" | "iva">;
 
 function mergeRow(item: InsumoSolicitadoRow, draft: DraftRow): InsumoSolicitadoRow {
   return { ...item, ...draft };
@@ -68,6 +69,8 @@ export function InsumosSolicitadosTable({
   modoIva = false,
   ivaIncluido = false,
   enPagina = false,
+  mostrarSubtotal = true,
+  textoVacioPagina,
   className = "",
 }: {
   items: InsumoSolicitadoRow[];
@@ -83,6 +86,12 @@ export function InsumosSolicitadosTable({
   modoIva?: boolean;
   ivaIncluido?: boolean;
   enPagina?: boolean;
+  /** Punto 3.3: false en la Orden de Compra — la tabla del formulario lleva
+   *  las columnas literales del plan (sin Subtotal por fila). */
+  mostrarSubtotal?: boolean;
+  /** Texto de la fila vacía en modo página (p. ej. "Aún no has agregado
+   *  ítems" cuando la orden admite insumos Y productos). */
+  textoVacioPagina?: string;
   className?: string;
 }) {
   const [editId, setEditId] = useState<string | null>(null);
@@ -93,7 +102,6 @@ export function InsumosSolicitadosTable({
     setEditId(item.rowId);
     setDraft({
       cantidad: item.cantidad,
-      unidad: item.unidad,
       precioUnitario: item.precioUnitario,
       iva: item.iva,
     });
@@ -106,8 +114,8 @@ export function InsumosSolicitadosTable({
 
   const commitEdit = () => {
     if (editId && draft) {
-      // Nunca se reemplaza la fila: sólo entran estos 4 campos editables, así
-      // que id, nombre y unidad se conservan siempre (mergeRow hace lo mismo
+      // Nunca se reemplaza la fila: sólo entran estos 3 campos editables, así
+      // que id, nombre y medida se conservan siempre (mergeRow hace lo mismo
       // para el borrador en pantalla).
       const cantidad = toNum(draft.cantidad);
       const precioUnitario = toNum(draft.precioUnitario);
@@ -128,7 +136,6 @@ export function InsumosSolicitadosTable({
 
       onUpdate?.(editId, {
         cantidad,
-        unidad: draft.unidad,
         precioUnitario,
         iva,
       });
@@ -184,12 +191,15 @@ export function InsumosSolicitadosTable({
 
   const mostrarColsIva = modoIva || mostrarIva;
   const colIvaSimple = mostrarColsIva && enPagina;
-  const headers = ["Nombre", "Cantidad", "Unidad", "Monto unitario"];
+  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario"];
   if (mostrarColsIva) {
     if (colIvaSimple || !modoIva) headers.push("IVA");
     else { headers.push("IVA (%)"); headers.push("Monto IVA"); }
   }
-  headers.push(modoIva && !enPagina ? "Subtotal (con IVA)" : "Subtotal");
+  // Punto 3.3: en el formulario de la Orden de Compra la tabla lleva las
+  // columnas literales del plan (sin Subtotal por fila: el resumen de abajo
+  // ya trae Subtotal / IVA / Total).
+  if (mostrarSubtotal) headers.push(modoIva && !enPagina ? "Subtotal (con IVA)" : "Subtotal");
   const columnCount = headers.length + (showActions ? 1 : 0);
   const colSpanPie = headers.length - 1;
   const labelSubtotal = modoIva && !enPagina ? "Subtotal sin IVA" : subtotalLabel;
@@ -214,7 +224,7 @@ export function InsumosSolicitadosTable({
    */
   const ANCHOS: Record<string, number | undefined> = {
     Cantidad: 68,
-    Unidad: 56,
+    Medida: 56,
     "Monto unitario": 68,
     IVA: 60,
     "IVA (%)": 60,
@@ -243,7 +253,7 @@ export function InsumosSolicitadosTable({
             {enPagina ? (
               <span className="inline-flex items-center gap-2">
                 <Package className="w-5 h-5 text-muted-foreground/40" />
-                Aún no has agregado insumos
+                {textoVacioPagina ?? "Aún no has agregado insumos"}
               </span>
             ) : (
               "Sin insumos agregados"
@@ -285,24 +295,10 @@ export function InsumosSolicitadosTable({
                 )}
               </td>
 
+              {/* Punto 3.3: la medida es de SOLO LECTURA (la define el ítem
+                  del catálogo): no se edita ni al agregar ni al editar. */}
               <td className={tdBase + " text-xs text-muted-foreground"}>
-                {draftRow ? (
-                  <select
-                    value={draftRow.unidad}
-                    onChange={(e) =>
-                      setDraft({ ...draftRow, unidad: e.target.value })
-                    }
-                    className={cellInputCls + " appearance-none cursor-pointer"}
-                  >
-                    {UNIDADES.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  row.unidad
-                )}
+                {row.unidad}
               </td>
 
               <td className={tdBase + " text-sm"}>
@@ -393,11 +389,13 @@ export function InsumosSolicitadosTable({
                 </td>
               )}
 
-              <td className={tdBase + " text-sm font-semibold"}>
-                {modoIva
-                  ? fmtCOP(calcularLinea(row).subtotalConIva)
-                  : fmtCOP(row.cantidad * row.precioUnitario)}
-              </td>
+              {mostrarSubtotal && (
+                <td className={tdBase + " text-sm font-semibold"}>
+                  {modoIva
+                    ? fmtCOP(calcularLinea(row).subtotalConIva)
+                    : fmtCOP(row.cantidad * row.precioUnitario)}
+                </td>
+              )}
 
               {showActions && (
                 <td className={tdBase + " whitespace-nowrap"}>

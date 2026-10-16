@@ -27,7 +27,6 @@ export type Screen =
   | "suppliers"
   | "production-orders"
   | "finished-products"
-  | "tech-sheet"
   | "sales"
   | "ventas-pedidos"
   | "gestion-productos"

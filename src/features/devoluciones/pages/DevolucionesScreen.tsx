@@ -22,7 +22,7 @@ const nowHoraDev = () =>
   new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
 
 // Producto del menú elegido como canje de la devolución. `tamaño` forma parte de
-// la identidad: la misma pizza puede canjearse en Mediano o en Grande, y cada
+// la identidad: la misma pizza puede canjearse en Mediana o en Grande, y cada
 // tamaño tiene su propio precio.
 type Reemplazo = { id: number; nombre: string; precio: number; cantidad: number; imagen?: string; tamaño?: string };
 
@@ -247,7 +247,7 @@ export function DevolucionesScreen({
   // igual que "Ver Menú": así el nombre del producto elegido es exactamente el
   // del panel ("Pizza Jamon") y al confirmar la devolución se puede devolver el
   // stock y crear la orden del producto nuevo sin traducciones de nombre.
-  const canjeCatalogo = useMemo(
+  const canjeCatalogo: Product[] = useMemo(
     () =>
       productos
         .filter((p) => p.estado === "Disponible")
@@ -528,7 +528,7 @@ export function DevolucionesScreen({
     );
   };
 
-  const devolucionDetalle = detalleDevolucion
+  const devolucionDetalle: Venta = detalleDevolucion
     ? pedidos.find((p) => p.id === detalleDevolucion.id) ?? detalleDevolucion
     : null;
   const totalDetalleDevolucion =
@@ -537,7 +537,7 @@ export function DevolucionesScreen({
     0;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-4 sm:px-6 py-6">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF_DEV }}>
@@ -1195,7 +1195,7 @@ export function DevolucionesScreen({
                             <label className="block text-xs font-semibold text-foreground mb-1.5">
                               Por qué <span className="text-orange-600 dark:text-orange-400">*</span>
                             </label>
-                            <div className="grid grid-cols-2 gap-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {MOTIVOS_DEVOLUCION.map((m) => (
                                 <button
                                   key={m}
@@ -1443,7 +1443,7 @@ export function DevolucionesScreen({
               </div>
 
               <div className="p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Total</p>
                     <p className="text-lg font-bold text-foreground mt-0.5" style={{ fontFamily: MONO_DEV }}>
