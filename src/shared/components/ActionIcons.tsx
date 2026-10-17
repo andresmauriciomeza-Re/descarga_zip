@@ -3,8 +3,9 @@ import { Eye, Pencil, Trash2 } from "lucide-react";
 /**
  * Iconos de acción de fila unificados (diseño de Gestión Proveedor):
  * ver detalle → editar → eliminar, en ese orden, con lucide-react a 16px
- * (`w-4 h-4`), botón `p-1.5 rounded-lg`, gris por defecto y hover con fondo
- * muy suave (azul / neutro / rojo).
+ * (`w-4 h-4`), botón `p-1.5 rounded-lg`, gris por defecto y hover NEUTRO
+ * (`hover:bg-muted hover:text-foreground`): la columna Acciones de los
+ * listados no lleva color ni en reposo ni al pasar el mouse.
  *
  * Cada acción se muestra sólo si su callback existe; los flags `*Disabled`
  * la muestran atenuada con `cursor-not-allowed` (sin hover y sin disparar la
@@ -30,11 +31,11 @@ interface ActionIconsProps {
 
 const CLASE_BASE = "p-1.5 rounded-lg transition-colors";
 
-function claseHover(tipo: "ver" | "editar" | "eliminar") {
-  if (tipo === "ver") return "text-muted-foreground hover:bg-blue-50 hover:text-blue-600 cursor-pointer";
-  if (tipo === "editar") return "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer";
-  return "text-muted-foreground hover:bg-red-50 hover:text-red-600 cursor-pointer";
-}
+/** Hover NEUTRO compartido por las tres acciones: "ver" dejó de ser azul y
+    "eliminar" dejó de ser rojo para que ninguna acción de la columna
+    Acciones tenga color en reposo ni al pasar el mouse. */
+const CLASE_HOVER =
+  "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer";
 
 /** Atenuado, sin hover y sin acción: mismo aspecto en todos los módulos. */
 const CLASE_DISABLED = "text-muted-foreground/40 cursor-not-allowed";
@@ -59,7 +60,7 @@ export function ActionIcons({
           disabled={viewDisabled}
           aria-label="Ver detalle"
           title={viewTitle ?? "Ver detalle"}
-          className={`${CLASE_BASE} ${viewDisabled ? CLASE_DISABLED : claseHover("ver")}`}
+          className={`${CLASE_BASE} ${viewDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Eye className="w-4 h-4" />
         </button>
@@ -71,7 +72,7 @@ export function ActionIcons({
           disabled={editDisabled}
           aria-label="Editar"
           title={editTitle ?? "Editar"}
-          className={`${CLASE_BASE} ${editDisabled ? CLASE_DISABLED : claseHover("editar")}`}
+          className={`${CLASE_BASE} ${editDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Pencil className="w-4 h-4" />
         </button>
@@ -83,7 +84,7 @@ export function ActionIcons({
           disabled={deleteDisabled}
           aria-label="Eliminar"
           title={deleteTitle ?? "Eliminar"}
-          className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : claseHover("eliminar")}`}
+          className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Trash2 className="w-4 h-4" />
         </button>

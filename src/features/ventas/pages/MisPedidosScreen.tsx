@@ -351,7 +351,11 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
                         <p className="text-sm">
                           {p.motivoRechazo === "dinero-faltante"
                             ? "Rechazado: el valor recibido no cubría el total y el dinero fue devuelto."
-                            : "Rechazado: el comprobante de pago no fue válido."}
+                            : p.motivoRechazo === "comprobante-falso"
+                              ? "Rechazado: el comprobante de pago no fue válido."
+                              // Sin motivo de verificación = la venta fue anulada
+                              // desde el panel (anular deja "rechazado").
+                              : "Rechazado: el pedido fue anulado por el administrador."}
                         </p>
                       </div>
                       {p.comprobanteDevolucion && (

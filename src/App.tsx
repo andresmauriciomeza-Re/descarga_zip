@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Banknote,
-  BarChart2,
   Check,
   CheckCircle,
   ChevronDown,
@@ -29,7 +28,6 @@ import {
   Menu,
   Minus,
   Moon,
-  MoreHorizontal,
   Package,
   PackageCheck,
   Phone,
@@ -1447,7 +1445,7 @@ function PublicNav({
               onClick={() =>
                 navigate(isStaff ? "store-profile" : "client-profile")
               }
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
+              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
                 loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
               }`}
               title="Mi perfil"
@@ -1618,195 +1616,69 @@ function AdminTopBar({
 
 function BottomNav({
   navigate,
-  cart,
   current,
-  onMore,
   isLoggedIn,
+  isStaff,
+  loggedInUser,
+  onLogin,
 }: {
   navigate: (s: Screen) => void;
-  cart: CartItem[];
   current: Screen;
-  onMore: () => void;
   isLoggedIn: boolean;
+  isStaff: boolean;
+  loggedInUser: { iniciales: string; avatarColor: string } | null;
+  /** Abre el modal de Iniciar sesión (lo que hacía el botón "Más"). */
+  onLogin: () => void;
 }) {
-  const count = cart.reduce((s, i) => s + i.quantity, 0);
   const items = [
     { s: "landing" as Screen, Icon: Home, label: "Inicio" },
     ...(isLoggedIn
       ? [{ s: "mis-pedidos" as Screen, Icon: ShoppingBag, label: "Mis pedidos" }]
       : []),
     { s: "catalog" as Screen, Icon: Grid, label: "Menú" },
-    {
-      s: "cart" as Screen,
-      Icon: ShoppingCart,
-      label: "Carrito",
-      badge: count,
-    },
   ];
+  // Punto 2.1: "Carrito" y "Más" dejan la barra inferior. El carrito ya vive
+  // en el botón rojo del header (y en el badge del contenido), y lo que antes
+  // abría el cajón "Más" ahora es "Perfil": mismo destino que el avatar del
+  // header (`store-profile` para staff / `client-profile` para cliente, para
+  // no chocar con el guard de rutas del panel).
+  const perfilScreen: Screen = isStaff ? "store-profile" : "client-profile";
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border md:hidden">
       <div className="flex items-center justify-around h-16">
-        {items.map(({ s, Icon, label, badge }) => (
+        {items.map(({ s, Icon, label }) => (
           <button
             key={s}
             onClick={() => navigate(s)}
             className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === s ? "text-primary" : "text-muted-foreground"}`}
           >
-            <div className="relative">
-              <Icon className="w-5 h-5" />
-              {badge != null && badge > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {badge}
-                </span>
-              )}
-            </div>
+            <Icon className="w-5 h-5" />
             <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">{label}</span>
           </button>
         ))}
-        <button
-          onClick={onMore}
-          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
-        >
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-xs font-medium">Más</span>
-        </button>
+        {isLoggedIn ? (
+          <button
+            onClick={() => navigate(perfilScreen)}
+            className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === perfilScreen ? "text-primary" : "text-muted-foreground"}`}
+          >
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold leading-none shadow-sm ${loggedInUser?.avatarColor ?? "bg-primary"}`}
+            >
+              {(loggedInUser?.iniciales.charAt(0) ?? "U").toUpperCase()}
+            </span>
+            <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">Perfil</span>
+          </button>
+        ) : (
+          <button
+            onClick={onLogin}
+            className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
+          >
+            <UserCircle className="w-5 h-5" />
+            <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">Ingresar</span>
+          </button>
+        )}
       </div>
     </nav>
-  );
-}
-
-// ─────────────────────────── MOBILE DRAWER ───────────────────────────
-
-function MobileDrawer({
-  open,
-  onClose,
-  navigate,
-  onLogin,
-  cart,
-  isLoggedIn,
-  onLogout,
-}: {
-  open: boolean;
-  onClose: () => void;
-  navigate: (s: Screen) => void;
-  onLogin: () => void;
-  cart: CartItem[];
-  isLoggedIn: boolean;
-  onLogout: () => void;
-}) {
-  const count = cart.reduce((s, i) => s + i.quantity, 0);
-  const rows = [
-    {
-      s: "cart" as Screen,
-      Icon: ShoppingCart,
-      label: "Carrito",
-      badge: count,
-    },
-    { s: "clients" as Screen, Icon: Users, label: "Clientes" },
-    {
-      s: "product-categories" as Screen,
-      Icon: Tag,
-      label: "Categorías",
-    },
-    {
-      s: "supplies" as Screen,
-      Icon: Package,
-      label: "Insumos",
-    },
-    {
-      s: "reports" as Screen,
-      Icon: BarChart2,
-      label: "Informes",
-    },
-    ...(isLoggedIn
-      ? [
-          {
-            s: "dashboard" as Screen,
-            Icon: TrendingUp,
-            label: "Panel de control",
-          },
-        ]
-      : []),
-  ];
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/40 md:hidden"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{
-              type: "spring",
-              damping: 26,
-              stiffness: 320,
-            }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl shadow-2xl md:hidden"
-          >
-            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-4" />
-            <div className="px-4 pb-8 space-y-1 max-h-[70vh] overflow-y-auto">
-              {rows.map(({ s, Icon, label, badge }: any) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    navigate(s);
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <div className="relative">
-                    <Icon className="w-5 h-5 text-primary" />
-                    {badge > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {badge}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-base font-medium text-foreground">
-                    {label}
-                  </span>
-                </button>
-              ))}
-              <div className="border-t border-border my-2" />
-              {isLoggedIn ? (
-                <button
-                  onClick={() => {
-                    onLogout();
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-red-50 transition-colors cursor-pointer text-left"
-                >
-                  <LogOut className="w-5 h-5 text-red-500" />
-                  <span className="text-base font-medium text-red-500">
-                    Cerrar sesión
-                  </span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    navigate("login");
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <UserCircle className="w-5 h-5 text-primary" />
-                  <span className="text-base font-medium text-foreground">
-                    Ingresar
-                  </span>
-                </button>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
   );
 }
 
@@ -1911,7 +1783,11 @@ function LandingScreen({
                   franja roja de ancho completo de más abajo: esa se mantiene
                   igual y las dos conviven. Va dentro de la columna izquierda,
                   debajo de los botones. */}
-              <div className="mt-10 flex flex-wrap w-full items-stretch justify-between gap-x-4 gap-y-2 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
+              {/* grid de 3 columnas IGUALES en una sola fila (antes flex-wrap,
+                  que a 360 px bajaba "30 años / De tradición" a una segunda
+                  fila). `divide-x` conserva los divisores verticales; `min-w-0`
+                  en cada celda evita que la cifra o la etiqueta desborden. */}
+              <div className="mt-10 w-full grid grid-cols-3 items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
                 {[
                   {
                     value: "+5.200",
@@ -1928,7 +1804,7 @@ function LandingScreen({
                 ].map(({ value, label }) => (
                   <div
                     key={label}
-                    className="px-2 sm:px-5 text-center"
+                    className="min-w-0 px-1.5 sm:px-5 text-center"
                   >
                     <p
                       // `clamp` en vez de pasos fijos: las tres celdas se
@@ -2023,13 +1899,11 @@ function LandingScreen({
             </button>
           </div>
 
-          {/* Cards — horizontal scroll on mobile, 4-col on desktop */}
+          {/* Cards — punto 2.2: en móvil pasan a grid de 1 columna (antes
+              carrusel con `overflow-x-auto`, donde la última tarjeta quedaba
+              cortada a 360 px). Escritorio sin cambios. */}
           <div
-            className="flex gap-5 overflow-x-auto md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible pb-2 md:pb-0"
-            style={{
-              scrollbarWidth: "none",
-              WebkitOverflowScrolling: "touch",
-            }}
+            className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4"
           >
             {(() => {
               const normalizar = (valor: string | undefined) =>
@@ -2063,7 +1937,7 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
-                    className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
+                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
                   >
                     {/* Image */}
                     <div className="relative h-52 bg-muted overflow-hidden">
@@ -7825,6 +7699,29 @@ export default function App() {
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
 
+  // Punto 2.1 — accesos rápidos del perfil (antes en el cajón "Más" del menú
+  // móvil). Apuntan a las pantallas REALES y se filtran con las mismas reglas
+  // que el Sidebar: Panel de control solo con acceso al Dashboard; el resto,
+  // por el privilegio "Ver" de su permiso. "Informes" no aparece porque
+  // `reports` no tiene pantalla propia (se reporta, no se enlaza a un
+  // placeholder).
+  const accesosRapidos = isStaff
+    ? ([
+        ...(hasDashboardAccess
+          ? [{ screen: "dashboard", label: "Panel de control", Icon: TrendingUp }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Ventas", "Clientes"))
+          ? [{ screen: "clientes", label: "Clientes", Icon: UserCircle }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Producción", "Categoría de Producto"))
+          ? [{ screen: "cat-producto", label: "Categorías", Icon: Tag }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Compras", "Insumos"))
+          ? [{ screen: "supplies", label: "Insumos", Icon: Package }]
+          : []),
+      ] as { screen: string; label: string; Icon: typeof TrendingUp }[])
+    : [];
+
   // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
   // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
   // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
@@ -7956,7 +7853,6 @@ export default function App() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>(
     // Órdenes 2024 → relativas a hoy: [0, 1, 3, 6, 10] cubre hoy, la semana
@@ -8255,15 +8151,34 @@ export default function App() {
     }
     if (options?.restaurar) {
       const top = scrollPorPantalla.current[s] ?? 0;
-      // La pantalla entrante todavía no está pintada cuando corre este efecto,
-      // así que se espera un frame para que el alto del documento sea real.
-      requestAnimationFrame(() =>
-        window.scrollTo({ top, behavior: "auto" }),
-      );
+      // Punto 2.3: la pantalla entrante tarda en montarse (`AnimatePresence
+      // mode="wait"`), y al montarse las imágenes del landing aún no han
+      // cargado, así que el documento puede estar más bajo que `top` y el
+      // scroll se limita al máximo disponible (quedaba en otra sección).
+      // Se reintenta con rAF + `setTimeout` hasta llegar al tope guardado o
+      // agotar el tiempo (~3 s): cuando el documento crece por la carga de
+      // imágenes, el siguiente intento ya alcanza la posición. Antes se
+      // cortaba en cuanto el scroll llegaba al fondo del documento TEMPORAL
+      // (imágenes sin cargar), que era mucho más arriba que el tope guardado.
+      const MAX_INTENTOS = 60;
+      let intentos = 0;
+      const intentar = () => {
+        intentos += 1;
+        const doc = document.documentElement;
+        const alcanzable = Math.min(
+          top,
+          Math.max(0, doc.scrollHeight - window.innerHeight),
+        );
+        window.scrollTo({ top: alcanzable, behavior: "auto" });
+        if (window.scrollY !== top && intentos < MAX_INTENTOS) {
+          window.setTimeout(intentar, 50);
+        }
+      };
+      // Un doble frame para que el DOM de la pantalla entrante exista al menos.
+      requestAnimationFrame(() => window.requestAnimationFrame(intentar));
     } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    setDrawerOpen(false);
   };
 
   /** Desde la tabla de ventas, "Gestionar" salta al módulo de devoluciones con el
@@ -8505,8 +8420,21 @@ export default function App() {
     });
   };
 
+  // Punto 2.4: agregar desde el detalle acumulaba unidades en líneas separadas
+  // aunque el producto, el tamaño y los extras fueran idénticos (quickAdd y
+  // fusionarCarritos ya lo hacían). Se reutiliza `mismaConfig`: si la misma
+  // configuración ya está en el carrito, se suman las unidades a esa línea (la
+  // primera que entró); si no, se agrega al final.
   const addDetailed = (item: CartItem) =>
-    setCart((p) => [...p, item]);
+    setCart((p) => {
+      const i = p.findIndex((x) => mismaConfig(x, item));
+      if (i === -1) return [...p, item];
+      return p.map((x, idx) =>
+        idx === i
+          ? { ...x, quantity: x.quantity + item.quantity }
+          : x,
+      );
+    });
 
   const registrarPedido = (
     metodoPago: string,
@@ -9076,12 +9004,24 @@ export default function App() {
                   onBack={() => {
                     navigate(detalleOrigen, { restaurar: true });
                     // Al volver al catálogo, hace scroll a la tarjeta del producto
-                    // que se abrió (data-producto-id en ProductCard).
+                    // que se abrió (data-producto-id en ProductCard). Mismo criterio
+                    // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
+                    // montarse por la transición de salida (AnimatePresence).
                     if (detalleOrigen === "catalog") {
-                      requestAnimationFrame(() => {
+                      let intentosCard = 0;
+                      const buscarTarjeta = () => {
+                        intentosCard += 1;
                         const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
-                        el?.scrollIntoView({ block: "center" });
-                      });
+                        if (!el) {
+                          // Mismo presupuesto amplio que `navigate(restaurar)`:
+                          // la tarjeta tarda en montarse por la transición de
+                          // salida (AnimatePresence) y en aparecer las imágenes.
+                          if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
+                          return;
+                        }
+                        el.scrollIntoView({ block: "center" });
+                      };
+                      requestAnimationFrame(buscarTarjeta);
                     }
                   }}
                   backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
@@ -9220,6 +9160,9 @@ export default function App() {
                   setProveedores={setProveedores}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  // Punto 3.2: el modal que abre este listado necesita el
+                  // catálogo para buscar por tipo "Producto".
+                  productos={productos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -9519,6 +9462,7 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
+                  accesosRapidos={accesosRapidos}
                   inStore
                 />
               )}
@@ -9550,6 +9494,7 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
+                  accesosRapidos={accesosRapidos}
                 />
               )}
               {screen === "supplies" && (
@@ -9592,6 +9537,10 @@ export default function App() {
                   "recepcion-compra",
                   "gestion-compra",
                   "nueva-compra",
+                  // El detalle real se pinta arriba (screen === "orden-detalle");
+                  // sin estar acá, GenericAdmin se sumaba debajo y repetía el
+                  // placeholder "En desarrollo · Volver al inicio".
+                  "orden-detalle",
                   "devoluciones",
                 ].includes(screen) && (
                   <GenericAdmin
@@ -9614,10 +9563,14 @@ export default function App() {
         {!isAdmin && !isAuth && (
           <BottomNav
             navigate={navigate}
-            cart={cart}
             current={screen}
-            onMore={() => setDrawerOpen(true)}
             isLoggedIn={isLoggedIn}
+            isStaff={isStaff}
+            loggedInUser={loggedInUser ? {
+              iniciales: loggedInUser.iniciales,
+              avatarColor: loggedInUser.avatarColor,
+            } : null}
+            onLogin={openLogin}
           />
         )}
       </div>
@@ -9632,17 +9585,6 @@ export default function App() {
           aria-hidden
         />
       )}
-
-      {/* Mobile drawer */}
-      <MobileDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        navigate={navigate}
-        onLogin={openLogin}
-        cart={cart}
-        isLoggedIn={isLoggedIn}
-        onLogout={logout}
-      />
 
       <style>{`
         ::-webkit-scrollbar { display: none; }

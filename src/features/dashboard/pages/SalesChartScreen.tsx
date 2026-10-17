@@ -358,7 +358,7 @@ export function SalesChartScreen({
   // Índice real de ventas por fecha (excluye anuladas y devueltas).
   const porFecha = new Map<string, { unidades: number; ingresos: number }>();
   ventas.forEach((v) => {
-    if (!esFechaISO(v.fecha) || v.estado === "anulado" || v.estado === "perdida") return;
+    if (!esFechaISO(v.fecha) || v.estado === "anulado" || v.estado === "perdida" || v.estado === "rechazado") return;
     const dato = porFecha.get(v.fecha) ?? { unidades: 0, ingresos: 0 };
     dato.unidades += v.detalle?.reduce((s, d) => s + d.cantidad, 0) ?? v.cantidad ?? 0;
     dato.ingresos += v.total;

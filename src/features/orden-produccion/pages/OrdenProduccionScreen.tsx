@@ -1630,7 +1630,7 @@ export function OrdenProduccionScreen({
                         <button onClick={() => puedeBaja && openDarBaja(o)}
                           disabled={!puedeBaja}
                           title={puedeBaja ? "Dar de baja" : "No se puede dar de baja en este estado"}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 text-muted-foreground hover:text-amber-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
                           <PackageX className="w-4 h-4" />
                         </button>
                       </div>

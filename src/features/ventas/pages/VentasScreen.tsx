@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useRef } from "react";
+﻿import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 import { hora12 } from "@/shared/utils/hora";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -66,6 +66,9 @@ function ConfirmModal({
   onConfirm,
   onCancel,
   tone = "peligro",
+  children,
+  confirmDisabled = false,
+  confirmLabel = "Sí, confirmar",
 }: {
   title: string;
   message: string;
@@ -74,6 +77,14 @@ function ConfirmModal({
   /** "aviso" pinza el botón en naranja, para acciones que no son destructivas
       (p. ej. registrar una devolución). */
   tone?: "peligro" | "aviso";
+  /** Punto 3.4: slot opcional entre el mensaje y los botones. Lo usa
+      "Rechazar por comprobante falso" para pedir el adjunto (antes este
+      rechazo no exigía comprobante y el de dinero faltante sí). */
+  children?: ReactNode;
+  /** Apaga el botón de confirmar sin desmontar el modal (falta el adjunto
+      obligatorio). El clic nunca llega a `onConfirm`. */
+  confirmDisabled?: boolean;
+  confirmLabel?: string;
 }) {
   const esAviso = tone === "aviso";
   return (
@@ -102,9 +113,10 @@ function ConfirmModal({
             {title}
           </h3>
         </div>
-        <p className="text-muted-foreground mb-6 leading-relaxed">
+        <p className={`leading-relaxed text-muted-foreground ${children ? "mb-4" : "mb-6"}`}>
           {message}
         </p>
+        {children}
         <div className="flex gap-3">
           <button
             onClick={onCancel}
@@ -114,17 +126,91 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-3 text-white rounded-xl font-semibold transition-colors active:scale-95 cursor-pointer ${
-              esAviso
-                ? "bg-orange-600 hover:bg-orange-700"
-                : "bg-red-600 hover:bg-red-700"
+            disabled={confirmDisabled}
+            className={`flex-1 py-3 text-white rounded-xl font-semibold transition-colors active:scale-95 ${
+              confirmDisabled
+                ? "bg-red-600/50 opacity-50 cursor-not-allowed"
+                : `${
+                    esAviso ? "bg-orange-600 hover:bg-orange-700" : "bg-red-600 hover:bg-red-700"
+                  } cursor-pointer`
             }`}
           >
-            Sí, confirmar
+            {confirmLabel}
           </button>
         </div>
       </motion.div>
     </div>
+  );
+}
+
+/**
+ * Punto 3.4: bloque de comprobante (input oculto + vista previa + "Quitar").
+ * Antes vivía copiado a mano dentro del modal "Devolución del dinero recibido";
+ * ahora lo comparten ese modal y el `ConfirmModal` de "Rechazar por comprobante
+ * falso", que antes no pedía adjunto y así dejaba el rechazo sin evidencia.
+ * Mismos formatos y tope que ya aplica `useSubirArchivo` (JPG/PNG/WEBP/PDF, 5 MB).
+ */
+function CampoComprobante({
+  fileRef,
+  url,
+  onQuitar,
+  subiendo,
+  onSubir,
+  etiquetaBoton,
+}: {
+  fileRef: React.RefObject<HTMLInputElement | null>;
+  url: string | null;
+  onQuitar: () => void;
+  subiendo: boolean;
+  onSubir: (file: File) => void;
+  etiquetaBoton: string;
+}) {
+  const esPdf = !!url && (url.startsWith("data:application/pdf") || url.endsWith(".pdf"));
+  return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          onSubir(file);
+          e.target.value = "";
+        }}
+      />
+      {url ? (
+        <div className="relative rounded-xl overflow-hidden border border-border">
+          {esPdf ? (
+            <div className="flex items-center gap-2 p-3 text-sm text-foreground">
+              <FileText className="w-4 h-4 text-primary" /> Comprobante adjunto
+            </div>
+          ) : (
+            <img src={url} alt="Comprobante" className="w-full object-contain max-h-56" />
+          )}
+          <button
+            onClick={onQuitar}
+            className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+            aria-label="Quitar comprobante"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={subiendo}
+          className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border text-center hover:border-primary/40 cursor-pointer transition-colors"
+        >
+          <Upload className="w-6 h-6 text-muted-foreground/50" />
+          <span className="text-sm font-semibold text-foreground">
+            {subiendo ? "Subiendo..." : etiquetaBoton}
+          </span>
+          <span className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx 5 MB</span>
+        </button>
+      )}
+    </>
   );
 }
 
@@ -139,8 +225,10 @@ export type VentaStatus =
   | "rechazado"
   | "en-espera";
 
-/** "anulado" y "perdida" ya no se eligen desde el desplegable de estado de la
-    tabla: se aplican con los botones de acción (anular / devolución). */
+/** "perdida" no se elige desde el desplegable de estado de la tabla: se aplica
+    con los botones de acción (devolución). "anulado" ya no lo escribe ningún
+    botón (anular deja la venta en "rechazado") pero se conserva en el tipo y
+    en los labels por los datos persistidos. */
 export const VENTA_STATUS_MANUALES: VentaStatus[] = ["perdida", "anulado"];
 
 /** Estados que solo asigna el flujo de verificación (nunca el selector):
@@ -613,8 +701,12 @@ export function VentasScreen({
     cerrarDetalle();
   };
 
-  /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución. */
+  /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución.
+      Punto 3.4: además guarda el adjunto como evidencia, en el MISMO campo que
+      ya lee el detalle (`comprobanteDevolucion`), así el rechazo no queda sin
+      soporte documental. El botón de confirmar llega con `devolUrl` lleno. */
   const rechazarPorFalso = (id: string) => {
+    if (!devolUrl) return;
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
@@ -622,6 +714,7 @@ export function VentasScreen({
               ...x,
               estado: "rechazado" as VentaStatus,
               motivoRechazo: "comprobante-falso" as MotivoRechazo,
+              comprobanteDevolucion: devolUrl,
               historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
             }
           : x,
@@ -672,16 +765,19 @@ export function VentasScreen({
     cerrarDetalle();
   };
 
-  /** Anular una venta: el pedido queda en el estado "anulado" y deja de contar
-      como venta, sin tocar el módulo de devoluciones. */
+  /** Anular una venta: el pedido queda en el estado "rechazado" (mismo badge
+      y misma regla de conteo que un rechazo de pago: no cuenta como venta)
+      y deja su entrada en el historial, sin tocar el módulo de devoluciones.
+      "anulado" sigue existiendo en el tipo por los datos ya persistidos, pero
+      este botón ya no lo escribe. */
   const anularVenta = (id: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
           ? {
               ...x,
-              estado: "anulado" as VentaStatus,
-              historial: [...(x.historial ?? []), { estado: "anulado" as VentaStatus, hora: nowHora() }],
+              estado: "rechazado" as VentaStatus,
+              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
             }
           : x,
       ),
@@ -1640,23 +1736,23 @@ export function VentasScreen({
         );
         if (pendientes.length === 0) return null;
         return (
-          <div className="flex items-center gap-4 px-5 py-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-              <AlertCircle className="w-5 h-5 text-amber-600" />
+          <div className="flex items-center gap-4 px-5 py-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl dark:bg-amber-500/10 dark:border-amber-500/25">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-amber-900">
+              <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
                 {pendientes.length}{" "}
                 {pendientes.length === 1
                   ? "pedido pendiente de verificación"
                   : "pedidos pendientes de verificación"}
               </p>
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs text-amber-700 mt-0.5 dark:text-amber-300/80">
                 Revisa el comprobante de pago y aprueba o
                 rechaza cada pedido.
               </p>
             </div>
-            <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full bg-amber-200 text-amber-900 animate-pulse">
+            <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full bg-amber-200 text-amber-900 animate-pulse dark:bg-amber-500/20 dark:text-amber-300 dark:animate-none">
               ● Requiere acción
             </span>
           </div>
@@ -1715,9 +1811,9 @@ export function VentasScreen({
                     key={p.id}
                     className={`transition-colors ${
                       p.estado === "por-verificar"
-                        ? "bg-amber-50/60 hover:bg-amber-50"
+                        ? "bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-500/5 dark:hover:bg-amber-500/10"
                         : p.estado === "en-espera"
-                          ? "bg-violet-50/60 hover:bg-violet-50"
+                          ? "bg-violet-50/60 hover:bg-violet-50 dark:bg-violet-500/5 dark:hover:bg-violet-500/10"
                           : "hover:bg-muted/20"
                     }`}
                   >
@@ -1792,7 +1888,7 @@ export function VentasScreen({
                           <button
                             onClick={() => abrirDetalle(p)}
                             title="Verificar pago"
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors cursor-pointer text-xs font-semibold"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Verificar
@@ -1801,7 +1897,7 @@ export function VentasScreen({
                         <ActionIcons
                           onView={() => abrirDetalle(p)}
                         />
-                        {/* Anular venta: la deja en estado "anulado". Un círculo con
+                        {/* Anular venta: la deja en estado "rechazado". Un círculo con
                             la línea en diagonal dice "anular" mejor que una papelera,
                             que parecía borrar el pedido. Una venta rechazada es
                             final: no se anula ni se devuelve. */}
@@ -1811,7 +1907,7 @@ export function VentasScreen({
                               setConfirmAccionV({ id: p.id, accion: "anular" })
                             }
                             title="Anular venta"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <Ban className="w-4 h-4" />
                           </button>
@@ -1823,7 +1919,7 @@ export function VentasScreen({
                               setConfirmAccionV({ id: p.id, accion: "devolucion" })
                             }
                             title="Registrar devolución"
-                            className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <Undo2 className="w-4 h-4" />
                           </button>
@@ -1834,7 +1930,7 @@ export function VentasScreen({
                           <button
                             onClick={() => setFacturaVenta(p)}
                             title="Imprimir factura"
-                            className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -1854,7 +1950,7 @@ export function VentasScreen({
                             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                               p.devolucionResuelta
                                 ? "text-muted-foreground hover:bg-muted"
-                                : "text-muted-foreground hover:bg-orange-50 hover:text-orange-600"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             }`}
                           >
                             <RefreshCw className="w-4 h-4" />
@@ -2106,31 +2202,31 @@ export function VentasScreen({
                       (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
                     const pagoInicial = detailItem.montoFaltante ? totalVenta - detailItem.montoFaltante : null;
                     return (
-                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 dark:bg-amber-500/10 dark:border-amber-500/25">
                         <div className="flex items-center gap-2 mb-4">
-                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <p className="text-sm font-semibold text-amber-900">Verificación de pago</p>
+                          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Verificación de pago</p>
                         </div>
                         <div className="space-y-3 mb-4">
-                          <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
-                            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Total a cobrar</p>
+                          <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
+                            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-0.5">Total a cobrar</p>
                             <p className="text-xl font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(totalVenta)}</p>
                           </div>
                           {pagoInicial !== null && (
                             <>
-                              <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
+                              <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
                                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Pagado inicialmente</p>
                                 <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(pagoInicial)}</p>
                               </div>
-                              <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
-                                <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Faltante solicitado</p>
+                              <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
+                                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-0.5">Faltante solicitado</p>
                                 <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(detailItem.montoFaltante ?? 0)}</p>
                               </div>
                             </>
                           )}
                           {/* Motivo (solo si se va a rechazar). */}
-                          <div className="bg-white rounded-xl border border-amber-200 px-4 py-3">
-                            <label className="block text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-1">
+                          <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
+                            <label className="block text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-1">
                               Motivo
                             </label>
                             <select
@@ -2228,7 +2324,7 @@ export function VentasScreen({
             tone={confirmAccionV.accion === "anular" ? "peligro" : "aviso"}
             message={
               confirmAccionV.accion === "anular"
-                ? "¿Estás seguro de anular esta venta? El pedido quedará marcado como Anulado y dejará de contar como venta."
+                ? "¿Estás seguro de anular esta venta? El pedido quedará marcado como Rechazado y dejará de contar como venta."
                 : "¿Estás seguro de registrar la devolución? La venta pasará a estado Devolución y quedará en el módulo de devoluciones."
             }
             onConfirm={() => {
@@ -2255,13 +2351,41 @@ export function VentasScreen({
                 ? "¿Aprobar el pago? La venta pasará a Por entregar (listo para recoger)."
                 : "¿Rechazar el pago por comprobante falso? La venta quedará como Rechazado (estado final)."
             }
+            // Punto 3.4: en este rechazo el adjunto es obligatorio (igual que
+            // en el de dinero faltante), así que el botón queda apagado y con
+            // el nombre de la acción hasta subirlo.
+            confirmLabel={confirmVerif === "aprobar" ? "Sí, confirmar" : "Confirmar rechazo"}
+            confirmDisabled={confirmVerif === "rechazar-falso" && (!devolUrl || subiendoDevol)}
             onConfirm={() => {
               if (confirmVerif === "aprobar") aprobarPago(detailItem.id);
               else rechazarPorFalso(detailItem.id);
               setConfirmVerif(null);
             }}
             onCancel={() => setConfirmVerif(null)}
-          />
+          >
+            {confirmVerif === "rechazar-falso" && (
+              <div className="mb-5 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Sube el comprobante que dejó el cliente para dejar constancia del rechazo. Es obligatorio para confirmar.
+                </p>
+                <CampoComprobante
+                  fileRef={devolFileRef}
+                  url={devolUrl}
+                  onQuitar={() => setDevolUrl(null)}
+                  subiendo={subiendoDevol}
+                  onSubir={(file) => {
+                    void subirDevol(file, "comprobantes").then((u) => { if (u) setDevolUrl(u); });
+                  }}
+                  etiquetaBoton="Subir comprobante"
+                />
+                {!devolUrl && (
+                  <p className="text-xs font-semibold text-red-600">
+                    Adjunta el comprobante para poder confirmar el rechazo.
+                  </p>
+                )}
+              </div>
+            )}
+          </ConfirmModal>
         )}
       </AnimatePresence>
 
@@ -2353,48 +2477,17 @@ export function VentasScreen({
                 <p className="text-sm text-muted-foreground">
                   Sube el comprobante de la transferencia con la que se devuelve el dinero al cliente (a la misma cuenta). Es obligatorio para rechazar.
                 </p>
-                <input
-                  ref={devolFileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    void subirDevol(file, "comprobantes").then((url) => { if (url) setDevolUrl(url); });
-                    e.target.value = "";
+                {/* Punto 3.4: el bloque dejó de estar copiado a mano aquí. */}
+                <CampoComprobante
+                  fileRef={devolFileRef}
+                  url={devolUrl}
+                  onQuitar={() => setDevolUrl(null)}
+                  subiendo={subiendoDevol}
+                  onSubir={(file) => {
+                    void subirDevol(file, "comprobantes").then((u) => { if (u) setDevolUrl(u); });
                   }}
+                  etiquetaBoton="Subir comprobante de devolución"
                 />
-                {devolUrl ? (
-                  <div className="relative rounded-xl overflow-hidden border border-border">
-                    {devolUrl.startsWith("data:application/pdf") || devolUrl.endsWith(".pdf") ? (
-                      <div className="flex items-center gap-2 p-3 text-sm text-foreground">
-                        <FileText className="w-4 h-4 text-primary" /> Comprobante de devolución adjunto
-                      </div>
-                    ) : (
-                      <img src={devolUrl} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
-                    )}
-                    <button
-                      onClick={() => setDevolUrl(null)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
-                      aria-label="Quitar comprobante"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => devolFileRef.current?.click()}
-                    disabled={subiendoDevol}
-                    className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border text-center hover:border-primary/40 cursor-pointer transition-colors"
-                  >
-                    <Upload className="w-6 h-6 text-muted-foreground/50" />
-                    <span className="text-sm font-semibold text-foreground">
-                      {subiendoDevol ? "Subiendo..." : "Subir comprobante de devolución"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx 5 MB</span>
-                  </button>
-                )}
               </div>
               <div className="flex gap-2 px-5 pb-5">
                 <button
