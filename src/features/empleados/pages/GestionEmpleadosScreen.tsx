@@ -11,7 +11,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarCorreoPersona, validarDocumento, validarNombre } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "@/features/usuarios/pages/GestionUsuariosScreen";
@@ -354,7 +354,13 @@ export function GestionEmpleadosScreen({
     if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(e.nombre); if (v) errs.nombre = v; }
     if (!e.correo.trim()) errs.correo = "El correo es obligatorio";
-    else { const v = validarCorreo(e.correo); if (v) errs.correo = v; }
+    else {
+      // Dominio restringido solo si el correo cambió: una cuenta existente con
+      // otro dominio (p. ej. @lasirena.com) no se bloquea mientras no se toque.
+      const correoCambio = e.correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
+      const v = correoCambio ? validarCorreoPersona(e.correo) : validarCorreo(e.correo);
+      if (v) errs.correo = v;
+    }
     if (e.telefono.trim() && !/^[\d\s+()\-]+$/.test(e.telefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
@@ -428,7 +434,7 @@ export function GestionEmpleadosScreen({
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) { errs.correo = "El correo es obligatorio"; }
-    else if (validarCorreo(newCorreo)) { errs.correo = validarCorreo(newCorreo) as string; }
+    else if (validarCorreoPersona(newCorreo)) { errs.correo = validarCorreoPersona(newCorreo) as string; }
     if (newTelefono.trim() && !/^[\d\s+()\-]+$/.test(newTelefono.trim()))
       errs.telefono = "El teléfono solo debe contener números";
     if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
@@ -983,7 +989,7 @@ export function GestionEmpleadosScreen({
                       Correo electrónico <span className="text-primary">*</span>
                     </label>
                     <input type="email" value={newCorreo} autoComplete="off"
-                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreoPersona(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={fCls(createErrors.correo)} />
                     {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
@@ -1138,7 +1144,7 @@ export function GestionEmpleadosScreen({
                   <div key={field} className={full ? "col-span-2" : ""}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
-                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
+                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? ((v.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase() ? validarCorreoPersona(v) : validarCorreo(v)) ?? undefined) : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>

@@ -15,7 +15,7 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, fullAccesos } from "@/features/roles/pages/GestionConfigScreen";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarCorreoPersona, validarDocumento, validarNombre } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 
@@ -372,7 +372,13 @@ export function GestionUsuariosScreen({
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
-    else { const v = validarCorreo(editItem.correo); if (v) errs.correo = v; }
+    else {
+      // Dominio restringido solo si el correo cambió: una cuenta existente con
+      // otro dominio (p. ej. @lasirena.com) no se bloquea mientras no se toque.
+      const correoCambio = editItem.correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
+      const v = correoCambio ? validarCorreoPersona(editItem.correo) : validarCorreo(editItem.correo);
+      if (v) errs.correo = v;
+    }
     if (!editItem.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!editItem.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
     else { const v = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento); if (v) errs.numeroDocumento = v; }
@@ -479,8 +485,8 @@ export function GestionUsuariosScreen({
 
     if (!newCorreo.trim()) {
       errs.correo = "El correo es obligatorio";
-    } else if (validarCorreo(newCorreo)) {
-      errs.correo = validarCorreo(newCorreo) as string;
+    } else if (validarCorreoPersona(newCorreo)) {
+      errs.correo = validarCorreoPersona(newCorreo) as string;
     } else {
       const em = newCorreo.trim().toLowerCase();
       const dupCorreo =
@@ -969,7 +975,7 @@ export function GestionUsuariosScreen({
                       inputMode={numeric ? "numeric" : undefined}
                       value={editItem[field]}
                       autoComplete="off"
-                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
+                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? ((v.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase() ? validarCorreoPersona(v) : validarCorreo(v)) ?? undefined) : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
@@ -1151,7 +1157,7 @@ export function GestionUsuariosScreen({
                       type="email"
                       value={newCorreo}
                       autoComplete="off"
-                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreoPersona(v) ?? undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
