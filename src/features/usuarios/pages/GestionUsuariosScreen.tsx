@@ -930,8 +930,8 @@ export function GestionUsuariosScreen({
                   </div>
                 </div>
 
-                <div className="flex gap-3 items-start">
-                  <div className="w-56 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div className="w-full sm:w-56 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                     <select
                       disabled
@@ -1097,8 +1097,8 @@ export function GestionUsuariosScreen({
 
                 <div className="px-5 py-4 space-y-4">
                   {/* Documento */}
-                   <div className="flex gap-3 items-start">
-                    <div className="w-56 shrink-0">
+                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                    <div className="w-full sm:w-56 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
                         Tipo de documento <span className="text-primary">*</span>
                       </label>

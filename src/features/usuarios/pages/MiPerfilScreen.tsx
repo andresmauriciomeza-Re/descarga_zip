@@ -140,7 +140,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
         className="bg-card border border-border rounded-2xl overflow-hidden"
       >
         {/* Avatar + nombre + rol */}
-        <div className="flex items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
+        <div className="flex flex-wrap items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-sm ${avatarBg}`}>
             {iniciales}
           </div>
@@ -161,7 +161,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             )}
           </div>
           {!editando && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={() => setShowCambiarContrasena(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
@@ -179,7 +179,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             </div>
           )}
           {editando && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
               <button
                 disabled
                 title="Termina de editar tu perfil primero"

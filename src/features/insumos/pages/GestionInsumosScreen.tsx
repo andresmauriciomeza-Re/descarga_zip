@@ -780,9 +780,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         </div>
 
         {/* Two columns: cada columna scrollea por dentro, nunca la página */}
-        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-border overflow-y-auto lg:overflow-hidden">
           {/* ── COLUMNA IZQUIERDA: datos del producto insumo ── */}
-          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+          <div className="w-full lg:w-1/2 px-6 py-4 flex flex-col min-h-0">
             <div className="flex flex-col flex-1 min-h-0 w-full max-w-2xl">
               <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
                 Datos del producto insumo
@@ -864,7 +864,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
           </div>
 
           {/* ── COLUMNA DERECHA: ficha técnica (siempre visible) ── */}
-          <div className="w-1/2 px-6 py-4 flex flex-col min-h-0">
+          <div className="w-full lg:w-1/2 px-6 py-4 flex flex-col min-h-0">
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
               <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
                 Ficha Técnica
