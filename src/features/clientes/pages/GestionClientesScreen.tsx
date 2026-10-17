@@ -16,7 +16,7 @@ import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarCorreoPersona, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -189,10 +189,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
     else {
-      // Dominio restringido solo si el correo cambió: una cuenta existente con
-      // otro dominio (p. ej. @lasirena.com) no se bloquea mientras no se toque.
-      const correoCambio = editItem.correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
-      const v = correoCambio ? validarCorreoPersona(editItem.correo) : validarCorreo(editItem.correo);
+      const v = validarCorreo(editItem.correo);
       if (v) errs.correo = v;
       if (!errs.correo) {
         const em = editItem.correo.trim().toLowerCase();
@@ -266,7 +263,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   // el modal).
   const errorCorreoAlta = (correo: string): string | undefined => {
     if (!correo.trim()) return undefined;
-    const formato = validarCorreoPersona(correo);
+    const formato = validarCorreo(correo);
     if (formato) return formato;
     return correoDuplicado(correo) ? "Ya existe un cliente con este correo" : undefined;
   };
@@ -678,7 +675,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <div key={field}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} value={editItem[field]} autoComplete="off"
-                      onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? ((v.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase() ? validarCorreoPersona(v) : validarCorreo(v)) ?? undefined) : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
+                      onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>

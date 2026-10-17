@@ -6,7 +6,7 @@ import { type Contratacion, ordenarContrataciones } from "@/features/empleados/p
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, validarCorreo, validarCorreoPersona, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "@/shared/components/campo";
+import { filtrarCorreo, validarCorreo, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "@/shared/components/campo";
 
 const SERIF = "var(--font-titulo)";
 
@@ -91,11 +91,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
   };
 
   const handleGuardar = () => {
-    // Dominio restringido solo si el correo cambió: si la persona ya tiene una
-    // cuenta con otro dominio (p. ej. @lasirena.com) y no lo modifica, se
-    // permite guardar sin exigirle un dominio nuevo.
-    const correoCambio = correo.trim().toLowerCase() !== (loggedInUser?.correo ?? "").trim().toLowerCase();
-    const ec = correoCambio ? validarCorreoPersona(correo) : validarCorreo(correo);
+    const ec = validarCorreo(correo);
     const et = validarTelefono(telefono);
     if (ec || et) { setErrores({ correo: ec ?? undefined, telefono: et ?? undefined }); return; }
     const newCorreo   = correo.trim().toLowerCase();
@@ -245,7 +241,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 <input
                   type="email"
                   value={correo}
-                   onChange={e => { const value = filtrarCorreo(e.target.value); setCorreo(value); const cambio = value.trim().toLowerCase() !== (loggedInUser?.correo ?? "").trim().toLowerCase(); setErrores(p => ({ ...p, correo: (cambio ? validarCorreoPersona(value) : validarCorreo(value)) ?? undefined })); }}
+                   onChange={e => { const value = filtrarCorreo(e.target.value); setCorreo(value); setErrores(p => ({ ...p, correo: validarCorreo(value) ?? undefined })); }}
                   placeholder="correo@ejemplo.com"
                   className={iCls(errores.correo)}
                   autoFocus

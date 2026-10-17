@@ -94,7 +94,7 @@ import {
   YAxis,
 } from "recharts";
 import QRCode from "qrcode";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarCorreoPersona, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { VolverArriba } from "@/shared/components/VolverArriba";
@@ -4141,10 +4141,7 @@ function ClientProfileScreen({
     : "—";
 
   const handleGuardar = () => {
-    // Dominio restringido solo si el correo cambió: una cuenta existente con
-    // otro dominio (p. ej. @lasirena.com) no se bloquea mientras no se toque.
-    const correoCambio = correo.trim().toLowerCase() !== (loggedInUser?.correo ?? "").trim().toLowerCase();
-    const ec = correoCambio ? validarCorreoPersona(correo) : validarCorreo(correo);
+    const ec = validarCorreo(correo);
     const et = !/^\d{7,15}$/.test(telefono.replace(/\s/g, ""))
       ? "Solo números, entre 7 y 15 dígitos"
       : null;
@@ -4266,8 +4263,7 @@ function ClientProfileScreen({
                   onChange={(e) => {
                      const value = filtrarCorreo(e.target.value);
                      setCorreo(value);
-                     const cambio = value.trim().toLowerCase() !== (loggedInUser?.correo ?? "").trim().toLowerCase();
-                     setErrores((p) => ({ ...p, correo: (cambio ? validarCorreoPersona(value) : validarCorreo(value)) ?? undefined }));
+                     setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
                   }}
                   className={iCls(errores.correo)}
                   autoFocus
@@ -5473,7 +5469,7 @@ function RegisterScreen({
       setForm((p) => ({ ...p, [k]: value }));
       setErrores((prev) => {
         const next = { ...prev };
-        if (k === "email") next.email = validarCorreoPersona(value) ?? "";
+        if (k === "email") next.email = validarCorreo(value) ?? "";
         if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
         if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
         if (k === "password") {
@@ -5538,7 +5534,7 @@ function RegisterScreen({
       case "name":
         return () => validarNombre(form.name);
       case "email":
-        return () => validarCorreoPersona(form.email);
+        return () => validarCorreo(form.email);
       case "phone":
         return () => validarTelefono(form.phone);
       case "password":
@@ -5570,7 +5566,7 @@ function RegisterScreen({
     if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
     else errs.name = validarNombre(form.name) ?? undefined;
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
-    else errs.email = validarCorreoPersona(form.email) ?? undefined;
+    else errs.email = validarCorreo(form.email) ?? undefined;
     if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
     else if (!/^3\d{9}$/.test(form.phone)) errs.phone = "Debe tener 10 dígitos y comenzar por 3";
     if (!form.docType) errs.docType = "Selecciona el tipo de documento";
@@ -5725,14 +5721,6 @@ function RegisterScreen({
         "Ingresa un correo válido y sin espacios.": {
           campo: "email",
           texto: "Ingresa un correo válido y sin espacios",
-        },
-        "Solo se permiten correos @gmail.com, @outlook.com o @hotmail.com.": {
-          campo: "email",
-          texto: "Solo se permiten correos @gmail.com, @outlook.com o @hotmail.com",
-        },
-        "Solo se permiten correos @gmail.com, @outlook.com, @hotmail.com o @lasirena.com.": {
-          campo: "email",
-          texto: "Solo se permiten correos @gmail.com, @outlook.com o @hotmail.com",
         },
         "El teléfono debe tener 10 dígitos y comenzar por 3.": {
           campo: "phone",

@@ -123,73 +123,30 @@ export function PasswordField({
 // Reglas preexistentes: no cambian que se considera valido, solo evitan que
 // el mismo regex este copiado en cada pantalla.
 
-export const ALLOWED_EMAIL_DOMAINS = [
-  "gmail.com",
-  "outlook.com",
-  "hotmail.com",
-  "lasirena.com",
-] as const;
-
-/**
- * Dominios permitidos al CREAR o EDITAR cuentas de personas (registro,
- * usuarios, empleados, clientes y perfil). Más restrictivo que
- * ALLOWED_EMAIL_DOMAINS: aquí NO entra lasirena.com, que se reserva para
- * login y recuperación de las cuentas semilla.
- */
-export const DOMINIOS_CORREO_PERMITIDOS = [
-  "gmail.com",
-  "outlook.com",
-  "hotmail.com",
-] as const;
-
-const RE_CORREO = /^[A-Za-z0-9._-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+/** Correo: solo valida FORMATO. Cualquier dominio es válido (gmail, yahoo,
+ *  sena.edu.co, corporativos, etc.); no existe lista de dominios permitidos.
+ *  Local: letras, dígitos y . _ % + - (p. ej. ana+pedidos@gmail.com).
+ *  Dominio: etiquetas separadas por punto con extensión final de ≥2 letras
+ *  (subdominios como soy.sena.edu.co permitidos). */
+const RE_CORREO = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 const RE_NOMBRE = /^[A-Za-zÁÉÍÓÚáéíóúÜüÑñ]+(?: [A-Za-zÁÉÍÓÚáéíóúÜüÑñ]+)*$/;
 const RE_TELEFONO = /^3\d{9}$/;
 const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
 
 export const MIN_CONTRASENA = 8;
 
-/** Formato de correo (sin mirar el dominio). Compartido por `validarCorreo`
- *  y `validarCorreoPersona` para no duplicar la regla de sintaxis. */
-function formatoCorreo(v: string): string | null {
-  if (!v.trim()) return "El correo es obligatorio";
-  if (v !== v.trim() || v.includes(" ")) return "Ingresa un correo válido y sin espacios";
-  if (!RE_CORREO.test(v) || (v.match(/@/g) ?? []).length !== 1)
-    return "Ingresa un correo válido y sin espacios";
-  const [local] = v.toLowerCase().split("@");
-  if (!local || local.startsWith(".") || local.endsWith("."))
-    return "La parte antes del @ no puede estar vacía ni empezar o terminar con punto";
-  return null;
-}
-
 export function validarCorreo(v: string): string | null {
-  const fmt = formatoCorreo(v);
-  if (fmt) return fmt;
-  const domain = v.toLowerCase().split("@")[1];
-  if (!ALLOWED_EMAIL_DOMAINS.includes(domain as (typeof ALLOWED_EMAIL_DOMAINS)[number]))
-    return "Solo se permiten correos @gmail.com, @outlook.com, @hotmail.com o @lasirena.com";
-  return null;
-}
-
-/**
- * Validación de correo para formularios de PERSONAS (crear/editar usuario,
- * empleado, cliente, registro público y perfil). Reutiliza el formato de
- * `validarCorreo` pero restringe el dominio a `DOMINIOS_CORREO_PERMITIDOS`
- * (sin lasirena.com). No reemplaza a `validarCorreo`: login y recuperación
- * siguen usando la versión original para que las cuentas existentes con
- * otros dominios puedan entrar.
- */
-export function validarCorreoPersona(v: string): string | null {
-  const fmt = formatoCorreo(v);
-  if (fmt) return fmt;
-  const dominio = v.toLowerCase().split("@")[1];
-  if (!(DOMINIOS_CORREO_PERMITIDOS as readonly string[]).includes(dominio))
-    return "Solo se permiten correos @gmail.com, @outlook.com o @hotmail.com";
+  if (!v.trim()) return "El correo es obligatorio";
+  const invalido = "Ingresa un correo válido. Ej: nombre@dominio.com";
+  if (v !== v.trim() || v.includes(" ")) return invalido;
+  if (!RE_CORREO.test(v) || (v.match(/@/g) ?? []).length !== 1) return invalido;
+  const [local] = v.toLowerCase().split("@");
+  if (!local || local.startsWith(".") || local.endsWith(".")) return invalido;
   return null;
 }
 
 export function filtrarCorreo(valor: string): string {
-  const filtrado = valor.replace(/[^A-Za-z0-9._@-]/g, "").toLowerCase();
+  const filtrado = valor.replace(/[^A-Za-z0-9._@%+-]/g, "").toLowerCase();
   const arroba = filtrado.indexOf("@");
   if (arroba < 0) return filtrado;
   return `${filtrado.slice(0, arroba)}@${filtrado.slice(arroba + 1).replace(/@/g, "")}`;
