@@ -97,8 +97,10 @@ import QRCode from "qrcode";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
+import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPagoTransferencia";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
+import { agregarDias, fechaISO } from "@/shared/utils/fechas";
 import type { Screen } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -164,7 +166,7 @@ import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
 import {
   SuppliersScreen
 } from "@/features/proveedores/pages/SuppliersScreen";
-import { INITIAL_VENTAS, PagoPill, VentasScreen, type DevolucionTipo, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
+import { INITIAL_VENTAS, PagoPill, VentasScreen, comprobantesDe, type ComprobanteVenta, type DevolucionTipo, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
 import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
 
 // ─────────────────────────── TYPES ───────────────────────────
@@ -470,12 +472,17 @@ const imagenDeProducto = (id: Product["id"]): string =>
 const precioDeProducto = (id: Product["id"]): number =>
   PRODUCTS.find((p) => p.id === id)?.price ?? 0;
 
+/** Dirección única del local, usada en el pie de la Landing, en la tarjeta
+    "Dónde recoger tu pedido" y en las órdenes de demostración. El mapa de
+    Google Maps se arma con esta misma cadena (ver `DIRECCION_LOCAL_MAPA`). */
+const DIRECCION_LOCAL = "Cra. 45 #104-30, Laureles, Medellín, Antioquia";
+
 const ORDERS: Order[] = [
   {
     id: "VEN-2024-0156",
     client: "María González",
     phone: "310 456 7890",
-    address: "Cra 45 #72-30, Laureles",
+    address: DIRECCION_LOCAL,
     items: [
       {
         name: "La Sirena Especial (Mediana)",
@@ -728,6 +735,61 @@ const escribirRolActivo = (usuarioId: string | null | undefined, rolId: string |
     // localStorage bloqueado: el cambio de rol vive solo en memoria.
   }
 };
+
+// ─────────────────────────── SESIÓN PERSISTENTE ───────────────────────────
+// La sesión (usuario + rol activo + pantalla) se guarda en localStorage para
+// que F5 no la borre, y se cierra sola tras 15 minutos de inactividad. La
+// clave es compartida entre pestañas: la actividad de cualquier pestaña mantiene
+// viva la sesión y cerrarla en una la cierra en todas (evento `storage`).
+const SESION_STORAGE_KEY = "sivpro.sesion.v1";
+const INACTIVIDAD_MS = 15 * 60 * 1000;
+/** Mínimo entre escrituras de `ultimaActividad` para no saturar localStorage. */
+const ACTIVIDAD_THROTTLE_MS = 30 * 1000;
+
+interface SesionGuardada {
+  userId: string;
+  rolActivo: string | null;
+  /** Última pantalla vista, para restaurarla tras recargar. */
+  screen: string;
+  ultimaActividad: number;
+}
+
+const leerSesionGuardada = (): SesionGuardada | null => {
+  try {
+    const raw = localStorage.getItem(SESION_STORAGE_KEY);
+    if (!raw) return null;
+    const m = JSON.parse(raw) as SesionGuardada;
+    if (
+      m &&
+      typeof m === "object" &&
+      typeof m.userId === "string" &&
+      m.userId &&
+      typeof m.ultimaActividad === "number"
+    ) {
+      return m;
+    }
+  } catch {
+    // Dato corrupto: no hay sesión que restaurar.
+  }
+  return null;
+};
+
+const escribirSesionGuardada = (s: SesionGuardada) => {
+  try {
+    localStorage.setItem(SESION_STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    // localStorage bloqueado: la sesión vive solo en memoria.
+  }
+};
+
+const borrarSesionGuardada = () => {
+  try {
+    localStorage.removeItem(SESION_STORAGE_KEY);
+  } catch {
+    // localStorage bloqueado.
+  }
+};
+
 
 const SCREEN_META: Partial<
   Record<Screen, { title: string; icon: string; desc: string }>
@@ -2221,11 +2283,7 @@ function LandingScreen({
                 </div>
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
-                  <span>
-                    Cra. 45 #104-30, Laureles
-                    <br />
-                    Medellín, Antioquia
-                  </span>
+                  <span>{DIRECCION_LOCAL}</span>
                 </div>
               </div>
             </div>
@@ -2875,34 +2933,9 @@ function ProductDetailScreen({
 
 // ─────────────────────────── CART ───────────────────────────
 
-/** Datos de la cuenta a la que se hace el depósito. `llave` es la llave de la
-    cuenta (interbancaria/Nequi) por si el cliente prefiere enviar el dinero con
-    ella en vez del número, y `qr` es el contenido que se pinta en el recuadro
-    del QR para pagar escaneando. */
-const PAYMENT_INFO: Record<
-  string,
-  { icon: string; lines: string[]; llave: string; qr: string }
-> = {
-  Nequi: {
-    icon: "💜",
-    lines: [
-      "Número Nequi: 310 555 1234",
-      "Titular: La Sirena Pizza",
-    ],
-    llave: "310 555 1234",
-    qr: "nequi://pay/3105551234?name=La%20Sirena%20Pizza",
-  },
-  Bancolombia: {
-    icon: "🏦",
-    lines: [
-      "Cuenta de Ahorros: 690-1234567-89",
-      "Titular: La Sirena Pizza SAS",
-      "NIT: 900.123.456-7",
-    ],
-    llave: "900 123 456 789",
-    qr: "https://banco.example.com/pagar?cuenta=690123456789&titular=La%20Sirena%20Pizza%20SAS",
-  },
-};
+// Los datos de las cuentas de pago (PAYMENT_INFO) viven ahora en el componente
+// compartido PasoPagoTransferencia, usado por el checkout y por el modal
+// "Completar pago" de Mis pedidos.
 
 /** El horario de atención, el parser de horas y el formato "6:30 p. m." viven
     en `utils/hora.ts` para compartirlos con las pantallas que muestran la hora
@@ -3092,17 +3125,6 @@ function CartScreen({
     };
   }, [payment, subtotal]);
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    void subir(file, "comprobantes").then((url) => {
-      if (url) setComprobante(url);
-    });
-  };
-
   /** Último paso: registra la venta con los datos del formulario (invitado)
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
       aquí no se vuelve a interrumpir el flujo. */
@@ -3214,7 +3236,7 @@ function CartScreen({
 
         {/* b) Dos columnas: cliente y recogida a la izquierda; productos y
             totales a la derecha. */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start text-left">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start text-left">
           {/* Productos con su desglose y totales. En "pedido recibido" los
               productos van a la derecha y cliente/recogida a la izquierda. */}
           <div className="order-2 md:order-2 bg-card border border-border rounded-2xl p-5">
@@ -3243,7 +3265,7 @@ function CartScreen({
           </div>
 
           {/* Cliente + dónde recoger. */}
-          <div className="order-1 md:order-1 space-y-4">
+          <div className="order-1 md:order-1 space-y-6">
             {pedidoResumen.nombre && (
               <div className="bg-card border border-border rounded-2xl p-5">
                 <h3 className="font-bold text-foreground mb-2">Cliente</h3>
@@ -3270,8 +3292,7 @@ function CartScreen({
                 recoger tu pedido
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Podrás pasar por tu pedido
-                {horaEtiqueta ? ` a las ${horaEtiqueta}` : ""}.
+                Podrás pasar por tu pedido a la hora estipulada.
               </p>
               <div className="mb-4 border-l-2 border-primary/60 pl-3">
                 <p className="text-xs text-muted-foreground">Hora de recogida</p>
@@ -3281,11 +3302,29 @@ function CartScreen({
                 La Sirena Pizza
               </p>
               <p className="text-muted-foreground text-sm">
-                Cra. 45 #104-30, Laureles
+                {DIRECCION_LOCAL}
               </p>
-              <p className="text-muted-foreground text-sm">
-                Medellín, Antioquia
-              </p>
+
+              {/* Mapa de Google Maps del local (sin API key). */}
+              <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                <iframe
+                  title="Ubicación de La Sirena Pizza en Google Maps"
+                  src={`https://www.google.com/maps?q=${encodeURIComponent(DIRECCION_LOCAL)}&output=embed`}
+                  loading="lazy"
+                  className="w-full h-[150px] border-0"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+              <a
+                href={`https://www.google.com/maps?q=${encodeURIComponent(DIRECCION_LOCAL)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <MapPin className="w-3.5 h-3.5" /> Abrir en Google Maps
+              </a>
+
               <div className="mt-3 pt-3 border-t border-border space-y-1">
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5" /> 604 234 5678
@@ -3298,7 +3337,7 @@ function CartScreen({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
           {isLoggedIn && (
             <PrimaryBtn
               onClick={() => {
@@ -3556,10 +3595,11 @@ function CartScreen({
                     ))}
                   </div>
                   {/* Mismas filas que el panel "Resumen" del carrito, para
-                      que el cliente lea el mismo desglose en las dos vistas. */}
+                      que el cliente lea el mismo desglose en las dos vistas.
+                      La divisoria ya viene dentro de ResumenTotales. */}
                   <ResumenTotales
                     subtotal={subtotal}
-                    className="mt-4 pt-3 border-t border-border space-y-2 text-sm"
+                    className="mt-4 space-y-2 text-sm"
                   />
                 </div>
                 {/* RIGHT: payment method + pickup time */}
@@ -3920,139 +3960,26 @@ function CartScreen({
                 </button>
               </div>
               {/* Body: dos columnas — izquierda cuenta + QR, derecha
-                  comprobante — para que el modal no se alargue y haya poco
-                  scroll. */}
-              <div className="px-5 py-5 grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                {/* LEFT: account info + QR */}
-                <div className="space-y-4">
-                {/* Account info */}
-                <div className="bg-muted/50 rounded-2xl p-4 border border-border">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-3xl">
-                      {PAYMENT_INFO[payment].icon}
-                    </span>
-                    <p className="font-bold text-foreground text-base">
-                      {payment}
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {PAYMENT_INFO[payment].lines.map(
-                      (line, i) => (
-                        <p
-                          key={i}
-                          className="text-sm text-foreground font-medium"
-                        >
-                          {line}
-                        </p>
-                      ),
-                    )}
-                    {/* Llave de la cuenta: por si el cliente prefiere enviar
-                        el dinero con la llave en vez del número/cuenta. */}
-                    <div className="flex items-center justify-between gap-3 pt-2 mt-1 border-t border-border">
-                      <span className="text-sm text-muted-foreground">
-                        Llave de la cuenta
-                      </span>
-                      <span
-                        className="text-sm font-bold text-foreground"
-                        style={{ fontFamily: MONO }}
-                      >
-                        {PAYMENT_INFO[payment].llave}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs text-muted-foreground border-t border-border pt-2">
-                    Realiza la transferencia por el valor exacto
-                    de{" "}
-                    <strong className="text-foreground">
-                      {fmt(subtotal)}
-                    </strong>{" "}
-                    y sube el comprobante.
-                  </p>
-                </div>
-
-                {/* QR de la cuenta: para depositar escaneando con la app del
-                    banco o con Nequi. */}
-                <div className="rounded-2xl border border-border bg-muted/50 p-4 flex flex-col items-center gap-3">
-                  <p className="w-full text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4 text-primary" />
-                    O deposita escaneando el QR
-                  </p>
-                  <div className="bg-white rounded-xl p-3 border border-border shadow-sm">
-                    {qrDataUrl ? (
-                      <img
-                        src={qrDataUrl}
-                        alt={`QR de pago ${payment}`}
-                        className="w-44 h-44"
-                      />
-                    ) : (
-                      <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground px-5">
-                        <span className="text-2xl">📱</span>
-                        Generando el QR…
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Escanea con la cámara o con tu app de pago y paga{" "}
-                    <strong className="text-foreground">{fmt(subtotal)}</strong>.
-                  </p>
-                </div>
-                </div>
-
-                {/* RIGHT: upload */}
-                <div>
-                {/* Upload */}
-                <div>
-                  <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
-                    <Upload className="w-4 h-4 text-primary" />
-                    Comprobante de pago *
-                  </p>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    className="sr-only"
-                    onChange={handleFileChange}
-                  />
-                  {comprobante ? (
-                    <div className="relative rounded-xl overflow-hidden border border-border">
-                      <img
-                        src={comprobante}
-                        alt="Comprobante"
-                        className="w-full max-h-48 object-contain bg-muted"
-                      />
-                      <button
-                        onClick={() => {
-                          setComprobante("");
-                          if (fileRef.current)
-                            fileRef.current.value = "";
-                        }}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 cursor-pointer transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => fileRef.current?.click()}
-                      disabled={subiendo}
-                      className="w-full flex flex-col items-center justify-center gap-3 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 cursor-pointer transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                        <ImageIcon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-foreground">
-                          {subiendo ? "Subiendo..." : "Haz clic para subir"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          JPG, PNG, WEBP o PDF · máx 5 MB
-                        </p>
-                      </div>
-                    </button>
-                  )}
-                </div>
-                </div>
-              </div>
+                  comprobante. El cuerpo del pago es un componente compartido
+                  (PasoPagoTransferencia) que también usa el modal
+                  "Completar pago" de Mis pedidos. */}
+              <PasoPagoTransferencia
+                payment={payment}
+                subtotal={subtotal}
+                qrDataUrl={qrDataUrl}
+                comprobante={comprobante}
+                onQuitarComprobante={() => {
+                  setComprobante("");
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+                subiendo={subiendo}
+                fileRef={fileRef}
+                onFileChange={(file) => {
+                  void subir(file, "comprobantes").then((url) => {
+                    if (url) setComprobante(url);
+                  });
+                }}
+              />
               {/* Footer */}
               <div className="flex gap-3 px-5 py-4 border-t border-border">
                 <button
@@ -7171,8 +7098,39 @@ const mezclarInsumosPersistidos = (): Insumo[] => {
     return INITIAL_INSUMOS;
   }
 };
+
+/**
+ * Semillas con fechas relativas a hoy. Las pantallas de Semilla traían fechas
+ * fijas (2024 / septiembre 2026): con los filtros Diario · Semanal · Mensual
+ * del Dashboard eso dejaba las gráficas vacías casi siempre. Aquí solo se
+ * recoloca la fecha de cada ítem de la semilla hacia atrás desde hoy; si el
+ * usuario ya guardó datos en `localStorage`, esos no se tocan (la semilla solo
+ * se usa cuando no hay nada guardado o está corrupto).
+ *
+ * `diasAtras` reparte los ítems por índice para cubrir hoy, la semana y el mes
+ * completos (p. ej. ventas: [0, 0, 1, 2, 3, 4, 6, 9, 0] deja tres ventas de
+ * hoy a distintas horas y el resto esparcidas por la semana/mes).
+ */
+const semillaConFechasRelativas = <T,>(
+  semilla: T[],
+  campo: keyof T,
+  diasAtras: number[],
+): T[] => {
+  const hoy = new Date();
+  return semilla.map((item, i) => ({
+    ...item,
+    [campo]: fechaISO(agregarDias(hoy, -(diasAtras[i % diasAtras.length] ?? 0))),
+  })) as T[];
+};
+
 const leerVentasPersistidas = () =>
-  leerListaPersistida<Venta>(VENTAS_STORAGE_KEY, INITIAL_VENTAS, esVentaValida);
+  leerListaPersistida<Venta>(
+    VENTAS_STORAGE_KEY,
+    // [0, 0, 1, 2, 3, 4, 6, 9, 0]: hoy (2 ventas a distintas horas + la
+    // "completado" 18:30), ayer, y el resto esparcido por la semana/mes.
+    semillaConFechasRelativas(INITIAL_VENTAS, "fecha", [0, 0, 1, 2, 3, 4, 6, 9, 0]),
+    esVentaValida,
+  );
 const esNoConformidadValida = (x: unknown) =>
   esObjeto(x) &&
   typeof x.id === "string" &&
@@ -7181,7 +7139,12 @@ const esNoConformidadValida = (x: unknown) =>
   typeof x.fechaRegistro === "string";
 
 const leerNoConformidadesPersistidas = () =>
-  leerListaPersistida<NoConformidad>(NO_CONFORMIDADES_STORAGE_KEY, INITIAL_NO_CONFORMIDADES, esNoConformidadValida);
+  leerListaPersistida<NoConformidad>(
+    NO_CONFORMIDADES_STORAGE_KEY,
+    // [0, 1, 2, 4, 6, 9]: una hoy y el resto repartida por la semana/mes.
+    semillaConFechasRelativas(INITIAL_NO_CONFORMIDADES, "fechaRegistro", [0, 1, 2, 4, 6, 9]),
+    esNoConformidadValida,
+  );
 
 // ── Persistencia del stock de Productos (por SESIÓN) ──────────────────
 // A diferencia del resto, este va en `sessionStorage`: el descuento de stock
@@ -7470,7 +7433,23 @@ class LandingErrorBoundary extends Component<
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("landing");
+  /** Snapshot de la sesión al cargar la página, leído UNA sola vez.
+      Permite que F5 no borre la sesión (se restaura usuario, rol y pantalla)
+      y detectar una sesión expirada por inactividad para avisar. */
+  const [sesionArranque] = useState(() => {
+    const s = leerSesionGuardada();
+    if (!s) return { estado: "ninguna" as const };
+    if (Date.now() - s.ultimaActividad >= INACTIVIDAD_MS) {
+      borrarSesionGuardada();
+      return { estado: "expirada" as const };
+    }
+    return { estado: "activa" as const, s };
+  });
+  const sesionActiva = sesionArranque.estado === "activa" ? sesionArranque.s : null;
+  /** Pantalla que se restaura desde la sesión (si era válida) o "landing". */
+  const [screen, setScreen] = useState<Screen>(
+    (sesionActiva?.screen as Screen) || "landing",
+  );
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -7485,7 +7464,7 @@ export default function App() {
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(sesionActiva !== null);
   const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
@@ -7547,10 +7526,10 @@ export default function App() {
     [productos, categorias],
   );
   const [userRole, setUserRole] = useState("Administrador");
-  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(null);
+  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
   // Id del rol ACTIVO de la sesión. Se inicializa en el login y lo cambia el
   // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
-  const [rolActivoId, setRolActivoId] = useState<string | null>(null);
+  const [rolActivoId, setRolActivoId] = useState<string | null>(sesionActiva?.rolActivo ?? null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
@@ -7930,10 +7909,14 @@ export default function App() {
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
-  const [ordenes, setOrdenes] =
-    useState<OrdenCompra[]>(INITIAL_ORDENES);
+  const [ordenes, setOrdenes] = useState<OrdenCompra[]>(
+    // Órdenes 2024 → relativas a hoy: [0, 1, 3, 6, 10] cubre hoy, la semana
+    // y el mes para el filtro del Dashboard.
+    semillaConFechasRelativas(INITIAL_ORDENES, "fecha", [0, 1, 3, 6, 10]),
+  );
   const [gestiones, setGestiones] = useState<GestionCompra[]>(
-    INITIAL_GESTIONES,
+    // Facturas ago/sept 2026 → relativas a hoy: [0, 1, 2, 4, 6].
+    semillaConFechasRelativas(INITIAL_GESTIONES, "fechaFactura", [0, 1, 2, 4, 6]),
   );
   const [insumos, setInsumos] =
     useState<Insumo[]>(() => mezclarInsumosPersistidos());
@@ -8040,6 +8023,30 @@ export default function App() {
       // El almacenamiento puede estar bloqueado o sin cuota.
     }
   }, [ventas]);
+
+  // ── Sincronización de ventas entre pestañas (Fase 3.1) ──
+  // Cuando otra pestaña (p. ej. el admin) cambia una venta, esta pestaña la
+  // recibe sin recargar. El `storage` solo se dispara en las OTRAS pestañas, y
+  // solo se aplica el cambio si el JSON realmente difiere del actual, para no
+  // entrar en bucles de escritura.
+  const ventasRef = useRef(ventas);
+  useEffect(() => {
+    ventasRef.current = ventas;
+  }, [ventas]);
+  useEffect(() => {
+    const onVentasStorage = (e: StorageEvent) => {
+      if (e.key !== VENTAS_STORAGE_KEY || e.newValue === null) return;
+      if (e.newValue === JSON.stringify(ventasRef.current)) return;
+      try {
+        const nueva: unknown = JSON.parse(e.newValue);
+        if (Array.isArray(nueva)) setVentas(nueva as Venta[]);
+      } catch {
+        // JSON corrupto: se ignora.
+      }
+    };
+    window.addEventListener("storage", onVentasStorage);
+    return () => window.removeEventListener("storage", onVentasStorage);
+  }, []);
 
   // ── Avance automático del estado de la venta (§13) ──
   // El estado NO se cambia a mano: sigue el proceso del pedido. Acá se
@@ -8520,6 +8527,31 @@ export default function App() {
     return newVenta.id;
   };
 
+  /** El cliente envía el comprobante del dinero faltante: se agrega a la venta
+      como segundo comprobante (tipo "faltante") y la venta vuelve a estado
+      "Por verificar" para que el admin la revise otra vez. */
+  const completarFaltante = (ventaId: string, comprobanteUrl: string) => {
+    const ahora = new Date();
+    const fecha = ahora.toLocaleDateString("en-CA");
+    const hora = ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+    setVentas((prev) =>
+      prev.map((v) => {
+        if (v.id !== ventaId) return v;
+        const base = comprobantesDe(v);
+        const nuevo: ComprobanteVenta = { url: comprobanteUrl, tipo: "faltante", fecha, hora };
+        return {
+          ...v,
+          estado: "por-verificar" as VentaStatus,
+          comprobantes: [...base, nuevo],
+          // `comprobante` se conserva apuntando al pago inicial (compatibilidad
+          // con vistas viejas que solo leen ese campo).
+          comprobante: base[0]?.url ?? v.comprobante,
+          historial: [...(v.historial ?? []), { estado: "por-verificar" as VentaStatus, hora }],
+        };
+      }),
+    );
+  };
+
   const updateQty = (id: string, qty: number) => {
     if (qty <= 0) {
       setCart((p) => p.filter((i) => i.id !== id));
@@ -8558,12 +8590,15 @@ export default function App() {
    * `silenciarAviso` evita el toast "Has cerrado sesión correctamente" cuando
    * el cierre es un paso interno (p. ej. tras cambiar la contraseña, donde el
    * aviso es otro y dos toasts seguidos solo enredan).
+   * `aviso` permite reemplazar el mensaje de cierre (p. ej. inactividad).
    * `destino` permite ir directo a "login" sin pasar por la landing. */
   const logout = async (opciones?: {
     silenciarAviso?: boolean;
+    aviso?: string;
     destino?: Screen;
   }) => {
     const silenciarAviso = opciones?.silenciarAviso ?? false;
+    const aviso = opciones?.aviso ?? "Has cerrado sesión correctamente";
     const destino: Screen = opciones?.destino ?? "landing";
     try {
       const endpoint = import.meta.env.VITE_AUTH_LOGOUT_URL;
@@ -8575,13 +8610,14 @@ export default function App() {
     } finally {
       clearAuthStorage();
       borrarToken();
+      borrarSesionGuardada();
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
       setRolActivoId(null);
       navigate(destino, { replace: true });
       if (!silenciarAviso) {
-        toast.success("Has cerrado sesión correctamente");
+        toast.success(aviso);
       }
     }
   };
@@ -8626,6 +8662,116 @@ export default function App() {
   useEffect(() => {
     if (isLoggedIn && !hasValidSession && !pendingOrder) void logout();
   }, [isLoggedIn, hasValidSession, pendingOrder]);
+
+  // ── Sesión persistente y cierre por inactividad ─────────────────────
+  // Marca de tiempo de la última actividad del usuario (mouse, tecla, clic,
+  // scroll o toque). Vive en un ref para no re-renderizar en cada evento.
+  const ultimaActividadRef = useRef<number>(
+    sesionActiva?.ultimaActividad ?? Date.now(),
+  );
+
+  // Aviso si la sesión se borró por haber pasado más de 15 min sin actividad.
+  useEffect(() => {
+    if (sesionArranque.estado === "expirada") {
+      toast("Tu sesión se cerró por inactividad");
+    }
+  }, [sesionArranque.estado]);
+
+  // Persiste la sesión (usuario + rol activo + pantalla) mientras haya login.
+  // Al cerrar sesión, `logout` ya borra la clave.
+  useEffect(() => {
+    if (!isLoggedIn || !loggedInUserId) return;
+    escribirSesionGuardada({
+      userId: loggedInUserId,
+      rolActivo: rolActivoId,
+      screen,
+      ultimaActividad: ultimaActividadRef.current,
+    });
+  }, [isLoggedIn, loggedInUserId, rolActivoId, screen]);
+
+  // Inactividad: escucha de eventos de actividad con throttle (máx. una vez
+  // cada 30 s) y un intervalo que revisa cada 30 s si pasaron 15 min. Usa refs
+  // para no depender de valores que cambian en cada render (si no, el intervalo
+  // se re-crearía sin cesar y nunca detectaría la inactividad).
+  const logoutRef = useRef(logout);
+  useEffect(() => {
+    logoutRef.current = logout;
+  });
+  const sesionActualRef = useRef({ loggedInUserId, rolActivoId, screen });
+  useEffect(() => {
+    sesionActualRef.current = { loggedInUserId, rolActivoId, screen };
+  }, [loggedInUserId, rolActivoId, screen]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const registrarActividad = () => {
+      const ahora = Date.now();
+      if (ahora - ultimaActividadRef.current < ACTIVIDAD_THROTTLE_MS) return;
+      ultimaActividadRef.current = ahora;
+      // Mantener viva la sesión en localStorage (valor compartido entre
+      // pestañas) para que la actividad de esta alimente el chequeo global.
+      const { loggedInUserId: uid, rolActivoId: rid, screen: scr } = sesionActualRef.current;
+      if (uid) {
+        escribirSesionGuardada({
+          userId: uid,
+          rolActivo: rid,
+          screen: scr,
+          ultimaActividad: ahora,
+        });
+      }
+    };
+
+    const eventos: (keyof WindowEventMap)[] = [
+      "mousemove",
+      "keydown",
+      "click",
+      "scroll",
+      "touchstart",
+    ];
+    for (const ev of eventos) window.addEventListener(ev, registrarActividad, { passive: true });
+
+    const intervalo = window.setInterval(() => {
+      // Revisar la marca guardada (que otras pestañas pudieron refrescar).
+      const guardada = leerSesionGuardada();
+      const ultima = Math.max(
+        ultimaActividadRef.current,
+        guardada?.ultimaActividad ?? 0,
+      );
+      if (Date.now() - ultima >= INACTIVIDAD_MS) {
+        void logoutRef.current({ silenciarAviso: true, aviso: "Tu sesión se cerró por inactividad" });
+      }
+    }, 30 * 1000);
+
+    return () => {
+      for (const ev of eventos) window.removeEventListener(ev, registrarActividad);
+      window.clearInterval(intervalo);
+    };
+  }, [isLoggedIn]);
+
+  // Sincronización entre pestañas: cerrar sesión en una la cierra en todas, y
+  // la actividad de otra pestaña mantiene viva la de esta.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== SESION_STORAGE_KEY) return;
+      if (e.newValue === null) {
+        // Otra pestaña cerró sesión.
+        if (isLoggedIn) void logoutRef.current({ silenciarAviso: true, aviso: "Se cerró la sesión en otra pestaña" });
+        return;
+      }
+      // Otra pestaña refrescó la actividad: adoptar la marca más reciente.
+      try {
+        const s = JSON.parse(e.newValue) as SesionGuardada;
+        if (typeof s.ultimaActividad === "number" && s.ultimaActividad > ultimaActividadRef.current) {
+          ultimaActividadRef.current = s.ultimaActividad;
+        }
+      } catch {
+        // Dato corrupto: se ignora.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [isLoggedIn]);
 
   // La confirmación de pedido solo vive mientras se ve el carrito:
   // antes se asignaba (en el login y al enviar) y jamás se limpiaba,
@@ -8914,6 +9060,7 @@ export default function App() {
                   pedidos={ventas}
                   usuarioNombre={pedidosUsuarioNombre}
                   onVerMenu={() => navigate("catalog")}
+                  onCompletarFaltante={completarFaltante}
                 />
               )}
               {screen === "login" && (

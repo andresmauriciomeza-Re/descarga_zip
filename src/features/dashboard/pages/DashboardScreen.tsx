@@ -3,9 +3,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -58,6 +58,8 @@ import {
   type Periodo,
 } from "@/shared/utils/fechas";
 import type { Screen } from "@/shared/utils/screen";
+import { ChartCard } from "@/shared/components/ChartCard";
+import { FiltroPeriodo } from "@/shared/components/FiltroPeriodo";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -66,11 +68,7 @@ const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 /** Rango real de atención (utils/hora.ts): 4 p. m. a 10 p. m. */
 const HORAS_HOY = [16, 17, 18, 19, 20, 21, 22];
 
-const PERIODOS: { id: Periodo; label: string }[] = [
-  { id: "semana", label: "Semana" },
-  { id: "mes", label: "Mes" },
-  { id: "total", label: "Total" },
-];
+const DOW_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 /** §3 — Vista "Inicio" del empleado: TODOS los sub-módulos con su pantalla
  *  (los mismos del sidebar, vía SCREEN_PERM_KEY de App.tsx), para armar las
@@ -98,7 +96,8 @@ const MODULOS_INICIO: {
   { permKey: KEY("Ventas", "Devoluciones"), screen: "devoluciones", nombre: "Devoluciones", Icon: RefreshCw, descripcion: "Gestiona las devoluciones de ventas" },
 ];
 
-// ── Tooltip compartido: valores exactos (COP o unidades) ──────────────
+// ── Tooltip único de todas las gráficas: valores exactos (COP, unidades o
+// conteos) según la función `formatear` que recibe cada una ───────────
 function GrafTooltip({
   active,
   payload,
@@ -131,49 +130,6 @@ function SinDatos({ texto = "No hay datos en este periodo" }: { texto?: string }
   return (
     <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4 rounded-xl bg-muted/30">
       {texto}
-    </div>
-  );
-}
-
-/** Tooltip de "Comportamiento de ventas": ingresos COP + N° de ventas. */
-function TooltipVentas({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: { ingresos?: number; nVentas?: number } }>;
-  label?: string;
-}) {
-  const punto = payload?.[0]?.payload;
-  if (!active || !punto) return null;
-  return (
-    <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
-      <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      <p className="font-bold text-foreground">Ingresos: {fmt(punto.ingresos ?? 0)}</p>
-      <p className="font-bold text-foreground">
-        {punto.nVentas ?? 0} venta{punto.nVentas === 1 ? "" : "s"}
-      </p>
-    </div>
-  );
-}
-
-function GraficaCard({
-  titulo,
-  etiqueta,
-  children,
-}: {
-  titulo: string;
-  etiqueta: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-card border border-border rounded-2xl p-5">
-      <h3 className="font-bold text-foreground mb-0.5" style={{ fontFamily: SERIF }}>
-        {titulo}
-      </h3>
-      <p className="text-xs text-muted-foreground mb-4">{etiqueta}</p>
-      {children}
     </div>
   );
 }
@@ -234,21 +190,37 @@ export function DashboardScreen({
     .slice(0, 5)
     .map(({ venta }) => venta);
 
-  // ── Filtro global: Semana (lun–dom) | Mes actual | Total histórico ──
-  const [periodo, setPeriodo] = useState<Periodo>("mes");
+  // ── Filtro global de los indicadores: Diario · Semanal · Mensual ──
+  const [periodo, setPeriodo] = useState<Periodo>("semana");
 
   /**
-   * Regla única de exclusión para Ingresos, Ventas y las gráficas de ventas:
-   * anuladas (el pedido no se concretó) y "perdida" (devolución gestionada)
-   * no suman dinero ni conteo. Las devoluciones se cuentan aparte.
+   * Regla única de ingresos: solo las ventas confirmadas ("venta") o
+   * entregadas ("completado") suman dinero y conteo. La misma función se usa
+   * en las tarjetas Y en todas las gráficas de ventas para que los números
+   * nunca se contradigan. Anuladas, devoluciones, rechazos y pagos sin
+   * confirmar no cuentan; las devoluciones se siguen contando aparte.
    */
-  const ventaExcluida = (v: Venta) => v.estado === "anulado" || v.estado === "perdida";
+  const esVentaIngresante = (v: Venta) => v.estado === "venta" || v.estado === "completado";
+
+  /** Ventas que suman dentro de un periodo dado (filtro de cada gráfica). */
+  const ventasEn = (p: Periodo) =>
+    ventas.filter((v) => enPeriodo(v.fecha, p) && esVentaIngresante(v));
+
+  // ── Filtro propio de cada gráfica (todas arrancan en Semanal) ──
+  const [fVentas, setFVentas] = useState<Periodo>("semana");
+  const [fClientes, setFClientes] = useState<Periodo>("semana");
+  const [fProductos, setFProductos] = useState<Periodo>("semana");
+  const [fOC, setFOC] = useState<Periodo>("semana");
+  const [fProv, setFProv] = useState<Periodo>("semana");
+  const [fNC, setFNC] = useState<Periodo>("semana");
+
+  // Filtro global → tarjetas de indicadores.
   const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha, periodo));
-  const ventasValidas = ventasPeriodo.filter((v) => !ventaExcluida(v));
+  const ingresantesGlobal = ventasPeriodo.filter(esVentaIngresante);
   const devolucionesPeriodo = ventasPeriodo.filter((v) => v.estado === "perdida");
   const ncPeriodo = noConformidades.filter((nc) => enPeriodo(nc.fechaRegistro, periodo));
 
-  const ingresosPeriodo = ventasValidas.reduce((s, v) => s + v.total, 0);
+  const ingresosPeriodo = ingresantesGlobal.reduce((s, v) => s + v.total, 0);
 
   // ── Tarjetas (exactamente 4) ──
   const etiquetaPeriodoTxt = etiquetaPeriodo(periodo);
@@ -270,7 +242,7 @@ export function DashboardScreen({
     },
     {
       label: "Ventas",
-      value: String(ventasValidas.length),
+      value: String(ingresantesGlobal.length),
       Icon: ShoppingBag,
       bg: "bg-blue-50",
       ic: "text-blue-600",
@@ -294,20 +266,9 @@ export function DashboardScreen({
     },
   ];
 
-  // ── Gráfica "Ventas hoy — 4pm a 10pm": unidades reales por hora ──
-  const fechaHoy = hoyISO();
-  const ventasDeHoy = ventasValidas.filter((v) => v.fecha === fechaHoy);
-  const unidadesHoy = ventasDeHoy.reduce((s, v) => s + (v.cantidad || 0), 0);
-  const hourlyHoy = HORAS_HOY.map((h) => ({
-    hora: `${h - 12}pm`,
-    ventas: ventasDeHoy
-      .filter((v) => Math.floor(minutosHora(horaVenta(v)) / 60) === h)
-      .reduce((s, v) => s + (v.cantidad || 0), 0),
-  }));
-
   // ── 1. Top 10 clientes: pedidos vs valor (unión de ambos top 10) ──
   const clientesAgg = Object.values(
-    ventasValidas.reduce<Record<string, { nombre: string; pedidos: number; total: number }>>(
+    ventasEn(fClientes).reduce<Record<string, { nombre: string; pedidos: number; total: number }>>(
       (acc, venta) => {
         const nombre = venta.usuario?.trim() || "Venta general";
         const actual = acc[nombre] ?? { nombre, pedidos: 0, total: 0 };
@@ -328,7 +289,7 @@ export function DashboardScreen({
 
   // ── 2. Top 10 productos más vendidos: Σ detalle[].cantidad ──
   const dataProductos = Object.values(
-    ventasValidas
+    ventasEn(fProductos)
       .flatMap((v) => v.detalle ?? [])
       .reduce<Record<string, { nombre: string; vendidos: number }>>((acc, det) => {
         const actual = acc[det.nombre] ?? { nombre: det.nombre, vendidos: 0 };
@@ -340,61 +301,83 @@ export function DashboardScreen({
     .sort((a, b) => b.vendidos - a.vendidos)
     .slice(0, 10);
 
-  // ── Órdenes y compras del periodo (sin anuladas) ──
-  const ordenesPeriodo = ordenes.filter(
-    (o) => o.estado !== "Anulado" && esFechaISO(o.fecha) && enPeriodo(o.fecha, periodo),
-  );
-  const gestionesPeriodo = gestiones.filter(
-    (g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura) && enPeriodo(g.fechaFactura, periodo),
-  );
+  // ── Órdenes y compras por gráfica (sin anuladas) ──
+  const ordenesEn = (p: Periodo) =>
+    ordenes.filter((o) => o.estado !== "Anulado" && esFechaISO(o.fecha) && enPeriodo(o.fecha, p));
+  const gestionesEn = (p: Periodo) =>
+    gestiones.filter((g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura) && enPeriodo(g.fechaFactura, p));
 
-  // ── Eje X dinámico de las gráficas 3 y 4 ──
-  // Semana → por día (lun–dom) · Mes → por semana del mes (Semana 1–5) ·
-  // Total → por mes (últimos 12 meses con datos, orden ascendente).
-  const DOW_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  // ── Eje X estandarizado de las gráficas de compras, órdenes y no
+  // conformes: "dia" → un grupo "Hoy", "semana" → Lun–Dom, "mes" → Semana 1–5. ──
   interface GrupoEje {
     clave: string;
     etiqueta: string;
-    /** Para "semana": clave = fecha ISO; para "mes": clave = "1".."5"; total: "YYYY-MM". */
     extraer: (fecha: string) => string;
   }
-  const gruposEje: GrupoEje[] =
-    periodo === "semana"
-      ? Array.from({ length: 7 }, (_, i) => {
-          const d = agregarDias(lunesDe(new Date()), i);
-          const iso = fechaISO(d);
-          return { clave: iso, etiqueta: `${DOW_CORTO[d.getDay()]} ${d.getDate()}`, extraer: (f: string) => f };
-        })
-      : periodo === "mes"
-        ? [1, 2, 3, 4, 5].map((s) => ({
+  const gruposEje = (p: Periodo): GrupoEje[] =>
+    p === "dia"
+      ? [{ clave: hoyISO(), etiqueta: "Hoy", extraer: (f) => f }]
+      : p === "semana"
+        ? Array.from({ length: 7 }, (_, i) => {
+            const d = agregarDias(lunesDe(new Date()), i);
+            const iso = fechaISO(d);
+            return { clave: iso, etiqueta: `${DOW_CORTO[d.getDay()]} ${d.getDate()}`, extraer: (f: string) => f };
+          })
+        : [1, 2, 3, 4, 5].map((s) => ({
             clave: String(s),
             etiqueta: `Semana ${s}`,
             extraer: (f: string) => String(semanaDelMes(f)),
-          }))
-        : (() => {
-            const meses = new Set<string>();
-            ordenesPeriodo.forEach((o) => meses.add(o.fecha.slice(0, 7)));
-            gestionesPeriodo.forEach((g) => meses.add(g.fechaFactura.slice(0, 7)));
-            return [...meses].sort().slice(-12).map((m) => ({
-              clave: m,
-              etiqueta: `${m.slice(5, 7)}/${m.slice(0, 4)}`,
-              extraer: (f: string) => f.slice(0, 7),
-            }));
-          })();
+          }));
 
-  // ── 3. Órdenes de compra vs compras (eje X según filtro) ──
-  const dataOCvsCompras = gruposEje.map((g) => ({
+  // ── 1. Gráfica combinada de ventas: barras = unidades, línea = ingresos.
+  // El eje X se estandariza según SU filtro: "dia" por hora (4–10 p. m.),
+  // "semana" por día (Lun–Dom) y "mes" por Semana 1–5. ──
+  interface PuntoVenta {
+    etiqueta: string;
+    ingresos: number;
+    unidades: number;
+  }
+  const ventasGrafica = ventasEn(fVentas);
+  const dataVentasGrafica: PuntoVenta[] =
+    fVentas === "dia"
+      ? (() => {
+          const hoy = hoyISO();
+          return HORAS_HOY.map((h) => {
+            const fila = ventasGrafica.filter(
+              (v) => v.fecha === hoy && Math.floor(minutosHora(horaVenta(v)) / 60) === h,
+            );
+            return {
+              etiqueta: `${h - 12}pm`,
+              ingresos: fila.reduce((s, v) => s + v.total, 0),
+              unidades: fila.reduce((s, v) => s + (v.cantidad || 0), 0),
+            };
+          });
+        })()
+      : gruposEje(fVentas).map((g) => {
+          const fila = ventasGrafica.filter((v) => esFechaISO(v.fecha) && g.extraer(v.fecha) === g.clave);
+          return {
+            etiqueta: g.etiqueta,
+            ingresos: fila.reduce((s, v) => s + v.total, 0),
+            unidades: fila.reduce((s, v) => s + (v.cantidad || 0), 0),
+          };
+        });
+
+  // ── 4. Órdenes de compra vs compras (eje X según el filtro de la gráfica) ──
+  const ordenesGrafica = ordenesEn(fOC);
+  const gestionesGrafica = gestionesEn(fOC);
+  const dataOCvsCompras = gruposEje(fOC).map((g) => ({
     etiqueta: g.etiqueta,
-    ordenes: ordenesPeriodo
+    ordenes: ordenesGrafica
       .filter((o) => g.extraer(o.fecha) === g.clave)
       .reduce((t, o) => t + o.items.reduce((si, i) => si + i.cantidad * i.costoUnitario, 0), 0),
-    compras: gestionesPeriodo
+    compras: gestionesGrafica
       .filter((ga) => g.extraer(ga.fechaFactura) === g.clave)
       .reduce((t, ga) => t + ga.valorTotal, 0),
   }));
 
-  // ── 4. Compras por proveedor: eje X = semanas/días/meses, una serie por proveedor ──
-  const proveedoresPorTotal = [...gestionesPeriodo.reduce<Map<string, number>>((acc, g) => {
+  // ── 5. Compras por proveedor: eje X del filtro, una serie por proveedor ──
+  const gestionesProv = gestionesEn(fProv);
+  const proveedoresPorTotal = [...gestionesProv.reduce<Map<string, number>>((acc, g) => {
     const p = (g.proveedor ?? "").trim() || "Sin proveedor";
     acc.set(p, (acc.get(p) ?? 0) + g.valorTotal);
     return acc;
@@ -406,10 +389,10 @@ export function DashboardScreen({
     ...[...proveedoresTop],
     ...(proveedoresPorTotal.length > TOP_PROVEEDORES ? ["Otros"] : []),
   ];
-  const dataProveedores = gruposEje.map((g) => {
+  const dataProveedores = gruposEje(fProv).map((g) => {
     const fila: Record<string, string | number> = { etiqueta: g.etiqueta };
     nombresProveedores.forEach((p) => (fila[p] = 0));
-    gestionesPeriodo.forEach((ga) => {
+    gestionesProv.forEach((ga) => {
       if (g.extraer(ga.fechaFactura) !== g.clave) return;
       const crudo = (ga.proveedor ?? "").trim() || "Sin proveedor";
       const p = proveedoresTop.has(crudo) ? crudo : "Otros";
@@ -417,56 +400,23 @@ export function DashboardScreen({
     });
     return fila;
   });
-  const hayComprasProveedores = gestionesPeriodo.length > 0;
+  const hayComprasProveedores = gestionesProv.length > 0;
 
-  // ── 5. Comportamiento de ventas: selector propio Diario | Mensual | Anual ──
-  const [granularidad, setGranularidad] = useState<"diario" | "mensual" | "anual">("diario");
-  interface PuntoVenta {
-    etiqueta: string;
-    ingresos: number;
-    nVentas: number;
-  }
-  const mapaVentas = new Map<string, PuntoVenta>();
-  ventasValidas.forEach((v) => {
-    if (!esFechaISO(v.fecha)) return;
-    const clave =
-      granularidad === "diario"
-        ? v.fecha
-        : granularidad === "mensual"
-          ? v.fecha.slice(0, 7)
-          : v.fecha.slice(0, 4);
-    const punto = mapaVentas.get(clave) ?? { etiqueta: clave, ingresos: 0, nVentas: 0 };
-    punto.ingresos += v.total;
-    punto.nVentas += 1;
-    mapaVentas.set(clave, punto);
-  });
-  const dataVentasSerie = [...mapaVentas.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(granularidad === "diario" ? -31 : 0)
-    .map(([, p]) => ({
-      ...p,
-      etiqueta:
-        granularidad === "diario"
-          ? `${p.etiqueta.slice(8, 10)}/${p.etiqueta.slice(5, 7)}`
-          : granularidad === "mensual"
-            ? `${p.etiqueta.slice(5, 7)}/${p.etiqueta.slice(0, 4)}`
-            : p.etiqueta,
-    }));
-
-  // ── 6. No conformes por semana del mes, apilados por tipo de solución ──
+  // ── 6. No conformes agrupados por el eje de SU filtro, apilados por tipo ──
   const TIPOS_NC_TOP = 5;
-  const conteoTipos = [...ncPeriodo.reduce<Map<string, number>>((acc, nc) => {
+  const ncGrafica = noConformidades.filter((nc) => enPeriodo(nc.fechaRegistro, fNC));
+  const conteoTipos = [...ncGrafica.reduce<Map<string, number>>((acc, nc) => {
     const t = nc.tipoSolucion?.trim() || "Sin solución asignada";
     acc.set(t, (acc.get(t) ?? 0) + 1);
     return acc;
   }, new Map())].sort((a, b) => b[1] - a[1]);
   const tiposTop = conteoTipos.slice(0, TIPOS_NC_TOP).map(([t]) => t);
   const tiposNC = [...tiposTop, ...(conteoTipos.length > TIPOS_NC_TOP ? ["Otros"] : [])];
-  const dataNC = [1, 2, 3, 4, 5].map((s) => {
-    const fila: Record<string, string | number> = { semana: `Semana ${s}` };
+  const dataNC = gruposEje(fNC).map((g) => {
+    const fila: Record<string, string | number> = { etiqueta: g.etiqueta };
     tiposNC.forEach((t) => (fila[t] = 0));
-    ncPeriodo.forEach((nc) => {
-      if (!esFechaISO(nc.fechaRegistro) || semanaDelMes(nc.fechaRegistro) !== s) return;
+    ncGrafica.forEach((nc) => {
+      if (!esFechaISO(nc.fechaRegistro) || g.extraer(nc.fechaRegistro) !== g.clave) return;
       const crudo = nc.tipoSolucion?.trim() || "Sin solución asignada";
       const t = tiposTop.includes(crudo) ? crudo : "Otros";
       fila[t] = Number(fila[t] ?? 0) + 1;
@@ -477,9 +427,9 @@ export function DashboardScreen({
   const vacio = (valores: number[]) => valores.every((v) => !v);
   const cop = (v: number) => fmt(v);
   const und = (v: number) => `${v} ${v === 1 ? "unidad" : "unidades"}`;
-  /** Etiqueta del eje X según el filtro global (para títulos/etiquetas). */
-  const ejeSegunFiltro =
-    periodo === "semana" ? "por día (lun–dom)" : periodo === "mes" ? "por semana del mes (Semana 1–5)" : "por mes";
+  /** Etiqueta del eje X según el filtro de CADA gráfica (títulos/etiquetas). */
+  const ejeDe = (p: Periodo) =>
+    p === "dia" ? "de hoy" : p === "semana" ? "por día (lun–dom)" : "por semana del mes";
 
   // ÚNICA regla de acceso de la app. Antes había dos: `canSee` (con atajo por
   // nombre de rol) y `tieneVer` (sin atajo), y cada una servía a una capa
@@ -634,38 +584,6 @@ export function DashboardScreen({
         </div>
       </div>
 
-      {/* Gráfica "Ventas hoy — 4pm a 10pm" (arriba de las tarjetas) */}
-      {(hasDashboardAccess || cv) && (
-        <div
-          onClick={() => navigate("sales-chart")}
-          className="bg-card border border-border rounded-2xl p-5 mb-7 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
-        >
-          <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                Ventas hoy — 4pm a 10pm
-              </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {unidadesHoy} producto{unidadesHoy === 1 ? "" : "s"} vendido{unidadesHoy === 1 ? "" : "s"} hoy
-              </p>
-            </div>
-            <span className="text-primary text-sm font-semibold flex items-center gap-1 group-hover:underline">
-              Ver detalle por semana <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <ResponsiveContainer width="100%" height={120}>
-            <BarChart data={hourlyHoy} barSize={22} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}>
-              <XAxis dataKey="hora" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-              <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} producto${v === 1 ? "" : "s"}`} />} />
-              <Bar dataKey="ventas" name="Unidades" fill="#C62828" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="text-[11px] text-muted-foreground mt-2 text-right">
-            Última barra = hora en curso · clic para ver ventas y compras
-          </p>
-        </div>
-      )}
-
       {/* Tarjetas (exactamente 4) + filtro global */}
       {(hasDashboardAccess || cv) && (
         <div className="mb-7">
@@ -673,23 +591,11 @@ export function DashboardScreen({
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
               Indicadores comerciales
             </h2>
-            <div className="flex gap-1 bg-muted rounded-xl p-1" role="group" aria-label="Filtro de periodo">
-              {PERIODOS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={periodo === p.id}
-                  onClick={() => setPeriodo(p.id)}
-                  className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold cursor-pointer transition-all ${
-                    periodo === p.id
-                      ? "bg-primary text-white shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <FiltroPeriodo
+              value={periodo}
+              onChange={setPeriodo}
+              ariaLabel="Filtro de los indicadores"
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tarjetas.map(({ label, value, Icon, bg, ic, screen }) => (
@@ -715,22 +621,67 @@ export function DashboardScreen({
         </div>
       )}
 
-      {/* 6 gráficas con datos reales — Administrador o permiso Dashboard */}
+      {/* 6 gráficas con datos reales — Administrador o permiso Dashboard.
+          Cada una lleva su propio filtro Diario/Semanal/Mensual. */}
       {(hasDashboardAccess || isNamedAdmin) && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-              Estadísticas del periodo
+              Estadísticas
             </h2>
             <p className="text-xs text-muted-foreground">
-              Filtro activo: <span className="font-semibold text-foreground">{etiquetaPeriodoTxt}</span>
+              Cada gráfica tiene su propio filtro de periodo
             </p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* 1. Top 10 clientes: pedidos vs valor */}
-            <GraficaCard
+            {/* 1. Ventas del periodo: barras (unidades) + línea (ingresos) */}
+            <ChartCard
+              titulo="Ventas del periodo"
+              etiqueta={`Ingresos y unidades vendidas ${
+                fVentas === "dia" ? "por hora (4–10 p. m.)" : ejeDe(fVentas)
+              } (COP)`}
+              periodo={fVentas}
+              onPeriodo={setFVentas}
+            >
+              {vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades])) ? (
+                <SinDatos texto="Sin ventas en este periodo" />
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={dataVentasGrafica} margin={{ left: -8, right: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} />
+                    <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <YAxis
+                      yAxisId="cop"
+                      orientation="right"
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
+                    />
+                    <Tooltip
+                      content={<GrafTooltip formatear={(serie, v) => (serie === "ingresos" ? cop(v) : und(v))} />}
+                    />
+                    <Legend />
+                    <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill="#C62828" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke="#16A34A" strokeWidth={2} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => navigate("sales-chart")}
+                  className="text-primary text-xs font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  Ver detalle por semana <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </ChartCard>
+
+            {/* 2. Top 10 clientes: pedidos vs valor */}
+            <ChartCard
               titulo="Top 10 clientes frecuentes vs mayores consumidores"
               etiqueta="Unión del top 10 por pedidos y del top 10 por valor, ordenada por pedidos"
+              periodo={fClientes}
+              onPeriodo={setFClientes}
             >
               {dataClientes.length === 0 ? (
                 <SinDatos texto="Sin ventas de clientes en este periodo" />
@@ -748,12 +699,14 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </GraficaCard>
+            </ChartCard>
 
-            {/* 2. Top 10 productos más vendidos */}
-            <GraficaCard
+            {/* 3. Top 10 productos más vendidos */}
+            <ChartCard
               titulo="Top 10 productos más vendidos"
               etiqueta="Suma de detalle[].cantidad de las ventas del periodo (unidades)"
+              periodo={fProductos}
+              onPeriodo={setFProductos}
             >
               {dataProductos.length === 0 ? (
                 <SinDatos texto="Sin productos vendidos en este periodo" />
@@ -768,27 +721,22 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </GraficaCard>
+            </ChartCard>
 
-            {/* 3. Órdenes de compra vs compras (eje X según filtro global) */}
-            <GraficaCard
-              titulo="Órdenes de compra vs compras semanales"
-              etiqueta={`Valor de órdenes creadas vs facturas registradas ${ejeSegunFiltro}, sin anuladas (COP)`}
+            {/* 4. Órdenes de compra vs compras (eje X según su filtro) */}
+            <ChartCard
+              titulo="Órdenes de compra vs compras"
+              etiqueta={`Valor de órdenes creadas vs facturas registradas ${ejeDe(fOC)}, sin anuladas (COP)`}
+              periodo={fOC}
+              onPeriodo={setFOC}
             >
               {vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
                 <SinDatos texto="Sin compras ni órdenes en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: periodo === "total" ? 40 : 8 }}>
+                  <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis
-                      dataKey="etiqueta"
-                      tick={{ fontSize: periodo === "semana" ? 10 : 11 }}
-                      interval={0}
-                      angle={periodo === "total" ? -30 : 0}
-                      textAnchor={periodo === "total" ? "end" : "middle"}
-                      height={periodo === "total" ? 55 : 30}
-                    />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
                     <Legend />
@@ -797,27 +745,22 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </GraficaCard>
+            </ChartCard>
 
-            {/* 4. Compras por proveedor: eje X = semanas/días/meses, serie = proveedor */}
-            <GraficaCard
+            {/* 5. Compras por proveedor: eje X del filtro, serie = proveedor */}
+            <ChartCard
               titulo="Compras por proveedor"
-              etiqueta={`Facturas no anuladas ${ejeSegunFiltro}, una serie por proveedor (top 8 + Otros, COP)`}
+              etiqueta={`Facturas no anuladas ${ejeDe(fProv)}, una serie por proveedor (top 8 + Otros, COP)`}
+              periodo={fProv}
+              onPeriodo={setFProv}
             >
               {!hayComprasProveedores ? (
                 <SinDatos texto="Sin compras registradas en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: periodo === "total" ? 40 : 8 }}>
+                  <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis
-                      dataKey="etiqueta"
-                      tick={{ fontSize: periodo === "semana" ? 10 : 11 }}
-                      interval={0}
-                      angle={periodo === "total" ? -30 : 0}
-                      textAnchor={periodo === "total" ? "end" : "middle"}
-                      height={periodo === "total" ? 55 : 30}
-                    />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
                     <Legend />
@@ -834,57 +777,22 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </GraficaCard>
+            </ChartCard>
 
-            {/* 5. Comportamiento de ventas: Diario | Mensual | Anual */}
-            <GraficaCard
-              titulo="Comportamiento de ventas"
-              etiqueta={`Ingresos ($) agrupados por ${granularidad === "diario" ? "día" : granularidad === "mensual" ? "mes" : "año"}, con N° de ventas en el tooltip`}
-            >
-              <div className="flex gap-1 bg-muted rounded-xl p-1 mb-3 w-fit" role="group" aria-label="Granularidad de ventas">
-                {(["diario", "mensual", "anual"] as const).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    aria-pressed={granularidad === g}
-                    onClick={() => setGranularidad(g)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize cursor-pointer transition-all ${
-                      granularidad === g
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {g === "diario" ? "Diario" : g === "mensual" ? "Mensual" : "Anual"}
-                  </button>
-                ))}
-              </div>
-              {dataVentasSerie.length === 0 ? (
-                <SinDatos texto="Sin ventas en este periodo" />
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={dataVentasSerie} margin={{ left: -8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                    <Tooltip content={<TooltipVentas />} />
-                    <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#16A34A" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </GraficaCard>
-
-            {/* 6. No conformes por semana del mes, apilados por tipo de solución */}
-            <GraficaCard
-              titulo="Productos no conformes por semana del mes"
-              etiqueta="Conteo por fechaRegistro (Semana 1–5), apilado por tipo de solución"
+            {/* 6. No conformes según su filtro, apilados por tipo de solución */}
+            <ChartCard
+              titulo="Productos no conformes"
+              etiqueta={`Conteo por fechaRegistro ${ejeDe(fNC)}, apilado por tipo de solución`}
+              periodo={fNC}
+              onPeriodo={setFNC}
             >
               {vacio(dataNC.flatMap((fila) => tiposNC.map((t) => Number(fila[t] ?? 0)))) ? (
                 <SinDatos texto="Sin no conformes registrados en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={dataNC} margin={{ left: -4, right: 8, bottom: periodo === "total" ? 40 : 8 }}>
+                  <BarChart data={dataNC} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="semana" tick={{ fontSize: 10 }} interval={0} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} no conforme${v === 1 ? "" : "s"}`} />} />
                     <Legend />
@@ -901,7 +809,7 @@ export function DashboardScreen({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </GraficaCard>
+            </ChartCard>
           </div>
         </div>
       )}
