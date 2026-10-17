@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -25,15 +25,12 @@ import {
   RefreshCw,
   RotateCcw,
   Settings,
-  ShoppingCart,
   ShoppingBag,
-  Tag,
   Truck,
-  UserCircle,
   Users,
 } from "lucide-react";
 
-import { KEY, ACCIONES, ACCION_EXCEL, accionColors, type AccesosMap } from "@/features/roles/pages/GestionConfigScreen";
+import { KEY, type AccesosMap } from "@/features/roles/pages/GestionConfigScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
 import type {
   GestionCompra,
@@ -69,32 +66,6 @@ const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 const HORAS_HOY = [16, 17, 18, 19, 20, 21, 22];
 
 const DOW_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-/** §3 — Vista "Inicio" del empleado: TODOS los sub-módulos con su pantalla
- *  (los mismos del sidebar, vía SCREEN_PERM_KEY de App.tsx), para armar las
- *  tarjetas de accesos rápidos según el permiso "Ver" del rol activo. */
-const MODULOS_INICIO: {
-  permKey: string;
-  screen: Screen;
-  nombre: string;
-  Icon: typeof Package;
-  descripcion: string;
-}[] = [
-  { permKey: KEY("Configuración", "Roles"), screen: "gestion-roles", nombre: "Roles", Icon: Settings, descripcion: "Configura roles y permisos" },
-  { permKey: KEY("Configuración", "Usuarios"), screen: "users", nombre: "Usuarios", Icon: Users, descripcion: "Consulta los usuarios del sistema" },
-  { permKey: KEY("Producción", "Empleados"), screen: "empleados", nombre: "Empleados", Icon: IdCard, descripcion: "Administra los empleados y sus roles" },
-  { permKey: KEY("Compras", "Insumos"), screen: "supplies", nombre: "Insumos", Icon: Package, descripcion: "Controla el inventario de insumos" },
-  { permKey: KEY("Compras", "Proveedores"), screen: "suppliers", nombre: "Proveedores", Icon: Truck, descripcion: "Administra los proveedores" },
-  { permKey: KEY("Compras", "Orden de Compra"), screen: "orden-compra", nombre: "Orden de Compra", Icon: FileText, descripcion: "Crea y envía órdenes de compra" },
-  { permKey: KEY("Compras", "Compra"), screen: "gestion-compra", nombre: "Compra", Icon: Truck, descripcion: "Registra las facturas de compra" },
-  { permKey: KEY("Producción", "Categoría de Producto"), screen: "cat-producto", nombre: "Categoría de Productos", Icon: Tag, descripcion: "Organiza el menú por categorías" },
-  { permKey: KEY("Producción", "Productos"), screen: "gestion-productos", nombre: "Productos", Icon: Package, descripcion: "Administra el menú y sus fichas técnicas" },
-  { permKey: KEY("Producción", "Orden de Producción"), screen: "production-orders", nombre: "Orden de Producción", Icon: FileText, descripcion: "Programa y sigue la producción de la cocina" },
-  { permKey: KEY("Producción", "Producto No Conforme"), screen: "perecederos", nombre: "Productos no conformes", Icon: AlertTriangle, descripcion: "Registra productos e insumos no conformes" },
-  { permKey: KEY("Ventas", "Clientes"), screen: "clientes", nombre: "Clientes", Icon: UserCircle, descripcion: "Consulta y administra los clientes" },
-  { permKey: KEY("Ventas", "Ventas"), screen: "ventas-pedidos", nombre: "Ventas", Icon: ShoppingCart, descripcion: "Registra pedidos y consulta el estado de las ventas" },
-  { permKey: KEY("Ventas", "Devoluciones"), screen: "devoluciones", nombre: "Devoluciones", Icon: RefreshCw, descripcion: "Gestiona las devoluciones de ventas" },
-];
 
 // ── Tooltip único de todas las gráficas: valores exactos (COP, unidades o
 // conteos) según la función `formatear` que recibe cada una ───────────
@@ -140,10 +111,12 @@ export function DashboardScreen({
   gestiones,
   ordenes,
   noConformidades,
+  insumos,
+  ordenesProduccion,
+  clientes,
   loggedInUser,
   loggedInRoleName,
   tieneRolActivo,
-  isNamedAdmin,
   hasDashboardAccess,
   accesos,
 }: {
@@ -157,7 +130,6 @@ export function DashboardScreen({
   // false = el rol fue borrado, está desactivado o el usuario no tiene rol.
   // Distingue "no tienes permisos" de "ya no existe tu rol".
   tieneRolActivo: boolean;
-  isNamedAdmin: boolean;
   hasDashboardAccess: boolean;
   accesos: AccesosMap;
   // Inventarios cableados desde App.tsx (se usan en los próximos indicadores).
@@ -167,7 +139,7 @@ export function DashboardScreen({
   ordenesProduccion: OrdenProduccion[];
   clientes: Cliente[];
 }) {
-  const firstName = (loggedInUser?.nombre ?? "Gloria").split(" ")[0];
+  const firstName = (loggedInUser?.nombre ?? "Empleado").split(" ")[0];
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
   const dateStr = new Date().toLocaleDateString("es-CO", {
@@ -431,13 +403,14 @@ export function DashboardScreen({
   const ejeDe = (p: Periodo) =>
     p === "dia" ? "de hoy" : p === "semana" ? "por día (lun–dom)" : "por semana del mes";
 
-  // ÚNICA regla de acceso de la app. Antes había dos: `canSee` (con atajo por
-  // nombre de rol) y `tieneVer` (sin atajo), y cada una servía a una capa
-  // distinta — menú y rutas usaban una, los KPIs del Dashboard la otra. Por eso
-  // un admin podía tener control total en la navegación y al mismo tiempo ver
-  // el badge de "no sos administrador". Ahora las dos capas llaman a esto.
+  // ÚNICA regla de acceso del Dashboard. El permiso "Dashboard::Dashboard"
+  // (o la cuenta super admin, calculado en App.tsx como `hasDashboardAccess`)
+  // decide QUIÉN ve esta vista; dentro de ella, `puedeVer` decide qué módulos
+  // muestra según el permiso "Ver" de cada sub-opción. Ventas ya NO abre el
+  // Dashboard: el acoplamiento `|| cv` existía cuando Inicio y Dashboard
+  // eran la misma pantalla y se eliminó junto con la vista de módulos.
   const puedeVer = (permKey: string) =>
-    hasDashboardAccess || isNamedAdmin || (accesos[permKey]?.includes("Ver") ?? false);
+    hasDashboardAccess || (accesos[permKey]?.includes("Ver") ?? false);
 
   // Granular flags, one per sub-opción del sistema.
   // Se construyen con KEY() para que un renombrado en MENU_TREE rompa aquí
@@ -455,8 +428,6 @@ export function DashboardScreen({
   const ccfg = puedeVer(KEY("Configuración", "Roles"));
   const cus  = puedeVer(KEY("Configuración", "Usuarios"));
   const cemp = puedeVer(KEY("Producción", "Empleados"));
-  // El contenido de ventas depende únicamente del permiso de Ventas.
-  const vePanelCompleto = hasDashboardAccess || cv;
 
   // noAccess: true only when the user cannot see ANY sub-opción. La condición
   // por nombre de rol sobra: el administrador original tiene fullAccesos(), así
@@ -479,18 +450,137 @@ export function DashboardScreen({
     cemp && { label: "Empleados",     Icon: IdCard,        screen: "empleados"         as Screen },
   ].filter(Boolean) as ActionDef[];
 
-  // ── §3 — Vista "Inicio" del empleado (rol ≠ Administrador) ────────────
-  // Sin KPIs, gráficas, indicadores ni "Últimas ventas": solo saludo, chip
-  // del rol y tarjetas de los sub-módulos a los que su rol tiene acceso "Ver".
-  if (!isNamedAdmin) {
-    const modulos = MODULOS_INICIO.map((m) => ({
-      ...m,
-      acciones: accesos[m.permKey]?.filter((a) => [...ACCIONES, ACCION_EXCEL].includes(a)) ?? [],
-    })).filter((m) => m.acciones.includes("Ver"));
+  // ── Vista "Inicio" del empleado (sin permiso Dashboard) ────────────────
+  // Diseño original restaurado: saludo dinámico + fecha + chip del rol, KPIs
+  // (máx. 4), accesos rápidos (solo módulos con permiso "Crear") y hasta 2
+  // tablas con "Ver todos →", todo según los permisos "Ver" del rol.
+  // Los registros no guardan quién los creó, así que las tablas son del día
+  // en general ("Ventas de hoy"), no "Mis ventas".
+  if (!hasDashboardAccess) {
+    const ver = (m: string, s: string) => accesos[KEY(m, s)]?.includes("Ver") ?? false;
+    const crear = (m: string, s: string) => accesos[KEY(m, s)]?.includes("Crear") ?? false;
+
+    const hoy = hoyISO();
+    const ventasHoy = ventas.filter((v) => v.fecha === hoy && esVentaIngresante(v));
+    const totalVendidoHoy = ventasHoy.reduce((s, v) => s + v.total, 0);
+    const porVerificar = ventas.filter((v) => v.estado === "por-verificar");
+    const devoluciones = ventas.filter((v) => v.devolucionTipo !== undefined);
+    const devolucionesPendientes = devoluciones.filter((v) => v.devolucionResuelta !== true);
+    const ordenesEnCurso = ordenesProduccion.filter(
+      (o) => o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso",
+    );
+    const ncPendientes = noConformidades.filter((nc) => nc.estado === "Pendiente");
+    const insumosBajo = insumos.filter((i) => i.stockActual < i.stockMinimo);
+    const ocPorRecibir = ordenes.filter((o) => o.estado === "Enviado");
+    const clientesActivos = clientes.filter((c) => c.activo);
+
+    // KPIs — máximo 4, en orden de prioridad según permisos del rol.
+    type KpiEmp = { label: string; value: string; sub: string; Icon: typeof Package; bg: string; ic: string };
+    const kpisEmp = [
+      ver("Ventas", "Ventas") && { label: "Ventas de hoy", value: String(ventasHoy.length), sub: fmt(totalVendidoHoy), Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600" },
+      ver("Ventas", "Ventas") && { label: "Pedidos por verificar pago", value: String(porVerificar.length), sub: "Pago sin confirmar", Icon: ClipboardList, bg: "bg-amber-50", ic: "text-amber-600" },
+      ver("Ventas", "Clientes") && { label: "Clientes", value: String(clientesActivos.length), sub: "Registrados en el sistema", Icon: Users, bg: "bg-violet-50", ic: "text-violet-600" },
+      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: String(devolucionesPendientes.length), sub: "Por resolver", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
+      ver("Producción", "Orden de Producción") && { label: "Órdenes en curso", value: String(ordenesEnCurso.length), sub: "Pendientes y en proceso", Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600" },
+      ver("Producción", "Producto No Conforme") && { label: "No conformes pendientes", value: String(ncPendientes.length), sub: "Sin solución aún", Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600" },
+      ver("Compras", "Insumos") && { label: "Insumos bajo mínimo", value: String(insumosBajo.length), sub: "Stock por debajo del mínimo", Icon: Package, bg: "bg-emerald-50", ic: "text-emerald-600" },
+      ver("Compras", "Orden de Compra") && { label: "Compras por recibir", value: String(ocPorRecibir.length), sub: "Órdenes enviadas al proveedor", Icon: Truck, bg: "bg-cyan-50", ic: "text-cyan-600" },
+    ].filter(Boolean).slice(0, 4) as KpiEmp[];
+
+    // Accesos rápidos — solo módulos con permiso "Crear".
+    type AccesoRapido = { label: string; Icon: typeof Package; screen: Screen };
+    const accesosRapidos: AccesoRapido[] = [
+      crear("Ventas", "Ventas") && { label: "Ventas", Icon: ShoppingBag, screen: "ventas-pedidos" as Screen },
+      crear("Ventas", "Clientes") && { label: "Clientes", Icon: Users, screen: "clientes" as Screen },
+      crear("Ventas", "Devoluciones") && { label: "Devoluciones", Icon: RefreshCw, screen: "devoluciones" as Screen },
+      crear("Producción", "Productos") && { label: "Productos", Icon: Package, screen: "gestion-productos" as Screen },
+      crear("Producción", "Orden de Producción") && { label: "Producción", Icon: Layers, screen: "production-orders" as Screen },
+      crear("Compras", "Insumos") && { label: "Insumos", Icon: Archive, screen: "supplies" as Screen },
+      crear("Compras", "Proveedores") && { label: "Proveedores", Icon: Truck, screen: "suppliers" as Screen },
+      crear("Compras", "Orden de Compra") && { label: "Orden de Compra", Icon: ClipboardList, screen: "orden-compra" as Screen },
+      crear("Compras", "Compra") && { label: "Compras", Icon: FileText, screen: "gestion-compra" as Screen },
+      crear("Configuración", "Roles") && { label: "Roles", Icon: Settings, screen: "gestion-roles" as Screen },
+      crear("Configuración", "Usuarios") && { label: "Usuarios", Icon: Users, screen: "users" as Screen },
+    ].filter(Boolean) as AccesoRapido[];
+
+    // Tablas — máximo 2, en orden de prioridad: Ventas de hoy y la siguiente
+    // con permiso (Devoluciones → Producción → Insumos).
+    const ventasHoyTabla = [...ventasHoy]
+      .map((venta, index) => ({ venta, index }))
+      .sort((a, b) => {
+        const porHora = minutosHora(horaVenta(b.venta)) - minutosHora(horaVenta(a.venta));
+        return porHora !== 0 ? porHora : a.index - b.index;
+      })
+      .slice(0, 5)
+      .map(({ venta }) => venta);
+    const devolucionesTabla = [...devoluciones]
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .slice(0, 5);
+    const ordenesTabla = [...ordenesEnCurso]
+      .sort((a, b) => b.creadaEn.localeCompare(a.creadaEn))
+      .slice(0, 5);
+    const insumosTabla = insumosBajo.slice(0, 5);
+
+    const ESTADO_VENTA: Record<Venta["estado"], string> = {
+      venta: "Por entregar",
+      perdida: "Devolución",
+      "por-verificar": "Por verificar",
+      completado: "Completado",
+      anulado: "Anulado",
+      rechazado: "Rechazado",
+      "en-espera": "En espera",
+    };
+    const ESTADO_OP: Record<string, string> = {
+      pendiente: "Pendiente",
+      "en-proceso": "En producción",
+      completada: "Completada",
+      cancelada: "Cancelada",
+    };
+
+    /** Envoltorio estándar de tabla del inicio: título + "Ver todos →". */
+    const TablaInicio = ({ titulo, destino, cols, vacio, filas }: {
+      titulo: string;
+      destino: Screen;
+      cols: string[];
+      vacio: string;
+      filas: ReactNode;
+    }) => (
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-6">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{titulo}</h2>
+          <button
+            onClick={() => navigate(destino)}
+            className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1"
+          >
+            Ver todos <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+              <tr>
+                {cols.map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filas ?? (
+                <tr>
+                  <td colSpan={cols.length} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    {vacio}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
 
     return (
-      <div className="px-4 sm:px-6 py-6">
-        {/* Header: saludo + fecha + chip del rol activo */}
+      <div className="px-4 sm:px-6 py-6 max-w-6xl mx-auto">
+        {/* Header: saludo dinámico + fecha + chip del rol activo */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
             ¡{greeting}, {firstName}! 👋
@@ -504,7 +594,7 @@ export function DashboardScreen({
         </div>
 
         {noAccess ? (
-          /* Módulos no configurados / sin rol activo */
+          /* Sin permisos "Ver" en ningún módulo / sin rol activo */
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
               <Lock className="w-7 h-7 text-muted-foreground" />
@@ -522,45 +612,109 @@ export function DashboardScreen({
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-4">
-              Estos son los módulos a los que tienes acceso con tu rol{" "}
-              <span className="font-semibold text-foreground">{loggedInRoleName}</span>.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {modulos.map(({ permKey, screen, nombre, Icon, descripcion, acciones }) => (
-                <div
-                  key={permKey}
-                  className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2.5"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Icon className="w-4.5 h-4.5 text-primary" />
+            {/* KPIs (máx. 4) */}
+            {kpisEmp.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {kpisEmp.map(({ label, value, sub, Icon, bg, ic }) => (
+                  <div key={label} className="bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-shadow">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${bg}`}>
+                      <Icon className={`w-5 h-5 ${ic}`} />
                     </div>
-                    <p className="font-bold text-sm text-foreground">{nombre}</p>
+                    <p className="text-2xl font-bold text-foreground mb-0.5" style={{ fontFamily: MONO }}>{value}</p>
+                    <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{descripcion}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[...ACCIONES, ACCION_EXCEL]
-                      .filter((a) => acciones.includes(a))
-                      .map((a) => (
-                        <span
-                          key={a}
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${accionColors[a]}`}
-                        >
-                          {a}
-                        </span>
-                      ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(screen)}
-                    className="mt-auto pt-1 text-xs font-semibold text-primary hover:underline cursor-pointer text-left"
-                  >
-                    Ir al módulo →
-                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Accesos rápidos (solo módulos con permiso Crear) */}
+            {accesosRapidos.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Accesos rápidos</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {accesosRapidos.map(({ label, Icon, screen }) => (
+                    <button
+                      key={label}
+                      onClick={() => navigate(screen)}
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl font-semibold text-sm bg-card border border-border text-foreground hover:bg-muted hover:border-primary/30 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm"
+                    >
+                      <Icon className="w-5 h-5 text-primary" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* Tabla 1: Ventas de hoy */}
+            {ver("Ventas", "Ventas") && (
+              <TablaInicio
+                titulo="Ventas de hoy"
+                destino="ventas-pedidos"
+                cols={["Cliente", "Monto", "Hora", "Estado"]}
+                vacio="Aún no hay ventas hoy"
+                filas={ventasHoyTabla.length === 0 ? null : ventasHoyTabla.map((venta) => (
+                  <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{fmt(venta.total)}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{hora12(horaVenta(venta))}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_VENTA[venta.estado] ?? venta.estado}</td>
+                  </tr>
+                ))}
+              />
+            )}
+
+            {/* Tabla 2: Devoluciones (si el rol las ve) */}
+            {ver("Ventas", "Devoluciones") && (
+              <TablaInicio
+                titulo="Devoluciones"
+                destino="devoluciones"
+                cols={["Cliente", "Monto", "Fecha"]}
+                vacio="No hay devoluciones registradas"
+                filas={devolucionesTabla.length === 0 ? null : devolucionesTabla.map((venta) => (
+                  <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{fmt(venta.devolucionMonto ?? venta.total)}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{venta.fecha}</td>
+                  </tr>
+                ))}
+              />
+            )}
+
+            {/* Tabla 2 (alternativa): Órdenes en curso */}
+            {(!ver("Ventas", "Devoluciones")) && ver("Producción", "Orden de Producción") && (
+              <TablaInicio
+                titulo="Órdenes en curso"
+                destino="production-orders"
+                cols={["Orden", "Cliente", "Estado"]}
+                vacio="No hay órdenes en producción"
+                filas={ordenesTabla.length === 0 ? null : ordenesTabla.map((o) => (
+                  <tr key={o.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{o.id}</td>
+                    <td className="px-4 py-3.5 text-sm text-foreground">{o.cliente?.trim() || "Sin cliente"}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_OP[o.estadoOrden] ?? o.estadoOrden}</td>
+                  </tr>
+                ))}
+              />
+            )}
+
+            {/* Tabla 2 (alternativa): Insumos bajo mínimo */}
+            {(!ver("Ventas", "Devoluciones")) && (!ver("Producción", "Orden de Producción")) && ver("Compras", "Insumos") && (
+              <TablaInicio
+                titulo="Insumos bajo mínimo"
+                destino="supplies"
+                cols={["Insumo", "Stock", "Mínimo"]}
+                vacio="No hay insumos bajo mínimo"
+                filas={insumosTabla.length === 0 ? null : insumosTabla.map((i) => (
+                  <tr key={i.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3.5 text-sm text-foreground">{i.nombre}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{i.stockActual}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{i.stockMinimo}</td>
+                  </tr>
+                ))}
+              />
+            )}
           </>
         )}
       </div>
@@ -576,17 +730,11 @@ export function DashboardScreen({
         </h1>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <p className="text-muted-foreground capitalize">{dateStr}</p>
-          {!vePanelCompleto && (
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
-              {tieneRolActivo ? loggedInRoleName : "sin rol"}
-            </span>
-          )}
         </div>
       </div>
 
       {/* Tarjetas (exactamente 4) + filtro global */}
-      {(hasDashboardAccess || cv) && (
-        <div className="mb-7">
+      <div className="mb-7">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
               Indicadores comerciales
@@ -619,12 +767,10 @@ export function DashboardScreen({
             ))}
           </div>
         </div>
-      )}
 
-      {/* 6 gráficas con datos reales — Administrador o permiso Dashboard.
-          Cada una lleva su propio filtro Diario/Semanal/Mensual. */}
-      {(hasDashboardAccess || isNamedAdmin) && (
-        <div className="mb-8">
+      {/* 6 gráficas con datos reales — permiso Dashboard. Cada una lleva su
+          propio filtro Diario/Semanal/Mensual. */}
+      <div className="mb-8">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
               Estadísticas
@@ -812,7 +958,6 @@ export function DashboardScreen({
             </ChartCard>
           </div>
         </div>
-      )}
 
       {/* Quick actions */}
       {quickActions.length > 0 && (
@@ -833,10 +978,9 @@ export function DashboardScreen({
         </div>
       )}
 
-      {/* Últimas ventas — Ventas::Ventas */}
-      {cv && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between p-5 border-b border-border">
+      {/* Últimas ventas */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-border">
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Últimas ventas</h2>
             <button
               onClick={() => navigate("orders")}
@@ -877,8 +1021,7 @@ export function DashboardScreen({
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Empty state */}
       {noAccess && (

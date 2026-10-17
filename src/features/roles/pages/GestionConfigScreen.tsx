@@ -28,9 +28,13 @@ export const MENU_TREE = [
 // ── Celdas de la grilla de módulos ──────────────────────────────────────
 // Replican el orden de las secciones del sidebar del Admin (NAV_SECTIONS en
 // App.tsx): Dashboard · Configuración · Usuarios · Compras · Producción ·
-// Ventas. "Dashboard" ya no es celda §3: la gráfica es exclusiva del
-// Administrador y la clave "Dashboard::Dashboard" se quita a los demás roles
-// al leer de localStorage (App.tsx), así que no es asignable.
+// Ventas. "Dashboard" es un módulo INDEPENDIENTE (primera tarjeta): asignar
+// Ventas u otro módulo con todas sus sub-opciones y privilegios NO da acceso
+// al Dashboard. Su permiso es solo "Ver" (MODULOS_SOLO_LECTURA) y decide quién
+// ve la pantalla "dashboard" (hasDashboardAccess en App.tsx), no el nombre
+// del rol. La clave "Dashboard::Dashboard" se migra una sola vez con la
+// bandera "sivpro.migracion.dashboardPermiso.v1" y después solo la cambia el
+// super admin desde este editor.
 // "Usuarios" es una celda propia porque en el sidebar lo es, pero NO es
 // un módulo nuevo: sigue siendo la sub-opción `Configuración::Usuarios` de
 // MENU_TREE, igual que la nombra el `permKey` del sidebar y el guard de ruta.
@@ -39,6 +43,7 @@ export const MENU_TREE = [
 type Celda = { nombre: string; modulo: string; subs?: string[] };
 
 const CELDAS: Celda[] = [
+  { nombre: "Dashboard",     modulo: "Dashboard" },
   { nombre: "Configuración", modulo: "Configuración", subs: ["Roles"] },
   // El sidebar agrupa Usuarios y Empleados bajo una sección "Usuarios", de ahí
   // que compartan celda. Sigue siendo "un módulo simple" en permisos: cada
@@ -50,9 +55,9 @@ const CELDAS: Celda[] = [
 ];
 
 // Sub-opciones que gobierna una celda: las declaradas, o todas las del módulo.
-// Con MENU_TREE intacto, las 5 celdas cubren las 14 sub-opciones asignables
-// (1+1+2+4+4+3 sin "Dashboard": su celda se eliminó en §3), así que todas
-// siguen siendo asignables.
+// Con MENU_TREE intacto, las 6 celdas cubren las 15 sub-opciones asignables
+// (1+1+1+2+4+5+3, incluyendo "Dashboard"), así que todas siguen siendo
+// asignables.
 const subsDeCelda = (c: Celda): string[] =>
   c.subs ?? MENU_TREE.find(m => m.modulo === c.modulo)!.subs;
 
@@ -61,6 +66,7 @@ const subsDeCelda = (c: Celda): string[] =>
 // el engranaje. Son los mismos iconos que usa el sidebar. Una celda sin entrada
 // aquí se sigue mostrando por su nombre, solo sin icono.
 const CELDA_ICONOS: Record<string, typeof Home> = {
+  Dashboard:     Home,
   Configuración: Settings,
   Usuarios:      Users,
   Compras:       ShoppingBag,
@@ -87,10 +93,10 @@ export type AccesosMap = Record<string, Accion[]>;
 
 export const KEY = (modulo: string, sub: string) => `${modulo}::${sub}`;
 
-// §3: "Dashboard" ya no es un permiso asignable (la celda salió de CELDAS);
-// MODULOS_SOLO_LECTURA queda solo para leer claves legacy "Dashboard::Dashboard"
-// que aún existan en datos guardados. Inicio sigue siendo universal y no
-// depende de esta entrada del editor de roles.
+// "Dashboard" admite SOLO el permiso "Ver": es un indicador global, no un
+// módulo con CRUD. La celda aparece en el editor (independiente de Ventas y
+// del resto) y `accionesDe` limita sus acciones a ["Ver"]. Inicio sigue
+// siendo universal y no depende de esta entrada del editor de roles.
 export const MODULOS_SOLO_LECTURA = ["Dashboard"];
 
 // Sub-módulos cuyo listado se puede descargar a Excel, por `permKey` completo
