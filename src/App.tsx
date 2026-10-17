@@ -4557,6 +4557,24 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
   };
 };
 
+/**
+ * Clases glass para los inputs de Login y Registro. Espejo de `inputCls`
+ * (campo.tsx) pero con fondo translucido sobre la tarjeta de vidrio: en claro
+ * `bg-white/70` + borde negro suave, en oscuro `bg-white/10` + borde blanco
+ * suave, texto blanco y placeholder al 50%. El estado de error pinta un rojo
+ * legible por encima del vidrio. No se tocó `inputCls` porque comparte
+ * clases con los formularios del panel administrativo.
+ */
+function authInputCls(err?: string, base: string = ""): string {
+  const fondo = err
+    ? "border-red-400 bg-red-50/50 dark:bg-red-950/50 dark:border-red-400/80"
+    : "border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/10";
+  const texto =
+    "text-foreground dark:text-white placeholder:text-neutral-500 dark:placeholder:text-white/50";
+  const propia = `w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 ${fondo} ${texto}`;
+  return `${propia}${base ? ` ${base}` : ""}`;
+}
+
 function LoginScreen({
   navigate,
   onLogin,
@@ -4727,12 +4745,12 @@ function LoginScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8"
+        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -4740,12 +4758,12 @@ function LoginScreen({
         <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
-            className="text-2xl font-bold text-foreground"
+            className="text-2xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
             Bienvenido a La Sirena
           </h1>
-          <p className="text-muted-foreground text-sm mt-2">
+          <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
             Ingresa tus datos para continuar
           </p>
         </div>
@@ -4758,7 +4776,7 @@ function LoginScreen({
         >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
+            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
               Correo electrónico
             </label>
             <input
@@ -4777,13 +4795,13 @@ function LoginScreen({
                 aplicar: (campo, err) =>
                   setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
               })}
-              className={`w-full h-12 px-4 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              className={authInputCls(errors.email, "h-12")}
               {...validacion.ariaCampo("email", errors.email)}
             />
             <MensajeError id={validacion.idError("email")} err={errors.email} />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-2">
+            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
               Contraseña
             </label>
             <PasswordField
@@ -4809,7 +4827,7 @@ function LoginScreen({
               ariaDescribedBy={
                 errors.password ? validacion.idError("password") : undefined
               }
-              cls={`w-full h-12 px-4 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              cls={authInputCls(errors.password, "h-12")}
             />
             <MensajeError id={validacion.idError("password")} err={errors.password} />
           </div>
@@ -4849,7 +4867,7 @@ function LoginScreen({
           </p>
         )}
 
-        <p className="text-center text-sm text-muted-foreground mt-4">
+        <p className="text-center text-sm text-foreground/75 mt-4 dark:text-white/75">
           {"¿No tienes cuenta? "}
           <button
             onClick={() => navigate("register")}
@@ -5734,12 +5752,12 @@ function RegisterScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4"
+        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -5752,7 +5770,7 @@ function RegisterScreen({
           <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-10 w-auto object-contain mx-auto mb-1" />
 
           <h1
-            className="text-xl font-bold text-foreground"
+            className="text-xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
             Crear cuenta
@@ -5778,7 +5796,7 @@ function RegisterScreen({
         <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
           <div className="sm:col-span-2 grid gap-3 sm:grid-cols-[3fr_2fr]">
             <div className="min-w-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 Tipo doc.
               </label>
               <select
@@ -5792,7 +5810,7 @@ function RegisterScreen({
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
                 onKeyDown={teclaEnRegistro("docType")}
-                className={inputCls(errores.docType, "cursor-pointer h-10 pl-3 pr-8")}
+                className={`${authInputCls(errores.docType, "cursor-pointer h-10 pl-3 pr-8")} [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white`}
                 {...validacion.ariaCampo("docType", errores.docType)}
               >
                 {OPCIONES_TIPO_DOCUMENTO.map((opt) => (
@@ -5804,7 +5822,7 @@ function RegisterScreen({
               <MensajeError id={validacion.idError("docType")} err={errores.docType} />
             </div>
             <div className="min-w-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 Número de documento
               </label>
               <input
@@ -5815,7 +5833,7 @@ function RegisterScreen({
                  placeholder="Ej: 12345678"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
-                className={inputCls(errores.docNum, "h-10")}
+                className={authInputCls(errores.docNum, "h-10")}
                 {...validacion.ariaCampo("docNum", errores.docNum)}
               />
               <MensajeError id={validacion.idError("docNum")} err={errores.docNum} />
@@ -5857,7 +5875,7 @@ function RegisterScreen({
             },
           ].map(({ label, key, placeholder, type, numeric, full }) => (
             <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 {label}
               </label>
               {type === "password" ? (
@@ -5867,7 +5885,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
-                  cls={inputCls(errores[key], "h-10")}
+                  cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
                   ariaInvalid={Boolean(errores[key])}
@@ -5882,7 +5900,7 @@ function RegisterScreen({
                   placeholder={placeholder}
                   ref={validacion.refCampo(key)}
                   onKeyDown={teclaEnRegistro(key)}
-                  className={inputCls(errores[key], "h-10")}
+                  className={authInputCls(errores[key], "h-10")}
                   {...validacion.ariaCampo(key, errores[key])}
                 />
               )}
@@ -5905,7 +5923,7 @@ function RegisterScreen({
           <div className="sm:col-span-2 min-w-0">
             <RequisitosContrasena
               valor={form.password}
-              className="mt-1 grid grid-cols-1 sm:grid-cols-[max-content_max-content_max-content] justify-start gap-x-3 gap-y-1 [&>li:nth-child(2)]:order-1 [&>li:nth-child(1)]:order-2 [&>li:nth-child(5)]:order-3 [&>li:nth-child(4)]:order-4 [&>li:nth-child(3)]:order-5"
+              className="mt-1 grid grid-cols-1 sm:grid-cols-[max-content_max-content_max-content] justify-start gap-x-3 gap-y-1 [&>li:nth-child(2)]:order-1 [&>li:nth-child(1)]:order-2 [&>li:nth-child(5)]:order-3 [&>li:nth-child(4)]:order-4 [&>li:nth-child(3)]:order-5 [&>li.text-muted-foreground]:text-foreground/75 [&>li.text-emerald-600]:text-emerald-900 dark:[&>li.text-emerald-600]:text-emerald-400"
             />
           </div>
         </div>
@@ -5924,7 +5942,7 @@ function RegisterScreen({
           {loading ? "Creando cuenta..." : "Crear cuenta"}
         </PrimaryBtn>
 
-        <p className="text-center text-sm text-muted-foreground mt-2">
+        <p className="text-center text-sm text-foreground/75 mt-2 dark:text-white/75">
           {"¿Ya tienes cuenta? "}
           <button
             onClick={() => navigate("login")}
