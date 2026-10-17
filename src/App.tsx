@@ -895,6 +895,11 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
 
+/** Nombre del ítem de inicio de la barra lateral y del breadcrumb para los
+ *  roles SIN permiso Dashboard (la "casita" de siempre). Con el permiso, la
+ *  misma casita se llama "Dashboard". */
+const ETIQUETA_INICIO_EMPLEADO = "Menú";
+
 const NAV_SECTIONS = [
   {
     key: "dashboard",
@@ -911,12 +916,12 @@ const NAV_SECTIONS = [
   },
   {
     key: "inicio",
-    label: "Inicio",
+    label: ETIQUETA_INICIO_EMPLEADO,
     Icon: Home,
     items: [
       {
         screen: "inicio" as Screen,
-        label: "Inicio",
+        label: ETIQUETA_INICIO_EMPLEADO,
         Icon: Home,
       },
     ],
@@ -1512,7 +1517,7 @@ function AdminTopBar({
 }) {
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
-    inicio: "Inicio",
+    inicio: ETIQUETA_INICIO_EMPLEADO,
     "manage-products": "Gestión de productos",
     orders: "Gestión de ventas",
     clients: "Gestión de clientes",
@@ -1554,9 +1559,9 @@ function AdminTopBar({
           onClick={() => navigate(homeScreen)}
           className="hover:text-foreground transition-colors cursor-pointer shrink-0"
         >
-          {homeScreen === "dashboard" ? "Dashboard" : "Inicio"}
+          {homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO}
         </button>
-        {current !== "dashboard" && (
+        {current !== homeScreen && (
           <>
             <ChevronRight className="w-3.5 h-3.5 shrink-0" />
             <span className="text-foreground font-medium min-w-0 truncate">
@@ -6640,6 +6645,11 @@ function GenericAdmin({
 // forma `Rol` / `AccesosMap` ya es JSON-serializable sin transformaciones.
 // La clave incluye versión para poder invalidar el cache al cambiar el schema.
 const ROLES_STORAGE_KEY = "sivpro.roles.v1";
+// Bandera de la migración ÚNICA del permiso Dashboard (ver leerRolesPersistidos).
+const MIGRACION_DASHBOARD_PERMISO_KEY = "sivpro.migracion.dashboardPermiso.v1";
+const marcarMigracionDashboard = () => {
+  try { localStorage.setItem(MIGRACION_DASHBOARD_PERMISO_KEY, "1"); } catch { /* localStorage bloqueado */ }
+};
 
 const esRolValido = (r: unknown): r is Rol => {
   if (!r || typeof r !== "object") return false;
@@ -6685,7 +6695,14 @@ const restaurarDescargaExcel = (rol: Rol): Rol => {
 const leerRolesPersistidos = (): Rol[] => {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
-    if (!raw) return INITIAL_ROLES;
+    if (!raw) {
+      // Sin datos guardados: la semilla ya trae el permiso Dashboard en el rol
+      // Administrador (fullAccesos) y ningún otro rol lo tiene. Se marca la
+      // migración como hecha para que no toque permisos dados después por el
+      // super admin.
+      marcarMigracionDashboard();
+      return INITIAL_ROLES;
+    }
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
       const lista = (parsed as Rol[]).map(rol => {
@@ -6702,22 +6719,44 @@ const leerRolesPersistidos = (): Rol[] => {
       // "Mesera" se deja como está y la semilla no duplica por clave de género.
       const normalizar = (v: string) =>
         v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      // §3: "Dashboard" ya no es un permiso asignable: se le quita la clave
-      // "Dashboard::Dashboard" a todo rol que no sea Administrador.
-      const listaSinDashboard = lista.map(rol => {
-        if (normalizar(rol.nombre) === "administrador") return rol;
-        const accesosSinDash: AccesosMap = { ...rol.accesos };
-        delete accesosSinDash[DASHBOARD_PERM_KEY];
-        return { ...rol, accesos: accesosSinDash };
-      });
-      const yaHayMesero = listaSinDashboard.some(r => normalizar(r.nombre) === "mesero");
-      const listaFinal = yaHayMesero
-        ? listaSinDashboard
-        : listaSinDashboard.map(r => (normalizar(r.nombre) === "mesera" ? { ...r, nombre: "Mesero" } : r));
-      return completarRolesSemilla(listaFinal);
+      const yaHayMesero = lista.some(r => normalizar(r.nombre) === "mesero");
+      const listaRenombrada = yaHayMesero
+        ? lista
+        : lista.map(r => (normalizar(r.nombre) === "mesera" ? { ...r, nombre: "Mesero" } : r));
+      // § Dashboard: migración ÚNICA (bandera "sivpro.migracion.dashboardPermiso.v1").
+      // En datos viejos la clave "Dashboard::Dashboard" podía estar en cualquier
+      // rol (fue una celda más del editor). La primera vez se la quita a todo
+      // rol que no sea Administrador y se la agrega a Administrador si faltaba.
+      // Después de esa primera ejecución NUNCA se vuelve a tocar el permiso:
+      // los cambios que haga el super admin en Crear/Editar rol se conservan
+      // al recargar la página.
+      let migrados = listaRenombrada;
+      try {
+        if (!localStorage.getItem(MIGRACION_DASHBOARD_PERMISO_KEY)) {
+          migrados = listaRenombrada.map(rol => {
+            if (normalizar(rol.nombre) === "administrador") {
+              if (rol.accesos[DASHBOARD_PERM_KEY]?.includes("Ver")) return rol;
+              return { ...rol, accesos: { ...rol.accesos, [DASHBOARD_PERM_KEY]: ["Ver"] } };
+            }
+            if (!(DASHBOARD_PERM_KEY in rol.accesos)) return rol;
+            const accesosSinDash: AccesosMap = { ...rol.accesos };
+            delete accesosSinDash[DASHBOARD_PERM_KEY];
+            return { ...rol, accesos: accesosSinDash };
+          });
+          // Se persisten los roles migrados ANTES de marcar la bandera: si la
+          // escritura falla, la bandera no queda puesta y se reintenta en la
+          // próxima carga.
+          localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(migrados));
+          marcarMigracionDashboard();
+        }
+      } catch {
+        // localStorage bloqueado: la migración se aplica solo en memoria.
+      }
+      return completarRolesSemilla(migrados);
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+    marcarMigracionDashboard();
   }
   return INITIAL_ROLES;
 };
@@ -7765,9 +7804,18 @@ export default function App() {
   // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
   // los id solo son anclas de migración.
   const isNamedAdmin = esRolAdministrador(loggedInRol);
-  // §3: el Dashboard es EXCLUSIVO del Administrador (detectado por nombre del
-  // rol); ya no depende del permiso "Dashboard::Dashboard".
-  const hasDashboardAccess = isNamedAdmin;
+  // § Dashboard por PERMISO, no por nombre de rol: la cuenta super admin
+  // (Gloria, USR-001 / gloria@lasirena.com) siempre; los demás únicamente con
+  // el privilegio "Ver" de "Dashboard::Dashboard" del rol activo. El rol
+  // "Administrador" lo conserva porque su semilla (fullAccesos) ya incluye la
+  // clave y la migración única "sivpro.migracion.dashboardPermiso.v1" se la
+  // agrega a los datos viejos; si super admin se la quita, deja de verlo.
+  const esSuperAdminSesion =
+    loggedInUser !== null &&
+    (loggedInUser.id === "USR-001" ||
+      loggedInUser.correo.trim().toLowerCase() === "gloria@lasirena.com");
+  const hasDashboardAccess =
+    esSuperAdminSesion || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
 
   // Cliente público = solo el rol "Cliente" y sin ficha de empleado. El
@@ -7795,17 +7843,18 @@ export default function App() {
     toast.success(`Ahora estás como ${siguiente.nombre}`);
     // Si la pantalla actual ya no está permitida por el rol nuevo, vuelve a la
     // primera pantalla que ese rol sí permite. "dashboard" solo lo es si el rol
-    // siguiente es Administrador (§3).
-    const esAdminSiguiente = normalizarNombreRol(siguiente.nombre) === "administrador";
+    // siguiente tiene el permiso Dashboard (o la sesión es super admin).
+    const dashSiguiente =
+      esSuperAdminSesion || (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
     const permKeyActual = SCREEN_PERM_KEY[screen];
     const permitida =
       screen === "dashboard"
-        ? esAdminSiguiente
+        ? dashSiguiente
         : permKeyActual
           ? (siguiente.accesos[permKeyActual]?.includes("Ver") ?? false)
           : true; // "inicio" y pantallas sin permKey siempre son un fallback seguro
     if (!permitida) {
-      navigate(esAdminSiguiente ? "dashboard" : "inicio");
+      navigate(dashSiguiente ? "dashboard" : "inicio");
     }
   };
 
@@ -8407,11 +8456,12 @@ export default function App() {
     escribirRolActivo(user.id, inicialId);
     const nextRole = rolInicial?.nombre ?? "Empleado";
     // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
-    // Dashboard solo si el rol activo es Administrador (§3); si no, "Inicio"
-    // (que siempre está disponible para empleados y no depende de pantalla
-    // asignada).
-    const rolInicialEsAdmin = (rolInicial?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador";
-    const hasDashRolInicial = rolInicialEsAdmin;
+    // Dashboard solo si la sesión es super admin o el rol activo tiene el
+    // permiso "Dashboard::Dashboard"; si no, "Inicio" (siempre disponible).
+    const userEsSuperAdmin =
+      user.id === "USR-001" || user.correo.trim().toLowerCase() === "gloria@lasirena.com";
+    const hasDashRolInicial =
+      userEsSuperAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
     const nextScreen = esClientePublico
       ? "landing"
       : hasDashRolInicial
@@ -8814,9 +8864,10 @@ export default function App() {
   if (isLoggedIn && isAdminRole && screen === "inicio" && hasDashboardAccess) {
     setTimeout(() => navigate("dashboard"), 0);
   }
-  // §3: el detalle de la gráfica (sales-chart) solo lo abre el Administrador;
-  // si otro rol llega ahí, se le devuelve a "inicio".
-  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !isNamedAdmin) {
+  // El detalle de la gráfica (sales-chart) forma parte del Dashboard: solo lo
+  // abre quien tiene el permiso Dashboard (o la super admin); si otro rol
+  // llega ahí, se le devuelve a "inicio".
+  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !hasDashboardAccess) {
     setTimeout(() => navigate("inicio"), 0);
   }
   if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "inicio" && screen !== "profile" && screen !== "store-profile") {
@@ -9123,7 +9174,6 @@ export default function App() {
                   loggedInUser={loggedInUser}
                   loggedInRoleName={loggedInRoleName}
                   tieneRolActivo={loggedInRol !== null}
-                  isNamedAdmin={isNamedAdmin}
                   hasDashboardAccess={hasDashboardAccess}
                   accesos={loggedInAccesos}
                 />
