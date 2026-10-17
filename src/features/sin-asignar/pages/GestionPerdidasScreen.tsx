@@ -691,7 +691,7 @@ export function GestionPerdidasScreen({
                         <button
                           onClick={() => setDetailItem(p)}
                           title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -705,7 +705,7 @@ export function GestionPerdidasScreen({
                         <button
                           onClick={() => setDeleteId(p.id)}
                           title="Eliminar"
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

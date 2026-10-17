@@ -605,8 +605,10 @@ export function GestionUsuariosScreen({
 
       {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
           el número de filas por página se calcula arriba para que siempre quepan
-          enteras y la navegación sea solo por el paginador. */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+          enteras y la navegación sea solo por el paginador. Sin `flex-1 min-h-0`
+          (punto 2.5): en pantalla locked la card se estiraba hasta el fondo y
+          dejaba un hueco vacío bajo la última fila. */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">

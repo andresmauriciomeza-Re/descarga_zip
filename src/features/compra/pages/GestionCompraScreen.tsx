@@ -15,6 +15,7 @@ import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { abrirPicker } from "@/shared/utils/abrirFecha";
 import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import {
@@ -240,16 +241,22 @@ function TablaItemsFactura({
   // Punto 3.3: columnas LITERALES del plan. La suma de anchos fijos (248 px +
   // acciones) deja ~250 px de sobra para "Nombre" a 1366×768, así que la tabla
   // NO muestra scroll horizontal; la Medida va en su propia columna.
-  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario", "IVA"];
+  // Punto 2.8c: se agrega "Subtotal" a la lista (antes sólo se veía en el pie)
+  // y las columnas de dinero se alinean a la derecha.
+  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario", "IVA", "Subtotal"];
   const ANCHOS: Record<string, number> = {
     Cantidad: 64,
     Medida: 56,
     "Monto unitario": 68,
     IVA: 60,
+    Subtotal: 88,
   };
   const ANCHO_ACCIONES = 64;
   const columnCount = headers.length + 1;
-  const td = "align-middle px-1.5 " + (enPagina ? "py-2" : "py-2.5");
+  const td = "align-middle px-1.5 " + (enPagina ? "py-1.5" : "py-2.5");
+  /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
+      como columnas de datos (punto 2.8c). */
+  const NUMERICA = new Set(["Cantidad", "Monto unitario", "IVA", "Subtotal"]);
 
   return (
     <div
@@ -270,14 +277,17 @@ function TablaItemsFactura({
 
       <div
         className={
-          "flex-1 min-h-0 overflow-auto " +
-          (enPagina && items.length === 0 ? "flex items-center" : "")
+          // Punto 2.8c: sin `flex items-center` cuando está vacío — centraba
+          // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
+          // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
+          // pegado a la cabecera.
+          "flex-1 min-h-0 overflow-auto"
         }
       >
+        {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
+            `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
-          className={
-            "table-fixed w-full min-w-[500px] text-sm " + (enPagina ? "[&_td]:py-2" : "")
-          }
+          className={"table-fixed w-full min-w-[500px] text-sm "}
         >
           <colgroup>
             {headers.map((h) => (
@@ -298,7 +308,8 @@ function TablaItemsFactura({
                 <th
                   key={h}
                   className={
-                    "px-1.5 text-left font-semibold " +
+                    "px-1.5 font-semibold " +
+                    (NUMERICA.has(h) ? "text-right " : "text-left ") +
                     (enPagina ? "py-1.5 bg-muted" : "py-2.5")
                   }
                 >
@@ -314,7 +325,7 @@ function TablaItemsFactura({
               <tr>
                 <td
                   colSpan={columnCount}
-                  className="text-center text-xs text-muted-foreground px-3 py-8"
+                  className="text-center text-[11px] font-medium text-muted-foreground/80 px-3 py-6"
                 >
                   {enPagina ? "Aún no has agregado ítems" : "Sin ítems agregados"}
                 </td>
@@ -335,18 +346,24 @@ function TablaItemsFactura({
                         {row.nombre}
                       </div>
                     </td>
-                    <td className={td + " text-sm"}>{row.cantidad}</td>
+                    {/* Punto 2.8c: columnas numéricas alineadas a la derecha. */}
+                    <td className={td + " text-sm text-right"}>{row.cantidad}</td>
                     {/* Punto 3.3: Medida en su propia columna (solo lectura;
                         la define el ítem del catálogo). */}
                     <td className={td + " text-xs text-muted-foreground"}>{row.unidad}</td>
-                    <td className={td + " text-sm whitespace-nowrap"}>
+                    <td className={td + " text-sm text-right whitespace-nowrap"}>
                       {fmtCOP(row.precioUnitario)}
                     </td>
-                    <td className={td + " text-xs text-muted-foreground"}>
+                    <td className={td + " text-xs text-muted-foreground text-right"}>
                       <span className="text-[13px] text-foreground/80">{row.iva}%</span>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
                       </p>
+                    </td>
+                    {/* Punto 2.8c: el subtotal de la línea se veía sólo en el
+                        pie; ahora tiene su columna, junto a IVA. */}
+                    <td className={td + " text-sm font-semibold text-foreground text-right whitespace-nowrap"}>
+                      {fmtCOP(l.subtotalConIva)}
                     </td>
                     <td className={td + " whitespace-nowrap"}>
                       <div className="flex items-center gap-1">
@@ -374,26 +391,36 @@ function TablaItemsFactura({
             )}
           </tbody>
         </table>
-      </div>
 
-      {items.length > 0 && (
-        <div className="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 shrink-0 px-3 py-2 border-t border-border">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            {modoIva ? "Subtotal sin IVA" : "Subtotal"}
-          </span>
-          <span className="text-sm font-semibold text-foreground">
-            {fmtCOP(totales.baseSinIva)}
-          </span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            IVA
-          </span>
-          <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.montoIva)}</span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Total pagado
-          </span>
-          <span className="text-lg font-bold text-foreground">{fmtCOP(totales.total)}</span>
-        </div>
-      )}
+        {/* Punto 2.8c: el pie de totales vive DENTRO del scroller, pegado a la
+            última fila. Antes era hermano del scroller y quedaba anclado al
+            fondo de la columna, dejando un hueco grande (medido: 345 px a
+            1366×768 con 1 ítem) entre la tabla y "Total pagado". Con muchas
+            filas el scroller sigue absorbiendo el desborde. */}
+        {items.length > 0 && (
+          <div
+            className={
+              "flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 px-3 py-2 border-t border-border" +
+              (enPagina ? " min-w-[500px]" : "")
+            }
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              {modoIva ? "Subtotal sin IVA" : "Subtotal"}
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {fmtCOP(totales.baseSinIva)}
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              IVA
+            </span>
+            <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.montoIva)}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Total pagado
+            </span>
+            <span className="text-lg font-bold text-foreground">{fmtCOP(totales.total)}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -482,6 +509,9 @@ function CompraForm({
   const itemRef = useRef<HTMLDivElement>(null);
   /** Input de Nombre: recupera el foco tras agregar o actualizar una fila. */
   const nombreRef = useRef<HTMLInputElement>(null);
+  /** Fecha de factura: `abrirPicker` la abre con clic/foco (Chrome ya no
+      despliega el calendario sólo con enfocar el campo — punto 2.8b). */
+  const fechaFacturaRef = useRef<HTMLInputElement>(null);
   /** Fila en edición: el lápiz de la tabla carga sus datos en este formulario
    *  y el botón pasa a "Actualizar" (pantalla completa). */
   const [editando, setEditando] = useState<string | null>(null);
@@ -609,7 +639,11 @@ function CompraForm({
     // P14: el buscador mira un catálogo u otro según el tipo de ítem elegido.
     if (itemTipo === "producto") {
       // Mismo criterio que con los insumos: sólo productos disponibles.
-      const base = (productos ?? []).filter((p) => p.estado === "Disponible");
+      // Punto 3.2: además sólo "Producto terminado" (bebidas y reventa); los
+      // "Producto insumo" (Pizzas, Lasañas) se producen, no se compran.
+      const base = (productos ?? []).filter(
+        (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
+      );
       const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
       // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
       // calcular) se usa el precio de venta como monto de referencia.
@@ -991,16 +1025,21 @@ function CompraForm({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden"
+                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row"
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
               {/* Columna IZQUIERDA — formulario (50 %). En el modal es solo un
-                  grupo vertical: mantiene el mismo flujo de antes. */}
+                  grupo vertical: mantiene el mismo flujo de antes. Punto 2.8a:
+                  en página NO scrollea por dentro; con la raíz `overflow-hidden`
+                  eso sólo era posible porque el formulario entero cabía, y el
+                  scroll interno dejaba un hueco muerto. Si algo no cabe, ahora
+                  lo empuja la tabla (que sí scrollea) o se ve en móvil, donde
+                  la columna apila y la raíz scrollea. */}
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:overflow-y-auto"
+                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1131,9 +1170,12 @@ function CompraForm({
                           Fecha de factura <span className="text-red-500">*</span>
                         </label>
                         <input
+                          ref={fechaFacturaRef}
                           type="date"
                           value={fechaFactura}
                           onChange={(e) => setFechaFactura(e.target.value)}
+                          onClick={() => abrirPicker(fechaFacturaRef)}
+                          onFocus={() => abrirPicker(fechaFacturaRef)}
                           onBlur={() => marcarTocado("fechaFactura")}
                           max={today}
                           className={campoCls(
@@ -1163,9 +1205,12 @@ function CompraForm({
                           Fecha de factura <span className="text-red-500">*</span>
                         </label>
                         <input
+                          ref={fechaFacturaRef}
                           type="date"
                           value={fechaFactura}
                           onChange={(e) => setFechaFactura(e.target.value)}
+                          onClick={() => abrirPicker(fechaFacturaRef)}
+                          onFocus={() => abrirPicker(fechaFacturaRef)}
                           onBlur={() => marcarTocado("fechaFactura")}
                           max={today}
                           className={campoCls(
@@ -1340,7 +1385,39 @@ function CompraForm({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {isPage && <p className={seccionCls}>Agregar ítem</p>}
+                  {/* Punto 2.6: en página el "Tipo de ítem" sube a la fila de
+                      título (a la derecha) en vez de ocupar el hueco de Medida;
+                      el formulario ya no lo recibe (`campoExtra` solo en el
+                      modal, donde el título sigue dentro de la card). */}
+                  {isPage ? (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className={seccionCls}>Agregar ítem</p>
+                      <div className="flex items-center gap-2">
+                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                          Tipo de ítem
+                        </label>
+                        <SegmentadoButtons
+                          valor={itemTipo}
+                          onChange={(valor) => {
+                            const nuevo = valor as TipoItem;
+                            if (nuevo === itemTipo) return;
+                            setItemTipo(nuevo);
+                            // Al cambiar de catálogo el ítem cargado ya no
+                            // sirve: se limpia la fila y el buscador empieza
+                            // a mirar la otra lista.
+                            limpiarFilaInsumo();
+                          }}
+                          disabled={ivaIncluido === null}
+                          opciones={[
+                            { valor: "insumo", etiqueta: "Insumo" },
+                            { valor: "producto", etiqueta: "Producto" },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={seccionCls}>Agregar ítem</p>
+                  )}
                   <CompactInsumoForm
                     containerRef={itemRef}
                     titulo={isPage ? "" : "Agregar ítem"}
@@ -1383,16 +1460,22 @@ function CompraForm({
                     compacto={isPage}
                     buttonLabel={editando ? "Actualizar" : "Agregar"}
                     variante="compacta"
-                    // P11: la unidad sale del ítem seleccionado, no se elige.
-                    ocultarMedida
+                    // P11 + punto 2.6: en el modal la Medida sigue oculta (la
+                    // unidad la define el insumo); en página vuelve a la fila
+                    // de la card como texto de solo lectura, igual que en Orden
+                    // de Compra, para no tener dos controles de medida.
+                    ocultarMedida={!isPage}
+                    medidaSoloLectura={isPage}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
                     placeholder={
                       itemTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
                     }
-                    // P14 + punto 3.2: selector de tipo de ítem en el hueco
-                    // de Medida; 2 opciones → control segmentado.
+                    // Punto 2.6: el selector de tipo vive en el hueco de
+                    // Medida SOLO en el modal; en página ya subió a la fila de
+                    // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
+                      isPage ? undefined : (
                       <div className="min-w-[118px]">
                         <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
                           Tipo de ítem
@@ -1415,6 +1498,7 @@ function CompraForm({
                           ]}
                         />
                       </div>
+                      )
                     }
                   />
                   {/* Aviso de insumos/total: en pantalla completa va justo
@@ -1998,12 +2082,13 @@ export function GestionCompraScreen({
         />
       </div>
 
-      {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
-          (se pagina en filas fijas de 5); sólo queda scroll horizontal en
-          tablet y scroll vertical en movil (tarjetas). El paginador queda
-          fuera y debajo de la card. */}
-      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+      {/* Punto 2.5: la card medía todo el alto restante y se estiraba hasta el
+          fondo (hueco vacío bajo la última fila). Ahora mide su contenido y el
+          paginador queda pegado debajo. La tabla se pagina en filas fijas de 5;
+          sólo queda scroll horizontal en tablet y scroll vertical en movil
+          (tarjetas). */}
+      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+        <div className="overflow-x-auto">
           {/* Escritorio/tablet (>=768px): tabla. La columna Fecha sólo existe
               desde 1440px; por debajo va bajo el N° de Factura. */}
           <table className="hidden md:table w-full table-fixed md:min-w-[720px]">

@@ -790,7 +790,12 @@ export function OrdenModal({
     // Punto 3.3: el buscador mira un catálogo u otro según el tipo de ítem
     // elegido (mismo criterio que la Nueva compra).
     if (aTipoItem === "producto") {
-      const base = (productos ?? []).filter((p) => p.estado === "Disponible");
+      // Punto 3.2: sólo se compran "Producto terminado" (bebidas y reventa).
+      // Con sólo `estado === "Disponible"` entraban también Pizzas y Lasañas,
+      // que son "Producto insumo" (se producen, no se compran al proveedor).
+      const base = (productos ?? []).filter(
+        (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
+      );
       const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
       // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
       // calcular) se usa el precio de venta como monto de referencia.
@@ -1291,7 +1296,38 @@ export function OrdenModal({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {isPage && <p className={seccionCls}>Agregar ítem</p>}
+                  {/* Punto 2.6: en página el "Tipo de ítem" sale del hueco de
+                      Medida y sube a la fila de título, a la derecha del
+                      título; el formulario ya no lo recibe (`campoExtra` solo
+                      en el modal, donde el título sigue dentro de la card). */}
+                  {isPage ? (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className={seccionCls}>Agregar ítem</p>
+                      <div className="flex items-center gap-2">
+                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                          Tipo de ítem
+                        </label>
+                        <SegmentadoButtons
+                          valor={aTipoItem}
+                          onChange={(valor) => {
+                            const nuevo = valor as "insumo" | "producto";
+                            if (nuevo === aTipoItem) return;
+                            setATipoItem(nuevo);
+                            // Al cambiar de catálogo el ítem cargado ya no
+                            // sirve: se limpia la fila y el buscador empieza
+                            // a mirar la otra lista.
+                            limpiarFilaInsumo();
+                          }}
+                          opciones={[
+                            { valor: "insumo", etiqueta: "Insumo" },
+                            { valor: "producto", etiqueta: "Producto" },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={seccionCls}>Agregar ítem</p>
+                  )}
                   <CompactInsumoForm
                     containerRef={sugRef}
                     titulo={isPage ? "" : "Agregar ítem"}
@@ -1339,9 +1375,11 @@ export function OrdenModal({
                     placeholder={
                       aTipoItem === "producto" ? "Buscar producto..." : "Buscar insumo..."
                     }
-                    // Punto 3.3: selector de tipo de ítem en el hueco junto a
-                    // Medida; 2 opciones → control segmentado (Insumo por defecto).
+                    // Punto 2.6: el selector de tipo vive en el hueco de
+                    // Medida SOLO en el modal; en página ya subió a la fila de
+                    // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
+                      isPage ? undefined : (
                       <div className="min-w-[118px]">
                         <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
                           Tipo de ítem
@@ -1363,6 +1401,7 @@ export function OrdenModal({
                           ]}
                         />
                       </div>
+                      )
                     }
                   />
                   {/* Aviso de insumos: en pantalla completa va justo debajo de
@@ -2124,12 +2163,15 @@ interface Props {
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
+  /** Punto 3.2: catálogo de Productos para el buscador "Producto" del modal
+   *  que se abre desde este listado (antes llegaba `undefined` y salía vacío). */
+  productos?: Producto[];
 }
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+  insumos, setInsumos, productos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
@@ -2486,12 +2528,13 @@ export function OrdenCompraScreen({
         />
       </div>
 
-      {/* La card ocupa todo el alto que queda bajo el header y el buscador. La
-          tabla NO hace scroll vertical: se pagina en filas fijas de 5; sólo
-          queda scroll horizontal en tablet y scroll vertical en móvil
-          (tarjetas). El paginador queda fuera y debajo de la card. */}
-      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+      {/* Punto 2.5: la card medía todo el alto restante y se estiraba hasta el
+          fondo (hueco vacío bajo la última fila). Ahora mide su contenido y el
+          paginador queda pegado debajo. La tabla NO hace scroll vertical: se
+          pagina en filas fijas de 5; sólo queda scroll horizontal en tablet y
+          scroll vertical en móvil (tarjetas). */}
+      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+        <div className="overflow-x-auto">
           {/* Escritorio/tablet (>=768px): tabla. Las 3 columnas de dinero y la
               fecha sólo existen desde 1440px; por debajo se fusionan en Total y
               la fecha va bajo el N° de orden. */}
@@ -2629,7 +2672,7 @@ export function OrdenCompraScreen({
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
                               title="Registrar recepción"
-                              className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
+                              className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
                             >
                               <ClipboardCheck className="w-3.5 h-3.5" />
                               {/* Sólo desde 1440px: por debajo el botón va con
@@ -2745,7 +2788,7 @@ export function OrdenCompraScreen({
                         <button
                           onClick={() => onAbrirRecepcion?.(o)}
                           title="Registrar recepción"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
                         >
                           <ClipboardCheck className="w-3.5 h-3.5" /> OC
                         </button>
@@ -2781,6 +2824,9 @@ export function OrdenCompraScreen({
             orden={modal.orden}
             proveedores={proveedores}
             insumos={insumos}
+            // Punto 3.2: sin el catálogo el buscador "Producto" de este modal
+            // no tenía con qué filtrar y quedaba siempre vacío.
+            productos={productos}
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}

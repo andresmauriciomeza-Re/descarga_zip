@@ -425,7 +425,7 @@ export function GestionAgendaScreen() {
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={()=>setDetailItem(a)} title="Ver detalle"
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer"><Eye className="w-4 h-4"/></button>
+                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"><Eye className="w-4 h-4"/></button>
                       <button onClick={()=>setEditItem({...a,tareas:[...a.tareas]})} title="Editar"
                         className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4"/></button>
                       <EstadoSwitch activo={a.activo} onToggle={()=>toggleEstado(a.id)}/>

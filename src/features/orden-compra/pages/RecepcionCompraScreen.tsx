@@ -9,6 +9,7 @@ import {
 } from "@/features/compras/services/inventario";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
+import { abrirPicker } from "@/shared/utils/abrirFecha";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import {
   ConfirmModal,
@@ -704,10 +705,13 @@ export function RecepcionCompraScreen({
         </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL ��� dos columnas (mismo patrón que "Crear Producto") */}
+      {/* CONTENIDO PRINCIPAL — dos columnas (mismo patrón que "Crear Producto").
+          Cada columna scrollea por dentro porque la raíz de esta pantalla es
+          `h-full overflow-hidden` (pantalla locked): sin ese scroll, el
+          contenido por debajo del viewport quedaría inalcanzable. */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border">
           {/* =========================================================
-              COLUMNA IZQUIERDA ��� ORDEN DE COMPRA (solo lectura)
+              COLUMNA IZQUIERDA — ORDEN DE COMPRA (solo lectura)
           ========================================================= */}
           <div className="w-full lg:w-1/2 overflow-y-auto pr-1">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
@@ -892,6 +896,8 @@ export function RecepcionCompraScreen({
                     onChange={(e) =>
                       setFechaFactura(e.target.value)
                     }
+                    onClick={() => abrirPicker(fechaFacturaRef)}
+                    onFocus={() => abrirPicker(fechaFacturaRef)}
                     onBlur={() => marcarTocado("fechaFactura")}
                     max={today}
                     className={campoCls(
@@ -1316,7 +1322,10 @@ export function RecepcionCompraScreen({
                       />
                     </div>
 
-                    {/* Medida — select personalizado (mismo componente que Nueva Compra) */}
+                    {/* Medida — select personalizado (mismo componente que Nueva
+                        Compra). Punto 2.7: a la misma altura que los inputs
+                        vecinos (`compactInputCls` = py-2 ≈ 34 px) y con el mismo
+                        padding/redondeo; antes era h-11 (44 px) y desentonaba. */}
                     <div className="w-16 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         Medida
@@ -1325,7 +1334,7 @@ export function RecepcionCompraScreen({
                         value={exUnidad}
                         onChange={setExUnidad}
                         ariaLabel="Medida"
-                        fieldClassName="bg-muted border border-border text-foreground h-11 rounded-lg"
+                        fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-xs"
                       />
                     </div>
 
