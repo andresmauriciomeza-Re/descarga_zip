@@ -362,8 +362,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       </div>
 
       {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
-          5 filas por página y navegación solo por el paginador. */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 flex-1 min-h-0">
+          5 filas por página y navegación solo por el paginador. Sin `flex-1
+          min-h-0`: en pantalla locked la raíz ocupa el viewport y la card se
+          estiraba hasta el fondo dejando un hueco vacío bajo la última fila.
+          Ahora la card mide su contenido y el paginador queda pegado debajo. */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">

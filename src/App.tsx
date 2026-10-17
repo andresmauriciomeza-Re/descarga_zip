@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Banknote,
-  BarChart2,
   Check,
   CheckCircle,
   ChevronDown,
@@ -29,7 +28,6 @@ import {
   Menu,
   Minus,
   Moon,
-  MoreHorizontal,
   Package,
   PackageCheck,
   Phone,
@@ -895,6 +893,11 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
 
+/** Nombre del ítem de inicio de la barra lateral y del breadcrumb para los
+ *  roles SIN permiso Dashboard (la "casita" de siempre). Con el permiso, la
+ *  misma casita se llama "Dashboard". */
+const ETIQUETA_INICIO_EMPLEADO = "Menú";
+
 const NAV_SECTIONS = [
   {
     key: "dashboard",
@@ -911,12 +914,12 @@ const NAV_SECTIONS = [
   },
   {
     key: "inicio",
-    label: "Inicio",
+    label: ETIQUETA_INICIO_EMPLEADO,
     Icon: Home,
     items: [
       {
         screen: "inicio" as Screen,
-        label: "Inicio",
+        label: ETIQUETA_INICIO_EMPLEADO,
         Icon: Home,
       },
     ],
@@ -1442,7 +1445,7 @@ function PublicNav({
               onClick={() =>
                 navigate(isStaff ? "store-profile" : "client-profile")
               }
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
+              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
                 loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
               }`}
               title="Mi perfil"
@@ -1512,7 +1515,7 @@ function AdminTopBar({
 }) {
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
-    inicio: "Inicio",
+    inicio: ETIQUETA_INICIO_EMPLEADO,
     "manage-products": "Gestión de productos",
     orders: "Gestión de ventas",
     clients: "Gestión de clientes",
@@ -1554,9 +1557,9 @@ function AdminTopBar({
           onClick={() => navigate(homeScreen)}
           className="hover:text-foreground transition-colors cursor-pointer shrink-0"
         >
-          {homeScreen === "dashboard" ? "Dashboard" : "Inicio"}
+          {homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO}
         </button>
-        {current !== "dashboard" && (
+        {current !== homeScreen && (
           <>
             <ChevronRight className="w-3.5 h-3.5 shrink-0" />
             <span className="text-foreground font-medium min-w-0 truncate">
@@ -1613,195 +1616,69 @@ function AdminTopBar({
 
 function BottomNav({
   navigate,
-  cart,
   current,
-  onMore,
   isLoggedIn,
+  isStaff,
+  loggedInUser,
+  onLogin,
 }: {
   navigate: (s: Screen) => void;
-  cart: CartItem[];
   current: Screen;
-  onMore: () => void;
   isLoggedIn: boolean;
+  isStaff: boolean;
+  loggedInUser: { iniciales: string; avatarColor: string } | null;
+  /** Abre el modal de Iniciar sesión (lo que hacía el botón "Más"). */
+  onLogin: () => void;
 }) {
-  const count = cart.reduce((s, i) => s + i.quantity, 0);
   const items = [
     { s: "landing" as Screen, Icon: Home, label: "Inicio" },
     ...(isLoggedIn
       ? [{ s: "mis-pedidos" as Screen, Icon: ShoppingBag, label: "Mis pedidos" }]
       : []),
     { s: "catalog" as Screen, Icon: Grid, label: "Menú" },
-    {
-      s: "cart" as Screen,
-      Icon: ShoppingCart,
-      label: "Carrito",
-      badge: count,
-    },
   ];
+  // Punto 2.1: "Carrito" y "Más" dejan la barra inferior. El carrito ya vive
+  // en el botón rojo del header (y en el badge del contenido), y lo que antes
+  // abría el cajón "Más" ahora es "Perfil": mismo destino que el avatar del
+  // header (`store-profile` para staff / `client-profile` para cliente, para
+  // no chocar con el guard de rutas del panel).
+  const perfilScreen: Screen = isStaff ? "store-profile" : "client-profile";
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border md:hidden">
       <div className="flex items-center justify-around h-16">
-        {items.map(({ s, Icon, label, badge }) => (
+        {items.map(({ s, Icon, label }) => (
           <button
             key={s}
             onClick={() => navigate(s)}
             className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === s ? "text-primary" : "text-muted-foreground"}`}
           >
-            <div className="relative">
-              <Icon className="w-5 h-5" />
-              {badge != null && badge > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {badge}
-                </span>
-              )}
-            </div>
+            <Icon className="w-5 h-5" />
             <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">{label}</span>
           </button>
         ))}
-        <button
-          onClick={onMore}
-          className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
-        >
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-xs font-medium">Más</span>
-        </button>
+        {isLoggedIn ? (
+          <button
+            onClick={() => navigate(perfilScreen)}
+            className={`flex flex-col items-center gap-1 py-2 px-3 cursor-pointer transition-colors ${current === perfilScreen ? "text-primary" : "text-muted-foreground"}`}
+          >
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold leading-none shadow-sm ${loggedInUser?.avatarColor ?? "bg-primary"}`}
+            >
+              {(loggedInUser?.iniciales.charAt(0) ?? "U").toUpperCase()}
+            </span>
+            <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">Perfil</span>
+          </button>
+        ) : (
+          <button
+            onClick={onLogin}
+            className="flex flex-col items-center gap-1 py-2 px-3 cursor-pointer text-muted-foreground"
+          >
+            <UserCircle className="w-5 h-5" />
+            <span className="text-xs font-medium min-w-0 truncate max-w-[5rem]">Ingresar</span>
+          </button>
+        )}
       </div>
     </nav>
-  );
-}
-
-// ─────────────────────────── MOBILE DRAWER ───────────────────────────
-
-function MobileDrawer({
-  open,
-  onClose,
-  navigate,
-  onLogin,
-  cart,
-  isLoggedIn,
-  onLogout,
-}: {
-  open: boolean;
-  onClose: () => void;
-  navigate: (s: Screen) => void;
-  onLogin: () => void;
-  cart: CartItem[];
-  isLoggedIn: boolean;
-  onLogout: () => void;
-}) {
-  const count = cart.reduce((s, i) => s + i.quantity, 0);
-  const rows = [
-    {
-      s: "cart" as Screen,
-      Icon: ShoppingCart,
-      label: "Carrito",
-      badge: count,
-    },
-    { s: "clients" as Screen, Icon: Users, label: "Clientes" },
-    {
-      s: "product-categories" as Screen,
-      Icon: Tag,
-      label: "Categorías",
-    },
-    {
-      s: "supplies" as Screen,
-      Icon: Package,
-      label: "Insumos",
-    },
-    {
-      s: "reports" as Screen,
-      Icon: BarChart2,
-      label: "Informes",
-    },
-    ...(isLoggedIn
-      ? [
-          {
-            s: "dashboard" as Screen,
-            Icon: TrendingUp,
-            label: "Panel de control",
-          },
-        ]
-      : []),
-  ];
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/40 md:hidden"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{
-              type: "spring",
-              damping: 26,
-              stiffness: 320,
-            }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl shadow-2xl md:hidden"
-          >
-            <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-4" />
-            <div className="px-4 pb-8 space-y-1 max-h-[70vh] overflow-y-auto">
-              {rows.map(({ s, Icon, label, badge }: any) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    navigate(s);
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <div className="relative">
-                    <Icon className="w-5 h-5 text-primary" />
-                    {badge > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {badge}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-base font-medium text-foreground">
-                    {label}
-                  </span>
-                </button>
-              ))}
-              <div className="border-t border-border my-2" />
-              {isLoggedIn ? (
-                <button
-                  onClick={() => {
-                    onLogout();
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-red-50 transition-colors cursor-pointer text-left"
-                >
-                  <LogOut className="w-5 h-5 text-red-500" />
-                  <span className="text-base font-medium text-red-500">
-                    Cerrar sesión
-                  </span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    navigate("login");
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <UserCircle className="w-5 h-5 text-primary" />
-                  <span className="text-base font-medium text-foreground">
-                    Ingresar
-                  </span>
-                </button>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
   );
 }
 
@@ -1906,7 +1783,11 @@ function LandingScreen({
                   franja roja de ancho completo de más abajo: esa se mantiene
                   igual y las dos conviven. Va dentro de la columna izquierda,
                   debajo de los botones. */}
-              <div className="mt-10 flex flex-wrap w-full items-stretch justify-between gap-x-4 gap-y-2 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
+              {/* grid de 3 columnas IGUALES en una sola fila (antes flex-wrap,
+                  que a 360 px bajaba "30 años / De tradición" a una segunda
+                  fila). `divide-x` conserva los divisores verticales; `min-w-0`
+                  en cada celda evita que la cifra o la etiqueta desborden. */}
+              <div className="mt-10 w-full grid grid-cols-3 items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
                 {[
                   {
                     value: "+5.200",
@@ -1923,7 +1804,7 @@ function LandingScreen({
                 ].map(({ value, label }) => (
                   <div
                     key={label}
-                    className="px-2 sm:px-5 text-center"
+                    className="min-w-0 px-1.5 sm:px-5 text-center"
                   >
                     <p
                       // `clamp` en vez de pasos fijos: las tres celdas se
@@ -2018,13 +1899,11 @@ function LandingScreen({
             </button>
           </div>
 
-          {/* Cards — horizontal scroll on mobile, 4-col on desktop */}
+          {/* Cards — punto 2.2: en móvil pasan a grid de 1 columna (antes
+              carrusel con `overflow-x-auto`, donde la última tarjeta quedaba
+              cortada a 360 px). Escritorio sin cambios. */}
           <div
-            className="flex gap-5 overflow-x-auto md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible pb-2 md:pb-0"
-            style={{
-              scrollbarWidth: "none",
-              WebkitOverflowScrolling: "touch",
-            }}
+            className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4"
           >
             {(() => {
               const normalizar = (valor: string | undefined) =>
@@ -2058,7 +1937,7 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
-                    className="group flex-shrink-0 w-72 md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
+                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
                   >
                     {/* Image */}
                     <div className="relative h-52 bg-muted overflow-hidden">
@@ -4332,21 +4211,23 @@ function AuthLayout({
     "linear-gradient(to bottom, #85613f 0%, #b57740 15%, #4c4a08 35%, #944a1a 50%, #391101 66%, #ca7331 85%, #2a0c01 100%)";
   const RELLENO_OSCURO =
     "linear-gradient(to bottom, #1e120a 0%, #482710 15%, #17120a 30%, #391503 50%, #0a0200 66%, #401b08 85%, #000000 100%)";
-  const FUNDIDO_BORDE = "linear-gradient(to right, #000 92%, transparent 100%)";
   return (
     <div className="relative min-h-screen bg-muted">
       {/* Fondo unico de TODA la pantalla, con IMAGEN POR TEMA.
 
-          `bienvenido-la-sirena-light.webp` (1672x941) y
-          `bienvenido-la-sirena-dark.webp` (1671x941) son las dos versiones de la
-          misma escena de bienvenida: logo de Pizzeria La Sirena, titulo,
-          subtitulo y tres beneficios a la IZQUIERDA; el lado derecho (horno y
-          cocina) es decoracion pura y es donde se apoya la tarjeta.
+          `bienvenido-la-sirena-light.webp` (1994x789) y
+          `bienvenido-la-sirena-dark.webp` (1993x789) son las dos versiones de la
+          misma escena de bienvenida EXTENDIDA (~2.5:1): logo de Pizzeria La
+          Sirena, titulo, subtitulo y tres beneficios a la IZQUIERDA; el lado
+          derecho (horno y cocina) es decoracion pura y es donde se apoya la
+          tarjeta. Su ratio ya cubre holgadamente cualquier escritorio, asi que
+          NO hace falta relleno lateral, copia desenfocada ni mascara de
+          fundido: una sola capa `cover` basta.
 
-          Se usan los .webp (226 KB y 205 KB) y no los .png originales (2.26 MB y
-          2.08 MB) porque el peso al vuelo se reduce ~90%. Los .png renombrados
-          siguen en `src/assets/img/` como respaldo, pero NO se importan, asi que
-          no entran al build.
+          Se usan los .webp (252 KB y 222 KB) y no los .png originales (2.42 MB
+          y 2.20 MB) porque el peso al vuelo se reduce ~90%. Los .png siguen en
+          `src/assets/img/` como respaldo, pero NO se importan, asi que no
+          entran al build.
 
           POR QUE DOS CAPAS Y NO UN `src={darkMode ? a : b}`:
           con un solo `<img>` el cambio de tema obliga a descargar la imagen nueva
@@ -4359,39 +4240,20 @@ function AuthLayout({
           prop desde el `useState` de App, asi que al pulsar la luna la capa
           visible se cruza al instante y sin recargar la pagina.
 
-          POR QUE `background-size: auto 100%` Y NO `cover`:
-          con `cover` la imagen llena los DOS ejes, asi que en una ventana mas
-          ANCHA que su ratio (1.777) se escalaba por el ancho y rebasaba el alto:
-          se recortaba el logo por arriba y los tres beneficios por abajo. Con
-          `auto 100%` la altura SIEMPRE se ve entera (logo, titulo, subtitulo y
-          beneficios incluidos) y lo que sobra es ancho, no alto.
+          CADA CAPA ES UN SOLO DIV HIJO con la imagen del tema:
 
-          ESTRUCTURA DE CADA CAPA (relleno + imagen enmascarada):
+          - `background-size: cover` + `background-position: left center` +
+            `background-repeat: no-repeat` llenan TODO el viewport manteniendo
+            el ratio natural. Gracias al anclaje a la IZQUIERDA, el logo, el
+            titulo, el subtitulo y los tres beneficios (que viven en esa banda
+            izquierda de la foto) SIEMPRE se ven completos y nunca se recortan
+            por ese lado. Cuando la ventana es mas ancha que ~2.5:1 lo que se
+            recorta es solo decoracion por la derecha; `overflow-hidden` del
+            exterior recorta ese desbordamiento.
 
-          1) El div exterior lleva `background: RELLENO_*`, un degradado VERTICAL
-             cuyos paradas son los tonos muestreados en el borde derecho de cada
-             imagen (franja de 40px, de arriba a abajo: pared clara -> beige ->
-             horno -> madera de la mesa -> sombra). Ese mismo degradado rellena
-             todo el hueco que queda a la derecha cuando la ventana es mas ancha
-             que 1.777, y al coincidir con los colores reales del filo no se
-             percibe un panel de color pegado a la foto.
-
-          2) El div interior es la imagen, con `aspect-ratio` propio: su alto es
-             el 100% del contenedor y su ancho se deduce de la relacion natural,
-             es decir EXACTAMENTE el ancho de la foto. Gracias a eso el
-             `mask-image` (3) cae siempre sobre el borde derecho real de la
-             imagen, exista o no hueco.
-
-          3) `mask-image: linear-gradient(to right, #000 92%, transparent 100%)`
-             desvanece el filo derecho de la imagen: los ultimos 8% de su ancho
-             se funden hacia transparente y dejan ver el `RELLENO_*` de atras.
-             Es el degradado horizontal suave que evita el corte brusco.
-
-          `background-position: left center` + `background-repeat: no-repeat`
-          anclan la foto al borde IZQUIERDO, que es donde vive todo su texto:
-          cuando la imagen resulta mas ancha que la ventana se recorta por la
-          derecha (decoracion) y nunca por logo ni textos. `overflow-hidden` en
-          el exterior es lo que recorta ese desbordamiento.
+          - El div exterior lleva `background: RELLENO_*`, un degradado VERTICAL
+            cuyos paradas son los tonos muestreados en el borde derecho de cada
+            imagen. Hoy es SOLO un respaldo por si la imagen tarda en cargar.
 
           El `bg-muted` del contenedor se conserva como red de seguridad para el
           breve instante en que aun no ha llegado ninguna de las dos.
@@ -4409,16 +4271,11 @@ function AuthLayout({
         <div
           style={{
             position: "absolute",
-            left: 0,
-            top: 0,
-            height: "100%",
-            aspectRatio: "1672 / 941",
+            inset: 0,
             backgroundImage: `url(${fondoBienvenidoLight})`,
-            backgroundSize: "auto 100%",
+            backgroundSize: "cover",
             backgroundPosition: "left center",
             backgroundRepeat: "no-repeat",
-            maskImage: FUNDIDO_BORDE,
-            WebkitMaskImage: FUNDIDO_BORDE,
           }}
         />
       </div>
@@ -4432,16 +4289,11 @@ function AuthLayout({
         <div
           style={{
             position: "absolute",
-            left: 0,
-            top: 0,
-            height: "100%",
-            aspectRatio: "1671 / 941",
+            inset: 0,
             backgroundImage: `url(${fondoBienvenidoDark})`,
-            backgroundSize: "auto 100%",
+            backgroundSize: "cover",
             backgroundPosition: "left center",
             backgroundRepeat: "no-repeat",
-            maskImage: FUNDIDO_BORDE,
-            WebkitMaskImage: FUNDIDO_BORDE,
           }}
         />
       </div>
@@ -4510,6 +4362,24 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
     activo: true,
   };
 };
+
+/**
+ * Clases glass para los inputs de Login y Registro. Espejo de `inputCls`
+ * (campo.tsx) pero con fondo translucido sobre la tarjeta de vidrio: en claro
+ * `bg-white/70` + borde negro suave, en oscuro `bg-white/10` + borde blanco
+ * suave, texto blanco y placeholder al 50%. El estado de error pinta un rojo
+ * legible por encima del vidrio. No se tocó `inputCls` porque comparte
+ * clases con los formularios del panel administrativo.
+ */
+function authInputCls(err?: string, base: string = ""): string {
+  const fondo = err
+    ? "border-red-400 bg-red-50/50 dark:bg-red-950/50 dark:border-red-400/80"
+    : "border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/10";
+  const texto =
+    "text-foreground dark:text-white placeholder:text-neutral-500 dark:placeholder:text-white/50";
+  const propia = `w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 ${fondo} ${texto}`;
+  return `${propia}${base ? ` ${base}` : ""}`;
+}
 
 function LoginScreen({
   navigate,
@@ -4640,7 +4510,7 @@ function LoginScreen({
 
   return (
     <AuthLayout
-      contentClassName="items-start justify-center sm:justify-end px-4 sm:px-6 py-6 lg:px-8"
+      contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8 lg:pr-16 xl:pr-12"
       darkMode={darkMode}
       overlay={
         <AnimatePresence>
@@ -4664,40 +4534,42 @@ function LoginScreen({
           espacio sobrante (centrado) y valen 0 cuando no hay, dejando la
           tarjeta arriba y todo accesible con scroll.
 
-          `sm:justify-end` manda la tarjeta a la derecha ya desde 640px y no
-          solo desde `lg`: el fondo de La Sirena ancla a la IZQUIERDA su logo y
-          sus textos, y empujar la tarjeta al borde derecho cuanto antes es lo
-          que evita que se monte sobre ellos en tablet. Por debajo de 544px la
-          tarjeta es de ancho completo, asi que ahi el `justify-center` no se
-          nota. `px-4 sm:px-6 lg:px-8` son los margenes.
+          `sm:justify-end` manda la tarjeta a la derecha ya desde 640px: el
+          fondo de La Sirena ancla a la IZQUIERDA su logo y sus textos, y
+          empujar la tarjeta al borde derecho cuanto antes es lo que evita que
+          se monte sobre ellos. Por debajo de 640px la tarjeta es de ancho
+          completo, asi que ahi el `justify-center` no se nota. `px-4` son los
+          margenes laterales (16px) y `lg:px-8` los ensancha en escritorio.
 
-          El ancho baja de `max-w-lg` a `max-w-md` entre 640px y 1024px: en ese
-          tramo (tablet apaisada y portatiles angostos) los 512px de `max-w-lg`
-          dejaban muy poco lienzo libre a la izquierda. Con 448px la tarjeta
-          sigue comoda y deja ver mas de la imagen. En movil (`w-full` manda) y
-          en escritorio (`lg:max-w-lg`) no cambia nada respecto a antes. */}
+          El ancho es `max-w-[480px]`, propio de esta pantalla: el login es un
+          formulario corto (2 campos) y una tarjeta angosta no se monta sobre
+          el logo de La Sirena ni sobre los tres beneficios del pie de la
+          imagen. Crear cuenta usa `max-w-[540px]`, un poco mas ancho por su
+          grilla de 2 columnas pero aun asi compacto para que quepe en un
+          viewport de 1280x720. En movil `w-full` manda y la
+          tarjeta llena el ancho disponible. */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md lg:max-w-lg p-5"
+        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-      <div className="text-center mb-4">
-        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+      <div className="text-center mb-6">
+        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
-            className="text-2xl font-bold text-foreground"
+            className="text-2xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
             Bienvenido a La Sirena
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
             Ingresa tus datos para continuar
           </p>
         </div>
@@ -4708,9 +4580,9 @@ function LoginScreen({
             handleLogin();
           }}
         >
-        <div className="space-y-2.5 mb-3">
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-1">
+            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
               Correo electrónico
             </label>
             <input
@@ -4729,13 +4601,13 @@ function LoginScreen({
                 aplicar: (campo, err) =>
                   setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
               })}
-              className={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.email ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              className={authInputCls(errors.email, "h-12")}
               {...validacion.ariaCampo("email", errors.email)}
             />
             <MensajeError id={validacion.idError("email")} err={errors.email} />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-foreground mb-1">
+            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
               Contraseña
             </label>
             <PasswordField
@@ -4761,25 +4633,25 @@ function LoginScreen({
               ariaDescribedBy={
                 errors.password ? validacion.idError("password") : undefined
               }
-              cls={`w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errors.password ? "border-red-400 bg-red-50/30" : "border-border"}`}
+              cls={authInputCls(errors.password, "h-12")}
             />
             <MensajeError id={validacion.idError("password")} err={errors.password} />
           </div>
-          <div className="text-right">
-            <button
-              type="button"
-              onClick={() => setShowForgot(true)}
-              className="text-sm text-primary font-medium hover:underline cursor-pointer"
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
-          </div>
+        </div>
+        <div className="text-right mt-2">
+          <button
+            type="button"
+            onClick={() => setShowForgot(true)}
+            className="text-sm text-primary font-medium hover:underline cursor-pointer"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
         </div>
 
         <PrimaryBtn
           type="submit"
           size="md"
-          className="w-full mb-3"
+          className="w-full mt-5 h-12"
           disabled={loading}
         >
           {loading ? (
@@ -4801,7 +4673,7 @@ function LoginScreen({
           </p>
         )}
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-foreground/75 mt-4 dark:text-white/75">
           {"¿No tienes cuenta? "}
           <button
             onClick={() => navigate("register")}
@@ -5434,6 +5306,21 @@ function RegisterScreen({
     (e: React.ChangeEvent<HTMLInputElement>) =>
       setVal(k)(soloDigitos(e.target.value));
 
+  // El botón "Crear cuenta" queda apagado hasta que todos los campos
+  // obligatorios estén llenos, la contraseña cumpla las 5 reglas y el
+  // confirmar coincida. Se recalcula en cada render a partir del estado,
+  // así el check de la lista y el botón nunca se contradicen.
+  const formValido =
+    form.docType !== "" &&
+    form.docNum.trim() !== "" &&
+    form.name.trim() !== "" &&
+    form.email.trim() !== "" &&
+    form.phone.trim() !== "" &&
+    form.password !== "" &&
+    form.confirm !== "" &&
+    validarContrasena(form.password) === null &&
+    form.password === form.confirm;
+
   // ── Trampa de Tab, foco al primer inválido y aria ──
   // Lógica compartida en src/shared/hooks/useValidacionFormulario.ts. El
   // orden coincide con el del tabulador de la tarjeta.
@@ -5667,44 +5554,55 @@ function RegisterScreen({
    };
 
    return (
-    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 sm:px-6 py-4 lg:px-8 lg:py-0" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="my-auto bg-card rounded-2xl shadow-xl border border-border w-full max-w-md p-3"
+        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
       >
-        <div className="text-center mb-1">
-          {/* El logo va exactamente igual que en Login (`h-14`,
-              `mb-2`): mismo tratamiento visual en las dos pantallas de auth.
-              NO se reduce aqui aunque la tarjeta gane alto con ello: romperia
-              la paridad con Login, que no debe tocarse. */}
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-14 w-auto object-contain mx-auto mb-2" />
+        <button
+          onClick={() => navigate("landing")}
+          title="Volver al inicio"
+          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="text-center mb-3">
+          {/* El logo va en `h-10` (40px) con `mb-1`: el registro es la tarjeta
+              mas alta de las dos pantallas de auth, y el area visible real del
+              equipo (Windows 150% + Chrome con pestañas) es de ~1280x585, muy
+              inferior al viewport nominal. El login, mas corto, conserva su
+              `h-16`. */}
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-10 w-auto object-contain mx-auto mb-1" />
 
           <h1
-            className="text-2xl font-bold text-foreground"
+            className="text-xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
             Crear cuenta
           </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Completa tus datos para registrarte
-          </p>
+          {/* Subtitulo "Completa tus datos para registrarte" eliminado: con el
+              area visible real de ~1280x585 la tarjeta no cabia sin scroll y
+              este era el unico bloque que podia quitarse sin tocar inputs,
+              textos ni logo. */}
         </div>
 
         {/* Grid y no `space-y`: hace falta para que los campos puedan COMPARTIR
-            fila. Tres parejas ya la comparten: Tipo doc + Numero (fila propia
-            arriba), Correo + Teléfono y, desde este cambio, Contraseña +
-            Confirmar contraseña. El flag `full` de cada descriptor marca los
-            campos que se llevan las 2 columnas (hoy solo "Nombre completo").
-            En movil (<640px) el grid cae a 1 columna y todo se apila.
+            fila. Fila 1 = Tipo doc + Numero (grid `3fr_2fr` dentro de una celda
+            de ancho completo: Tipo doc mas ancho para que el label del select
+            no se corte, Numero mas corto), Fila 2 = Nombre completo (ancho
+            completo), Fila 3 = Correo + Telefono, Fila 4 = Contrasena +
+            Confirmar, Fila 5 = checklist de requisitos. El flag `full` de cada
+            descriptor marca los campos que se llevan las 2 columnas (hoy solo
+            "Nombre completo"). En movil (<640px) el grid cae a 1 columna y
+            todo se apila.
 
-            `gap-y-0.5` es el espaciado entre filas: con el de antes (`gap-y-1`)
-            la tarjeta crecia 8px mas sin que se notara, porque el label ya
-            separa el campo anterior del siguiente. */}
-        <div className="grid gap-x-3 gap-y-0.5 sm:grid-cols-2 mb-1">
-          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
-            <div className="sm:w-56 sm:shrink-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+            `gap-x-3` (12px) separa las dos columnas y `gap-y-2` (8px) las
+            filas; `mb-1` (4px) dentro de cada celda separa label e input. */}
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
+          <div className="sm:col-span-2 grid gap-3 sm:grid-cols-[3fr_2fr]">
+            <div className="min-w-0">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 Tipo doc.
               </label>
               <select
@@ -5718,7 +5616,7 @@ function RegisterScreen({
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
                 onKeyDown={teclaEnRegistro("docType")}
-                className={inputCls(errores.docType, "cursor-pointer")}
+                className={`${authInputCls(errores.docType, "cursor-pointer h-10 pl-3 pr-8")} [&>option]:bg-white [&>option]:text-neutral-900 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-white`}
                 {...validacion.ariaCampo("docType", errores.docType)}
               >
                 {OPCIONES_TIPO_DOCUMENTO.map((opt) => (
@@ -5729,8 +5627,8 @@ function RegisterScreen({
               </select>
               <MensajeError id={validacion.idError("docType")} err={errores.docType} />
             </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+            <div className="min-w-0">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 Número de documento
               </label>
               <input
@@ -5741,7 +5639,7 @@ function RegisterScreen({
                  placeholder="Ej: 12345678"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
-                className={inputCls(errores.docNum)}
+                className={authInputCls(errores.docNum, "h-10")}
                 {...validacion.ariaCampo("docNum", errores.docNum)}
               />
               <MensajeError id={validacion.idError("docNum")} err={errores.docNum} />
@@ -5759,7 +5657,7 @@ function RegisterScreen({
             {
               label: "Correo electrónico",
               key: "email" as const,
-              placeholder: "gloria@lasirena.com",
+              placeholder: "gloria@gmail.com",
               type: "email",
             },
             {
@@ -5783,7 +5681,7 @@ function RegisterScreen({
             },
           ].map(({ label, key, placeholder, type, numeric, full }) => (
             <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
-              <label className="block text-sm font-semibold mb-1 text-foreground">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 {label}
               </label>
               {type === "password" ? (
@@ -5793,7 +5691,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
-                  cls={inputCls(errores[key])}
+                  cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
                   ariaInvalid={Boolean(errores[key])}
@@ -5808,7 +5706,7 @@ function RegisterScreen({
                   placeholder={placeholder}
                   ref={validacion.refCampo(key)}
                   onKeyDown={teclaEnRegistro(key)}
-                  className={inputCls(errores[key])}
+                  className={authInputCls(errores[key], "h-10")}
                   {...validacion.ariaCampo(key, errores[key])}
                 />
               )}
@@ -5819,21 +5717,19 @@ function RegisterScreen({
           {/* Lista de requisitos en tiempo real, como FILA PROPIA de ancho
               completo justo debajo de la pareja Contraseña / Confirmar.
 
-              Antes vivia dentro de la celda de Contraseña: eso convertia esa
-              fila en la mas alta de la tarjeta (162px de los 669 totales) y
-              era la principal razon por la que el formulario crecia. Al sacarla
-              a su propia fila y pasarla a cuadrícula, las 5 reglas caben en 2
-              lineas en vez de 5 y la pareja de contraseñas ocupa una sola fila.
-
-              `grid-cols-1 sm:grid-cols-2`: a 2 columnas cada una mide ~202px y
-              la cadena mas larga ("Al menos una letra mayuscula", ~162px + icono
-              14 + hueco 6 = 182px) entra sin envolver; a 3 columnas serian 130px
-              y TODAVIA envolveria, subiendo la fila en vez de bajarla. En movil
-              (<640px) vuelve a 1 columna, donde hay ancho de sobra. */}
+              `grid` de 3 columnas `max-content` (fila 1 = mayuscula, largo,
+              espacios; fila 2 = minuscula, numero) alineadas en columna:
+              mayuscula/minuscula en la col 1, largo/numero en la col 2.
+              `justify-start` las alinea a la izquierda. En movil (<640px)
+              cae a `grid-cols-1`. Los `order-*` por `nth-child` reordenan
+              solo A LA VISTA el array de REGLAS_CONTRASENA (que va numero
+              antes que minuscula, y espacios al final) sin tocar campo.tsx,
+              donde ese orden sigue sirviendo a las demas pantallas que
+              listan los requisitos en vertical. */}
           <div className="sm:col-span-2 min-w-0">
             <RequisitosContrasena
               valor={form.password}
-              className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1"
+              className="mt-1 grid grid-cols-1 sm:grid-cols-[max-content_max-content_max-content] justify-start gap-x-3 gap-y-1 [&>li:nth-child(2)]:order-1 [&>li:nth-child(1)]:order-2 [&>li:nth-child(5)]:order-3 [&>li:nth-child(4)]:order-4 [&>li:nth-child(3)]:order-5 [&>li.text-muted-foreground]:text-foreground/75 [&>li.text-emerald-600]:text-emerald-900 dark:[&>li.text-emerald-600]:text-emerald-400"
             />
           </div>
         </div>
@@ -5841,8 +5737,8 @@ function RegisterScreen({
         <PrimaryBtn
           onClick={register}
           size="md"
-          className="w-full mb-1"
-           disabled={loading}
+          className="w-full mt-3 h-10 min-h-0!"
+           disabled={loading || !formValido}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -5852,7 +5748,7 @@ function RegisterScreen({
           {loading ? "Creando cuenta..." : "Crear cuenta"}
         </PrimaryBtn>
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-foreground/75 mt-2 dark:text-white/75">
           {"¿Ya tienes cuenta? "}
           <button
             onClick={() => navigate("login")}
@@ -6623,6 +6519,11 @@ function GenericAdmin({
 // forma `Rol` / `AccesosMap` ya es JSON-serializable sin transformaciones.
 // La clave incluye versión para poder invalidar el cache al cambiar el schema.
 const ROLES_STORAGE_KEY = "sivpro.roles.v1";
+// Bandera de la migración ÚNICA del permiso Dashboard (ver leerRolesPersistidos).
+const MIGRACION_DASHBOARD_PERMISO_KEY = "sivpro.migracion.dashboardPermiso.v1";
+const marcarMigracionDashboard = () => {
+  try { localStorage.setItem(MIGRACION_DASHBOARD_PERMISO_KEY, "1"); } catch { /* localStorage bloqueado */ }
+};
 
 const esRolValido = (r: unknown): r is Rol => {
   if (!r || typeof r !== "object") return false;
@@ -6668,7 +6569,14 @@ const restaurarDescargaExcel = (rol: Rol): Rol => {
 const leerRolesPersistidos = (): Rol[] => {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
-    if (!raw) return INITIAL_ROLES;
+    if (!raw) {
+      // Sin datos guardados: la semilla ya trae el permiso Dashboard en el rol
+      // Administrador (fullAccesos) y ningún otro rol lo tiene. Se marca la
+      // migración como hecha para que no toque permisos dados después por el
+      // super admin.
+      marcarMigracionDashboard();
+      return INITIAL_ROLES;
+    }
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esRolValido)) {
       const lista = (parsed as Rol[]).map(rol => {
@@ -6685,22 +6593,44 @@ const leerRolesPersistidos = (): Rol[] => {
       // "Mesera" se deja como está y la semilla no duplica por clave de género.
       const normalizar = (v: string) =>
         v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      // §3: "Dashboard" ya no es un permiso asignable: se le quita la clave
-      // "Dashboard::Dashboard" a todo rol que no sea Administrador.
-      const listaSinDashboard = lista.map(rol => {
-        if (normalizar(rol.nombre) === "administrador") return rol;
-        const accesosSinDash: AccesosMap = { ...rol.accesos };
-        delete accesosSinDash[DASHBOARD_PERM_KEY];
-        return { ...rol, accesos: accesosSinDash };
-      });
-      const yaHayMesero = listaSinDashboard.some(r => normalizar(r.nombre) === "mesero");
-      const listaFinal = yaHayMesero
-        ? listaSinDashboard
-        : listaSinDashboard.map(r => (normalizar(r.nombre) === "mesera" ? { ...r, nombre: "Mesero" } : r));
-      return completarRolesSemilla(listaFinal);
+      const yaHayMesero = lista.some(r => normalizar(r.nombre) === "mesero");
+      const listaRenombrada = yaHayMesero
+        ? lista
+        : lista.map(r => (normalizar(r.nombre) === "mesera" ? { ...r, nombre: "Mesero" } : r));
+      // § Dashboard: migración ÚNICA (bandera "sivpro.migracion.dashboardPermiso.v1").
+      // En datos viejos la clave "Dashboard::Dashboard" podía estar en cualquier
+      // rol (fue una celda más del editor). La primera vez se la quita a todo
+      // rol que no sea Administrador y se la agrega a Administrador si faltaba.
+      // Después de esa primera ejecución NUNCA se vuelve a tocar el permiso:
+      // los cambios que haga el super admin en Crear/Editar rol se conservan
+      // al recargar la página.
+      let migrados = listaRenombrada;
+      try {
+        if (!localStorage.getItem(MIGRACION_DASHBOARD_PERMISO_KEY)) {
+          migrados = listaRenombrada.map(rol => {
+            if (normalizar(rol.nombre) === "administrador") {
+              if (rol.accesos[DASHBOARD_PERM_KEY]?.includes("Ver")) return rol;
+              return { ...rol, accesos: { ...rol.accesos, [DASHBOARD_PERM_KEY]: ["Ver"] } };
+            }
+            if (!(DASHBOARD_PERM_KEY in rol.accesos)) return rol;
+            const accesosSinDash: AccesosMap = { ...rol.accesos };
+            delete accesosSinDash[DASHBOARD_PERM_KEY];
+            return { ...rol, accesos: accesosSinDash };
+          });
+          // Se persisten los roles migrados ANTES de marcar la bandera: si la
+          // escritura falla, la bandera no queda puesta y se reintenta en la
+          // próxima carga.
+          localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(migrados));
+          marcarMigracionDashboard();
+        }
+      } catch {
+        // localStorage bloqueado: la migración se aplica solo en memoria.
+      }
+      return completarRolesSemilla(migrados);
     }
   } catch {
     // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+    marcarMigracionDashboard();
   }
   return INITIAL_ROLES;
 };
@@ -7748,9 +7678,18 @@ export default function App() {
   // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
   // los id solo son anclas de migración.
   const isNamedAdmin = esRolAdministrador(loggedInRol);
-  // §3: el Dashboard es EXCLUSIVO del Administrador (detectado por nombre del
-  // rol); ya no depende del permiso "Dashboard::Dashboard".
-  const hasDashboardAccess = isNamedAdmin;
+  // § Dashboard por PERMISO, no por nombre de rol: la cuenta super admin
+  // (Gloria, USR-001 / gloria@lasirena.com) siempre; los demás únicamente con
+  // el privilegio "Ver" de "Dashboard::Dashboard" del rol activo. El rol
+  // "Administrador" lo conserva porque su semilla (fullAccesos) ya incluye la
+  // clave y la migración única "sivpro.migracion.dashboardPermiso.v1" se la
+  // agrega a los datos viejos; si super admin se la quita, deja de verlo.
+  const esSuperAdminSesion =
+    loggedInUser !== null &&
+    (loggedInUser.id === "USR-001" ||
+      loggedInUser.correo.trim().toLowerCase() === "gloria@lasirena.com");
+  const hasDashboardAccess =
+    esSuperAdminSesion || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
 
   // Cliente público = solo el rol "Cliente" y sin ficha de empleado. El
@@ -7759,6 +7698,29 @@ export default function App() {
   const esClientePublicoSesion =
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
+
+  // Punto 2.1 — accesos rápidos del perfil (antes en el cajón "Más" del menú
+  // móvil). Apuntan a las pantallas REALES y se filtran con las mismas reglas
+  // que el Sidebar: Panel de control solo con acceso al Dashboard; el resto,
+  // por el privilegio "Ver" de su permiso. "Informes" no aparece porque
+  // `reports` no tiene pantalla propia (se reporta, no se enlaza a un
+  // placeholder).
+  const accesosRapidos = isStaff
+    ? ([
+        ...(hasDashboardAccess
+          ? [{ screen: "dashboard", label: "Panel de control", Icon: TrendingUp }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Ventas", "Clientes"))
+          ? [{ screen: "clientes", label: "Clientes", Icon: UserCircle }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Producción", "Categoría de Producto"))
+          ? [{ screen: "cat-producto", label: "Categorías", Icon: Tag }]
+          : []),
+        ...(canViewPermission(loggedInAccesos, KEY("Compras", "Insumos"))
+          ? [{ screen: "supplies", label: "Insumos", Icon: Package }]
+          : []),
+      ] as { screen: string; label: string; Icon: typeof TrendingUp }[])
+    : [];
 
   // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
   // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
@@ -7778,17 +7740,18 @@ export default function App() {
     toast.success(`Ahora estás como ${siguiente.nombre}`);
     // Si la pantalla actual ya no está permitida por el rol nuevo, vuelve a la
     // primera pantalla que ese rol sí permite. "dashboard" solo lo es si el rol
-    // siguiente es Administrador (§3).
-    const esAdminSiguiente = normalizarNombreRol(siguiente.nombre) === "administrador";
+    // siguiente tiene el permiso Dashboard (o la sesión es super admin).
+    const dashSiguiente =
+      esSuperAdminSesion || (siguiente.accesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
     const permKeyActual = SCREEN_PERM_KEY[screen];
     const permitida =
       screen === "dashboard"
-        ? esAdminSiguiente
+        ? dashSiguiente
         : permKeyActual
           ? (siguiente.accesos[permKeyActual]?.includes("Ver") ?? false)
           : true; // "inicio" y pantallas sin permKey siempre son un fallback seguro
     if (!permitida) {
-      navigate(esAdminSiguiente ? "dashboard" : "inicio");
+      navigate(dashSiguiente ? "dashboard" : "inicio");
     }
   };
 
@@ -7890,7 +7853,6 @@ export default function App() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [orders] = useState<Order[]>(ORDERS);
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>(
     // Órdenes 2024 → relativas a hoy: [0, 1, 3, 6, 10] cubre hoy, la semana
@@ -8189,15 +8151,34 @@ export default function App() {
     }
     if (options?.restaurar) {
       const top = scrollPorPantalla.current[s] ?? 0;
-      // La pantalla entrante todavía no está pintada cuando corre este efecto,
-      // así que se espera un frame para que el alto del documento sea real.
-      requestAnimationFrame(() =>
-        window.scrollTo({ top, behavior: "auto" }),
-      );
+      // Punto 2.3: la pantalla entrante tarda en montarse (`AnimatePresence
+      // mode="wait"`), y al montarse las imágenes del landing aún no han
+      // cargado, así que el documento puede estar más bajo que `top` y el
+      // scroll se limita al máximo disponible (quedaba en otra sección).
+      // Se reintenta con rAF + `setTimeout` hasta llegar al tope guardado o
+      // agotar el tiempo (~3 s): cuando el documento crece por la carga de
+      // imágenes, el siguiente intento ya alcanza la posición. Antes se
+      // cortaba en cuanto el scroll llegaba al fondo del documento TEMPORAL
+      // (imágenes sin cargar), que era mucho más arriba que el tope guardado.
+      const MAX_INTENTOS = 60;
+      let intentos = 0;
+      const intentar = () => {
+        intentos += 1;
+        const doc = document.documentElement;
+        const alcanzable = Math.min(
+          top,
+          Math.max(0, doc.scrollHeight - window.innerHeight),
+        );
+        window.scrollTo({ top: alcanzable, behavior: "auto" });
+        if (window.scrollY !== top && intentos < MAX_INTENTOS) {
+          window.setTimeout(intentar, 50);
+        }
+      };
+      // Un doble frame para que el DOM de la pantalla entrante exista al menos.
+      requestAnimationFrame(() => window.requestAnimationFrame(intentar));
     } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    setDrawerOpen(false);
   };
 
   /** Desde la tabla de ventas, "Gestionar" salta al módulo de devoluciones con el
@@ -8390,11 +8371,12 @@ export default function App() {
     escribirRolActivo(user.id, inicialId);
     const nextRole = rolInicial?.nombre ?? "Empleado";
     // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
-    // Dashboard solo si el rol activo es Administrador (§3); si no, "Inicio"
-    // (que siempre está disponible para empleados y no depende de pantalla
-    // asignada).
-    const rolInicialEsAdmin = (rolInicial?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador";
-    const hasDashRolInicial = rolInicialEsAdmin;
+    // Dashboard solo si la sesión es super admin o el rol activo tiene el
+    // permiso "Dashboard::Dashboard"; si no, "Inicio" (siempre disponible).
+    const userEsSuperAdmin =
+      user.id === "USR-001" || user.correo.trim().toLowerCase() === "gloria@lasirena.com";
+    const hasDashRolInicial =
+      userEsSuperAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
     const nextScreen = esClientePublico
       ? "landing"
       : hasDashRolInicial
@@ -8438,8 +8420,21 @@ export default function App() {
     });
   };
 
+  // Punto 2.4: agregar desde el detalle acumulaba unidades en líneas separadas
+  // aunque el producto, el tamaño y los extras fueran idénticos (quickAdd y
+  // fusionarCarritos ya lo hacían). Se reutiliza `mismaConfig`: si la misma
+  // configuración ya está en el carrito, se suman las unidades a esa línea (la
+  // primera que entró); si no, se agrega al final.
   const addDetailed = (item: CartItem) =>
-    setCart((p) => [...p, item]);
+    setCart((p) => {
+      const i = p.findIndex((x) => mismaConfig(x, item));
+      if (i === -1) return [...p, item];
+      return p.map((x, idx) =>
+        idx === i
+          ? { ...x, quantity: x.quantity + item.quantity }
+          : x,
+      );
+    });
 
   const registrarPedido = (
     metodoPago: string,
@@ -8797,9 +8792,10 @@ export default function App() {
   if (isLoggedIn && isAdminRole && screen === "inicio" && hasDashboardAccess) {
     setTimeout(() => navigate("dashboard"), 0);
   }
-  // §3: el detalle de la gráfica (sales-chart) solo lo abre el Administrador;
-  // si otro rol llega ahí, se le devuelve a "inicio".
-  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !isNamedAdmin) {
+  // El detalle de la gráfica (sales-chart) forma parte del Dashboard: solo lo
+  // abre quien tiene el permiso Dashboard (o la super admin); si otro rol
+  // llega ahí, se le devuelve a "inicio".
+  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !hasDashboardAccess) {
     setTimeout(() => navigate("inicio"), 0);
   }
   if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "inicio" && screen !== "profile" && screen !== "store-profile") {
@@ -9008,12 +9004,24 @@ export default function App() {
                   onBack={() => {
                     navigate(detalleOrigen, { restaurar: true });
                     // Al volver al catálogo, hace scroll a la tarjeta del producto
-                    // que se abrió (data-producto-id en ProductCard).
+                    // que se abrió (data-producto-id en ProductCard). Mismo criterio
+                    // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
+                    // montarse por la transición de salida (AnimatePresence).
                     if (detalleOrigen === "catalog") {
-                      requestAnimationFrame(() => {
+                      let intentosCard = 0;
+                      const buscarTarjeta = () => {
+                        intentosCard += 1;
                         const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
-                        el?.scrollIntoView({ block: "center" });
-                      });
+                        if (!el) {
+                          // Mismo presupuesto amplio que `navigate(restaurar)`:
+                          // la tarjeta tarda en montarse por la transición de
+                          // salida (AnimatePresence) y en aparecer las imágenes.
+                          if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
+                          return;
+                        }
+                        el.scrollIntoView({ block: "center" });
+                      };
+                      requestAnimationFrame(buscarTarjeta);
                     }
                   }}
                   backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
@@ -9106,7 +9114,6 @@ export default function App() {
                   loggedInUser={loggedInUser}
                   loggedInRoleName={loggedInRoleName}
                   tieneRolActivo={loggedInRol !== null}
-                  isNamedAdmin={isNamedAdmin}
                   hasDashboardAccess={hasDashboardAccess}
                   accesos={loggedInAccesos}
                 />
@@ -9153,6 +9160,9 @@ export default function App() {
                   setProveedores={setProveedores}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  // Punto 3.2: el modal que abre este listado necesita el
+                  // catálogo para buscar por tipo "Producto".
+                  productos={productos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -9452,6 +9462,7 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
+                  accesosRapidos={accesosRapidos}
                   inStore
                 />
               )}
@@ -9483,6 +9494,7 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
+                  accesosRapidos={accesosRapidos}
                 />
               )}
               {screen === "supplies" && (
@@ -9525,6 +9537,10 @@ export default function App() {
                   "recepcion-compra",
                   "gestion-compra",
                   "nueva-compra",
+                  // El detalle real se pinta arriba (screen === "orden-detalle");
+                  // sin estar acá, GenericAdmin se sumaba debajo y repetía el
+                  // placeholder "En desarrollo · Volver al inicio".
+                  "orden-detalle",
                   "devoluciones",
                 ].includes(screen) && (
                   <GenericAdmin
@@ -9547,10 +9563,14 @@ export default function App() {
         {!isAdmin && !isAuth && (
           <BottomNav
             navigate={navigate}
-            cart={cart}
             current={screen}
-            onMore={() => setDrawerOpen(true)}
             isLoggedIn={isLoggedIn}
+            isStaff={isStaff}
+            loggedInUser={loggedInUser ? {
+              iniciales: loggedInUser.iniciales,
+              avatarColor: loggedInUser.avatarColor,
+            } : null}
+            onLogin={openLogin}
           />
         )}
       </div>
@@ -9565,17 +9585,6 @@ export default function App() {
           aria-hidden
         />
       )}
-
-      {/* Mobile drawer */}
-      <MobileDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        navigate={navigate}
-        onLogin={openLogin}
-        cart={cart}
-        isLoggedIn={isLoggedIn}
-        onLogout={logout}
-      />
 
       <style>{`
         ::-webkit-scrollbar { display: none; }

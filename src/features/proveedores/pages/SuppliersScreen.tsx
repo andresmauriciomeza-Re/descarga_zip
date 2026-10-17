@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
@@ -595,6 +595,78 @@ export function SuppliersScreen({
   // mano: se duplicaba con el formulario y, como el componente se recreaba en
   // cada render, React remontaba todos los inputs y se perdía el foco.
 
+  // ── Punto 3.1: alta y edición dejan de ser modales (`fixed … max-w-6xl`)
+  // y pasan a PANTALLA COMPLETA, con el patrón de `OrdenCompraScreen` en modo
+  // página: flecha ← + título + subtítulo, formulario con scroll propio y los
+  // botones fijos abajo. Es un return temprano DESPUÉS de todos los hooks
+  // (justo antes del listado), así el orden de hooks no cambia. El formulario
+  // es el MISMO `ProveedorFormCampos`: validaciones, NIT en solo lectura al
+  // editar y el borrador de `useProveedorForm` siguen intactos.
+  const enAlta = showCreate;
+  const enPantalla = enAlta || editItem !== null;
+  const salirDePantalla = () => { if (enAlta) setShowCreate(false); else setEditItem(null); };
+
+  if (enPantalla) {
+    const clsBase = "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
+    return (
+      <div className="w-full max-w-[1200px] mx-auto px-4 py-3 h-full min-h-0 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 py-1.5 border-b border-border shrink-0">
+          <button
+            onClick={salirDePantalla}
+            title="Volver"
+            className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+              {enAlta ? "Crear Proveedor" : `Editar — ${editItem?.nombre ?? ""}`}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {enAlta
+                ? "Registra la identificación, el contacto y la configuración del proveedor."
+                : "Actualiza los datos del proveedor. El NIT no se modifica."}
+            </p>
+          </div>
+        </div>
+
+        {/* Única zona con scroll: la raíz del módulo es `h-full` con
+            `overflow-hidden`, así que sin esto el pie quedaría tapando campos. */}
+        <div className="flex-1 min-h-0 overflow-y-auto py-4">
+          {enAlta || !editItem ? (
+            <ProveedorFormCampos form={proveedorForm} />
+          ) : (
+            <ProveedorFormCampos
+              form={editForm}
+              autoFocusNombre={false}
+              // El NIT queda congelado: es la regla del módulo.
+              nitLectura={editItem.nit}
+            />
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-3 border-t border-border shrink-0">
+          <button
+            onClick={salirDePantalla}
+            className={`${clsBase} border border-border text-foreground hover:bg-muted cursor-pointer`}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={enAlta ? handleCreate : handleEdit}
+            // El alta ya venía deshabilitada hasta completar el formulario; la
+            // edición valida al guardar (como hasta ahora) para no bloquear
+            // registros antiguos con datos heredados.
+            disabled={enAlta ? !proveedorForm.formValido : false}
+            className={`${clsBase} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
+          >
+            {enAlta ? "Crear" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 py-3 h-full min-h-0 flex flex-col overflow-hidden">
       {/* Header */}
@@ -621,14 +693,16 @@ export function SuppliersScreen({
           className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
-      {/* La card ocupa todo el alto restante: la tabla NO hace scroll vertical
-          (se pagina en filas fijas de 5); sólo queda scroll horizontal en
-          tablet y scroll vertical en móvil (tarjetas). El paginador queda
-          fuera y debajo de la card.
-          `table-fixed` con anchos % por <th> reparte las columnas; la columna
-          Teléfono sólo existe desde 1440px (debajo va bajo Contacto). */}
-      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+      {/* Punto 2.5: la card medía todo el alto restante (`flex-1 min-h-0`) y,
+          con la raíz locked en `h-dvh`, se estiraba hasta el fondo dejando un
+          hueco vacío bajo la última fila. Ahora mide su contenido y el
+          paginador queda pegado debajo. La tabla se pagina en filas fijas de 5;
+          sólo queda scroll horizontal en tablet y scroll vertical en móvil
+          (tarjetas). `table-fixed` con anchos % por <th> reparte las columnas;
+          la columna Teléfono sólo existe desde 1440px (debajo va bajo
+          Contacto). */}
+      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+        <div className="overflow-x-auto">
           {filtered.length === 0 ? (
             <div className="px-4 py-14 text-center text-muted-foreground">
               <p className="text-4xl mb-3">🚛</p>
@@ -687,7 +761,7 @@ export function SuppliersScreen({
                     <td className="px-3 py-2 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                           <Eye className="w-4 h-4" />
                         </button>
                         {canEdit && (
@@ -698,7 +772,7 @@ export function SuppliersScreen({
                         )}
                         {canDelete && (
                           <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -745,7 +819,7 @@ export function SuppliersScreen({
               {/* Acciones abajo — mismas reglas y permisos que la tabla. */}
               <div className="mt-2.5 flex items-center gap-1.5">
                 <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                  className="p-2 rounded-lg hover:bg-blue-50 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer">
+                  className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                   <Eye className="w-4 h-4" />
                 </button>
                 {canEdit && (
@@ -756,7 +830,7 @@ export function SuppliersScreen({
                 )}
                 {canDelete && (
                   <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                    className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer">
+                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
@@ -772,76 +846,6 @@ export function SuppliersScreen({
       {filtered.length > 0 && (
         <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
       )}
-
-      {/* ── Modal: Crear Proveedor (centrado, 2 columnas) ── */}
-      <AnimatePresence>
-        {showCreate && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
-              >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Proveedor</h3>
-                  <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-                </div>
-                {/* Cuerpo con scroll propio SIEMPRE: el formulario va en dos
-                    columnas y, si la ventana no alcanza, se desplaza aquí sin
-                    perder la cabecera ni los botones. */}
-                <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
-                  {/* Punto 1: mismo formulario de proveedor que el de Orden de
-                      Compra y el de Compra (mismas reglas y validación en vivo). */}
-                  <ProveedorFormCampos form={proveedorForm} />
-                </div>
-                <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-                  <button onClick={() => setShowCreate(false)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-                  <button
-                    onClick={handleCreate}
-                    disabled={!proveedorForm.formValido}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
-                  >Crear</button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Modal: Editar (nombre y NIT bloqueados) ── */}
-      <AnimatePresence>
-        {editItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
-              >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h3>
-                  <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-                </div>
-                <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
-                  {editItem && (
-                    <ProveedorFormCampos
-                      form={editForm}
-                      autoFocusNombre={false}
-                      // El NIT queda congelado: es la regla del módulo.
-                      nitLectura={editItem.nit}
-                    />
-                  )}
-                </div>
-                <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-                  <button onClick={() => setEditItem(null)} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-                  <button onClick={handleEdit} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">Guardar</button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* ── Modal: Ver detalle ── */}
       <AnimatePresence>

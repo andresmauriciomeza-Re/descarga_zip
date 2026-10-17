@@ -83,6 +83,7 @@ function SelectCampo({
   valor,
   opciones,
   vacio,
+  etiquetas,
   autoFocus = false,
   className = "",
 }: {
@@ -92,6 +93,12 @@ function SelectCampo({
   valor: string;
   opciones: readonly string[];
   vacio: string;
+  /**
+   * Punto 3.1: texto visible distinto del valor guardado ("CC" se ve como
+   * "Cédula de Ciudadanía" y se GUARDA igual). Sin esto el `<option>` pintaría
+   * el código interno. El `value` siempre es `op`.
+   */
+  etiquetas?: (valor: string) => string;
   autoFocus?: boolean;
   className?: string;
 }) {
@@ -108,7 +115,9 @@ function SelectCampo({
         className={`${inputCls} cursor-pointer transition-colors ${form.campoCls(campo)}`}
       >
         <option value="">{vacio}</option>
-        {opciones.map(op => <option key={op} value={op}>{op}</option>)}
+        {opciones.map(op => (
+          <option key={op} value={op}>{etiquetas ? etiquetas(op) : op}</option>
+        ))}
       </select>
     </Campo>
   );
@@ -264,17 +273,19 @@ export function ProveedorFormCampos({
                   className={`${inputCls} transition-colors ${form.campoCls("apellidos")}`}
                 />
               </Campo>
-              {/* Punto 3.1: CC/CE/Pasaporte son 3 opciones → segmentado. */}
-              <Campo form={form} label={<>Tipo de documento {req}</>} campo="tipoDocumento">
-                <SegmentadoButtons
-                  valor={v.tipoDocumento ?? ""}
-                  onChange={(valor) => {
-                    form.marcarTocado("tipoDocumento");
-                    form.setCampo("tipoDocumento", valor as ProveedorFormValues["tipoDocumento"]);
-                  }}
-                  opciones={TIPOS_DOCUMENTO.map(d => ({ valor: d, etiqueta: etiquetaTipoDocumento(d) }))}
-                />
-              </Campo>
+              {/* Punto 3.1: CC/CE/Pasaporte pasan a `<select>` como ya lo
+                  estaba "Tipo de sociedad": 3 botones en línea se rompían en la
+                  columna izquierda. Se pinta la etiqueta completa y se GUARDA
+                  el mismo código de siempre. */}
+              <SelectCampo
+                form={form}
+                label={<>Tipo de documento {req}</>}
+                campo="tipoDocumento"
+                valor={v.tipoDocumento ?? ""}
+                opciones={TIPOS_DOCUMENTO}
+                etiquetas={etiquetaTipoDocumento}
+                vacio="Selecciona el tipo de documento"
+              />
               <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
                 <input
                   value={v.numeroDocumento ?? ""}
@@ -490,18 +501,17 @@ export function ProveedorFormCampos({
                   className={`${inputCls} transition-colors ${form.campoCls("repLegalApellidos")}`}
                 />
               </Campo>
-              {/* Punto 3.1: mismo control segmentado que el tipo de documento
-                  de Persona Natural (consistencia dentro del mismo formulario). */}
-              <Campo form={form} label={<>Tipo de documento {req}</>} campo="repLegalTipoDocumento">
-                <SegmentadoButtons
-                  valor={v.repLegalTipoDocumento ?? ""}
-                  onChange={(valor) => {
-                    form.marcarTocado("repLegalTipoDocumento");
-                    form.setCampo("repLegalTipoDocumento", valor as ProveedorFormValues["repLegalTipoDocumento"]);
-                  }}
-                  opciones={TIPOS_DOCUMENTO.map(d => ({ valor: d, etiqueta: etiquetaTipoDocumento(d) }))}
-                />
-              </Campo>
+              {/* Punto 3.1: mismo control que el tipo de documento de Persona
+                  Natural (lista vertical con la etiqueta completa). */}
+              <SelectCampo
+                form={form}
+                label={<>Tipo de documento {req}</>}
+                campo="repLegalTipoDocumento"
+                valor={v.repLegalTipoDocumento ?? ""}
+                opciones={TIPOS_DOCUMENTO}
+                etiquetas={etiquetaTipoDocumento}
+                vacio="Selecciona el tipo de documento"
+              />
               <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">
                 <input
                   value={v.repLegalNumeroDocumento ?? ""}

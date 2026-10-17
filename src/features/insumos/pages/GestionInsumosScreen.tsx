@@ -1054,7 +1054,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                             !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
                             "Programar producción"
                           }
-                          className="p-1.5 rounded-lg hover:bg-purple-50 text-muted-foreground hover:text-purple-600 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <ChefHat className="w-4 h-4" />
                         </button>

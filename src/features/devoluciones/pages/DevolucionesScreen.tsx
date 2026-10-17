@@ -651,7 +651,7 @@ export function DevolucionesScreen({
                             title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                               pendiente
-                                ? "bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 dark:bg-orange-500/10 dark:border-orange-500/30 dark:text-orange-300 dark:hover:bg-orange-500/20 cursor-pointer"
+                                ? "bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
                                 : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
                             }`}
                           >
