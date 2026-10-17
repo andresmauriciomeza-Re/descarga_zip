@@ -129,7 +129,7 @@ export function CompactInsumoForm({
     ? "text-xs font-bold text-muted-foreground mb-2"
     : `text-sm font-bold text-foreground ${compacto ? "mb-0.5" : "mb-3"}`;
 
-  const inputClsCompacta = "w-full h-9 px-2.5 bg-muted border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  const inputClsCompacta = "w-full h-9 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
   const labelClsCompacta = "block text-[11px] font-semibold text-muted-foreground mb-1";
 
   return (
@@ -251,7 +251,7 @@ export function CompactInsumoForm({
                   title="La medida la define el ítem del catálogo"
                   className={
                     (esCompacta
-                      ? "w-full h-9 px-2.5 rounded-lg text-xs "
+                      ? "w-full h-9 px-2.5 rounded-lg text-sm "
                       : "w-full h-10 px-3 rounded-xl text-sm ") +
                     "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                   }

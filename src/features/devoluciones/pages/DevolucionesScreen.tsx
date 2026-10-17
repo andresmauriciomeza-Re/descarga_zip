@@ -710,7 +710,7 @@ export function DevolucionesScreen({
                   cada mitad dentro del alto del modal: sin él la fila del grid se
                   mide por su contenido y el catálogo de canje se desborda hacia
                   abajo en vez de quedarse en la columna derecha. */}
-              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:grid-rows-1 divide-y lg:divide-y-0 lg:divide-x divide-border">
+              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:grid-rows-1 divide-y lg:divide-y-0 lg:divide-x divide-border">
                 {/* ================= Columna izquierda ================= */}
                 <div className="flex flex-col min-h-0">
                   <div className="px-5 py-3 border-b border-border shrink-0 flex items-center justify-between">
@@ -741,7 +741,7 @@ export function DevolucionesScreen({
                         return (
                           <div
                             key={i}
-                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-colors ${
+                            className={`flex flex-wrap items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-colors ${
                               q > 0
                                 ? "border-orange-300 bg-orange-50/40 dark:border-orange-500/40 dark:bg-orange-500/10"
                                 : "border-border bg-card"
@@ -754,7 +754,7 @@ export function DevolucionesScreen({
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-foreground truncate">{nombre}</p>
-                              <p className="text-xs text-muted-foreground truncate">
+                              <p className="text-xs text-muted-foreground">
                                 {resto.length > 0 ? `${resto.join(" — ")} · ` : ""}
                                 {/* Cantidad pedida. Va antes del unitario y un punto
                                     más grande que él, porque al lado del precio se

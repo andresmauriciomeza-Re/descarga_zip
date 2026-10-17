@@ -764,7 +764,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                         aria-checked={allOn}
                         onClick={event => { event.stopPropagation(); toggleCelda(celda); }}
                         style={{ position: "absolute", top: "8px", right: "8px" }}
-                        className={`w-3.5 h-3.5 rounded-[5px] border flex items-center justify-center transition-colors ${
+                        className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center transition-colors ${
                           allOn
                             ? "bg-primary border-primary"
                             : someOn
@@ -772,7 +772,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                               : "border-border bg-background"
                         }`}
                       >
-                        {allOn && <Check className="w-2.5 h-2.5 text-white" />}
+                        {allOn && <Check className="w-3 h-3 text-white" />}
                         {someOn && !allOn && <span className="w-1.5 h-0.5 rounded-full bg-primary" />}
                       </button>
                       {Icon
@@ -789,7 +789,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
           </div>
 
           {/* ── RIGHT 50%: Permisos CRUD — scroll independiente ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-hidden">
+          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
              Asignar permisos al rol
            </p>
@@ -839,7 +839,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                })()
              ) : moduloActivo === null ? (
                <div className="flex flex-col items-center justify-center text-center flex-1">
-                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-2">
                   <span className="text-2xl">🔒</span>
                 </div>
                 <p className="text-sm font-semibold text-foreground mb-1">Ningún módulo abierto</p>

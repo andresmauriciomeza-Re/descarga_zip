@@ -945,11 +945,11 @@ export function GestionEmpleadosScreen({
                   </button>
                 </div>
 
-                <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-2.5">
+                <div className="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2.5">
                   {/* Datos de cuenta */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
-                  <div className="col-span-2 flex gap-2 items-start">
-                    <div className="w-56 shrink-0">
+                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
+                  <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-start gap-2">
+                    <div className="w-full sm:w-56 shrink-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
                       <select value={newTipoDoc}
                        onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
@@ -969,7 +969,7 @@ export function GestionEmpleadosScreen({
                       {createErrors.documento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.documento}</p>}
                     </div>
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Nombre completo <span className="text-primary">*</span>
                     </label>
@@ -1025,7 +1025,7 @@ export function GestionEmpleadosScreen({
                   </div>
 
                   {/* Datos del empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
+                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                     {/* Punto 3.2: 2 opciones → control segmentado */}
@@ -1038,7 +1038,7 @@ export function GestionEmpleadosScreen({
                       ]}
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Cargo <span className="text-primary">*</span>
                     </label>
@@ -1053,7 +1053,7 @@ export function GestionEmpleadosScreen({
                   </div>
 
                   {/* Datos de Contratación */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
+                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Fecha de inicio <span className="text-primary">*</span>

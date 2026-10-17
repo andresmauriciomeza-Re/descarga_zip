@@ -31,7 +31,7 @@ const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const compactInputCls =
-  "w-full px-2.5 py-2 bg-muted border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  "w-full px-2.5 py-2 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
 
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
@@ -1004,7 +1004,7 @@ export function RecepcionCompraScreen({
                                     Number(e.target.value)
                                   )
                                 }
-                                className="w-20 px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
 
@@ -1019,7 +1019,7 @@ export function RecepcionCompraScreen({
                                     Number(e.target.value)
                                   )
                                 }
-                                className="w-24 px-2 py-1.5 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
 
@@ -1324,7 +1324,7 @@ export function RecepcionCompraScreen({
 
                     {/* Medida — select personalizado (mismo componente que Nueva
                         Compra). Punto 2.7: a la misma altura que los inputs
-                        vecinos (`compactInputCls` = py-2 ≈ 34 px) y con el mismo
+                        vecinos (`compactInputCls` = py-2 ≈ 38 px) y con el mismo
                         padding/redondeo; antes era h-11 (44 px) y desentonaba. */}
                     <div className="w-16 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -1334,7 +1334,7 @@ export function RecepcionCompraScreen({
                         value={exUnidad}
                         onChange={setExUnidad}
                         ariaLabel="Medida"
-                        fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-xs"
+                        fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-sm"
                       />
                     </div>
 

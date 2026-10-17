@@ -1025,17 +1025,17 @@ function CompraForm({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row"
+                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto overflow-x-clip"
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
               {/* Columna IZQUIERDA — formulario (50 %). En el modal es solo un
                   grupo vertical: mantiene el mismo flujo de antes. Punto 2.8a:
-                  en página NO scrollea por dentro; con la raíz `overflow-hidden`
-                  eso sólo era posible porque el formulario entero cabía, y el
-                  scroll interno dejaba un hueco muerto. Si algo no cabe, ahora
-                  lo empuja la tabla (que sí scrollea) o se ve en móvil, donde
-                  la columna apila y la raíz scrollea. */}
+                  en página NO scrollea por dentro cuando el formulario entero
+                  cabe (así no queda un hueco muerto); si algo no cabe — móvil,
+                  donde la columna apila y se suma la tabla — el
+                  `overflow-y-auto` del contenedor deja alcanzables "Agregar" y
+                  el pie Cancelar/Guardar. */}
               <div
                 className={
                   isPage
@@ -1308,7 +1308,7 @@ function CompraForm({
                         className="w-4 h-4 text-muted-foreground cursor-help"
                       />
                       <span className="sr-only">Ayuda sobre los precios de la factura</span>
-                      <span className="pointer-events-none absolute left-0 top-full mt-2 z-50 w-[280px] rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-3 text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="pointer-events-none absolute left-0 max-sm:left-auto max-sm:right-0 top-full mt-2 z-50 w-[280px] max-sm:w-[calc(100vw-4rem)] rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-3 text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity">
                         {MSJ_IVA_AYUDA}
                       </span>
                     </span>
