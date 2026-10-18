@@ -1886,7 +1886,7 @@ function RecepcionModal({
                               <input
                                 type="number" min={0} value={item.cantidadRecibida}
                                 onChange={e => updRec(item.rowId, Number(e.target.value))}
-                                className="w-20 px-2 py-1 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.unidad}</td>
@@ -1895,7 +1895,7 @@ function RecepcionModal({
                               <input
                                 type="number" min={0} value={item.costoUnitario}
                                 onChange={e => updPrice(item.rowId, Number(e.target.value))}
-                                className="w-28 px-2 py-1 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-28 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
                             <td className="px-3 py-2.5 text-sm font-semibold">
@@ -1978,7 +1978,7 @@ function RecepcionModal({
                       onChange={e => { setExNombre(e.target.value); setExShowSug(true); }}
                       onFocus={() => setExShowSug(true)}
                       placeholder="Buscar insumo..."
-                      className="pl-7 pr-2 py-1.5 w-44 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      className="pl-7 pr-2 py-2 w-44 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                     />
                     {exShowSug && exSugs.length > 0 && (
                       <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
@@ -2007,12 +2007,12 @@ function RecepcionModal({
                     type="number" min={1} value={exCant}
                     onChange={e => setExCant(Number(e.target.value))}
                     placeholder="Cant."
-                    className="w-16 px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                   <select
                     value={exUnidad}
                     onChange={e => setExUnidad(e.target.value)}
-                    className="w-16 px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none cursor-pointer"
+                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none cursor-pointer"
                   >
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -2020,7 +2020,7 @@ function RecepcionModal({
                     type="number" value={exPrecio || ""}
                     onChange={e => setExPrecio(Number(e.target.value))}
                     placeholder="P. unit."
-                    className="w-24 px-2 py-1.5 bg-background border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                   <button
                     onClick={addExtra}

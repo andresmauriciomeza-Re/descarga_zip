@@ -421,7 +421,7 @@ export function FichaTecnicaEditor({
         {ficha.insumos.length === 0 && (
           <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
         )}
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <InsumoSearchField
             insumos={catalogo}
             valor={nombre}

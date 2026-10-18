@@ -1279,12 +1279,12 @@ export function GestionProductosScreen({
          dentro, nunca la página. */
       <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
         {/* Cabecera fija: no crece ni genera scroll */}
-        <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
-          <div>
+        <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear producto</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => setFichaOculta(v => !v)}
@@ -1306,12 +1306,12 @@ export function GestionProductosScreen({
         </div>
 
         {/* Two columns: cada columna scrollea por dentro, nunca la página */}
-        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
 
           {/* ── COLUMNA IZQUIERDA: datos del producto ── */}
           {/* Con la ficha oculta, los datos ocupan el ancho (max-w-2xl
               centrado); la animación de 0,2 s la da transition-all. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
+          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
             <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
             <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
             {/* Los campos reparten el espacio libre de la columna (`justify-between`)
@@ -1407,7 +1407,7 @@ export function GestionProductosScreen({
               columna colapsa con una animación de 0,2 s y NO se borra lo
               diligenciado. */}
           <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-            fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
+            fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
           }`}>
             {!mostrarEditor ? (
               <div className="flex-1 min-h-0 flex flex-col">
@@ -1510,12 +1510,12 @@ export function GestionProductosScreen({
          espacio: la izquierda scrollea solo como respaldo y en la derecha la
          única barra posible es la de la lista de pasos (recetas largas). */
       <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
-        <div className="shrink-0 bg-card border-b border-border px-6 py-3 flex items-center justify-between">
-          <div>
+        <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Información del producto y su ficha técnica</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button onClick={() => setDetailItem(null)}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cerrar
@@ -1529,13 +1529,13 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
 
           {/* COLUMNA IZQUIERDA: datos del producto. `overflow-y-auto` es solo
               respaldo: con los datos compactados caben sin barra en las dos
               resoluciones objetivo; si algo no cupiera, desplaza la columna
               (nunca la página). */}
-          <div className={`${tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] ? "w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
+          <div className={`${tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] ? "w-full md:w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Datos del producto</p>
             {FormFields({
               values: detailItem,
@@ -1578,7 +1578,7 @@ export function GestionProductosScreen({
               Sin scroll propio: la única barra posible es la de la lista de
               pasos, dentro de su recuadro, cuando la receta es larga. */}
           {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] && (
-          <div className="w-1/2 px-8 py-4 min-h-0 flex flex-col overflow-hidden">
+          <div className="w-full md:w-1/2 px-8 py-4 min-h-0 flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between mb-3">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
               {ficha && ficha.length > 0 && (
@@ -1624,12 +1624,12 @@ export function GestionProductosScreen({
          por dentro; la página nunca scrollea. */
       <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
         {/* Cabecera fija: no crece ni genera scroll */}
-        <div className="shrink-0 bg-card border-b border-border px-6 py-2.5 flex items-center justify-between">
-          <div>
+        <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => setFichaOculta(v => !v)}
@@ -1651,12 +1651,12 @@ export function GestionProductosScreen({
         </div>
 
         {/* Dos columnas: cada columna scrollea por dentro, nunca la página */}
-        <div className="flex-1 min-h-0 flex divide-x divide-border overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
 
           {/* COLUMNA IZQUIERDA: datos editables. Con la ficha oculta ocupa
               el ancho (max-w-2xl centrado) con animación de 0,2 s. Los
               datos scrollean por dentro de la columna, nunca la página. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
+          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
             <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
             <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
@@ -1735,7 +1735,7 @@ export function GestionProductosScreen({
               columna colapsa con animación de 0,2 s sin borrar los datos. */}
           {!llevaFichaEditar ? (
             <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-              fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
+              fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
             }`}>
               <div className="flex-1 min-h-0 flex flex-col">
               <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
@@ -1752,7 +1752,7 @@ export function GestionProductosScreen({
             const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
             return (
               <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-                fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-1/2 px-6 opacity-100"
+                fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
               }`}>
                 <div className="shrink-0 flex items-center justify-between mb-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>

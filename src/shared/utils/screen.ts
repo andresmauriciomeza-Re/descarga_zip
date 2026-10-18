@@ -44,3 +44,8 @@ export type Screen =
   | "devoluciones"
   | "empleados"
   | "mis-pedidos";
+
+/** Nombre del ítem de inicio de la barra lateral y del breadcrumb para los
+ *  roles SIN permiso Dashboard (la "casita" de siempre). Con el permiso, la
+ *  misma casita se llama "Dashboard". */
+export const ETIQUETA_INICIO_EMPLEADO = "Menú";
