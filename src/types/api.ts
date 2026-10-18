@@ -32,6 +32,7 @@ export interface UsuarioApi {
   correo: string;
   rol?: string;
   documento?: string;
+  numeroDocumento?: string;
   tipoDocumento?: string;
   telefono?: string;
   permisos?: PermisoApi[];
