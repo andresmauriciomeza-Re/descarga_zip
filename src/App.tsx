@@ -44,7 +44,6 @@ import {
   Sun,
   Tag,
   Trash2,
-  TrendingUp,
   Truck,
   Upload,
   User,
@@ -100,6 +99,7 @@ import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
 import type { Screen } from "@/shared/utils/screen";
+import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario, trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
@@ -892,11 +892,6 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
 };
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
-
-/** Nombre del ítem de inicio de la barra lateral y del breadcrumb para los
- *  roles SIN permiso Dashboard (la "casita" de siempre). Con el permiso, la
- *  misma casita se llama "Dashboard". */
-const ETIQUETA_INICIO_EMPLEADO = "Menú";
 
 const NAV_SECTIONS = [
   {
@@ -7699,29 +7694,6 @@ export default function App() {
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
 
-  // Punto 2.1 — accesos rápidos del perfil (antes en el cajón "Más" del menú
-  // móvil). Apuntan a las pantallas REALES y se filtran con las mismas reglas
-  // que el Sidebar: Panel de control solo con acceso al Dashboard; el resto,
-  // por el privilegio "Ver" de su permiso. "Informes" no aparece porque
-  // `reports` no tiene pantalla propia (se reporta, no se enlaza a un
-  // placeholder).
-  const accesosRapidos = isStaff
-    ? ([
-        ...(hasDashboardAccess
-          ? [{ screen: "dashboard", label: "Panel de control", Icon: TrendingUp }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Ventas", "Clientes"))
-          ? [{ screen: "clientes", label: "Clientes", Icon: UserCircle }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Producción", "Categoría de Producto"))
-          ? [{ screen: "cat-producto", label: "Categorías", Icon: Tag }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Compras", "Insumos"))
-          ? [{ screen: "supplies", label: "Insumos", Icon: Package }]
-          : []),
-      ] as { screen: string; label: string; Icon: typeof TrendingUp }[])
-    : [];
-
   // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
   // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
   // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
@@ -9462,7 +9434,6 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
-                  accesosRapidos={accesosRapidos}
                   inStore
                 />
               )}
@@ -9494,7 +9465,6 @@ export default function App() {
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
-                  accesosRapidos={accesosRapidos}
                 />
               )}
               {screen === "supplies" && (

@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound, ChevronRight } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
+import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { filtrarCorreo, validarCorreo, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "@/shared/components/campo";
 
 const SERIF = "var(--font-titulo)";
@@ -49,14 +49,9 @@ interface Props {
    *  menú "Cambiar de rol". */
   rolesParaCambiar?: Rol[];
   onCambiarRol?: (rolId: string) => void;
-  /** Punto 2.1 — accesos rápidos: pantallas del panel (Panel de control,
-   *  Clientes, Categorías, Insumos…) a las que el rol activo sí tiene
-   *  permiso. App.tsx arma la lista con las mismas reglas del Sidebar; si la
-   *  lista viene vacía o no se pasa, la sección no se pinta (p. ej. clientes). */
-  accesosRapidos?: { screen: string; label: string; Icon: LucideIcon }[];
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, onUpdatePassword, onPasswordSaved, inStore = false, contrataciones, rolNombreDe, rolesParaCambiar, onCambiarRol, accesosRapidos }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, onUpdatePassword, onPasswordSaved, inStore = false, contrataciones, rolNombreDe, rolesParaCambiar, onCambiarRol }: Props) {
   const [editando, setEditando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
@@ -320,7 +315,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                       <p className="text-xs text-muted-foreground">
                         {c.rolIds.map(id => (rolNombreDe ? rolNombreDe(id) : id)).join(" · ") || "—"}
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
                       </p>
                     </div>
@@ -330,35 +325,6 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             </div>
           )}
         </div>
-
-        {/* Punto 2.1 — Accesos rápidos: lo que antes vivía en el cajón "Más"
-            del menú móvil, ahora como filas del perfil (solo staff y solo las
-            pantallas para las que el rol activo tiene permiso). Los destinos
-            apuntan a las pantallas reales: `clientes`, `cat-producto` y
-            `supplies`; "Informes" no aparece porque `reports` no tiene
-            pantalla propia. */}
-        {isStaff && accesosRapidos && accesosRapidos.length > 0 && (
-          <div className="px-6 py-5 border-t border-border">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">
-              Accesos rápidos
-            </p>
-            <div className="space-y-1">
-              {accesosRapidos.map(({ screen, label, Icon }) => (
-                <button
-                  key={screen}
-                  onClick={() => navigate(screen)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <Icon className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                    {label}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Footer actions */}
         <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row gap-3">
@@ -386,7 +352,11 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                {isStaff ? "Volver al panel de control" : "Volver al inicio"}
+                {isStaff
+                  ? adminHomeScreen === "dashboard"
+                    ? "Volver al Dashboard"
+                    : `Volver al ${ETIQUETA_INICIO_EMPLEADO}`
+                  : "Volver al inicio"}
               </button>
               {inStore && isStaff && (
               <button
