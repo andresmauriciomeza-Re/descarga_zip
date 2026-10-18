@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound, ChevronRight } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, validarCorreo, validarTelefono, PasswordField, validarContrasena, faltantesContrasena, RequisitosContrasena, MensajeError } from "@/shared/components/campo";
+import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
+import { filtrarCorreo, validarCorreo, validarTelefono } from "@/shared/components/campo";
+import { CambiarContrasenaModal, type ErrorGuardarContrasena } from "@/shared/components/CambiarContrasenaModal";
+import { cambiarContrasena } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 
@@ -25,19 +27,22 @@ interface Props {
     telefono: string;
     tipoDocumento: string;
     numeroDocumento: string;
-    contrasena?: string;
   } | null;
   loggedInRoleName: string;
   adminHomeScreen: string;
-  onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
-  /** Escribe la contraseña nueva en la lista `usuarios` (en memoria).
-   *  Devuelve false si no se pudo guardar: en ese caso NO se cierra ni el
-   *  modal ni la sesión. */
-  onUpdatePassword?: (id: string, nuevaContrasena: string) => boolean;
-  /** Se llama DESPUÉS de guardar con éxito: muestra el toast, cierra la sesión
-   *  (misma función que el botón "Cerrar sesión") y deja el correo escrito en
-   *  la pantalla de Iniciar sesión. */
+  /** Guarda correo y teléfono en el backend (PUT /auth/perfil). Si falla,
+   *  indica el campo para pintar el error ahí mismo. */
+  onGuardarPerfil: (datos: {
+    correo: string;
+    telefono: string;
+  }) => Promise<{ ok: boolean; campo?: "correo" | "telefono" | "general"; mensaje?: string }>;
+  /** Se llama DESPUÉS de guardar la contraseña con éxito: muestra el toast,
+   *  cierra la sesión y deja el correo escrito en Iniciar sesión. */
   onPasswordSaved?: (correo: string) => void;
+  /** Estado de la carga del perfil desde GET /auth/me (App lo gestiona). */
+  perfilCargando?: boolean;
+  perfilError?: string | null;
+  onReintentarPerfil?: () => void;
   inStore?: boolean;
   // Historial de contrataciones del empleado de la sesión, en solo lectura.
   // Lo resuelve App.tsx cruzando el correo de `loggedInUser` contra `empleados`.
@@ -49,15 +54,11 @@ interface Props {
    *  menú "Cambiar de rol". */
   rolesParaCambiar?: Rol[];
   onCambiarRol?: (rolId: string) => void;
-  /** Punto 2.1 — accesos rápidos: pantallas del panel (Panel de control,
-   *  Clientes, Categorías, Insumos…) a las que el rol activo sí tiene
-   *  permiso. App.tsx arma la lista con las mismas reglas del Sidebar; si la
-   *  lista viene vacía o no se pasa, la sección no se pinta (p. ej. clientes). */
-  accesosRapidos?: { screen: string; label: string; Icon: LucideIcon }[];
 }
 
-export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onUpdateUser, onUpdatePassword, onPasswordSaved, inStore = false, contrataciones, rolNombreDe, rolesParaCambiar, onCambiarRol, accesosRapidos }: Props) {
+export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedInUser, loggedInRoleName, adminHomeScreen, onGuardarPerfil, onPasswordSaved, perfilCargando, perfilError, onReintentarPerfil, inStore = false, contrataciones, rolNombreDe, rolesParaCambiar, onCambiarRol }: Props) {
   const [editando, setEditando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [correo,   setCorreo]   = useState(loggedInUser?.correo   ?? "");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "");
   const [guardado, setGuardado] = useState({ correo: loggedInUser?.correo ?? "", telefono: loggedInUser?.telefono ?? "" });
@@ -96,19 +97,30 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
     setErrores({});
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     const ec = validarCorreo(correo);
     const et = validarTelefono(telefono);
     if (ec || et) { setErrores({ correo: ec ?? undefined, telefono: et ?? undefined }); return; }
     const newCorreo   = correo.trim().toLowerCase();
     const newTelefono = telefono.trim();
-    setGuardado({ correo: newCorreo, telefono: newTelefono });
-    if (loggedInUser) {
-      onUpdateUser(loggedInUser.id, { correo: newCorreo, telefono: newTelefono });
+    setGuardando(true);
+    try {
+      // El guardado real es del BACKEND (PUT /auth/perfil); la lista local
+      // se actualiza en App con la respuesta del servidor.
+      const resultado = await onGuardarPerfil({ correo: newCorreo, telefono: newTelefono });
+      if (!resultado.ok) {
+        if (resultado.campo === "correo") setErrores({ correo: resultado.mensaje });
+        else if (resultado.campo === "telefono") setErrores({ telefono: resultado.mensaje });
+        else toast.error(resultado.mensaje ?? "No se pudo guardar el perfil. Inténtalo de nuevo.");
+        return;
+      }
+      setGuardado({ correo: newCorreo, telefono: newTelefono });
+      setEditando(false);
+      setErrores({});
+      toast.success("Perfil actualizado correctamente", { description: "Los cambios han sido guardados." });
+    } finally {
+      setGuardando(false);
     }
-    setEditando(false);
-    setErrores({});
-    toast.success("Perfil actualizado correctamente", { description: "Los cambios han sido guardados." });
   };
 
   const nombre    = loggedInUser?.nombre    ?? "—";
@@ -132,6 +144,30 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
           Consulta y actualiza tu información de contacto
         </p>
       </div>
+
+      {/* Carga / error de GET /auth/me: los datos locales se ven mientras
+          llegan; si el servidor falla, se puede reintentar sin perder nada. */}
+      {perfilCargando && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-muted/40 text-sm text-muted-foreground">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+          Cargando tu información desde el servidor…
+        </div>
+      )}
+      {perfilError && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50/60 text-sm text-red-700">
+          <span className="flex-1 min-w-[200px]">{perfilError}</span>
+          {onReintentarPerfil && (
+            <button
+              onClick={onReintentarPerfil}
+              disabled={perfilCargando}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden />
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -320,7 +356,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                       <p className="text-xs text-muted-foreground">
                         {c.rolIds.map(id => (rolNombreDe ? rolNombreDe(id) : id)).join(" · ") || "—"}
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
                       </p>
                     </div>
@@ -330,35 +366,6 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             </div>
           )}
         </div>
-
-        {/* Punto 2.1 — Accesos rápidos: lo que antes vivía en el cajón "Más"
-            del menú móvil, ahora como filas del perfil (solo staff y solo las
-            pantallas para las que el rol activo tiene permiso). Los destinos
-            apuntan a las pantallas reales: `clientes`, `cat-producto` y
-            `supplies`; "Informes" no aparece porque `reports` no tiene
-            pantalla propia. */}
-        {isStaff && accesosRapidos && accesosRapidos.length > 0 && (
-          <div className="px-6 py-5 border-t border-border">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">
-              Accesos rápidos
-            </p>
-            <div className="space-y-1">
-              {accesosRapidos.map(({ screen, label, Icon }) => (
-                <button
-                  key={screen}
-                  onClick={() => navigate(screen)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors cursor-pointer text-left"
-                >
-                  <Icon className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                    {label}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Footer actions */}
         <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row gap-3">
@@ -372,11 +379,12 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 Cancelar
               </button>
               <button
-                onClick={handleGuardar}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all"
+                onClick={() => void handleGuardar()}
+                disabled={guardando}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
               >
                 <Check className="w-4 h-4" />
-                Guardar cambios
+                {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
             </>
           ) : (
@@ -386,7 +394,11 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                {isStaff ? "Volver al panel de control" : "Volver al inicio"}
+                {isStaff
+                  ? adminHomeScreen === "dashboard"
+                    ? "Volver al Dashboard"
+                    : `Volver al ${ETIQUETA_INICIO_EMPLEADO}`
+                  : "Volver al inicio"}
               </button>
               {inStore && isStaff && (
               <button
@@ -410,323 +422,28 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
       </motion.div>
 
       {showCambiarContrasena && loggedInUser && (
-        <ChangePasswordModal
+        <CambiarContrasenaModal
           correo={loggedInUser.correo}
-          contrasenaActual={loggedInUser.contrasena ?? "123456"}
           onClose={() => setShowCambiarContrasena(false)}
-          onSave={(nueva) => {
-            // El orden importa: primero se escribe (si falla, aquí NO se cierra
-            // nada y el modal sigue abierto con la sesión intacta), y solo
-            // después se cierra el modal y se cierra la sesión.
-            const ok = onUpdatePassword?.(loggedInUser.id, nueva) ?? false;
-            if (!ok) {
-              toast.error("No se pudo actualizar la contraseña, inténtalo de nuevo");
-              return false;
+          onGuardar={async (actual, nueva): Promise<ErrorGuardarContrasena | null> => {
+            try {
+              // Guardado real contra PUT /auth/cambiar-contrasena.
+              await cambiarContrasena(actual, nueva);
+            } catch (e) {
+              const mensaje =
+                e instanceof Error ? e.message : "No se pudo cambiar la contraseña.";
+              if (/contraseña actual/i.test(mensaje)) return { campo: "actual", mensaje };
+              if (/nueva contraseña/i.test(mensaje)) return { campo: "nueva", mensaje };
+              return { campo: "general", mensaje };
             }
+            // Éxito: se cierra el modal y se cierra la sesión (con el correo
+            // ya escrito en la pantalla de Iniciar sesión).
             setShowCambiarContrasena(false);
             onPasswordSaved?.(loggedInUser.correo);
-            return true;
+            return null;
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────── CAMBIAR CONTRASEÑA ───────────────────────────
-// El mismo modal de "Recuperar / Restablecer contraseña" (código por correo,
-// 6 dígitos, luego nueva contraseña), aplicado al perfil actual. Reutiliza
-// PasswordField, validarContrasena, RequisitosContrasena y MensajeError, y al
-// guardar cierra la sesión con la misma función del botón "Cerrar sesión".
-
-function ChangePasswordModal({
-  correo,
-  contrasenaActual,
-  onClose,
-  onSave,
-}: {
-  correo: string;
-  contrasenaActual: string;
-  onClose: () => void;
-  /** Guarda y cierra. Devuelve false si no se pudo guardar (entonces el modal
-   *  y la sesión siguen donde estaban). */
-  onSave: (nueva: string) => boolean;
-}) {
-  const [step, setStep] = useState<"send" | "code" | "password">("send");
-  const [code, setCode] = useState(["", "", "", "", "", ""]);
-  const [newPass, setNewPass] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [errores, setErrores] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const closeWithEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeWithEscape);
-    return () => document.removeEventListener("keydown", closeWithEscape);
-  }, [onClose]);
-
-  const startCooldown = () => {
-    setResendCooldown(30);
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const [local, domain] = correo.split("@");
-  const correoEnmascarado = `${local[0] ?? ""}•••${domain ? `@${domain}` : ""}`;
-
-  const sendCode = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setStep("code");
-      toast.success("Código enviado a " + correo);
-      startCooldown();
-    }, 1000);
-  };
-
-  const resendCode = () => {
-    if (resendCooldown > 0) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      toast.success("Código reenviado a " + correo);
-      startCooldown();
-    }, 900);
-  };
-
-  const verifyCode = () => {
-    const fullCode = code.join("");
-    if (fullCode.length < 6) {
-      setErrores({ code: "Código incorrecto" });
-      return;
-    }
-    setErrores({});
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setStep("password");
-    }, 900);
-  };
-
-  // ── Validación en tiempo real ──────────────────────────────────────
-  // Todo se deriva del valor mientras se escribe: no depende de un estado que
-  // solo se rellena al pulsar el botón, así que los mensajes (y los bordes)
-  // aparecen desde la primera tecla.
-  const passwordError = newPass.length > 0 ? validarContrasena(newPass) : null;
-  const confirmVacio = confirm.length === 0;
-  const confirmCoincide = !confirmVacio && confirm === newPass;
-  const confirmError = !confirmVacio && !confirmCoincide;
-  const mismoQueActual = newPass.length > 0 && newPass === contrasenaActual;
-  const todoValido =
-    validarContrasena(newPass) === null && confirmCoincide && !mismoQueActual;
-
-  // Es lo que se pinta SIEMPRE debajo del botón mientras esté deshabilitado:
-  // un botón apagado nunca queda sin explicación.
-  const faltan: string[] = [];
-  if (newPass.length === 0) faltan.push("escribir la contraseña");
-  else faltan.push(...faltantesContrasena(newPass));
-  if (mismoQueActual) faltan.push("usar una contraseña distinta a la actual");
-  if (confirmVacio) faltan.push("confirmar la contraseña");
-  else if (confirmError) faltan.push("que las contraseñas coincidan");
-
-  // Borde del campo: rojo si tiene error, verde si ya es válido, neutro vacío.
-  const clsCampo = (estado: "ok" | "err" | "neutro") =>
-    `w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-      estado === "err"
-        ? "border-red-400 bg-red-50/30"
-        : estado === "ok"
-          ? "border-emerald-500"
-          : "border-border"
-    }`;
-  const estadoNew: "ok" | "err" | "neutro" =
-    newPass.length === 0 ? "neutro" : passwordError || mismoQueActual ? "err" : "ok";
-  const estadoConfirm: "ok" | "err" | "neutro" =
-    confirmVacio ? "neutro" : confirmError ? "err" : "ok";
-
-  const handleCodeInput = (i: number, val: string) => {
-    if (!/^\d?$/.test(val)) return;
-    const next = [...code];
-    next[i] = val;
-    setCode(next);
-    if (errores.code) setErrores((p) => ({ ...p, code: "" }));
-    if (val && i < 5) document.getElementById(`chg-otp-${i + 1}`)?.focus();
-  };
-
-  const handleCodeKey = (i: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !code[i] && i > 0) {
-      document.getElementById(`chg-otp-${i - 1}`)?.focus();
-    }
-  };
-
-  const guardar = () => {
-    // El botón ya viene deshabilitado si algo falta; esta guarda es la que
-    // cubre el Enter y cualquier intento de envío indirecto.
-    if (loading || !todoValido) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      // `onSave` hace el trabajo real (escribir en `usuarios`, cerrar sesión y
-      // navegar). Si devuelve false NO se cierra nada: el modal y la sesión
-      // siguen como estaban y el error ya lo avisó el propio `onSave`.
-      onSave(newPass);
-    }, 900);
-  };
-
-  /** Enter envía, pero solo cuando todo es válido (ver la guarda de arriba). */
-  const enviarConEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") guardar();
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <motion.div
-        initial={{ scale: 0.93, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.18 }}
-        className="relative my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Cerrar cambio de contraseña"
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {step === "send" && (
-          <>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Mail className="w-7 h-7 text-primary" />
-              </div>
-              <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Cambiar contraseña</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Te enviaremos un código de 6 dígitos a {correoEnmascarado}
-              </p>
-            </div>
-            <button
-              onClick={sendCode}
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {loading ? "Enviando..." : "Enviar código"}
-            </button>
-          </>
-        )}
-
-        {step === "code" && (
-          <>
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Código de verificación</h2>
-              <p className="text-sm text-muted-foreground mt-1">Ingresa el código de 6 dígitos enviado a tu correo</p>
-            </div>
-            <div className="flex justify-center gap-2 mb-4">
-              {code.map((digit, i) => (
-                <input
-                  key={i}
-                  id={`chg-otp-${i}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleCodeInput(i, e.target.value)}
-                  onKeyDown={(e) => handleCodeKey(i, e)}
-                  className="w-10 h-12 text-center text-lg font-bold rounded-xl border border-border bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
-                />
-              ))}
-            </div>
-            {errores.code && <MensajeError err={errores.code} />}
-            <p className="text-center text-sm text-muted-foreground mb-4">
-              ¿No lo recibiste?{" "}
-              {resendCooldown > 0 ? (
-                <span className="text-muted-foreground">Reenviar en {resendCooldown}s</span>
-              ) : (
-                <button onClick={resendCode} className="text-primary font-semibold hover:underline cursor-pointer">Reenviar código</button>
-              )}
-            </p>
-            <button
-              onClick={verifyCode}
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
-            >
-              {loading ? "Verificando..." : "Verificar"}
-            </button>
-          </>
-        )}
-
-        {step === "password" && (
-          <>
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva contraseña</h2>
-              <p className="text-sm text-muted-foreground mt-1">Elige una contraseña segura para tu cuenta</p>
-            </div>
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">Nueva contraseña</label>
-                <PasswordField
-                  value={newPass}
-                  onChange={setNewPass}
-                  onKeyDown={enviarConEnter}
-                  placeholder="Mínimo 8 caracteres"
-                  autoComplete="new-password"
-                  cls={clsCampo(estadoNew)}
-                />
-                {/* Requisitos que se marcan mientras se escribe. */}
-                <RequisitosContrasena valor={newPass} />
-                <MensajeError err={passwordError ?? undefined} />
-                {mismoQueActual && (
-                  <MensajeError err="La nueva contraseña debe ser diferente a la actual" />
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">Confirmar contraseña</label>
-                <PasswordField
-                  value={confirm}
-                  onChange={setConfirm}
-                  onKeyDown={enviarConEnter}
-                  placeholder="Repite tu contraseña"
-                  autoComplete="new-password"
-                  cls={clsCampo(estadoConfirm)}
-                />
-                {/* En rojo en cuanto difiere; en verde con check cuando coinciden. */}
-                {confirmError && <MensajeError err="Las contraseñas no coinciden" />}
-                {confirmCoincide && (
-                  <p className="text-xs text-emerald-600 mt-1 ml-0.5 leading-tight flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                    Las contraseñas coinciden
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={guardar}
-              disabled={loading || !todoValido}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
-            >
-              {loading ? "Guardando..." : "Guardar contraseña"}
-            </button>
-            {/* Nunca un botón deshabilitado sin decir qué falta. */}
-            {!todoValido && (
-              <p className="text-xs text-muted-foreground mt-2 leading-tight">
-                Para guardar falta: {faltan.join(", ")}.
-              </p>
-            )}
-          </>
-        )}
-      </motion.div>
     </div>
   );
 }

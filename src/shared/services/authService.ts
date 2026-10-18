@@ -50,6 +50,34 @@ export async function login(
   return { token: data.token, usuario: data.usuario };
 }
 
+/** Perfil completo del usuario autenticado (GET /auth/me): trae nombre,
+ *  correo, teléfono, tipo y número de documento. Nunca la contraseña. */
+export async function obtenerPerfil(): Promise<UsuarioApi> {
+  const { data } = await api.get<UsuarioApi>("/auth/me");
+  return data;
+}
+
+/** Guarda SOLO correo y teléfono en el backend (PUT /auth/perfil). */
+export async function actualizarPerfil(datos: {
+  correo: string;
+  telefono: string;
+}): Promise<UsuarioApi> {
+  const { data } = await api.put<UsuarioApi>("/auth/perfil", datos);
+  return data;
+}
+
+/** Cambia la contraseña del usuario autenticado (PUT /auth/cambiar-contrasena).
+ *  El backend responde 400 si la actual es incorrecta o la nueva no cumple. */
+export async function cambiarContrasena(
+  contrasenaActual: string,
+  contrasenaNueva: string,
+): Promise<void> {
+  await api.put("/auth/cambiar-contrasena", {
+    contrasenaActual,
+    contrasenaNueva,
+  });
+}
+
 /** Pide un código de recuperación. El backend responde 200 exista o no el
  *  correo (para no revelar cuentas); 429 si llegan demasiadas solicitudes.
  *  No guarda token: la recuperación ocurre con el código, no con sesión. */

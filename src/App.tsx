@@ -13,13 +13,13 @@ import {
   ClipboardList,
   CreditCard,
   DollarSign,
-  Edit2,
   Eye,
   FileText,
   Grid,
   Home,
   IdCard,
   ImageIcon,
+  KeyRound,
   Layers,
   Lock,
   LogOut,
@@ -30,6 +30,7 @@ import {
   Moon,
   Package,
   PackageCheck,
+  Pencil,
   Phone,
   Plus,
   QrCode,
@@ -44,7 +45,6 @@ import {
   Sun,
   Tag,
   Trash2,
-  TrendingUp,
   Truck,
   Upload,
   User,
@@ -100,10 +100,11 @@ import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
 import type { Screen } from "@/shared/utils/screen";
+import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario, trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
-import { borrarToken, login as loginApi, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
+import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
@@ -128,6 +129,8 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
+import { CambiarContrasenaModal, type ErrorGuardarContrasena } from "@/shared/components/CambiarContrasenaModal";
+import { cambiarContrasena } from "@/shared/services/authService";
 import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
   GestionCompra,
@@ -892,11 +895,6 @@ const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
 };
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
-
-/** Nombre del ítem de inicio de la barra lateral y del breadcrumb para los
- *  roles SIN permiso Dashboard (la "casita" de siempre). Con el permiso, la
- *  misma casita se llama "Dashboard". */
-const ETIQUETA_INICIO_EMPLEADO = "Menú";
 
 const NAV_SECTIONS = [
   {
@@ -3900,7 +3898,11 @@ function ClientProfileScreen({
   loggedInRoleName,
   isStaff,
   adminHomeScreen,
-  onUpdateUser,
+  onGuardarPerfil,
+  onPasswordSaved,
+  perfilCargando,
+  perfilError,
+  onReintentarPerfil,
 }: {
   navigate: (s: Screen) => void;
   onLogout: () => void;
@@ -3917,9 +3919,21 @@ function ClientProfileScreen({
   loggedInRoleName: string;
   isStaff: boolean;
   adminHomeScreen: Screen;
-  onUpdateUser: (id: string, data: { correo: string; telefono: string }) => void;
+  /** Guarda correo y teléfono en el backend (PUT /auth/perfil). */
+  onGuardarPerfil: (datos: {
+    correo: string;
+    telefono: string;
+  }) => Promise<{ ok: boolean; campo?: "correo" | "telefono" | "general"; mensaje?: string }>;
+  /** Tras guardar la contraseña con éxito: toast, cierre de sesión y login
+   *  con el correo ya escrito. */
+  onPasswordSaved?: (correo: string) => void;
+  perfilCargando?: boolean;
+  perfilError?: string | null;
+  onReintentarPerfil?: () => void;
 }) {
   const [editando, setEditando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [showCambiarContrasena, setShowCambiarContrasena] = useState(false);
   const [correo, setCorreo] = useState(loggedInUser?.correo ?? "sebas@gmail.com");
   const [telefono, setTelefono] = useState(loggedInUser?.telefono ?? "3109876543");
   const [guardado, setGuardado] = useState({
@@ -3946,7 +3960,7 @@ function ClientProfileScreen({
     ? etiquetaTipoDocumento(loggedInUser.tipoDocumento)
     : "—";
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     const ec = validarCorreo(correo);
     const et = !/^\d{7,15}$/.test(telefono.replace(/\s/g, ""))
       ? "Solo números, entre 7 y 15 dígitos"
@@ -3958,15 +3972,29 @@ function ClientProfileScreen({
       });
       return;
     }
-    setGuardado({
-       correo: correo.trim().toLowerCase(),
-      telefono: telefono.trim(),
-    });
-    if (loggedInUser)
-       onUpdateUser(loggedInUser.id, { correo: correo.trim().toLowerCase(), telefono: telefono.trim() });
-    setEditando(false);
-    setErrores({});
-    toast.success("Perfil actualizado correctamente");
+    setGuardando(true);
+    try {
+      // Guardado real contra PUT /auth/perfil (no solo memoria local).
+      const resultado = await onGuardarPerfil({
+        correo: correo.trim().toLowerCase(),
+        telefono: telefono.trim(),
+      });
+      if (!resultado.ok) {
+        if (resultado.campo === "correo") setErrores({ correo: resultado.mensaje });
+        else if (resultado.campo === "telefono") setErrores({ telefono: resultado.mensaje });
+        else toast.error(resultado.mensaje ?? "No se pudo guardar el perfil. Inténtalo de nuevo.");
+        return;
+      }
+      setGuardado({
+        correo: correo.trim().toLowerCase(),
+        telefono: telefono.trim(),
+      });
+      setEditando(false);
+      setErrores({});
+      toast.success("Perfil actualizado correctamente");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -3982,9 +4010,32 @@ function ClientProfileScreen({
           Tu información de cuenta
         </p>
       </div>
+      {/* Carga / error de GET /auth/me: los datos locales se ven mientras
+          llegan; si el servidor falla, se puede reintentar. */}
+      {perfilCargando && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-muted/40 text-sm text-muted-foreground">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+          Cargando tu información desde el servidor…
+        </div>
+      )}
+      {perfilError && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50/60 text-sm text-red-700">
+          <span className="flex-1 min-w-[200px]">{perfilError}</span>
+          {onReintentarPerfil && (
+            <button
+              onClick={onReintentarPerfil}
+              disabled={perfilCargando}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden />
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {/* Avatar */}
-        <div className="flex items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
+        <div className="flex flex-wrap items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
           <div className={`w-16 h-16 rounded-full ${loggedInUser?.avatarColor ?? "bg-blue-600"} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm`}>
             {loggedInUser?.iniciales ?? "S"}
           </div>
@@ -4000,17 +4051,38 @@ function ClientProfileScreen({
             </span>
           </div>
           {!editando && (
-            <button
-              onClick={() => {
-                setCorreo(guardado.correo);
-                setTelefono(guardado.telefono);
-                setErrores({});
-                setEditando(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
-            >
-              <Edit2 className="w-3.5 h-3.5" /> Editar
-            </button>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
+              <button
+                onClick={() => setShowCambiarContrasena(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <KeyRound className="w-4 h-4" />
+                Cambiar contraseña
+              </button>
+              <button
+                onClick={() => {
+                  setCorreo(guardado.correo);
+                  setTelefono(guardado.telefono);
+                  setErrores({});
+                  setEditando(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+              >
+                <Pencil className="w-4 h-4" /> Editar
+              </button>
+            </div>
+          )}
+          {editando && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
+              <button
+                disabled
+                title="Termina de editar tu perfil primero"
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl opacity-60 cursor-not-allowed shrink-0"
+              >
+                <KeyRound className="w-4 h-4" />
+                Cambiar contraseña
+              </button>
+            </div>
           )}
         </div>
          {/* Fields */}
@@ -4046,9 +4118,9 @@ function ClientProfileScreen({
              </div>
            </div>
            <div>
-             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-               <User className="w-3.5 h-3.5" /> Nombre
-             </label>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <User className="w-3.5 h-3.5" /> Nombre completo
+              </label>
              <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
                {loggedInUser?.nombre ?? "Sebastián"}
              </div>
@@ -4087,9 +4159,9 @@ function ClientProfileScreen({
             )}
           </div>
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-              <Phone className="w-3.5 h-3.5" /> Teléfono
-            </label>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <Phone className="w-3.5 h-3.5" /> Número de teléfono
+              </label>
             {editando ? (
               <>
                 <input
@@ -4131,10 +4203,11 @@ function ClientProfileScreen({
                 <X className="w-4 h-4" /> Cancelar
               </button>
               <button
-                onClick={handleGuardar}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 active:scale-95 cursor-pointer transition-all"
+                onClick={() => void handleGuardar()}
+                disabled={guardando}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
               >
-                <Check className="w-4 h-4" /> Guardar cambios
+                <Check className="w-4 h-4" /> {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
             </>
           ) : (
@@ -4143,7 +4216,7 @@ function ClientProfileScreen({
                 onClick={() => navigate("catalog")}
                 className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
-                <ArrowLeft className="w-4 h-4" /> Volver al menú
+                <ArrowLeft className="w-4 h-4" /> Volver al Menú
               </button>
               {isStaff && (
                 <button
@@ -4163,6 +4236,30 @@ function ClientProfileScreen({
           )}
         </div>
       </div>
+
+      {showCambiarContrasena && loggedInUser && (
+        <CambiarContrasenaModal
+          correo={loggedInUser.correo}
+          onClose={() => setShowCambiarContrasena(false)}
+          onGuardar={async (actual, nueva): Promise<ErrorGuardarContrasena | null> => {
+            try {
+              // Guardado real contra PUT /auth/cambiar-contrasena.
+              await cambiarContrasena(actual, nueva);
+            } catch (e) {
+              const mensaje =
+                e instanceof Error ? e.message : "No se pudo cambiar la contraseña.";
+              if (/contraseña actual/i.test(mensaje)) return { campo: "actual", mensaje };
+              if (/nueva contraseña/i.test(mensaje)) return { campo: "nueva", mensaje };
+              return { campo: "general", mensaje };
+            }
+            // Éxito: se cierra el modal y se cierra la sesión (con el correo
+            // ya escrito en la pantalla de Iniciar sesión).
+            setShowCambiarContrasena(false);
+            onPasswordSaved?.(loggedInUser.correo);
+            return null;
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -4356,7 +4453,7 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
     correo: usuarioApi.correo,
     telefono: usuarioApi.telefono ?? "",
     tipoDocumento: usuarioApi.tipoDocumento ?? (usuarioApi.documento ? "CC" : ""),
-    numeroDocumento: usuarioApi.documento ?? "",
+    numeroDocumento: usuarioApi.numeroDocumento ?? usuarioApi.documento ?? "",
     rolIds: [rolLocal.id],
     rolId: rolLocal.id,
     activo: true,
@@ -7699,29 +7796,6 @@ export default function App() {
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
 
-  // Punto 2.1 — accesos rápidos del perfil (antes en el cajón "Más" del menú
-  // móvil). Apuntan a las pantallas REALES y se filtran con las mismas reglas
-  // que el Sidebar: Panel de control solo con acceso al Dashboard; el resto,
-  // por el privilegio "Ver" de su permiso. "Informes" no aparece porque
-  // `reports` no tiene pantalla propia (se reporta, no se enlaza a un
-  // placeholder).
-  const accesosRapidos = isStaff
-    ? ([
-        ...(hasDashboardAccess
-          ? [{ screen: "dashboard", label: "Panel de control", Icon: TrendingUp }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Ventas", "Clientes"))
-          ? [{ screen: "clientes", label: "Clientes", Icon: UserCircle }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Producción", "Categoría de Producto"))
-          ? [{ screen: "cat-producto", label: "Categorías", Icon: Tag }]
-          : []),
-        ...(canViewPermission(loggedInAccesos, KEY("Compras", "Insumos"))
-          ? [{ screen: "supplies", label: "Insumos", Icon: Package }]
-          : []),
-      ] as { screen: string; label: string; Icon: typeof TrendingUp }[])
-    : [];
-
   // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
   // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
   // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
@@ -8600,27 +8674,99 @@ export default function App() {
     }
   };
 
-  /** Guarda la contraseña nueva del usuario de la sesión en la lista
-   *  `usuarios` (en memoria: este prototipo no guarda credenciales en
-   *  localStorage, así que un F5 devuelve las contraseñas de la semilla).
-   *
-   *  Devuelve false —sin tocar nada— cuando no se pudo actualizar, para que "Mi
-   *  perfil" conserve tanto el modal como la sesión abiertas. */
-  const actualizarContrasena = (
-    id: string,
-    nuevaContrasena: string,
-  ): boolean => {
+  /** Refresca el perfil del usuario de la sesión desde GET /auth/me y hace
+   *  merge en la lista local `usuarios` (nombre, correo, teléfono, tipo y
+   *  número de documento). Se usa al restaurar la sesión (F5) y al entrar a
+   *  las pantallas de perfil: así el teléfono y el documento no dependen de
+   *  lo que haya quedado en el estado local. */
+  const [perfilEstado, setPerfilEstado] = useState<"idle" | "cargando" | "error">("idle");
+  const [perfilErrorMsg, setPerfilErrorMsg] = useState<string | null>(null);
+
+  const refrescarPerfil = async () => {
+    if (!obtenerToken() || !loggedInUserId) return;
+    setPerfilEstado("cargando");
     try {
-      if (!nuevaContrasena) return false;
-      if (!usuarios.some((u) => u.id === id)) return false;
+      const perfil = await obtenerPerfil();
+      const id = String(perfil.id);
       setUsuarios((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, contrasena: nuevaContrasena } : u)),
+        prev.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                nombre: perfil.nombre || u.nombre,
+                correo: (perfil.correo || u.correo).trim().toLowerCase(),
+                telefono: perfil.telefono || u.telefono,
+                tipoDocumento: perfil.tipoDocumento || u.tipoDocumento,
+                numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
+              }
+            : u,
+        ),
       );
-      return true;
-    } catch {
-      return false;
+      setPerfilEstado("idle");
+      setPerfilErrorMsg(null);
+    } catch (error) {
+      setPerfilEstado("error");
+      setPerfilErrorMsg(
+        error instanceof Error
+          ? `No pudimos cargar tu información del servidor: ${error.message}`
+          : "No pudimos cargar tu información del servidor. Inténtalo de nuevo.",
+      );
     }
   };
+
+  /** Guarda SOLO correo y teléfono contra PUT /auth/perfil y actualiza la
+   *  lista local con la respuesta del servidor. */
+  const guardarPerfilBackend = async (datos: {
+    correo: string;
+    telefono: string;
+  }): Promise<{ ok: boolean; campo?: "correo" | "telefono" | "general"; mensaje?: string }> => {
+    try {
+      const perfil = await actualizarPerfil(datos);
+      const id = String(perfil.id);
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                correo: (perfil.correo || datos.correo).trim().toLowerCase(),
+                telefono: perfil.telefono || datos.telefono,
+              }
+            : u,
+        ),
+      );
+      return { ok: true };
+    } catch (error) {
+      const mensaje =
+        error instanceof Error ? error.message : "No se pudo guardar el perfil.";
+      const status = (error as { status?: number }).status;
+      // 409 = correo ya registrado (lo dice el backend para el campo correo).
+      if (status === 409 || /correo/i.test(mensaje)) {
+        return { ok: false, campo: "correo", mensaje };
+      }
+      return { ok: false, campo: "general", mensaje };
+    }
+  };
+
+  /** Refresca el perfil al restaurar la sesión (F5) y cada vez que se entra a
+   *  una pantalla de perfil. El estado de carga/error lo pintan las pantallas. */
+  useEffect(() => {
+    if (!isLoggedIn || !loggedInUserId) return;
+    if (
+      screen === "client-profile" ||
+      screen === "store-profile" ||
+      screen === "profile"
+    ) {
+      void refrescarPerfil();
+    }
+  }, [screen, isLoggedIn, loggedInUserId]);
+
+  useEffect(() => {
+    if (sesionActiva && obtenerToken() && loggedInUserId) {
+      void refrescarPerfil();
+    }
+    // Solo al montar la app: la sesión de arranque es la del F5.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
    *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
@@ -9094,9 +9240,11 @@ export default function App() {
                   loggedInRoleName={loggedInRoleName}
                   isStaff={isStaff}
                   adminHomeScreen={adminHomeScreen}
-                  onUpdateUser={(id, data) => {
-                    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-                  }}
+                  onGuardarPerfil={guardarPerfilBackend}
+                  onPasswordSaved={trasCambiarContrasena}
+                  perfilCargando={perfilEstado === "cargando"}
+                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                  onReintentarPerfil={() => void refrescarPerfil()}
                 />
               )}
               {((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
@@ -9449,20 +9597,18 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
-                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
-                  onUpdateUser={(id, data) => {
-                    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-                  }}
-                  onUpdatePassword={actualizarContrasena}
+                  onGuardarPerfil={guardarPerfilBackend}
                   onPasswordSaved={trasCambiarContrasena}
+                  perfilCargando={perfilEstado === "cargando"}
+                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                  onReintentarPerfil={() => void refrescarPerfil()}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
-                  accesosRapidos={accesosRapidos}
                   inStore
                 />
               )}
@@ -9481,20 +9627,18 @@ export default function App() {
                     telefono: loggedInUser.telefono,
                     tipoDocumento: loggedInUser.tipoDocumento,
                     numeroDocumento: loggedInUser.numeroDocumento,
-                    contrasena: loggedInUser.contrasena,
                   } : null}
                   loggedInRoleName={loggedInRoleName}
                   adminHomeScreen={adminHomeScreen}
-                  onUpdateUser={(id, data) => {
-                    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-                  }}
-                  onUpdatePassword={actualizarContrasena}
+                  onGuardarPerfil={guardarPerfilBackend}
                   onPasswordSaved={trasCambiarContrasena}
+                  perfilCargando={perfilEstado === "cargando"}
+                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                  onReintentarPerfil={() => void refrescarPerfil()}
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
                   onCambiarRol={cambiarRolActivo}
-                  accesosRapidos={accesosRapidos}
                 />
               )}
               {screen === "supplies" && (
