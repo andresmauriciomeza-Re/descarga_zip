@@ -11,7 +11,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "@/features/usuarios/pages/GestionUsuariosScreen";
@@ -46,7 +46,6 @@ export interface Empleado {
   telefono: string;
   tipoDocumento: string;
   numeroDocumento: string;
-  contrasena: string;
   rolIds: string[];        // cargos/roles vigentes (fuente de verdad)
   activo: boolean;         // Tb_Empleado.Estado
   fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (vigente)
@@ -60,8 +59,8 @@ export interface Empleado {
 // ROL-004 Cajero · ROL-005 Mesero · ROL-006 Domiciliario · ROL-007 Cocinero ·
 // ROL-008 Auxiliar de cocina · ROL-009 Operador de producción.
 const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
-  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", contrasena:"123456", rolIds:["ROL-001"],             activo:true,  fechaInicio:"2024-01-15", fechaFinal:"" },
-  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", contrasena:"123456", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-01", fechaFinal:"" },
+  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolIds:["ROL-001"],             activo:true,  fechaInicio:"2024-01-15", fechaFinal:"" },
+  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-01", fechaFinal:"" },
 ];
 
 // Cada empleado de la semilla arranca con una contratación inicial (C01) que es
@@ -144,8 +143,6 @@ export function GestionEmpleadosScreen({
   const [newTelefono,     setNewTelefono]     = useState("");
   const [newTipoDoc,      setNewTipoDoc]      = useState("CC");
   const [newDocumento,    setNewDocumento]    = useState("");
-  const [newContrasena,   setNewContrasena]   = useState("");
-  const [newConfirmar,    setNewConfirmar]    = useState("");
   const [newActivo,       setNewActivo]       = useState(true);
   const [newRolIds,       setNewRolIds]       = useState<string[]>([]);
   const [newFechaInicio,  setNewFechaInicio]  = useState("");
@@ -240,26 +237,17 @@ export function GestionEmpleadosScreen({
         activo: emp.activo,
       };
       if (target) {
-        // Actualizar NUNCA toca `contrasena`: si no, cada edición de ficha
-        // pisaría la clave que el usuario cambió en "Mi perfil" o en
-        // "Restablecer contraseña" y lo dejaría sin su clave nueva.
         return prev.map(u => u.id === target.id ? { ...u, ...base } : u);
       }
       const maxNum = prev.reduce((max, u) => {
         const n = parseInt(u.id.replace("USR-", ""), 10) || 0;
         return Math.max(max, n);
       }, 0);
-      // Al CREAR sí se copia la contraseña de la ficha: sin este campo el
-      // usuario nace con `contrasena` indefinida y el login exige "123456",
-      // con lo que la clave que se acabó de escribir en el alta no serviría.
-      // Ojo: este alta ocurre ANTES que el efecto de sincronización de App
-      // (mismo tick), por eso tiene que llevarla ella y no esperar a ese efecto.
       return [
         ...prev,
         {
           id: `USR-${String(maxNum + 1).padStart(3, "0")}`,
           ...base,
-          contrasena: emp.contrasena,
         },
       ];
     });
@@ -421,7 +409,7 @@ export function GestionEmpleadosScreen({
 
   const resetCreate = () => {
     setNewNombre(""); setNewCorreo(""); setNewTelefono(""); setNewTipoDoc("CC");
-    setNewDocumento(""); setNewContrasena(""); setNewConfirmar("");
+    setNewDocumento("");
     setNewActivo(true);
     setNewRolIds([]);
     setNewFechaInicio(""); setNewFechaFinal(""); setCreateErrors({});
@@ -439,10 +427,6 @@ export function GestionEmpleadosScreen({
     if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
     if (!newDocumento.trim()) { errs.documento = "El número de documento es obligatorio"; }
     else { const v = validarDocumento(newDocumento, newTipoDoc); if (v) errs.documento = v; }
-    if (!newContrasena.trim()) { errs.contrasena = "La contraseña es obligatoria"; }
-    else { const v = validarContrasena(newContrasena); if (v) errs.contrasena = v; }
-    if (!newConfirmar.trim()) { errs.confirmar = "Confirma la contraseña"; }
-    else if (newContrasena !== newConfirmar) { errs.confirmar = "Las contraseñas no coinciden"; }
     // Cargo: no hay mínimo de extras, porque "Empleado" siempre acompaña.
     const rolIdsExtras = newRolIds.filter(Boolean);
     const empBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
@@ -496,7 +480,6 @@ export function GestionEmpleadosScreen({
       telefono: newTelefono.trim(),
       tipoDocumento: newTipoDoc,
       numeroDocumento: dm,
-      contrasena: newContrasena,
       rolIds: rolIdsNuevo,
       activo: newActivo,
       fechaInicio: newFechaInicio,
@@ -1004,31 +987,6 @@ export function GestionEmpleadosScreen({
                       className={fCls(createErrors.telefono)} />
                     {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Contraseña <span className="text-primary">*</span>
-                    </label>
-                    <PasswordField
-                      value={newContrasena}
-                      onChange={v => { setNewContrasena(v); if (createErrors.contrasena) setCreateErrors(p => ({ ...p, contrasena: undefined })); }}
-                       placeholder="Mínimo 8 caracteres"
-                       autoComplete="new-password"
-                      cls={fCls(createErrors.contrasena)} />
-                    {createErrors.contrasena && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.contrasena}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Confirmar contraseña <span className="text-primary">*</span>
-                    </label>
-                    <PasswordField
-                      value={newConfirmar}
-                      onChange={v => { setNewConfirmar(v); if (createErrors.confirmar) setCreateErrors(p => ({ ...p, confirmar: undefined })); }}
-                      placeholder="Repite la contraseña"
-                      autoComplete="new-password"
-                      cls={fCls(createErrors.confirmar)} />
-                    {createErrors.confirmar && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.confirmar}</p>}
-                  </div>
-
                   {/* Datos del empleado */}
                   <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
                   <div>

@@ -80,6 +80,43 @@ export async function eliminarUsuario(
   return data;
 }
 
+export interface UsuarioListadoApi {
+  id_usuario: string | number;
+  tipo_documento: string | null;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  estado: boolean;
+  id_rol: string | number;
+  rol: string;
+  rol_estado: boolean;
+  es_empleado: boolean;
+}
+
+export interface ClienteListadoApi {
+  id_cliente: string | number;
+  id_usuario: string | number;
+  cliente_estado: boolean;
+  tipo_documento: string | null;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  usuario_estado: boolean;
+  id_rol: string | number;
+  rol: string;
+  rol_estado: boolean;
+}
+
+export async function listarUsuarios(): Promise<UsuarioListadoApi[]> {
+  const { data } = await api.get<UsuarioListadoApi[]>("/usuarios");
+  return data;
+}
+
+export async function listarClientes(): Promise<ClienteListadoApi[]> {
+  const { data } = await api.get<ClienteListadoApi[]>("/clientes");
+  return data;
+}
+
 /** Pide un código de recuperación. El backend responde 200 exista o no el
  *  correo (para no revelar cuentas); 429 si llegan demasiadas solicitudes.
  *  No guarda token: la recuperación ocurre con el código, no con sesión. */

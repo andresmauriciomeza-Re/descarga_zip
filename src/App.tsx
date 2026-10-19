@@ -119,7 +119,7 @@ import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
-import { GestionClientesScreen, INITIAL_CLIENTES, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
+import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
@@ -137,7 +137,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
-import { GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
+import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
@@ -6457,104 +6457,7 @@ const leerRolesPersistidos = (): Rol[] => {
   return INITIAL_ROLES;
 };
 
-// ── Lectura de usuarios (la clave se LEE, no se Escribe) ───────────────
-// `sivpro.usuarios.v1` se sigue leyendo por si queda algo guardado de una
-// build anterior (y por el backfill de `contrasena` de abajo), pero ya NO se
-// escribe: en este prototipo no hay backend y las credenciales no deben quedar
-// en el navegador. Alta, edición y cambio de contraseña viven solo en el
-// `useState` de App y por eso se pierden al recargar (F5).
-//
-// ATENCIÓN con mezclar: si algún día se vuelve a persistir el array, se
-// guardarían también las ediciones de "Mi Perfil" y los interruptores de
-// Activo/Inactivo de la pantalla de Usuarios… y las contraseñas.
-// Para vaciar la clave a mano: localStorage.removeItem(USUARIOS_STORAGE_KEY).
-const USUARIOS_STORAGE_KEY = "sivpro.usuarios.v1";
-const CUENTAS_PRUEBA_IDS = new Set(["USR-001", "USR-002", "USR-010"]);
-
-const DOCS_SEMILLA_PURGAR: ReadonlySet<string> = new Set([
-  "cc||11223344",
-  "cc||22334455",
-  "cc||33445566",
-  "cc||44556677",
-  "cc||55667788",
-  "cc||66778899",
-  "cc||77889900",
-  "cc||99001122",
-  "cc||10111213",
-]);
-
-const esUsuarioValido = (u: unknown): u is Usuario => {
-  if (!u || typeof u !== "object") return false;
-  const usr = u as Usuario;
-  // Se comprueban también `iniciales` y `avatarColor` porque la tabla las
-  // pinta tal cual: un registro corrupto que las traiga ausentes llegaría hasta
-  // el avatar en vez de descartarse aquí.
-  // `rolIds` (multi-rol) se acepta ausente en registros viejos: los que solo
-  // traen `rolId` se migran en la normalización de abajo.
-  return (
-    typeof usr.id === "string" &&
-    typeof usr.nombre === "string" &&
-    typeof usr.iniciales === "string" &&
-    typeof usr.avatarColor === "string" &&
-    typeof usr.correo === "string" &&
-    typeof usr.telefono === "string" &&
-    typeof usr.tipoDocumento === "string" &&
-    typeof usr.numeroDocumento === "string" &&
-    typeof usr.rolId === "string" &&
-    typeof usr.activo === "boolean"
-  );
-};
-
-// Lista de cargos/roles de un registro guardado. Los datos viejos solo traían
-// `rolId` (un solo rol); los nuevos traen `rolIds`. El espejo `rolId` se
-// conserva siempre apuntando al PRIMER rol de la lista.
-const rolIdsDe = (rolIds: unknown, rolId: unknown): string[] => {
-  if (Array.isArray(rolIds)) {
-    const limpio = rolIds.filter((x): x is string => typeof x === "string" && x.trim() !== "");
-    if (limpio.length > 0) return limpio;
-  }
-  return typeof rolId === "string" && rolId.trim() !== "" ? [rolId] : [];
-};
-
-const leerUsuariosPersistidos = (): Usuario[] => {
-  try {
-    const raw = localStorage.getItem(USUARIOS_STORAGE_KEY);
-    if (!raw) return INIT_USUARIOS;
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esUsuarioValido)) {
-      const persistidos = parsed as Usuario[];
-      const porId = new Map(persistidos.map((usuario) => [usuario.id, usuario]));
-      const cuentasPrueba = INIT_USUARIOS
-        .filter((usuario) => CUENTAS_PRUEBA_IDS.has(usuario.id))
-        .map((semilla) => ({
-          ...semilla,
-          // Las cuentas de prueba siempre conservan sus credenciales y rol.
-          ...(porId.get(semilla.id) ?? {}),
-          correo: semilla.correo,
-          rolId: semilla.rolId,
-          activo: semilla.activo,
-        }));
-      const otrosUsuarios = persistidos
-        .filter((usuario) => !CUENTAS_PRUEBA_IDS.has(usuario.id))
-        .filter((usuario) => !DOCS_SEMILLA_PURGAR.has(`${(usuario.tipoDocumento ?? "").trim().toLowerCase()}||${(usuario.numeroDocumento ?? "").trim()}`))
-        .map((usuario) => ({ ...usuario, correo: usuario.correo.trim().toLowerCase() }));
-      return [...cuentasPrueba, ...otrosUsuarios].map(u => {
-        const ids = rolIdsDe(u.rolIds, u.rolId);
-        return {
-          ...u,
-          // Multi-rol + espejo: `rolIds` manda, `rolId` refleja el primero.
-          rolIds: ids,
-          rolId: ids[0] ?? "",
-          // Backfill para registros viejos sin contraseña propia.
-          contrasena: u.contrasena ?? "123456",
-        };
-      });
-    }
-  } catch {
-    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
-  }
-  return INIT_USUARIOS;
-};
+// Usuarios y clientes se cargan desde el backend en sus respectivas pantallas.
 
 // ── Persistencia de empleados (TEMPORAL) ─────────────────────────────
 // Necesita una clave propia porque el historial de contrataciones vive DENTRO
@@ -6566,12 +6469,13 @@ const leerUsuariosPersistidos = (): Usuario[] => {
 // no solo las contrataciones. Para volver a la semilla:
 // localStorage.removeItem(EMPLEADOS_STORAGE_KEY).
 //
-// EXCEPCIÓN IMPORTANTE: `contrasena` NO se serializa. Las credenciales no se
-// guardan en el navegador (mismo criterio que el bloque de usuarios), así que
-// el efecto de escritura quita ese campo y `normalizarEmpleado` de abajo lo
-// repone con "123456" al leer. Las contraseñas que el usuario cambie durante
-// la sesión viven solo en memoria.
+// Las fichas de empleados no contienen ni persisten credenciales.
 const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
+const DOCS_SEMILLA_PURGAR: ReadonlySet<string> = new Set([
+  "cc||11223344", "cc||22334455", "cc||33445566", "cc||44556677",
+  "cc||55667788", "cc||66778899", "cc||77889900", "cc||99001122",
+  "cc||10111213",
+]);
 
 const esEmpleadoValido = (e: unknown): e is Empleado => {
   if (!e || typeof e !== "object") return false;
@@ -6647,11 +6551,11 @@ const migrarCargos = (rolIds: unknown, rolId: unknown, cargo: unknown, roles: Ro
 // de arriba.
 const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
   const crudo = e as unknown as {
-    cargo?: unknown; rolId?: unknown; rolIds?: unknown; contrataciones?: unknown;
+    cargo?: unknown; rolId?: unknown; rolIds?: unknown; contrataciones?: unknown; contrasena?: unknown;
   };
   // Se quitan los campos viejos (`cargo` texto y su `rolId` espejo) para que no
   // sobrevivan en la memoria ni se re-serialicen al guardar.
-  const { cargo, rolId, rolIds: _legacy, ...resto } = crudo;
+  const { cargo, rolId, rolIds: _legacy, contrasena: _legacyPassword, ...resto } = crudo;
   // Todo empleado tiene SIEMPRE los roles base "Empleado" y "Cliente". La cuenta
   // de super administrador (Gloria) queda tal cual: no recibe roles de empleado.
   const esSuperAdmin = e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
@@ -6678,7 +6582,6 @@ const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
   return {
     ...(resto as unknown as Empleado),
     rolIds: peso(migrarCargos(crudo.rolIds, rolId, cargo, roles)),
-    contrasena: typeof e.contrasena === "string" ? e.contrasena : "123456",
     contrataciones: (Array.isArray(crudo.contrataciones) ? crudo.contrataciones : []).map(c => {
       const vieja = c as unknown as { id?: unknown; fechaInicio?: unknown; fechaFinal?: unknown; cargo?: unknown; rolId?: unknown; rolIds?: unknown };
       return {
@@ -7305,9 +7208,9 @@ export default function App() {
   // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
   const [rolActivoId, setRolActivoId] = useState<string | null>(sesionActiva?.rolActivo ?? null);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
-  const [usuarios, setUsuarios] = useState<Usuario[]>(leerUsuariosPersistidos);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
-  const [clientes, setClientes] = useState<Cliente[]>(INITIAL_CLIENTES);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
 
   // Mantiene el listado general como la unión de las cuentas de empleados y
   // clientes. Los perfiles que coinciden por tipo y número de documento
@@ -7356,7 +7259,7 @@ export default function App() {
           // `contrasena` a propósito, así que la rama de arriba (actualizar)
           // jamás pisa la contraseña que el usuario cambió en "Mi perfil" o en
           // "Restablecer contraseña".
-          const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
+          const nuevo = { id: siguienteId(), ...base };
           next.push(nuevo);
           porClave.set(clave, nuevo);
           changed = true;
@@ -7441,7 +7344,7 @@ export default function App() {
       } else {
         // Misma regla que en el efecto de arriba: la contraseña se copia SOLO
         // al crear, nunca al actualizar (el listado unificado no debe pisarla).
-        const nuevo = { id: siguienteId(), ...base, contrasena: empleado.contrasena };
+        const nuevo = { id: siguienteId(), ...base };
         next.push(nuevo);
         porClave.set(clave, nuevo);
       }
@@ -7755,16 +7658,10 @@ export default function App() {
   // Igual para empleados: sin esta escritura, el alta de un empleado y su
   // historial de contrataciones se perdían en cada F5.
   //
-  // `contrasena` se DEJA FUERA a propósito (ver EMPLEADOS_STORAGE_KEY): las
-  // credenciales no se guardan en el navegador. Al leer, `normalizarEmpleado`
-  // repone "123456" a los registros que lleguen sin ella, que es exactamente
-  // lo que ocurre tras guardar aquí.
+  // No se serializan credenciales en las fichas de empleados.
   useEffect(() => {
     try {
-      const sinContrasena = empleados.map(
-        ({ contrasena: _sinContrasena, ...resto }) => resto,
-      );
-      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(sinContrasena));
+      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(empleados));
     } catch {
       // Almacenamiento bloqueado o sin cuota: los empleados siguen en memoria.
     }

@@ -17,6 +17,7 @@ import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefonoOpcional } from "@/shared/components/campo";
+import { listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -25,6 +26,17 @@ const AVATAR_COLORS = [
   "bg-red-500","bg-blue-500","bg-emerald-500",
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
+
+function adaptarClienteApi(c: ClienteListadoApi, index: number): Cliente {
+  const nombre = c.nombre ?? "";
+  return {
+    id: String(c.id_cliente), nombre,
+    iniciales: nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
+    avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length], correo: c.correo ?? "",
+    tipoDocumento: c.tipo_documento ?? "", numeroDocumento: String(c.id_usuario),
+    pedidos: 0, activo: c.cliente_estado && c.usuario_estado,
+  };
+}
 
 export interface Cliente {
   id: string;
@@ -38,11 +50,7 @@ export interface Cliente {
   activo: boolean;
 }
 
-export const INITIAL_CLIENTES: Cliente[] = [
-  { id:"CLI-008", nombre:"Tomás Jiménez",     iniciales:"TJ", avatarColor:"bg-teal-500",    correo:"tomas.j@gmail.com",           tipoDocumento:"CC", numeroDocumento:"88990011", pedidos:4,  activo:true  },
-];
-
-export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
+export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
@@ -53,6 +61,19 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   /** Correo de la cuenta con la que se abrió la sesión (su propio cliente). */
   sesionCorreo?: string;
 }) {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
+  const cargarClientes = async () => {
+    setCargando(true); setErrorCarga("");
+    try {
+      const filas = await listarClientes();
+      setClientes(filas.map(adaptarClienteApi));
+    } catch (error) {
+      setErrorCarga(error instanceof Error ? error.message : "No se pudieron cargar los clientes.");
+    } finally { setCargando(false); }
+  };
+  useEffect(() => { void cargarClientes(); }, []);
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
   const [sortBy,       setSortBy]     = useState("nombre");
@@ -101,31 +122,6 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   // nunca lleva scroll interno, la navegación es solo por el paginador.
   const PER_PAGE = 5;
 
-  // ── P8 — Reconciliación Gloria ↔ Clientes ──────────────────────────────
-  // Gloria (USR-001, super administradora) aparece en el módulo de Usuarios
-  // pero NO figuraba en el listado de clientes, lo que rompía la
-  // consistencia entre módulos. Decisión: al montar esta pantalla, si
-  // `clientes` no la incluye, se agrega aquí con su correo y su documento
-  // CC 12345678 (los mismos que tiene como usuario), para que el módulo de
-  // Clientes la muestre y ambos módulos cuenten con la misma persona. Se usa
-  // el update funcional para no pisar altas hechas en el mismo render, y la
-  // dependencia vacía hace que solo corra al montar (el chequeo de
-  // existencia vive dentro del update).
-  useEffect(() => {
-    setClientes(prev => {
-      const correo = "gloria@lasirena.com";
-      if (prev.some(c => c.correo.trim().toLowerCase() === correo)) return prev;
-      const maxNum = prev.reduce((max, c) => {
-        const n = parseInt(c.id.replace("CLI-", "")) || 0;
-        return Math.max(max, n);
-      }, 0);
-      return [
-        { id: `CLI-${String(maxNum + 1).padStart(3, "0")}`, nombre: "Gloria Inés Vargas", iniciales: "GV", avatarColor: "bg-red-500", correo, tipoDocumento: "CC", numeroDocumento: "12345678", pedidos: 0, activo: true },
-        ...prev,
-      ];
-    });
-  }, [setClientes]);
-
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
   // se reduce (p. ej. al apagar un switch con un filtro de estado activo) `page`
@@ -168,6 +164,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     esAdministrador(c) ? "El administrador no puede ser inactivado" : bloqueoEstado(c);
 
   const toggleEstado = (id: string) => {
+    toast.info("Disponible próximamente");
+    return;
     const cliente = clientes.find(c => c.id === id);
     const motivo = cliente ? bloqueoEstado(cliente) : null;
     if (motivo) { toast.error(motivo); return; }
@@ -177,6 +175,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
 
   const handleEdit = () => {
     if (!editItem) return;
+    toast.info("Disponible próximamente");
+    return;
     // Si el formulario tocó el estado, se comprueba aquí la misma regla que
     // en la lista: el administrador y la cuenta propia no se inactivan.
     const original = clientes.find(c => c.id === editItem.id);
@@ -278,6 +278,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const createBloqueado = Object.values(createErrors).some(v => !!v);
 
   const handleCreate = () => {
+    toast.info("Disponible próximamente");
+    return;
     const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
@@ -335,8 +337,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         <div className="flex items-center gap-2 shrink-0">
           {_canCreate && (
             <button
-              onClick={() => { resetCreate(); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+              onClick={() => toast.info("Disponible próximamente")}
+              disabled title="Disponible próximamente"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold opacity-60 cursor-not-allowed shadow-sm"
             >
               <UserPlus className="w-4 h-4" /> Crear cliente
             </button>
@@ -381,7 +384,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
+              {cargando ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando clientes…</td></tr>
+              ) : errorCarga ? (
+                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2" onClick={() => void cargarClientes()}>Reintentar</button></td></tr>
+              ) : paged.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p>
                 </td></tr>
@@ -406,12 +413,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                         administrador y la de la propia cuenta quedan
                         bloqueadas, con el motivo en el tooltip. */}
                     <span
-                      title={tooltipEstado(c) ?? undefined}
+                      title="Disponible próximamente"
                       className="inline-block"
                     >
                       <EstadoSelect
                         value={c.activo ? "activo" : "inactivo"}
-                        disabled={!!bloqueoEstado(c)}
+                        disabled
                         onChange={nuevoEstado => {
                           if ((nuevoEstado === "activo") === c.activo) return;
                           toggleEstado(c.id);
@@ -426,7 +433,9 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <td className="px-4 py-1.5">
                     <ActionIcons
                       onView={() => setDetailItem(c)}
-                      onEdit={canEdit ? () => { abrirEdicion(c); } : undefined}
+                      onEdit={canEdit ? () => toast.info("Disponible próximamente") : undefined}
+                      editDisabled={canEdit}
+                      editTitle="Disponible próximamente"
                     />
                   </td>
                 </tr>
