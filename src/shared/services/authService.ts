@@ -117,6 +117,23 @@ export async function listarClientes(): Promise<ClienteListadoApi[]> {
   return data;
 }
 
+export async function crearCliente(datos: {
+  tipoDocumento: string; numeroDocumento: string; nombre: string;
+  correo: string; telefono: string; estado: boolean;
+}): Promise<void> {
+  await api.post('/clientes', datos);
+}
+
+export async function editarCliente(id: string, datos: {
+  nombre: string; correo: string; telefono: string;
+}): Promise<void> {
+  await api.put(`/clientes/${encodeURIComponent(id)}`, datos);
+}
+
+export async function cambiarEstadoCliente(id: string, estado: boolean): Promise<void> {
+  await api.patch(`/clientes/${encodeURIComponent(id)}/estado`, { estado });
+}
+
 export interface ClientePorDocumentoApi {
   documento: string | number;
   tipoDocumento: string;

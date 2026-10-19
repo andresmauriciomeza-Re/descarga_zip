@@ -7998,6 +7998,7 @@ export default function App() {
           iniciales,
           avatarColor: AVATAR_PALETTE[prev.length % AVATAR_PALETTE.length],
           correo: "",
+          telefono: "",
           tipoDocumento: tipo,
           numeroDocumento: numero,
           pedidos: 1,
