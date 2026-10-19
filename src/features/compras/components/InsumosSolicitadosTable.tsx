@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
+import { limpiarNumeroInput } from "@/shared/utils/numeroInput";
 
 export interface InsumoSolicitadoRow {
   rowId: string;
@@ -281,11 +282,14 @@ export function InsumosSolicitadosTable({
                   <input
                     type="number"
                     min={0}
-                    value={draftRow.cantidad}
+                    // 0 = vacío con placeholder "0" (punto B1); al guardar
+                    // vuelve a contar como 0 vía toNum.
+                    value={draftRow.cantidad === 0 ? "" : draftRow.cantidad}
+                    placeholder="0"
                     onChange={(e) =>
                       setDraft({
                         ...draftRow,
-                        cantidad: toNum(e.target.value),
+                        cantidad: toNum(limpiarNumeroInput(e.target.value)),
                       })
                     }
                     className={cellInputCls}
@@ -306,11 +310,12 @@ export function InsumosSolicitadosTable({
                   <input
                     type="number"
                     min={0}
-                    value={draftRow.precioUnitario}
+                    value={draftRow.precioUnitario === 0 ? "" : draftRow.precioUnitario}
+                    placeholder="0"
                     onChange={(e) =>
                       setDraft({
                         ...draftRow,
-                        precioUnitario: toNum(e.target.value),
+                        precioUnitario: toNum(limpiarNumeroInput(e.target.value)),
                       })
                     }
                     className={cellInputCls}
@@ -328,11 +333,14 @@ export function InsumosSolicitadosTable({
                         type="number"
                         min={0}
                         max={100}
-                        value={draftRow.iva}
+                        // Vacío = 0 % (punto B1): el 0 sigue siendo un valor
+                        // válido y los totales no se van a NaN.
+                        value={draftRow.iva === 0 ? "" : draftRow.iva}
+                        placeholder="0"
                         onChange={(e) =>
                           setDraft({
                             ...draftRow,
-                            iva: toNum(e.target.value),
+                            iva: toNum(limpiarNumeroInput(e.target.value)),
                           })
                         }
                         className={cellInputCls}
@@ -360,11 +368,12 @@ export function InsumosSolicitadosTable({
                         type="number"
                         min={0}
                         max={100}
-                        value={draftRow.iva}
+                        value={draftRow.iva === 0 ? "" : draftRow.iva}
+                        placeholder="0"
                         onChange={(e) =>
                           setDraft({
                             ...draftRow,
-                            iva: toNum(e.target.value),
+                            iva: toNum(limpiarNumeroInput(e.target.value)),
                           })
                         }
                         className={cellInputCls}

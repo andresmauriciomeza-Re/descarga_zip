@@ -106,6 +106,9 @@ import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPag
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { migrarIdsVenta, siguienteIdVenta } from "@/features/ventas/services/siguienteIdVenta";
+import { puedeTransicionar } from "@/features/ventas/services/estadosVenta";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
@@ -1179,10 +1182,9 @@ function Sidebar({
   /** Ref mutable que recibe la primera opción del menú al abrir (para el foco). */
   firstNavRef?: { current: HTMLButtonElement | null };
 }) {
-  const [open, setOpen] = useState<Record<string, boolean>>({
-    ventas: true,
-    compras: true,
-  });
+  // Grupos del menú: todos cerrados al entrar; cada módulo se abre solo con
+  // clic (no hay ningún efecto que los reabra según la pantalla activa).
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) =>
     setOpen((p) => ({ ...p, [k]: !p[k] }));
   // En móvil navegar cierra el panel para que no tape la pantalla.
@@ -1445,7 +1447,9 @@ function PublicNav({
             )}
           </button>
 
-          {/* Profile / Login */}
+          {/* Profile / Login — en móvil (<768 px) el acceso a sesión lo da la
+              barra inferior ("Ingresar"), así que este botón del header solo
+              existe desde md para que nunca se vean las dos opciones a la vez. */}
           {isLoggedIn ? (
             <button
               onClick={() =>
@@ -1461,10 +1465,9 @@ function PublicNav({
           ) : (
             <button
               onClick={onLogin}
-              className="px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
+              className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
-              <span className="sm:hidden">Entrar</span>
-              <span className="hidden sm:inline">Iniciar sesión</span>
+              Iniciar sesión
             </button>
           )}
 
@@ -1767,7 +1770,10 @@ function LandingScreen({
               {/* CTAs — en columna solo por debajo de `sm`; en escritorio van
                   siempre en la misma fila. `flex-col` estira los dos botones al
                   ancho del contenido, así que apilados se ven del mismo tamaño;
-                  `sm:items-center` les devuelve su ancho natural en fila. */}
+                  `sm:items-center` les devuelve su ancho natural en fila.
+                  Por debajo de `md` este botón lleva un velo oscuro propio
+                  (`max-md:bg-black/45`): sin fondo dependía de lo que se viera
+                  detrás de la imagen del hero y en móvil se veía transparente. */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <button
                   onClick={() => navigate("catalog")}
@@ -1778,7 +1784,7 @@ function LandingScreen({
                 </button>
                 <button
                   onClick={() => navigate("catalog")}
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 max-md:bg-black/45 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
                 >
                   Ver menú completo
                   <ArrowRight className="w-5 h-5" />
@@ -5905,13 +5911,16 @@ function ManageProductsScreen() {
                   </label>
                   <input
                     type="number"
-                    value={editP.price}
+                    // 0 = vacío: no arranca mostrando "0" ni vuelve a 0 si el
+                    // usuario lo borra (punto B1); al guardar sigue siendo 0.
+                    value={editP.price === 0 ? "" : editP.price}
+                    placeholder="0"
                     onChange={(e) =>
                       setEditP((p) =>
                         p
                           ? {
                               ...p,
-                              price: Number(e.target.value),
+                              price: numeroDeInput(limpiarNumeroInput(e.target.value)),
                             }
                           : null,
                       )
@@ -6011,11 +6020,13 @@ function ManageProductsScreen() {
                   </label>
                   <input
                     type="number"
+                    // Texto vacío hasta que el usuario escriba; los ceros a la
+                    // izquierda se limpian al teclear (punto B1).
                     value={newP.price}
                     onChange={(e) =>
                       setNewP((p) => ({
                         ...p,
-                        price: e.target.value,
+                        price: limpiarNumeroInput(e.target.value),
                       }))
                     }
                     placeholder="Ej: 32000"
@@ -6847,13 +6858,52 @@ const semillaConFechasRelativas = <T,>(
   })) as T[];
 };
 
+/** Punto C1: al arrancar se reescriben los IDs legacy de venta ("VEN-001",
+ *  "VEN-2024-015x") al numérico canónico y se remapea el `ventaId` de las
+ *  órdenes de producción GUARDADAS, así el vínculo pedido ↔ orden sobrevive
+ *  al cambio de formato. Las órdenes se reescriben en su propia clave ANTES
+ *  de que `leerOrdenesPersistidas` las lea (ventas se declara antes que
+ *  órdenesProduccion en el componente). */
+const migrarIdsVentasEnArranque = (ventas: Venta[]): Venta[] => {
+  try {
+    const { ventas: migradas, mapa } = migrarIdsVenta(ventas) as {
+      ventas: Venta[];
+      mapa: Record<string, string>;
+    };
+    if (Object.keys(mapa).length === 0) return migradas;
+    // Las ventas se reescriben en su clave para que el cambio sea permanente.
+    localStorage.setItem(VENTAS_STORAGE_KEY, JSON.stringify(migradas));
+    const rawOrdenes = localStorage.getItem(ORDENES_PRODUCCION_STORAGE_KEY);
+    if (rawOrdenes) {
+      const ordenes: unknown = JSON.parse(rawOrdenes);
+      if (Array.isArray(ordenes)) {
+        const remapeadas = ordenes.map((o) =>
+          esObjeto(o) && typeof o.ventaId === "string" && mapa[o.ventaId]
+            ? { ...o, ventaId: mapa[o.ventaId] }
+            : o
+        );
+        localStorage.setItem(
+          ORDENES_PRODUCCION_STORAGE_KEY,
+          JSON.stringify(remapeadas)
+        );
+      }
+    }
+    return migradas;
+  } catch {
+    // localStorage bloqueado o JSON ilegible: se sigue con lo leído tal cual.
+    return ventas;
+  }
+};
+
 const leerVentasPersistidas = () =>
-  leerListaPersistida<Venta>(
-    VENTAS_STORAGE_KEY,
-    // [0, 0, 1, 2, 3, 4, 6, 9, 0]: hoy (2 ventas a distintas horas + la
-    // "completado" 18:30), ayer, y el resto esparcido por la semana/mes.
-    semillaConFechasRelativas(INITIAL_VENTAS, "fecha", [0, 0, 1, 2, 3, 4, 6, 9, 0]),
-    esVentaValida,
+  migrarIdsVentasEnArranque(
+    leerListaPersistida<Venta>(
+      VENTAS_STORAGE_KEY,
+      // [0, 0, 1, 2, 3, 4, 6, 9, 0]: hoy (2 ventas a distintas horas + la
+      // "completado" 18:30), ayer, y el resto esparcido por la semana/mes.
+      semillaConFechasRelativas(INITIAL_VENTAS, "fecha", [0, 0, 1, 2, 3, 4, 6, 9, 0]),
+      esVentaValida,
+    )
   );
 const esNoConformidadValida = (x: unknown) =>
   esObjeto(x) &&
@@ -7784,10 +7834,13 @@ export default function App() {
   // ── Avance automático del estado de la venta (§13) ──
   // El estado NO se cambia a mano: sigue el proceso del pedido. Acá se
   // resuelve el último salto, el que ningún humano debe tocar: un pedido
-  // que quedó "por entregar" (es decir, ya se verificó el pago) pasa solo
-  // a "completado" cuando se cumple la hora de recogida que eligió el
-  // cliente. Un "por-verificar" NO se autocumple: ese salto exige que el
-  // admin revise el comprobante, que es una decisión humana.
+  // que quedó "por entregar" (llega ahí cuando su orden de producción se
+  // completa, punto C2) pasa solo a "completado" cuando se cumple la hora de
+  // recogida que eligió el cliente. Es el segundo disparador de ese salto:
+  // el primero es el botón "Entregar" de VentasScreen; ambos están
+  // registrados en services/estadosVenta.ts. Un "por-verificar" NO se
+  // autocumple: ese salto exige que el admin revise el comprobante, que es
+  // una decisión humana.
   useEffect(() => {
     const marcarCompletados = () => {
       setVentas((prev) => {
@@ -7866,26 +7919,28 @@ export default function App() {
     );
   }, []);
 
-  // Creación automática de la orden de producción (§3a / P2): cuando una venta
-  // queda lista para cocinar se le crea sola una orden tipo "Pedido" en
-  // Pendiente. Mientras la venta está "por-verificar" no se crea nada, que es
-  // justo cuando NO se prepara.
+  // Creación automática de la orden de producción (§3a / P2) — punto C2:
+  // cuando una venta queda PAGADA y pasa a "en-preparacion" se le crea sola
+  // una orden tipo "Pedido" en Pendiente. Mientras la venta está
+  // "por-verificar" no se crea nada, que es justo cuando NO se prepara. Y
+  // cuando esa orden se completa (callback `onVentaLista` más abajo) la venta
+  // vuelve a avanzar, a "venta" ("Por entregar").
   //
   // El filtro es por ESTADO, no por transición, así que cubre los flujos:
   // - Ventas web: nacen en "por-verificar" (registrarPedido) y, al aprobarlas
-  //   en VentasScreen, pasan a "venta" → el efecto reacciona al cambio.
-  // - Ventas del admin: VentasScreen las crea directamente en "venta" (vía
-  //   setVentas) → el efecto las detecta aunque nunca "pasaron" por otro estado.
-  // - Ventas en Efectivo (solo las que crea el administrador): nacen directas
-  //   en "completado" porque no hay comprobante que verificar, y su orden de
-  //   producción también se crea sola: la pizza igual hay que hacerla.
+  //   en VentasScreen, pasan a "en-preparacion" → el efecto reacciona.
+  // - Ventas del admin: VentasScreen las crea directamente en
+  //   "en-preparacion" (vía setVentas) → el efecto las detecta aunque nunca
+  //   "pasaron" por otro estado.
+  // - Datos previos al C2: una venta ya en "venta" (o en "completado" con
+  //   Efectivo) sin orden también la arma, para que no se quede sin producir.
   // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
   // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
   // orden por producto.
   //
-  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas
-  // "verificadas" de la semilla y de lo que se cargó de localStorage, y no es un
-  // cambio de estado sino el arranque. A partir de ahí, cada venta que aparece
+  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas de
+  // la semilla y de lo que se cargó de localStorage, y no es un cambio de
+  // estado sino el arranque. A partir de ahí, cada venta que aparece
   // preparada sin orden genera la suya. La clave anti-duplicados es `ventaId`:
   // una venta = una sola orden, y el updater vuelve a comprobarlo contra el
   // estado final por si acaso.
@@ -7897,6 +7952,7 @@ export default function App() {
     }
     const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
     const preparable = (v: Venta) =>
+      v.estado === "en-preparacion" ||
       v.estado === "venta" ||
       (v.estado === "completado" && v.metodoPago === "Efectivo");
     const nuevas = ventas.filter((v) => preparable(v) && !conOrden.has(v.id));
@@ -8233,19 +8289,12 @@ export default function App() {
     clienteDocumento?: string,
     clienteTelefono?: string,
   ): string => {
-    // ID único: se calcula contra los ids existentes (no contra el largo de
-    // la lista, que se desincroniza si se borra o se importa una venta). Se
-    // busca el sufijo numérico más alto de los "VEN-###" y se suma uno.
-    const siguienteId = () => {
-      const maximo = ventas.reduce((max, v) => {
-        const m = /^VEN-(\d+)$/.exec(v.id);
-        if (!m) return max;
-        return Math.max(max, parseInt(m[1], 10));
-      }, 0);
-      return `VEN-${String(maximo + 1).padStart(3, "0")}`;
-    };
+    // ID único (punto C1): el generador ÚNICO es `siguienteIdVenta`, que
+    // devuelve el siguiente numérico canónico ("10", "11", …) contra los ids
+    // reales existentes (no contra el largo de la lista, que se desincroniza
+    // si se borra o se importa una venta).
     const newVenta: Venta = {
-      id: siguienteId(),
+      id: siguienteIdVenta(ventas),
       usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
       documento: clienteDocumento?.trim() || undefined,
       telefono: clienteTelefono?.trim() || undefined,
@@ -8698,6 +8747,8 @@ export default function App() {
         richColors
         closeButton
         toastOptions={{
+          // Todas las alertas del sistema (landing y panel) duran 2 segundos.
+          duration: 2000,
           style: {
             fontFamily: "var(--font-texto)",
             fontSize: "15px",
@@ -9290,6 +9341,31 @@ export default function App() {
                   setOrdenes={setOrdenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
+                  // Punto C2: al completarse la orden de producción de una
+                  // venta, ésta sale de cocina y pasa a "venta" ("Por
+                  // entregar"); recién ahí la cierra el botón "Entregar" o la
+                  // hora de recogida (§13). La transición se valida contra la
+                  // tabla de `estadosVenta.ts`.
+                  onVentaLista={(ventaId) => {
+                    setVentas((prev) =>
+                      prev.map((v) => {
+                        if (v.id !== ventaId || !puedeTransicionar(v.estado, "venta")) return v;
+                        const hora = new Date().toLocaleTimeString("es-CO", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                        return {
+                          ...v,
+                          estado: "venta" as VentaStatus,
+                          historial: [
+                            ...(v.historial ?? []),
+                            { estado: "venta" as VentaStatus, hora },
+                          ],
+                        };
+                      }),
+                    );
+                    toast.success(`Pedido ${ventaId} listo para recoger`);
+                  }}
                   abrirOrdenId={ordenAAbrir}
                   setOrdenAAbrir={setOrdenAAbrir}
                 />

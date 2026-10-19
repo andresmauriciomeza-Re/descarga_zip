@@ -19,6 +19,7 @@ import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-re
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   TAMANOS_FICHA,
   UNIDADES_FICHA,
@@ -72,11 +73,11 @@ function InsumoFilaEditable({
             type="number"
             min={0}
             step={0.1}
-            value={cantidad}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n) && n >= 0) setCantidad(n);
-            }}
+            // 0 = vacío (punto B1): si el usuario borra el campo queda en
+            // blanco; los botones − / + tratan ese vacío como 0.
+            value={cantidad === 0 ? "" : cantidad}
+            placeholder="0"
+            onChange={(e) => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
             className={inputNumCls}
           />
           <button
@@ -340,23 +341,24 @@ export function FichaTecnicaEditor({
       <div className={`grid gap-3 ${esInsumo ? "grid-cols-2" : "grid-cols-[1fr_1.4fr]"}`}>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
-          {/* Como el precio: el 0 se muestra vacío con placeholder "0". Solo
-              en producto; en insumo el campo sigue igual que siempre. */}
+          {/* Como todos los numéricos del sistema (punto B1): el 0 se muestra
+              vacío con placeholder "0", en producto y en insumo. */}
           <input type="number" min={0}
-            value={esInsumo ? ficha.tiempoPreparacion : ficha.tiempoPreparacion === 0 ? "" : ficha.tiempoPreparacion}
-            placeholder={esInsumo ? undefined : "0"}
-            onChange={e => onChange({ ...ficha, tiempoPreparacion: Number(e.target.value) })}
+            value={ficha.tiempoPreparacion === 0 ? "" : ficha.tiempoPreparacion}
+            placeholder="0"
+            onChange={e => onChange({ ...ficha, tiempoPreparacion: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
             className={inputCls} />
         </div>
         {esInsumo ? (
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Rendimiento (unidades por preparación)</label>
-            <input type="number" min={0.1} step={0.1} value={rendimientoDe(ficha)}
+            {/* Vacío = rendimiento sin escribir (punto B1): al consumirlo los
+                demás módulos usan `rendimientoDe`, que cae en 1 si es 0. */}
+            <input type="number" min={0.1} step={0.1}
+              value={ficha.rendimiento && ficha.rendimiento > 0 ? rendimientoDe(ficha) : ""}
+              placeholder="0"
               aria-label="Rendimiento"
-              onChange={e => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n) && n > 0) onChange({ ...ficha, rendimiento: n });
-              }}
+              onChange={e => onChange({ ...ficha, rendimiento: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
               className={inputCls} />
           </div>
         ) : (
@@ -447,8 +449,12 @@ export function FichaTecnicaEditor({
           />
           <div className="w-20">
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
-            <input type="number" min={0.1} step={0.1} value={cantidad}
-              onChange={e => setCantidad(Number(e.target.value))}
+            {/* Arranca en 1 (regla del alta de insumos) y borra a vacío sin
+                volver a 0 (punto B1). */}
+            <input type="number" min={0.1} step={0.1}
+              value={cantidad === 0 ? "" : cantidad}
+              placeholder="0"
+              onChange={e => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
               className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
           <div className="w-24">

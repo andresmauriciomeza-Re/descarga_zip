@@ -25,7 +25,6 @@ import { toast } from "sonner";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -34,6 +33,11 @@ import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
+import { siguienteIdVenta } from "@/features/ventas/services/siguienteIdVenta";
+import {
+  type EstadoVenta,
+  puedeTransicionar,
+} from "@/features/ventas/services/estadosVenta";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -216,24 +220,24 @@ function CampoComprobante({
 
 // ─────────────────────────── VENTAS TYPES & DATA ───────────────────────────
 
-export type VentaStatus =
-  | "venta"
-  | "perdida"
-  | "por-verificar"
-  | "completado"
-  | "anulado"
-  | "rechazado"
-  | "en-espera";
+/** Claves internas de estado: se definen en `estadosVenta.ts` (punto C2), que
+ *  es la tabla de transiciones que comparte el panel, el checkout, Orden de
+ *  Producción y el backend; este alias conserva el nombre con el que se
+ *  referencia en todo el frontend. */
+export type VentaStatus = EstadoVenta;
 
-/** "perdida" no se elige desde el desplegable de estado de la tabla: se aplica
-    con los botones de acción (devolución). "anulado" ya no lo escribe ningún
-    botón (anular deja la venta en "rechazado") pero se conserva en el tipo y
-    en los labels por los datos persistidos. */
+/** "perdida" no se elige a mano (la columna de estado es de solo lectura
+    desde el punto C2): se aplica con los botones de acción (devolución).
+    "anulado" ya no lo escribe ningún botón (anular deja la venta en
+    "rechazado") pero se conserva en el tipo y en los labels por los datos
+    persistidos. */
 export const VENTA_STATUS_MANUALES: VentaStatus[] = ["perdida", "anulado"];
 
-/** Estados que solo asigna el flujo de verificación (nunca el selector):
-    "rechazado" (rechazo con motivo) y "en-espera" (falta completar el pago). */
-export const VENTA_STATUS_FLUJO: VentaStatus[] = ["rechazado", "en-espera"];
+/** Estados que solo asigna el flujo (nunca una mano en la tabla):
+    "rechazado" (rechazo con motivo o anulación), "en-espera" (falta completar
+    el pago) y "en-preparacion" (pago aprobado, esperando la orden de
+    producción). La tabla completa de transiciones vive en `estadosVenta.ts`. */
+export const VENTA_STATUS_FLUJO: VentaStatus[] = ["rechazado", "en-espera", "en-preparacion"];
 
 /** Motivos estandarizados de rechazo de pago. */
 export type MotivoRechazo = "comprobante-falso" | "dinero-faltante";
@@ -327,6 +331,9 @@ const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
   venta:           "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
   perdida:         "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
   "por-verificar": "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+  // En cocina: turquesa, deliberadamente distinto de "por verificar" (ámbar)
+  // y de "por entregar" (azul) para que se lea como un paso intermedio.
+  "en-preparacion":"bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-300",
   completado:      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
   anulado:         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   rechazado:       "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
@@ -339,6 +346,7 @@ const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
   venta:           "Por entregar",
   perdida:         "Devolución",
   "por-verificar": "Por verificar",
+  "en-preparacion":"En preparación",
   completado:      "Completado",
   anulado:         "Anulado",
   rechazado:       "Rechazado",
@@ -349,6 +357,7 @@ const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
     admin usa `VENTA_STATUS_LABEL`; el portal del cliente estas. */
 export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
   "por-verificar": "Verificando pago",
+  "en-preparacion":"Preparando tu pedido",
   venta:           "Listo para recoger",
   completado:      "Entregado",
   rechazado:       "Rechazado",
@@ -357,16 +366,10 @@ export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
   anulado:         "Anulado",
 };
 
-/** Estados ofrecidos por el desplegable de la tabla, en el orden fijo del
-    flujo de verificación: Por verificar → Por entregar → Completado. Los
-    anulados y las devoluciones se aplican con sus botones de acción, y los
-    estados "rechazado"/"en-espera" los asigna el flujo (nunca el selector);
-    por eso no aparecen aquí. */
-export const VENTA_STATUS_SELECCIONABLES: VentaStatus[] = [
-  "por-verificar",
-  "venta",
-  "completado",
-];
+// Punto C2: ya NO existe el desplegable de estado en la tabla. La columna es
+// de solo lectura y los avances los produce el flujo: verificación de pago,
+// orden de producción, botón "Entregar" y la hora de recogida (§13).
+// La tabla completa de transiciones vive en `services/estadosVenta.ts`.
 
 /** Métodos de pago. "Efectivo" solo existe para los pedidos que genera el
     administrador (pedidos tomados en el local). */
@@ -688,17 +691,33 @@ export function VentasScreen({
     setDetailItem(null);
   };
 
-  /** Aprobar el pago: la venta pasa a "Por entregar" (listo para recoger). */
+  /** Aprobar el pago (punto C2): la venta pasa a "En preparación" y su orden
+      de producción se crea sola (la escucha el efecto de App). Sólo cuando la
+      orden se completa vuelve a avanzar, a "Por entregar". */
   const aprobarPago = (id: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
-        x.id === id
-          ? { ...x, estado: "venta" as VentaStatus, historial: [...(x.historial ?? []), { estado: "venta" as VentaStatus, hora: nowHora() }] }
+        x.id === id && puedeTransicionar(x.estado, "en-preparacion")
+          ? { ...x, estado: "en-preparacion" as VentaStatus, historial: [...(x.historial ?? []), { estado: "en-preparacion" as VentaStatus, hora: nowHora() }] }
           : x,
       ),
     );
-    toast.success("Pago aprobado — listo para entregar");
+    toast.success("Pago aprobado — el pedido pasó a cocina");
     cerrarDetalle();
+  };
+
+  /** Botón "Entregar" (punto C2): uno de los dos disparadores del paso
+      "Por entregar → Completado"; el otro es el auto-completado por hora de
+      recogida (§13, en App). Ambos están registrados en `estadosVenta.ts`. */
+  const entregarVenta = (id: string) => {
+    setPedidos((prev) =>
+      prev.map((x) =>
+        x.id === id && puedeTransicionar(x.estado, "completado")
+          ? { ...x, estado: "completado" as VentaStatus, historial: [...(x.historial ?? []), { estado: "completado" as VentaStatus, hora: nowHora() }] }
+          : x,
+      ),
+    );
+    toast.success("Pedido entregado");
   };
 
   /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución.
@@ -803,25 +822,9 @@ export function VentasScreen({
     toast.success("Devolución registrada");
   };
 
-  /** Cambio de estado desde el menú de la columna Estado. Solo se ofrecen los
-      estados seleccionables (Por verificar, Por entregar, Completado); la
-      devolución y la anulación siguen yendo por sus botones, que además
-      marcan campos propios de la devolución. Cada cambio queda en el
-      historial, que es lo que alimenta la columna "Hora de estado". */
-  const cambiarEstado = (id: string, estado: VentaStatus) => {
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado,
-              historial: [...(x.historial ?? []), { estado, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.success(`Estado actualizado: ${VENTA_STATUS_LABEL[estado]}`);
-  };
+  /** Cambio de estado: YA NO existe desde la tabla (punto C2). La columna es
+      de solo lectura y cada avance sale de `estadosVenta.ts` (verificación,
+      orden de producción, botón "Entregar", hora de recogida). */
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
@@ -1160,12 +1163,12 @@ export function VentasScreen({
             nombre: usuario.trim(),
           })
         : "existente";
-      // El pago se recibe en el momento, así que el pedido nace verificado.
-      // Efectivo es el único método que no deja comprobante por verificar
-      // (el dinero queda en caja), así que ese pedido nace directamente
-      // "Completado": es el efectivo automático del pedido tomado en el local.
-      const finalEstado: VentaStatus =
-        metodoPago === "Efectivo" ? "completado" : "venta";
+      // Punto C2: el pago se recibe en el momento (nada que verificar), pero
+      // la pizza todavía hay que hacerla, así que TODOS los pedidos tomados en
+      // el local nacen "En preparación". Ahí se crea su orden de producción y
+      // recién cuando esa orden se completa pasa a "Por entregar"; la entrega
+      // la cierra el botón "Entregar" o la hora de recogida (§13).
+      const finalEstado: VentaStatus = "en-preparacion";
       const detalle: DetalleProd[] = selProductos.map((p) => ({
         nombre: `${p.nombre} — ${p.tamaño}`,
         precio: p.precio,
@@ -1847,34 +1850,15 @@ export function VentasScreen({
                       {fmtCOP(p.total)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {/* Estado editable. El flujo del checkout se conserva:
-                          la venta web nace "Por verificar" y el admin la
-                          aprueba con el botón Verificar (→ Por entregar).
-                          Desde el menú se pasa a Por entregar o Completado
-                          cuando el pedido ya no avanza solo. La devolución y
-                          la anulación no están aquí: van con sus botones de
-                          acción, y en la columna no se ofrece ninguna acción
-                          de eliminar. */}
-                      <EstadoSelect
-                        value={p.estado}
-                        disabled={VENTA_STATUS_FLUJO.includes(p.estado)}
-                        options={[
-                          // Si el estado lo asignó el flujo (rechazado /
-                          // en-espera), se muestra como única opción (solo
-                          // pill, sin menú) para que el badge no se pierda.
-                          ...(VENTA_STATUS_FLUJO.includes(p.estado)
-                            ? [{ value: p.estado, label: VENTA_STATUS_LABEL[p.estado], color: VENTA_STATUS_COLOR[p.estado] }]
-                            : []),
-                          ...VENTA_STATUS_SELECCIONABLES.map((s) => ({
-                            value: s,
-                            label: VENTA_STATUS_LABEL[s],
-                            color: VENTA_STATUS_COLOR[s],
-                          })),
-                        ]}
-                        onChange={(nuevo) => {
-                          if (nuevo !== p.estado) cambiarEstado(p.id, nuevo);
-                        }}
-                      />
+                      {/* Punto C2: el estado es de SOLO LECTURA. La venta avanza
+                          sola por el flujo (verificación → en preparación →
+                          orden de producción → por entregar → completado) y en
+                          la columna sólo se muestra el badge con su hora. */}
+                      <span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${VENTA_STATUS_COLOR[p.estado]}`}
+                      >
+                        {VENTA_STATUS_LABEL[p.estado]}
+                      </span>
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
@@ -1892,6 +1876,19 @@ export function VentasScreen({
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Verificar
+                          </button>
+                        )}
+                        {/* Punto C2: botón "Entregar", disparador manual del
+                            paso Por entregar → Completado (el otro disparador
+                            es el auto-completado por hora de recogida, §13). */}
+                        {p.estado === "venta" && (
+                          <button
+                            onClick={() => entregarVenta(p.id)}
+                            title="Entregar pedido"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Entregar
                           </button>
                         )}
                         <ActionIcons
@@ -2297,8 +2294,10 @@ export function VentasScreen({
           <VentaModal
             onClose={() => setShowCreate(false)}
             onConfirm={(v, resultadoCliente) => {
-              const maxId = Math.max(0, ...pedidos.map((p) => parseInt(p.id) || 0));
-              const newId = String(maxId + 1);
+              // Punto C1: el mismo generador Único que usa el checkout del
+              // cliente (`siguienteIdVenta`), así ambos caminos dan IDs
+              // numéricos consecutivos y no chocan entre sí.
+              const newId = siguienteIdVenta(pedidos);
               const initHistorial: HistorialEntry[] = [{ estado: v.estado, hora: nowHora() }];
               setPedidos((prev) => [{ id: newId, ...v, historial: initHistorial }, ...prev]);
               setShowCreate(false);
@@ -2348,7 +2347,7 @@ export function VentasScreen({
             tone={confirmVerif === "aprobar" ? "aviso" : "peligro"}
             message={
               confirmVerif === "aprobar"
-                ? "¿Aprobar el pago? La venta pasará a Por entregar (listo para recoger)."
+                ? "¿Aprobar el pago? La venta pasará a En preparación y se creará su orden de producción."
                 : "¿Rechazar el pago por comprobante falso? La venta quedará como Rechazado (estado final)."
             }
             // Punto 3.4: en este rechazo el adjunto es obligatorio (igual que

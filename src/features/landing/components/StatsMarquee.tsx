@@ -14,7 +14,10 @@ const DATOS: Dato[] = [
 
 function Estadistica({ emoji, value, label }: Dato) {
   return (
-    <div className="flex flex-col items-center gap-2 text-center w-52 shrink-0">
+    /* Ancho por breakpoint (punto B2): w-40 en móvil, w-52 en md y w-56
+       en lg; cada media en animations.css ajusta la duración para que la
+       velocidad se mantenga en ~50 px/s en todos los anchos. */
+    <div className="flex flex-col items-center gap-2 text-center w-40 md:w-52 lg:w-56 shrink-0">
       <span className="text-4xl leading-none">{emoji}</span>
       <p
         className="text-3xl md:text-4xl font-bold text-white mt-1 leading-none"
@@ -39,48 +42,24 @@ function Grupo({ oculto = false }: { oculto?: boolean }) {
 
 export default function StatsMarquee() {
   return (
-    <>
-      {/* Diseño original estático: solo visible con prefers-reduced-motion */}
-      <div className="hidden motion-reduce:block">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-            {DATOS.map((d, i) => (
-              <div
-                key={d.label}
-                className={`flex flex-col items-center gap-2 text-center ${
-                  i === 2 ? "col-span-2 md:col-span-1" : ""
-                }`}
-              >
-                <span className="text-4xl leading-none">{d.emoji}</span>
-                <p
-                  className="text-3xl md:text-4xl font-bold text-white mt-1 leading-none"
-                  style={{ fontFamily: MONO }}
-                >
-                  {d.value}
-                </p>
-                <p className="text-white/75 text-sm font-medium">{d.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+    /* Letrero en movimiento: de derecha a izquierda, continuo. El diseño
+       estático que existía solo para prefers-reduced-motion se unificó aquí
+       (punto B2): la pausa al pasar el cursor/teclado sigue disponible y es
+       el control de accesibilidad del movimiento. */
+    <div className="stats-marquee-mask">
+      <div className="stats-marquee-track">
+        {/* Primer conjunto: el primer grupo queda accesible para lectores
+            de pantalla; el resto del conjunto es decorativo. */}
+        <Grupo />
+        {[...Array(4)].map((_, i) => (
+          <Grupo key={`c1-g${i + 2}`} oculto />
+        ))}
+        {/* Segundo conjunto: réplica visual exacta del primero, toda
+            aria-hidden, para que el bucle a -50% empalme sin saltos. */}
+        {[...Array(5)].map((_, i) => (
+          <Grupo key={`c2-g${i + 1}`} oculto />
+        ))}
       </div>
-
-      {/* Letrero en movimiento: de derecha a izquierda, continuo */}
-      <div className="stats-marquee-mask motion-reduce:hidden">
-        <div className="stats-marquee-track">
-          {/* Primer conjunto: el primer grupo queda accesible para lectores
-              de pantalla; el resto del conjunto es decorativo. */}
-          <Grupo />
-          {[...Array(4)].map((_, i) => (
-            <Grupo key={`c1-g${i + 2}`} oculto />
-          ))}
-          {/* Segundo conjunto: réplica visual exacta del primero, toda
-              aria-hidden, para que el bucle a -50% empalme sin saltos. */}
-          {[...Array(5)].map((_, i) => (
-            <Grupo key={`c2-g${i + 1}`} oculto />
-          ))}
-        </div>
-      </div>
-    </>
+    </div>
   );
 }

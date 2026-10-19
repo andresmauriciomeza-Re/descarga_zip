@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -409,9 +410,11 @@ function PerdidaModal({
               </label>
               <input
                 type="number"
-                value={precioU}
+                // 0 = vacío con placeholder "0" (punto B1); al guardar cuenta como 0.
+                value={precioU === 0 ? "" : precioU}
+                placeholder="0"
                 onChange={(e) =>
-                  setPrecioU(Number(e.target.value))
+                  setPrecioU(numeroDeInput(limpiarNumeroInput(e.target.value)))
                 }
                 className={inputCls}
               />

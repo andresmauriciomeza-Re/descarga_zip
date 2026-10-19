@@ -1,10 +1,10 @@
 /* Letrero de estadísticas de la landing: movimiento continuo de derecha a
-   izquierda. Velocidad constante de 50 px/s en cualquier ancho de pantalla:
-   cada ítem mide w-52 (208 px) y cada grupo 3 × 208 = 624 px; un conjunto
-   son 5 grupos = 3120 px (supera los 2560 px de la pantalla más ancha);
-   el track lleva dos conjuntos (6240 px) y avanza -50% (= un conjunto) en
-   62.4 s (3120 px / 50 px·s⁻¹). El bucle empalma sin saltos porque el
-   segundo conjunto es una réplica exacta del primero. */
+   izquierda. Velocidad constante de 50 px/s en cualquier ancho de pantalla
+   (punto B2): cada ítem mide w-40 (160 px) en móvil, w-52 (208 px) en md y
+   w-56 (224 px) en lg; cada grupo son 3 ítems y cada conjunto 5 grupos, así
+   que el track (dos conjuntos) avanza -50% en 48 s / 62,4 s / 67,2 s según
+   el breakpoint. El bucle empalma sin saltos porque el segundo conjunto es
+   una réplica exacta del primero. */
 
 @keyframes stats-marquee {
   from {
@@ -24,17 +24,25 @@
 .stats-marquee-track {
   display: flex;
   width: max-content;
-  animation: stats-marquee 62.4s linear infinite;
+  /* Base = móvil (w-40: 160 px × 3 × 5 = 2400 px / 50 px·s⁻¹ = 48 s). */
+  animation: stats-marquee 48s linear infinite;
   will-change: transform;
+}
+
+/* Mismo 50 px/s con los ítems más anchos de cada breakpoint. */
+@media (min-width: 768px) {
+  .stats-marquee-track {
+    animation-duration: 62.4s;
+  }
+}
+
+@media (min-width: 1024px) {
+  .stats-marquee-track {
+    animation-duration: 67.2s;
+  }
 }
 
 .stats-marquee-track:hover,
 .stats-marquee-track:focus-within {
   animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stats-marquee-track {
-    animation: none;
-  }
 }

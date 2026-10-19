@@ -12,6 +12,7 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { hora12 } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
@@ -865,12 +866,14 @@ function LineaPreparacion({
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
             Cantidad a producir ({linea.unidad})
           </label>
+          {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta como 0. */}
           <input
             type="number"
             min={0}
             step={esDecimal(linea.unidad) ? 0.1 : 1}
-            value={linea.cantidadEstimada || ""}
-            onChange={(e) => onChange({ ...linea, cantidadEstimada: Number(e.target.value) })}
+            value={linea.cantidadEstimada === 0 ? "" : linea.cantidadEstimada}
+            placeholder="0"
+            onChange={(e) => onChange({ ...linea, cantidadEstimada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
             className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -923,6 +926,7 @@ export function OrdenProduccionScreen({
   setOrdenes,
   noConformidades,
   setNoConformidades,
+  onVentaLista,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -944,6 +948,10 @@ export function OrdenProduccionScreen({
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
   noConformidades: NoConformidad[];
   setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
+  /** Punto C2: avisa a App cuando se completa una orden que pertenece a una
+      venta (`ventaId`), para que esa venta salga de cocina y pase a "venta"
+      ("Por entregar"). Sin callback la pantalla sigue funcionando igual. */
+  onVentaLista?: (ventaId: string) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1049,12 +1057,16 @@ export function OrdenProduccionScreen({
   // ── Numeración ─────────────────────────────────────────────────────
   const siguienteId = () => siguienteOrdenId(ordenes);
 
-  /** Venta ya pagada (estado "venta") que todavía no tiene orden. Una venta =
-      una sola orden: el buscador manual y la creación automática de App
-      comparten esta lista, así que no se puede duplicar. */
+  /** Venta pagada y "en preparación" que todavía no tiene orden (punto C2).
+      Una venta = una sola orden: el buscador manual y la creación automática
+      de App comparten esta lista, así que no se puede duplicar. El estado
+      "venta" (legacy, anterior al C2) también se ofrece por si alguna venta
+      quedó aprobada sin orden: igual hay que producirla. */
   const ventasSinOrden = useMemo(() => {
     const conOrden = new Set(ordenes.map((o) => o.ventaId).filter(Boolean) as string[]);
-    return ventas.filter((v) => v.estado === "venta" && !conOrden.has(v.id));
+    return ventas.filter(
+      (v) => (v.estado === "en-preparacion" || v.estado === "venta") && !conOrden.has(v.id),
+    );
   }, [ventas, ordenes]);
 
   // ── Guardar (compartido por Crear y Editar) ────────────────────────
@@ -1160,8 +1172,9 @@ export function OrdenProduccionScreen({
         toast.error("Elige la venta que se va a preparar");
         return;
       }
-      if (ventas.find((v) => v.id === form.ventaId)?.estado !== "venta") {
-        toast.error("Solo se puede preparar una venta con el pago verificado");
+      const estadoVenta = ventas.find((v) => v.id === form.ventaId)?.estado;
+      if (estadoVenta !== "en-preparacion" && estadoVenta !== "venta") {
+        toast.error("Solo se puede preparar una venta pagada (en preparación)");
         return;
       }
       if (ordenes.some((o) => o.ventaId === form.ventaId)) {
@@ -1382,6 +1395,12 @@ export function OrdenProduccionScreen({
         : orden.notasFaltantes,
     };
     setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizado : o)));
+
+    // Punto C2: si la orden pertenece a una venta, al completarse ésta sale
+    // de cocina y pasa a "Por entregar" (transición en-preparacion → venta,
+    // registrada en services/estadosVenta.ts). Es el paso que antes no estaba
+    // cableado: la venta y su orden avanzaban por separado.
+    if (orden.ventaId) onVentaLista?.(orden.ventaId);
 
     if (faltantes.length > 0) {
       toast.warning(actualizado.notasFaltantes ?? "Completó con faltantes");
@@ -1884,8 +1903,11 @@ export function OrdenProduccionScreen({
                           <input
                             type="number" min={0}
                             step={esDecimal(l.unidad) ? 0.01 : 1}
+                            // Texto con vacío permitido (punto B1); se limpian
+                            // los ceros a la izquierda al teclear.
                             value={reales[i] ?? ""}
-                            onChange={e => setReales(p => ({ ...p, [i]: e.target.value }))}
+                            placeholder="0"
+                            onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
                             className={iCls}
                           />
                         </div>
@@ -2258,8 +2280,12 @@ export function OrdenProduccionScreen({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
-                      <input type="number" min={1} value={darBajaForm.cantidad}
-                        onChange={e => setDarBajaForm(f => f && ({ ...f, cantidad: Number(e.target.value) }))}
+                      {/* Nace con la cantidad estimada de la línea; borra a
+                          vacío sin volver a 0 (punto B1). */}
+                      <input type="number" min={1}
+                        value={darBajaForm.cantidad === 0 ? "" : darBajaForm.cantidad}
+                        placeholder="0"
+                        onChange={e => setDarBajaForm(f => f && ({ ...f, cantidad: numeroDeInput(limpiarNumeroInput(e.target.value)) }))}
                         className={iCls} />
                     </div>
                     <div>
@@ -2367,7 +2393,7 @@ function CamposPedido({
     <div className="space-y-3">
       <div>
         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-          Venta a preparar <span className="text-muted-foreground/60">(solo ventas con pago verificado)</span>
+          Venta a preparar <span className="text-muted-foreground/60">(solo ventas pagadas, en preparación)</span>
         </label>
         <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

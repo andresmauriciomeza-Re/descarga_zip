@@ -525,6 +525,7 @@ export function DashboardScreen({
       venta: "Por entregar",
       perdida: "Devolución",
       "por-verificar": "Por verificar",
+      "en-preparacion": "En preparación",
       completado: "Completado",
       anulado: "Anulado",
       rechazado: "Rechazado",

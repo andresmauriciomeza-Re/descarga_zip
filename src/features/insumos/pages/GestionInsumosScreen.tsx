@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -354,7 +355,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         bajos.length === 1
           ? `1 insumo con stock bajo: ${nombres}`
           : `${bajos.length} insumos con stock bajo: ${nombres}`,
-        { duration: 8000, icon: <AlertTriangle className="w-4 h-4" /> }
+        { duration: 2000, icon: <AlertTriangle className="w-4 h-4" /> }
       );
     }
   }, []);
@@ -497,7 +498,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       ));
       const actualizado: Insumo = { ...original, stockActual, stockMinimo };
       if (esStockBajo(actualizado)) {
-        toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 6000 });
+        toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 2000 });
       } else {
         toast.success(`Insumo "${original.nombre}" actualizado`);
       }
@@ -526,7 +527,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       };
       setInsumos(prev => [nuevo, ...prev]);
       if (esStockBajo(nuevo)) {
-        toast.warning(`Alerta: el stock de ${nuevo.nombre} está bajo (${nuevo.stockActual} ${nuevo.unidadMedida}, mínimo ${nuevo.stockMinimo} ${nuevo.unidadMedida})`, { duration: 6000 });
+        toast.warning(`Alerta: el stock de ${nuevo.nombre} está bajo (${nuevo.stockActual} ${nuevo.unidadMedida}, mínimo ${nuevo.stockMinimo} ${nuevo.unidadMedida})`, { duration: 2000 });
       } else {
         toast.success(`Insumo "${nombre}" creado`);
       }
@@ -825,12 +826,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad (stock actual) *</label>
+                    {/* 0 = vacío con placeholder "0" (punto B1). */}
                     <input
                       type="number"
                       min={0}
                       step="0.1"
-                      value={piStockActual}
-                      onChange={e => setPiStockActual(Number(e.target.value))}
+                      value={piStockActual === 0 ? "" : piStockActual}
+                      placeholder="0"
+                      onChange={e => setPiStockActual(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                       disabled={editandoProducto}
                       className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : "")}
                     />
@@ -840,8 +843,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                     <input
                       type="number"
                       min={0}
-                      value={piStockMinimo}
-                      onChange={e => setPiStockMinimo(Number(e.target.value))}
+                      value={piStockMinimo === 0 ? "" : piStockMinimo}
+                      placeholder="0"
+                      onChange={e => setPiStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                       disabled={editandoProducto}
                       className={iCls + (editandoProducto ? " text-muted-foreground cursor-not-allowed" : "")}
                     />
@@ -1157,11 +1161,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                   {editingId && (
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Actual</label>
+                      {/* 0 = vacío (punto B1): al borrar no reaparece el 0. */}
                       <input
                         type="number"
                         min={0}
-                        value={stockActual}
-                        onChange={e => setStockActual(Number(e.target.value))}
+                        value={stockActual === 0 ? "" : stockActual}
+                        placeholder="0"
+                        onChange={e => setStockActual(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                         className="w-full px-3 py-2.5 rounded-xl text-sm text-foreground bg-muted dark:bg-input focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
@@ -1172,8 +1178,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                     <input
                       type="number"
                       min={0}
-                      value={stockMinimo}
-                      onChange={e => setStockMinimo(Number(e.target.value))}
+                      value={stockMinimo === 0 ? "" : stockMinimo}
+                      placeholder="0"
+                      onChange={e => setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                       className="w-full px-3 py-2.5 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   </div>

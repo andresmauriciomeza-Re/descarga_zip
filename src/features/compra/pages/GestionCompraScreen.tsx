@@ -16,6 +16,7 @@ import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { abrirPicker } from "@/shared/utils/abrirFecha";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import {
@@ -185,15 +186,17 @@ export interface NuevaCompraData {
  * Monto unitario | IVA | Acciones (editar/eliminar) — con el resumen
  * Subtotal / IVA / Total debajo.
  *
- * Es LOCAL y no reutiliza `InsumosSolicitadosTable` porque el lápiz NO edita
- * en línea: carga la fila en el formulario de la izquierda (`editarItem`),
- * que es para lo que existe ese estado. Los cálculos son los mismos:
- * `calcularLineaIva` con la opción de precios elegida, de modo que la suma
- * incluye por igual insumos y productos.
+ * Es LOCAL y no reutiliza `InsumosSolicitadosTable`: la edición es EN LÍNEA
+ * en la propia fila (borrador con ✓ / ✗, punto B3), mientras que el
+ * formulario de la izquierda siempre queda en modo "Agregar". Los cálculos
+ * son los mismos: `calcularLineaIva` con la opción de precios elegida, de
+ * modo que la suma incluye por igual insumos y productos.
  */
 function TablaItemsFactura({
   items,
   onEdit,
+  onCommit,
+  onCancelarEdicion,
   onRemove,
   modoIva = false,
   ivaIncluido = true,
@@ -202,17 +205,67 @@ function TablaItemsFactura({
   className = "",
 }: {
   items: ItemFactura[];
-  /** Lápiz: carga la fila en el formulario de la izquierda. */
+  /** Lápiz: abre la edición en línea de la fila y avisa al formulario. */
   onEdit: (row: ItemFactura) => void;
+  /** ✓: aplica el borrador de la fila (con las mismas validaciones que al agregar). */
+  onCommit: (rowId: string, patch: Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva">) => void;
+  /** ✗: descarta el borrador y sale de la edición de esa fila. */
+  onCancelarEdicion: () => void;
   onRemove: (rowId: string) => void;
   modoIva?: boolean;
   ivaIncluido?: boolean;
   /** Misma estructura que la tabla compartida: sin card ni título. */
   enPagina?: boolean;
-  /** Fila cargada en el formulario (se resalta para saber qué se edita). */
+  /** Fila en edición en línea (se resalta y muestra ✓ / ✗). */
   rowEditando?: string | null;
   className?: string;
 }) {
+  /** Borrador de la fila en edición (punto B3): sólo cantidad, monto e IVA;
+   *  nombre y medida son texto porque los define el ítem del catálogo. */
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva"> | null>(null);
+
+  // Si el padre cancela la edición desde afuera (p. ej. al agregar otra fila,
+  // que deja el formulario en "Agregar"), el borrador se descarta con él.
+  useEffect(() => {
+    if (rowEditando === null) {
+      setDraftId(null);
+      setDraft(null);
+    }
+  }, [rowEditando]);
+
+  const startEdit = (row: ItemFactura) => {
+    setDraftId(row.rowId);
+    setDraft({ cantidad: row.cantidad, precioUnitario: row.precioUnitario, iva: row.iva });
+    onEdit(row);
+  };
+
+  const cancelEdit = () => {
+    setDraftId(null);
+    setDraft(null);
+    onCancelarEdicion();
+  };
+
+  const commitEdit = (rowId: string) => {
+    if (!draft) return;
+    // Mismas validaciones que al agregar una fila nueva.
+    if (draft.cantidad <= 0) {
+      toast.error("La cantidad debe ser mayor que cero.");
+      return;
+    }
+    if (draft.precioUnitario < 0) {
+      toast.error("El precio unitario no puede ser negativo.");
+      return;
+    }
+    if (draft.iva < 0 || draft.iva > 100) {
+      toast.error("El IVA debe estar entre 0 % y 100 %.");
+      return;
+    }
+    onCommit(rowId, draft);
+    setDraftId(null);
+    setDraft(null);
+  };
+
   const linea = (row: ItemFactura) =>
     modoIva
       ? calcularLineaIva({
@@ -227,7 +280,13 @@ function TablaItemsFactura({
           return { baseSinIva: base, montoIva: monto, subtotalConIva: base + monto };
         })();
 
-  const totales = items.reduce(
+  // Los totales incluyen el borrador de la fila en edición, así el pie se
+  // mueve al escribir y no hace que "no cuadre" hasta pulsar ✓.
+  const filasVisibles = items.map((row) =>
+    row.rowId === draftId && draft ? { ...row, ...draft } : row
+  );
+
+  const totales = filasVisibles.reduce(
     (acc, row) => {
       const l = linea(row);
       acc.baseSinIva += l.baseSinIva;
@@ -237,6 +296,12 @@ function TablaItemsFactura({
     },
     { baseSinIva: 0, montoIva: 0, total: 0 }
   );
+
+  // Input numérico de las celdas en edición: mismo estilo de celda que
+  // `InsumosSolicitadosTable`, sin spinners (el ancho de la columna es fijo).
+  const inputCelda =
+    "w-full h-8 px-1.5 bg-muted border border-border rounded-xl text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-primary/30 " +
+    "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
   // Punto 3.3: columnas LITERALES del plan. La suma de anchos fijos (248 px +
   // acciones) deja ~250 px de sobra para "Nombre" a 1366×768, así que la tabla
@@ -331,9 +396,9 @@ function TablaItemsFactura({
                 </td>
               </tr>
             ) : (
-              items.map((row) => {
+              filasVisibles.map((row) => {
                 const l = linea(row);
-                const editandoFila = rowEditando === row.rowId;
+                const editandoFila = rowEditando === row.rowId && draft !== null;
                 return (
                   <tr
                     key={row.rowId}
@@ -342,47 +407,138 @@ function TablaItemsFactura({
                     }`}
                   >
                     <td className={td + " text-sm font-medium text-foreground"}>
+                      {/* El nombre NO se edita en línea: lo define el ítem
+                          agregado (punto B3). */}
                       <div className="line-clamp-2 break-words" title={row.nombre}>
                         {row.nombre}
                       </div>
                     </td>
-                    {/* Punto 2.8c: columnas numéricas alineadas a la derecha. */}
-                    <td className={td + " text-sm text-right"}>{row.cantidad}</td>
+                    {/* Punto 2.8c: columnas numéricas alineadas a la derecha.
+                        Punto B3: en edición el 0 se muestra vacío (placeholder
+                        "0") y los ceros a la izquierda se limpian al teclear. */}
+                    <td className={td + " text-sm text-right"}>
+                      {editandoFila && draft ? (
+                        <input
+                          type="number"
+                          min={0}
+                          autoFocus
+                          value={draft.cantidad === 0 ? "" : draft.cantidad}
+                          placeholder="0"
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              cantidad: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                            })
+                          }
+                          className={inputCelda}
+                        />
+                      ) : (
+                        row.cantidad
+                      )}
+                    </td>
                     {/* Punto 3.3: Medida en su propia columna (solo lectura;
                         la define el ítem del catálogo). */}
                     <td className={td + " text-xs text-muted-foreground"}>{row.unidad}</td>
                     <td className={td + " text-sm text-right whitespace-nowrap"}>
-                      {fmtCOP(row.precioUnitario)}
+                      {editandoFila && draft ? (
+                        <input
+                          type="number"
+                          min={0}
+                          value={draft.precioUnitario === 0 ? "" : draft.precioUnitario}
+                          placeholder="0"
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              precioUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                            })
+                          }
+                          className={inputCelda}
+                        />
+                      ) : (
+                        fmtCOP(row.precioUnitario)
+                      )}
                     </td>
                     <td className={td + " text-xs text-muted-foreground text-right"}>
-                      <span className="text-[13px] text-foreground/80">{row.iva}%</span>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                        {fmtCOP(l.montoIva)}
-                      </p>
+                      {editandoFila && draft ? (
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            // Vacío = 0 % (punto B1): el 0 es un valor válido y
+                            // los subtotales de la fila nunca quedan en NaN.
+                            value={draft.iva === 0 ? "" : draft.iva}
+                            placeholder="0"
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                iva: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                              })
+                            }
+                            className={inputCelda + " pr-4"}
+                          />
+                          <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[11px] text-muted-foreground">
+                            %
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                          {/* Mientras se edita no se pinta el monto: quedaba
+                              "$ 0" debajo del input y agrandaba la fila. */}
+                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                            {fmtCOP(l.montoIva)}
+                          </p>
+                        </>
+                      )}
                     </td>
                     {/* Punto 2.8c: el subtotal de la línea se veía sólo en el
-                        pie; ahora tiene su columna, junto a IVA. */}
+                        pie; ahora tiene su columna, junto a IVA. En edición
+                        sigue el borrador para que reaccione al escribir. */}
                     <td className={td + " text-sm font-semibold text-foreground text-right whitespace-nowrap"}>
                       {fmtCOP(l.subtotalConIva)}
                     </td>
                     <td className={td + " whitespace-nowrap"}>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(row)}
-                          title="Editar ítem"
-                          className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onRemove(row.rowId)}
-                          title="Eliminar ítem"
-                          className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {editandoFila ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => commitEdit(row.rowId)}
+                              title="Confirmar cambios"
+                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              title="Cancelar edición"
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(row)}
+                              title="Editar ítem"
+                              className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRemove(row.rowId)}
+                              title="Eliminar ítem"
+                              className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -512,8 +668,9 @@ function CompraForm({
   /** Fecha de factura: `abrirPicker` la abre con clic/foco (Chrome ya no
       despliega el calendario sólo con enfocar el campo — punto 2.8b). */
   const fechaFacturaRef = useRef<HTMLInputElement>(null);
-  /** Fila en edición: el lápiz de la tabla carga sus datos en este formulario
-   *  y el botón pasa a "Actualizar" (pantalla completa). */
+  /** Fila en edición EN LÍNEA (punto B3): el lápiz de la tabla abre el
+   *  borrador en la propia fila; el formulario de la izquierda siempre
+   *  queda en modo "Agregar". */
   const [editando, setEditando] = useState<string | null>(null);
 
   // Factura única: normalización y validación de duplicados
@@ -690,7 +847,12 @@ function CompraForm({
   const faltaIva = ivaIncluido === null;
   // Guardar queda habilitado aunque falte elegir el IVA: en ese caso el clic
   // muestra el mensaje rojo bajo el selector (y el toast) sin abrir el confirm.
-  const botonGuardarOk = camposOk && !facturaDuplicada;
+  const botonGuardarOk =
+    camposOk && !facturaDuplicada &&
+    // Con una fila en edición en línea no se guarda: primero se confirma (✓)
+    // o se descarta (✗) el borrador, así la factura nunca se guarda con una
+    // edición a medias (punto B3).
+    editando === null;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
     setProvQuery(p.nombre);
@@ -756,40 +918,9 @@ function CompraForm({
       return;
     }
 
-    // Modo edición (lápiz de la tabla): los datos ya están cargados en los
-    // campos de arriba, así que solo se reemplaza la fila y se vuelve a dejar
-    // el formulario listo para el siguiente insumo.
-    if (editando) {
-      if (!itemNombre.trim()) {
-        toast.error("Ingresa el nombre del ítem.");
-        return;
-      }
-      if (
-        items.some(
-          (item) =>
-            item.rowId !== editando &&
-            (item.tipoItem ?? "insumo") === itemTipo &&
-            item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()
-        )
-      ) {
-        toast.error("Este ítem ya fue agregado a la factura.");
-        return;
-      }
-      actualizarItem(editando, {
-        nombre: itemNombre.trim(),
-        cantidad: itemCantidad,
-        // P11: la unidad vuelve a salir del catálogo, nunca de un select.
-        unidad: unidadElegida(),
-        precioUnitario: itemPrecio,
-        iva: itemIva,
-        tipoItem: itemTipo,
-        // El ítem puede haber cambiado de catálogo (insumo ↔ producto).
-        idInsumo: itemId,
-      });
-      limpiarFilaInsumo();
-      return;
-    }
-
+    // Edición en línea (punto B3): el lápiz ya no carga la fila en el
+    // formulario, así que aquí SIEMPRE se agrega una fila nueva y se
+    // descarta cualquier borrador abierto en la tabla.
     if (!itemNombre.trim()) {
       toast.error("Ingresa el nombre del ítem.");
       return;
@@ -849,23 +980,19 @@ function CompraForm({
     nombreRef.current?.focus();
   };
 
-  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda.
+  /** Lápiz de la tabla (punto B3): abre la edición EN LÍNEA en la fila; el
+   *  formulario de la izquierda se deja limpio para seguir agregando ítems.
    *  P14: también el tipo, para que el buscador siga mirando el catálogo
    *  correcto mientras se edita. */
   const editarItem = (row: ItemFactura) => {
-    setEditando(row.rowId);
-    setItemNombre(row.nombre);
-    setItemCantidad(row.cantidad);
-    setItemUnidad(row.unidad);
-    setItemPrecio(row.precioUnitario);
-    setItemIva(row.iva);
-    setItemId(row.idInsumo.startsWith("INS-FAC-") ? "" : row.idInsumo);
+    limpiarFilaInsumo();
     setItemTipo(row.tipoItem ?? "insumo");
-    setItemSugAbierto(false);
-    nombreRef.current?.focus();
+    setEditando(row.rowId);
   };
 
   const eliminarItem = (rowId: string) => {
+    // Si se borra la fila que estaba en edición, el borrador se cierra con ella.
+    if (editando === rowId) setEditando(null);
     setItems((prev) => prev.filter((item) => item.rowId !== rowId));
   };
 
@@ -1458,7 +1585,9 @@ function CompraForm({
                       setShowNuevoInsumo(true);
                     }}
                     compacto={isPage}
-                    buttonLabel={editando ? "Actualizar" : "Agregar"}
+                    // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
+                    // de una fila existente ocurre en línea, en la tabla.
+                    buttonLabel="Agregar"
                     variante="compacta"
                     // P11 + punto 2.6: en el modal la Medida sigue oculta (la
                     // unidad la define el insumo); en página vuelve a la fila
@@ -1616,6 +1745,11 @@ function CompraForm({
                 <TablaItemsFactura
                   items={items}
                   onEdit={editarItem}
+                  onCommit={(rowId, patch) => {
+                    actualizarItem(rowId, patch);
+                    setEditando(null);
+                  }}
+                  onCancelarEdicion={() => setEditando(null)}
                   onRemove={eliminarItem}
                   modoIva
                   ivaIncluido={ivaIncluido ?? true}
