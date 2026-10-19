@@ -334,10 +334,17 @@ export function FichaTecnicaEditor({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      {/* En producto la rejilla "Tiempo | Porciones" es 1 : 1.4 (la columna de
+          porciones es más ancha: lleva las cajitas lado a lado); en insumo
+          ("Tiempo | Rendimiento") se mantiene 50/50. */}
+      <div className={`grid gap-3 ${esInsumo ? "grid-cols-2" : "grid-cols-[1fr_1.4fr]"}`}>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
-          <input type="number" min={0} value={ficha.tiempoPreparacion}
+          {/* Como el precio: el 0 se muestra vacío con placeholder "0". Solo
+              en producto; en insumo el campo sigue igual que siempre. */}
+          <input type="number" min={0}
+            value={esInsumo ? ficha.tiempoPreparacion : ficha.tiempoPreparacion === 0 ? "" : ficha.tiempoPreparacion}
+            placeholder={esInsumo ? undefined : "0"}
             onChange={e => onChange({ ...ficha, tiempoPreparacion: Number(e.target.value) })}
             className={inputCls} />
         </div>
@@ -355,49 +362,59 @@ export function FichaTecnicaEditor({
         ) : (
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
-            <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
-              <span className="flex-1 min-w-0">Tamaño</span>
-              <span className="w-20 shrink-0">Porciones</span>
-              {!tamanoFijo && <span className="w-6 shrink-0" />}
-            </div>
-            <div className="space-y-2">
-              {filas.map((fila, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  {tamanoFijo ? (
-                    /* Tamaño fijo por categoría: solo se lee, sin selector. */
-                    <span className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm font-medium text-foreground truncate">
-                      {fila.tamano}
-                    </span>
-                  ) : (
-                    <select
-                      value={fila.tamano}
-                      onChange={e => updateTamano(idx, e.target.value as TamanoFicha)}
-                      aria-label="Tamaño"
-                      className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
-                      {TAMANOS_FICHA.map(t => (
-                        <option key={t} value={t} disabled={filas.some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
-                      ))}
-                    </select>
-                  )}
-                  <input type="number" min={1} step={1} value={fila.porciones} aria-label="Porciones"
-                    onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
-                    className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                  {!tamanoFijo && (
-                    <button type="button" title="Quitar tamaño" onClick={() => removeTamano(idx)}
-                      disabled={filas.length === 1}
-                      className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+            {tamanoFijo ? (
+              /* Tamaño fijo por categoría (Pizzas, Lasañas): la categoría
+                 define los tamaños, no se agregan ni se quitan. UNA sola fila
+                 de cajitas lado a lado, con la misma piel y altura que el
+                 input de tiempo: nombre a la izquierda y porciones editables
+                 a la derecha. Sin fila de encabezados. */
+              <div className="flex flex-wrap gap-2">
+                {filas.map((fila, idx) => (
+                  <div key={idx}
+                    className="flex-1 min-w-[9rem] flex items-center justify-between gap-2 px-3 py-2.5 bg-muted rounded-xl border border-border focus-within:ring-2 focus-within:ring-primary/30">
+                    <span className="min-w-0 truncate text-sm font-medium text-foreground">{fila.tamano}</span>
+                    <input type="number" min={1} step={1} value={fila.porciones}
+                      aria-label={`Porciones de ${fila.tamano}`}
+                      onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
+                      className="w-12 shrink-0 bg-transparent text-right text-sm font-bold text-foreground focus:outline-none" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
+                  <span className="flex-1 min-w-0">Tamaño</span>
+                  <span className="w-20 shrink-0">Porciones</span>
+                  <span className="w-6 shrink-0" />
                 </div>
-              ))}
-            </div>
-            {/* La categoría define los tamaños: no se agregan ni se quitan. */}
-            {!tamanoFijo && (
-              <button type="button" onClick={addTamano} disabled={filas.length === TAMANOS_FICHA.length}
-                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Agregar tamaño
-              </button>
+                <div className="space-y-2">
+                  {filas.map((fila, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <select
+                        value={fila.tamano}
+                        onChange={e => updateTamano(idx, e.target.value as TamanoFicha)}
+                        aria-label="Tamaño"
+                        className="flex-1 min-w-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer">
+                        {TAMANOS_FICHA.map(t => (
+                          <option key={t} value={t} disabled={filas.some((f, i) => i !== idx && f.tamano === t)}>{t}</option>
+                        ))}
+                      </select>
+                      <input type="number" min={1} step={1} value={fila.porciones} aria-label="Porciones"
+                        onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
+                        className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                      <button type="button" title="Quitar tamaño" onClick={() => removeTamano(idx)}
+                        disabled={filas.length === 1}
+                        className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={addTamano} disabled={filas.length === TAMANOS_FICHA.length}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Agregar tamaño
+                </button>
+              </>
             )}
           </div>
         )}
@@ -512,8 +529,10 @@ export function FichaTecnicaDetalle({
 }) {
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
-      {/* Tiempo de preparación y el dato de rendimiento/porciones en una fila. */}
-      <div className="shrink-0 grid grid-cols-2 gap-3">
+      {/* Tiempo de preparación y el dato de rendimiento/porciones en una fila.
+          En producto la proporción es 1 : 1.4 (como en el editor); en insumo
+          se mantiene 50/50. */}
+      <div className={`shrink-0 grid gap-3 ${modo === "insumo" ? "grid-cols-2" : "grid-cols-[1fr_1.4fr]"}`}>
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</p>
           <div className={readCls}>{v.tiempoPreparacion}</div>
@@ -524,18 +543,20 @@ export function FichaTecnicaDetalle({
           </p>
           {modo === "insumo" ? (
             <div className={readCls}>{rendimientoDe(v)}</div>
-          ) : (
-            <>
-              {v.porcionesPorTamano?.map((pt, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{pt.tamano}</span>
-                  <span className="text-sm text-foreground">{pt.porciones}</span>
+          ) : v.porcionesPorTamano?.length ? (
+            /* Mismo patrón de cajitas que el editor: nombre a la izquierda,
+               porciones en negrita a la derecha, solo lectura. La piel sale
+               de readCls para calzar con la caja de Tiempo de cada pantalla. */
+            <div className="flex flex-wrap gap-2">
+              {v.porcionesPorTamano.map((pt, idx) => (
+                <div key={idx} className={`${readCls} flex flex-1 min-w-[9rem] items-center justify-between gap-2`}>
+                  <span className="min-w-0 truncate font-medium">{pt.tamano}</span>
+                  <span className="font-bold">{pt.porciones}</span>
                 </div>
               ))}
-              {!v.porcionesPorTamano?.length && (
-                <span className="text-xs text-muted-foreground">Normal: {v.porciones}</span>
-              )}
-            </>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">Normal: {v.porciones}</span>
           )}
         </div>
       </div>
