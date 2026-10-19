@@ -11,6 +11,7 @@ import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { abrirPicker } from "@/shared/utils/abrirFecha";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   ConfirmModal,
   NuevoInsumoModal,
@@ -993,15 +994,17 @@ export function RecepcionCompraScreen({
                             </td>
 
                             <td className="px-3 py-3">
+                              {/* 0 = vacío (punto B1): al borrar no reaparece el 0. */}
                               <input
                                 type="number"
                                 min={0}
                                 max={item.cantidadSolicitada}
-                                value={item.cantidadRecibida}
+                                value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
+                                placeholder="0"
                                 onChange={(e) =>
                                   updRec(
                                     item.rowId,
-                                    Number(e.target.value)
+                                    numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
                                 className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -1012,11 +1015,12 @@ export function RecepcionCompraScreen({
                               <input
                                 type="number"
                                 min={0}
-                                value={item.costoUnitario}
+                                value={item.costoUnitario === 0 ? "" : item.costoUnitario}
+                                placeholder="0"
                                 onChange={(e) =>
                                   updPrice(
                                     item.rowId,
-                                    Number(e.target.value)
+                                    numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
                                 className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -1125,11 +1129,12 @@ export function RecepcionCompraScreen({
                                   <input
                                     type="number"
                                     min={0}
-                                    value={draft.cantidad}
+                                    value={draft.cantidad === 0 ? "" : draft.cantidad}
+                                    placeholder="0"
                                     onChange={(e) =>
                                       setEditExtraDraft({
                                         ...draft,
-                                        cantidad: Number(e.target.value),
+                                        cantidad: numeroDeInput(limpiarNumeroInput(e.target.value)),
                                       })
                                     }
                                     className="w-14 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -1166,11 +1171,14 @@ export function RecepcionCompraScreen({
                                   <input
                                     type="number"
                                     min={0}
-                                    value={draft.costoUnitario}
+                                    value={draft.costoUnitario === 0 ? "" : draft.costoUnitario}
+                                    placeholder="0"
                                     onChange={(e) =>
                                       setEditExtraDraft({
                                         ...draft,
-                                        costoUnitario: Number(e.target.value), precioUnitario: Number(e.target.value), iva: 0
+                                        costoUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                                        precioUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                                        iva: 0,
                                       })
                                     }
                                     className="w-20 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
@@ -1313,11 +1321,13 @@ export function RecepcionCompraScreen({
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         Cantidad
                       </label>
+                      {/* Nace en 1 (regla del alta) y borra a vacío (punto B1). */}
                       <input
                         type="number"
                         min={1}
-                        value={exCant}
-                        onChange={(e) => setExCant(Number(e.target.value))}
+                        value={exCant === 0 ? "" : exCant}
+                        onChange={(e) => setExCant(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+                        placeholder="0"
                         className={compactInputCls}
                       />
                     </div>
@@ -1357,14 +1367,15 @@ export function RecepcionCompraScreen({
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         IVA (%)
                       </label>
+                      {/* Vacío = 0 % (punto B1); ya traía placeholder "0". */}
                       <input
                         type="number"
                         min={0}
                         max={100}
-                        value={exIva}
+                        value={exIva === 0 ? "" : exIva}
                         onChange={(e) =>
                           setExIva(
-                            Math.min(100, Math.max(0, Number(e.target.value)))
+                            Math.min(100, Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value))))
                           )
                         }
                         placeholder="0"

@@ -16,6 +16,7 @@ import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -625,8 +626,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
             {readOnly
               ? <p className="text-sm font-semibold text-foreground py-2">{f.cantidadAfectada} {f.unidadMedida}</p>
-              : <input type="number" min={1} value={f.cantidadAfectada}
-                  onChange={e => set({ cantidadAfectada: Number(e.target.value) })} className={iCls} />
+              : <input type="number" min={1}
+                  // Nace en 1 (regla del alta); borra a vacío sin volver a 0
+                  // y limpia ceros a la izquierda (punto B1).
+                  value={f.cantidadAfectada === 0 ? "" : f.cantidadAfectada}
+                  placeholder="0"
+                  onChange={e => set({ cantidadAfectada: numeroDeInput(limpiarNumeroInput(e.target.value)) })} className={iCls} />
             }
           </div>
           <div>

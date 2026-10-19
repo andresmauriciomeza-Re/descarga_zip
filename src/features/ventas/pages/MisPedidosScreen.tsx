@@ -38,6 +38,13 @@ const ESTADO: Record<
     color: "bg-amber-100 text-amber-800",
     mensaje: "Estamos revisando tu comprobante de pago.",
   },
+  // Punto C2: estado nuevo entre "pago verificado" y "listo para recoger":
+  // la venta espera a que su orden de producción se complete en cocina.
+  "en-preparacion": {
+    label: "Preparando tu pedido",
+    color: "bg-teal-100 text-teal-800",
+    mensaje: "Tu pago fue confirmado y tu pedido ya está en cocina.",
+  },
   venta: {
     label: "Listo para recoger",
     color: "bg-blue-100 text-blue-800",

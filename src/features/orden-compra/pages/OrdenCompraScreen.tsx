@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { aplicarStockCompra } from "@/features/compras/services/inventario";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -1883,9 +1884,12 @@ function RecepcionModal({
                             <td className="px-3 py-2.5 font-medium text-foreground">{item.nombre}</td>
                             <td className="px-3 py-2.5 text-muted-foreground">{item.cantidadSolicitada}</td>
                             <td className="px-3 py-2.5">
+                              {/* 0 = vacío (punto B1): al borrar no reaparece el 0. */}
                               <input
-                                type="number" min={0} value={item.cantidadRecibida}
-                                onChange={e => updRec(item.rowId, Number(e.target.value))}
+                                type="number" min={0}
+                                value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
+                                placeholder="0"
+                                onChange={e => updRec(item.rowId, numeroDeInput(limpiarNumeroInput(e.target.value)))}
                                 className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
@@ -1893,8 +1897,10 @@ function RecepcionModal({
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{fmtCOP(item.precioReferencia)}</td>
                             <td className="px-3 py-2.5">
                               <input
-                                type="number" min={0} value={item.costoUnitario}
-                                onChange={e => updPrice(item.rowId, Number(e.target.value))}
+                                type="number" min={0}
+                                value={item.costoUnitario === 0 ? "" : item.costoUnitario}
+                                placeholder="0"
+                                onChange={e => updPrice(item.rowId, numeroDeInput(limpiarNumeroInput(e.target.value)))}
                                 className="w-28 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
@@ -2003,9 +2009,12 @@ function RecepcionModal({
                       </div>
                     )}
                   </div>
+                  {/* Nace en 1 (regla del alta de insumo) y borra a vacío sin
+                      volver a 0 (punto B1). */}
                   <input
-                    type="number" min={1} value={exCant}
-                    onChange={e => setExCant(Number(e.target.value))}
+                    type="number" min={1}
+                    value={exCant === 0 ? "" : exCant}
+                    onChange={e => setExCant(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                     placeholder="Cant."
                     className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
@@ -2995,12 +3004,14 @@ export function NuevoInsumoModal({
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">IVA (%)</label>
+              {/* Vacío = 0 % al guardar (punto B1); el 0 es un valor válido. */}
               <input
                 type="number"
                 min={0}
                 max={100}
-                value={iva}
-                onChange={e => setIva(Number(e.target.value))}
+                value={iva === 0 ? "" : iva}
+                placeholder="0"
+                onChange={e => setIva(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                 onBlur={() => marcarTocado("iva")}
                 className={iCls}
               />

@@ -1008,7 +1008,9 @@ export function PurchasesScreen() {
                                     <td className="px-2 py-1.5">
                                       <input
                                         type="number"
-                                        value={line.cantidad}
+                                        // 0 = vacío con placeholder "0" (punto B1).
+                                        value={line.cantidad === 0 ? "" : line.cantidad}
+                                        placeholder="0"
                                         onChange={(e) =>
                                           updateInsumo(
                                             line.id,
@@ -1054,8 +1056,9 @@ export function PurchasesScreen() {
                                       <input
                                         type="number"
                                         value={
-                                          line.costoUnitario
+                                          line.costoUnitario === 0 ? "" : line.costoUnitario
                                         }
+                                        placeholder="0"
                                         onChange={(e) =>
                                           updateInsumo(
                                             line.id,
@@ -1560,7 +1563,8 @@ export function PurchasesScreen() {
                                     <td className="px-2 py-1.5">
                                       <input
                                         type="number"
-                                        value={line.cantidad}
+                                        value={line.cantidad === 0 ? "" : line.cantidad}
+                                        placeholder="0"
                                         onChange={(e) =>
                                           updateLine(
                                             "cantidad",
@@ -1604,8 +1608,9 @@ export function PurchasesScreen() {
                                       <input
                                         type="number"
                                         value={
-                                          line.costoUnitario
+                                          line.costoUnitario === 0 ? "" : line.costoUnitario
                                         }
+                                        placeholder="0"
                                         onChange={(e) =>
                                           updateLine(
                                             "costoUnitario",
@@ -2024,7 +2029,8 @@ export function PurchasesScreen() {
                               <input
                                 type="number"
                                 min={0}
-                                value={l.cantidad}
+                                value={l.cantidad === 0 ? "" : l.cantidad}
+                                placeholder="0"
                                 onChange={(e) =>
                                   updateLote(
                                     l.id,
