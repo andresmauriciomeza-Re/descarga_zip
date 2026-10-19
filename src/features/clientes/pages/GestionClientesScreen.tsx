@@ -16,7 +16,7 @@ import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefonoOpcional } from "@/shared/components/campo";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -66,7 +66,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const [newTipoDoc,   setNewTipoDoc] = useState("CC");
   const [newDocumento, setNewDocumento] = useState("");
   const [newActivo,    setNewActivo]  = useState(true);
-  const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string }>({});
+  const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string }>({});
   const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string }>({});
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
   const [editTipoOriginal, setEditTipoOriginal] = useState("");
@@ -278,7 +278,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const createBloqueado = Object.values(createErrors).some(v => !!v);
 
   const handleCreate = () => {
-    const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string } = {};
+    const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) {
@@ -288,6 +288,10 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       const v = errorCorreoAlta(newCorreo);
       if (v) errs.correo = v;
     }
+    // Teléfono opcional con la regla única del sistema (solo números,
+    // 7 a 15 dígitos); vacío se acepta porque el campo es opcional.
+    const et = validarTelefonoOpcional(newTelefono);
+    if (et) errs.telefono = et;
     if (!newTipoDoc.trim()) {
       errs.tipoDocumento = "Selecciona el tipo de documento";
     }
@@ -584,10 +588,17 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       inputMode="numeric"
                       value={newTelefono}
                       autoComplete="off"
-                      onChange={e => setNewTelefono(soloDigitos(e.target.value))}
+                      onChange={e => {
+                        const v = soloDigitos(e.target.value);
+                        setNewTelefono(v);
+                        // Tiempo real, igual que correo y documento: el vacío
+                        // nunca grita (el "obligatorio" no aplica aquí).
+                        setCreateErrors(p => ({ ...p, telefono: validarTelefonoOpcional(v) ?? undefined }));
+                      }}
                       placeholder="3001234567"
-                      className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
+                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
 
                   {/* Estado: punto 3.2, 2 opciones → control segmentado */}

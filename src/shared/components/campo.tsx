@@ -130,8 +130,7 @@ export function PasswordField({
  *  (subdominios como soy.sena.edu.co permitidos). */
 const RE_CORREO = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 const RE_NOMBRE = /^[A-Za-zÁÉÍÓÚáéíóúÜüÑñ]+(?: [A-Za-zÁÉÍÓÚáéíóúÜüÑñ]+)*$/;
-const RE_TELEFONO = /^3\d{9}$/;
-const RE_TELEFONO_FLEXIBLE = /^[\d\s+()\-]+$/;
+const RE_TELEFONO = /^\d{7,15}$/;
 
 export const MIN_CONTRASENA = 8;
 
@@ -181,18 +180,21 @@ export function filtrarNombre(valor: string): string {
     .replace(/ {2,}/g, " ");
 }
 
+/** Teléfono — REGLA ÚNICA del sistema (registro, perfiles y formularios del
+    panel): solo números, entre 7 y 15 dígitos. Acepta fijo o celular, ya no
+    exige empezar por 3. Los espacios se ignoran antes de contar dígitos. */
 export function validarTelefono(v: string): string | null {
   if (!v.trim()) return "El teléfono es obligatorio";
   const limpio = v.replace(/\s/g, "");
-  if (!RE_TELEFONO.test(limpio)) return "El teléfono debe tener 10 dígitos y comenzar por 3";
+  if (!RE_TELEFONO.test(limpio))
+    return "El teléfono debe tener solo números, entre 7 y 15 dígitos";
   return null;
 }
 
-/** Telefono opcional: si viene vacio no hay error, si viene debe ser numerico. */
+/** Teléfono opcional: vacío = OK; con valor aplica la MISMA regla única. */
 export function validarTelefonoOpcional(v: string): string | null {
   if (!v.trim()) return null;
-  if (!RE_TELEFONO_FLEXIBLE.test(v.trim())) return "El teléfono solo debe contener números";
-  return null;
+  return validarTelefono(v);
 }
 
 /**

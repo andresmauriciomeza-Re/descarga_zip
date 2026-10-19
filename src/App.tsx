@@ -3970,9 +3970,7 @@ function ClientProfileScreen({
 
   const handleGuardar = async () => {
     const ec = validarCorreo(correo);
-    const et = !/^\d{7,15}$/.test(telefono.replace(/\s/g, ""))
-      ? "Solo números, entre 7 y 15 dígitos"
-      : null;
+    const et = validarTelefono(telefono);
     if (ec || et) {
       setErrores({
         correo: ec ?? undefined,
@@ -5187,7 +5185,7 @@ function RegisterScreen({
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
     else errs.email = validarCorreo(form.email) ?? undefined;
     if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
-    else if (!/^3\d{9}$/.test(form.phone)) errs.phone = "Debe tener 10 dígitos y comenzar por 3";
+    else errs.phone = validarTelefono(form.phone) ?? undefined;
     if (!form.docType) errs.docType = "Selecciona el tipo de documento";
 
     const docTrim = form.docNum.trim();
@@ -5341,9 +5339,9 @@ function RegisterScreen({
           campo: "email",
           texto: "Ingresa un correo válido y sin espacios",
         },
-        "El teléfono debe tener 10 dígitos y comenzar por 3.": {
+        "El teléfono debe tener solo números, entre 7 y 15 dígitos.": {
           campo: "phone",
-          texto: "El teléfono debe tener 10 dígitos y comenzar por 3",
+          texto: "El teléfono debe tener solo números, entre 7 y 15 dígitos",
         },
         "La contraseña no cumple los requisitos.": {
           campo: "password",

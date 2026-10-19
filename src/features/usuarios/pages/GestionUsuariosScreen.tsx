@@ -15,7 +15,7 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { type Rol, PermisosTablaDetalle, countAccesos, textoPermisosModulos, fullAccesos } from "@/features/roles/pages/GestionConfigScreen";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 
