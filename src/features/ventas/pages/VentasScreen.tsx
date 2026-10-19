@@ -30,6 +30,8 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { buscarClientePorDocumento } from "@/shared/services/authService";
+import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
@@ -602,9 +604,6 @@ export function VentasScreen({
   setPedidos,
   productos,
   onGestionarDevolucion,
-  clientes = [],
-  usuarios = [],
-  empleados = [],
   onRegistrarClienteVenta,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
@@ -615,16 +614,7 @@ export function VentasScreen({
   productos: ProductoMenu[];
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
-  /** Clientes registrados en el panel. Se usan para buscar el documento en
-      tiempo real al crear un pedido (§12). */
-  clientes?: { nombre: string; tipoDocumento?: string; numeroDocumento: string }[];
-  /** Usuarios y empleados del sistema: alimentan la misma búsqueda de
-      documento para saber si la persona ya existe antes de crear un cliente. */
-  usuarios?: { nombre: string; tipoDocumento: string; numeroDocumento: string }[];
-  empleados?: { nombre: string; tipoDocumento: string; numeroDocumento: string }[];
-  /** §1: crea o actualiza el cliente antes de guardar la venta. Devuelve
-      "creado" si nació un Cliente nuevo y "existente" si ya estaba (como
-      cliente, usuario o empleado). */
+  /** Crea localmente el cliente solo después de que el backend responda 404. */
   onRegistrarClienteVenta?: (
     datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
   ) => "creado" | "existente";
@@ -892,55 +882,6 @@ export function VentasScreen({
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
-  // Lista de usuarios registrados para el autocomplete
-  const USUARIOS_LISTA = [
-    "Gloria Inés Vargas",
-    "Sebastián Gómez",
-    "María González",
-    "Carlos Martínez",
-    "Ana Rodríguez",
-    "Jorge Vargas",
-    "Patricia Soto",
-    "Luis Herrera",
-    "Sandra Ríos",
-    "Tomás Jiménez",
-    "Valentina Mora",
-    "Andrés Castillo",
-  ];
-
-  // Índice de documentos conocidos: clientes, usuarios y empleados (se
-  // compara tipo + número de documento) más las ventas previas (solo número).
-  // Alimenta la búsqueda en tiempo real del modal "Nuevo pedido" (§12): si
-  // coincide exacto, se trae sola el nombre de la persona.
-  type DocConocido = { tipo: string; numero: string; nombre: string };
-  const DOCS_CONOCIDOS = useMemo<DocConocido[]>(() => {
-    const salida: DocConocido[] = [];
-    const vistos = new Set<string>();
-    const add = (tipo: string, numero: string, nombre: string) => {
-      const n = (numero ?? "").trim();
-      if (!n) return;
-      const t = (tipo ?? "").trim();
-      const clave = `${t.toLowerCase()}||${n}`;
-      if (vistos.has(clave)) return;
-      vistos.add(clave);
-      salida.push({ tipo: t, numero: n, nombre });
-    };
-    clientes.forEach((c) => add(c.tipoDocumento ?? "", c.numeroDocumento, c.nombre));
-    usuarios.forEach((u) => add(u.tipoDocumento, u.numeroDocumento, u.nombre));
-    empleados.forEach((e) => add(e.tipoDocumento, e.numeroDocumento, e.nombre));
-    return salida;
-  }, [clientes, usuarios, empleados]);
-  // Ventas previas: solo traen el número, sin tipo, así que se indexan aparte
-  // para seguir trayendo el nombre cuando se repite un documento conocido.
-  const DOCS_VENTAS_PREVIAS = useMemo(() => {
-    const mapa = new Map<string, string>();
-    pedidos.forEach((p) => {
-      const doc = (p.documento ?? "").trim();
-      if (doc && !mapa.has(doc)) mapa.set(doc, p.usuario);
-    });
-    return mapa;
-  }, [pedidos]);
-
   // Interfaz para productos seleccionados en el picker
   interface ProductoSeleccionado {
     id: number;
@@ -974,78 +915,86 @@ export function VentasScreen({
       [],
     );
 
-    // ── Búsqueda de documento en tiempo real (§12) ──
-    // Mientras el admin escribe el documento, se va filtrando contra los
-    // documentos conocidos (clientes del panel y ventas previas). Si hay una
-    // coincidencia EXACTA, se trae sola el nombre del cliente y se marca el
-    // campo como encontrado. Si no hay ninguna coincidencia exacta, se avisa
-    // y el documento queda como uno nuevo.
-    const [docSugerencias, setDocSugerencias] = useState<DocConocido[]>([]);
-    const [docExacto, setDocExacto] = useState<string | null>(null);
-    const [docTocado, setDocTocado] = useState(false);
-    /** Último nombre que se trajo solo al coincidir el documento. Sirve para
-        no pisar el nombre que el admin escribió a mano. */
-    const [nombreTraido, setNombreTraido] = useState<string | null>(null);
+    type EstadoBusquedaDocumento = "inactivo" | "pendiente" | "buscando" | "registrado" | "no-encontrado" | "error";
+    const [estadoBusqueda, setEstadoBusqueda] = useState<EstadoBusquedaDocumento>("inactivo");
+    const [clienteInactivo, setClienteInactivo] = useState(false);
+    const busquedaId = useRef(0);
+    const documentoActual = useRef(documento);
+    const tipoActual = useRef(tipoDocumento);
+    const digitosDe = (valor: string) => valor.replace(/\D/g, "");
 
-    // `tipo` se recibe aparte porque al cambiar el select el estado todavía no
-    // se ha actualizado en el cierre que llama a esta función.
-    const buscarDocumento = (valor: string, tipo: string = tipoDocumento) => {
-      const doc = valor.trim();
-      setDocTocado(doc.length > 0);
-      if (doc.length < 2) {
-        setDocSugerencias([]);
-        setDocExacto(null);
-        setNombreTraido(null);
-        return;
-      }
-      // Coincidencias parciales: contra tipo+número (clientes, usuarios y
-      // empleados) y contra el número de las ventas previas.
-      const parciales = DOCS_CONOCIDOS.filter((d) => d.numero.includes(doc));
-      const enDocs = new Set(parciales.map((d) => d.numero));
-      const previas: DocConocido[] = [];
-      DOCS_VENTAS_PREVIAS.forEach((nombre, numero) => {
-        if (numero.includes(doc) && !enDocs.has(numero)) {
-          previas.push({ tipo: "", numero, nombre });
+    const consultarDocumento = async (
+      valor = documentoActual.current,
+      tipo = tipoActual.current,
+    ): Promise<EstadoBusquedaDocumento | "obsoleto"> => {
+      const numero = valor.trim();
+      if (digitosDe(numero).length < 6) return "inactivo";
+      const id = ++busquedaId.current;
+      setEstadoBusqueda("buscando");
+      try {
+        const resultado = await buscarClientePorDocumento(numero, tipo);
+        if (
+          id !== busquedaId.current ||
+          numero !== documentoActual.current.trim() ||
+          tipo !== tipoActual.current
+        ) return "obsoleto";
+        setUsuario(resultado.nombre);
+        setClienteInactivo(!resultado.estado);
+        setEstadoBusqueda("registrado");
+        return "registrado";
+      } catch (error) {
+        if (
+          id !== busquedaId.current ||
+          numero !== documentoActual.current.trim() ||
+          tipo !== tipoActual.current
+        ) return "obsoleto";
+        const status = (error as ApiErrorConEstado).status;
+        setClienteInactivo(false);
+        if (status === 404) {
+          setEstadoBusqueda("no-encontrado");
+          return "no-encontrado";
         }
-      });
-      setDocSugerencias([...parciales, ...previas].slice(0, 6));
-      const clave = `${tipo.trim().toLowerCase()}||${doc}`;
-      const exacto =
-        DOCS_CONOCIDOS.find(
-          (d) => `${d.tipo.toLowerCase()}||${d.numero}` === clave,
-        )?.nombre ??
-        DOCS_VENTAS_PREVIAS.get(doc) ??
-        null;
-      setDocExacto(exacto);
-      // Coincidió el documento EXACTO: se trae el nombre solo si el campo está
-      // vacío o si el nombre actual era el que se había traído antes (así no
-      // se pisa lo que el admin escribió a mano para otro cliente).
-      if (exacto) {
-        const puedeTraer =
-          !usuario.trim() ||
-          !nombreTraido ||
-          usuario.trim() === nombreTraido;
-        if (puedeTraer) {
-          setUsuario(exacto);
-          setUQuery(exacto);
-        }
-        setNombreTraido(exacto);
-      } else {
-        setNombreTraido(null);
+        setEstadoBusqueda("error");
+        return "error";
       }
     };
 
-    // Autocomplete state
-    const [uQuery, setUQuery] = useState("");
-    const [showSugg, setShowSugg] = useState(false);
-    const suggestions =
-      uQuery.length > 0
-        ? USUARIOS_LISTA.filter(
-            (u) =>
-              u.toLowerCase().includes(uQuery.toLowerCase()) &&
-              u !== uQuery,
-          )
-        : [];
+    useEffect(() => {
+      const numero = documento.trim();
+      if (digitosDe(numero).length < 6) {
+        setEstadoBusqueda("inactivo");
+        return;
+      }
+      setEstadoBusqueda("pendiente");
+      const id = busquedaId.current;
+      const timer = window.setTimeout(() => {
+        if (id === busquedaId.current) void consultarDocumento(numero, tipoDocumento);
+      }, 500);
+      return () => {
+        window.clearTimeout(timer);
+        busquedaId.current += 1;
+      };
+    }, [documento, tipoDocumento]);
+
+    const cambiarDocumento = (valor: string) => {
+      const estabaRegistrado = estadoBusqueda === "registrado";
+      busquedaId.current += 1;
+      documentoActual.current = valor;
+      setDocumento(valor);
+      setEstadoBusqueda(digitosDe(valor).length >= 6 ? "pendiente" : "inactivo");
+      setClienteInactivo(false);
+      if (estabaRegistrado) setUsuario("");
+    };
+
+    const cambiarTipoDocumento = (tipo: string) => {
+      const estabaRegistrado = estadoBusqueda === "registrado";
+      busquedaId.current += 1;
+      tipoActual.current = tipo;
+      setTipoDocumento(tipo);
+      setEstadoBusqueda(digitosDe(documentoActual.current).length >= 6 ? "pendiente" : "inactivo");
+      setClienteInactivo(false);
+      if (estabaRegistrado) setUsuario("");
+    };
 
     // Product picker state
     const [showPicker, setShowPicker] = useState(false);
@@ -1136,7 +1085,7 @@ export function VentasScreen({
       .map((p) => `${p.nombre} (${p.tamaño}) x${p.cantidad}`)
       .join(", ");
 
-    const handleSave = () => {
+    const handleSave = async () => {
       if (!usuario.trim()) {
         toast.error("El nombre del cliente es obligatorio");
         return;
@@ -1154,9 +1103,21 @@ export function VentasScreen({
         toast.error("Selecciona el método de pago");
         return;
       }
-      // §1: primero se registra (o actualiza) el cliente con su tipo de
-      // documento y DESPUÉS se crea la venta.
-      const resultadoCliente: "creado" | "existente" = onRegistrarClienteVenta
+      let estadoCliente: EstadoBusquedaDocumento | "obsoleto" = estadoBusqueda;
+      if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
+        estadoCliente = await consultarDocumento(documento, tipoDocumento);
+      }
+      if (estadoCliente === "error" || estadoCliente === "obsoleto") {
+        toast.error("No se pudo verificar el documento. Intenta de nuevo antes de guardar.");
+        return;
+      }
+      if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
+        toast.error("Espera a que termine la búsqueda del cliente.");
+        return;
+      }
+      // Solo la respuesta 404 confirma que se debe crear la ficha local. Un
+      // resultado registrado en PostgreSQL nunca pasa por este callback.
+      const resultadoCliente: "creado" | "existente" = estadoCliente === "no-encontrado" && onRegistrarClienteVenta
         ? onRegistrarClienteVenta({
             tipoDocumento,
             numeroDocumento: documento.trim(),
@@ -1233,10 +1194,7 @@ export function VentasScreen({
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={tipoDocumento}
-                  onChange={(e) => {
-                    setTipoDocumento(e.target.value);
-                    buscarDocumento(documento, e.target.value);
-                  }}
+                  onChange={(e) => cambiarTipoDocumento(e.target.value)}
                   aria-label="Tipo de documento"
                   className="px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer w-full sm:w-56 shrink-0"
                 >
@@ -1249,114 +1207,44 @@ export function VentasScreen({
                 <div className="relative flex-1 min-w-0">
                   <input
                     value={documento}
-                    onChange={(e) => {
-                      const valor = filtrarDocumento(e.target.value, tipoDocumento);
-                      setDocumento(valor);
-                      buscarDocumento(valor);
+                    onChange={(e) => cambiarDocumento(filtrarDocumento(e.target.value, tipoDocumento))}
+                    onBlur={() => {
+                      if (digitosDe(documento).length >= 6) void consultarDocumento(documento, tipoDocumento);
                     }}
-                    onFocus={() => {
-                      if (documento.trim().length >= 2) buscarDocumento(documento);
-                    }}
-                    onBlur={() => setTimeout(() => setDocSugerencias([]), 150)}
                     placeholder="Escribe el documento…"
                     inputMode="numeric"
                     className={`${iCls} w-full`}
                     autoComplete="off"
                   />
-                  {/* Coincidencias parciales: se muestran mientras se escribe */}
-                  {docSugerencias.length > 0 && (
-                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-                      {docSugerencias.map((s) => (
-                        <button
-                          key={`${s.tipo}||${s.numero}`}
-                          type="button"
-                          onMouseDown={() => {
-                            setDocumento(s.numero);
-                            if (s.tipo) setTipoDocumento(s.tipo);
-                            setDocExacto(s.nombre);
-                            setUsuario(s.nombre);
-                            setUQuery(s.nombre);
-                            setNombreTraido(s.nombre);
-                            setDocSugerencias([]);
-                          }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer border-b border-border last:border-0 flex items-center gap-2"
-                        >
-                          <span className="font-mono text-xs text-muted-foreground shrink-0">
-                            {s.tipo ? `${s.tipo} ` : ""}
-                            {s.numero}
-                          </span>
-                          <span className="truncate">{s.nombre}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
-              {/* Estado de la búsqueda: exacto / parcial / nuevo */}
-              {docTocado && documento.length >= 2 && (
-                <p
-                  className={`text-xs mt-1 font-medium flex items-center gap-1 ${
-                    docExacto
-                      ? "text-emerald-600"
-                      : docSugerencias.length > 0
-                        ? "text-amber-600"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {docExacto
-                    ? `✓ Cliente encontrado: ${docExacto}`
-                    : docSugerencias.length > 0
-                      ? `Coincidencias: ${docSugerencias.length} — sigue escribiendo para el exacto`
-                      : "Documento no registrado — se creará un cliente nuevo"}
-                </p>
+              {estadoBusqueda === "registrado" && (
+                <>
+                  <p className="text-xs mt-1 font-medium text-emerald-600">✓ Cliente registrado</p>
+                  {clienteInactivo && <p role="status" className="text-xs mt-1 font-medium text-amber-600">⚠ Cliente inactivo</p>}
+                </>
               )}
+              {estadoBusqueda === "no-encontrado" && (
+                <p className="text-xs mt-1 font-medium text-muted-foreground">Documento no registrado — se creará un cliente nuevo</p>
+              )}
+              {estadoBusqueda === "pendiente" && <p className="text-xs mt-1 text-muted-foreground">Esperando documento completo…</p>}
+              {estadoBusqueda === "buscando" && <p className="text-xs mt-1 text-muted-foreground">Buscando cliente…</p>}
+              {estadoBusqueda === "error" && <p role="alert" className="text-xs mt-1 font-medium text-red-600">No se pudo verificar el documento. Revisa la conexión e inténtalo de nuevo.</p>}
             </div>
 
-            {/* Usuario con autocomplete */}
+            {/* Nombre del cliente: editable solo si el backend confirma que es nuevo */}
             <div className="relative">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Nombre del cliente *
               </label>
               <input
-                value={uQuery}
-                onChange={(e) => {
-                  setUQuery(e.target.value);
-                  setUsuario(e.target.value);
-                  setShowSugg(true);
-                }}
-                onFocus={() => setShowSugg(true)}
-                onBlur={() =>
-                  setTimeout(() => setShowSugg(false), 150)
-                }
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                readOnly={estadoBusqueda === "registrado"}
                 placeholder="Escribe el nombre del cliente..."
                 className={iCls}
                 autoComplete="off"
               />
-              {showSugg && suggestions.length > 0 && (
-                <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-                  {suggestions.slice(0, 6).map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onMouseDown={() => {
-                        setUQuery(u);
-                        setUsuario(u);
-                        setShowSugg(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors cursor-pointer border-b border-border last:border-0 flex items-center gap-2"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                        {u
-                          .split(" ")
-                          .map((w) => w[0])
-                          .slice(0, 2)
-                          .join("")}
-                      </div>
-                      {u}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}

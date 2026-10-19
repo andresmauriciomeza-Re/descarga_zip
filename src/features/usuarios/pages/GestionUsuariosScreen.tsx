@@ -18,8 +18,7 @@ import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
-import { eliminarUsuario } from "@/shared/services/authService";
-import { type ApiErrorConEstado } from "@/types/api";
+import { eliminarUsuario, listarUsuarios, type UsuarioListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 
@@ -43,14 +42,8 @@ export interface Usuario {
   rolId: string;
   rolInternoId?: string;
   activo: boolean;
-  contrasena?: string;
+  esEmpleado?: boolean;
 }
-
-export const INIT_USUARIOS: Usuario[] = [
-  { id:"USR-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolId:"ROL-001", rolIds:["ROL-001"], activo:true  },
-  { id:"USR-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolId:"ROL-007", rolIds:["ROL-007"], activo:true  },
-  { id:"USR-010", nombre:"Tomás Jiménez",       iniciales:"TJ", avatarColor:"bg-blue-500",    correo:"tomas.j@gmail.com",            telefono:"321 456 7890", tipoDocumento:"CC", numeroDocumento:"88990011", rolId:"ROL-002", rolIds:["ROL-002"], activo:true  },
-];
 
 // Colores de avatar para los usuarios de alta. La misma paleta que usa Clientes
 // para que ambos listados se vean homogéneos.
@@ -58,6 +51,20 @@ const AVATAR_COLORS = [
   "bg-red-500","bg-blue-500","bg-emerald-500",
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
+
+function adaptarUsuarioApi(u: UsuarioListadoApi, roles: Rol[], index: number): Usuario {
+  const rol = roles.find(r => r.nombre.trim().toLowerCase() === u.rol.trim().toLowerCase());
+  const nombre = u.nombre ?? "";
+  return {
+    id: String(u.id_usuario), nombre,
+    iniciales: nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
+    avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
+    correo: u.correo ?? "", telefono: u.telefono ?? "",
+    tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario),
+    rolId: rol?.id ?? String(u.id_rol), rolIds: [rol?.id ?? String(u.id_rol)],
+    activo: u.estado, esEmpleado: u.es_empleado,
+  };
+}
 
 // Paleta de colores para roles (por índice de ROL-XXX)
 const ROL_PALETTE = [
@@ -121,7 +128,7 @@ export const idRolCliente = (roles: Rol[]) =>
 // nunca por rolId, porque `usuariosUnificados` (App.tsx) puede pisar el
 // rolId a ROL-002 cuando la persona también figura en `clientes`.
 const esSuperAdmin = (u: Usuario): boolean =>
-  u.id === "USR-001" || u.correo.trim().toLowerCase() === "gloria@lasirena.com";
+  u.id === "12345678" || u.correo.trim().toLowerCase() === "gloria@lasirena.com";
 const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
 // Roles reales de una persona para la vista de detalle: los que trae su
@@ -133,10 +140,9 @@ const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 const rolesDeUsuario = (
   usuario: Usuario,
   roles: Rol[],
-  empleados: Empleado[],
-  clientes: Cliente[],
+  _empleados: Empleado[],
+  _clientes: Cliente[],
 ): Rol[] => {
-  const k = claveDoc(usuario.tipoDocumento, usuario.numeroDocumento);
   const ids: string[] = usuario.rolIds?.length
     ? [...usuario.rolIds]
     : [usuario.rolId];
@@ -144,13 +150,6 @@ const rolesDeUsuario = (
   // `usuariosUnificados` le haya pisado el rolId a ROL-002 al aparecer en
   // `clientes`; sin esto, el detalle dejaría de mostrar sus permisos reales.
   if (esSuperAdmin(usuario) && !ids.includes("ROL-001")) ids.unshift("ROL-001");
-  if (docValida(k)) {
-    const fichaEmpleado = empleados.find(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === k);
-    if (fichaEmpleado?.rolIds?.length) ids.push(...fichaEmpleado.rolIds);
-    if (clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === k)) {
-      ids.push(idRolCliente(roles));
-    }
-  }
 
   const unicos: Rol[] = [];
   const vistos = new Set<string>();
@@ -166,8 +165,8 @@ const rolesDeUsuario = (
 export function GestionUsuariosScreen({
   userRole,
   roles,
-  usuarios,
-  setUsuarios,
+  usuarios: _usuarios,
+  setUsuarios: _setUsuarios,
   empleados,
   setEmpleados,
   clientes,
@@ -190,6 +189,22 @@ export function GestionUsuariosScreen({
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
+  const cargarUsuarios = async () => {
+    setCargando(true);
+    setErrorCarga("");
+    try {
+      const filas = await listarUsuarios();
+      setUsuarios(filas.map((u, index) => adaptarUsuarioApi(u, roles, index)));
+    } catch (error) {
+      setErrorCarga(error instanceof Error ? error.message : "No se pudieron cargar los usuarios.");
+    } finally {
+      setCargando(false);
+    }
+  };
+  useEffect(() => { if (canVer) void cargarUsuarios(); }, [canVer]);
   const [search,     setSearch]    = useState("");
   const [filterRol,  setFiltroR]   = useState("todos");
   const [filterEst,  setFiltroE]   = useState("todos");
@@ -344,19 +359,7 @@ export function GestionUsuariosScreen({
   // todos los permisos, y siempre actualizando el empleado vinculado.
   const aplicarCambioEstado = (usuario: Usuario, nuevoEstado: boolean) => {
     if (nuevoEstado === usuario.activo) return;
-    // P7: la cuenta de super administrador no se puede ni activar ni
-    // desactivar desde ningún flujo de la pantalla.
-    if (esSuperAdmin(usuario)) {
-      toast.error(`${TITULO_SUPER_ADMIN}: no se puede cambiar su estado.`);
-      return;
-    }
-    if (!nuevoEstado && usuario.activo && usuarioEsTotal(usuario) && totalesActivos.length === 1) {
-      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
-      return;
-    }
-    updateUsuario(usuario.id, { activo: nuevoEstado });
-    updateEmpleadoLinked(usuario, { activo: nuevoEstado });
-    toast.success(`Usuario ${nuevoEstado ? "activado" : "desactivado"} correctamente`);
+    toast.info("Disponible próximamente");
   };
 
   const cambiarEstado = () => {
@@ -365,13 +368,8 @@ export function GestionUsuariosScreen({
   };
 
   const handleEdit = () => {
-    if (!editItem) return;
-    // P7: barrera de seguridad — aunque los botones ya vienen deshabilitados
-    // para Gloria, ningún flujo de la pantalla debe poder guardar su edición.
-    if (esSuperAdmin(editItem)) {
-      toast.error(`${TITULO_SUPER_ADMIN}: no se puede editar.`);
-      return;
-    }
+    toast.info("Disponible próximamente");
+    return;
     const errs: Record<string, string> = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
@@ -464,63 +462,13 @@ export function GestionUsuariosScreen({
 
     // El id real de la cuenta en la base de datos es el número de documento
     // (así lo crea el registro); sin documento la cuenta solo vive en el panel.
-    const idRemoto = objetivo?.numeroDocumento.trim() || "";
-
-    // Retiro local de las fichas de la persona (empleado y cliente), por
-    // DOCUMENTO; el correo queda solo como respaldo si no hay documento.
-    const quitarFichas = () => {
-      if (!objetivo) return;
-      const k = claveDoc(objetivo.tipoDocumento, objetivo.numeroDocumento);
-      const correo = objetivo.correo.trim().toLowerCase();
-      if (docValida(k)) {
-        setEmpleados(p => p.filter(e => claveDoc(e.tipoDocumento, e.numeroDocumento) !== k));
-        setClientes(p => p.filter(c => claveDoc(c.tipoDocumento, c.numeroDocumento) !== k));
-      } else if (correo) {
-        setEmpleados(p => p.filter(e => e.correo.trim().toLowerCase() !== correo));
-        setClientes(p => p.filter(c => c.correo.trim().toLowerCase() !== correo));
-      }
-    };
-
     try {
-      if (idRemoto) {
-        const res = await eliminarUsuario(idRemoto);
-        if (res.accion === "desactivado") {
-          // Tiene ventas o contrataciones: el backend la desactiva en lugar
-          // de borrarla, y el panel refleja lo mismo (cuenta y fichas en false).
-          updateUsuario(id, { activo: false });
-          if (objetivo) updateEmpleadoLinked(objetivo, { activo: false });
-          if (objetivo) {
-            const k = claveDoc(objetivo.tipoDocumento, objetivo.numeroDocumento);
-            if (docValida(k)) {
-              setClientes(p => p.map(c =>
-                claveDoc(c.tipoDocumento, c.numeroDocumento) === k ? { ...c, activo: false } : c
-              ));
-            }
-          }
-          setDeleteId(null);
-          toast.success(res.mensaje);
-          return;
-        }
-      }
-      // Borrado real confirmado por el backend (o cuenta que solo existía
-      // en el panel): desaparece de la lista y de sus fichas locales.
-      setUsuarios(p => p.filter(u => u.id !== id));
-      quitarFichas();
+      const res = await eliminarUsuario(objetivo?.numeroDocumento || id);
+      await cargarUsuarios();
       setDeleteId(null);
-      toast.success("Usuario eliminado correctamente");
+      toast.success(res.mensaje);
     } catch (error) {
-      const status = (error as ApiErrorConEstado).status;
       setDeleteId(null);
-      if (status === 404 && idRemoto) {
-        // La cuenta no existía en la base de datos (solo vivía en el panel):
-        // no hay nada remoto que limpiar, se retira del estado local.
-        setUsuarios(p => p.filter(u => u.id !== id));
-        quitarFichas();
-        toast.success("Usuario eliminado correctamente");
-        return;
-      }
-      // 403 (sin permiso / super administrador / propia cuenta) y 409 (último
-      // usuario con todos los permisos): el servidor explica el motivo.
       toast.error(error instanceof Error ? error.message : "No se pudo eliminar el usuario.");
     }
   };
@@ -536,6 +484,8 @@ export function GestionUsuariosScreen({
   // representar a dos personas distintas dentro del sistema.
   const handleCreate = () => {
     const errs: Record<string, string> = {};
+    toast.info("Disponible próximamente");
+    return;
 
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
@@ -614,7 +564,6 @@ export function GestionUsuariosScreen({
         rolId: newRolId,
         rolIds: [newRolId],
         activo: newActivo,
-        contrasena: "123456",
       },
       ...prev,
     ]);
@@ -643,6 +592,7 @@ export function GestionUsuariosScreen({
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Todos los usuarios registrados en el sistema</p>
         </div>
+        {canCreate && <button disabled title="Disponible próximamente" onClick={() => toast.info("Disponible próximamente")} className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold opacity-60 cursor-not-allowed shadow-sm"><UserPlus className="w-4 h-4"/> Crear usuario</button>}
       </div>
 
       {/* Filtros */}
@@ -682,16 +632,20 @@ export function GestionUsuariosScreen({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-14 text-center text-muted-foreground">
+              {cargando ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</td></tr>
+              ) : errorCarga ? (
+                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2" onClick={() => void cargarUsuarios()}>Reintentar</button></td></tr>
+              ) : paged.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p>
                 </td></tr>
               ) : paged.map(u => {
                 const rolesFila = rolesDeUsuario(u, roles, empleados, clientes);
                 const rolInactivo = rolesFila.some(r => !r.activo);
                 const claveU = claveDoc(u.tipoDocumento, u.numeroDocumento);
-                const esCliente = docValida(claveU) && clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === claveU);
-                const esEmpleado = docValida(claveU) && empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === claveU);
+                const esCliente = rolesFila.some(r => r.nombre.trim().toLowerCase() === "cliente");
+                const esEmpleado = !!u.esEmpleado;
                 const esAdmin = esSuperAdmin(u) || rolesFila.some(r => r.nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "administrador");
                 const extrasFila = rolesFila.filter(r => {
                   const n = r.nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -757,10 +711,10 @@ export function GestionUsuariosScreen({
                           regla del último usuario con todos los permisos.
                           P7: para la super administradora el pill queda
                           deshabilitado con su explicación. */}
-                      <span title={esSuperAdmin(u) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
+                      <span title="Disponible próximamente" className="inline-flex">
                         <EstadoSelect
                           value={u.activo ? "activo" : "inactivo"}
-                          disabled={esSuperAdmin(u)}
+                          disabled
                           onChange={nuevoEstado => {
                             if ((nuevoEstado === "activo") === u.activo) return;
                             aplicarCambioEstado(u, nuevoEstado === "activo");
@@ -778,9 +732,9 @@ export function GestionUsuariosScreen({
                           explica el motivo. */}
                       <ActionIcons
                         onView={() => setDetail(u)}
-                        onEdit={canEdit ? () => abrirEdicion(u) : undefined}
-                        editDisabled={canEdit && esSuperAdmin(u)}
-                        editTitle={TITULO_SUPER_ADMIN}
+                        onEdit={canEdit ? () => toast.info("Disponible próximamente") : undefined}
+                        editDisabled={canEdit}
+                        editTitle="Disponible próximamente"
                         onDelete={canDelete ? () => setDeleteId(u.id) : undefined}
                         deleteDisabled={canDelete && esSuperAdmin(u)}
                         deleteTitle={TITULO_SUPER_ADMIN}
@@ -808,9 +762,9 @@ export function GestionUsuariosScreen({
         {detail && (() => {
     const correo = detail.correo.trim().toLowerCase();
     const claveD = claveDoc(detail.tipoDocumento, detail.numeroDocumento);
-    const esCliente = docValida(claveD) && clientes.some(c => claveDoc(c.tipoDocumento, c.numeroDocumento) === claveD);
-    const esEmpleado = docValida(claveD) && empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === claveD);
           const rolesDetalle = rolesDeUsuario(detail, roles, empleados, clientes);
+          const esCliente = rolesDetalle.some(r => r.nombre.trim().toLowerCase() === "cliente");
+          const esEmpleado = !!detail.esEmpleado;
           return (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto overflow-x-hidden">
               <div className="flex min-h-full items-center justify-center p-4">

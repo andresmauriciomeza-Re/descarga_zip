@@ -16,7 +16,8 @@ import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
+import { cambiarEstadoCliente, crearCliente, editarCliente, listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -26,23 +27,31 @@ const AVATAR_COLORS = [
   "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
 ];
 
+function adaptarClienteApi(c: ClienteListadoApi, index: number): Cliente {
+  const nombre = c.nombre ?? "";
+  return {
+    id: String(c.id_cliente), nombre,
+    iniciales: nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
+    avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length], correo: c.correo ?? "",
+    tipoDocumento: c.tipo_documento ?? "", numeroDocumento: String(c.id_usuario),
+    telefono: c.telefono ?? "", pedidos: 0, activo: c.cliente_estado && c.usuario_estado,
+  };
+}
+
 export interface Cliente {
   id: string;
   nombre: string;
   iniciales: string;
   avatarColor: string;
   correo: string;
+  telefono: string;
   tipoDocumento: string;
   numeroDocumento: string;
   pedidos: number;
   activo: boolean;
 }
 
-export const INITIAL_CLIENTES: Cliente[] = [
-  { id:"CLI-008", nombre:"Tomás Jiménez",     iniciales:"TJ", avatarColor:"bg-teal-500",    correo:"tomas.j@gmail.com",           tipoDocumento:"CC", numeroDocumento:"88990011", pedidos:4,  activo:true  },
-];
-
-export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes, setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
+export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
@@ -53,6 +62,19 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   /** Correo de la cuenta con la que se abrió la sesión (su propio cliente). */
   sesionCorreo?: string;
 }) {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
+  const cargarClientes = async () => {
+    setCargando(true); setErrorCarga("");
+    try {
+      const filas = await listarClientes();
+      setClientes(filas.map(adaptarClienteApi));
+    } catch (error) {
+      setErrorCarga(error instanceof Error ? error.message : "No se pudieron cargar los clientes.");
+    } finally { setCargando(false); }
+  };
+  useEffect(() => { void cargarClientes(); }, []);
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
   const [sortBy,       setSortBy]     = useState("nombre");
@@ -67,11 +89,8 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const [newDocumento, setNewDocumento] = useState("");
   const [newActivo,    setNewActivo]  = useState(true);
   const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string }>({});
-  const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string }>({});
+  const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string; telefono?: string }>({});
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
-  const [editTipoOriginal, setEditTipoOriginal] = useState("");
-  const [editNumOriginal, setEditNumOriginal] = useState("");
-  const [editPedidosOriginal, setEditPedidosOriginal] = useState(0);
 
   const total   = clientes.length;
   const activos = clientes.filter(c => c.activo).length;
@@ -100,31 +119,6 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   // 5 clientes por página (unificado con el resto de listados): la tabla
   // nunca lleva scroll interno, la navegación es solo por el paginador.
   const PER_PAGE = 5;
-
-  // ── P8 — Reconciliación Gloria ↔ Clientes ──────────────────────────────
-  // Gloria (USR-001, super administradora) aparece en el módulo de Usuarios
-  // pero NO figuraba en el listado de clientes, lo que rompía la
-  // consistencia entre módulos. Decisión: al montar esta pantalla, si
-  // `clientes` no la incluye, se agrega aquí con su correo y su documento
-  // CC 12345678 (los mismos que tiene como usuario), para que el módulo de
-  // Clientes la muestre y ambos módulos cuenten con la misma persona. Se usa
-  // el update funcional para no pisar altas hechas en el mismo render, y la
-  // dependencia vacía hace que solo corra al montar (el chequeo de
-  // existencia vive dentro del update).
-  useEffect(() => {
-    setClientes(prev => {
-      const correo = "gloria@lasirena.com";
-      if (prev.some(c => c.correo.trim().toLowerCase() === correo)) return prev;
-      const maxNum = prev.reduce((max, c) => {
-        const n = parseInt(c.id.replace("CLI-", "")) || 0;
-        return Math.max(max, n);
-      }, 0);
-      return [
-        { id: `CLI-${String(maxNum + 1).padStart(3, "0")}`, nombre: "Gloria Inés Vargas", iniciales: "GV", avatarColor: "bg-red-500", correo, tipoDocumento: "CC", numeroDocumento: "12345678", pedidos: 0, activo: true },
-        ...prev,
-      ];
-    });
-  }, [setClientes]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
@@ -167,15 +161,19 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   const tooltipEstado = (c: Cliente) =>
     esAdministrador(c) ? "El administrador no puede ser inactivado" : bloqueoEstado(c);
 
-  const toggleEstado = (id: string) => {
+  const toggleEstado = async (id: string) => {
     const cliente = clientes.find(c => c.id === id);
     const motivo = cliente ? bloqueoEstado(cliente) : null;
     if (motivo) { toast.error(motivo); return; }
-    setClientes(p => p.map(c => c.id === id ? { ...c, activo: !c.activo } : c));
-    toast.success("Estado del cliente actualizado");
+    if (!cliente) return;
+    try {
+      await cambiarEstadoCliente(cliente.numeroDocumento, !cliente.activo);
+      await cargarClientes();
+      toast.success("Estado del cliente actualizado");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado."); }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editItem) return;
     // Si el formulario tocó el estado, se comprueba aquí la misma regla que
     // en la lista: el administrador y la cuenta propia no se inactivan.
@@ -184,7 +182,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       const motivo = bloqueoEstado(original);
       if (motivo) { toast.error(motivo); return; }
     }
-    const errs: { nombre?: string; correo?: string } = {};
+    const errs: { nombre?: string; correo?: string; telefono?: string } = {};
     if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
     if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
@@ -203,27 +201,26 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
         if (duplicado) errs.correo = "Este correo ya está registrado";
       }
     }
+    const telefonoError = validarTelefono(editItem.telefono);
+    if (telefonoError) errs.telefono = telefonoError;
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
-    const nuevasIniciales = editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
-    setClientes(p => p.map(c => c.id === editItem.id ? {
-      ...editItem,
-      iniciales: nuevasIniciales,
-      tipoDocumento: editTipoOriginal,
-      numeroDocumento: editNumOriginal,
-      pedidos: editPedidosOriginal,
-    } : c));
-    setEditItem(null);
-    setEditPrevCorreo(null);
-    setEditErrors({});
-    toast.success("Cliente actualizado correctamente");
+    try {
+      await editarCliente(editItem.numeroDocumento, { nombre: editItem.nombre.trim(), correo: editItem.correo.trim(), telefono: editItem.telefono });
+      const original = clientes.find(c => c.id === editItem.id);
+      if (original && original.activo !== editItem.activo) {
+        const motivo = bloqueoEstado(original);
+        if (motivo) { toast.error(motivo); return; }
+        await cambiarEstadoCliente(editItem.numeroDocumento, editItem.activo);
+      }
+      await cargarClientes();
+      setEditItem(null); setEditPrevCorreo(null); setEditErrors({});
+      toast.success("Cliente actualizado correctamente");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar el cliente."); }
   };
 
   const abrirEdicion = (c: Cliente) => {
     setEditItem({ ...c });
     setEditPrevCorreo(c.correo);
-    setEditTipoOriginal(c.tipoDocumento);
-    setEditNumOriginal(c.numeroDocumento);
-    setEditPedidosOriginal(c.pedidos);
     setEditErrors({});
   };
 
@@ -277,7 +274,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
   // (formato inválido O duplicado de documento/correo).
   const createBloqueado = Object.values(createErrors).some(v => !!v);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const errs: { nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string } = {};
     if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
@@ -288,9 +285,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
       const v = errorCorreoAlta(newCorreo);
       if (v) errs.correo = v;
     }
-    // Teléfono opcional con la regla única del sistema (solo números,
-    // 7 a 15 dígitos); vacío se acepta porque el campo es opcional.
-    const et = validarTelefonoOpcional(newTelefono);
+    const et = validarTelefono(newTelefono);
     if (et) errs.telefono = et;
     if (!newTipoDoc.trim()) {
       errs.tipoDocumento = "Selecciona el tipo de documento";
@@ -304,21 +299,12 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
     }
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
 
-    const maxNum = clientes.reduce((max, c) => {
-      const n = parseInt(c.id.replace("CLI-", "")) || 0;
-      return Math.max(max, n);
-    }, 0);
-    const newId = `CLI-${String(maxNum + 1).padStart(3, "0")}`;
-    const iniciales = newNombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-    const avatarColor = AVATAR_COLORS[(clientes.length) % AVATAR_COLORS.length];
-
-    setClientes(prev => [
-      { id: newId, nombre: newNombre.trim(), iniciales, avatarColor, correo: newCorreo.trim(), tipoDocumento: newTipoDoc, numeroDocumento: dm, pedidos: 0, activo: newActivo },
-      ...prev,
-    ]);
-    setShowCreate(false);
-    resetCreate();
-    toast.success(`Cliente ${newNombre.trim()} creado correctamente`);
+    try {
+      await crearCliente({ tipoDocumento: newTipoDoc, numeroDocumento: dm, nombre: newNombre.trim(), correo: newCorreo.trim(), telefono: newTelefono, estado: newActivo });
+      await cargarClientes();
+      setShowCreate(false); resetCreate();
+      toast.success(`Cliente ${newNombre.trim()} creado correctamente`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo crear el cliente."); }
   };
 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
@@ -333,10 +319,10 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
           <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo cliente en La Sirena</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {_canCreate && (
+          {canCreate && (
             <button
-              onClick={() => { resetCreate(); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer shadow-sm"
             >
               <UserPlus className="w-4 h-4" /> Crear cliente
             </button>
@@ -381,7 +367,11 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
+              {cargando ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando clientes…</td></tr>
+              ) : errorCarga ? (
+                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2" onClick={() => void cargarClientes()}>Reintentar</button></td></tr>
+              ) : paged.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p>
                 </td></tr>
@@ -411,7 +401,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     >
                       <EstadoSelect
                         value={c.activo ? "activo" : "inactivo"}
-                        disabled={!!bloqueoEstado(c)}
+                        disabled={!canEdit || !!bloqueoEstado(c)}
                         onChange={nuevoEstado => {
                           if ((nuevoEstado === "activo") === c.activo) return;
                           toggleEstado(c.id);
@@ -426,7 +416,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   <td className="px-4 py-1.5">
                     <ActionIcons
                       onView={() => setDetailItem(c)}
-                      onEdit={canEdit ? () => { abrirEdicion(c); } : undefined}
+                      onEdit={canEdit ? () => abrirEdicion(c) : undefined}
                     />
                   </td>
                 </tr>
@@ -536,7 +526,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       autoComplete="off"
                       // P1 — tiempo real: solo dígitos (soloDigitos) y como
                       // máximo 10 números, cortando el valor con slice(0,10).
-                      onChange={e => { const v = soloDigitos(e.target.value).slice(0, 10); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
+                       onChange={e => { const v = soloDigitos(e.target.value).slice(0, newTipoDoc === "CC" ? 10 : 12); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
                       placeholder="12345678"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
@@ -581,7 +571,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                   {/* Teléfono */}
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
+                       Teléfono <span className="text-primary">*</span>
                     </label>
                     <input
                       type="tel"
@@ -591,9 +581,7 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                       onChange={e => {
                         const v = soloDigitos(e.target.value);
                         setNewTelefono(v);
-                        // Tiempo real, igual que correo y documento: el vacío
-                        // nunca grita (el "obligatorio" no aplica aquí).
-                        setCreateErrors(p => ({ ...p, telefono: validarTelefonoOpcional(v) ?? undefined }));
+                        setCreateErrors(p => ({ ...p, telefono: v ? validarTelefono(v) ?? undefined : undefined }));
                       }}
                       placeholder="3001234567"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -694,6 +682,13 @@ export function GestionClientesScreen({ canCreate: _canCreate = true, canEdit = 
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono <span className="text-primary">*</span></label>
+                    <input type="tel" inputMode="numeric" value={editItem.telefono} autoComplete="off"
+                      onChange={e => { const v = soloDigitos(e.target.value); setEditItem(x => x && ({ ...x, telefono: v })); setEditErrors(p => ({ ...p, telefono: validarTelefono(v) ?? undefined })); }}
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    {editErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.telefono}</p>}
+                  </div>
                   <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
                   <input type="number" value={editItem.pedidos} disabled
