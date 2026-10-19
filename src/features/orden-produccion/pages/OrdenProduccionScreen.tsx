@@ -14,6 +14,7 @@ import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { hora12 } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
 import type { Producto, FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
@@ -255,6 +256,40 @@ function snapshotDeFicha(ficha: FichaVersion): NonNullable<LineaOrden["fichaSnap
     tiempoPreparacion: ficha.tiempoPreparacion,
     pasos: ficha.pasos,
   };
+}
+
+/** Ficha que muestra "Ver ficha del producto": primero la versión que USÓ la
+    orden (la del snapshot, buscada en el catálogo por número de versión) y,
+    si la orden es vieja y no trae snapshot, la ficha vigente —mismo criterio
+    que `requeridosDeLinea`. `reconstruida` avisa que esa versión ya no está
+    en el catálogo y lo que se ve sale solo de la foto guardada en la orden. */
+function fichaParaVer(
+  linea: LineaOrden,
+  fichas: FichasPorProducto,
+): { ficha: FichaVersion | null; reconstruida: boolean } {
+  const clave = linea.productoId ?? linea.idProducto;
+  const snap = linea.fichaSnapshot;
+  if (!clave) return { ficha: null, reconstruida: false };
+  if (snap) {
+    const guardada = fichas[clave]?.find(v => v.version === snap.version);
+    if (guardada) return { ficha: guardada, reconstruida: false };
+    // Versión borrada del catálogo: se arma desde la foto de la orden.
+    return {
+      ficha: {
+        version: snap.version,
+        idReceta: "",
+        tiempoPreparacion: snap.tiempoPreparacion,
+        rendimiento: snap.rendimiento,
+        porciones: 0,
+        insumos: snap.insumos,
+        pasos: snap.pasos,
+        fechaInicio: "",
+        fechaFin: null,
+      },
+      reconstruida: true,
+    };
+  }
+  return { ficha: fichaVigente(fichas, clave), reconstruida: false };
 }
 
 const esProductoInsumo = (i: Insumo) => i.tipo === "ProductoInsumo";
@@ -926,8 +961,15 @@ export function OrdenProduccionScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<OrdenProduccion | null>(null);
   const [detailItem, setDetailItem] = useState<OrdenProduccion | null>(null);
+  const [verFicha, setVerFicha] = useState<{ ordenId: string; lineaIdx: number } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OrdenForm>(emptyForm());
+
+  // Al cerrar el detalle se olvida el modal de ficha: si se vuelve a abrir la
+  // misma orden, la ficha no reaparece sola.
+  useEffect(() => {
+    if (!detailItem) setVerFicha(null);
+  }, [detailItem]);
 
   // Cuando llega abrirOrdenId desde Insumos, abrir Crear orden con el
   // Producto Insumo preseleccionado y su ficha vigente ya en la línea.
@@ -976,6 +1018,8 @@ export function OrdenProduccionScreen({
   const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const sCls = iCls + " cursor-pointer";
   const tCls = iCls + " resize-none";
+  // Mismo campo solo lectura que usa la ficha detalle de Gestión de Productos.
+  const readCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
 
   // ── Listado ────────────────────────────────────────────────────────
   const ultimoCambio = (o: OrdenProduccion) =>
@@ -1890,20 +1934,31 @@ export function OrdenProduccionScreen({
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                {[
-                  { l: "Tipo de orden", v: TIPO_LABEL[detailItem.tipo] },
-                  { l: "Venta asociada", v: detailItem.ventaNumero ? `${detailItem.ventaNumero}${detailItem.cliente ? ` · ${detailItem.cliente}` : ""}` : "—" },
-                  { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
-                  { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
-                  { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
-                  { l: "Estado", v: ESTADO_LABEL[detailItem.estadoOrden] },
-                  { l: "Fecha/Hora de estado", v: fmtDT(ultimoCambio(detailItem)) },
-                ].map(({ l, v }) => (
-                  <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
-                    <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                    <span className="text-sm font-semibold text-foreground text-right">{v}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{TIPO_LABEL[detailItem.tipo]}</span>
+                  <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
+                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {fmtDT(ultimoCambio(detailItem))}</span>
+                </div>
+
+                {detailItem.tipo === "pedido" && (
+                  <div className="flex items-center justify-between py-2 border-b border-border gap-4">
+                    <span className="text-sm text-muted-foreground font-medium shrink-0">Venta asociada</span>
+                    <span className="text-sm font-semibold text-foreground text-right">{detailItem.ventaNumero ? `${detailItem.ventaNumero}${detailItem.cliente ? ` · ${detailItem.cliente}` : ""}` : "—"}</span>
                   </div>
-                ))}
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
+                    { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
+                    { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
+                  ].map(({ l, v }) => (
+                    <div key={l}>
+                      <p className="text-[11px] font-semibold text-muted-foreground">{l}</p>
+                      <p className="text-sm font-semibold text-foreground">{v}</p>
+                    </div>
+                  ))}
+                </div>
 
                 {(() => {
                   const mermas = noConformidades.filter(
@@ -1928,18 +1983,18 @@ export function OrdenProduccionScreen({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {l.tamano ? `Tamaño ${l.tamano} · ` : ""}
-                              {l.porciones ? `${l.porciones} porciones · ` : ""}
-                              Estimada {fmtCant(l.cantidadEstimada, l.unidad)}
-                            </p>
+                            {(l.tamano || l.porciones) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                {[l.tamano ? `Tamaño ${l.tamano}` : null, l.porciones ? `${l.porciones} porciones` : null].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right shrink-0">
-                            {l.cantidadReal === null || l.cantidadReal === undefined ? (
-                              <span className="text-sm text-muted-foreground">Real: —</span>
-                            ) : (
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimada</p>
+                            <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
+                            {l.cantidadReal != null && (
                               <>
-                                <p className="text-sm font-semibold text-foreground">Real: {fmtCant(l.cantidadReal, l.unidad)}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Real: {fmtCant(l.cantidadReal, l.unidad)}</p>
                                 {(l.merma ?? 0) > 0 && (
                                   <p className="text-[11px] font-semibold text-red-600">−{fmtCant(l.merma ?? 0, l.unidad)} merma</p>
                                 )}
@@ -1969,16 +2024,18 @@ export function OrdenProduccionScreen({
 
                 {detailItem.tipo === "preparacion" && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Descripción de la preparación</p>
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <p className="text-xs font-semibold text-muted-foreground">Descripción de la preparación</p>
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        Tiempo estimado:{" "}
+                        <strong className="text-foreground">
+                          {detailItem.tiempoPreparacionMin ? fmtMinutos(detailItem.tiempoPreparacionMin) : "Sin tiempo definido"}
+                        </strong>
+                      </span>
+                    </div>
                     <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
                       {detailItem.descripcionPreparacion || "Sin descripción"}
-                    </p>
-                    <p className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      Tiempo estimado:{" "}
-                      <strong className="text-foreground">
-                        {detailItem.tiempoPreparacionMin ? fmtMinutos(detailItem.tiempoPreparacionMin) : "Sin tiempo definido"}
-                      </strong>
                     </p>
                   </div>
                 )}
@@ -2000,46 +2057,151 @@ export function OrdenProduccionScreen({
                   </div>
                 )}
 
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Línea de tiempo de estados</p>
-                  {detailItem.historial.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
-                      Sin transiciones. Creada el {fmtDT(detailItem.creadaEn)}.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
-                        <span className="text-xs font-semibold text-foreground">Orden creada</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(detailItem.creadaEn)}</span>
-                      </div>
-                      {detailItem.historial.map((h, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
-                            <span className="text-muted-foreground text-xs">→</span>
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                {(() => {
+                  // En 2 columnas solo cuando la línea de tiempo está vacía: con
+                  // transiciones, la lista se lleva el ancho completo.
+                  const enColumnas = detailItem.historial.length === 0 && !!detailItem.observacion;
+                  const lineaTiempos = (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Línea de tiempo de estados</p>
+                      {detailItem.historial.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
+                          Sin transiciones. Creada el {fmtDT(detailItem.creadaEn)}.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
+                            <span className="text-xs font-semibold text-foreground">Orden creada</span>
+                            <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(detailItem.creadaEn)}</span>
                           </div>
-                          <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{fmtDT(h.fechaHora)}</span>
+                          {detailItem.historial.map((h, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                                <span className="text-muted-foreground text-xs">→</span>
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{fmtDT(h.fechaHora)}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
-
-                {detailItem.observacion && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1">Observación</p>
-                    <p className="text-sm text-foreground bg-muted rounded-xl px-3 py-2">{detailItem.observacion}</p>
-                  </div>
-                )}
+                  );
+                  const observacion = detailItem.observacion ? (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Observación</p>
+                      <p className="text-sm text-foreground bg-muted rounded-xl px-3 py-2">{detailItem.observacion}</p>
+                    </div>
+                  ) : null;
+                  return enColumnas ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{lineaTiempos}{observacion}</div>
+                  ) : (
+                    <>{lineaTiempos}{observacion}</>
+                  );
+                })()}
               </div>
-              <div className="shrink-0 px-5 py-4 border-t border-border">
-                <button onClick={() => setDetailItem(null)} className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
-                <button onClick={() => alert("Ver ficha del producto - funcionalidad por implementar")} className="w-full py-2.5 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
+              <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
+                <button onClick={() => setDetailItem(null)} className="w-32 shrink-0 py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
+                <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
               </div>
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* ── Modal: Ver ficha del producto (solo lectura, sobre el detalle) ── */}
+      <AnimatePresence>
+        {detailItem && verFicha && verFicha.ordenId === detailItem.id && (() => {
+          const linea = detailItem.lineas[verFicha.lineaIdx] ?? detailItem.lineas[0];
+          if (!linea) return null;
+          const { ficha, reconstruida } = fichaParaVer(linea, fichasPorProducto);
+          const clave = linea.productoId ?? linea.idProducto;
+          const vigente = clave ? fichaVigente(fichasPorProducto, clave) : null;
+          // Copia solo para mostrar: los pasos que ya traen "1." o "1)" no
+          // deben duplicar el círculo numerado que pinta FichaTecnicaDetalle.
+          const fichaVista = ficha
+            ? { ...ficha, pasos: ficha.pasos.map(p => p.replace(/^\s*\d+\s*[.)]\s+/, "")).filter(p => p.trim()) }
+            : null;
+          return (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+                <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+                  <h3 className="text-lg font-bold text-foreground min-w-0 truncate" style={{ fontFamily: SERIF }}>Ficha técnica — {linea.nombre}</h3>
+                  <button onClick={() => setVerFicha(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="flex-1 min-h-0 flex flex-col px-5 py-4 space-y-3">
+                  {detailItem.lineas.length > 1 && (
+                    <div className="shrink-0 flex flex-wrap gap-1.5">
+                      {detailItem.lineas.map((l, i) => (
+                        <button key={i} type="button"
+                          onClick={() => setVerFicha(v => v && ({ ...v, lineaIdx: i }))}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                            i === verFicha.lineaIdx
+                              ? "bg-primary text-white"
+                              : "bg-muted text-muted-foreground hover:bg-border"
+                          }`}>
+                          {l.nombre}{l.tamano ? ` · ${l.tamano}` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!fichaVista || linea.sinFicha ? (
+                    <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center">
+                      <p className="text-sm font-semibold text-foreground">Este producto no tiene ficha técnica</p>
+                      <p className="text-xs text-muted-foreground mt-1">{linea.nombre}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <span className={`shrink-0 self-start inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                        reconstruida ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {reconstruida
+                          ? `Versión v${fichaVista.version} guardada en la orden`
+                          : linea.fichaSnapshot
+                            ? `Versión v${fichaVista.version} usada en esta orden`
+                            : `Versión v${fichaVista.version} vigente`}
+                      </span>
+                      {vigente && vigente.version > fichaVista.version && (
+                        <p className="shrink-0 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          Existe una versión más nueva (v{vigente.version}) en el catálogo.
+                        </p>
+                      )}
+                      {reconstruida && (
+                        <p className="shrink-0 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          Esta versión ya no está en el catálogo: se muestra la foto guardada en la orden.
+                        </p>
+                      )}
+                      {!linea.fichaSnapshot && (
+                        <p className="shrink-0 text-xs text-muted-foreground">
+                          Esta orden no guardó su versión de ficha: se muestra la vigente del producto.
+                        </p>
+                      )}
+                      {(linea.cantidadEstimada > 0 || linea.tamano) && (
+                        <p className="shrink-0 text-xs text-muted-foreground">
+                          Esta orden pide:{" "}
+                          {linea.cantidadEstimada > 0 && (
+                            <strong className="text-foreground">{fmtCant(linea.cantidadEstimada, linea.unidad)}</strong>
+                          )}
+                          {linea.tamano ? `${linea.cantidadEstimada > 0 ? " · " : ""}Tamaño: ${linea.tamano}` : null}
+                        </p>
+                      )}
+                      <div className="flex-1 min-h-0 flex flex-col">
+                        <FichaTecnicaDetalle v={fichaVista} readCls={readCls}
+                          modo={detailItem.tipo === "preparacion" ? "insumo" : "producto"} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="shrink-0 px-5 py-4 border-t border-border">
+                  <button onClick={() => setVerFicha(null)} className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Modal: Dar de baja ── */}

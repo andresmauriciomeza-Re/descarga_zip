@@ -454,20 +454,21 @@ function VersionPills({
 }
 
 /**
- * Campo de imágenes múltiples del producto (P13): lista de miniaturas con
- * vista previa y botón de quitar en cada una, más el alta de una en una con
- * "Agregar imagen" (por archivo o pegando una URL). El límite es
- * MAX_IMAGENES (4): al llegar a él los controles de agregar quedan
- * deshabilitados. La primera posición es la portada que ven el menú y las
- * tarjetas, por eso lleva la etiqueta "Principal".
- * En solo lectura (Ver detalle) solo pinta las miniaturas.
+ * Campo de imágenes múltiples del producto (P13): cuadrícula FIJA de
+ * MAX_IMAGENES (4) casillas —la primera es la portada y se marca con su
+ * etiqueta y su resalte aunque esté vacía— más el alta de una en una con
+ * "Subir archivo" (fila completa) y, debajo, una fila con la URL y "Agregar
+ * imagen". Al llegar al límite los controles y las casillas vacías quedan
+ * atenuados. Las casillas vacías son decorativas: no cargan ni quitan nada.
+ * En solo lectura (Ver detalle) solo se pinta la cuadrícula; sin fotos no se
+ * pinta nada.
  */
 function CampoImagenes({
   imagenes,
   onChange,
   readOnly = false,
   inputCls,
-  alto = "h-40",
+  llenarAlto = false,
 }: {
   imagenes: string[];
   onChange: (imgs: string[]) => void;
@@ -475,9 +476,11 @@ function CampoImagenes({
   /** Clase del input de URL (la del formulario que lo usa: Crear usa iCls y
       FormFields usa inputCls). */
   inputCls: string;
-  /** Alto de la vista previa grande: 40 px en Editar/Ver detalle y 32 px en
-      Crear (mismo alto que traía la foto única de antes). */
-  alto?: string;
+  /** Dos columnas con la ficha visible (solo Crear lo activa ahora): la
+      cuadrícula crece en alto para que la tarjeta empareje el fondo con la de
+      la derecha. Con columna única o en móvil no hay alto libre y las casillas
+      se quedan en su mínimo (el alto actual). */
+  llenarAlto?: boolean;
 }) {
   // URL pendiente de agregar. Estado propio para no tener que escribir en el
   // producto mientras se teclea (antes el input escribía `imagen` en vivo).
@@ -496,100 +499,121 @@ function CampoImagenes({
     setUrl("");
   };
 
-  // Solo lectura (Ver detalle): sin etiquetas ni controles, solo las fotos.
-  if (readOnly) {
-    if (imagenes.length === 0) return null;
-    if (imagenes.length === 1) {
-      return (
-        <div className={`relative w-full ${alto} rounded-xl overflow-hidden bg-muted border border-border`}>
-          <img src={imagenes[0]} alt="Vista previa" className="w-full h-full object-cover" />
-        </div>
-      );
-    }
-    return (
-      <div className="grid grid-cols-2 gap-2">
-        {imagenes.map((src, idx) => (
-          <div key={`${src}-${idx}`} className={`relative w-full ${alto} rounded-xl overflow-hidden bg-muted border border-border`}>
-            <img src={src} alt={`Imagen ${idx + 1}`} className="w-full h-full object-cover" />
-          </div>
-        ))}
-      </div>
-    );
-  }
+  // Solo lectura (Ver detalle): sin controles y sin fotos no se pinta nada.
+  if (readOnly && imagenes.length === 0) return null;
+
+  const casillas = Array.from({ length: MAX_IMAGENES }, (_, i) => i);
+  // Con `llenarAlto` las casillas bajan su alto a un MÍNIMO (el actual) y
+  // estiran con la rejilla; sin él, alto fijo como siempre.
+  const altoCasilla = llenarAlto ? "min-h-24" : "h-24";
 
   return (
-    <div>
-      {/* Miniaturas: cada una se quita con su X. */}
-      {imagenes.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-          {imagenes.map((src, idx) => (
-            <div
-              key={`${src}-${idx}`}
-              className="relative h-24 rounded-xl overflow-hidden bg-muted border border-border"
-            >
-              <img src={src} alt={`Imagen ${idx + 1}`} className="w-full h-full object-cover" />
-              {idx === 0 && (
-                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] font-semibold text-white">
-                  Principal
-                </span>
-              )}
-              <button
-                type="button"
-                title="Quitar imagen"
-                onClick={() => onChange(imagenes.filter((_, i) => i !== idx))}
-                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
+    <div className={llenarAlto ? "flex flex-col h-full" : ""}>
+      {/* Cuadrícula de 4 casillas: ocupadas muestran la foto (la primera, con
+          su resalte de portada); vacías son decorativas y quedan atenuadas en
+          solo lectura o al estar el límite alcanzado. */}
+      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 ${llenarAlto ? "flex-1" : ""}`}>
+        {casillas.map((idx) => {
+          const src = imagenes[idx];
+          const esPortada = idx === 0;
+          if (src) {
+            return (
+              <div
+                key={`imagen-${idx}`}
+                className={`relative ${altoCasilla} rounded-xl overflow-hidden bg-muted border border-border ${
+                  esPortada ? "ring-2 ring-primary" : ""
+                }`}
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                {/* La foto va absoluta para no aportar alto intrínseco: la
+                    casilla crece solo con la rejilla (llenarAlto). */}
+                <img src={src} alt={`Imagen ${idx + 1}`} className="absolute inset-0 w-full h-full object-cover" />
+                {esPortada && (
+                  <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] font-semibold text-white">
+                    Portada
+                  </span>
+                )}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    title="Quitar imagen"
+                    onClick={() => onChange(imagenes.filter((_, i) => i !== idx))}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={`vacia-${idx}`}
+              className={`${altoCasilla} rounded-xl flex items-center justify-center ${
+                esPortada
+                  ? "bg-primary/10 border border-primary/40"
+                  : "border border-dashed border-border"
+              } ${readOnly || completa ? "opacity-40" : ""}`}
+            >
+              {esPortada ? (
+                <span className="px-1.5 py-0.5 rounded-md bg-primary/15 text-[10px] font-semibold text-primary">
+                  Portada
+                </span>
+              ) : (
+                <Plus className="w-4 h-4 text-muted-foreground" />
+              )}
             </div>
-          ))}
-        </div>
-      )}
-      {/* Alta de una imagen: archivo o URL, siempre con "Agregar imagen". */}
-      <div className="flex gap-2 mb-1">
-        <label
-          className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
-            completa || subiendo ? "opacity-50 pointer-events-none" : ""
-          }`}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          {subiendo ? "Subiendo..." : "Subir archivo"}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={subiendo || completa}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) {
-                void subir(file, "productos").then((url) => {
-                  if (url) agregar(url);
-                });
-              }
-            }}
-          />
-        </label>
-        <span className="flex items-center text-xs text-muted-foreground">o</span>
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && agregar(url)}
-          placeholder="Pega una URL de imagen..."
-          className={`flex-1 min-w-0 ${inputCls}`}
-        />
-        <button
-          type="button"
-          onClick={() => agregar(url)}
-          disabled={completa || !url.trim()}
-          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
-        >
-          <Plus className="w-3.5 h-3.5" /> Agregar imagen
-        </button>
+          );
+        })}
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        {imagenes.length}/{MAX_IMAGENES} imágenes · la primera es la portada del menú
-      </p>
+      {!readOnly && (
+        <>
+          {/* Fila 1: alta desde el equipo, a ancho completo. */}
+          <label
+            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+              completa || subiendo ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {subiendo ? "Subiendo..." : "Subir archivo"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={subiendo || completa}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) {
+                  void subir(file, "productos").then((nuevaUrl) => {
+                    if (nuevaUrl) agregar(nuevaUrl);
+                  });
+                }
+              }}
+            />
+          </label>
+          {/* Fila 2: pegar una URL y agregarla. */}
+          <div className="flex gap-2 mt-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && agregar(url)}
+              placeholder="Pega una URL de imagen..."
+              className={`flex-1 min-w-0 ${inputCls}`}
+            />
+            <button
+              type="button"
+              onClick={() => agregar(url)}
+              disabled={completa || !url.trim()}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5" /> Agregar imagen
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            {imagenes.length}/{MAX_IMAGENES} imágenes · la primera es la portada del menú
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -609,6 +633,149 @@ function BadgeImagenes({ p }: { p: Producto }) {
       <ImageIcon className="w-3 h-3" />
       {n} {n === 1 ? "imagen" : "imágenes"}
     </span>
+  );
+}
+
+/** Sección con estilo de tarjeta (Opción A): fondo `bg-card`, borde y esquinas
+    redondeadas, con el título a la izquierda y un slot opcional a la derecha
+    (`acciones`: pastillas de versión, badges…). El contenido scrollea dentro
+    de la tarjeta solo con `scrollInterno` (columna derecha); `footer` queda
+    FUERA de ese scroll, siempre visible. En la columna izquierda las tarjetas
+    se apilan sin scroll propio (scrollea la columna). */
+function Tarjeta({
+  titulo,
+  acciones,
+  children,
+  footer,
+  scrollInterno = false,
+  className = "",
+}: {
+  titulo: string;
+  acciones?: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  scrollInterno?: boolean;
+  className?: string;
+}) {
+  return (
+    <section className={`bg-card border border-border rounded-2xl flex flex-col ${className}`}>
+      <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-5 pt-4 pb-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{titulo}</p>
+        {acciones}
+      </div>
+      {/* `flex-1` siempre: en tarjetas de alto natural no cambia nada (el
+          mínimo automático la fija al contenido) y en la tarjeta estirada
+          (Imágenes con `llenarAlto`) permite que el contenido llene el fondo. */}
+      <div className={`px-4 sm:px-5 pb-4 flex-1 ${scrollInterno ? "min-h-0 overflow-y-auto pt-3" : ""}`}>
+        {children}
+      </div>
+      {footer && <div className="shrink-0 border-t border-border px-4 sm:px-5 py-3">{footer}</div>}
+    </section>
+  );
+}
+
+/** Tarjeta "Imágenes del producto": le da a `CampoImagenes` el mismo marco que
+    el resto de secciones. En solo lectura (Ver detalle) solo se pinta cuando
+    hay al menos una imagen: decide el que la llama. */
+function TarjetaImagenes({
+  imagenes,
+  onChange,
+  readOnly = false,
+  inputCls,
+  llenarAlto = false,
+}: {
+  imagenes: string[];
+  onChange: (imgs: string[]) => void;
+  readOnly?: boolean;
+  inputCls: string;
+  /** Dos columnas con ficha visible (solo Crear ahora): la tarjeta crece
+      (grow, sin encogerse) hasta el fondo y las casillas estiran su alto. */
+  llenarAlto?: boolean;
+}) {
+  return (
+    <Tarjeta titulo="Imágenes del producto" className={llenarAlto ? "grow shrink-0" : ""}>
+      <CampoImagenes
+        imagenes={imagenes}
+        onChange={onChange}
+        readOnly={readOnly}
+        inputCls={inputCls}
+        llenarAlto={llenarAlto}
+      />
+    </Tarjeta>
+  );
+}
+
+/** Pregunta "¿Tiene ficha técnica?" de las categorías SIN configuración en
+    `CONFIG_CATEGORIA`. Va SIEMPRE como hijo directo de la cuadrícula de
+    `FormFields` (por eso trae `sm:col-span-2`). `error` es la validación de
+    Crear; `bloqueada` impide responder en Editar cuando ya hay historial. */
+function PreguntaTieneFicha({
+  valor,
+  onElegir,
+  error = "",
+  bloqueada = false,
+}: {
+  valor: "si" | "no" | null;
+  onElegir: (v: "si" | "no") => void;
+  error?: string;
+  bloqueada?: boolean;
+}) {
+  return (
+    <div className="sm:col-span-2 mt-1">
+      <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+        ¿Tiene ficha técnica? *
+      </label>
+      <div className="flex items-center gap-2 flex-wrap">
+        {(["si", "no"] as const).map((op) => (
+          <button
+            key={op}
+            type="button"
+            disabled={bloqueada}
+            title={bloqueada ? "Este producto ya tiene historial de ficha técnica" : undefined}
+            onClick={() => onElegir(op)}
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+              valor === op
+                ? "bg-primary text-white border-primary"
+                : "bg-muted text-muted-foreground border-border hover:bg-border"
+            } ${bloqueada ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            {op === "si" ? "Sí" : "No"}
+          </button>
+        ))}
+      </div>
+      {error && <p className="text-xs text-red-500 mt-1 leading-tight">{error}</p>}
+      {bloqueada && (
+        <p className="text-[11px] text-muted-foreground mt-1 italic">
+          Bloqueado: el producto ya tiene historial de ficha técnica.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Precio de venta: un 0 no se muestra (evitaba el "06767" del valor inicial
+    con `type="number"`) y ocupa su lugar el placeholder "$ 0". El dato sigue
+    siendo un número al guardar: vaciar el campo escribe 0. */
+function CampoPrecio({
+  valor,
+  onCambio,
+  readOnly = false,
+  cls,
+}: {
+  valor: number;
+  onCambio: (n: number) => void;
+  readOnly?: boolean;
+  cls: string;
+}) {
+  return (
+    <input
+      type="number"
+      value={valor === 0 ? "" : valor}
+      placeholder="$ 0"
+      onChange={(e) => onCambio(Number(e.target.value))}
+      readOnly={readOnly}
+      className={cls}
+    />
   );
 }
 
@@ -1069,7 +1236,8 @@ export function GestionProductosScreen({
     hideUnidad = false,
     readOnly = false,
     lockNombre = false,
-    onImagenes,
+    mostrarEstado = true,
+    mostrarTipo = true,
     trasCategoria,
   }: {
     values: Omit<Producto, "id">;
@@ -1077,125 +1245,127 @@ export function GestionProductosScreen({
     hideUnidad?: boolean;
     readOnly?: boolean;
     lockNombre?: boolean;
-    /** Escribe la lista completa de imágenes (P13). Va aparte de `onChange`
-        porque ese solo admite string | number. En Ver detalle no llega. */
-    onImagenes?: (imgs: string[]) => void;
+    /** Estado (solo lectura; se cambia desde la lista del index). Crear no lo
+        muestra: un producto nuevo siempre nace "Disponible". */
+    mostrarEstado?: boolean;
+    /** Pastilla del tipo + descripción bajo Categoría. Crear la calla hasta
+        que el tipo esté definido (categoría configurada o "¿Tiene ficha
+        técnica?" ya respondida). */
+    mostrarTipo?: boolean;
     /** Bloque que va INMEDIATAMENTE después de Categoría (Editar pasa aquí
         la pregunta "¿Tiene ficha técnica?" de las categorías sin config). */
     trasCategoria?: React.ReactNode;
-  }) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {/* Categoría: PRIMER campo de "Datos del producto" (se muestra solo el
-          nombre; el id queda interno) porque es la que define el tipo del
-          producto y los tamaños de su ficha técnica. */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Categoría *
-        </label>
-        <select
-          value={values.idCategoria}
-          onChange={(e) => onChange("idCategoria", e.target.value)}
-          disabled={readOnly}
-          className={readOnly ? roCls : inputCls + " cursor-pointer"}
-        >
-          <option value="" disabled>Selecciona una categoría</option>
-          {opcionesCategoria(values.idCategoria).map((c) => (
-            <option key={c.id} value={c.id}>{c.nombre}</option>
-          ))}
-        </select>
-      </div>
-      {trasCategoria}
-      {/* Nombre */}
-      <div className="sm:col-span-2">
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Nombre *
-        </label>
-        <input
-          value={values.nombre}
-          onChange={(e) => onChange("nombre", e.target.value)}
-          placeholder="Ej: Margarita Clásica"
-          readOnly={readOnly || lockNombre}
-          className={readOnly || lockNombre ? roCls : inputCls}
-        />
-      </div>
-      {/* Tipo (solo lectura aquí; lo define la categoría del producto, o la
-          pregunta "¿Tiene ficha técnica?" si la categoría no está en
-          CONFIG_CATEGORIA). Comparte fila con Estado en la cuadrícula. */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Tipo
-        </label>
-        <div>
-          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoDe(values, catName(values.idCategoria)))}`}>
-            {tipoDe(values, catName(values.idCategoria))}
-          </span>
-        </div>
-      </div>
-      {/* Estado (solo lectura; se cambia desde la lista del index). Comparte
-          fila con Tipo. */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Estado
-        </label>
-        <div>
-          <EstadoBadge estado={values.estado} />
-        </div>
-      </div>
-      {/* Imágenes múltiples del producto (P13): hasta MAX_IMAGENES (4), con
-          vista previa y quitar por cada una. En Ver detalle (solo lectura) la
-          etiqueta no se muestra: la foto ya es evidente y el requisito de ese
-          diseño separa la imagen (fija, 160 px) de la cuadrícula de datos. */}
-      <div className="sm:col-span-2">
-        {!readOnly && (
+  }) => {
+    const tipo = tipoDe(values, catName(values.idCategoria));
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {/* Categoría: PRIMER campo de "Datos del producto" (se muestra solo el
+            nombre; el id queda interno) porque es la que define el tipo del
+            producto y los tamaños de su ficha técnica. Ocupa el ANCHO COMPLETO
+            (sm:col-span-2) porque debajo va la pastilla del tipo con su
+            descripción en una sola línea: lo define la categoría
+            (CONFIG_CATEGORIA) o, sin configuración, la pregunta
+            "¿Tiene ficha técnica?". */}
+        <div className="sm:col-span-2">
           <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-            Imágenes del producto
-          </label>
-        )}
-        <CampoImagenes
-          imagenes={imagenesDe(values)}
-          onChange={(imgs) => onImagenes?.(imgs)}
-          readOnly={readOnly}
-          inputCls={inputCls}
-        />
-      </div>
-      {/* Precio de venta al público (precioUnitario): es el precio que
-          muestran el listado, el Excel y el menú público. El costo
-          (costoUnitario) no se edita aquí: ver el TODO de la interfaz. */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-          Precio de venta (COP)
-        </label>
-        <input
-          type="number"
-          value={values.precioUnitario}
-          onChange={(e) => onChange("precioUnitario", Number(e.target.value))}
-          readOnly={readOnly}
-          className={readOnly ? roCls : inputCls}
-        />
-      </div>
-      {/* Unidad de venta */}
-      {!hideUnidad && (
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-            Unidad de venta
+            Categoría *
           </label>
           <select
-            value={values.unidadVenta}
-            onChange={(e) => onChange("unidadVenta", e.target.value)}
+            value={values.idCategoria}
+            onChange={(e) => onChange("idCategoria", e.target.value)}
             disabled={readOnly}
             className={readOnly ? roCls : inputCls + " cursor-pointer"}
           >
-            {["und", "kg", "lt", "paq", "pza", "caja"].map((u) => (
-              <option key={u} value={u}>{u}</option>
+            <option value="" disabled>Selecciona una categoría</option>
+            {opcionesCategoria(values.idCategoria).map((c) => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
             ))}
           </select>
+          {values.idCategoria && mostrarTipo && (
+            /* Pastilla del tipo + descripción en UNA sola línea (sin wrap):
+               la pastilla a la izquierda y la ayuda a su lado. El `title` de
+               la pastilla conserva el texto completo de `descTipo`; en
+               pantalla se quita el prefijo ("Producto insumo: ") porque la
+               pastilla ya dice el tipo. */
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className={`shrink-0 inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipo)}`}
+                title={descTipo(tipo)}
+              >
+                {tipo}
+              </span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {descTipo(tipo).replace(`${tipo}: `, "")}
+              </span>
+            </div>
+          )}
         </div>
-      )}
-      {/* El stock disponible NO se escribe en el producto: sigue en la
-          interfaz y lo actualiza el sistema (órdenes de producción / compras).
-          En el index y en Ver detalle se muestra como solo lectura. */}
-    </div>
-  );
+        {trasCategoria}
+        {/* Nombre y Precio de venta lado a lado (60/40 en sm+; en móvil se
+            apilan). El precio NO muestra el 0 inicial: ver `CampoPrecio`. El
+            costo (costoUnitario) no se edita aquí: ver el TODO de la interfaz. */}
+        <div className="sm:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            <div className="sm:col-span-3">
+              <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+                Nombre *
+              </label>
+              <input
+                value={values.nombre}
+                onChange={(e) => onChange("nombre", e.target.value)}
+                placeholder="Ej: Margarita Clásica"
+                readOnly={readOnly || lockNombre}
+                className={readOnly || lockNombre ? roCls : inputCls}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+                Precio de venta (COP)
+              </label>
+              <CampoPrecio
+                valor={values.precioUnitario}
+                onCambio={(n) => onChange("precioUnitario", n)}
+                readOnly={readOnly}
+                cls={readOnly ? roCls : inputCls}
+              />
+            </div>
+          </div>
+        </div>
+        {/* Estado (solo lectura; se cambia desde la lista del index). */}
+        {mostrarEstado && (
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+              Estado
+            </label>
+            <div>
+              <EstadoBadge estado={values.estado} />
+            </div>
+          </div>
+        )}
+        {/* Unidad de venta */}
+        {!hideUnidad && (
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+              Unidad de venta
+            </label>
+            <select
+              value={values.unidadVenta}
+              onChange={(e) => onChange("unidadVenta", e.target.value)}
+              disabled={readOnly}
+              className={readOnly ? roCls : inputCls + " cursor-pointer"}
+            >
+              {["und", "kg", "lt", "paq", "pza", "caja"].map((u) => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {/* El stock disponible NO se escribe en el producto: sigue en la
+            interfaz y lo actualiza el sistema (órdenes de producción / compras).
+            En el index y en Ver detalle se muestra como solo lectura. */}
+      </div>
+    );
+  };
 
   const ModalWrap = ({
     title,
@@ -1267,9 +1437,6 @@ export function GestionProductosScreen({
     // Reventa definida (por categoría o por la respuesta): no hay ficha que
     // ocultar/mostrar, así que el botón queda deshabilitado.
     const sinFichaDefinitiva = (cfgCrear?.tipo === TIPOS_PRODUCTO[1]) || formTieneFicha === "no";
-    const tipoCrear: TipoProducto | null = cfgCrear
-      ? cfgCrear.tipo
-      : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : formTieneFicha === "no" ? TIPOS_PRODUCTO[1] : null;
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -1277,7 +1444,7 @@ export function GestionProductosScreen({
          la pantalla medía 56px más que la ventana (scroll de página) y el
          footer la empujaba fuera del viewport. Cada columna scrollea por
          dentro, nunca la página. */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
@@ -1305,114 +1472,71 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        {/* Two columns: cada columna scrollea por dentro, nunca la página */}
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
+        {/* Dos columnas de tarjetas: el fondo `bg-muted/30` y el `p-4` de cada
+            columna son el aire alrededor (ya no hay línea divisoria). Cada
+            columna scrollea por dentro, nunca la página. */}
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
 
-          {/* ── COLUMNA IZQUIERDA: datos del producto ── */}
-          {/* Con la ficha oculta, los datos ocupan el ancho (max-w-2xl
+          {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
+          {/* Con la ficha oculta, las tarjetas ocupan el ancho (max-w-2xl
               centrado); la animación de 0,2 s la da transition-all. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
-            <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
-            <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
-            {/* Los campos reparten el espacio libre de la columna (`justify-between`)
-                hasta `27rem`; más allá el sobrante queda abajo para no abrir huecos
-                exagerados entre los campos ni obligar a scroll con la imagen puesta. */}
-            <div className="flex-1 min-h-0 max-h-[27rem] overflow-y-auto flex flex-col justify-between gap-4">
-              {/* Categoría — PRIMER campo: la categoría define el tipo del
-                  producto y los tamaños de su ficha técnica. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Categoría *</label>
-                <select value={form.idCategoria} onChange={e => solicitarCambioCategoriaCrear(e.target.value)}
-                  className={iCls + " cursor-pointer"}>
-                  <option value="" disabled>Selecciona una categoría</option>
-                  {opcionesCategoria(form.idCategoria).map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
-                {/* Tipo resultante: de la categoría (CONFIG_CATEGORIA) o de la
-                    respuesta a "¿Tiene ficha técnica?". */}
-                {tipoCrear && (
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span
-                      className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoCrear)}`}
-                      title={descTipo(tipoCrear)}
-                    >
-                      {tipoCrear}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{descTipo(tipoCrear)}</span>
-                  </div>
-                )}
-                {/* ¿Tiene ficha técnica? — solo cuando la categoría NO está
-                    configurada (así el tipo lo decide quien crea el producto). */}
-                {mostrarPregunta && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {(["si", "no"] as const).map((op) => (
-                        <button
-                          key={op}
-                          type="button"
-                          onClick={() => elegirTieneFicha(op)}
-                          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors cursor-pointer ${
-                            formTieneFicha === op
-                              ? "bg-primary text-white border-primary"
-                              : "bg-muted text-muted-foreground border-border hover:bg-border"
-                          }`}
-                        >
-                          {op === "si" ? "Sí" : "No"}
-                        </button>
-                      ))}
-                    </div>
-                    {tieneFichaError && (
-                      <p className="text-xs text-red-500 mt-1 leading-tight">{tieneFichaError}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-              {/* Nombre */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
-                  placeholder="Ej: Margarita Clásica" className={iCls} />
-              </div>
-              {/* Imágenes del producto (P13): hasta MAX_IMAGENES (4); la
-                  primera es la portada que ven el menú y las tarjetas. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Imágenes del producto</label>
-                <CampoImagenes
-                  imagenes={imagenesDe(form)}
-                  onChange={imgs => setForm(p => ({ ...p, imagenes: imgs, imagen: imgs[0] ?? "" }))}
-                  inputCls={iCls}
-                  alto="h-32"
-                />
-              </div>
-              {/* Precio de venta (precioUnitario; el stock NO se escribe aquí:
-                  todo producto nuevo empieza en 0 y lo actualiza el sistema).
-                  El costo no se toca: ver el TODO de la interfaz Producto. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Precio de venta (COP)</label>
-                <input type="number" value={form.precioUnitario}
-                  onChange={e => setForm(p => ({ ...p, precioUnitario: Number(e.target.value) }))} className={iCls} />
-              </div>
-            </div>
+          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} p-4 flex flex-col min-h-0 transition-all duration-200`}>
+            <div className={`flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
+              {/* Datos mantiene su alto natural; Imágenes crece (llenarAlto)
+                  solo cuando hay dos columnas con el editor visible, para que
+                  ambos fondos caigan parejos. Con la ficha oculta o sin ficha
+                  no se estira nada (alto natural). */}
+              <Tarjeta titulo="Datos del producto" className="shrink-0">
+                {FormFields({
+                  values: form,
+                  onChange: (f, v) => {
+                    // La categoría tiene regla propia: pide confirmación antes
+                    // de reajustar los tamaños de la ficha.
+                    if (f === "idCategoria") {
+                      solicitarCambioCategoriaCrear(String(v));
+                      return;
+                    }
+                    setForm((p) => ({ ...p, [f]: v }));
+                  },
+                  // Crear no muestra Estado (nace "Disponible") ni Unidad de
+                  // venta; las imágenes viven en su propia tarjeta.
+                  hideUnidad: true,
+                  mostrarEstado: false,
+                  // La pastilla del tipo espera a tener el tipo definido.
+                  mostrarTipo: !mostrarPregunta || formTieneFicha !== null,
+                  trasCategoria: mostrarPregunta ? (
+                    <PreguntaTieneFicha
+                      valor={formTieneFicha}
+                      onElegir={elegirTieneFicha}
+                      error={tieneFichaError}
+                    />
+                  ) : null,
+                })}
+              </Tarjeta>
+              <TarjetaImagenes
+                imagenes={imagenesDe(form)}
+                onChange={(imgs) => setForm((p) => ({ ...p, imagenes: imgs, imagen: imgs[0] ?? "" }))}
+                inputCls={iCls}
+                llenarAlto={!fichaOculta && mostrarEditor}
+              />
             </div>
           </div>
 
-          {/* ── COLUMNA DERECHA: ficha técnica ── */}
-          {/* La ficha técnica scrollea por dentro; el botón "Guardar Ficha
-              Técnica" vive FUERA del scroller (footer de la columna), así que
-              siempre queda visible y nunca tapa el input de pasos. Solo se
-              activa si el producto lleva ficha (categoría con ficha, o
-              respuesta "Sí" en categorías sin configuración). Al ocultarla, la
-              columna colapsa con una animación de 0,2 s y NO se borra lo
-              diligenciado. */}
-          <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-            fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
+          {/* ── COLUMNA DERECHA: tarjeta de ficha técnica ── */}
+          {/* La tarjeta scrollea por dentro y el botón "Guardar Ficha
+              Técnica" queda en su footer, FUERA del scroller, así que siempre
+              se ve y nunca tapa el input de pasos. Solo aparece si el producto
+              lleva ficha (categoría con ficha, o respuesta "Sí" en categorías
+              sin configuración). Al ocultarla, la columna colapsa con una
+              animación de 0,2 s y NO se borra lo diligenciado. */}
+          <div className={`flex flex-col min-h-0 transition-all duration-200 ${
+            fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
           }`}>
+            {/* Sin ficha definitiva (o categoría sin elegir): tarjeta compacta
+                con el mensaje del caso, sin botón de guardar. */}
             {!mostrarEditor ? (
-              <div className="flex-1 min-h-0 flex flex-col">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
-                <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/40 rounded-2xl border border-border p-6 select-none">
+              <Tarjeta titulo="Ficha técnica">
+                <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
                   <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                     <span className="text-2xl">📋</span>
                   </div>
@@ -1424,46 +1548,45 @@ export function GestionProductosScreen({
                         : "Responde arriba si el producto tiene ficha técnica"}
                   </p>
                 </div>
-              </div>
+              </Tarjeta>
             ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
-                <div className="flex items-center gap-2">
-                  {fichaGuardada && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
-                      <Check className="w-3.5 h-3.5" /> Ficha guardada
+              <Tarjeta
+                titulo="Ficha técnica"
+                className="flex-1 min-h-0"
+                scrollInterno
+                acciones={
+                  <div className="flex items-center gap-2">
+                    {fichaGuardada && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                        <Check className="w-3.5 h-3.5" /> Ficha guardada
+                      </span>
+                    )}
+                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
+                      Nueva versión (borrador)
                     </span>
-                  )}
-                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
-                    Nueva versión (borrador)
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
-                La ficha se guarda como <span className="font-bold text-foreground">v1</span> junto con el producto.
-              </p>
-
-              <FichaTecnicaEditor
-                ficha={fichaBorrador}
-                onChange={setFichaBorrador}
-                insumos={insumos}
-                modo="producto"
-                inputCls={iCls}
-                    /* Los tamaños los define la categoría (o la fila única
-                       "Único" de etiqueta fija, si no está configurada). */
-                    tamanoFijo={tamanoFijoDe(cfgCrear)}
-                  />
-            </div>
-            )}
-            {mostrarEditor && (
-              <div className="shrink-0 pt-4">
-                <button type="button" onClick={solicitarGuardarFicha}
-                  className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  Guardar Ficha Técnica
-                </button>
-              </div>
+                  </div>
+                }
+                footer={
+                  <button type="button" onClick={solicitarGuardarFicha}
+                    className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                    Guardar Ficha Técnica
+                  </button>
+                }
+              >
+                <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                  La ficha se guarda como <span className="font-bold text-foreground">v1</span> junto con el producto.
+                </p>
+                <FichaTecnicaEditor
+                  ficha={fichaBorrador}
+                  onChange={setFichaBorrador}
+                  insumos={insumos}
+                  modo="producto"
+                  inputCls={iCls}
+                  /* Los tamaños los define la categoría (o la fila única
+                     "Único" de etiqueta fija, si no está configurada). */
+                  tamanoFijo={tamanoFijoDe(cfgCrear)}
+                />
+              </Tarjeta>
             )}
           </div>
         </div>
@@ -1503,13 +1626,18 @@ export function GestionProductosScreen({
     const vIdx = ficha ? Math.min(detailVIdx, ficha.length - 1) : 0;
     const fichaV = ficha ? ficha[vIdx] : null;
     const readCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
+    const tipoDetalle = tipoDe(detailItem, catName(detailItem.idCategoria));
+    const llevaFichaDetalle = tipoDetalle === TIPOS_PRODUCTO[0];
+    // Stock: porciones según la ficha VIGENTE del producto.
+    const vigente = fichaVigente(detailItem.id);
+    const conFichaStock = llevaFichaDetalle && vigente;
+    const imagenesDetalle = imagenesDe(detailItem);
     return (
-      /* Igual que Crear: altura fija sobre el viewport menos el AdminTopBar
-         (h-14) y el footer del admin. La pantalla ocupa exactamente el alto de
-         la ventana y la página NUNCA desplaza; las columnas tienen su propio
-         espacio: la izquierda scrollea solo como respaldo y en la derecha la
-         única barra posible es la de la lista de pasos (recetas largas). */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+      /* Igual que Crear y Editar: altura fija sobre el viewport menos el
+         AdminTopBar (h-14) y el footer del admin; fondo bg-muted/30 y cada
+         columna con sus tarjetas, scrolleando por dentro solo como respaldo.
+         La página NUNCA desplaza. */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h1>
@@ -1529,34 +1657,30 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
 
-          {/* COLUMNA IZQUIERDA: datos del producto. `overflow-y-auto` es solo
-              respaldo: con los datos compactados caben sin barra en las dos
-              resoluciones objetivo; si algo no cupiera, desplaza la columna
-              (nunca la página). */}
-          <div className={`${tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] ? "w-full md:w-1/2" : "w-full max-w-2xl mx-auto"} px-8 py-4 min-h-0 overflow-y-auto`}>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Datos del producto</p>
-            {FormFields({
-              values: detailItem,
-              onChange: () => {},
-              readOnly: true,
-            })}
-            
-            {/* Stock: unidades, total de porciones y porciones por unidad
-                (según la ficha VIGENTE), en líneas cortas para que el bloque
-                quepa en 1366×768 sin barra en la columna. */}
-            {(() => {
-              const vigente = fichaVigente(detailItem.id);
-              const conFicha = tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] && vigente;
-              return (
+          {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
+          {/* Todo va en tarjetas (igual que Crear y Editar); la columna
+              scrollea por dentro si algo no cabe, nunca la página. */}
+          <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
+            <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full">
+              <Tarjeta titulo="Datos del producto" className="shrink-0">
+                {FormFields({
+                  values: detailItem,
+                  onChange: () => {},
+                  readOnly: true,
+                  mostrarEstado: true,
+                })}
+                {/* Stock: unidades, total de porciones y porciones por unidad
+                    (según la ficha VIGENTE), en líneas cortas para que el
+                    bloque quepa en 1366×768 sin barra en la columna. */}
                 <div className="mt-3 pt-3 border-t border-border">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Stock</p>
                   <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
                     <span className={`font-bold ${detailItem.stockDisponible <= 5 ? "text-red-600" : detailItem.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}>
                       {detailItem.stockDisponible} {palabraStock(detailItem, detailItem.stockDisponible)}
                     </span>
-                    {conFicha && (
+                    {conFichaStock && (
                       <>
                         <span className="text-muted-foreground">
                           · {detailItem.stockDisponible * porcionesReferencia(vigente)} porciones
@@ -1569,42 +1693,74 @@ export function GestionProductosScreen({
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{ayudaStock(detailItem)}</p>
                 </div>
-              );
-            })()}
-          </div>
-
-          {/* COLUMNA DERECHA: ficha técnica (solo Producto insumo; un
-              Producto terminado no lleva ficha y no se muestra la sección).
-              Sin scroll propio: la única barra posible es la de la lista de
-              pasos, dentro de su recuadro, cuando la receta es larga. */}
-          {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[0] && (
-          <div className="w-full md:w-1/2 px-8 py-4 min-h-0 flex flex-col overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between mb-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
-              {ficha && ficha.length > 0 && (
-                <VersionPills versiones={ficha} activo={vIdx} onSelect={setDetailVIdx} />
+              </Tarjeta>
+              {/* Con 1+ imágenes se muestran las 4 casillas (portada
+                  resaltada, vacías apagadas, sin X ni controles); con 0 no se
+                  pinta la tarjeta. `llenarAlto` empareja el fondo con la
+                  derecha cuando el producto lleva ficha. */}
+              {imagenesDetalle.length > 0 && (
+                <TarjetaImagenes
+                  imagenes={imagenesDetalle}
+                  onChange={() => {}}
+                  readOnly
+                  inputCls={readCls}
+                  llenarAlto={llevaFichaDetalle}
+                />
               )}
             </div>
-            {!fichaV ? (
-              <div className="flex flex-col items-center justify-center flex-1 text-center">
-                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
-                  <span className="text-2xl">📋</span>
+          </div>
+
+          {/* ── COLUMNA DERECHA: tarjeta de ficha técnica ── */}
+          {/* Un Producto terminado no lleva ficha: tarjeta compacta con el
+              mensaje del caso (igual que Crear y Editar). El Producto insumo
+              muestra la ficha vigente o la versión elegida en las pastillas,
+              con scroll interno en el cuerpo. */}
+          <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
+            {!llevaFichaDetalle ? (
+              <Tarjeta titulo="Ficha técnica">
+                <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
+                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <span className="text-2xl">📋</span>
+                  </div>
+                  <p className="text-sm font-semibold text-muted-foreground">Este producto no lleva ficha técnica</p>
                 </div>
-                <p className="text-sm font-semibold text-foreground mb-1">Sin ficha técnica</p>
-                <p className="text-xs text-muted-foreground">Este producto no tiene ficha técnica registrada</p>
-              </div>
+              </Tarjeta>
             ) : (
-              <div className="flex-1 min-h-0 flex flex-col">
-                <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold mb-2 ${
-                  fichaV.fechaFin ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-800"
-                }`}>
-                  {fichaV.fechaFin ? "Versión histórica" : "Versión vigente"}
-                </span>
-                <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
-              </div>
+              <Tarjeta
+                titulo="Ficha técnica"
+                className="flex-1 min-h-0"
+                scrollInterno
+                acciones={
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {ficha && ficha.length > 0 && (
+                      <VersionPills versiones={ficha} activo={vIdx} onSelect={setDetailVIdx} />
+                    )}
+                    {fichaV && (
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                        fichaV.fechaFin ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {fichaV.fechaFin ? "Versión histórica" : "Versión vigente"}
+                      </span>
+                    )}
+                  </div>
+                }
+              >
+                {/* Sin versión registrada: el estado vive DENTRO de la
+                    tarjeta, bajo su encabezado. */}
+                {!fichaV ? (
+                  <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
+                    <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                      <span className="text-2xl">📋</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Sin ficha técnica</p>
+                    <p className="text-xs text-muted-foreground">Este producto no tiene ficha técnica registrada</p>
+                  </div>
+                ) : (
+                  <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
+                )}
+              </Tarjeta>
             )}
           </div>
-          )}
         </div>
       </div>
     );
@@ -1618,11 +1774,16 @@ export function GestionProductosScreen({
     const tipoEditar: TipoProducto =
       cfgEditar ? cfgEditar.tipo : tipoDe(editItem, catName(editItem.idCategoria));
     const llevaFichaEditar = tipoEditar === TIPOS_PRODUCTO[0];
+    // Pregunta "¿Tiene ficha técnica?" (solo categorías SIN configuración):
+    // bloqueada cuando el producto ya tiene versiones guardadas.
+    const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
+    // Versión histórica seleccionada (null = borrador editable).
+    const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
     return (
       /* Misma estructura que Crear Producto: alto fijo sobre el viewport
-         (AdminTopBar h-14 + footer del admin) y cada columna scrollea
-         por dentro; la página nunca scrollea. */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-background flex flex-col overflow-hidden">
+         (AdminTopBar h-14 + footer del admin), fondo bg-muted/30 y cada
+         columna scrollea por dentro; la página nunca scrollea. */
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
@@ -1650,113 +1811,87 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        {/* Dos columnas: cada columna scrollea por dentro, nunca la página */}
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border overflow-y-auto md:overflow-hidden">
+        {/* Dos columnas de tarjetas: el fondo `bg-muted/30` y el `p-4` de cada
+            columna son el aire alrededor (ya no hay línea divisoria). Cada
+            columna scrollea por dentro, nunca la página. */}
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
 
-          {/* COLUMNA IZQUIERDA: datos editables. Con la ficha oculta ocupa
-              el ancho (max-w-2xl centrado) con animación de 0,2 s. Los
-              datos scrollean por dentro de la columna, nunca la página. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} px-6 py-4 flex flex-col min-h-0 transition-all duration-200`}>
-            <div className={`flex flex-col flex-1 min-h-0 w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
-            <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Datos del producto</p>
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-            {FormFields({
-              values: editItem,
-              onChange: (f, v) => {
-                // La categoría tiene reglas propias (confirmación al cambiar
-                // y bloqueo hacia categorías sin ficha con historial).
-                if (f === "idCategoria") {
-                  solicitarCambioCategoriaEdit(String(v));
-                  return;
-                }
-                setEditItem((x) => x && { ...x, [f]: v });
-              },
-              // Escribe la lista completa y re-sincroniza la portada al tocarla.
-              onImagenes: (imgs) =>
-                setEditItem((x) => x && { ...x, imagenes: imgs, imagen: imgs[0] ?? "" }),
-              lockNombre: true,
-              // "¿Tiene ficha técnica?" — solo para categorías SIN
-              // configuración (si no, el tipo lo da la categoría) y
-              // bloqueada si ya hay versiones guardadas.
-              trasCategoria: cfgEditar ? null : (() => {
-                const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
-                return (
-                  <div className="sm:col-span-2 mt-1">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">¿Tiene ficha técnica? *</label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {(["si", "no"] as const).map((op) => {
-                        const activo = (tipoEditar === TIPOS_PRODUCTO[0]) === (op === "si");
-                        return (
-                          <button
-                            key={op}
-                            type="button"
-                            disabled={tieneHistorialFicha}
-                            title={tieneHistorialFicha ? "Este producto ya tiene historial de ficha técnica" : undefined}
-                            onClick={() =>
-                              setEditItem((x) =>
-                                x && { ...x, tipo: op === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1] }
-                              )
-                            }
-                            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
-                              activo
-                                ? "bg-primary text-white border-primary"
-                                : "bg-muted text-muted-foreground border-border hover:bg-border"
-                            } ${tieneHistorialFicha ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                          >
-                            {op === "si" ? "Sí" : "No"}
-                          </button>
-                        );
-                      })}
-                      <span
-                        className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipoEditar)}`}
-                        title={descTipo(tipoEditar)}
-                      >
-                        {tipoEditar}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{descTipo(tipoEditar)}</p>
-                    {tieneHistorialFicha && (
-                      <p className="text-[11px] text-muted-foreground mt-1 italic">
-                        Bloqueado: el producto ya tiene historial de ficha técnica.
-                      </p>
-                    )}
-                  </div>
-                );
-              })(),
-            })}
-            </div>
+          {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
+          {/* Con la ficha oculta, las tarjetas ocupan el ancho (max-w-2xl
+              centrado); la animación de 0,2 s la da transition-all. */}
+          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} p-4 flex flex-col min-h-0 transition-all duration-200`}>
+            <div className={`flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
+              <Tarjeta titulo="Datos del producto" className="shrink-0">
+                {FormFields({
+                  values: editItem,
+                  onChange: (f, v) => {
+                    // La categoría tiene reglas propias (confirmación al cambiar
+                    // y bloqueo hacia categorías sin ficha con historial).
+                    if (f === "idCategoria") {
+                      solicitarCambioCategoriaEdit(String(v));
+                      return;
+                    }
+                    setEditItem((x) => x && { ...x, [f]: v });
+                  },
+                  mostrarEstado: true,
+                  lockNombre: true,
+                  // "¿Tiene ficha técnica?" — solo para categorías SIN
+                  // configuración (si no, el tipo lo da la categoría) y
+                  // bloqueada si ya hay versiones guardadas.
+                  trasCategoria: cfgEditar ? null : (
+                    <PreguntaTieneFicha
+                      valor={tipoEditar === TIPOS_PRODUCTO[0] ? "si" : "no"}
+                      onElegir={(op) =>
+                        setEditItem((x) =>
+                          x && { ...x, tipo: op === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1] }
+                        )
+                      }
+                      bloqueada={tieneHistorialFicha}
+                    />
+                  ),
+                })}
+              </Tarjeta>
+              {/* La tarjeta de Imágenes crece hasta el fondo solo con dos
+                  columnas y el editor visible (igual que Crear). */}
+              <TarjetaImagenes
+                imagenes={imagenesDe(editItem)}
+                onChange={(imgs) => setEditItem((x) => x && { ...x, imagenes: imgs, imagen: imgs[0] ?? "" })}
+                inputCls={inputCls}
+                llenarAlto={!fichaOculta && llevaFichaEditar}
+              />
             </div>
           </div>
 
-          {/* COLUMNA DERECHA: ficha técnica. Solo el borrador es editable;
-              las versiones guardadas se ven en solo lectura con fondo gris.
-              Un Producto terminado no lleva ficha: la sección queda
-              deshabilitada con el mensaje correspondiente. Al ocultarla, la
-              columna colapsa con animación de 0,2 s sin borrar los datos. */}
+          {/* ── COLUMNA DERECHA: tarjeta de ficha técnica ── */}
+          {/* Solo el borrador es editable; las versiones guardadas se ven en
+              solo lectura. Un Producto terminado no lleva ficha: tarjeta
+              compacta con el mensaje del caso (igual que Crear). La ficha se
+              guarda con el botón "Guardar" del encabezado, así que la
+              tarjeta va SIN footer. Al ocultarla, la columna colapsa con
+              animación de 0,2 s sin borrar lo diligenciado. */}
           {!llevaFichaEditar ? (
-            <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-              fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
+            <div className={`flex flex-col min-h-0 transition-all duration-200 ${
+              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
             }`}>
-              <div className="flex-1 min-h-0 flex flex-col">
-              <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Ficha Técnica</p>
-              <div className="flex-1 flex flex-col items-center justify-center text-center bg-muted/40 rounded-2xl border border-border p-6 select-none">
-                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
-                  <span className="text-2xl">📋</span>
+              <Tarjeta titulo="Ficha técnica">
+                <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
+                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <span className="text-2xl">📋</span>
+                  </div>
+                  <p className="text-sm font-semibold text-muted-foreground">Este producto no lleva ficha técnica</p>
                 </div>
-                <p className="text-sm font-semibold text-muted-foreground">Este producto no lleva ficha técnica</p>
-              </div>
-              </div>
+              </Tarjeta>
             </div>
-          ) : (() => {
-            const activeEV = editFichaBorrador;
-            const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
-            return (
-              <div className={`py-4 flex flex-col min-h-0 transition-all duration-200 ${
-                fichaOculta ? "w-0 px-0 opacity-0 overflow-hidden border-l-0" : "w-full md:w-1/2 px-6 opacity-100"
-              }`}>
-                <div className="shrink-0 flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ficha Técnica</p>
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
+          ) : (
+            <div className={`flex flex-col min-h-0 transition-all duration-200 ${
+              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
+            }`}>
+              <Tarjeta
+                titulo="Ficha técnica"
+                className="flex-1 min-h-0"
+                scrollInterno
+                acciones={
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
                     <VersionPills
                       versiones={editFichaVersiones}
                       activo={editFichaSel === "borrador" ? -1 : (editFichaSel as number)}
@@ -1772,16 +1907,14 @@ export function GestionProductosScreen({
                       Nueva versión (borrador)
                     </button>
                   </div>
-                </div>
-
+                }
+              >
                 {editFichaVersiones.length > 0 && (
-                  <p className="shrink-0 text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                  <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
                     Esta ficha tiene {editFichaVersiones.length} {editFichaVersiones.length === 1 ? "versión" : "versiones"}. Las versiones anteriores no se pueden modificar.
                   </p>
                 )}
-
                 {vSel ? (
-                  <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="rounded-2xl border border-border bg-muted/50 p-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-muted-foreground">
@@ -1805,10 +1938,7 @@ export function GestionProductosScreen({
                       modo="producto"
                     />
                   </div>
-                  </div>
                 ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-                <div className="space-y-4 flex-1">
                   <FichaTecnicaEditor
                     ficha={editFichaBorrador}
                     onChange={setEditFichaBorrador}
@@ -1819,14 +1949,10 @@ export function GestionProductosScreen({
                        "Único" de etiqueta fija, si no está configurada). */
                     tamanoFijo={tamanoFijoDe(cfgEditar)}
                   />
-                </div>
-                 </div>
                 )}
-
-                {/* La ficha se guarda con el botón "Guardar" del encabezado. */}
-              </div>
-            );
-          })()}
+              </Tarjeta>
+            </div>
+          )}
         </div>
 
         {/* ── Confirmar cambio de categoría (reajusta los tamaños de la
