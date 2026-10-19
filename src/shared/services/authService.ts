@@ -66,6 +66,18 @@ export async function actualizarPerfil(datos: {
   return data;
 }
 
+/** Elimina la cuenta en el backend (DELETE /usuarios/:id). El backend decide:
+ *  sin registros asociados la borra de verdad; con ventas o contrataciones
+ *  la desactiva en su lugar. `id` es el número de documento (el id real de
+ *  la cuenta en tb_usuarios). */
+export async function eliminarUsuario(
+  id: string,
+): Promise<{ accion: "eliminado" | "desactivado"; mensaje: string }> {
+  const { data } = await api.delete<{
+    accion: "eliminado" | "desactivado";
+    mensaje: string;
+  }>(`/usuarios/${encodeURIComponent(id)}`);
+  return data;
 }
 
 /** Pide un código de recuperación. El backend responde 200 exista o no el

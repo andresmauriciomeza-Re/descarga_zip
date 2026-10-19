@@ -9260,6 +9260,7 @@ export default function App() {
                   empleados={empleados}
                   setEmpleados={setEmpleados}
                   clientes={clientes}
+                  setClientes={setClientes}
                   canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
                   canCreate={getPerms("users").canCreate}
                   canEdit={getPerms("users").canEdit}

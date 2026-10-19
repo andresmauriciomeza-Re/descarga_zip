@@ -18,6 +18,8 @@ import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
+import { eliminarUsuario } from "@/shared/services/authService";
+import { type ApiErrorConEstado } from "@/types/api";
 
 const SERIF = "var(--font-titulo)";
 
@@ -169,6 +171,7 @@ export function GestionUsuariosScreen({
   empleados,
   setEmpleados,
   clientes,
+  setClientes,
   canVer = true,
   canCreate = true,
   canEdit = true,
@@ -181,6 +184,7 @@ export function GestionUsuariosScreen({
   empleados: Empleado[];
   setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
   clientes: Cliente[];
+  setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   canVer?: boolean;
   canCreate?: boolean;
   canEdit?: boolean;
@@ -376,8 +380,12 @@ export function GestionUsuariosScreen({
     if (!editItem.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!editItem.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
     else { const v = validarDocumento(editItem.numeroDocumento, editItem.tipoDocumento); if (v) errs.numeroDocumento = v; }
-    if (editItem.telefono.trim() && !/^[\d\s+()\-]+$/.test(editItem.telefono.trim()))
-      errs.telefono = "El teléfono solo debe contener números";
+    // Teléfono opcional en edición: vacío vale, con valor aplica la regla
+    // única del sistema (solo números, 7 a 15 dígitos).
+    if (editItem.telefono.trim()) {
+      const et = validarTelefono(editItem.telefono);
+      if (et) errs.telefono = et;
+    }
     // CARGO = ROL. Los cargos solo se editan si la persona tiene ficha de
     // Empleado (ahí vive `rolIds`); sin ficha el campo queda de solo lectura y
     // se conserva el rol que ya traía.
@@ -441,7 +449,7 @@ export function GestionUsuariosScreen({
     toast.success("Usuario actualizado correctamente");
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const objetivo = usuarios.find(u => u.id === id);
     // P7: la cuenta de super administrador nunca se puede eliminar, ni desde
     // la fila de la tabla ni desde ningún otro flujo.
@@ -453,13 +461,68 @@ export function GestionUsuariosScreen({
       toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
       return;
     }
-    setUsuarios(p => p.filter(u => u.id !== id));
-    if (objetivo) {
-      const key = objetivo.correo.trim().toLowerCase();
-      setEmpleados(p => p.filter(e => e.correo.trim().toLowerCase() !== key));
+
+    // El id real de la cuenta en la base de datos es el número de documento
+    // (así lo crea el registro); sin documento la cuenta solo vive en el panel.
+    const idRemoto = objetivo?.numeroDocumento.trim() || "";
+
+    // Retiro local de las fichas de la persona (empleado y cliente), por
+    // DOCUMENTO; el correo queda solo como respaldo si no hay documento.
+    const quitarFichas = () => {
+      if (!objetivo) return;
+      const k = claveDoc(objetivo.tipoDocumento, objetivo.numeroDocumento);
+      const correo = objetivo.correo.trim().toLowerCase();
+      if (docValida(k)) {
+        setEmpleados(p => p.filter(e => claveDoc(e.tipoDocumento, e.numeroDocumento) !== k));
+        setClientes(p => p.filter(c => claveDoc(c.tipoDocumento, c.numeroDocumento) !== k));
+      } else if (correo) {
+        setEmpleados(p => p.filter(e => e.correo.trim().toLowerCase() !== correo));
+        setClientes(p => p.filter(c => c.correo.trim().toLowerCase() !== correo));
+      }
+    };
+
+    try {
+      if (idRemoto) {
+        const res = await eliminarUsuario(idRemoto);
+        if (res.accion === "desactivado") {
+          // Tiene ventas o contrataciones: el backend la desactiva en lugar
+          // de borrarla, y el panel refleja lo mismo (cuenta y fichas en false).
+          updateUsuario(id, { activo: false });
+          if (objetivo) updateEmpleadoLinked(objetivo, { activo: false });
+          if (objetivo) {
+            const k = claveDoc(objetivo.tipoDocumento, objetivo.numeroDocumento);
+            if (docValida(k)) {
+              setClientes(p => p.map(c =>
+                claveDoc(c.tipoDocumento, c.numeroDocumento) === k ? { ...c, activo: false } : c
+              ));
+            }
+          }
+          setDeleteId(null);
+          toast.success(res.mensaje);
+          return;
+        }
+      }
+      // Borrado real confirmado por el backend (o cuenta que solo existía
+      // en el panel): desaparece de la lista y de sus fichas locales.
+      setUsuarios(p => p.filter(u => u.id !== id));
+      quitarFichas();
+      setDeleteId(null);
+      toast.success("Usuario eliminado correctamente");
+    } catch (error) {
+      const status = (error as ApiErrorConEstado).status;
+      setDeleteId(null);
+      if (status === 404 && idRemoto) {
+        // La cuenta no existía en la base de datos (solo vivía en el panel):
+        // no hay nada remoto que limpiar, se retira del estado local.
+        setUsuarios(p => p.filter(u => u.id !== id));
+        quitarFichas();
+        toast.success("Usuario eliminado correctamente");
+        return;
+      }
+      // 403 (sin permiso / super administrador / propia cuenta) y 409 (último
+      // usuario con todos los permisos): el servidor explica el motivo.
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el usuario.");
     }
-    setDeleteId(null);
-    toast.success("Usuario eliminado correctamente");
   };
 
   const resetCreate = () => {
@@ -490,12 +553,12 @@ export function GestionUsuariosScreen({
       if (dupCorreo) errs.correo = "Este correo ya está registrado";
     }
 
-    // Solo dígitos, 7 a 15. El mismo criterio que valida "Mi Perfil". Los
-    // espacios, guiones y puntos se van quitando mientras se escribe.
+    // Teléfono obligatorio con la regla única (solo números, 7 a 15 dígitos).
     if (!newTelefono.trim()) {
       errs.telefono = "El teléfono es obligatorio";
-    } else if (!/^\d{7,15}$/.test(newTelefono)) {
-      errs.telefono = "El teléfono debe tener entre 7 y 15 dígitos";
+    } else {
+      const et = validarTelefono(newTelefono);
+      if (et) errs.telefono = et;
     }
 
     // Un usuario no puede quedar sin rol: sin él no tendría permisos y la
