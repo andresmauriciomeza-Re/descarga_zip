@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Plus,
+  Check,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -151,18 +152,86 @@ const claveNombre = (valor: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+/** Nombre legible de cada clave del catálogo, SOLO para mostrar en la
+    galería agrupada del modal Crear. No toca los datos ni el orden. */
+const NOMBRES_IMAGEN: Record<string, string> = {
+  "img:pizza": "Pizza",
+  "img:pizza-carnes": "Carnes",
+  "img:pizza-canon": "Cañón",
+  "img:pizza-hawaii": "Hawaii",
+  "img:pizza-jamon": "Jamón",
+  "img:pizza-maicitos": "Maicitos",
+  "img:pizza-peperoni": "Peperoni",
+  "img:pizza-pollo": "Pollo",
+  "img:pizza-tocineta": "Tocineta",
+  "img:lasana-carne": "Carne",
+  "img:lasana-mixta": "Mixta",
+  "img:lasana-pollo": "Pollo",
+  "img:coca-cola": "Coca-Cola",
+  "img:pepsi": "Pepsi",
+  "img:premio": "Premio",
+  "img:quatro": "Quatro",
+};
+
+const nombreImagen = (clave: string): string =>
+  NOMBRES_IMAGEN[clave] ?? clave.replace(/^img:/, "");
+
+const BEBIDAS_IMAGEN = [
+  "img:coca-cola",
+  "img:pepsi",
+  "img:premio",
+  "img:quatro",
+];
+
+/** Grupos de la galería del Crear: los filtros sobre Object.keys conservan
+    el orden del catálogo; "OTRAS" solo se pinta si tiene elementos. */
+const GRUPOS_IMAGEN: { titulo: string; claves: string[] }[] = [
+  {
+    titulo: "PIZZAS",
+    claves: Object.keys(IMAGENES_CATEGORIA).filter((k) =>
+      k.startsWith("img:pizza"),
+    ),
+  },
+  {
+    titulo: "LASAÑAS",
+    claves: Object.keys(IMAGENES_CATEGORIA).filter((k) =>
+      k.startsWith("img:lasana"),
+    ),
+  },
+  {
+    titulo: "BEBIDAS",
+    claves: BEBIDAS_IMAGEN.filter((k) => k in IMAGENES_CATEGORIA),
+  },
+  {
+    titulo: "OTRAS",
+    claves: Object.keys(IMAGENES_CATEGORIA).filter(
+      (k) =>
+        !k.startsWith("img:pizza") &&
+        !k.startsWith("img:lasana") &&
+        !BEBIDAS_IMAGEN.includes(k),
+    ),
+  },
+];
+
 function SmModal({
   title,
   onClose,
   onConfirm,
   confirmLabel,
   children,
+  ancho = "max-w-sm",
+  scroll = false,
 }: {
   title: string;
   onClose: () => void;
   onConfirm: () => void;
   confirmLabel: string;
   children: React.ReactNode;
+  /** Ancho del modal; max-w-sm por defecto para que Editar quede igual. */
+  ancho?: string;
+  /** Con true el cuerpo scrollea por dentro (max-h-[90vh]) y header/pie
+      quedan fijos. Solo lo usa el modal Crear. */
+  scroll?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -171,9 +240,11 @@ function SmModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.16 }}
-        className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border"
+        className={`bg-card rounded-2xl w-full ${ancho} shadow-2xl border border-border ${
+          scroll ? "max-h-[90vh] flex flex-col" : ""
+        }`}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <h3
             className="text-lg font-bold text-foreground"
             style={{ fontFamily: SERIF }}
@@ -187,8 +258,14 @@ function SmModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
-        <div className="flex gap-3 px-5 py-4 border-t border-border">
+        <div
+          className={`px-5 py-4 ${
+            scroll ? "flex-1 min-h-0 overflow-y-auto" : ""
+          }`}
+        >
+          {children}
+        </div>
+        <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
@@ -203,6 +280,51 @@ function SmModal({
           </button>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+/** Miniatura de la galería del modal Crear: 64×64 con su nombre debajo. El
+    check de la seleccionada sobresale de la esquina (el contenedor no recorta). */
+function MiniaturaImagen({
+  clave,
+  seleccionada,
+  onSelect,
+}: {
+  clave: string;
+  seleccionada: boolean;
+  onSelect: (clave: string) => void;
+}) {
+  const url = IMAGENES_CATEGORIA[clave];
+  return (
+    <div className="relative w-16">
+      <button
+        type="button"
+        title={clave}
+        aria-label={clave}
+        aria-pressed={seleccionada}
+        onClick={() => onSelect(clave)}
+        className={`block w-16 h-16 rounded-xl border-2 overflow-hidden transition-colors cursor-pointer ${
+          seleccionada
+            ? "border-primary bg-primary/10"
+            : "border-border bg-muted hover:bg-border"
+        }`}
+      >
+        <img
+          src={url}
+          alt={clave}
+          loading="lazy"
+          className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
+        />
+      </button>
+      {seleccionada && (
+        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center pointer-events-none">
+          <Check className="w-3 h-3 text-white" />
+        </span>
+      )}
+      <span className="block mt-1 text-[11px] leading-tight text-muted-foreground text-center truncate">
+        {nombreImagen(clave)}
+      </span>
     </div>
   );
 }
@@ -240,6 +362,30 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
   const campoCls = (err?: string) =>
     "w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
     (err ? "border-red-400 bg-red-50/30" : "bg-muted border-border");
+
+  const [grupoPizzas, grupoLasanas, grupoBebidas, grupoOtras] = GRUPOS_IMAGEN;
+
+  const tituloGrupo = (titulo: string, total: number) => (
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+      {titulo} · {total}
+    </p>
+  );
+
+  const filaMiniaturas = (claves: string[]) => (
+    <div className="flex flex-wrap gap-2">
+      {claves.map((clave) => (
+        <MiniaturaImagen
+          key={clave}
+          clave={clave}
+          seleccionada={formIcono === clave}
+          onSelect={(k) => {
+            setFormIcono(k);
+            setCreateErrors((p) => ({ ...p, icono: "" }));
+          }}
+        />
+      ))}
+    </div>
+  );
 
   /** Valida nombre e imagen contra el resto de categorías. `ignorarId` deja
       fuera al propio registro para que al editar no se detecte a sí mismo. */
@@ -528,92 +674,195 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
             onClose={() => setShowCreate(false)}
             onConfirm={handleCreate}
             confirmLabel="Crear"
+            ancho="max-w-3xl"
+            scroll
           >
             <div className="space-y-4">
-              {/* Sin campo ID (P17a): el id lo asigna el sistema solo y ya se
-                  ve en el listado y en Ver detalle; en el formulario solo
-                  estorbaba. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Nombre Categoría *
-                  </label>
-                  <input
-                    type="text"
-                    value={formNombre}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFormNombre(v);
-                      setCreateErrors((p) => ({
-                        ...p,
-                        nombre: validarCategoria(v, formIcono).nombre,
-                      }));
-                    }}
-                    placeholder="Ej. Parrilladas"
-                    maxLength={MAX_NOMBRE}
-                    className={campoCls(createErrors.nombre)}
-                  />
-                  <MensajeError err={createErrors.nombre} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Estado
-                  </label>
-                  {/* Nueva categoría: siempre empieza como Activo. */}
-                  <EstadoSelect
-                    value={formEstado}
-                    onChange={(v) => setFormEstado(v)}
-                    options={OPCIONES_ESTADO_CATEGORIA}
-                  />
-                </div>
-              </div>
-              {/* Descripción (P17a): OPCIONAL y sin validación — la única
-                  regla del formulario sigue siendo el nombre. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Descripción <span className="font-normal">(opcional)</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={formDescripcion}
-                  onChange={(e) => setFormDescripcion(e.target.value)}
-                  placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
-                  className={inputCls + " resize-y"}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Imagen *
-                </label>
-                {/* Galería de imágenes (§5): miniaturas de 56×56 con la misma
-                    selección por borde que antes usaba los emojis. */}
-                <div className="grid grid-cols-6 gap-2 mb-2">
-                  {Object.entries(IMAGENES_CATEGORIA).map(([clave, url]) => (
-                    <button
-                      key={clave}
-                      type="button"
-                      title={clave}
-                      aria-label={clave}
-                      aria-pressed={formIcono === clave}
-                      onClick={() => {
-                        setFormIcono(clave);
-                        setCreateErrors((p) => ({ ...p, icono: "" }));
+              {/* Zona superior en 2 columnas (apiladas en móvil): a la
+                  izquierda los campos, a la derecha la vista previa de cómo
+                  quedará la categoría en el listado y en el inicio. */}
+              <div className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr] gap-4">
+                <div className="space-y-3">
+                  {/* Sin campo ID (P17a): el id lo asigna el sistema solo y ya se
+                      ve en el listado y en Ver detalle; en el formulario solo
+                      estorbaba. */}
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground">
+                        Nombre Categoría *
+                      </label>
+                      <span className="text-[11px] text-muted-foreground">
+                        {formNombre.length}/{MAX_NOMBRE}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={formNombre}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormNombre(v);
+                        setCreateErrors((p) => ({
+                          ...p,
+                          nombre: validarCategoria(v, formIcono).nombre,
+                        }));
                       }}
-                      className={`shrink-0 w-14 h-14 rounded-xl border overflow-hidden transition-colors cursor-pointer ${
-                        formIcono === clave
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-muted hover:bg-border"
-                      }`}
-                    >
-                      <img
-                        src={url}
-                        alt={clave}
-                        loading="lazy"
-                        className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
-                      />
-                    </button>
-                  ))}
+                      placeholder="Ej. Parrilladas"
+                      maxLength={MAX_NOMBRE}
+                      className={campoCls(createErrors.nombre)}
+                    />
+                    <MensajeError err={createErrors.nombre} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Estado
+                    </label>
+                    {/* Nueva categoría: siempre empieza como Activo. */}
+                    <EstadoSelect
+                      value={formEstado}
+                      onChange={(v) => setFormEstado(v)}
+                      options={OPCIONES_ESTADO_CATEGORIA}
+                    />
+                  </div>
+                  {/* Descripción (P17a): OPCIONAL y sin validación — la única
+                      regla del formulario sigue siendo el nombre. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                      Descripción <span className="font-normal">(opcional)</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formDescripcion}
+                      onChange={(e) => setFormDescripcion(e.target.value)}
+                      placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
+                      className={inputCls + " resize-y"}
+                    />
+                  </div>
                 </div>
+                <div className="bg-muted/50 border border-border rounded-xl p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Vista previa
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full bg-card overflow-hidden shrink-0 flex items-center justify-center">
+                      {formIcono && IMAGENES_CATEGORIA[formIcono] ? (
+                        <img
+                          src={IMAGENES_CATEGORIA[formIcono]}
+                          alt={formIcono}
+                          className={`w-full h-full ${
+                            esImagenContenida(formIcono)
+                              ? "object-contain p-0.5"
+                              : "object-cover"
+                          }`}
+                        />
+                      ) : (
+                        <span className="w-full h-full rounded-full border-2 border-dashed border-border" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p
+                          className={`text-sm font-bold truncate ${
+                            formNombre.trim()
+                              ? "text-foreground"
+                              : "text-muted-foreground font-normal"
+                          }`}
+                        >
+                          {formNombre.trim() || "Nombre de la categoría"}
+                        </p>
+                        <span
+                          className={`text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${
+                            OPCIONES_ESTADO_CATEGORIA.find(
+                              (o) => o.value === formEstado,
+                            )?.color ?? ""
+                          }`}
+                        >
+                          {formEstado}
+                        </span>
+                      </div>
+                      {formDescripcion.trim() && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
+                          {formDescripcion}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div
+                    className={`mt-3 w-full h-[130px] rounded-xl flex items-center justify-center ${
+                      formIcono && IMAGENES_CATEGORIA[formIcono]
+                        ? "bg-card border border-border p-2"
+                        : "border-2 border-dashed border-border"
+                    }`}
+                  >
+                    {formIcono && IMAGENES_CATEGORIA[formIcono] ? (
+                      <img
+                        src={IMAGENES_CATEGORIA[formIcono]}
+                        alt={formIcono}
+                        className={`w-[110px] h-[110px] ${
+                          esImagenContenida(formIcono)
+                            ? "object-contain"
+                            : "object-cover"
+                        }`}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Elige una imagen
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Así se verá en el listado y en la página de inicio
+                  </p>
+                </div>
+              </div>
+              {/* Zona inferior: la galería agrupada por tipo (§5), con las
+                  mismas claves, orden y lógica de imagen que antes. */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-muted-foreground">
+                    Imagen *
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    Elige una de las {Object.keys(IMAGENES_CATEGORIA).length}
+                  </span>
+                </div>
+                {grupoPizzas.claves.length > 0 && (
+                  <div>
+                    {tituloGrupo(
+                      grupoPizzas.titulo,
+                      grupoPizzas.claves.length,
+                    )}
+                    {filaMiniaturas(grupoPizzas.claves)}
+                  </div>
+                )}
+                {(grupoLasanas.claves.length > 0 ||
+                  grupoBebidas.claves.length > 0) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {grupoLasanas.claves.length > 0 && (
+                      <div>
+                        {tituloGrupo(
+                          grupoLasanas.titulo,
+                          grupoLasanas.claves.length,
+                        )}
+                        {filaMiniaturas(grupoLasanas.claves)}
+                      </div>
+                    )}
+                    {grupoBebidas.claves.length > 0 && (
+                      <div>
+                        {tituloGrupo(
+                          grupoBebidas.titulo,
+                          grupoBebidas.claves.length,
+                        )}
+                        {filaMiniaturas(grupoBebidas.claves)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {grupoOtras.claves.length > 0 && (
+                  <div>
+                    {tituloGrupo(grupoOtras.titulo, grupoOtras.claves.length)}
+                    {filaMiniaturas(grupoOtras.claves)}
+                  </div>
+                )}
                 <MensajeError err={createErrors.icono} />
               </div>
             </div>
