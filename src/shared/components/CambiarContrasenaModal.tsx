@@ -1,52 +1,53 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Check, X } from "lucide-react";
+import { Lock, ShieldQuestion, X } from "lucide-react";
+import { toast } from "sonner";
 import {
-  MensajeError,
-  PasswordField,
-  RequisitosContrasena,
-  faltantesContrasena,
-  validarContrasena,
-} from "@/shared/components/campo";
+  restablecerContrasena,
+  solicitarCodigoRecuperacion,
+  verificarCodigoRecuperacion,
+} from "@/shared/services/authService";
+import type { ApiErrorConEstado } from "@/types/api";
+import {
+  AUTH_GLASS_BUTTON_SECONDARY,
+  AUTH_GLASS_CARD,
+  AUTH_GLASS_OVERLAY,
+} from "@/shared/styles/authGlass";
+import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
+import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 
 const SERIF = "var(--font-titulo)";
 
-/** Error que devuelve `onGuardar` para que el modal lo muestre debajo del
- *  campo correspondiente (o genérico, si no pertenece a ninguno). */
-export type ErrorGuardarContrasena = {
-  campo: "actual" | "nueva" | "general";
-  mensaje: string;
-};
-
 /**
- * Modal compartido de "Cambiar contraseña" (panel y perfil del cliente).
- * Tres campos con ojo: contraseña actual, nueva y confirmar. NO depende de
- * la contraseña guardada en el estado: "la nueva debe ser distinta a la
- * actual" se compara con lo que el usuario ESCRIBE en los dos campos, y la
- * corrección de la actual la hace el backend (PUT /auth/cambiar-contrasena),
- * que responde 400 con "La contraseña actual es incorrecta.".
+ * Modal de "Cambiar contraseña" desde el perfil (cliente, empleados y
+ * administrador). Tres pasos con el MISMO vidrio esmerilado y los MISMOS
+ * componentes que el "¿Olvidaste tu contraseña?" del login:
+ *
+ *   1. Confirmación → aviso con el correo enmascarado y botón "Sí, enviar código".
+ *   2. Código       → las 6 casillas (el correo es el de la sesión, no editable).
+ *   3. Contraseña   → solo la nueva (sin la actual); el backend aplica el cambio
+ *                     con POST /auth/recuperar/restablecer.
+ *
+ * Éxito: quien llama recibe `onCambioExitoso` y hace toast + cierre de
+ * sesión con el correo ya precargado en Iniciar sesión (como hasta ahora).
  */
 export function CambiarContrasenaModal({
   correo,
   onClose,
-  onGuardar,
+  onCambioExitoso,
 }: {
   correo: string;
   onClose: () => void;
-  /** Guarda contra el backend. Devuelve null si todo salió bien; si hay
-   *  error, indica el campo para pintarlo ahí mismo. */
-  onGuardar: (
-    actual: string,
-    nueva: string,
-  ) => Promise<ErrorGuardarContrasena | null>;
+  /** El cambio se aplicó: cierra y continúa (toast + logout + precarga). */
+  onCambioExitoso: () => void;
 }) {
-  const [actual, setActual] = useState("");
-  const [nueva, setNueva] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorActual, setErrorActual] = useState<string | undefined>();
-  const [errorNueva, setErrorNueva] = useState<string | undefined>();
-  const [errorGeneral, setErrorGeneral] = useState<string | undefined>();
+  const [paso, setPaso] = useState<"confirmar" | "codigo" | "password">(
+    "confirmar",
+  );
+  // El código vive en el modal porque lo necesita el restablecer del paso 3.
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [errorCodigo, setErrorCodigo] = useState<string | undefined>();
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
@@ -59,72 +60,88 @@ export function CambiarContrasenaModal({
   const [local, domain] = correo.split("@");
   const correoEnmascarado = `${local[0] ?? ""}•••${domain ? `@${domain}` : ""}`;
 
-  // ── Validación en tiempo real (mismo patrón que el modal del panel) ──
-  const passwordError = nueva.length > 0 ? validarContrasena(nueva) : null;
-  const mismoQueActual = nueva.length > 0 && nueva === actual;
-  const confirmVacio = confirm.length === 0;
-  const confirmCoincide = !confirmVacio && confirm === nueva;
-  const confirmError = !confirmVacio && !confirmCoincide;
-  const todoValido =
-    actual.length > 0 &&
-    validarContrasena(nueva) === null &&
-    !mismoQueActual &&
-    confirmCoincide;
-
-  const faltan: string[] = [];
-  if (actual.length === 0) faltan.push("escribir la contraseña actual");
-  if (nueva.length === 0) faltan.push("escribir la contraseña nueva");
-  else faltan.push(...faltantesContrasena(nueva));
-  if (mismoQueActual) faltan.push("usar una contraseña distinta a la actual");
-  if (confirmVacio) faltan.push("confirmar la contraseña");
-  else if (confirmError) faltan.push("que las contraseñas coincidan");
-
-  const clsCampo = (estado: "ok" | "err" | "neutro") =>
-    `w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-      estado === "err"
-        ? "border-red-400 bg-red-50/30"
-        : estado === "ok"
-          ? "border-emerald-500"
-          : "border-border"
-    }`;
-  const estadoActual: "ok" | "err" | "neutro" =
-    errorActual ? "err" : actual.length === 0 ? "neutro" : "ok";
-  const estadoNueva: "ok" | "err" | "neutro" =
-    nueva.length === 0
-      ? "neutro"
-      : passwordError || mismoQueActual || errorNueva
-        ? "err"
-        : "ok";
-  const estadoConfirm: "ok" | "err" | "neutro" =
-    confirmVacio ? "neutro" : confirmError ? "err" : "ok";
-
-  const guardar = async () => {
-    if (loading || !todoValido) return;
-    setLoading(true);
-    setErrorActual(undefined);
-    setErrorNueva(undefined);
-    setErrorGeneral(undefined);
+  const enviarCodigo = async () => {
+    if (enviando) return;
+    setEnviando(true);
     try {
-      const error = await onGuardar(actual, nueva);
-      if (error) {
-        if (error.campo === "actual") setErrorActual(error.mensaje);
-        else if (error.campo === "nueva") setErrorNueva(error.mensaje);
-        else setErrorGeneral(error.mensaje);
-        return;
-      }
-      // Éxito: quien llama cierra el modal y continúa (toast + logout).
+      await solicitarCodigoRecuperacion(correo.trim().toLowerCase());
+      setErrorCodigo(undefined);
+      setPaso("codigo");
+      toast.success("Si el correo está registrado, te enviamos un código.");
+    } catch (e) {
+      // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
+      // extrajo el texto; no se avanza de paso.
+      toast.error((e as Error).message);
     } finally {
-      setLoading(false);
+      setEnviando(false);
     }
   };
 
-  const enviarConEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") void guardar();
+  // Los pasos 2 y 3 son los MISMOS componentes del "¿Olvidaste tu
+  // contraseña?"; aquí solo se pegan las llamadas a la API con el correo
+  // de la sesión (no se pide ni se puede editar).
+  const reenviarCodigo = async () => {
+    await solicitarCodigoRecuperacion(correo.trim().toLowerCase());
+  };
+
+  const verificarCodigo = async (codigoCompleto: string) => {
+    try {
+      const res = await verificarCodigoRecuperacion(
+        correo.trim().toLowerCase(),
+        codigoCompleto,
+      );
+      if (res.valido !== true) {
+        // Defensa: el contrato manda 400, pero un 200 con valido=false se
+        // trata igual que código inválido y no se avanza.
+        throw new Error("El código es incorrecto o venció.");
+      }
+      setErrorCodigo(undefined);
+      setPaso("password");
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        throw err; // el paso del código lo pinta bajo las casillas
+      }
+      // 429 y fallo de conexión: se avisa y se vuelve al aviso, porque el
+      // código no se pudo validar.
+      toast.error(err.message);
+      if (err.status === 429) setPaso("confirmar");
+    }
+  };
+
+  const guardarPassword = async (nueva: string) => {
+    try {
+      await restablecerContrasena(
+        correo.trim().toLowerCase(),
+        code.join(""),
+        nueva,
+      );
+      onCambioExitoso();
+    } catch (e) {
+      const err = e as ApiErrorConEstado;
+      if (err.message === "El código es incorrecto o venció.") {
+        // Caducó o quedó invalidado entre pasos: se pide de nuevo.
+        setErrorCodigo(err.message);
+        setPaso("codigo");
+        return;
+      }
+      if (err.status === 429) {
+        // Demasiadas solicitudes: se reinicia el flujo desde el aviso.
+        toast.error(err.message);
+        setCode(["", "", "", "", "", ""]);
+        setPaso("confirmar");
+        return;
+      }
+      // Fallo de conexión u otro error del servidor (p. ej. la contraseña
+      // no cumple los requisitos): se reintenta desde este mismo paso sin
+      // perder el código; el paso lo pinta bajo el campo.
+      throw err;
+    }
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm"
+      className={AUTH_GLASS_OVERLAY}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -133,108 +150,85 @@ export function CambiarContrasenaModal({
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.18 }}
-        className="relative my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-sm p-7`}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar cambio de contraseña"
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+          className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="text-center mb-6">
-          <h2
-            className="text-xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            Cambiar contraseña
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Confirma tu contraseña actual y elige una nueva para {correoEnmascarado}
-          </p>
-        </div>
-
-        <div className="space-y-3 mb-5">
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-1.5">
-              Contraseña actual
-            </label>
-            <PasswordField
-              value={actual}
-              onChange={(v) => {
-                setActual(v);
-                if (errorActual) setErrorActual(undefined);
-              }}
-              onKeyDown={enviarConEnter}
-              placeholder="Tu contraseña actual"
-              autoComplete="current-password"
-              cls={clsCampo(estadoActual)}
-              ariaInvalid={!!errorActual}
-            />
-            <MensajeError err={errorActual} />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-1.5">
-              Nueva contraseña
-            </label>
-            <PasswordField
-              value={nueva}
-              onChange={(v) => {
-                setNueva(v);
-                if (errorNueva) setErrorNueva(undefined);
-              }}
-              onKeyDown={enviarConEnter}
-              placeholder="Mínimo 8 caracteres"
-              autoComplete="new-password"
-              cls={clsCampo(estadoNueva)}
-              ariaInvalid={!!passwordError || mismoQueActual || !!errorNueva}
-            />
-            <RequisitosContrasena valor={nueva} />
-            <MensajeError err={passwordError ?? undefined} />
-            {mismoQueActual && (
-              <MensajeError err="La nueva contraseña debe ser diferente a la actual" />
-            )}
-            <MensajeError err={errorNueva} />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-1.5">
-              Confirmar nueva contraseña
-            </label>
-            <PasswordField
-              value={confirm}
-              onChange={setConfirm}
-              onKeyDown={enviarConEnter}
-              placeholder="Repite tu contraseña"
-              autoComplete="new-password"
-              cls={clsCampo(estadoConfirm)}
-              ariaInvalid={!!confirmError}
-            />
-            {confirmError && <MensajeError err="Las contraseñas no coinciden" />}
-            {confirmCoincide && (
-              <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                Las contraseñas coinciden
+        {/* ── Paso 1: Confirmación ── */}
+        {paso === "confirmar" && (
+          <>
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <ShieldQuestion className="w-7 h-7 text-primary" />
+              </div>
+              <h2
+                className="text-xl font-bold text-foreground dark:text-white"
+                style={{ fontFamily: SERIF }}
+              >
+                ¿Estás seguro de cambiar la contraseña?
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Te enviaremos un código de verificación a{" "}
+                <strong className="text-foreground">{correoEnmascarado}</strong>.
               </p>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={() => void guardar()}
-          disabled={loading || !todoValido}
-          className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
-        >
-          {loading ? "Guardando..." : "Guardar contraseña"}
-        </button>
-        {errorGeneral && (
-          <p className="text-xs text-red-500 mt-2 leading-tight">{errorGeneral}</p>
+            </div>
+            <button
+              onClick={() => void enviarCodigo()}
+              disabled={enviando}
+              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 mb-3"
+            >
+              {enviando ? "Enviando..." : "Sí, enviar código"}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              Cancelar
+            </button>
+          </>
         )}
-        {!todoValido && (
-          <p className="text-xs text-muted-foreground mt-2 leading-tight">
-            Para guardar falta: {faltan.join(", ")}.
-          </p>
+
+        {/* ── Paso 2: Código (compartido con la recuperación) ── */}
+        {paso === "codigo" && (
+          <PasoCodigoVerificacion
+            codigo={code}
+            onCodigoChange={setCode}
+            correoDestino={correo}
+            onVerificar={verificarCodigo}
+            onReenviar={reenviarCodigo}
+            errorInicial={errorCodigo}
+          />
+        )}
+
+        {/* ── Paso 3: Nueva contraseña (compartida con la recuperación) ── */}
+        {paso === "password" && (
+          <>
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-7 h-7 text-primary" />
+              </div>
+              <h2
+                className="text-xl font-bold text-foreground dark:text-white"
+                style={{ fontFamily: SERIF }}
+              >
+                Nueva contraseña
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Elige una contraseña segura para tu cuenta.
+              </p>
+            </div>
+            <PasoNuevaContrasena
+              onGuardar={guardarPassword}
+              labelConfirmar="Confirmar nueva contraseña"
+            />
+          </>
         )}
       </motion.div>
     </div>

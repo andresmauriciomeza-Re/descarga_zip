@@ -66,16 +66,6 @@ export async function actualizarPerfil(datos: {
   return data;
 }
 
-/** Cambia la contraseña del usuario autenticado (PUT /auth/cambiar-contrasena).
- *  El backend responde 400 si la actual es incorrecta o la nueva no cumple. */
-export async function cambiarContrasena(
-  contrasenaActual: string,
-  contrasenaNueva: string,
-): Promise<void> {
-  await api.put("/auth/cambiar-contrasena", {
-    contrasenaActual,
-    contrasenaNueva,
-  });
 }
 
 /** Pide un código de recuperación. El backend responde 200 exista o no el
