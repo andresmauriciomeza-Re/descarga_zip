@@ -7960,12 +7960,9 @@ export default function App() {
     );
   };
 
-  /** §1 — Al registrar una venta desde el panel, el cliente se crea (o se le
-      suma un pedido) ANTES de guardar la venta. Reglas:
-      - Ya existe como cliente → +1 pedido, sin tocar el nombre.
-      - Existe solo como usuario o empleado → no se crea nada nuevo.
-      - No existe en ningún lado → Cliente nuevo (correo vacío, que después
-        se completa en el registro público). */
+  /** Invocada solo después de que el endpoint de búsqueda confirme 404.
+      Reutiliza una ficha local creada previamente en esta sesión; en otro caso
+      agrega la ficha local mínima antes de guardar el pedido. */
   const registrarClienteVenta = (
     datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
   ): "creado" | "existente" => {
@@ -7981,8 +7978,6 @@ export default function App() {
       );
       return "existente";
     }
-    if (usuariosUnificados.some(mismaClave)) return "existente";
-
     const nombre = datos.nombre.trim();
     const iniciales = nombre
       .split(/\s+/)
@@ -9109,9 +9104,6 @@ export default function App() {
                   pedidos={ventas}
                   setPedidos={setVentas}
                   productos={productosMenu}
-                  clientes={clientes}
-                  usuarios={usuariosUnificados}
-                  empleados={empleados}
                   onRegistrarClienteVenta={registrarClienteVenta}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />

@@ -117,6 +117,25 @@ export async function listarClientes(): Promise<ClienteListadoApi[]> {
   return data;
 }
 
+export interface ClientePorDocumentoApi {
+  documento: string | number;
+  tipoDocumento: string;
+  nombre: string;
+  telefono: string | null;
+  estado: boolean;
+}
+
+export async function buscarClientePorDocumento(
+  documento: string,
+  tipoDocumento: string,
+): Promise<ClientePorDocumentoApi> {
+  const { data } = await api.get<ClientePorDocumentoApi>(
+    `/clientes/documento/${encodeURIComponent(documento)}`,
+    { params: { tipoDocumento } },
+  );
+  return data;
+}
+
 /** Pide un código de recuperación. El backend responde 200 exista o no el
  *  correo (para no revelar cuentas); 429 si llegan demasiadas solicitudes.
  *  No guarda token: la recuperación ocurre con el código, no con sesión. */
