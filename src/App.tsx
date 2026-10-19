@@ -93,6 +93,13 @@ import {
 } from "recharts";
 import QRCode from "qrcode";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import {
+  AUTH_GLASS_BUTTON_SECONDARY,
+  AUTH_GLASS_CARD,
+  AUTH_GLASS_OVERLAY,
+  authGlassInputCls,
+  authInputCls,
+} from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPagoTransferencia";
@@ -4461,22 +4468,9 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
 };
 
 /**
- * Clases glass para los inputs de Login y Registro. Espejo de `inputCls`
- * (campo.tsx) pero con fondo translucido sobre la tarjeta de vidrio: en claro
- * `bg-white/70` + borde negro suave, en oscuro `bg-white/10` + borde blanco
- * suave, texto blanco y placeholder al 50%. El estado de error pinta un rojo
- * legible por encima del vidrio. No se tocó `inputCls` porque comparte
- * clases con los formularios del panel administrativo.
+ * Clases glass de Login y Registro: ahora viven en
+ * `@/shared/styles/authGlass` y se reutilizan en los modales de contraseña.
  */
-function authInputCls(err?: string, base: string = ""): string {
-  const fondo = err
-    ? "border-red-400 bg-red-50/50 dark:bg-red-950/50 dark:border-red-400/80"
-    : "border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/10";
-  const texto =
-    "text-foreground dark:text-white placeholder:text-neutral-500 dark:placeholder:text-white/50";
-  const propia = `w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 ${fondo} ${texto}`;
-  return `${propia}${base ? ` ${base}` : ""}`;
-}
 
 function LoginScreen({
   navigate,
@@ -4648,12 +4642,12 @@ function LoginScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8`}
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
+          className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -5006,7 +5000,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
 
   return (
       <div
-        className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm"
+        className={AUTH_GLASS_OVERLAY}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
@@ -5016,13 +5010,13 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="relative my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-sm p-7`}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar recuperación de contraseña"
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+          className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
         </button>
@@ -5034,7 +5028,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 <Mail className="w-7 h-7 text-primary" />
               </div>
               <h2
-                className="text-xl font-bold text-foreground"
+                className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
                 ¿Olvidaste tu contraseña?
@@ -5045,7 +5039,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             <div className="mb-5">
-              <label className="block text-sm font-semibold text-foreground mb-1.5">
+              <label className="block text-sm font-semibold text-foreground dark:text-white mb-1.5">
                 Correo electrónico
               </label>
               <input
@@ -5064,7 +5058,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                   aplicar: (campo, err) =>
                     setErrores((p) => ({ ...p, [campo]: err ?? "" })),
                 })}
-                className={inputCls(errores.forgotEmail)}
+                className={authGlassInputCls(errores.forgotEmail ? "err" : "neutro")}
                 {...validacion.ariaCampo("forgotEmail", errores.forgotEmail)}
               />
               <MensajeError id={validacion.idError("forgotEmail")} err={errores.forgotEmail} />
@@ -5168,7 +5162,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 <Mail className="w-7 h-7 text-primary" />
               </div>
               <h2
-                className="text-xl font-bold text-foreground"
+                className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
                 Nueva contraseña
@@ -5302,7 +5296,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               <CheckCircle className="w-8 h-8 text-emerald-600" />
             </div>
             <h2
-              className="text-xl font-bold text-foreground mb-2"
+              className="text-xl font-bold text-foreground dark:text-white mb-2"
               style={{ fontFamily: SERIF }}
             >
               ¡Contraseña actualizada!
@@ -5655,12 +5649,12 @@ function RegisterScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4`}
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
+          className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
