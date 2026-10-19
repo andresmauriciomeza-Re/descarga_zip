@@ -92,7 +92,14 @@ import {
   YAxis,
 } from "recharts";
 import QRCode from "qrcode";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, inputCls, MensajeError, PasswordField, RequisitosContrasena, faltantesContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import {
+  AUTH_GLASS_BUTTON_SECONDARY,
+  AUTH_GLASS_CARD,
+  AUTH_GLASS_OVERLAY,
+  authGlassInputCls,
+  authInputCls,
+} from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPagoTransferencia";
@@ -103,7 +110,7 @@ import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { useValidacionFormulario, trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
+import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
@@ -129,8 +136,9 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, INIT_USUARIOS, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
-import { CambiarContrasenaModal, type ErrorGuardarContrasena } from "@/shared/components/CambiarContrasenaModal";
-import { cambiarContrasena } from "@/shared/services/authService";
+import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
+import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
+import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
   GestionCompra,
@@ -3962,9 +3970,7 @@ function ClientProfileScreen({
 
   const handleGuardar = async () => {
     const ec = validarCorreo(correo);
-    const et = !/^\d{7,15}$/.test(telefono.replace(/\s/g, ""))
-      ? "Solo números, entre 7 y 15 dígitos"
-      : null;
+    const et = validarTelefono(telefono);
     if (ec || et) {
       setErrores({
         correo: ec ?? undefined,
@@ -4241,22 +4247,11 @@ function ClientProfileScreen({
         <CambiarContrasenaModal
           correo={loggedInUser.correo}
           onClose={() => setShowCambiarContrasena(false)}
-          onGuardar={async (actual, nueva): Promise<ErrorGuardarContrasena | null> => {
-            try {
-              // Guardado real contra PUT /auth/cambiar-contrasena.
-              await cambiarContrasena(actual, nueva);
-            } catch (e) {
-              const mensaje =
-                e instanceof Error ? e.message : "No se pudo cambiar la contraseña.";
-              if (/contraseña actual/i.test(mensaje)) return { campo: "actual", mensaje };
-              if (/nueva contraseña/i.test(mensaje)) return { campo: "nueva", mensaje };
-              return { campo: "general", mensaje };
-            }
+          onCambioExitoso={() => {
             // Éxito: se cierra el modal y se cierra la sesión (con el correo
             // ya escrito en la pantalla de Iniciar sesión).
             setShowCambiarContrasena(false);
             onPasswordSaved?.(loggedInUser.correo);
-            return null;
           }}
         />
       )}
@@ -4461,22 +4456,9 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
 };
 
 /**
- * Clases glass para los inputs de Login y Registro. Espejo de `inputCls`
- * (campo.tsx) pero con fondo translucido sobre la tarjeta de vidrio: en claro
- * `bg-white/70` + borde negro suave, en oscuro `bg-white/10` + borde blanco
- * suave, texto blanco y placeholder al 50%. El estado de error pinta un rojo
- * legible por encima del vidrio. No se tocó `inputCls` porque comparte
- * clases con los formularios del panel administrativo.
+ * Clases glass de Login y Registro: ahora viven en
+ * `@/shared/styles/authGlass` y se reutilizan en los modales de contraseña.
  */
-function authInputCls(err?: string, base: string = ""): string {
-  const fondo = err
-    ? "border-red-400 bg-red-50/50 dark:bg-red-950/50 dark:border-red-400/80"
-    : "border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/10";
-  const texto =
-    "text-foreground dark:text-white placeholder:text-neutral-500 dark:placeholder:text-white/50";
-  const propia = `w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 ${fondo} ${texto}`;
-  return `${propia}${base ? ` ${base}` : ""}`;
-}
 
 function LoginScreen({
   navigate,
@@ -4648,12 +4630,12 @@ function LoginScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-8`}
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
+          className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -4789,22 +4771,18 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
     "email" | "code" | "password" | "done"
   >("email");
   const [forgotEmail, setForgotEmail] = useState("");
+  // El código vive aquí (no en el paso) porque lo necesita el restablecer.
   const [code, setCode] = useState(["", "", "", "", "", ""]);
-  const [newPass, setNewPass] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
   const [errores, setErrores] = useState<Record<string, string>>({});
-  // Fallo del guardado real (p. ej. la cuenta se borró entre el código y la
-  // contraseña): va aparte de `errores`, que es validación de campos y se
-  // recalcula mientras se escribe.
-  const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
+  // Error que el paso de código pinta al montar (p. ej. el código caducó
+  // mientras se escribía la contraseña nueva).
+  const [errorCodigo, setErrorCodigo] = useState<string | undefined>();
 
-  // Trampa de Tab, foco al primer inválido y aria (lógica compartida).
-  // El paso OTP no usa refs: sus casillas se enfocan por id.
-  const validacion = useValidacionFormulario([
-    "forgotEmail", "code", "newPass", "confirm",
-  ]);
+  // Trampa de Tab, foco al primer inválido y aria del paso de correo. Los
+  // pasos de código y contraseña viven en componentes compartidos que ya
+  // traen esta lógica consigo.
+  const validacion = useValidacionFormulario(["forgotEmail"]);
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
@@ -4813,19 +4791,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
     document.addEventListener("keydown", closeWithEscape);
     return () => document.removeEventListener("keydown", closeWithEscape);
   }, [onClose]);
-
-  const startCooldown = () => {
-    setResendCooldown(30);
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
 
   const sendCode = async () => {
     const err = validarCorreo(forgotEmail);
@@ -4841,9 +4806,9 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     try {
       await solicitarCodigoRecuperacion(correo);
+      setErrorCodigo(undefined);
       setStep("code");
       toast.success("Si el correo está registrado, te enviamos un código.");
-      startCooldown();
     } catch (e) {
       // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
       // extrajo el texto; no se avanza de paso.
@@ -4853,160 +4818,73 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const resendCode = async () => {
-    if (resendCooldown > 0) return;
-    const correo = forgotEmail.trim().toLowerCase();
-    setLoading(true);
-    try {
-      await solicitarCodigoRecuperacion(correo);
-      toast.success("Si el correo está registrado, te enviamos un código.");
-      startCooldown();
-    } catch (e) {
-      // El cooldown solo se reinicia si el backend aceptó la solicitud.
-      toast.error((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  // Los pasos de código y contraseña son los MISMOS componentes que usa el
+  // modal de "Cambiar contraseña"; aquí solo se pegan las llamadas a la API.
+  const reenviarCodigo = async () => {
+    await solicitarCodigoRecuperacion(forgotEmail.trim().toLowerCase());
   };
 
-  const verifyCode = async () => {
-    const fullCode = code.join("");
-    if (fullCode.length < 6) {
-      setErrores({ code: "Ingresa el código completo" });
-      // Foco a la primera casilla vacía: es el primer campo inválido.
-      const primeraVacia = code.findIndex((c) => !c);
-      document.getElementById(`otp-${primeraVacia < 0 ? 5 : primeraVacia}`)?.focus();
-      return;
-    }
-    setErrores({});
-    setLoading(true);
+  const verificarCodigo = async (codigoCompleto: string) => {
     try {
       const res = await verificarCodigoRecuperacion(
         forgotEmail.trim().toLowerCase(),
-        fullCode,
+        codigoCompleto,
       );
       if (res.valido !== true) {
         // Defensa: el contrato manda 400, pero un 200 con valido=false se
         // trata igual que código inválido y no se avanza.
-        setErrores({ code: "El código es incorrecto o venció." });
-        return;
+        throw new Error("El código es incorrecto o venció.");
       }
+      setErrorCodigo(undefined);
       setStep("password");
     } catch (e) {
       const err = e as ApiErrorConEstado;
       if (err.message === "El código es incorrecto o venció.") {
-        setErrores({ code: err.message });
-      } else {
-        // 429 y fallo de conexión: se avisa y se vuelve al correo, porque el
-        // código no se pudo validar.
-        toast.error(err.message);
-        if (err.status === 429) setStep("email");
+        throw err; // el paso del código lo pinta bajo las casillas
       }
-    } finally {
-      setLoading(false);
+      // 429 y fallo de conexión: se avisa y se vuelve al correo, porque el
+      // código no se pudo validar.
+      toast.error(err.message);
+      if (err.status === 429) setStep("email");
     }
   };
 
-  // ── Validación en tiempo real del paso "Nueva contraseña" ───────────
-  // Se deriva del valor mientras se escribe, igual que en el cambio de
-  // contraseña de Mi perfil, y comparte la misma lista de requisitos.
-  const passwordError = newPass.length > 0 ? validarContrasena(newPass) : null;
-  const confirmVacio = confirm.length === 0;
-  const confirmCoincide = !confirmVacio && confirm === newPass;
-  const confirmError = !confirmVacio && !confirmCoincide;
-  const todoValido = validarContrasena(newPass) === null && confirmCoincide;
-  const faltan: string[] = [];
-  if (newPass.length === 0) faltan.push("escribir la contraseña");
-  else faltan.push(...faltantesContrasena(newPass));
-  if (confirmVacio) faltan.push("confirmar la contraseña");
-  else if (confirmError) faltan.push("que las contraseñas coincidan");
-
-  // Sin `inputCls`: ahí el borde lo decide solo la presencia de error, y aquí
-  // hace falta una tercera estado (verde) cuando el campo ya es válido.
-  const clsCampo = (estado: "ok" | "err" | "neutro") =>
-    `w-full px-4 py-2 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-      estado === "err"
-        ? "border-red-400 bg-red-50/30"
-        : estado === "ok"
-          ? "border-emerald-500"
-          : "border-border"
-    }`;
-  const estadoNew: "ok" | "err" | "neutro" =
-    passwordError || errores.newPass ? "err" : newPass.length === 0 ? "neutro" : "ok";
-  const estadoConfirm: "ok" | "err" | "neutro" =
-    confirmError || errores.confirm ? "err" : confirmVacio ? "neutro" : "ok";
-
-  const changePassword = async () => {
-    if (loading || !todoValido) return;
-    setErrores({});
-    setErrorGuardado(null);
-    setLoading(true);
+  const cambiarPassword = async (nueva: string) => {
+    // Guardado real contra el backend: el código ya se verificó en el paso
+    // anterior, pero el servidor lo vuelve a validar. La contraseña nueva no
+    // se guarda en estado, localStorage ni consola.
     try {
-      // Guardado real contra el backend: el código ya se verificó en el paso
-      // anterior, pero el servidor lo vuelve a validar. La contraseña nueva no
-      // se guarda en estado, localStorage ni consola.
       await restablecerContrasena(
         forgotEmail.trim().toLowerCase(),
         code.join(""),
-        newPass,
+        nueva,
       );
       setStep("done");
     } catch (e) {
       const err = e as ApiErrorConEstado;
       if (err.message === "El código es incorrecto o venció.") {
         // Caducó o quedó invalidado entre pasos: se pide de nuevo.
-        setErrores({ code: err.message });
+        setErrorCodigo(err.message);
         setStep("code");
-      } else if (err.message === "La contraseña no cumple los requisitos.") {
-        setErrores({ newPass: err.message });
-      } else if (err.status === 429) {
+        return;
+      }
+      if (err.status === 429) {
         // Demasiadas solicitudes: se reinicia el flujo desde el correo.
         toast.error(err.message);
         setCode(["", "", "", "", "", ""]);
-        setNewPass("");
-        setConfirm("");
         setStep("email");
-      } else {
-        // Fallo de conexión u otro error del servidor: se reintenta desde
-        // este mismo paso sin perder el código.
-        setErrorGuardado(err.message);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /** Enter envía cuando todo es válido. */
-  const enviarConEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") changePassword();
-  };
-
-  const handleCodeInput = (i: number, val: string) => {
-    if (!/^\d?$/.test(val)) return;
-    const next = [...code];
-    next[i] = val;
-    setCode(next);
-    if (errores.code) setErrores((p) => ({ ...p, code: "" }));
-    if (val && i < 5) {
-      document.getElementById(`otp-${i + 1}`)?.focus();
-    }
-  };
-
-  const handleCodeKey = (i: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !code[i] && i > 0) {
-      document.getElementById(`otp-${i - 1}`)?.focus();
-    }
-    // Tab se mueve entre casillas; solo se bloquea al salir de la última
-    // con el código incompleto (el foco se queda y aparece el error).
-    if (trampaTabOTP(e, i === 5, code.join("").length >= 6)) {
-      setErrores((p) => ({ ...p, code: "Ingresa el código completo" }));
-      document.getElementById("otp-5")?.focus();
+      // Fallo de conexión u otro error del servidor (p. ej. la contraseña
+      // no cumple los requisitos): se reintenta desde este mismo paso sin
+      // perder el código; el paso lo pinta bajo el campo.
+      throw err;
     }
   };
 
   return (
       <div
-        className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/35 backdrop-blur-sm"
+        className={AUTH_GLASS_OVERLAY}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
@@ -5016,13 +4894,13 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.93, opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="relative my-auto bg-card rounded-2xl shadow-2xl border border-border w-full max-w-sm p-7"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-sm p-7`}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar recuperación de contraseña"
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+          className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
         </button>
@@ -5034,7 +4912,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 <Mail className="w-7 h-7 text-primary" />
               </div>
               <h2
-                className="text-xl font-bold text-foreground"
+                className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
                 ¿Olvidaste tu contraseña?
@@ -5045,7 +4923,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             <div className="mb-5">
-              <label className="block text-sm font-semibold text-foreground mb-1.5">
+              <label className="block text-sm font-semibold text-foreground dark:text-white mb-1.5">
                 Correo electrónico
               </label>
               <input
@@ -5064,7 +4942,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                   aplicar: (campo, err) =>
                     setErrores((p) => ({ ...p, [campo]: err ?? "" })),
                 })}
-                className={inputCls(errores.forgotEmail)}
+                className={authGlassInputCls(errores.forgotEmail ? "err" : "neutro")}
                 {...validacion.ariaCampo("forgotEmail", errores.forgotEmail)}
               />
               <MensajeError id={validacion.idError("forgotEmail")} err={errores.forgotEmail} />
@@ -5088,79 +4966,23 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {/* ── Paso 2: Solo código OTP ── */}
+        {/* ── Paso 2: Solo código OTP (componente compartido) ── */}
         {step === "code" && (
-          <>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-7 h-7 text-emerald-600" />
-              </div>
-              <h2
-                className="text-xl font-bold text-foreground"
-                style={{ fontFamily: SERIF }}
-              >
-                Código enviado
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Ingresa el código de 6 dígitos enviado a{" "}
-                <strong className="text-foreground">
-                  {forgotEmail}
-                </strong>
-              </p>
-            </div>
-            <div className="flex justify-center gap-2 mb-6 flex-wrap">
-              {code.map((c, i) => (
-                <input
-                  key={i}
-                  id={`otp-${i}`}
-                  value={c}
-                  onChange={(e) =>
-                    handleCodeInput(i, e.target.value)
-                  }
-                  onKeyDown={(e) => handleCodeKey(i, e)}
-                  maxLength={1}
-                  inputMode="numeric"
-                  aria-label={`Dígito ${i + 1} de 6 del código de verificación`}
-                  aria-invalid={errores.code ? true : undefined}
-                  aria-describedby={errores.code ? "code-error" : undefined}
-                  className={`w-10 h-12 text-center text-lg font-bold bg-muted rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground ${
-                    errores.code ? "border-red-400 bg-red-50/30" : "border-border"
-                  }`}
-                />
-              ))}
-            </div>
-            <div className="-mt-4 mb-4">
-              <MensajeError id="code-error" err={errores.code} />
-            </div>
-            <button
-              onClick={verifyCode}
-              disabled={loading}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
-            >
-              {loading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : null}
-              {loading ? "Verificando..." : "Verificar código"}
-            </button>
-            <button
-              onClick={resendCode}
-              disabled={resendCooldown > 0 || loading}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60 mb-0.5"
-            >
-              {resendCooldown > 0
-                ? `Reenviar en 00:${String(resendCooldown).padStart(2, "0")}`
-                : "Reenviar código"}
-            </button>
-            <button
-              onClick={() => setStep("email")}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-            >
-              ← Ingresar otro correo
-            </button>
-          </>
+          <PasoCodigoVerificacion
+            codigo={code}
+            onCodigoChange={setCode}
+            correoDestino={forgotEmail}
+            onVerificar={verificarCodigo}
+            onReenviar={reenviarCodigo}
+            onVolverOtroCorreo={() => {
+              setErrorCodigo(undefined);
+              setStep("email");
+            }}
+            errorInicial={errorCodigo}
+          />
         )}
 
-        {/* ── Paso 3: Nueva contraseña ── */}
+        {/* ── Paso 3: Nueva contraseña (componente compartido) ── */}
         {step === "password" && (
           <>
             <div className="text-center mb-6">
@@ -5168,7 +4990,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 <Mail className="w-7 h-7 text-primary" />
               </div>
               <h2
-                className="text-xl font-bold text-foreground"
+                className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
                 Nueva contraseña
@@ -5177,115 +4999,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 Elige una contraseña segura para tu cuenta.
               </p>
             </div>
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  Nueva contraseña
-                </label>
-                <PasswordField
-                  value={newPass}
-                  onChange={(v) => {
-                    setNewPass(v);
-                    setErrorGuardado(null);
-                    // Si la trampa de Tab había dejado un error escrito, al
-                    // corregir el valor se limpia para que no quede pegado.
-                    setErrores((p) => (p.newPass ? { ...p, newPass: "" } : p));
-                  }}
-                  onKeyDown={(e) => {
-                    validacion.onKeyDownCampo("newPass", {
-                      errores,
-                      validar: () => validarContrasena(newPass),
-                      aplicar: (campo, err) =>
-                        setErrores((p) => ({ ...p, [campo]: err ?? "" })),
-                    })(e);
-                    enviarConEnter(e);
-                  }}
-                  placeholder="Mínimo 8 caracteres"
-                  autoComplete="new-password"
-                  cls={clsCampo(estadoNew)}
-                  inputRef={validacion.refCampo("newPass")}
-                  ariaInvalid={Boolean(passwordError ?? errores.newPass)}
-                  ariaDescribedBy={
-                    passwordError ?? errores.newPass
-                      ? validacion.idError("newPass")
-                      : undefined
-                  }
-                />
-                {/* Lista de requisitos que se marca mientras se escribe. */}
-                <RequisitosContrasena valor={newPass} />
-                <MensajeError
-                  id={validacion.idError("newPass")}
-                  err={passwordError ?? errores.newPass ?? undefined}
-                />
-                {errorGuardado && <MensajeError err={errorGuardado} />}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-1.5">
-                  Confirmar contraseña
-                </label>
-                <PasswordField
-                  value={confirm}
-                  onChange={(v) => {
-                    setConfirm(v);
-                    setErrores((p) => (p.confirm ? { ...p, confirm: "" } : p));
-                  }}
-                  onKeyDown={(e) => {
-                    validacion.onKeyDownCampo("confirm", {
-                      errores,
-                      validar: () =>
-                        confirm === newPass
-                          ? null
-                          : "Las contraseñas no coinciden",
-                      aplicar: (campo, err) =>
-                        setErrores((p) => ({ ...p, [campo]: err ?? "" })),
-                    })(e);
-                    enviarConEnter(e);
-                  }}
-                  placeholder="Repite tu contraseña"
-                  autoComplete="new-password"
-                  cls={clsCampo(estadoConfirm)}
-                  inputRef={validacion.refCampo("confirm")}
-                  ariaInvalid={Boolean(confirmError || errores.confirm)}
-                  ariaDescribedBy={
-                    confirmError || errores.confirm
-                      ? validacion.idError("confirm")
-                      : undefined
-                  }
-                />
-                {(confirmError || errores.confirm) && (
-                  <MensajeError
-                    id={validacion.idError("confirm")}
-                    err={
-                      confirmError
-                        ? "Las contraseñas no coinciden"
-                        : errores.confirm || undefined
-                    }
-                  />
-                )}
-                {confirmCoincide && (
-                  <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                    Las contraseñas coinciden
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={changePassword}
-              disabled={loading || !todoValido}
-              className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
-            >
-              {loading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : null}
-              {loading ? "Cambiando..." : "Cambiar contraseña"}
-            </button>
-            {/* Un botón deshabilitado nunca queda sin explicación. */}
-            {!todoValido && (
-              <p className="text-xs text-muted-foreground mb-3 leading-tight">
-                Para guardar falta: {faltan.join(", ")}.
-              </p>
-            )}
+            <PasoNuevaContrasena onGuardar={cambiarPassword} />
             <button
               onClick={onClose}
               className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
@@ -5302,7 +5016,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               <CheckCircle className="w-8 h-8 text-emerald-600" />
             </div>
             <h2
-              className="text-xl font-bold text-foreground mb-2"
+              className="text-xl font-bold text-foreground dark:text-white mb-2"
               style={{ fontFamily: SERIF }}
             >
               ¡Contraseña actualizada!
@@ -5471,7 +5185,7 @@ function RegisterScreen({
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
     else errs.email = validarCorreo(form.email) ?? undefined;
     if (!form.phone) errs.phone = "El número de teléfono es obligatorio";
-    else if (!/^3\d{9}$/.test(form.phone)) errs.phone = "Debe tener 10 dígitos y comenzar por 3";
+    else errs.phone = validarTelefono(form.phone) ?? undefined;
     if (!form.docType) errs.docType = "Selecciona el tipo de documento";
 
     const docTrim = form.docNum.trim();
@@ -5625,9 +5339,9 @@ function RegisterScreen({
           campo: "email",
           texto: "Ingresa un correo válido y sin espacios",
         },
-        "El teléfono debe tener 10 dígitos y comenzar por 3.": {
+        "El teléfono debe tener solo números, entre 7 y 15 dígitos.": {
           campo: "phone",
-          texto: "El teléfono debe tener 10 dígitos y comenzar por 3",
+          texto: "El teléfono debe tener solo números, entre 7 y 15 dígitos",
         },
         "La contraseña no cumple los requisitos.": {
           campo: "password",
@@ -5655,12 +5369,12 @@ function RegisterScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative my-auto rounded-2xl shadow-2xl border border-white/50 dark:border-white/10 w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4 bg-white/90 dark:bg-neutral-950/85 supports-[backdrop-filter:blur(1px)]:bg-white/65 dark:supports-[backdrop-filter:blur(1px)]:bg-neutral-950/55 backdrop-blur-xl backdrop-saturate-150"
+        className={`relative my-auto ${AUTH_GLASS_CARD} w-full max-w-[540px] px-5 py-6 sm:px-7 sm:py-4`}
       >
         <button
           onClick={() => navigate("landing")}
           title="Volver al inicio"
-          className="absolute top-5 left-5 p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors"
+          className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -9546,6 +9260,7 @@ export default function App() {
                   empleados={empleados}
                   setEmpleados={setEmpleados}
                   clientes={clientes}
+                  setClientes={setClientes}
                   canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
                   canCreate={getPerms("users").canCreate}
                   canEdit={getPerms("users").canEdit}

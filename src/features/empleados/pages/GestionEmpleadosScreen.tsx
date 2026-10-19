@@ -11,7 +11,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, PasswordField, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "@/features/usuarios/pages/GestionUsuariosScreen";
@@ -355,8 +355,12 @@ export function GestionEmpleadosScreen({
     else { const v = validarNombre(e.nombre); if (v) errs.nombre = v; }
     if (!e.correo.trim()) errs.correo = "El correo es obligatorio";
     else { const v = validarCorreo(e.correo); if (v) errs.correo = v; }
-    if (e.telefono.trim() && !/^[\d\s+()\-]+$/.test(e.telefono.trim()))
-      errs.telefono = "El teléfono solo debe contener números";
+    // Teléfono opcional: vacío vale, con valor aplica la regla única del
+    // sistema (solo números, 7 a 15 dígitos).
+    if (e.telefono.trim()) {
+      const et = validarTelefono(e.telefono);
+      if (et) errs.telefono = et;
+    }
     if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
     if (!e.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
     else { const v = validarDocumento(e.numeroDocumento, e.tipoDocumento); if (v) errs.numeroDocumento = v; }
@@ -429,8 +433,9 @@ export function GestionEmpleadosScreen({
     else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
     if (!newCorreo.trim()) { errs.correo = "El correo es obligatorio"; }
     else if (validarCorreo(newCorreo)) { errs.correo = validarCorreo(newCorreo) as string; }
-    if (newTelefono.trim() && !/^[\d\s+()\-]+$/.test(newTelefono.trim()))
-      errs.telefono = "El teléfono solo debe contener números";
+    // Teléfono opcional con la regla única (solo números, 7 a 15 dígitos).
+    const etAlt = validarTelefonoOpcional(newTelefono);
+    if (etAlt) errs.telefono = etAlt;
     if (!newTipoDoc.trim()) { errs.tipoDocumento = "Selecciona el tipo de documento"; }
     if (!newDocumento.trim()) { errs.documento = "El número de documento es obligatorio"; }
     else { const v = validarDocumento(newDocumento, newTipoDoc); if (v) errs.documento = v; }

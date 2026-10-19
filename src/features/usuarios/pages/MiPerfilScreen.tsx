@@ -8,8 +8,7 @@ import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { filtrarCorreo, validarCorreo, validarTelefono } from "@/shared/components/campo";
-import { CambiarContrasenaModal, type ErrorGuardarContrasena } from "@/shared/components/CambiarContrasenaModal";
-import { cambiarContrasena } from "@/shared/services/authService";
+import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 
 const SERIF = "var(--font-titulo)";
 
@@ -425,22 +424,11 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
         <CambiarContrasenaModal
           correo={loggedInUser.correo}
           onClose={() => setShowCambiarContrasena(false)}
-          onGuardar={async (actual, nueva): Promise<ErrorGuardarContrasena | null> => {
-            try {
-              // Guardado real contra PUT /auth/cambiar-contrasena.
-              await cambiarContrasena(actual, nueva);
-            } catch (e) {
-              const mensaje =
-                e instanceof Error ? e.message : "No se pudo cambiar la contraseña.";
-              if (/contraseña actual/i.test(mensaje)) return { campo: "actual", mensaje };
-              if (/nueva contraseña/i.test(mensaje)) return { campo: "nueva", mensaje };
-              return { campo: "general", mensaje };
-            }
+          onCambioExitoso={() => {
             // Éxito: se cierra el modal y se cierra la sesión (con el correo
             // ya escrito en la pantalla de Iniciar sesión).
             setShowCambiarContrasena(false);
             onPasswordSaved?.(loggedInUser.correo);
-            return null;
           }}
         />
       )}
