@@ -7,6 +7,7 @@ const api = axios.create({
 });
 
 const esLogin = (url?: string) => !!url && /\/auth\/login\/?$/.test(url);
+const esPerfilAutenticado = (url?: string) => !!url && /\/auth\/me\/?$/.test(url);
 
 api.interceptors.request.use((config) => {
   const token = obtenerToken();
@@ -26,7 +27,9 @@ api.interceptors.response.use(
     // token: un 401 sin sesión no tiene nada que limpiar ni por qué recargar.
     if (status === 401 && !esLogin(error.config?.url) && obtenerToken()) {
       borrarToken();
-      window.location.reload();
+      // /auth/me durante la restauración se resuelve en App: deja que su flujo
+      // cierre la sesión de forma coordinada sin recargar antes del catch.
+      if (!esPerfilAutenticado(error.config?.url)) window.location.reload();
     }
     const err = new Error(mensaje) as ApiErrorConEstado;
     err.status = status;

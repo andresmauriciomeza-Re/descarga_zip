@@ -7152,6 +7152,9 @@ export default function App() {
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(sesionActiva !== null);
+  // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
+  // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
+  const [restauracionSesionLista, setRestauracionSesionLista] = useState(!sesionActiva);
   const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
@@ -7427,6 +7430,8 @@ export default function App() {
     }
     return [{ ...rolCatalogo, accesos, activo: true }];
   });
+  const esRolBaseSesion = (rol: Rol) => ["administrador", "cliente", "empleado"].includes(normalizarNombreRol(rol.nombre));
+  const rolesDeTrabajo = rolesSesion.filter(rol => !esRolBaseSesion(rol));
 
   // Rol activo de sesión. El valor persistido por usuario se carga únicamente
   // al restaurar la sesión (F5); durante un login nuevo manda el rol inicial
@@ -7463,7 +7468,7 @@ export default function App() {
 
   // El selector refleja exactamente los otros roles asignados y activos que
   // llegaron en la respuesta de autenticación/perfil.
-  const rolesParaCambiar = rolesSesion.filter(r => r.id !== loggedInRol?.id);
+  const rolesParaCambiar = rolesDeTrabajo.filter(r => r.id !== loggedInRol?.id);
 
   const cambiarRolActivo = (rolId: string) => {
     const siguiente = rolesSesion.find(r => r.id === rolId && r.activo) ?? null;
@@ -7525,6 +7530,7 @@ export default function App() {
   // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
   // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
   const hasValidSession = isLoggedIn && (
+    (sesionActiva !== null && !restauracionSesionLista) ||
     userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
   );
 
@@ -8087,7 +8093,15 @@ export default function App() {
 
     // El backend devuelve primero el rol principal; no se infiere el rol desde
     // el nombre de cuenta ni desde las fichas locales.
-    const rolInicial = rolesActivos[0] ?? null;
+    const rolesTrabajo = rolesActivos.filter(r => !["administrador", "cliente", "empleado"].includes(normalizarNombreRol(r.nombre)));
+    const rolAdministrador = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "administrador");
+    const rolEmpleado = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado");
+    const rolCliente = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente");
+    const rolInicial = rolAdministrador
+      ?? (esClientePublico ? rolCliente : null)
+      ?? (empleado ? rolesTrabajo[0] ?? rolEmpleado : rolesActivos[0])
+      ?? rolesActivos[0]
+      ?? null;
     const inicialId = rolInicial?.id ?? null;
     setRolActivoId(inicialId);
     escribirRolActivo(user.id, inicialId);
@@ -8322,8 +8336,8 @@ export default function App() {
   const [perfilEstado, setPerfilEstado] = useState<"idle" | "cargando" | "error">("idle");
   const [perfilErrorMsg, setPerfilErrorMsg] = useState<string | null>(null);
 
-  const refrescarPerfil = async () => {
-    if (!obtenerToken() || !loggedInUserId) return;
+  const refrescarPerfil = async (): Promise<boolean> => {
+    if (!obtenerToken() || !loggedInUserId) return false;
     setPerfilEstado("cargando");
     try {
       const perfil = await obtenerPerfil();
@@ -8333,24 +8347,37 @@ export default function App() {
         perfil.numeroDocumento ?? "",
         perfil.correo ?? "",
       );
-      setUsuarios((prev) =>
-        prev.map((u) =>
+      setUsuarios(prev => {
+        const existente = prev.find(u =>
           u.id === id || u.id === loggedInUserId ||
-          clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil
-            ? {
-                ...u,
-                nombre: perfil.nombre || u.nombre,
-                correo: (perfil.correo || u.correo).trim().toLowerCase(),
-                telefono: perfil.telefono || u.telefono,
-                tipoDocumento: perfil.tipoDocumento || u.tipoDocumento,
-                numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
-                esSuperAdmin: perfil.esSuperAdmin === true,
-                rolCuentaApi: perfil.rol,
-                rolesSesionApi: perfil.roles ?? [],
-              }
-            : u,
-        ),
-      );
+          clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil,
+        );
+        const rolIdsApi = (perfil.roles ?? []).flatMap(rolApi => {
+          const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+          return local ? [local.id] : [];
+        });
+        const nombre = perfil.nombre || existente?.nombre || "";
+        const base: Usuario = {
+          ...(existente ?? {} as Usuario),
+          id: existente?.id ?? loggedInUserId ?? id,
+          nombre,
+          iniciales: existente?.iniciales ?? nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
+          avatarColor: existente?.avatarColor ?? AVATAR_PALETTE[0],
+          correo: (perfil.correo || existente?.correo || "").trim().toLowerCase(),
+          telefono: perfil.telefono || existente?.telefono || "",
+          tipoDocumento: perfil.tipoDocumento || existente?.tipoDocumento || "",
+          numeroDocumento: perfil.numeroDocumento || existente?.numeroDocumento || "",
+          rolIds: rolIdsApi.length ? rolIdsApi : existente?.rolIds ?? [],
+          rolId: rolIdsApi[0] ?? existente?.rolId ?? "",
+          activo: existente?.activo ?? true,
+          esSuperAdmin: perfil.esSuperAdmin === true,
+          rolCuentaApi: perfil.rol,
+          rolesSesionApi: perfil.roles ?? [],
+        };
+        return existente
+          ? prev.map(u => u.id === existente.id ? base : u)
+          : [...prev, base];
+      });
       setEmpleados(prev => prev.map(e =>
         clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === clavePerfil
           ? { ...e, esSuperAdmin: perfil.esSuperAdmin === true }
@@ -8358,6 +8385,7 @@ export default function App() {
       ));
       setPerfilEstado("idle");
       setPerfilErrorMsg(null);
+      return true;
     } catch (error) {
       setPerfilEstado("error");
       setPerfilErrorMsg(
@@ -8365,6 +8393,7 @@ export default function App() {
           ? `No pudimos cargar tu información del servidor: ${error.message}`
           : "No pudimos cargar tu información del servidor. Inténtalo de nuevo.",
       );
+      return false;
     }
   };
 
@@ -8404,6 +8433,7 @@ export default function App() {
   /** Refresca el perfil al restaurar la sesión (F5) y cada vez que se entra a
    *  una pantalla de perfil. El estado de carga/error lo pintan las pantallas. */
   useEffect(() => {
+    if (sesionActiva && !restauracionSesionLista) return;
     if (!isLoggedIn || !loggedInUserId) return;
     if (
       screen === "client-profile" ||
@@ -8412,15 +8442,38 @@ export default function App() {
     ) {
       void refrescarPerfil();
     }
-  }, [screen, isLoggedIn, loggedInUserId]);
+  }, [screen, isLoggedIn, loggedInUserId, restauracionSesionLista]);
 
   useEffect(() => {
-    if (sesionActiva && obtenerToken() && loggedInUserId) {
-      void refrescarPerfil();
-    }
-    // Solo al montar la app: la sesión de arranque es la del F5.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!sesionActiva) return;
+    let cancelado = false;
+    let reintento: number | undefined;
+    const restaurar = async () => {
+      if (!obtenerToken()) {
+        if (!cancelado) void logout();
+        return;
+      }
+      const correcto = await refrescarPerfil();
+      if (cancelado) return;
+      if (correcto) {
+        setRestauracionSesionLista(true);
+        return;
+      }
+      if (!obtenerToken()) {
+        void logout();
+        return;
+      }
+      // Un fallo de red no prueba que el token sea inválido ni que falten roles.
+      reintento = window.setTimeout(() => void restaurar(), 5000);
+    };
+    void restaurar();
+    return () => {
+      cancelado = true;
+      if (reintento !== undefined) window.clearTimeout(reintento);
+    };
+  // La restauración solo debe iniciarse una vez por sesión persistida.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesionActiva?.userId]);
 
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
    *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
@@ -8717,7 +8770,7 @@ export default function App() {
             roleName={loggedInRoleName}
             homeScreen={adminHomeScreen}
             rolesParaCambiar={rolesParaCambiar}
-            onCambiarRol={isStaff ? cambiarRolActivo : undefined}
+            onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
           />
         )}
 
@@ -9273,7 +9326,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={cambiarRolActivo}
+                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                   inStore
                 />
               )}
@@ -9303,7 +9356,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={cambiarRolActivo}
+                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                 />
               )}
               {screen === "supplies" && (
