@@ -121,7 +121,7 @@ import { claveImagenDe } from "@/features/categoria-productos/services/imagenesC
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "@/features/roles/pages/GestionConfigScreen";
+import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import {
@@ -715,8 +715,8 @@ const clavePersona = (tipoDocumento: string, numeroDocumento: string, correo: st
   return docValida(k) ? `doc:${k}` : `correo:${correo.trim().toLowerCase()}`;
 };
 
-// Rol activo persistido por usuario: un mapa { [usuarioId]: rolId } que se
-// conserva al cerrar sesión para el próximo login.
+// Rol manual persistido por usuario. Solo se consulta al restaurar una sesión
+// existente tras F5; un login nuevo determina el rol según la respuesta API.
 const ROL_ACTIVO_STORAGE_KEY = "sivpro.rolActivo.v1";
 const leerRolActivo = (usuarioId: string | null | undefined): string | null => {
   if (!usuarioId) return null;
@@ -1159,7 +1159,7 @@ function Sidebar({
   darkMode,
   userRole,
   accesos,
-  isNamedAdmin,
+  esSuperAdminSesion,
   hasDashboardAccess,
   esMovil = false,
   onCerrarMovil,
@@ -1174,7 +1174,7 @@ function Sidebar({
   darkMode: boolean;
   userRole: string;
   accesos: AccesosMap;
-  isNamedAdmin: boolean;
+  esSuperAdminSesion: boolean;
   hasDashboardAccess: boolean;
   /** true en viewport < 768px: el aside pasa a panel deslizante. */
   esMovil?: boolean;
@@ -1219,7 +1219,7 @@ function Sidebar({
 
   // Returns true if the current user can "Ver" the given permission key. Es la
   // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
-  // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
+  // permiso; el único acceso total excepcional corresponde a superadmin.
   const canView = (permKey: string) =>
     canViewPermission(accesos, permKey);
 
@@ -1276,7 +1276,7 @@ function Sidebar({
                   ? !hasDashboardAccess
                   : it.permKey
                     ? canView(it.permKey)
-                    : isNamedAdmin
+                    : esSuperAdminSesion
             );
 
           // Hide entire module if no sub-items are visible
@@ -4453,6 +4453,8 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
     avatarColor: AVATAR_PALETTE[0],
     correo: usuarioApi.correo,
     telefono: usuarioApi.telefono ?? "",
+    esSuperAdmin: usuarioApi.esSuperAdmin === true,
+    rolCuentaApi: usuarioApi.rol,
     tipoDocumento: usuarioApi.tipoDocumento ?? (usuarioApi.documento ? "CC" : ""),
     numeroDocumento: usuarioApi.numeroDocumento ?? usuarioApi.documento ?? "",
     rolIds: [rolLocal.id],
@@ -4526,12 +4528,19 @@ function LoginScreen({
       const trimmedEmail = email.trim().toLowerCase();
       const { usuario: usuarioApi } = await loginApi(trimmedEmail, password);
 
-      // Puente API → estado local: la sesión, los roles y el menú siguen
-      // resolviendo contra el listado local de cuentas.
+      // Puente de identidad local; roles y permisos de autorización vienen del API.
       const correoApi = (usuarioApi.correo || trimmedEmail).trim().toLowerCase();
-      const user = usuarios.find(
+      const usuarioLocal = usuarios.find(
         u => u.correo.trim().toLowerCase() === correoApi,
       );
+      const user = usuarioLocal
+        ? {
+            ...usuarioLocal,
+            esSuperAdmin: usuarioApi.esSuperAdmin === true,
+            rolCuentaApi: usuarioApi.rol,
+            rolesSesionApi: usuarioApi.roles ?? [],
+          }
+        : undefined;
 
       if (user && !user.activo) {
         borrarToken();
@@ -4547,16 +4556,15 @@ function LoginScreen({
       if (user) {
         cuenta = user;
       } else {
-        const nombreRolApi = (usuarioApi.rol ?? "").trim();
-        const rolLocal = roles.find(
-          r => normalizarNombreRol(r.nombre) === normalizarNombreRol(nombreRolApi),
-        );
+        const rolesApi = usuarioApi.roles ?? [];
+        const rolPrincipalApi = rolesApi.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(usuarioApi.rol ?? "")) ?? rolesApi[0];
+        const rolLocal = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolPrincipalApi?.nombre ?? usuarioApi.rol ?? ""));
         if (!rolLocal) {
           borrarToken();
           toast.error("Tu cuenta no tiene un rol configurado en el panel.");
           return;
         }
-        cuenta = construirUsuarioLocal(usuarioApi, rolLocal);
+        cuenta = { ...construirUsuarioLocal(usuarioApi, rolLocal), rolesSesionApi: rolesApi };
         onUsuarioNuevo(cuenta);
       }
 
@@ -4678,7 +4686,7 @@ function LoginScreen({
                  setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
               }}
               type="email"
-              placeholder="gloria@lasirena.com"
+              placeholder="correo@lasirena.com"
               ref={validacion.refCampo("email")}
               onKeyDown={validacion.onKeyDownCampo("email", {
                 errores: errors,
@@ -4940,7 +4948,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                    setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
                 }}
                 type="email"
-                placeholder="gloria@lasirena.com"
+                placeholder="correo@lasirena.com"
                 ref={validacion.refCampo("forgotEmail")}
                 onKeyDown={validacion.onKeyDownCampo("forgotEmail", {
                   errores,
@@ -6364,7 +6372,7 @@ const esRolValido = (r: unknown): r is Rol => {
 // sin la acción nueva, y perdería el botón que sí ve uno recién creado (que sale
 // de `fullAccesos()`, ya con la acción). Se le devuelve.
 //
-// Va anclada al rol SEMILLA `ROL-001`, igual que `isNamedAdmin`, y NO se aplica
+// Va anclada al rol semilla `ROL-001` y NO se aplica
 // a los demás roles a propósito. Los que alguien configuró a mano se guardaron
 // sin esta acción porque aún no existía, así que su configuración se respeta
 // tal cual: si el privilegio se añadiera a cualquier rol, recargar la página
@@ -6558,7 +6566,7 @@ const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
   const { cargo, rolId, rolIds: _legacy, contrasena: _legacyPassword, ...resto } = crudo;
   // Todo empleado tiene SIEMPRE los roles base "Empleado" y "Cliente". La cuenta
   // de super administrador (Gloria) queda tal cual: no recibe roles de empleado.
-  const esSuperAdmin = e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
+  const esSuperAdmin = e.esSuperAdmin === true;
   const peso = (lista: string[]) => {
     const vivos = lista.filter(id => roles.some(r => r.id === id));
     // Ids perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesero.
@@ -7127,6 +7135,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(
     (sesionActiva?.screen as Screen) || "landing",
   );
+  const [clienteAAbrirDesdeUsuarios, setClienteAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
+  const [empleadoAAbrirDesdeUsuarios, setEmpleadoAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -7142,6 +7152,9 @@ export default function App() {
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
   const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(sesionActiva !== null);
+  // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
+  // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
+  const [restauracionSesionLista, setRestauracionSesionLista] = useState(!sesionActiva);
   const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
@@ -7206,7 +7219,11 @@ export default function App() {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
   // Id del rol ACTIVO de la sesión. Se inicializa en el login y lo cambia el
   // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
-  const [rolActivoId, setRolActivoId] = useState<string | null>(sesionActiva?.rolActivo ?? null);
+  const [rolActivoId, setRolActivoId] = useState<string | null>(() =>
+    sesionActiva
+      ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
+      : null,
+  );
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
@@ -7402,56 +7419,42 @@ export default function App() {
     ? empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuentaSesion) ?? null
     : null;
 
-  // Roles de la persona en sesión. La fuente es la ficha de empleado si existe
-  // (multi-rol operativo); si no, el propio usuario (cliente, admin o rol
-  // personalizado). Un rol desactivado o borrado no cuenta.
-  const rolIdsSesion: string[] = (() => {
-    if (loggedInEmpleado?.rolIds?.length) return [...loggedInEmpleado.rolIds];
-    if (loggedInUser) {
-      return loggedInUser.rolIds?.length ? [...loggedInUser.rolIds] : [loggedInUser.rolId];
+  // La autorización proviene de usuario.roles del backend. El catálogo local
+  // solo aporta presentación; no se consulta de nuevo al cambiar de rol.
+  const rolesSesion: Rol[] = (loggedInUser?.rolesSesionApi ?? []).flatMap(rolApi => {
+    const rolCatalogo = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+    if (!rolCatalogo) return [];
+    const accesos: AccesosMap = {};
+    for (const permiso of rolApi.permisos ?? []) {
+      accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
     }
-    // Sesión legacy "Cliente" (p. ej. portal público sin registro de usuario).
-    if (userRole === "Cliente") {
-      const cliente = roles.find(r => esRolCliente(r) && r.activo);
-      return cliente ? [cliente.id] : [];
-    }
-    return [];
-  })();
-  const rolesSesion: Rol[] = [];
-  const rolesSesionVistos = new Set<string>();
-  for (const id of rolIdsSesion) {
-    const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
-    if (r && !rolesSesionVistos.has(r.id)) { rolesSesionVistos.add(r.id); rolesSesion.push(r); }
-  }
+    return [{ ...rolCatalogo, accesos, activo: true }];
+  });
+  const esRolBaseSesion = (rol: Rol) => ["administrador", "cliente", "empleado"].includes(normalizarNombreRol(rol.nombre));
+  const rolesDeTrabajo = rolesSesion.filter(rol => !esRolBaseSesion(rol));
 
-  // Rol ACTIVO de la sesión. Prioridad: estado (cambio manual con "Cambiar de
-  // rol") → guardado en localStorage (persiste al cerrar sesión) → primero.
-  const rolActivoIdGuardado = loggedInUser ? leerRolActivo(loggedInUser.id) : null;
+  // Rol activo de sesión. El valor persistido por usuario se carga únicamente
+  // al restaurar la sesión (F5); durante un login nuevo manda el rol inicial
+  // decidido en handleLogin y los cambios manuales viven en el estado.
   const rolActivoIdValido =
     rolActivoId && rolesSesion.some(r => r.id === rolActivoId)
       ? rolActivoId
-      : rolActivoIdGuardado && rolesSesion.some(r => r.id === rolActivoIdGuardado)
-        ? rolActivoIdGuardado
-        : rolesSesion[0]?.id ?? null;
+      : rolesSesion[0]?.id ?? null;
   const loggedInRol = rolesSesion.find(r => r.id === rolActivoIdValido) ?? null;
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
   // Permisos SOLO del rol activo: la sesión ya no fusiona los mapas de todos
   // los roles de la persona.
-  const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
+  const loggedInAccesos: AccesosMap = loggedInUser?.esSuperAdmin === true
+    ? fullAccesos()
+    : loggedInRol?.accesos ?? {};
 
-  // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
-  // los id solo son anclas de migración.
-  const isNamedAdmin = esRolAdministrador(loggedInRol);
   // § Dashboard por PERMISO, no por nombre de rol: la cuenta super admin
-  // (Gloria, USR-001 / gloria@lasirena.com) siempre; los demás únicamente con
+  // marcada por la API; los demás únicamente con
   // el privilegio "Ver" de "Dashboard::Dashboard" del rol activo. El rol
   // "Administrador" lo conserva porque su semilla (fullAccesos) ya incluye la
   // clave y la migración única "sivpro.migracion.dashboardPermiso.v1" se la
   // agrega a los datos viejos; si super admin se la quita, deja de verlo.
-  const esSuperAdminSesion =
-    loggedInUser !== null &&
-    (loggedInUser.id === "USR-001" ||
-      loggedInUser.correo.trim().toLowerCase() === "gloria@lasirena.com");
+  const esSuperAdminSesion = loggedInUser?.esSuperAdmin === true;
   const hasDashboardAccess =
     esSuperAdminSesion || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
@@ -7463,14 +7466,9 @@ export default function App() {
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
 
-  // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
-  // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
-  // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
-  // debe ofrecerlos todos.
-  const rolesParaCambiar = rolesSesion.filter(r =>
-    r.id !== loggedInRol?.id &&
-    !(normalizarNombreRol(r.nombre) === "administrador" || normalizarNombreRol(r.nombre) === "cliente" || normalizarNombreRol(r.nombre) === "empleado"),
-  );
+  // El selector refleja exactamente los otros roles asignados y activos que
+  // llegaron en la respuesta de autenticación/perfil.
+  const rolesParaCambiar = rolesDeTrabajo.filter(r => r.id !== loggedInRol?.id);
 
   const cambiarRolActivo = (rolId: string) => {
     const siguiente = rolesSesion.find(r => r.id === rolId && r.activo) ?? null;
@@ -7532,6 +7530,7 @@ export default function App() {
   // Un usuario sin ficha o sin rol activo no es una sesión válida. La cuenta
   // legacy de cliente es la única excepción porque no tiene ficha en usuarios.
   const hasValidSession = isLoggedIn && (
+    (sesionActiva !== null && !restauracionSesionLista) ||
     userRole === "Cliente" || (loggedInUser !== null && loggedInRol !== null)
   );
 
@@ -8011,16 +8010,25 @@ export default function App() {
   };
 
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
+    const claveSesion = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
+    setEmpleados(prev => prev.map(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveSesion
+      ? { ...e, esSuperAdmin: user.esSuperAdmin === true }
+      : e));
+    setUsuarios(prev => prev.map(u => u.id === user.id ? {
+      ...u,
+      esSuperAdmin: user.esSuperAdmin === true,
+      rolesSesionApi: user.rolesSesionApi ?? [],
+    } : u));
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
-    const rolIdsCuenta = (empleado?.rolIds?.length ? empleado.rolIds : (user.rolIds?.length ? user.rolIds : [user.rolId])).filter(Boolean);
-    const rolesActivos: Rol[] = [];
-    const visto = new Set<string>();
-    for (const id of rolIdsCuenta) {
-      const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
-      if (r && !visto.has(r.id)) { visto.add(r.id); rolesActivos.push(r); }
-    }
+    const rolesActivos: Rol[] = (user.rolesSesionApi ?? []).flatMap(rolApi => {
+      const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+      if (!local) return [];
+      const accesos: AccesosMap = {};
+      for (const permiso of rolApi.permisos ?? []) accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
+      return [{ ...local, accesos, activo: true }];
+    });
     // Cliente público: solo el rol Cliente y sin ficha de empleado → landing
     // (portal público, nunca el panel).
     const esClientePublico = rolesActivos.length > 0 && rolesActivos.every(esRolCliente) && empleado === null;
@@ -8083,26 +8091,17 @@ export default function App() {
     const guardado = leerCarritosDeUsuarios()[user.id] ?? [];
     setCart((prev) => fusionarCarritos(prev, guardado));
 
-    // Rol activo inicial: el ÚLTIMO ROL EXTRA usado guardado en localStorage,
-    // si sigue asignado y activo; si no, el primer rol extra; si no hay extras,
-    // el rol base "Empleado".
-    const baseEs = (n: string) => {
-      const x = normalizarNombreRol(n);
-      return x === "administrador" || x === "cliente" || x === "empleado";
-    };
-    const rolesExtra = rolesActivos.filter(r => !baseEs(r.nombre));
-    const rolEmpleadoActivo = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado") ?? null;
-    const guardadoRolId = leerRolActivo(user.id);
-    let rolInicial: Rol | null = null;
-    if (esClientePublico) {
-      rolInicial = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente") ?? rolesActivos[0] ?? null;
-    } else {
-      if (guardadoRolId) {
-        const cand = rolesActivos.find(r => r.id === guardadoRolId);
-        if (cand && !baseEs(cand.nombre) && cand.activo) rolInicial = cand;
-      }
-      if (!rolInicial) rolInicial = rolesExtra[0] ?? rolEmpleadoActivo ?? rolesActivos[0] ?? null;
-    }
+    // El backend devuelve primero el rol principal; no se infiere el rol desde
+    // el nombre de cuenta ni desde las fichas locales.
+    const rolesTrabajo = rolesActivos.filter(r => !["administrador", "cliente", "empleado"].includes(normalizarNombreRol(r.nombre)));
+    const rolAdministrador = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "administrador");
+    const rolEmpleado = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado");
+    const rolCliente = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente");
+    const rolInicial = rolAdministrador
+      ?? (esClientePublico ? rolCliente : null)
+      ?? (empleado ? rolesTrabajo[0] ?? rolEmpleado : rolesActivos[0])
+      ?? rolesActivos[0]
+      ?? null;
     const inicialId = rolInicial?.id ?? null;
     setRolActivoId(inicialId);
     escribirRolActivo(user.id, inicialId);
@@ -8110,8 +8109,7 @@ export default function App() {
     // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
     // Dashboard solo si la sesión es super admin o el rol activo tiene el
     // permiso "Dashboard::Dashboard"; si no, "Inicio" (siempre disponible).
-    const userEsSuperAdmin =
-      user.id === "USR-001" || user.correo.trim().toLowerCase() === "gloria@lasirena.com";
+    const userEsSuperAdmin = user.esSuperAdmin === true;
     const hasDashRolInicial =
       userEsSuperAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
     const nextScreen = esClientePublico
@@ -8338,28 +8336,56 @@ export default function App() {
   const [perfilEstado, setPerfilEstado] = useState<"idle" | "cargando" | "error">("idle");
   const [perfilErrorMsg, setPerfilErrorMsg] = useState<string | null>(null);
 
-  const refrescarPerfil = async () => {
-    if (!obtenerToken() || !loggedInUserId) return;
+  const refrescarPerfil = async (): Promise<boolean> => {
+    if (!obtenerToken() || !loggedInUserId) return false;
     setPerfilEstado("cargando");
     try {
       const perfil = await obtenerPerfil();
       const id = String(perfil.id);
-      setUsuarios((prev) =>
-        prev.map((u) =>
-          u.id === id
-            ? {
-                ...u,
-                nombre: perfil.nombre || u.nombre,
-                correo: (perfil.correo || u.correo).trim().toLowerCase(),
-                telefono: perfil.telefono || u.telefono,
-                tipoDocumento: perfil.tipoDocumento || u.tipoDocumento,
-                numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
-              }
-            : u,
-        ),
+      const clavePerfil = clavePersona(
+        perfil.tipoDocumento ?? "",
+        perfil.numeroDocumento ?? "",
+        perfil.correo ?? "",
       );
+      setUsuarios(prev => {
+        const existente = prev.find(u =>
+          u.id === id || u.id === loggedInUserId ||
+          clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil,
+        );
+        const rolIdsApi = (perfil.roles ?? []).flatMap(rolApi => {
+          const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+          return local ? [local.id] : [];
+        });
+        const nombre = perfil.nombre || existente?.nombre || "";
+        const base: Usuario = {
+          ...(existente ?? {} as Usuario),
+          id: existente?.id ?? loggedInUserId ?? id,
+          nombre,
+          iniciales: existente?.iniciales ?? nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
+          avatarColor: existente?.avatarColor ?? AVATAR_PALETTE[0],
+          correo: (perfil.correo || existente?.correo || "").trim().toLowerCase(),
+          telefono: perfil.telefono || existente?.telefono || "",
+          tipoDocumento: perfil.tipoDocumento || existente?.tipoDocumento || "",
+          numeroDocumento: perfil.numeroDocumento || existente?.numeroDocumento || "",
+          rolIds: rolIdsApi.length ? rolIdsApi : existente?.rolIds ?? [],
+          rolId: rolIdsApi[0] ?? existente?.rolId ?? "",
+          activo: existente?.activo ?? true,
+          esSuperAdmin: perfil.esSuperAdmin === true,
+          rolCuentaApi: perfil.rol,
+          rolesSesionApi: perfil.roles ?? [],
+        };
+        return existente
+          ? prev.map(u => u.id === existente.id ? base : u)
+          : [...prev, base];
+      });
+      setEmpleados(prev => prev.map(e =>
+        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === clavePerfil
+          ? { ...e, esSuperAdmin: perfil.esSuperAdmin === true }
+          : e,
+      ));
       setPerfilEstado("idle");
       setPerfilErrorMsg(null);
+      return true;
     } catch (error) {
       setPerfilEstado("error");
       setPerfilErrorMsg(
@@ -8367,6 +8393,7 @@ export default function App() {
           ? `No pudimos cargar tu información del servidor: ${error.message}`
           : "No pudimos cargar tu información del servidor. Inténtalo de nuevo.",
       );
+      return false;
     }
   };
 
@@ -8406,6 +8433,7 @@ export default function App() {
   /** Refresca el perfil al restaurar la sesión (F5) y cada vez que se entra a
    *  una pantalla de perfil. El estado de carga/error lo pintan las pantallas. */
   useEffect(() => {
+    if (sesionActiva && !restauracionSesionLista) return;
     if (!isLoggedIn || !loggedInUserId) return;
     if (
       screen === "client-profile" ||
@@ -8414,15 +8442,38 @@ export default function App() {
     ) {
       void refrescarPerfil();
     }
-  }, [screen, isLoggedIn, loggedInUserId]);
+  }, [screen, isLoggedIn, loggedInUserId, restauracionSesionLista]);
 
   useEffect(() => {
-    if (sesionActiva && obtenerToken() && loggedInUserId) {
-      void refrescarPerfil();
-    }
-    // Solo al montar la app: la sesión de arranque es la del F5.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!sesionActiva) return;
+    let cancelado = false;
+    let reintento: number | undefined;
+    const restaurar = async () => {
+      if (!obtenerToken()) {
+        if (!cancelado) void logout();
+        return;
+      }
+      const correcto = await refrescarPerfil();
+      if (cancelado) return;
+      if (correcto) {
+        setRestauracionSesionLista(true);
+        return;
+      }
+      if (!obtenerToken()) {
+        void logout();
+        return;
+      }
+      // Un fallo de red no prueba que el token sea inválido ni que falten roles.
+      reintento = window.setTimeout(() => void restaurar(), 5000);
+    };
+    void restaurar();
+    return () => {
+      cancelado = true;
+      if (reintento !== undefined) window.clearTimeout(reintento);
+    };
+  // La restauración solo debe iniciarse una vez por sesión persistida.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesionActiva?.userId]);
 
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
    *  sesión con la MISMA función del botón "Cerrar sesión" (el carrito se
@@ -8606,7 +8657,7 @@ export default function App() {
     // (gestion-config, users, empleados) ya declaran permKey en SCREEN_PERM_KEY,
     // así que el fallback nunca se disparaba.
     const permKey = SCREEN_PERM_KEY[screen];
-    if (permKey && !isNamedAdmin && !hasDashboardAccess && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
+    if (permKey && !esSuperAdminSesion && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
       setTimeout(() => navigate(adminHomeScreen), 0);
     }
   }
@@ -8662,7 +8713,7 @@ export default function App() {
           darkMode={darkMode}
            userRole={userRole}
            accesos={loggedInAccesos}
-          isNamedAdmin={isNamedAdmin}
+          esSuperAdminSesion={esSuperAdminSesion}
           hasDashboardAccess={hasDashboardAccess}
           esMovil={esMovil}
           onCerrarMovil={() => {
@@ -8719,7 +8770,7 @@ export default function App() {
             roleName={loggedInRoleName}
             homeScreen={adminHomeScreen}
             rolesParaCambiar={rolesParaCambiar}
-            onCambiarRol={isStaff ? cambiarRolActivo : undefined}
+            onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
           />
         )}
 
@@ -9142,37 +9193,16 @@ export default function App() {
                   {...getPerms("cat-producto")}
                 />
               )}
-               {screen === "gestion-roles" && (
-                <GestionConfigScreen
-                  userRole={userRole}
-                  roles={roles}
-                  setRoles={setRoles}
-                  rolUserCounts={(() => {
-                    const counts: Record<string, number> = {};
-                    const sumar = (id: string) => { counts[id] = (counts[id] ?? 0) + 1; };
-                    empleados.forEach(e => e.rolIds.forEach(sumar));
-                    usuariosUnificados.forEach(u => {
-                      // Los que YA tienen ficha ya se contaron por empleado: solo
-                      // cuentan los que NO tienen (rol personalizado, cliente, etc.).
-                      const tieneFicha = empleados.some(e =>
-                        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) ===
-                        clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo),
-                      );
-                      if (tieneFicha) return;
-                      const ids = u.rolIds?.length ? u.rolIds : [u.rolId];
-                      ids.forEach(sumar);
-                    });
-                    return counts;
-                  })()}
-                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
+                {screen === "gestion-roles" && (
+                  <GestionConfigScreen
+                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
                   canCreate={getPerms("gestion-roles").canCreate}
                   canEdit={getPerms("gestion-roles").canEdit}
-                  canDelete={getPerms("gestion-roles").canDelete}
-                  accesosPropios={loggedInAccesos}
-                  loggedInRolId={loggedInRol?.id ?? null}
-                  usuarios={usuariosUnificados}
-                />
-              )}
+                    canDelete={getPerms("gestion-roles").canDelete}
+                    accesosPropios={loggedInAccesos}
+                    loggedInRolId={loggedInRol?.id ?? null}
+                  />
+                )}
               {screen === "sales-chart" && (
                 <SalesChartScreen
                   ventas={ventas}
@@ -9181,42 +9211,49 @@ export default function App() {
                   onBack={() => navigate(adminHomeScreen)}
                 />
               )}
-              {screen === "clientes" && (
-                <GestionClientesScreen
-                  {...getPerms("clientes")}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  empleados={empleados}
-                  usuarios={usuarios}
-                  roles={roles}
-                  sesionCorreo={correoSesion}
-                />
-              )}
-               {screen === "users" && (
-                 <GestionUsuariosScreen
-                   userRole={userRole}
+               {screen === "clientes" && (
+                 <GestionClientesScreen
+                   {...getPerms("clientes")}
+                   clientes={clientes}
+                   setClientes={setClientes}
+                   empleados={empleados}
+                   usuarios={usuarios}
                    roles={roles}
-                   usuarios={usuariosUnificados}
-                  setUsuarios={setUsuarios}
-                  empleados={empleados}
-                  setEmpleados={setEmpleados}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
-                  canCreate={getPerms("users").canCreate}
-                  canEdit={getPerms("users").canEdit}
-                  canDelete={getPerms("users").canDelete}
-                />
+                   sesionCorreo={correoSesion}
+                   clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
+                   onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
+                 />
               )}
-              {screen === "empleados" && (
-                <GestionEmpleadosScreen
+                {screen === "users" && (
+                  <GestionUsuariosScreen
+                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
+                   canEdit={getPerms("users").canEdit}
+                   canDelete={getPerms("users").canDelete}
+                   onEditarCliente={u => {
+                     setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                     navigate("clientes");
+                   }}
+                   onEditarEmpleado={u => {
+                     const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
+                     const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
+                     if (!existe) return false;
+                     setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                     navigate("empleados");
+                     return true;
+                   }}
+                 />
+              )}
+                {screen === "empleados" && (
+                  <GestionEmpleadosScreen
                   roles={roles}
                   usuarios={usuarios}
                   empleados={empleados}
                   setEmpleados={setEmpleados}
-                  setUsuarios={setUsuarios}
-                  clientes={clientes}
-                />
+                   setUsuarios={setUsuarios}
+                   clientes={clientes}
+                   empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
+                   onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
+                  />
               )}
               {screen === "production-orders" && (
                 <OrdenProduccionScreen
@@ -9289,7 +9326,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={cambiarRolActivo}
+                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                   inStore
                 />
               )}
@@ -9319,7 +9356,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={cambiarRolActivo}
+                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                 />
               )}
               {screen === "supplies" && (
