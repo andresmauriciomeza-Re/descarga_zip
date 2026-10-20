@@ -41,6 +41,8 @@ export interface Usuario {
   esEmpleado?: boolean;
   rolesExtra?: string[];
   esSuperAdmin?: boolean;
+  /** Roles y permisos asignados por el backend para la sesión actual. */
+  rolesSesionApi?: import("@/types/api").RolSesionApi[];
 }
 
 export type UsuarioGestion = Omit<UsuarioListadoApi, "tipo_documento" | "correo" | "telefono" | "rolesExtra"> & {

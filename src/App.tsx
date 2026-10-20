@@ -121,7 +121,7 @@ import { claveImagenDe } from "@/features/categoria-productos/services/imagenesC
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, type AccesosMap, type Rol } from "@/features/roles/pages/GestionConfigScreen";
+import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import {
@@ -1159,7 +1159,7 @@ function Sidebar({
   darkMode,
   userRole,
   accesos,
-  isNamedAdmin,
+  esSuperAdminSesion,
   hasDashboardAccess,
   esMovil = false,
   onCerrarMovil,
@@ -1174,7 +1174,7 @@ function Sidebar({
   darkMode: boolean;
   userRole: string;
   accesos: AccesosMap;
-  isNamedAdmin: boolean;
+  esSuperAdminSesion: boolean;
   hasDashboardAccess: boolean;
   /** true en viewport < 768px: el aside pasa a panel deslizante. */
   esMovil?: boolean;
@@ -1219,7 +1219,7 @@ function Sidebar({
 
   // Returns true if the current user can "Ver" the given permission key. Es la
   // misma regla que aplica el guard de ruta y el Dashboard: rol semilla o
-  // permiso. Ver `isNamedAdmin` para por qué el atajo se ancla al id.
+  // permiso; el único acceso total excepcional corresponde a superadmin.
   const canView = (permKey: string) =>
     canViewPermission(accesos, permKey);
 
@@ -1276,7 +1276,7 @@ function Sidebar({
                   ? !hasDashboardAccess
                   : it.permKey
                     ? canView(it.permKey)
-                    : isNamedAdmin
+                    : esSuperAdminSesion
             );
 
           // Hide entire module if no sub-items are visible
@@ -4528,8 +4528,7 @@ function LoginScreen({
       const trimmedEmail = email.trim().toLowerCase();
       const { usuario: usuarioApi } = await loginApi(trimmedEmail, password);
 
-      // Puente API → estado local: la sesión, los roles y el menú siguen
-      // resolviendo contra el listado local de cuentas.
+      // Puente de identidad local; roles y permisos de autorización vienen del API.
       const correoApi = (usuarioApi.correo || trimmedEmail).trim().toLowerCase();
       const usuarioLocal = usuarios.find(
         u => u.correo.trim().toLowerCase() === correoApi,
@@ -4539,6 +4538,7 @@ function LoginScreen({
             ...usuarioLocal,
             esSuperAdmin: usuarioApi.esSuperAdmin === true,
             rolCuentaApi: usuarioApi.rol,
+            rolesSesionApi: usuarioApi.roles ?? [],
           }
         : undefined;
 
@@ -4556,16 +4556,15 @@ function LoginScreen({
       if (user) {
         cuenta = user;
       } else {
-        const nombreRolApi = (usuarioApi.rol ?? "").trim();
-        const rolLocal = roles.find(
-          r => normalizarNombreRol(r.nombre) === normalizarNombreRol(nombreRolApi),
-        );
+        const rolesApi = usuarioApi.roles ?? [];
+        const rolPrincipalApi = rolesApi.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(usuarioApi.rol ?? "")) ?? rolesApi[0];
+        const rolLocal = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolPrincipalApi?.nombre ?? usuarioApi.rol ?? ""));
         if (!rolLocal) {
           borrarToken();
           toast.error("Tu cuenta no tiene un rol configurado en el panel.");
           return;
         }
-        cuenta = construirUsuarioLocal(usuarioApi, rolLocal);
+        cuenta = { ...construirUsuarioLocal(usuarioApi, rolLocal), rolesSesionApi: rolesApi };
         onUsuarioNuevo(cuenta);
       }
 
@@ -6373,7 +6372,7 @@ const esRolValido = (r: unknown): r is Rol => {
 // sin la acción nueva, y perdería el botón que sí ve uno recién creado (que sale
 // de `fullAccesos()`, ya con la acción). Se le devuelve.
 //
-// Va anclada al rol SEMILLA `ROL-001`, igual que `isNamedAdmin`, y NO se aplica
+// Va anclada al rol semilla `ROL-001` y NO se aplica
 // a los demás roles a propósito. Los que alguien configuró a mano se guardaron
 // sin esta acción porque aún no existía, así que su configuración se respeta
 // tal cual: si el privilegio se añadiera a cualquier rol, recargar la página
@@ -7417,27 +7416,17 @@ export default function App() {
     ? empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuentaSesion) ?? null
     : null;
 
-  // Roles de la persona en sesión. La fuente es la ficha de empleado si existe
-  // (multi-rol operativo); si no, el propio usuario (cliente, admin o rol
-  // personalizado). Un rol desactivado o borrado no cuenta.
-  const rolIdsSesion: string[] = (() => {
-    if (loggedInEmpleado?.rolIds?.length) return [...loggedInEmpleado.rolIds];
-    if (loggedInUser) {
-      return loggedInUser.rolIds?.length ? [...loggedInUser.rolIds] : [loggedInUser.rolId];
+  // La autorización proviene de usuario.roles del backend. El catálogo local
+  // solo aporta presentación; no se consulta de nuevo al cambiar de rol.
+  const rolesSesion: Rol[] = (loggedInUser?.rolesSesionApi ?? []).flatMap(rolApi => {
+    const rolCatalogo = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+    if (!rolCatalogo) return [];
+    const accesos: AccesosMap = {};
+    for (const permiso of rolApi.permisos ?? []) {
+      accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
     }
-    // Sesión legacy "Cliente" (p. ej. portal público sin registro de usuario).
-    if (userRole === "Cliente") {
-      const cliente = roles.find(r => esRolCliente(r) && r.activo);
-      return cliente ? [cliente.id] : [];
-    }
-    return [];
-  })();
-  const rolesSesion: Rol[] = [];
-  const rolesSesionVistos = new Set<string>();
-  for (const id of rolIdsSesion) {
-    const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
-    if (r && !rolesSesionVistos.has(r.id)) { rolesSesionVistos.add(r.id); rolesSesion.push(r); }
-  }
+    return [{ ...rolCatalogo, accesos, activo: true }];
+  });
 
   // Rol activo de sesión. El valor persistido por usuario se carga únicamente
   // al restaurar la sesión (F5); durante un login nuevo manda el rol inicial
@@ -7450,11 +7439,10 @@ export default function App() {
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
   // Permisos SOLO del rol activo: la sesión ya no fusiona los mapas de todos
   // los roles de la persona.
-  const loggedInAccesos: AccesosMap = loggedInRol?.accesos ?? {};
+  const loggedInAccesos: AccesosMap = loggedInUser?.esSuperAdmin === true
+    ? fullAccesos()
+    : loggedInRol?.accesos ?? {};
 
-  // "Administrador"/"Cliente" se reconocen SIEMPRE por nombre, nunca por id:
-  // los id solo son anclas de migración.
-  const isNamedAdmin = esRolAdministrador(loggedInRol);
   // § Dashboard por PERMISO, no por nombre de rol: la cuenta super admin
   // marcada por la API; los demás únicamente con
   // el privilegio "Ver" de "Dashboard::Dashboard" del rol activo. El rol
@@ -7473,14 +7461,9 @@ export default function App() {
     rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
 
-  // Los roles que ofrece el menú "Cambiar de rol": los EXTRAS (ni Administrador
-  // ni Cliente ni Empleado) que siguen activos del empleado. No se filtran más
-  // por "tener pantallas": Inicio siempre está disponible y el cambio de rol
-  // debe ofrecerlos todos.
-  const rolesParaCambiar = rolesSesion.filter(r =>
-    r.id !== loggedInRol?.id &&
-    !(normalizarNombreRol(r.nombre) === "administrador" || normalizarNombreRol(r.nombre) === "cliente" || normalizarNombreRol(r.nombre) === "empleado"),
-  );
+  // El selector refleja exactamente los otros roles asignados y activos que
+  // llegaron en la respuesta de autenticación/perfil.
+  const rolesParaCambiar = rolesSesion.filter(r => r.id !== loggedInRol?.id);
 
   const cambiarRolActivo = (rolId: string) => {
     const siguiente = rolesSesion.find(r => r.id === rolId && r.activo) ?? null;
@@ -8025,27 +8008,21 @@ export default function App() {
     setEmpleados(prev => prev.map(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveSesion
       ? { ...e, esSuperAdmin: user.esSuperAdmin === true }
       : e));
-    setUsuarios(prev => prev.map(u => u.id === user.id ? { ...u, esSuperAdmin: user.esSuperAdmin === true } : u));
+    setUsuarios(prev => prev.map(u => u.id === user.id ? {
+      ...u,
+      esSuperAdmin: user.esSuperAdmin === true,
+      rolesSesionApi: user.rolesSesionApi ?? [],
+    } : u));
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
-    const rolApiNormalizado = normalizarNombreRol(user.rolCuentaApi ?? "");
-    const debeEntrarComoAdministrador =
-      user.esSuperAdmin === true || rolApiNormalizado === "administrador";
-    const rolAdministrador = roles.find(r => esRolAdministrador(r)) ?? null;
-    const idsLocalesCuenta = (empleado?.rolIds?.length
-      ? empleado.rolIds
-      : (user.rolIds?.length ? user.rolIds : [user.rolId])
-    ).filter(Boolean);
-    const rolIdsCuenta = debeEntrarComoAdministrador && rolAdministrador
-      ? [...new Set([rolAdministrador.id, ...idsLocalesCuenta])]
-      : idsLocalesCuenta;
-    const rolesActivos: Rol[] = [];
-    const visto = new Set<string>();
-    for (const id of rolIdsCuenta) {
-      const r = roles.find(rr => rr.id === id && rr.activo) ?? null;
-      if (r && !visto.has(r.id)) { visto.add(r.id); rolesActivos.push(r); }
-    }
+    const rolesActivos: Rol[] = (user.rolesSesionApi ?? []).flatMap(rolApi => {
+      const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+      if (!local) return [];
+      const accesos: AccesosMap = {};
+      for (const permiso of rolApi.permisos ?? []) accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
+      return [{ ...local, accesos, activo: true }];
+    });
     // Cliente público: solo el rol Cliente y sin ficha de empleado → landing
     // (portal público, nunca el panel).
     const esClientePublico = rolesActivos.length > 0 && rolesActivos.every(esRolCliente) && empleado === null;
@@ -8108,24 +8085,9 @@ export default function App() {
     const guardado = leerCarritosDeUsuarios()[user.id] ?? [];
     setCart((prev) => fusionarCarritos(prev, guardado));
 
-    // Login nuevo: una cuenta Administrador del API o superadministradora entra
-    // con el rol local Administrador. Para las demás cuentas se conserva la
-    // elección multirol existente. El rol guardado no se consulta aquí: solo
-    // se restaura al recargar una sesión ya iniciada.
-    const baseEs = (n: string) => {
-      const x = normalizarNombreRol(n);
-      return x === "administrador" || x === "cliente" || x === "empleado";
-    };
-    const rolesExtra = rolesActivos.filter(r => !baseEs(r.nombre));
-    const rolEmpleadoActivo = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado") ?? null;
-    let rolInicial: Rol | null = null;
-    if (esClientePublico) {
-      rolInicial = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente") ?? rolesActivos[0] ?? null;
-    } else if (debeEntrarComoAdministrador) {
-      rolInicial = rolesActivos.find(r => esRolAdministrador(r)) ?? null;
-    } else {
-      rolInicial = rolesExtra[0] ?? rolEmpleadoActivo ?? rolesActivos[0] ?? null;
-    }
+    // El backend devuelve primero el rol principal; no se infiere el rol desde
+    // el nombre de cuenta ni desde las fichas locales.
+    const rolInicial = rolesActivos[0] ?? null;
     const inicialId = rolInicial?.id ?? null;
     setRolActivoId(inicialId);
     escribirRolActivo(user.id, inicialId);
@@ -8384,6 +8346,7 @@ export default function App() {
                 numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
                 esSuperAdmin: perfil.esSuperAdmin === true,
                 rolCuentaApi: perfil.rol,
+                rolesSesionApi: perfil.roles ?? [],
               }
             : u,
         ),
@@ -8641,7 +8604,7 @@ export default function App() {
     // (gestion-config, users, empleados) ya declaran permKey en SCREEN_PERM_KEY,
     // así que el fallback nunca se disparaba.
     const permKey = SCREEN_PERM_KEY[screen];
-    if (permKey && !isNamedAdmin && !hasDashboardAccess && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
+    if (permKey && !esSuperAdminSesion && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
       setTimeout(() => navigate(adminHomeScreen), 0);
     }
   }
@@ -8697,7 +8660,7 @@ export default function App() {
           darkMode={darkMode}
            userRole={userRole}
            accesos={loggedInAccesos}
-          isNamedAdmin={isNamedAdmin}
+          esSuperAdminSesion={esSuperAdminSesion}
           hasDashboardAccess={hasDashboardAccess}
           esMovil={esMovil}
           onCerrarMovil={() => {
@@ -9179,7 +9142,7 @@ export default function App() {
               )}
                 {screen === "gestion-roles" && (
                   <GestionConfigScreen
-                    canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
+                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
                   canCreate={getPerms("gestion-roles").canCreate}
                   canEdit={getPerms("gestion-roles").canEdit}
                     canDelete={getPerms("gestion-roles").canDelete}
@@ -9210,7 +9173,7 @@ export default function App() {
               )}
                 {screen === "users" && (
                   <GestionUsuariosScreen
-                   canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
+                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
                    canEdit={getPerms("users").canEdit}
                    canDelete={getPerms("users").canDelete}
                    onEditarCliente={u => {

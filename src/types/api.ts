@@ -26,6 +26,12 @@ export interface PermisoApi {
   privilegios: string[];
 }
 
+export interface RolSesionApi {
+  id: string | number;
+  nombre: string;
+  permisos: PermisoApi[];
+}
+
 export interface UsuarioApi {
   id: string | number;
   nombre: string;
@@ -37,6 +43,7 @@ export interface UsuarioApi {
   telefono?: string;
   esSuperAdmin?: boolean;
   permisos?: PermisoApi[];
+  roles?: RolSesionApi[];
 }
 
 export interface LoginResponse {
