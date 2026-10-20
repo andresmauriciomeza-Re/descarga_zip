@@ -715,8 +715,8 @@ const clavePersona = (tipoDocumento: string, numeroDocumento: string, correo: st
   return docValida(k) ? `doc:${k}` : `correo:${correo.trim().toLowerCase()}`;
 };
 
-// Rol activo persistido por usuario: un mapa { [usuarioId]: rolId } que se
-// conserva al cerrar sesión para el próximo login.
+// Rol manual persistido por usuario. Solo se consulta al restaurar una sesión
+// existente tras F5; un login nuevo determina el rol según la respuesta API.
 const ROL_ACTIVO_STORAGE_KEY = "sivpro.rolActivo.v1";
 const leerRolActivo = (usuarioId: string | null | undefined): string | null => {
   if (!usuarioId) return null;
@@ -4454,6 +4454,7 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
     correo: usuarioApi.correo,
     telefono: usuarioApi.telefono ?? "",
     esSuperAdmin: usuarioApi.esSuperAdmin === true,
+    rolCuentaApi: usuarioApi.rol,
     tipoDocumento: usuarioApi.tipoDocumento ?? (usuarioApi.documento ? "CC" : ""),
     numeroDocumento: usuarioApi.numeroDocumento ?? usuarioApi.documento ?? "",
     rolIds: [rolLocal.id],
@@ -4534,7 +4535,11 @@ function LoginScreen({
         u => u.correo.trim().toLowerCase() === correoApi,
       );
       const user = usuarioLocal
-        ? { ...usuarioLocal, esSuperAdmin: usuarioApi.esSuperAdmin === true }
+        ? {
+            ...usuarioLocal,
+            esSuperAdmin: usuarioApi.esSuperAdmin === true,
+            rolCuentaApi: usuarioApi.rol,
+          }
         : undefined;
 
       if (user && !user.activo) {
@@ -7212,7 +7217,11 @@ export default function App() {
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
   // Id del rol ACTIVO de la sesión. Se inicializa en el login y lo cambia el
   // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
-  const [rolActivoId, setRolActivoId] = useState<string | null>(sesionActiva?.rolActivo ?? null);
+  const [rolActivoId, setRolActivoId] = useState<string | null>(() =>
+    sesionActiva
+      ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
+      : null,
+  );
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
@@ -7430,15 +7439,13 @@ export default function App() {
     if (r && !rolesSesionVistos.has(r.id)) { rolesSesionVistos.add(r.id); rolesSesion.push(r); }
   }
 
-  // Rol ACTIVO de la sesión. Prioridad: estado (cambio manual con "Cambiar de
-  // rol") → guardado en localStorage (persiste al cerrar sesión) → primero.
-  const rolActivoIdGuardado = loggedInUser ? leerRolActivo(loggedInUser.id) : null;
+  // Rol activo de sesión. El valor persistido por usuario se carga únicamente
+  // al restaurar la sesión (F5); durante un login nuevo manda el rol inicial
+  // decidido en handleLogin y los cambios manuales viven en el estado.
   const rolActivoIdValido =
     rolActivoId && rolesSesion.some(r => r.id === rolActivoId)
       ? rolActivoId
-      : rolActivoIdGuardado && rolesSesion.some(r => r.id === rolActivoIdGuardado)
-        ? rolActivoIdGuardado
-        : rolesSesion[0]?.id ?? null;
+      : rolesSesion[0]?.id ?? null;
   const loggedInRol = rolesSesion.find(r => r.id === rolActivoIdValido) ?? null;
   const loggedInRoleName = loggedInRol?.nombre ?? userRole;
   // Permisos SOLO del rol activo: la sesión ya no fusiona los mapas de todos
@@ -8022,7 +8029,17 @@ export default function App() {
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
-    const rolIdsCuenta = (empleado?.rolIds?.length ? empleado.rolIds : (user.rolIds?.length ? user.rolIds : [user.rolId])).filter(Boolean);
+    const rolApiNormalizado = normalizarNombreRol(user.rolCuentaApi ?? "");
+    const debeEntrarComoAdministrador =
+      user.esSuperAdmin === true || rolApiNormalizado === "administrador";
+    const rolAdministrador = roles.find(r => esRolAdministrador(r)) ?? null;
+    const idsLocalesCuenta = (empleado?.rolIds?.length
+      ? empleado.rolIds
+      : (user.rolIds?.length ? user.rolIds : [user.rolId])
+    ).filter(Boolean);
+    const rolIdsCuenta = debeEntrarComoAdministrador && rolAdministrador
+      ? [...new Set([rolAdministrador.id, ...idsLocalesCuenta])]
+      : idsLocalesCuenta;
     const rolesActivos: Rol[] = [];
     const visto = new Set<string>();
     for (const id of rolIdsCuenta) {
@@ -8091,25 +8108,23 @@ export default function App() {
     const guardado = leerCarritosDeUsuarios()[user.id] ?? [];
     setCart((prev) => fusionarCarritos(prev, guardado));
 
-    // Rol activo inicial: el ÚLTIMO ROL EXTRA usado guardado en localStorage,
-    // si sigue asignado y activo; si no, el primer rol extra; si no hay extras,
-    // el rol base "Empleado".
+    // Login nuevo: una cuenta Administrador del API o superadministradora entra
+    // con el rol local Administrador. Para las demás cuentas se conserva la
+    // elección multirol existente. El rol guardado no se consulta aquí: solo
+    // se restaura al recargar una sesión ya iniciada.
     const baseEs = (n: string) => {
       const x = normalizarNombreRol(n);
       return x === "administrador" || x === "cliente" || x === "empleado";
     };
     const rolesExtra = rolesActivos.filter(r => !baseEs(r.nombre));
     const rolEmpleadoActivo = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado") ?? null;
-    const guardadoRolId = leerRolActivo(user.id);
     let rolInicial: Rol | null = null;
     if (esClientePublico) {
       rolInicial = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente") ?? rolesActivos[0] ?? null;
+    } else if (debeEntrarComoAdministrador) {
+      rolInicial = rolesActivos.find(r => esRolAdministrador(r)) ?? null;
     } else {
-      if (guardadoRolId) {
-        const cand = rolesActivos.find(r => r.id === guardadoRolId);
-        if (cand && !baseEs(cand.nombre) && cand.activo) rolInicial = cand;
-      }
-      if (!rolInicial) rolInicial = rolesExtra[0] ?? rolEmpleadoActivo ?? rolesActivos[0] ?? null;
+      rolInicial = rolesExtra[0] ?? rolEmpleadoActivo ?? rolesActivos[0] ?? null;
     }
     const inicialId = rolInicial?.id ?? null;
     setRolActivoId(inicialId);
@@ -8351,9 +8366,15 @@ export default function App() {
     try {
       const perfil = await obtenerPerfil();
       const id = String(perfil.id);
+      const clavePerfil = clavePersona(
+        perfil.tipoDocumento ?? "",
+        perfil.numeroDocumento ?? "",
+        perfil.correo ?? "",
+      );
       setUsuarios((prev) =>
         prev.map((u) =>
-          u.id === id
+          u.id === id || u.id === loggedInUserId ||
+          clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil
             ? {
                 ...u,
                 nombre: perfil.nombre || u.nombre,
@@ -8362,10 +8383,16 @@ export default function App() {
                 tipoDocumento: perfil.tipoDocumento || u.tipoDocumento,
                 numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
                 esSuperAdmin: perfil.esSuperAdmin === true,
+                rolCuentaApi: perfil.rol,
               }
             : u,
         ),
       );
+      setEmpleados(prev => prev.map(e =>
+        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === clavePerfil
+          ? { ...e, esSuperAdmin: perfil.esSuperAdmin === true }
+          : e,
+      ));
       setPerfilEstado("idle");
       setPerfilErrorMsg(null);
     } catch (error) {

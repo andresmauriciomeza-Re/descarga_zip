@@ -34,6 +34,8 @@ export interface Usuario {
   rolIds: string[];
   rolId: string;
   rolInternoId?: string;
+  /** Rol primario informado por el backend en login o /auth/me. */
+  rolCuentaApi?: string;
   activo: boolean;
   esCliente?: boolean;
   esEmpleado?: boolean;
