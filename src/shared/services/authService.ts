@@ -212,11 +212,10 @@ export interface ClientePorDocumentoApi {
 
 export async function buscarClientePorDocumento(
   documento: string,
-  tipoDocumento: string,
+  _tipoDocumento?: string,
 ): Promise<ClientePorDocumentoApi> {
   const { data } = await api.get<ClientePorDocumentoApi>(
     `/clientes/documento/${encodeURIComponent(documento)}`,
-    { params: { tipoDocumento } },
   );
   return data;
 }

@@ -16,7 +16,7 @@ import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
 import { cambiarEstadoCliente, crearCliente, editarCliente, listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
@@ -208,7 +208,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     if (telefonoError) errs.telefono = telefonoError;
     if (Object.keys(errs).length) { setEditErrors(errs); return; }
     try {
-      await editarCliente(editItem.numeroDocumento, { nombre: editItem.nombre.trim(), correo: editItem.correo.trim(), telefono: editItem.telefono });
+      await editarCliente(editItem.numeroDocumento, { nombre: normalizarNombre(editItem.nombre), correo: editItem.correo.trim(), telefono: editItem.telefono });
       const original = clientes.find(c => c.id === editItem.id);
       if (original && original.activo !== editItem.activo) {
         const motivo = bloqueoEstado(original);
@@ -218,7 +218,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
       await cargarClientes();
       setEditItem(null); setEditPrevCorreo(null); setEditErrors({});
       toast.success("Cliente actualizado correctamente");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar el cliente."); }
+    } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo actualizar el cliente."; if (mensaje.toLowerCase().includes("correo ya está registrado")) setEditErrors(p => ({ ...p, correo: "Este correo ya está registrado" })); else toast.error(mensaje); }
   };
 
   const abrirEdicion = (c: Cliente) => {
@@ -303,11 +303,11 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
 
     try {
-      await crearCliente({ tipoDocumento: newTipoDoc, numeroDocumento: dm, nombre: newNombre.trim(), correo: newCorreo.trim(), telefono: newTelefono, estado: newActivo });
+      await crearCliente({ tipoDocumento: newTipoDoc, numeroDocumento: dm, nombre: normalizarNombre(newNombre), correo: newCorreo.trim(), telefono: newTelefono, estado: newActivo });
       await cargarClientes();
       setShowCreate(false); resetCreate();
       toast.success(`Cliente ${newNombre.trim()} creado correctamente`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo crear el cliente."); }
+    } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo crear el cliente."; if (mensaje.toLowerCase().includes("correo ya está registrado")) setCreateErrors(p => ({ ...p, correo: "Este correo ya está registrado" })); else toast.error(mensaje); }
   };
 
   useEffect(() => {
@@ -510,12 +510,12 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </button>
                 </div>
 
-                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-6 gap-x-6 gap-y-4">
                   {/* Documento — cada campo en su columna del grid, igual que
                       Nombre completo / Correo electrónico. */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
-                      Tipo de documento <span className="text-primary">*</span>
+                   <div className="sm:col-span-3">
+                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
+                       Tipo de documento <MarcaObligatorio />
                     </label>
                     <select
                       value={newTipoDoc}
@@ -529,9 +529,9 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     </select>
                     {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Número de documento <span className="text-primary">*</span>
+                   <div className="sm:col-span-3">
+                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                       Número de documento <MarcaObligatorio />
                     </label>
                     <input
                       type="text"
@@ -548,14 +548,15 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </div>
 
                   {/* Nombre */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Nombre completo <span className="text-primary">*</span>
+                   <div className="sm:col-span-6">
+                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                       Nombre completo <MarcaObligatorio />
                     </label>
                     <input
                       type="text"
                       value={newNombre}
                        onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
+                       onBlur={() => setNewNombre(normalizarNombre(newNombre))}
                       placeholder="Ej: Laura Martínez"
                       autoFocus
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
@@ -564,18 +565,15 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </div>
 
                   {/* Correo */}
-                  <div>
+                   <div className="sm:col-span-4">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Correo electrónico <span className="text-primary">*</span>
+                       Correo electrónico <MarcaObligatorio />
                     </label>
                     <input
                       type="email"
                       value={newCorreo}
                       autoComplete="off"
-                      // P1 — tiempo real: filtrarCorreo normaliza mientras se
-                      // escribe y errorCorreoAlta valida formato + duplicado
-                      // contra clientes, empleados y usuarios.
-                      onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: errorCorreoAlta(v) })); }}
+                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: undefined })); }}
                       placeholder="correo@ejemplo.com"
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
@@ -583,9 +581,9 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </div>
 
                   {/* Teléfono */}
-                  <div>
+                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Teléfono <span className="text-primary">*</span>
+                        Teléfono <MarcaObligatorio />
                     </label>
                     <input
                       type="tel"
@@ -652,8 +650,8 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   <X className="w-4 h-4" />
                 </button>
               </div>
-                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                 <div className="sm:col-span-2 flex items-center gap-3 pb-2">
+                  <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-6 gap-x-6 gap-y-4">
+                  <div className="sm:col-span-6 flex items-center gap-3 pb-2">
                   <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
                     {editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase()}
                   </div>
@@ -662,7 +660,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                 <div className="sm:col-span-2 flex gap-3 items-start">
+                  <div className="sm:col-span-6 flex gap-3 items-start">
                   <div className="w-56 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <input
@@ -683,21 +681,22 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     />
                   </div>
                 </div>
-                 <p className="sm:col-span-2 text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
+                 <p className="sm:col-span-6 text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
                 {[
                   { label: "Nombre completo", field: "nombre" as const, type: "text"  },
                   { label: "Correo",          field: "correo" as const, type: "email" },
                 ].map(({ label, field, type }) => (
-                  <div key={field}>
+                   <div key={field} className={field === "nombre" ? "sm:col-span-6" : "sm:col-span-4"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} value={editItem[field]} autoComplete="off"
-                      onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreoBasico(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
+                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: undefined })); }}
+                      onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono <span className="text-primary">*</span></label>
+                   <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono <MarcaObligatorio /></label>
                     <input type="tel" inputMode="numeric" value={editItem.telefono} autoComplete="off"
                       onChange={e => { const v = soloDigitos(e.target.value); setEditItem(x => x && ({ ...x, telefono: v })); setEditErrors(p => ({ ...p, telefono: validarTelefono(v) ?? undefined })); }}
                       className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />

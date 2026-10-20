@@ -282,12 +282,12 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 <input
                   type="email"
                   value={correo}
-                   onChange={e => { const value = filtrarCorreo(e.target.value); setCorreo(value); setErrores(p => ({ ...p, correo: validarCorreo(value) ?? undefined })); }}
+                   onChange={e => { const value = filtrarCorreo(e.target.value); setCorreo(value); setErrores(p => ({ ...p, correo: undefined })); }}
                   placeholder="correo@ejemplo.com"
                   className={iCls(errores.correo)}
                   autoFocus
                 />
-                {errores.correo && <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{errores.correo}</p>}
+                {errores.correo && <p className="text-xs text-red-500 mt-1 ml-0.5 leading-tight">{errores.correo.toLowerCase().includes("correo ya está registrado") ? "Este correo ya está registrado" : errores.correo}</p>}
               </>
             ) : (
               <div className="px-3 py-2.5 rounded-xl border border-border bg-muted text-sm text-foreground font-medium">
