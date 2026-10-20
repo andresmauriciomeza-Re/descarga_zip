@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { filtrarDocumento, validarDocumento } from "@/shared/components/campo";
+import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
 import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -754,15 +754,6 @@ export function VentasScreen({
       if (estabaRegistrado) setUsuario("");
     };
 
-    const cambiarTipoDocumento = (tipo: string) => {
-      const estabaRegistrado = estadoBusqueda === "registrado";
-      busquedaId.current += 1;
-      tipoActual.current = tipo;
-      setTipoDocumento(tipo);
-      setEstadoBusqueda(digitosDe(documentoActual.current).length >= 6 ? "pendiente" : "inactivo");
-      setClienteInactivo(false);
-      if (estabaRegistrado) setUsuario("");
-    };
 
     // Product picker state
     const [showPicker, setShowPicker] = useState(false);
@@ -905,7 +896,7 @@ export function VentasScreen({
       }));
       onConfirm(
         {
-          usuario: usuario.trim(),
+          usuario: normalizarNombre(usuario),
           documento: documento.trim(),
           tipoDocumento,
           fecha,
@@ -957,21 +948,9 @@ export function VentasScreen({
             {/* Documento del cliente — búsqueda en tiempo real */}
             <div className="relative">
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Documento del cliente *
+                 Documento del cliente <MarcaObligatorio />
               </label>
               <div className="flex flex-col sm:flex-row gap-2">
-                <select
-                  value={tipoDocumento}
-                  onChange={(e) => cambiarTipoDocumento(e.target.value)}
-                  aria-label="Tipo de documento"
-                  className="px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer w-full sm:w-56 shrink-0"
-                >
-                  {OPCIONES_TIPO_DOCUMENTO.map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
                 <div className="relative flex-1 min-w-0">
                   <input
                     value={documento}
@@ -1002,12 +981,17 @@ export function VentasScreen({
 
             {/* Nombre del cliente: editable solo si el backend confirma que es nuevo */}
             <div className="relative">
+              {estadoBusqueda === "no-encontrado" && <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <MarcaObligatorio /></label>}
+              {estadoBusqueda === "no-encontrado" && <select value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)} className={`${iCls} mb-2`}>
+                {OPCIONES_TIPO_DOCUMENTO.filter(t => ["CC", "CE", "PP", "Pasaporte"].includes(t.code)).map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+              </select>}
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                Nombre del cliente *
+                 Nombre del cliente <MarcaObligatorio />
               </label>
               <input
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
+                onBlur={() => setUsuario(normalizarNombre(usuario))}
                 readOnly={estadoBusqueda === "registrado"}
                 placeholder="Escribe el nombre del cliente..."
                 className={iCls}
@@ -1039,7 +1023,7 @@ export function VentasScreen({
             {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Método de pago *
+                 Método de pago <MarcaObligatorio />
               </label>
               <div className="flex gap-2">
                 {METODO_PAGO_ADMIN.map((m) => (
@@ -1060,7 +1044,7 @@ export function VentasScreen({
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hora de recogida *</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hora de recogida <MarcaObligatorio /></label>
               <input type="time" required value={horaRecogida} onChange={(event) => setHoraRecogida(event.target.value)} className={iCls} />
             </div>
           </div>
@@ -1071,7 +1055,7 @@ export function VentasScreen({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-muted-foreground">
-                  Productos *
+                   Productos <MarcaObligatorio />
                 </label>
                 {selProductos.length > 0 && (
                   <span className="text-xs text-primary font-semibold">

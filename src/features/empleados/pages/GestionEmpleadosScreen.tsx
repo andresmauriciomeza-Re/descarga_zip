@@ -11,7 +11,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "@/features/usuarios/pages/GestionUsuariosScreen";
@@ -351,7 +351,7 @@ export function GestionEmpleadosScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
-    const e = editItem;
+    const e = { ...editItem, nombre: normalizarNombre(editItem.nombre) };
     const errs: Record<string, string> = {};
     if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
     else { const v = validarNombre(e.nombre); if (v) errs.nombre = v; }
@@ -430,9 +430,9 @@ export function GestionEmpleadosScreen({
   };
 
   const handleCreate = () => {
+    const nombreNormalizado = normalizarNombre(newNombre);
     const errs: Record<string, string> = {};
-    if (!newNombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else { const v = validarNombre(newNombre); if (v) errs.nombre = v; }
+    if (!nombreNormalizado) errs.nombre = "El nombre es obligatorio";
     if (!newCorreo.trim()) { errs.correo = "El correo es obligatorio"; }
     else if (validarCorreo(newCorreo)) { errs.correo = validarCorreo(newCorreo) as string; }
     // Teléfono opcional con la regla única (solo números, 7 a 15 dígitos).
@@ -487,7 +487,7 @@ export function GestionEmpleadosScreen({
 
     const nuevoEmpleado: Empleado = {
       id: newId,
-      nombre: newNombre.trim(),
+      nombre: nombreNormalizado,
       iniciales,
       avatarColor,
       correo: newCorreo.trim(),
@@ -739,7 +739,7 @@ export function GestionEmpleadosScreen({
                   {/* Empleado al que se le registra la contratación */}
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Empleado <span className="text-primary">*</span>
+                      Empleado <MarcaObligatorio />
                     </label>
                     <select value={ctrEmpleadoId} autoFocus
                       onChange={e => {
@@ -783,7 +783,7 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Cargo <span className="text-primary">*</span>
+                      Cargo <MarcaObligatorio />
                     </label>
                     {/* CARGO = ROL: un solo campo con los cargos (roles) de esta
                         contratación; ya no hay un texto de cargo aparte. */}
@@ -799,7 +799,7 @@ export function GestionEmpleadosScreen({
                   <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Fecha de inicio <span className="text-primary">*</span>
+                      Fecha de inicio <MarcaObligatorio />
                     </label>
                     <input type="date" value={ctrFechaInicio}
                       onChange={e => { setCtrFechaInicio(e.target.value); if (ctrErrors.fechaInicio) setCtrErrors(p => ({ ...p, fechaInicio: undefined })); }}
@@ -952,7 +952,7 @@ export function GestionEmpleadosScreen({
                   <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
                   <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-start gap-2">
                     <div className="w-full sm:w-56 shrink-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <span className="text-primary">*</span></label>
+                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <MarcaObligatorio /></label>
                       <select value={newTipoDoc}
                        onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
                         className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
@@ -962,7 +962,7 @@ export function GestionEmpleadosScreen({
                     </div>
                     <div className="flex-1 min-w-0">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Número de documento <span className="text-primary">*</span>
+                        Número de documento <MarcaObligatorio />
                       </label>
                        <input type="text" inputMode="numeric" value={newDocumento} autoComplete="off"
                          onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, documento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
@@ -973,17 +973,18 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Nombre completo <span className="text-primary">*</span>
+                       Nombre completo <MarcaObligatorio />
                     </label>
                     <input type="text" value={newNombre} autoFocus
-                       onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
+                        onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: undefined })); }}
+                        onBlur={() => setNewNombre(normalizarNombre(newNombre))}
                       placeholder="Ej: Laura Martínez"
                       className={fCls(createErrors.nombre)} />
                     {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Correo electrónico <span className="text-primary">*</span>
+                       Correo electrónico <MarcaObligatorio />
                     </label>
                     <input type="email" value={newCorreo} autoComplete="off"
                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
@@ -1017,7 +1018,7 @@ export function GestionEmpleadosScreen({
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Cargo <span className="text-primary">*</span>
+                       Cargo <MarcaObligatorio />
                     </label>
                     {/* CARGO = ROL: aquí se eligen los cargos (roles) del nuevo
                         empleado; no hay input de texto libre. */}
@@ -1033,7 +1034,7 @@ export function GestionEmpleadosScreen({
                   <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Fecha de inicio <span className="text-primary">*</span>
+                       Fecha de inicio <MarcaObligatorio />
                     </label>
                     <input type="date" value={newFechaInicio}
                       onChange={e => { setNewFechaInicio(e.target.value); if (createErrors.fechaInicio) setCreateErrors(p => ({ ...p, fechaInicio: undefined })); }}
@@ -1116,14 +1117,15 @@ export function GestionEmpleadosScreen({
                   <div key={field} className={full ? "col-span-2" : ""}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
-                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : field === "nombre" ? validarNombre(v) ?? undefined : undefined })); }}
+                        onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : undefined })); }}
+                        onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
                       className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Cargo <span className="text-primary">*</span>
+                     Cargo <MarcaObligatorio />
                   </label>
                   <SelectorRoles
                     roles={roles}

@@ -167,17 +167,26 @@ export function validarCorreoBasico(v: string): string | null {
 }
 
 export function validarNombre(v: string): string | null {
-  if (!v.trim()) return "El nombre completo es obligatorio";
-  if (!RE_NOMBRE.test(v)) return "Usa solo letras y espacios, sin espacios dobles";
-  if (v.trim().length < 3) return "El nombre completo debe tener al menos 3 caracteres";
-  return null;
+  return v.trim() ? null : "El nombre es obligatorio";
+}
+
+export function MarcaObligatorio() {
+  return <span aria-label="obligatorio" className="font-bold text-red-600 dark:text-red-400"> *</span>;
 }
 
 export function filtrarNombre(valor: string): string {
   return valor
-    .replace(/[^A-Za-zÁÉÍÓÚáéíóúÜüÑñ ]/g, "")
-    .replace(/^ +/, "")
+    .replace(/[^\p{L} ]/gu, "")
     .replace(/ {2,}/g, " ");
+}
+
+const PALABRAS_MINUSCULAS = new Set(["de", "del", "la", "las", "los", "y", "e"]);
+export function normalizarNombre(valor: string): string {
+  return filtrarNombre(valor).trim().toLocaleLowerCase("es").split(" ").filter(Boolean)
+    .map((palabra, indice) => indice > 0 && PALABRAS_MINUSCULAS.has(palabra)
+      ? palabra
+      : palabra.charAt(0).toLocaleUpperCase("es") + palabra.slice(1))
+    .join(" ");
 }
 
 /** Teléfono — REGLA ÚNICA del sistema (registro, perfiles y formularios del

@@ -92,7 +92,7 @@ import {
   YAxis,
 } from "recharts";
 import QRCode from "qrcode";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
   AUTH_GLASS_CARD,
@@ -3719,7 +3719,7 @@ function CartScreen({
                   {/* 1) Documento — obligatorio, 6 a 10 dígitos. */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">
-                      Documento <span className="text-primary">*</span>
+                      Documento <MarcaObligatorio />
                     </label>
                     <input
                       value={guestDocument}
@@ -3752,7 +3752,7 @@ function CartScreen({
                   {/* 2) Nombre — obligatorio. */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-1.5">
-                      Nombre completo <span className="text-primary">*</span>
+                      Nombre completo <MarcaObligatorio />
                     </label>
                     <input
                       value={guestName}
@@ -3760,7 +3760,7 @@ function CartScreen({
                         setGuestName(filtrarNombre(e.target.value));
                         setTocadoNombre(true);
                       }}
-                      onBlur={() => setTocadoNombre(true)}
+                      onBlur={() => { setGuestName(normalizarNombrePersona(guestName)); setTocadoNombre(true); }}
                       onKeyDown={validacionDatos.onKeyDownCampo("nombre", {
                         validar: () => errNombre,
                       })}
@@ -5107,7 +5107,7 @@ function RegisterScreen({
       setForm((p) => ({ ...p, [k]: value }));
       setErrores((prev) => {
         const next = { ...prev };
-        if (k === "email") next.email = validarCorreo(value) ?? "";
+        if (k === "email") next.email = "";
         if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
         if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
         if (k === "password") {
@@ -5201,7 +5201,7 @@ function RegisterScreen({
   const register = async () => {
     const errs: Record<string, string> = {};
 
-    if (!form.name.trim()) errs.name = "El nombre completo es obligatorio";
+    if (!form.name.trim()) errs.name = "El nombre es obligatorio";
     else errs.name = validarNombre(form.name) ?? undefined;
     if (!form.email) errs.email = "El correo electrónico es obligatorio";
     else errs.email = validarCorreo(form.email) ?? undefined;
@@ -5258,7 +5258,7 @@ function RegisterScreen({
       await registrarCliente({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
-        nombre: form.name.trim(),
+        nombre: normalizarNombrePersona(form.name),
         correo: form.email.trim().toLowerCase(),
         telefono: form.phone.trim(),
         contrasena: form.password,
@@ -5312,7 +5312,7 @@ function RegisterScreen({
             ).toUpperCase();
           const nuevoUsuario: Usuario = {
             id: "USR-" + (maxId + 1),
-            nombre: form.name.trim(),
+            nombre: normalizarNombrePersona(form.name),
             iniciales,
             avatarColor: AVATAR_PALETTE[usuarios.length % AVATAR_PALETTE.length],
             correo: correoNuevo,
@@ -5431,11 +5431,12 @@ function RegisterScreen({
 
             `gap-x-3` (12px) separa las dos columnas y `gap-y-2` (8px) las
             filas; `mb-1` (4px) dentro de cada celda separa label e input. */}
-        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
-          <div className="sm:col-span-2 grid gap-3 sm:grid-cols-[3fr_2fr]">
+        <div className="grid gap-x-3 gap-y-2 grid-cols-1 sm:grid-cols-6">
+          <div className="sm:col-span-6 grid gap-3 grid-cols-1 sm:grid-cols-[3fr_2fr]">
             <div className="min-w-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white whitespace-nowrap">
                 Tipo doc.
+                <MarcaObligatorio />
               </label>
               <select
                 value={form.docType}
@@ -5460,8 +5461,9 @@ function RegisterScreen({
               <MensajeError id={validacion.idError("docType")} err={errores.docType} />
             </div>
             <div className="min-w-0">
-              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
+              <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white whitespace-nowrap">
                 Número de documento
+                <MarcaObligatorio />
               </label>
               <input
                 value={form.docNum}
@@ -5512,9 +5514,10 @@ function RegisterScreen({
               type: "password",
             },
           ].map(({ label, key, placeholder, type, numeric, full }) => (
-            <div key={key} className={full ? "sm:col-span-2 min-w-0" : "min-w-0"}>
+            <div key={key} className={full ? "sm:col-span-6 min-w-0" : key === "email" ? "sm:col-span-4 min-w-0" : key === "phone" ? "sm:col-span-2 min-w-0" : "sm:col-span-3 min-w-0"}>
               <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
                 {label}
+                <MarcaObligatorio />
               </label>
               {type === "password" ? (
                 <PasswordField
@@ -5537,12 +5540,13 @@ function RegisterScreen({
                   inputMode={numeric ? "numeric" : undefined}
                   placeholder={placeholder}
                   ref={validacion.refCampo(key)}
+                  onBlur={key === "name" ? () => setForm(p => ({ ...p, name: normalizarNombrePersona(p.name) })) : undefined}
                   onKeyDown={teclaEnRegistro(key)}
                   className={authInputCls(errores[key], "h-10")}
                   {...validacion.ariaCampo(key, errores[key])}
                 />
               )}
-              <MensajeError id={validacion.idError(key)} err={errores[key]} />
+              <MensajeError id={validacion.idError(key)} err={key === "email" && errores[key]?.includes("registrado") ? "Este correo ya está registrado" : errores[key]} />
             </div>
           ))}
 
