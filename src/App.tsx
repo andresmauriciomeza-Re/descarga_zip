@@ -9177,37 +9177,16 @@ export default function App() {
                   {...getPerms("cat-producto")}
                 />
               )}
-               {screen === "gestion-roles" && (
-                <GestionConfigScreen
-                  userRole={userRole}
-                  roles={roles}
-                  setRoles={setRoles}
-                  rolUserCounts={(() => {
-                    const counts: Record<string, number> = {};
-                    const sumar = (id: string) => { counts[id] = (counts[id] ?? 0) + 1; };
-                    empleados.forEach(e => e.rolIds.forEach(sumar));
-                    usuariosUnificados.forEach(u => {
-                      // Los que YA tienen ficha ya se contaron por empleado: solo
-                      // cuentan los que NO tienen (rol personalizado, cliente, etc.).
-                      const tieneFicha = empleados.some(e =>
-                        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) ===
-                        clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo),
-                      );
-                      if (tieneFicha) return;
-                      const ids = u.rolIds?.length ? u.rolIds : [u.rolId];
-                      ids.forEach(sumar);
-                    });
-                    return counts;
-                  })()}
-                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
+                {screen === "gestion-roles" && (
+                  <GestionConfigScreen
+                    canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
                   canCreate={getPerms("gestion-roles").canCreate}
                   canEdit={getPerms("gestion-roles").canEdit}
-                  canDelete={getPerms("gestion-roles").canDelete}
-                  accesosPropios={loggedInAccesos}
-                  loggedInRolId={loggedInRol?.id ?? null}
-                  usuarios={usuariosUnificados}
-                />
-              )}
+                    canDelete={getPerms("gestion-roles").canDelete}
+                    accesosPropios={loggedInAccesos}
+                    loggedInRolId={loggedInRol?.id ?? null}
+                  />
+                )}
               {screen === "sales-chart" && (
                 <SalesChartScreen
                   ventas={ventas}

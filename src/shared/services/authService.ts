@@ -126,6 +126,60 @@ export async function listarUsuarios(): Promise<UsuarioListadoApi[]> {
   return data;
 }
 
+export interface PermisoRolApi {
+  id_permiso: number;
+  modulo: string;
+  nombre: string;
+  descripcion: string | null;
+  privilegios: { id_privilegio: number; nombre: string; descripcion: string | null }[];
+}
+
+export interface RolApi {
+  id: string | number;
+  nombre: string;
+  descripcion: string;
+  activo: boolean;
+  usuariosAsignados: number;
+  accesos: Record<string, string[]>;
+}
+
+export interface RolPayloadApi {
+  nombre: string;
+  descripcion: string;
+  activo: boolean;
+  accesos: Record<string, string[]>;
+}
+
+export async function listarPermisosRoles(): Promise<PermisoRolApi[]> {
+  const { data } = await api.get<PermisoRolApi[]>("/permisos");
+  return data;
+}
+
+export async function listarRoles(): Promise<RolApi[]> {
+  const { data } = await api.get<RolApi[]>("/roles");
+  return data;
+}
+
+export async function crearRol(datos: RolPayloadApi): Promise<RolApi> {
+  const { data } = await api.post<RolApi>("/roles", datos);
+  return data;
+}
+
+export async function editarRol(id: string, datos: RolPayloadApi): Promise<RolApi> {
+  const { data } = await api.put<RolApi>(`/roles/${encodeURIComponent(id)}`, datos);
+  return data;
+}
+
+export async function cambiarEstadoRol(id: string, estado: boolean): Promise<RolApi> {
+  const { data } = await api.patch<RolApi>(`/roles/${encodeURIComponent(id)}/estado`, { estado });
+  return data;
+}
+
+export async function eliminarRol(id: string): Promise<{ mensaje: string }> {
+  const { data } = await api.delete<{ mensaje: string }>(`/roles/${encodeURIComponent(id)}`);
+  return data;
+}
+
 export async function listarClientes(): Promise<ClienteListadoApi[]> {
   const { data } = await api.get<ClienteListadoApi[]>("/clientes");
   return data;

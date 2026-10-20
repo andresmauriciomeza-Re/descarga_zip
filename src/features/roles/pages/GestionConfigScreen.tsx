@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Check, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,16 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { validarNombre } from "@/shared/components/campo";
 import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/nombreRol";
+import {
+  cambiarEstadoRol as cambiarEstadoRolApi,
+  crearRol as crearRolApi,
+  editarRol as editarRolApi,
+  eliminarRol as eliminarRolApi,
+  listarPermisosRoles,
+  listarRoles as listarRolesApi,
+  type RolApi,
+  type RolPayloadApi,
+} from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 
@@ -141,6 +151,7 @@ export interface Rol {
   descripcion: string;
   accesos: AccesosMap;
   activo: boolean;
+  usuariosAsignados?: number;
 }
 
 const conAcciones = (base: AccesosMap, ks: string[], acts: Accion[]): AccesosMap => {
@@ -228,8 +239,7 @@ export const esRolBase = (r?: Rol | null): boolean => {
 // Un rol se puede editar salvo los dos fijos por simplicidad de cuenta:
 // "Administrador" y "Cliente". "Empleado" y todo rol extra/creado sí se editan.
 export const rolEditable = (r?: Rol | null): boolean => {
-  const n = (r?.nombre ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return n !== "administrador" && n !== "cliente";
+  return !esRolBase(r);
 };
 
 // "Permisos" = sub-módulos con al menos un privilegio asignado.
@@ -693,11 +703,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                <select value={activo ? "activo" : "inactivo"} onChange={e => setActivo(e.target.value === "activo")}
-                  className={iCls + " cursor-pointer"}>
-                  <option value="activo">Activo</option>
-                  <option value="inactivo">Inactivo</option>
-                </select>
+                {rolId
+                  ? <p className="text-sm text-muted-foreground py-2">Inactivo. Actívalo desde la lista después de editarlo.</p>
+                  : <select value={activo ? "activo" : "inactivo"} onChange={e => setActivo(e.target.value === "activo")}
+                      className={iCls + " cursor-pointer"}>
+                      <option value="activo">Activo</option>
+                      <option value="inactivo">Inactivo</option>
+                    </select>}
               </div>
             </div>
 
@@ -887,39 +899,86 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   );
 }
 
+const idApiARolUi = (id: string | number) => `ROL-${String(id).padStart(3, "0")}`;
+const idRolUiAApi = (id: string) => {
+  const numero = Number(id.replace(/^ROL-/, ""));
+  if (!Number.isSafeInteger(numero) || numero <= 0) throw new Error("El identificador del rol no es válido.");
+  return String(numero);
+};
+
+const adaptarRolApi = (rol: RolApi): Rol => ({
+  id: idApiARolUi(rol.id),
+  nombre: rol.nombre,
+  descripcion: rol.descripcion ?? "",
+  activo: rol.activo,
+  usuariosAsignados: Number(rol.usuariosAsignados ?? 0),
+  accesos: rol.accesos as AccesosMap,
+});
+
+const payloadRolApi = (nombre: string, descripcion: string, activo: boolean, accesos: AccesosMap): RolPayloadApi => ({
+  nombre,
+  descripcion,
+  activo,
+  accesos,
+});
+
+const mensajeError = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 // ── Pantalla principal ────────────────────────────────────────────────
 export function GestionConfigScreen({
-  userRole,
-  roles,
-  setRoles,
-  rolUserCounts,
   canVer = true,
   canCreate = true,
   canEdit = true,
   canDelete = true,
   accesosPropios,
   loggedInRolId,
-  usuarios,
 }: {
-  userRole: string;
-  roles: Rol[];
-  setRoles: React.Dispatch<React.SetStateAction<Rol[]>>;
-  rolUserCounts: Record<string, number>;
   canVer?: boolean;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   accesosPropios?: AccesosMap;
   loggedInRolId?: string | null;
-  usuarios?: { id: string; rolId: string; rolIds?: string[]; activo: boolean }[];
 }) {
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   const [page,       setPage]      = useState(1);
   const PER_PAGE = 5;
   const [showCreate, setShowCreate]= useState(false);
   const [editItem,   setEditItem]  = useState<Rol | null>(null);
   const [detailItem, setDetailItem]= useState<Rol | null>(null);
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
+  const [desactivarId, setDesactivarId] = useState<string | null>(null);
+  const [estadoEnCurso, setEstadoEnCurso] = useState<string | null>(null);
   const [search,     setSearch]    = useState("");
+
+  const cargarRoles = async () => {
+    setCargando(true);
+    setErrorCarga("");
+    try {
+      const [rolesApi, permisosApi] = await Promise.all([listarRolesApi(), listarPermisosRoles()]);
+      const catalogoApi = new Set(permisosApi.map(p => `${p.modulo}::${p.nombre}`));
+      const faltantes = MENU_TREE.flatMap(({ modulo, subs }) =>
+        subs.filter(sub => !catalogoApi.has(KEY(modulo, sub))).map(sub => KEY(modulo, sub)),
+      );
+      if (faltantes.length) {
+        throw new Error(`El catálogo de permisos no contiene: ${faltantes.join(", ")}.`);
+      }
+      setRoles(rolesApi.map(adaptarRolApi));
+    } catch (error) {
+      const mensaje = mensajeError(error, "No se pudieron cargar los roles.");
+      setErrorCarga(mensaje);
+      toast.error(mensaje);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canVer) void cargarRoles();
+  }, [canVer]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -933,81 +992,96 @@ export function GestionConfigScreen({
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
 
-  const handleCreate = (nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
-    const newRol: Rol = { id: nextRolId(roles), nombre, descripcion: desc, activo, accesos };
-    setRoles(p => [...p, newRol]);
-    setShowCreate(false);
-    toast.success(`Rol ${newRol.id} creado`);
+  const handleCreate = async (nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
+    try {
+      const creado = await crearRolApi(payloadRolApi(nombre, desc, activo, accesos));
+      const rol = adaptarRolApi(creado);
+      setRoles(p => [...p, rol]);
+      setShowCreate(false);
+      toast.success(`Rol ${rol.id} creado correctamente`);
+    } catch (error) {
+      toast.error(mensajeError(error, "No se pudo crear el rol."));
+    }
   };
 
-  // Misma regla para el mapa de accesos (p. ej. al editar un rol total).
-  const accesosEsTotal = (accs?: AccesosMap) => {
-    if (!accs) return false;
-    const full = fullAccesos();
-    return Object.entries(full).every(([k, acts]) => (accs[k]?.length ?? 0) > 0 && acts.every(a => accs[k]?.includes(a)));
-  };
-
-  // Los roles extra se editan siempre;Administrador y Cliente quedan fijos;
-  // Empleado se edita pero no se elimina/inactiva (los peers protegen con base).
-
-  const saveRol = (id: string | null, nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
-    if (id) {
-      const r = roles.find(x => x.id === id);
-      if (r && (r.nombre.trim().toLowerCase() === "administrador" || r.nombre.trim().toLowerCase() === "cliente")) {
-        toast.error("Este rol base no se puede editar");
-        return;
-      }
-      if (r && rolEsTotal(r) && (!activo || !accesosEsTotal(accesos)) && ultimoTotalCubiertoPor(id)) {
-        toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
-        return;
-      }
-      setRoles(p => p.map(x => x.id === id ? { ...x, nombre, descripcion: desc, activo, accesos } : x));
+  const saveRol = async (id: string | null, nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
+    if (!id) return;
+    const rol = roles.find(x => x.id === id);
+    if (!rol) return;
+    if (esRolBase(rol)) {
+      toast.error("Este rol base no se puede editar");
+      return;
+    }
+    if (rol.activo) {
+      toast.error("Desactiva el rol antes de editarlo");
+      return;
+    }
+    if (activo) {
+      toast.error("Guarda el rol inactivo y actívalo después desde su estado.");
+      return;
+    }
+    try {
+      const actualizado = await editarRolApi(idRolUiAApi(id), payloadRolApi(nombre, desc, false, accesos));
+      const nuevo = adaptarRolApi(actualizado);
+      setRoles(p => p.map(x => x.id === id ? nuevo : x));
       setEditItem(null);
-      toast.success("Rol actualizado");
+      toast.success("Rol actualizado correctamente");
+    } catch (error) {
+      toast.error(mensajeError(error, "No se pudo editar el rol."));
     }
   };
 
-  // ¿Este rol tiene TODOS los permisos y privilegios?
-  const rolEsTotal = (rol?: Rol | null) => {
-    if (!rol) return false;
-    const full = fullAccesos();
-    return Object.entries(full).every(([k, acts]) => (rol.accesos?.[k] ?? []).length > 0 && acts.every(a => rol.accesos[k]?.includes(a)));
-  };
-  // Usuarios ACTIVOS cuyo rol tiene todos los permisos. Si el cambio de un
-  // rol/usuario lo dejara en 0, el sistema se queda sin nadie con acceso total.
-  // Multi-rol: basta con que UNO de los roles del usuario sea total.
-  const totalesActivos = (usuarios ?? []).filter(u => {
-    const ids = u.rolIds && u.rolIds.length > 0 ? u.rolIds : [u.rolId];
-    return u.activo && ids.some(id => rolEsTotal(roles.find(x => x.id === id)));
-  });
-  // ¿Esta acción dejaría el sistema sin ningún usuario activo con todos los
-  // permisos? ¿El rol indicado cubre a TODOS los totales activos?
-  const ultimoTotalCubiertoPor = (rolId: string) => {
-    if (totalesActivos.length === 0) return false;
-    return totalesActivos.every(u => {
-      const ids = u.rolIds && u.rolIds.length > 0 ? u.rolIds : [u.rolId];
-      return ids.includes(rolId);
-    });
+  const aplicarEstado = async (rol: Rol, activo: boolean, confirmado = false) => {
+    if (esRolBase(rol) && !activo) {
+      toast.error("No se puede desactivar un rol base.");
+      return false;
+    }
+    if (rol.id === loggedInRolId) {
+      toast.error("No puedes modificar tu propio rol.");
+      return false;
+    }
+    if (rol.activo && !activo && (rol.usuariosAsignados ?? 0) > 0 && !confirmado) {
+      setDesactivarId(rol.id);
+      return false;
+    }
+    setEstadoEnCurso(rol.id);
+    try {
+      const actualizado = await cambiarEstadoRolApi(idRolUiAApi(rol.id), activo);
+      const nuevo = adaptarRolApi(actualizado);
+      setRoles(p => p.map(x => x.id === rol.id ? nuevo : x));
+      setDesactivarId(null);
+      toast.success(`Rol ${activo ? "activado" : "desactivado"} correctamente`);
+      return true;
+    } catch (error) {
+      toast.error(mensajeError(error, "No se pudo cambiar el estado del rol."));
+      return false;
+    } finally {
+      setEstadoEnCurso(null);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const confirmarDesactivacion = async () => {
+    const rol = roles.find(r => r.id === desactivarId);
+    if (rol) await aplicarEstado(rol, false, true);
+  };
+
+  const handleDelete = async (id: string) => {
     const rol = roles.find(r => r.id === id);
-    const asignados = rolUserCounts[id] ?? 0;
+    const asignados = rol?.usuariosAsignados ?? 0;
     if (esRolBase(rol) || asignados > 0) {
-      toast.error(
-        esRolBase(rol)
-          ? "No se puede eliminar un rol base"
-          : `No se puede eliminar el rol porque tiene ${asignados} usuario(s) asignado(s)`,
-      );
+      toast.error(esRolBase(rol)
+        ? "No se puede eliminar un rol base."
+        : `No se puede eliminar el rol porque tiene ${asignados} usuario(s) asignado(s).`);
       return;
     }
-    if (rolEsTotal(rol) && ultimoTotalCubiertoPor(id)) {
-      toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
-      return;
+    try {
+      const respuesta = await eliminarRolApi(idRolUiAApi(id));
+      setRoles(p => p.filter(r => r.id !== id));
+      setDeleteId(null);
+      toast.success(respuesta.mensaje);
+    } catch (error) {
+      toast.error(mensajeError(error, "No se pudo eliminar el rol."));
     }
-    setRoles(p => p.filter(r => r.id !== id));
-    setDeleteId(null);
-    toast.success("Rol eliminado");
   };
 
   if (!canVer) {
@@ -1051,7 +1125,14 @@ export function GestionConfigScreen({
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
+              {cargando ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando roles…</td></tr>
+              ) : errorCarga ? (
+                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
+                  <p role="alert">{errorCarga}</p>
+                  <button onClick={() => void cargarRoles()} className="mt-2 underline text-primary">Reintentar</button>
+                </td></tr>
+              ) : paged.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">🔐</p><p>No se encontraron roles</p>
                 </td></tr>
@@ -1061,32 +1142,24 @@ export function GestionConfigScreen({
                   <td className="px-4 py-3.5 text-sm font-medium text-foreground">{r.nombre}</td>
                   <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
                   <td className="px-4 py-3.5">
-                    {/* Pill de estado (diseño de Proveedores). Misma regla
-                        que antes: sin permiso o en el propio rol queda sin
-                        menú, y no se puede quedar el sistema sin un usuario
-                        activo con todos los permisos. */}
-                      <span
-                      title={
-                        r.id === loggedInRolId
-                          ? "No puedes modificar tu propio rol"
-                          : esRolBase(r) && r.nombre.trim().toLowerCase() === "empleado"
-                            ? "El rol Empleado no se puede inactivar"
-                            : undefined
-                      }
-                    >
-                      <EstadoSelect
-                        value={r.activo ? "activo" : "inactivo"}
-                        disabled={!canEdit || r.id === loggedInRolId || esRolBase(r)}
-                        onChange={nuevoEstado => {
-                          if ((nuevoEstado === "activo") === r.activo) return;
-                          const nuevo = nuevoEstado === "activo";
-                          if (r.activo && !nuevo && rolEsTotal(r) && ultimoTotalCubiertoPor(r.id)) {
-                            toast.error("No se puede: el sistema debe tener al menos un usuario activo con todos los permisos.");
-                            return;
-                          }
-                          setRoles(p => p.map(x => x.id === r.id ? { ...x, activo: nuevo } : x));
-                          toast.success("Estado actualizado");
-                        }}
+                   {/* El backend verifica en transacción las invariantes del estado. */}
+                       <span
+                       title={
+                         esRolBase(r)
+                           ? "Rol base: no se puede desactivar"
+                           : r.id === loggedInRolId
+                             ? "No puedes modificar tu propio rol"
+                             : undefined
+                       }
+                     >
+                       <EstadoSelect
+                         value={r.activo ? "activo" : "inactivo"}
+                         disabled={!canEdit || r.id === loggedInRolId || esRolBase(r) || estadoEnCurso === r.id}
+                         onChange={nuevoEstado => {
+                           if ((nuevoEstado === "activo") === r.activo) return;
+                           const nuevo = nuevoEstado === "activo";
+                           void aplicarEstado(r, nuevo);
+                         }}
                         options={[
                           { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
                           { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
@@ -1095,23 +1168,15 @@ export function GestionConfigScreen({
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <ActionIcons
-                      onView={() => setDetailItem(r)}
-                      onEdit={
-                        r.id === loggedInRolId || !rolEditable(r)
-                          ? () => {}
-                          : canEdit
-                            ? () => setEditItem(r)
-                            : undefined
-                      }
-                      editDisabled={r.id === loggedInRolId || !rolEditable(r)}
-                      editTitle={
-                        r.id === loggedInRolId
-                          ? "No puedes modificar tu propio rol"
-                          : rolEditable(r)
-                            ? "Editar"
-                            : "Este rol base no se puede editar"
-                      }
+                     <ActionIcons
+                       onView={() => setDetailItem(r)}
+                       onEdit={canEdit ? () => setEditItem(r) : undefined}
+                       editDisabled={esRolBase(r) || r.activo}
+                       editTitle={esRolBase(r)
+                         ? "Rol base: no se puede editar"
+                         : r.activo
+                           ? "Desactiva el rol para poder editarlo"
+                           : "Editar"}
                       onDelete={
                         r.id === loggedInRolId
                           ? () => {}
@@ -1120,15 +1185,15 @@ export function GestionConfigScreen({
                       deleteDisabled={
                         r.id === loggedInRolId ||
                         esRolBase(r) ||
-                        (rolUserCounts[r.id] ?? 0) > 0
+                         (r.usuariosAsignados ?? 0) > 0
                       }
                       deleteTitle={
                         r.id === loggedInRolId
                           ? "No puedes modificar tu propio rol"
                           : esRolBase(r)
                             ? "No se puede eliminar un rol base"
-                            : (rolUserCounts[r.id] ?? 0) > 0
-                              ? `No se puede eliminar: ${rolUserCounts[r.id]} usuario(s) asignado(s)`
+                            : (r.usuariosAsignados ?? 0) > 0
+                              ? `No se puede eliminar: ${r.usuariosAsignados} usuario(s) asignado(s)`
                               : "Eliminar"
                       }
                     />
@@ -1190,7 +1255,7 @@ export function GestionConfigScreen({
                   {[
                     { l: "Nombre",            v: detailItem.nombre,                     ancho: false },
                     { l: "Estado",            v: detailItem.activo ? "Activo" : "Inactivo", ancho: false },
-                    { l: "Usuarios",          v: textoUsuariosAsignados(rolUserCounts[detailItem.id] ?? 0), ancho: false },
+                    { l: "Usuarios",          v: textoUsuariosAsignados(detailItem.usuariosAsignados ?? 0), ancho: false },
                     { l: "Descripción",       v: detailItem.descripcion || "—",            ancho: true },
                   ].map(({ l, v, ancho }) => (
                     <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "sm:col-span-2" : ""}`}>
@@ -1214,7 +1279,7 @@ export function GestionConfigScreen({
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
-                {canEdit && detailItem.id !== loggedInRolId && rolEditable(detailItem) && (
+                {canEdit && rolEditable(detailItem) && !detailItem.activo && (
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
@@ -1222,9 +1287,15 @@ export function GestionConfigScreen({
                 )}
                 {/* Segunda ruta al modal de edición: mismo criterio que el lápiz
                     de la tabla (propio, no editable o sin permiso). */}
-                {detailItem.id === loggedInRolId || !rolEditable(detailItem) ? (
+                {rolEditable(detailItem) && detailItem.activo ? (
                   <button disabled
-                    title={detailItem.id === loggedInRolId ? "No puedes modificar tu propio rol" : "Este rol base no se puede editar"}
+                    title="Desactiva el rol para poder editarlo"
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
+                    Editar rol
+                  </button>
+                ) : !rolEditable(detailItem) ? (
+                  <button disabled
+                    title="Rol base: no se puede editar"
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
                     Editar rol
                   </button>
@@ -1242,11 +1313,11 @@ export function GestionConfigScreen({
 
       <AnimatePresence>
         {deleteId && (() => {
-          const count = rolUserCounts[deleteId] ?? 0;
+          const count = roles.find(r => r.id === deleteId)?.usuariosAsignados ?? 0;
           // Por nombre, nunca por el ID técnico: "eliminar el rol Administrador".
           const nombreRol = roles.find(r => r.id === deleteId)?.nombre ?? "";
           const message = count > 0
-            ? `Este rol tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}. ¿Deseas eliminarlo de todas formas? Los usuarios quedarán SIN ACCESO hasta que les asignes otro rol.`
+            ? `No se puede eliminar el rol: tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}.`
             : `¿Seguro que deseas eliminar el rol ${nombreRol}? Se eliminan también sus accesos configurados.`;
           return (
             <ConfirmDeleteModal
@@ -1257,6 +1328,17 @@ export function GestionConfigScreen({
             />
           );
         })()}
+      </AnimatePresence>
+      <AnimatePresence>
+        {desactivarId && (
+          <ConfirmDeleteModal
+            title="Desactivar rol"
+            message="Los usuarios con este rol perderán sus accesos mientras esté inactivo. ¿Deseas continuar?"
+            confirmLabel="Desactivar"
+            onConfirm={() => void confirmarDesactivacion()}
+            onCancel={() => setDesactivarId(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
