@@ -4453,6 +4453,7 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
     avatarColor: AVATAR_PALETTE[0],
     correo: usuarioApi.correo,
     telefono: usuarioApi.telefono ?? "",
+    esSuperAdmin: usuarioApi.esSuperAdmin === true,
     tipoDocumento: usuarioApi.tipoDocumento ?? (usuarioApi.documento ? "CC" : ""),
     numeroDocumento: usuarioApi.numeroDocumento ?? usuarioApi.documento ?? "",
     rolIds: [rolLocal.id],
@@ -4529,9 +4530,12 @@ function LoginScreen({
       // Puente API → estado local: la sesión, los roles y el menú siguen
       // resolviendo contra el listado local de cuentas.
       const correoApi = (usuarioApi.correo || trimmedEmail).trim().toLowerCase();
-      const user = usuarios.find(
+      const usuarioLocal = usuarios.find(
         u => u.correo.trim().toLowerCase() === correoApi,
       );
+      const user = usuarioLocal
+        ? { ...usuarioLocal, esSuperAdmin: usuarioApi.esSuperAdmin === true }
+        : undefined;
 
       if (user && !user.activo) {
         borrarToken();
@@ -4678,7 +4682,7 @@ function LoginScreen({
                  setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
               }}
               type="email"
-              placeholder="gloria@lasirena.com"
+              placeholder="correo@lasirena.com"
               ref={validacion.refCampo("email")}
               onKeyDown={validacion.onKeyDownCampo("email", {
                 errores: errors,
@@ -4940,7 +4944,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                    setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
                 }}
                 type="email"
-                placeholder="gloria@lasirena.com"
+                placeholder="correo@lasirena.com"
                 ref={validacion.refCampo("forgotEmail")}
                 onKeyDown={validacion.onKeyDownCampo("forgotEmail", {
                   errores,
@@ -6558,7 +6562,7 @@ const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
   const { cargo, rolId, rolIds: _legacy, contrasena: _legacyPassword, ...resto } = crudo;
   // Todo empleado tiene SIEMPRE los roles base "Empleado" y "Cliente". La cuenta
   // de super administrador (Gloria) queda tal cual: no recibe roles de empleado.
-  const esSuperAdmin = e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
+  const esSuperAdmin = e.esSuperAdmin === true;
   const peso = (lista: string[]) => {
     const vivos = lista.filter(id => roles.some(r => r.id === id));
     // Ids perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesero.
@@ -7127,6 +7131,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(
     (sesionActiva?.screen as Screen) || "landing",
   );
+  const [clienteAAbrirDesdeUsuarios, setClienteAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
+  const [empleadoAAbrirDesdeUsuarios, setEmpleadoAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -7443,15 +7449,12 @@ export default function App() {
   // los id solo son anclas de migración.
   const isNamedAdmin = esRolAdministrador(loggedInRol);
   // § Dashboard por PERMISO, no por nombre de rol: la cuenta super admin
-  // (Gloria, USR-001 / gloria@lasirena.com) siempre; los demás únicamente con
+  // marcada por la API; los demás únicamente con
   // el privilegio "Ver" de "Dashboard::Dashboard" del rol activo. El rol
   // "Administrador" lo conserva porque su semilla (fullAccesos) ya incluye la
   // clave y la migración única "sivpro.migracion.dashboardPermiso.v1" se la
   // agrega a los datos viejos; si super admin se la quita, deja de verlo.
-  const esSuperAdminSesion =
-    loggedInUser !== null &&
-    (loggedInUser.id === "USR-001" ||
-      loggedInUser.correo.trim().toLowerCase() === "gloria@lasirena.com");
+  const esSuperAdminSesion = loggedInUser?.esSuperAdmin === true;
   const hasDashboardAccess =
     esSuperAdminSesion || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
@@ -8011,6 +8014,11 @@ export default function App() {
   };
 
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
+    const claveSesion = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
+    setEmpleados(prev => prev.map(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveSesion
+      ? { ...e, esSuperAdmin: user.esSuperAdmin === true }
+      : e));
+    setUsuarios(prev => prev.map(u => u.id === user.id ? { ...u, esSuperAdmin: user.esSuperAdmin === true } : u));
     // Cruce canónico Usuario ↔ Empleado: documento.
     const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
@@ -8110,8 +8118,7 @@ export default function App() {
     // P9: el cliente público SIEMPRE cae en la landing; un empleado NUNCA:
     // Dashboard solo si la sesión es super admin o el rol activo tiene el
     // permiso "Dashboard::Dashboard"; si no, "Inicio" (siempre disponible).
-    const userEsSuperAdmin =
-      user.id === "USR-001" || user.correo.trim().toLowerCase() === "gloria@lasirena.com";
+    const userEsSuperAdmin = user.esSuperAdmin === true;
     const hasDashRolInicial =
       userEsSuperAdmin || !!(rolInicial && rolInicial.accesos[DASHBOARD_PERM_KEY]?.includes("Ver"));
     const nextScreen = esClientePublico
@@ -8354,6 +8361,7 @@ export default function App() {
                 telefono: perfil.telefono || u.telefono,
                 tipoDocumento: perfil.tipoDocumento || u.tipoDocumento,
                 numeroDocumento: perfil.numeroDocumento || u.numeroDocumento,
+                esSuperAdmin: perfil.esSuperAdmin === true,
               }
             : u,
         ),
@@ -9181,42 +9189,49 @@ export default function App() {
                   onBack={() => navigate(adminHomeScreen)}
                 />
               )}
-              {screen === "clientes" && (
-                <GestionClientesScreen
-                  {...getPerms("clientes")}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  empleados={empleados}
-                  usuarios={usuarios}
-                  roles={roles}
-                  sesionCorreo={correoSesion}
-                />
-              )}
-               {screen === "users" && (
-                 <GestionUsuariosScreen
-                   userRole={userRole}
+               {screen === "clientes" && (
+                 <GestionClientesScreen
+                   {...getPerms("clientes")}
+                   clientes={clientes}
+                   setClientes={setClientes}
+                   empleados={empleados}
+                   usuarios={usuarios}
                    roles={roles}
-                   usuarios={usuariosUnificados}
-                  setUsuarios={setUsuarios}
-                  empleados={empleados}
-                  setEmpleados={setEmpleados}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
-                  canCreate={getPerms("users").canCreate}
-                  canEdit={getPerms("users").canEdit}
-                  canDelete={getPerms("users").canDelete}
-                />
+                   sesionCorreo={correoSesion}
+                   clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
+                   onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
+                 />
               )}
-              {screen === "empleados" && (
-                <GestionEmpleadosScreen
+                {screen === "users" && (
+                  <GestionUsuariosScreen
+                   canVer={isNamedAdmin || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
+                   canEdit={getPerms("users").canEdit}
+                   canDelete={getPerms("users").canDelete}
+                   onEditarCliente={u => {
+                     setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                     navigate("clientes");
+                   }}
+                   onEditarEmpleado={u => {
+                     const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
+                     const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
+                     if (!existe) return false;
+                     setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                     navigate("empleados");
+                     return true;
+                   }}
+                 />
+              )}
+                {screen === "empleados" && (
+                  <GestionEmpleadosScreen
                   roles={roles}
                   usuarios={usuarios}
                   empleados={empleados}
                   setEmpleados={setEmpleados}
-                  setUsuarios={setUsuarios}
-                  clientes={clientes}
-                />
+                   setUsuarios={setUsuarios}
+                   clientes={clientes}
+                   empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
+                   onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
+                  />
               )}
               {screen === "production-orders" && (
                 <OrdenProduccionScreen

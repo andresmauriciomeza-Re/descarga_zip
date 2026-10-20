@@ -48,6 +48,7 @@ export interface Empleado {
   numeroDocumento: string;
   rolIds: string[];        // cargos/roles vigentes (fuente de verdad)
   activo: boolean;         // Tb_Empleado.Estado
+  esSuperAdmin?: boolean;
   fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (vigente)
   fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si sigue activo)
   contrataciones: Contratacion[]; // historial, de la más antigua a la más reciente
@@ -94,13 +95,8 @@ export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
   [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || b.id.localeCompare(a.id));
 
 // ── Cuenta de super administrador (Gloria) ─────────────────────────────────
-// Gloria (EMP-001, gloria@lasirena.com) es la super administradora: su cuenta
-// NUNCA puede quedar inactiva, porque nadie podría volver a entrar para
-// reactivarla. Se identifica por id/correo (igual que en GestionUsuariosScreen,
-// que ya la protege desde su propia pantalla) y nunca por rolId, porque el rol
-// puede variar si la persona también figura en Clientes.
-const esSuperAdmin = (e: Pick<Empleado, "id" | "correo">): boolean =>
-  e.id === "EMP-001" || e.correo.trim().toLowerCase() === "gloria@lasirena.com";
+// La marca proviene del usuario autenticado/del API, no de la semilla local.
+const esSuperAdmin = (e: Pick<Empleado, "esSuperAdmin">): boolean => e.esSuperAdmin === true;
 const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
 export function GestionEmpleadosScreen({
@@ -110,6 +106,8 @@ export function GestionEmpleadosScreen({
   setEmpleados,
   setUsuarios,
   clientes,
+  empleadoAAbrirDesdeUsuarios = null,
+  onEmpleadoAbiertoDesdeUsuarios,
 }: {
   roles: Rol[];
   usuarios: Usuario[];
@@ -117,6 +115,8 @@ export function GestionEmpleadosScreen({
   setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   clientes: Cliente[];
+  empleadoAAbrirDesdeUsuarios?: { tipoDocumento: string; numeroDocumento: string } | null;
+  onEmpleadoAbiertoDesdeUsuarios?: () => void;
 }) {
   const [search,      setSearch]    = useState("");
   const [filterEstado,setFiltro]    = useState("todos");
@@ -127,6 +127,20 @@ export function GestionEmpleadosScreen({
   const [editItem,    setEditItem]  = useState<Empleado | null>(null);
   const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
   const [showCreate,  setShowCreate] = useState(false);
+
+  useEffect(() => {
+    if (!empleadoAAbrirDesdeUsuarios) return;
+    const empleado = empleados.find(e =>
+      e.numeroDocumento === empleadoAAbrirDesdeUsuarios.numeroDocumento &&
+      e.tipoDocumento === empleadoAAbrirDesdeUsuarios.tipoDocumento
+    );
+    if (empleado) {
+      setEditItem({ ...empleado });
+      setEditPrevCorreo(empleado.correo);
+      setEditErrors({});
+    }
+    onEmpleadoAbiertoDesdeUsuarios?.();
+  }, [empleadoAAbrirDesdeUsuarios, empleados]);
 
   // Modal "Nueva contratación": registra una entrada más en el historial del
   // empleado elegido y, con esos mismos datos, actualiza su contratación vigente.

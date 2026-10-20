@@ -80,6 +80,17 @@ export async function eliminarUsuario(
   return data;
 }
 
+export async function cambiarEstadoUsuario(
+  id: string,
+  estado: boolean,
+): Promise<{ mensaje: string }> {
+  const { data } = await api.patch<{ mensaje: string }>(
+    `/usuarios/${encodeURIComponent(id)}/estado`,
+    { estado },
+  );
+  return data;
+}
+
 export interface UsuarioListadoApi {
   id_usuario: string | number;
   tipo_documento: string | null;
@@ -87,10 +98,13 @@ export interface UsuarioListadoApi {
   correo: string | null;
   telefono: string | null;
   estado: boolean;
-  id_rol: string | number;
+  id_rol: string | number | null;
   rol: string;
-  rol_estado: boolean;
-  es_empleado: boolean;
+  rol_estado: boolean | null;
+  esCliente: boolean;
+  esEmpleado: boolean;
+  rolesExtra: string[];
+  esSuperAdmin: boolean;
 }
 
 export interface ClienteListadoApi {

@@ -35,6 +35,7 @@ export interface UsuarioApi {
   numeroDocumento?: string;
   tipoDocumento?: string;
   telefono?: string;
+  esSuperAdmin?: boolean;
   permisos?: PermisoApi[];
 }
 

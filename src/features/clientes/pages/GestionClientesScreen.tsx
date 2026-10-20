@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -51,7 +51,7 @@ export interface Cliente {
   activo: boolean;
 }
 
-export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, empleados, usuarios, roles = [], sesionCorreo = "" }: {
+export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, empleados, usuarios, roles = [], sesionCorreo = "", clienteAAbrirDesdeUsuarios = null, onClienteAbiertoDesdeUsuarios }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
@@ -61,6 +61,8 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   roles?: Rol[];
   /** Correo de la cuenta con la que se abrió la sesión (su propio cliente). */
   sesionCorreo?: string;
+  clienteAAbrirDesdeUsuarios?: { tipoDocumento: string; numeroDocumento: string } | null;
+  onClienteAbiertoDesdeUsuarios?: () => void;
 }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -80,6 +82,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   const [sortBy,       setSortBy]     = useState("nombre");
   const [page,         setPage]       = useState(1);
   const [detailItem,   setDetailItem] = useState<Cliente | null>(null);
+  const edicionExternaConsumida = useRef<string | null>(null);
   const [editItem,     setEditItem]   = useState<Cliente | null>(null);
   const [showCreate,   setShowCreate] = useState(false);
   const [newNombre,    setNewNombre]  = useState("");
@@ -306,6 +309,17 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
       toast.success(`Cliente ${newNombre.trim()} creado correctamente`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo crear el cliente."); }
   };
+
+  useEffect(() => {
+    if (!clienteAAbrirDesdeUsuarios || cargando) return;
+    const clave = `${clienteAAbrirDesdeUsuarios.tipoDocumento}||${clienteAAbrirDesdeUsuarios.numeroDocumento}`;
+    if (edicionExternaConsumida.current === clave) return;
+    edicionExternaConsumida.current = clave;
+    const cliente = clientes.find(c => c.numeroDocumento === clienteAAbrirDesdeUsuarios.numeroDocumento);
+    if (cliente) abrirEdicion(cliente);
+    else toast.error("No se encontró el registro de cliente en la base de datos.");
+    onClienteAbiertoDesdeUsuarios?.();
+  }, [clienteAAbrirDesdeUsuarios, cargando, clientes]);
 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
 
