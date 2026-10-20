@@ -99,7 +99,7 @@ export function DevolucionesScreen({
   abrirDevolucionId?: string | null;
   onAbierta?: () => void;
 }) {
-  const devoluciones = pedidos.filter((p) => p.estado === "perdida");
+  const devoluciones = pedidos.filter((p) => p.estado === "Devolucion");
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
   const resueltas    = devoluciones.filter((d) => d.devolucionResuelta);
 
@@ -165,7 +165,7 @@ export function DevolucionesScreen({
                     Object.entries(motivos).map(([k, v]) => [String(k), v]),
                   ) }
                 : {}),
-              historial: [...(x.historial ?? []), { estado: "perdida" as VentaStatus, hora: nowHoraDev() }],
+              historial: [...(x.historial ?? []), { estado: "Devolucion" as VentaStatus, hora: nowHoraDev() }],
             }
           : x,
       ),

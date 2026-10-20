@@ -35,7 +35,7 @@ import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
-import { siguienteIdVenta } from "@/features/ventas/services/siguienteIdVenta";
+import { crearVentaPanel, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import {
   type EstadoVenta,
   puedeTransicionar,
@@ -228,30 +228,24 @@ function CampoComprobante({
  *  referencia en todo el frontend. */
 export type VentaStatus = EstadoVenta;
 
-/** "perdida" no se elige a mano (la columna de estado es de solo lectura
-    desde el punto C2): se aplica con los botones de acción (devolución).
-    "anulado" ya no lo escribe ningún botón (anular deja la venta en
-    "rechazado") pero se conserva en el tipo y en los labels por los datos
-    persistidos. */
-export const VENTA_STATUS_MANUALES: VentaStatus[] = ["perdida", "anulado"];
+/** Estado de devolución se asigna desde el flujo de Devoluciones. */
+export const VENTA_STATUS_MANUALES: VentaStatus[] = ["Devolucion"];
 
 /** Estados que solo asigna el flujo (nunca una mano en la tabla):
-    "rechazado" (rechazo con motivo o anulación), "en-espera" (falta completar
-    el pago) y "en-preparacion" (pago aprobado, esperando la orden de
-    producción). La tabla completa de transiciones vive en `estadosVenta.ts`. */
-export const VENTA_STATUS_FLUJO: VentaStatus[] = ["rechazado", "en-espera", "en-preparacion"];
+    Anulado y En espera. La tabla completa vive en `estadosVenta.ts`. */
+export const VENTA_STATUS_FLUJO: VentaStatus[] = ["Anulado", "En espera"];
 
 /** Motivos estandarizados de rechazo de pago. */
-export type MotivoRechazo = "comprobante-falso" | "dinero-faltante";
+export type MotivoRechazo = "Comprobante falso" | "Dinero faltante";
 
 export const MOTIVOS_RECHAZO: { value: MotivoRechazo; label: string }[] = [
-  { value: "comprobante-falso", label: "Comprobante falso" },
-  { value: "dinero-faltante", label: "Dinero faltante" },
+  { value: "Comprobante falso", label: "Comprobante falso" },
+  { value: "Dinero faltante", label: "Dinero faltante" },
 ];
 
 export const MOTIVO_RECHAZO_LABEL: Record<MotivoRechazo, string> = {
-  "comprobante-falso": "Comprobante falso",
-  "dinero-faltante": "Dinero faltante",
+  "Comprobante falso": "Comprobante falso",
+  "Dinero faltante": "Dinero faltante",
 };
 
 /** Un comprobante de una venta: el inicial de pago o el del dinero faltante. */
@@ -272,6 +266,16 @@ export const comprobantesDe = (v: Venta): ComprobanteVenta[] => {
 };
 
 export interface HistorialEntry { estado: VentaStatus; hora: string; }
+
+export interface PagoVenta {
+  id: number;
+  tipo: string;
+  comprobante?: string;
+  cantidadPagar: number;
+  depositado: number;
+  faltante: number;
+  estado: string;
+}
 
 interface DetalleProd {
   nombre: string;
@@ -295,6 +299,7 @@ export interface Venta {
   /** Documento del cliente. Lo piden tanto el checkout del invitado como el
       pedido que crea el administrador, así que en la práctica siempre llega. */
   documento?: string;
+  tipoDocumento?: string;
   fecha: string;
   productos: string;
   cantidad: number;
@@ -318,9 +323,11 @@ export interface Venta {
   /** Comprobantes de la venta (pago inicial y dinero faltante). Opcional por
       compatibilidad con ventas viejas: si no está, se usa `comprobante`. */
   comprobantes?: ComprobanteVenta[];
-  /** Motivo por el que se rechazó el pago (solo en estado "rechazado"). */
+  pagos?: PagoVenta[];
+  montoPagado?: number;
+  /** Motivo por el que se rechazó el pago (estado Anulado). */
   motivoRechazo?: MotivoRechazo;
-  /** Valor que falta por pagar cuando la venta quedó "en-espera". */
+  /** Valor que falta por pagar cuando la venta quedó En espera. */
   montoFaltante?: number;
   /** URL del comprobante con el que el admin devolvió el dinero al cliente. */
   comprobanteDevolucion?: string;
@@ -330,42 +337,32 @@ export interface Venta {
     oscuro y texto claro del mismo tono) para el pill de la tabla y los
     badges de detalle/historial. */
 const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
-  venta:           "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
-  perdida:         "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
-  "por-verificar": "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
-  // En cocina: turquesa, deliberadamente distinto de "por verificar" (ámbar)
-  // y de "por entregar" (azul) para que se lea como un paso intermedio.
-  "en-preparacion":"bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-300",
-  completado:      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
-  anulado:         "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  rechazado:       "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
-  // Naranja/violeta, deliberadamente distinto a los demás para que "en espera"
-  // no se confunda con "por verificar" (ámbar) ni con "devolución" (naranja).
-  "en-espera":     "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300",
+  "Por entregar": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  Devolucion: "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
+  "Por verificar": "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+  Completado: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  Anulado: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  "En espera": "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300",
 };
 
 const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
-  venta:           "Por entregar",
-  perdida:         "Devolución",
-  "por-verificar": "Por verificar",
-  "en-preparacion":"En preparación",
-  completado:      "Completado",
-  anulado:         "Anulado",
-  rechazado:       "Rechazado",
-  "en-espera":     "En espera",
+  "Por entregar": "Por entregar",
+  Devolucion: "Devuelta",
+  "Por verificar": "Por verificar",
+  Completado: "Completado",
+  Anulado: "Rechazado",
+  "En espera": "En espera",
 };
 
 /** Etiquetas PARA EL CLIENTE de cada estado (tabla de la sección 3). El panel
     admin usa `VENTA_STATUS_LABEL`; el portal del cliente estas. */
 export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
-  "por-verificar": "Verificando pago",
-  "en-preparacion":"Preparando tu pedido",
-  venta:           "Listo para recoger",
-  completado:      "Entregado",
-  rechazado:       "Rechazado",
-  "en-espera":     "Falta completar el pago",
-  perdida:         "Devolución",
-  anulado:         "Anulado",
+  "Por verificar": "Por verificar",
+  "En espera": "En espera",
+  "Por entregar": "Por entregar",
+  Completado: "Completado",
+  Devolucion: "Devuelta",
+  Anulado: "Rechazado",
 };
 
 // Punto C2: ya NO existe el desplegable de estado en la tabla. La columna es
@@ -417,186 +414,6 @@ const hoyFecha = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-export const INITIAL_VENTAS: Venta[] = [
-  {
-    id: "1",
-    usuario: "María González",
-    fecha: "2024-01-15",
-    productos: "Pizza Peperoni x2",
-    cantidad: 2,
-    total: 28000,
-    estado: "venta",
-    metodoPago: "Nequi",
-    historial: [{ estado: "por-verificar", hora: "4:10 PM" }, { estado: "venta", hora: "4:15 PM" }],
-    detalle: [
-      {
-        nombre: "Pizza Peperoni",
-        precio: 14000,
-        cantidad: 2,
-        imagen: "/src/assets/img/pizzaDefinitiva.png",
-      },
-    ],
-  },
-  {
-    id: "2",
-    historial: [{ estado: "venta" as VentaStatus, hora: "5:02 PM" }],
-    usuario: "Carlos Martínez",
-    fecha: "2024-01-15",
-    productos: "Pizza Jamon x1",
-    cantidad: 1,
-    total: 14000,
-    estado: "venta",
-    metodoPago: "Bancolombia",
-    detalle: [
-      {
-        nombre: "Pizza Jamon",
-        precio: 14000,
-        cantidad: 1,
-        imagen: "/src/assets/img/pizzaDefinitivaCompleta.png",
-      },
-    ],
-  },
-  {
-    id: "3",
-    historial: [{ estado: "por-verificar" as VentaStatus, hora: "6:30 PM" }, { estado: "venta" as VentaStatus, hora: "6:45 PM" }],
-    usuario: "Ana Rodríguez",
-    fecha: "2024-01-16",
-    productos: "Pizza Hawai x3",
-    cantidad: 3,
-    total: 45000,
-    estado: "venta",
-    metodoPago: "Nequi",
-    detalle: [
-      {
-        nombre: "Pizza Hawai",
-        precio: 15000,
-        cantidad: 3,
-        imagen: "/src/assets/img/pizzafondo-removebg-preview.png",
-      },
-    ],
-  },
-  {
-    id: "4",
-    historial: [{ estado: "por-verificar" as VentaStatus, hora: "7:00 PM" }, { estado: "perdida" as VentaStatus, hora: "7:20 PM" }],
-    usuario: "Jorge Vargas",
-    fecha: "2024-01-16",
-    productos: "Pizza Pollo x1",
-    cantidad: 1,
-    total: 15000,
-    estado: "perdida",
-    metodoPago: "Bancolombia",
-    detalle: [
-      {
-        nombre: "Pizza Pollo",
-        precio: 15000,
-        cantidad: 1,
-        imagen: "/src/assets/img/image-1.png",
-      },
-    ],
-  },
-  {
-    id: "5",
-    historial: [{ estado: "venta" as VentaStatus, hora: "8:05 PM" }],
-    usuario: "Patricia Soto",
-    fecha: "2024-01-17",
-    productos: "Pizza Cañon x2, Gaseosa Cuatro x1",
-    cantidad: 3,
-    total: 31000,
-    estado: "venta",
-    metodoPago: "Nequi",
-    detalle: [
-      {
-        nombre: "Pizza Cañon",
-        precio: 16000,
-        cantidad: 2,
-        imagen: "/src/assets/img/image-2.png",
-      },
-      {
-        nombre: "Gaseosa Cuatro",
-        precio: 3000,
-        cantidad: 1,
-        imagen: "/src/assets/img/Quatro.png",
-      },
-    ],
-  },
-  {
-    id: "6",
-    historial: [{ estado: "perdida" as VentaStatus, hora: "9:10 PM" }],
-    usuario: "Luis Herrera",
-    fecha: "2024-01-17",
-    productos: "Lasaña Carne x2",
-    cantidad: 2,
-    total: 40000,
-    estado: "perdida",
-    metodoPago: "Bancolombia",
-    detalle: [
-      {
-        nombre: "Lasaña Carne",
-        precio: 20000,
-        cantidad: 2,
-        imagen: "/src/assets/img/lasaña_carne.png",
-      },
-    ],
-  },
-  {
-    id: "7",
-    historial: [{ estado: "perdida" as VentaStatus, hora: "9:45 PM" }],
-    usuario: "Sandra Ríos",
-    fecha: "2024-01-18",
-    productos: "Pizza Maicitos x1",
-    cantidad: 1,
-    total: 13000,
-    estado: "perdida",
-    metodoPago: "Nequi",
-    detalle: [
-      {
-        nombre: "Pizza Maicitos",
-        precio: 13000,
-        cantidad: 1,
-        imagen: "/src/assets/img/image-3.png",
-      },
-    ],
-  },
-  {
-    id: "8",
-    historial: [{ estado: "perdida" as VentaStatus, hora: "8:30 PM" }],
-    usuario: "Jorge Vargas",
-    fecha: "2024-01-16",
-    productos: "Pizza Paisa x1",
-    cantidad: 1,
-    total: 18000,
-    estado: "perdida",
-    metodoPago: "Bancolombia",
-    detalle: [
-      {
-        nombre: "Pizza Paisa",
-        precio: 18000,
-        cantidad: 1,
-        imagen: "/src/assets/img/image-4.png",
-      },
-    ],
-  },
-  {
-    id: "9",
-    usuario: "Sebastián Gómez",
-    fecha: "2024-01-14",
-    productos: "Pizza Tocineta x1",
-    cantidad: 1,
-    total: 15000,
-    estado: "completado",
-    metodoPago: "Nequi",
-    horaRecogida: "18:30",
-    historial: [
-      { estado: "por-verificar", hora: "5:40 PM" },
-      { estado: "venta", hora: "5:46 PM" },
-      { estado: "completado", hora: "6:35 PM" },
-    ],
-    detalle: [
-      { nombre: "Pizza Tocineta — Mediana", precio: 15000, cantidad: 1, imagen: "/src/assets/img/image-5.png" },
-    ],
-  },
-];
-
 // ─────────────────────────── VENTAS SCREEN ───────────────────────────
 
 export function VentasScreen({
@@ -604,7 +421,6 @@ export function VentasScreen({
   setPedidos,
   productos,
   onGestionarDevolucion,
-  onRegistrarClienteVenta,
   canCreate: _canCreate = true,
   canEdit: _canEdit = true,
   canExportExcel = true,
@@ -614,10 +430,6 @@ export function VentasScreen({
   productos: ProductoMenu[];
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
-  /** Crea localmente el cliente solo después de que el backend responda 404. */
-  onRegistrarClienteVenta?: (
-    datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
-  ) => "creado" | "existente";
   canCreate?: boolean;
   canEdit?: boolean;
   canExportExcel?: boolean;
@@ -675,6 +487,7 @@ export function VentasScreen({
   const abrirDetalle = (v: Venta) => {
     resetVerificacion();
     setDetailItem(v);
+    void obtenerVentaPanel(v.id).then(setDetailItem).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo cargar el detalle de la venta."));
   };
   const cerrarDetalle = () => {
     resetVerificacion();
@@ -684,16 +497,18 @@ export function VentasScreen({
   /** Aprobar el pago (punto C2): la venta pasa a "En preparación" y su orden
       de producción se crea sola (la escucha el efecto de App). Sólo cuando la
       orden se completa vuelve a avanzar, a "Por entregar". */
+  const ejecutarVerificacion = async (id: string, payload: Parameters<typeof verificarVentaApi>[1]) => {
+    try {
+      await verificarVentaApi(id, payload);
+      const respuesta = await (await import("../services/ventasApi")).obtenerVentasPanel();
+      setPedidos(respuesta);
+      toast.success(payload.accion === "aceptar" ? "Pago aprobado — orden de producción creada" : payload.accion === "monto_faltante" ? "Se notificó el saldo pendiente al cliente" : "Venta rechazada");
+      cerrarDetalle();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta."); }
+  };
+
   const aprobarPago = (id: string) => {
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id && puedeTransicionar(x.estado, "en-preparacion")
-          ? { ...x, estado: "en-preparacion" as VentaStatus, historial: [...(x.historial ?? []), { estado: "en-preparacion" as VentaStatus, hora: nowHora() }] }
-          : x,
-      ),
-    );
-    toast.success("Pago aprobado — el pedido pasó a cocina");
-    cerrarDetalle();
+    void ejecutarVerificacion(id, { accion: "aceptar" });
   };
 
   /** Botón "Entregar" (punto C2): uno de los dos disparadores del paso
@@ -702,8 +517,8 @@ export function VentasScreen({
   const entregarVenta = (id: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
-        x.id === id && puedeTransicionar(x.estado, "completado")
-          ? { ...x, estado: "completado" as VentaStatus, historial: [...(x.historial ?? []), { estado: "completado" as VentaStatus, hora: nowHora() }] }
+        x.id === id && puedeTransicionar(x.estado, "Completado")
+          ? { ...x, estado: "Completado" as VentaStatus, historial: [...(x.historial ?? []), { estado: "Completado" as VentaStatus, hora: nowHora() }] }
           : x,
       ),
     );
@@ -715,78 +530,33 @@ export function VentasScreen({
       ya lee el detalle (`comprobanteDevolucion`), así el rechazo no queda sin
       soporte documental. El botón de confirmar llega con `devolUrl` lleno. */
   const rechazarPorFalso = (id: string) => {
-    if (!devolUrl) return;
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado: "rechazado" as VentaStatus,
-              motivoRechazo: "comprobante-falso" as MotivoRechazo,
-              comprobanteDevolucion: devolUrl,
-              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.error("Pago rechazado — comprobante falso");
-    cerrarDetalle();
+    void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: motivoSel || "Comprobante falso" });
   };
 
   /** Pedir el dinero faltante: la venta pasa a "En espera" con el monto. */
   const pedirFaltante = (id: string) => {
-    const monto = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado: "en-espera" as VentaStatus,
-              motivoRechazo: "dinero-faltante" as MotivoRechazo,
-              montoFaltante: monto,
-              historial: [...(x.historial ?? []), { estado: "en-espera" as VentaStatus, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.info(`Se solicitó el faltante de ${fmtCOP(monto)}`);
-    cerrarDetalle();
+    const pagado = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
+    void ejecutarVerificacion(id, { accion: "monto_faltante", pagado });
   };
 
   /** Rechazar por dinero faltante: guarda el comprobante de devolución y la
       venta queda "Rechazado" (estado final). */
   const rechazarPorDinero = (id: string) => {
-    if (!devolUrl) return;
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado: "rechazado" as VentaStatus,
-              motivoRechazo: "dinero-faltante" as MotivoRechazo,
-              comprobanteDevolucion: devolUrl,
-              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.error("Pago rechazado — dinero devuelto al cliente");
-    cerrarDetalle();
+    void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: "Dinero faltante" });
   };
 
-  /** Anular una venta: el pedido queda en el estado "rechazado" (mismo badge
+  /** Anular una venta: el pedido queda en Anulado (badge Rechazado)
       y misma regla de conteo que un rechazo de pago: no cuenta como venta)
       y deja su entrada en el historial, sin tocar el módulo de devoluciones.
-      "anulado" sigue existiendo en el tipo por los datos ya persistidos, pero
-      este botón ya no lo escribe. */
+      el estado persistido es Anulado. */
   const anularVenta = (id: string) => {
     setPedidos((prev) =>
       prev.map((x) =>
         x.id === id
           ? {
               ...x,
-              estado: "rechazado" as VentaStatus,
-              historial: [...(x.historial ?? []), { estado: "rechazado" as VentaStatus, hora: nowHora() }],
+              estado: "Anulado" as VentaStatus,
+              historial: [...(x.historial ?? []), { estado: "Anulado" as VentaStatus, hora: nowHora() }],
             }
           : x,
       ),
@@ -802,9 +572,9 @@ export function VentasScreen({
         x.id === id
           ? {
               ...x,
-              estado: "perdida" as VentaStatus,
+              estado: "Devolucion" as VentaStatus,
               devolucionResuelta: false,
-              historial: [...(x.historial ?? []), { estado: "perdida" as VentaStatus, hora: nowHora() }],
+              historial: [...(x.historial ?? []), { estado: "Devolucion" as VentaStatus, hora: nowHora() }],
             }
           : x,
       ),
@@ -856,7 +626,7 @@ export function VentasScreen({
 
   const filtered = useMemo(
     () =>
-      pedidos.filter(
+      pedidos.filter((p) => p.estado !== "Devolucion").filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.usuario
@@ -899,10 +669,7 @@ export function VentasScreen({
     onConfirm,
   }: {
     onClose: () => void;
-    onConfirm: (
-      v: Omit<Venta, "id">,
-      resultadoCliente: "creado" | "existente",
-    ) => void;
+    onConfirm: (v: Omit<Venta, "id">) => void;
   }) => {
     const [documento, setDocumento] = useState("");
     const [tipoDocumento, setTipoDocumento] = useState("CC");
@@ -911,6 +678,7 @@ export function VentasScreen({
     // guardar. Sin estado no hay forma de editarla.
     const fecha = hoyFecha();
     const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
+    const [horaRecogida, setHoraRecogida] = useState("");
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
@@ -1103,6 +871,10 @@ export function VentasScreen({
         toast.error("Selecciona el método de pago");
         return;
       }
+      if (!horaRecogida) {
+        toast.error("Selecciona la hora de recogida");
+        return;
+      }
       let estadoCliente: EstadoBusquedaDocumento | "obsoleto" = estadoBusqueda;
       if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
         estadoCliente = await consultarDocumento(documento, tipoDocumento);
@@ -1117,29 +889,25 @@ export function VentasScreen({
       }
       // Solo la respuesta 404 confirma que se debe crear la ficha local. Un
       // resultado registrado en PostgreSQL nunca pasa por este callback.
-      const resultadoCliente: "creado" | "existente" = estadoCliente === "no-encontrado" && onRegistrarClienteVenta
-        ? onRegistrarClienteVenta({
-            tipoDocumento,
-            numeroDocumento: documento.trim(),
-            nombre: usuario.trim(),
-          })
-        : "existente";
       // Punto C2: el pago se recibe en el momento (nada que verificar), pero
       // la pizza todavía hay que hacerla, así que TODOS los pedidos tomados en
       // el local nacen "En preparación". Ahí se crea su orden de producción y
       // recién cuando esa orden se completa pasa a "Por entregar"; la entrega
       // la cierra el botón "Entregar" o la hora de recogida (§13).
-      const finalEstado: VentaStatus = "en-preparacion";
+      const finalEstado: VentaStatus = "Por verificar";
       const detalle: DetalleProd[] = selProductos.map((p) => ({
-        nombre: `${p.nombre} — ${p.tamaño}`,
+        nombre: p.nombre,
         precio: p.precio,
         cantidad: p.cantidad,
-                        imagen: productos.find((x) => x.id === p.id)?.image,
+        imagen: productos.find((x) => x.id === p.id)?.image,
+        tamaño: p.tamaño === "Única" ? undefined : p.tamaño,
+        productoId: String(p.id),
       }));
       onConfirm(
         {
           usuario: usuario.trim(),
           documento: documento.trim(),
+          tipoDocumento,
           fecha,
           estado: finalEstado,
           productos: productosStr,
@@ -1147,9 +915,9 @@ export function VentasScreen({
           total: totalCalculado,
           detalle,
           metodoPago,
+          horaRecogida,
           historial: [{ estado: finalEstado, hora: nowHora() }],
         },
-        resultadoCliente,
       );
     };
 
@@ -1290,6 +1058,10 @@ export function VentasScreen({
                   </button>
                 ))}
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hora de recogida *</label>
+              <input type="time" required value={horaRecogida} onChange={(event) => setHoraRecogida(event.target.value)} className={iCls} />
             </div>
           </div>
 
@@ -1603,7 +1375,7 @@ export function VentasScreen({
             Gestión Ventas
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {pedidos.length} ventas registradas
+            {pedidos.filter((venta) => venta.estado !== "Devolucion").length} ventas registradas
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1623,7 +1395,7 @@ export function VentasScreen({
       {/* Banner — pagos por verificar */}
       {(() => {
         const pendientes = pedidos.filter(
-          (p) => p.estado === "por-verificar",
+          (p) => p.estado === "Por verificar",
         );
         if (pendientes.length === 0) return null;
         return (
@@ -1701,9 +1473,9 @@ export function VentasScreen({
                   <tr
                     key={p.id}
                     className={`transition-colors ${
-                      p.estado === "por-verificar"
+                       p.estado === "Por verificar"
                         ? "bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-500/5 dark:hover:bg-amber-500/10"
-                        : p.estado === "en-espera"
+                         : p.estado === "En espera"
                           ? "bg-violet-50/60 hover:bg-violet-50 dark:bg-violet-500/5 dark:hover:bg-violet-500/10"
                           : "hover:bg-muted/20"
                     }`}
@@ -1711,7 +1483,7 @@ export function VentasScreen({
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
                       <div className="flex items-center gap-2">
                         {p.id}
-                        {p.estado === "por-verificar" && (
+                        {p.estado === "Por verificar" && (
                           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
                         )}
                       </div>
@@ -1756,7 +1528,7 @@ export function VentasScreen({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
-                        {p.estado === "por-verificar" && (
+                        {p.estado === "Por verificar" && (
                           <button
                             onClick={() => abrirDetalle(p)}
                             title="Verificar pago"
@@ -1769,7 +1541,7 @@ export function VentasScreen({
                         {/* Punto C2: botón "Entregar", disparador manual del
                             paso Por entregar → Completado (el otro disparador
                             es el auto-completado por hora de recogida, §13). */}
-                        {p.estado === "venta" && (
+                        {p.estado === "Por entregar" && (
                           <button
                             onClick={() => entregarVenta(p.id)}
                             title="Entregar pedido"
@@ -1779,14 +1551,12 @@ export function VentasScreen({
                             Entregar
                           </button>
                         )}
-                        <ActionIcons
-                          onView={() => abrirDetalle(p)}
-                        />
-                        {/* Anular venta: la deja en estado "rechazado". Un círculo con
+                        <ActionIcons onView={() => abrirDetalle(p)} />
+                        {/* Anular venta: la deja en estado Anulado (Rechazado). Un círculo con
                             la línea en diagonal dice "anular" mejor que una papelera,
                             que parecía borrar el pedido. Una venta rechazada es
                             final: no se anula ni se devuelve. */}
-                        {p.estado !== "anulado" && p.estado !== "perdida" && p.estado !== "rechazado" && (
+                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && p.estado !== "Devolucion" && (
                           <button
                             onClick={() =>
                               setConfirmAccionV({ id: p.id, accion: "anular" })
@@ -1798,7 +1568,7 @@ export function VentasScreen({
                           </button>
                         )}
                         {/* Registrar devolución: pasa la venta a "Devolución". */}
-                        {p.estado !== "anulado" && p.estado !== "perdida" && p.estado !== "rechazado" && (
+                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && p.estado !== "Devolucion" && (
                           <button
                             onClick={() =>
                               setConfirmAccionV({ id: p.id, accion: "devolucion" })
@@ -1811,7 +1581,7 @@ export function VentasScreen({
                         )}
                         {/* Imprimir factura: electrónica (se descarga el documento)
                             o física (sale por la impresora del sistema). */}
-                        {p.estado !== "anulado" && (
+                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && (
                           <button
                             onClick={() => setFacturaVenta(p)}
                             title="Imprimir factura"
@@ -1824,7 +1594,7 @@ export function VentasScreen({
                             en su lugar se ofrece gestionar la que ya existe, que es
                             donde se decide el canje o la devolución del dinero.
                             Solo el icono, como las demás acciones de la fila. */}
-                        {p.estado === "perdida" && (
+                        {p.estado === "Devolucion" && (
                           <button
                             onClick={() => onGestionarDevolucion(p.id)}
                             title={
@@ -2037,7 +1807,7 @@ export function VentasScreen({
                   })()}
 
                   {/* Rechazado: motivo y comprobante de devolución. */}
-                  {detailItem.estado === "rechazado" && (
+                  {detailItem.estado === "Anulado" && (
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-2">
                         <ShieldX className="w-4 h-4 text-red-600 shrink-0" />
@@ -2067,22 +1837,28 @@ export function VentasScreen({
                   )}
 
                   {/* En espera: se solicitó el dinero faltante. */}
-                  {detailItem.estado === "en-espera" && (
+                  {detailItem.estado === "En espera" && (
                     <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertCircle className="w-4 h-4 text-violet-600 shrink-0" />
                         <p className="text-sm font-semibold text-violet-900">Falta completar el pago</p>
                       </div>
                       <p className="text-sm text-violet-800">
-                        Se solicitó al cliente un faltante de{" "}
-                        <span className="font-bold">{fmtCOP(detailItem.montoFaltante ?? 0)}</span>. El pedido
+                        Total: <span className="font-bold">{fmtCOP(detailItem.total)}</span> · Recibido: <span className="font-bold">{fmtCOP(detailItem.montoPagado ?? 0)}</span> · Saldo: <span className="font-bold">{fmtCOP(detailItem.montoFaltante ?? 0)}</span>. El pedido
                         espera el comprobante del dinero restante.
                       </p>
+                      <div className="mt-4 flex items-center gap-3">
+                        <select value={motivoSel} onChange={(event) => setMotivoSel(event.target.value as MotivoRechazo | "")} className="flex-1 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm">
+                          <option value="">Motivo de rechazo</option>
+                          {MOTIVOS_RECHAZO.map((motivo) => <option key={motivo.value} value={motivo.value}>{motivo.label}</option>)}
+                        </select>
+                        <button disabled={!motivoSel} onClick={() => setConfirmVerif("rechazar-falso")} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Rechazar</button>
+                      </div>
                     </div>
                   )}
 
                   {/* Verificación de pago */}
-                  {detailItem.estado === "por-verificar" && (() => {
+                  {detailItem.estado === "Por verificar" && (() => {
                     const totalVenta = detailItem.total ||
                       (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
                     const pagoInicial = detailItem.montoFaltante ? totalVenta - detailItem.montoFaltante : null;
@@ -2131,8 +1907,7 @@ export function VentasScreen({
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
-                              if (motivoSel === "dinero-faltante") { setModalDevolucion(true); return; }
-                              if (motivoSel === "comprobante-falso") setConfirmVerif("rechazar-falso");
+                                if (motivoSel) setConfirmVerif("rechazar-falso");
                             }}
                             disabled={motivoSel === ""}
                             title={motivoSel === "" ? "Selecciona un motivo" : "Rechazar pago"}
@@ -2144,27 +1919,12 @@ export function VentasScreen({
                           >
                             <ShieldX className="w-3.5 h-3.5" /> Rechazar
                           </button>
-                          {motivoSel === "dinero-faltante" ? (
-                            <button
-                              onClick={() => setModalFaltante(true)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95"
-                            >
-                              <AlertCircle className="w-3.5 h-3.5" /> Pedir dinero faltante
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmVerif("aprobar")}
-                              disabled={motivoSel !== ""}
-                              title={motivoSel !== "" ? "No puedes aprobar con un motivo de rechazo" : "Aprobar pago"}
-                              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white text-xs font-semibold transition-colors active:scale-95 ${
-                                motivoSel !== ""
-                                  ? "bg-emerald-600/50 opacity-50 cursor-not-allowed"
-                                  : "bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
-                              }`}
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" /> Aprobar
-                            </button>
-                          )}
+                          <button onClick={() => setModalFaltante(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95">
+                            <AlertCircle className="w-3.5 h-3.5" /> Monto faltante
+                          </button>
+                          <button onClick={() => setConfirmVerif("aprobar")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
+                            <ShieldCheck className="w-3.5 h-3.5" /> Aceptar
+                          </button>
                         </div>
                       </div>
                     );
@@ -2181,19 +1941,26 @@ export function VentasScreen({
         {showCreate && (
           <VentaModal
             onClose={() => setShowCreate(false)}
-            onConfirm={(v, resultadoCliente) => {
-              // Punto C1: el mismo generador Único que usa el checkout del
-              // cliente (`siguienteIdVenta`), así ambos caminos dan IDs
-              // numéricos consecutivos y no chocan entre sí.
-              const newId = siguienteIdVenta(pedidos);
-              const initHistorial: HistorialEntry[] = [{ estado: v.estado, hora: nowHora() }];
-              setPedidos((prev) => [{ id: newId, ...v, historial: initHistorial }, ...prev]);
-              setShowCreate(false);
-              toast.success(
-                resultadoCliente === "creado"
-                  ? `Cliente ${v.usuario} creado y pedido #${newId} registrado`
-                  : `Pedido #${newId} creado correctamente`,
-              );
+            onConfirm={(v) => {
+              void crearVentaPanel({
+                cliente: {
+                  tipo_documento: (v as Venta).tipoDocumento ?? "CC",
+                  numero_documento: v.documento ?? "",
+                  nombre: v.usuario,
+                },
+                hora_recogida: v.horaRecogida ?? "",
+                productos: (v.detalle ?? []).map((detalle) => ({
+                  id_producto: Number(detalle.productoId),
+                  cantidad: detalle.cantidad,
+                  tamano: detalle.tamaño ?? null,
+                })),
+                pago: { tipo: v.metodoPago ?? "" },
+              }).then(async ({ id }) => {
+                const ventasActualizadas = await obtenerVentasPanel();
+                setPedidos(ventasActualizadas);
+                setShowCreate(false);
+                toast.success(`Pedido #${id} registrado correctamente`);
+              }).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido."));
             }}
           />
         )}
@@ -2235,44 +2002,18 @@ export function VentasScreen({
             tone={confirmVerif === "aprobar" ? "aviso" : "peligro"}
             message={
               confirmVerif === "aprobar"
-                ? "¿Aprobar el pago? La venta pasará a En preparación y se creará su orden de producción."
-                : "¿Rechazar el pago por comprobante falso? La venta quedará como Rechazado (estado final)."
+                ? "¿Aceptar el pago? Se creará la orden de producción y el pedido quedará Por entregar."
+                : `¿Rechazar el pago por ${motivoSel || "el motivo seleccionado"}? La venta quedará Rechazado.`
             }
-            // Punto 3.4: en este rechazo el adjunto es obligatorio (igual que
-            // en el de dinero faltante), así que el botón queda apagado y con
-            // el nombre de la acción hasta subirlo.
             confirmLabel={confirmVerif === "aprobar" ? "Sí, confirmar" : "Confirmar rechazo"}
-            confirmDisabled={confirmVerif === "rechazar-falso" && (!devolUrl || subiendoDevol)}
+            confirmDisabled={confirmVerif === "rechazar-falso" && !motivoSel}
             onConfirm={() => {
               if (confirmVerif === "aprobar") aprobarPago(detailItem.id);
               else rechazarPorFalso(detailItem.id);
               setConfirmVerif(null);
             }}
             onCancel={() => setConfirmVerif(null)}
-          >
-            {confirmVerif === "rechazar-falso" && (
-              <div className="mb-5 space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Sube el comprobante que dejó el cliente para dejar constancia del rechazo. Es obligatorio para confirmar.
-                </p>
-                <CampoComprobante
-                  fileRef={devolFileRef}
-                  url={devolUrl}
-                  onQuitar={() => setDevolUrl(null)}
-                  subiendo={subiendoDevol}
-                  onSubir={(file) => {
-                    void subirDevol(file, "comprobantes").then((u) => { if (u) setDevolUrl(u); });
-                  }}
-                  etiquetaBoton="Subir comprobante"
-                />
-                {!devolUrl && (
-                  <p className="text-xs font-semibold text-red-600">
-                    Adjunta el comprobante para poder confirmar el rechazo.
-                  </p>
-                )}
-              </div>
-            )}
-          </ConfirmModal>
+          />
         )}
       </AnimatePresence>
 
@@ -2282,7 +2023,7 @@ export function VentasScreen({
           const totalVenta = detailItem.total ||
             (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
           const monto = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
-          const valido = monto > 0 && monto < totalVenta;
+          const valido = montoFaltanteValor !== "" && monto >= 0 && monto < totalVenta;
           return (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <motion.div
@@ -2304,7 +2045,7 @@ export function VentasScreen({
                   </p>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                      Valor faltante *
+                      Valor recibido *
                     </label>
                     <input
                       type="text"
@@ -2317,9 +2058,10 @@ export function VentasScreen({
                     />
                     {monto > 0 && !valido && (
                       <p className="text-xs text-red-600 mt-1">
-                        El faltante debe ser mayor a $0 y menor al total ({fmtCOP(totalVenta)}).
+                        El valor recibido debe ser menor al total ({fmtCOP(totalVenta)}).
                       </p>
                     )}
+                    {montoFaltanteValor !== "" && valido && <p className="text-xs text-muted-foreground mt-1">Saldo pendiente calculado: {fmtCOP(totalVenta - monto)}</p>}
                   </div>
                 </div>
                 <div className="flex gap-2 px-5 pb-5">
