@@ -107,11 +107,12 @@ import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { migrarIdsVenta, siguienteIdVenta } from "@/features/ventas/services/siguienteIdVenta";
 import { puedeTransicionar } from "@/features/ventas/services/estadosVenta";
+import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { DESCRIPCIONES, IMAGENES_PIZZA, SECCIONES_MENU, nombreCategoria, productoACatalogo, sizesDeProducto, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
+import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, categoriaApiACategoria, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
+import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
@@ -178,7 +179,7 @@ import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
 import {
   SuppliersScreen
 } from "@/features/proveedores/pages/SuppliersScreen";
-import { INITIAL_VENTAS, PagoPill, VentasScreen, comprobantesDe, type ComprobanteVenta, type DevolucionTipo, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
+import { PagoPill, VentasScreen, comprobantesDe, type ComprobanteVenta, type DevolucionTipo, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
 import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
 
 // ─────────────────────────── TYPES ───────────────────────────
@@ -226,7 +227,7 @@ interface Order {
   total: number;
   status:
     | "pendiente"
-    | "en-preparacion"
+    | "en-produccion"
     | "listo"
     | "entregado"
     | "cancelado";
@@ -508,7 +509,7 @@ const ORDERS: Order[] = [
       },
     ],
     total: 144000,
-    status: "en-preparacion",
+    status: "en-produccion",
     date: "15/01/2024 18:30",
     paymentMethod: "Nequi",
   },
@@ -614,7 +615,7 @@ const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
 const STATUS_COLOR: Record<string, string> = {
   pendiente: "bg-yellow-100 text-yellow-800",
-  "en-preparacion": "bg-blue-100 text-blue-800",
+  "en-produccion": "bg-blue-100 text-blue-800",
   listo: "bg-emerald-100 text-emerald-800",
   entregado: "bg-gray-100 text-gray-600",
   cancelado: "bg-red-100 text-red-700",
@@ -622,7 +623,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   pendiente: "Pendiente",
-  "en-preparacion": "En preparación",
+  "en-produccion": "En producción",
   listo: "Listo",
   entregado: "Entregado",
   cancelado: "Cancelado",
@@ -1714,9 +1715,6 @@ function LandingScreen({
   /** Abre el detalle guardando la pantalla de origen. */
   onOpenDetail: (p: Product) => void;
 }) {
-  const featured = PRODUCTS.filter(
-    (p) => p.status === "disponible",
-  ).slice(0, 3);
   return (
     <div>
       {/* Hero – full width con imagen de fondo */}
@@ -1925,19 +1923,16 @@ function LandingScreen({
                   .toLowerCase()
                   .trim()
                   .replace(/^pizza\s+/, "");
-              const favoritas = ["Cañón", "Hawaii", "Jamón y Queso", "Maicitos"];
+              const favoritas = ["Pizza Cañón", "Pizza Hawaiana", "Pizza Jamón", "Pizza Maicitos"];
               const lista = productos ?? [];
               return favoritas.map((nombre, i) => {
                 const objetivo = normalizar(nombre);
-                // Prefijo en ambos sentidos: el catálogo trae "Pizza Hawai" y
-                // "Pizza Jamon", mientras la tarjeta habla de "Hawaii" y
-                // "Jamón y Queso". Un nombre vacío nunca empareja.
                 const producto = lista.find((p) => {
                   const actual = normalizar(p.nombre);
                   return (
                     actual !== "" &&
                     objetivo !== "" &&
-                    (actual.startsWith(objetivo) || objetivo.startsWith(actual))
+                    actual === objetivo
                   );
                 });
                 if (!producto) return null;
@@ -2859,7 +2854,7 @@ function CartScreen({
     clienteNombre?: string,
     clienteDocumento?: string,
     clienteTelefono?: string,
-  ) => string;
+  ) => Promise<{ id: string; total: number }>;
   isLoggedIn: boolean;
   /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
   clienteSesion?: string;
@@ -2929,7 +2924,11 @@ function CartScreen({
   const horaYaPaso = (valor: string) => {
     const m = minutosDeHora(valor);
     if (m === null) return false;
-    const ahora = new Date().getHours() * 60 + new Date().getMinutes();
+    const partes = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date());
+    const reloj = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
+    const ahora = Number(reloj.hour) * 60 + Number(reloj.minute);
     return m <= ahora;
   };
 
@@ -2938,7 +2937,11 @@ function CartScreen({
   // dentro del horario de atención (4:00 p. m. – 9:45 p. m.), en intervalos
   // de 15 minutos. El input nativo desapareció a propósito: mostraba "a. m."
   // y no se le podía ocultar.
-  const ahoraMinutos = new Date().getHours() * 60 + new Date().getMinutes();
+  const ahoraPartes = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const ahoraReloj = Object.fromEntries(ahoraPartes.map((parte) => [parte.type, parte.value]));
+  const ahoraMinutos = Number(ahoraReloj.hour) * 60 + Number(ahoraReloj.minute);
   const minutosDisponiblesDe = (hora: number) =>
     MINUTOS_RECOGIDA.filter((m) => hora * 60 + m > ahoraMinutos);
   const horasDisponibles: number[] = [];
@@ -3019,7 +3022,7 @@ function CartScreen({
   /** Último paso: registra la venta con los datos del formulario (invitado)
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
       aquí no se vuelve a interrumpir el flujo. */
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!comprobante) {
       toast.error("Por favor sube el comprobante de pago");
       return;
@@ -3046,8 +3049,8 @@ function CartScreen({
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const idVenta = onOrder(
+    try {
+      const creada = await onOrder(
         payment,
         comprobante,
         [...cart],
@@ -3059,9 +3062,9 @@ function CartScreen({
       // Resumen del pedido ANTES de vaciar el carrito: es lo que
       // muestra la pantalla de confirmación.
       setPedidoResumen({
-        id: idVenta,
+        id: creada.id,
         items: [...cart],
-        total: cart.reduce((s, i) => s + cartTotal(i), 0),
+        total: creada.total,
         nombre: nombreCliente,
         documento: guestDocument.trim() || undefined,
         telefono: guestPhone.trim() || undefined,
@@ -3071,7 +3074,11 @@ function CartScreen({
       setLoading(false);
       setCheckoutStep(0);
       setPedidoConfirmado(true);
-    }, 1400);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   /** Paso 1 del checkout: valida el formulario de datos y pasa al resumen. */
@@ -6673,11 +6680,9 @@ const leerCategoriasPersistidas = (): CategoriaProducto[] => {
 // con quitar la clave para volver a la semilla.
 //   sivpro.ordenesProduccion.v1 → órdenes de producción
 //   sivpro.insumos.v1          → catálogo de insumos (con Producto Insumo)
-//   sivpro.ventas.v1           → ventas, con su detalle y estado
 //   sivpro.fichasProductos.v1  → fichas técnicas por producto
 const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
 const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
-const VENTAS_STORAGE_KEY = "sivpro.ventas.v1";
 const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
 const NO_CONFORMIDADES_STORAGE_KEY = "sivpro.noConformidades.v1";
 
@@ -6769,53 +6774,6 @@ const semillaConFechasRelativas = <T,>(
   })) as T[];
 };
 
-/** Punto C1: al arrancar se reescriben los IDs legacy de venta ("VEN-001",
- *  "VEN-2024-015x") al numérico canónico y se remapea el `ventaId` de las
- *  órdenes de producción GUARDADAS, así el vínculo pedido ↔ orden sobrevive
- *  al cambio de formato. Las órdenes se reescriben en su propia clave ANTES
- *  de que `leerOrdenesPersistidas` las lea (ventas se declara antes que
- *  órdenesProduccion en el componente). */
-const migrarIdsVentasEnArranque = (ventas: Venta[]): Venta[] => {
-  try {
-    const { ventas: migradas, mapa } = migrarIdsVenta(ventas) as {
-      ventas: Venta[];
-      mapa: Record<string, string>;
-    };
-    if (Object.keys(mapa).length === 0) return migradas;
-    // Las ventas se reescriben en su clave para que el cambio sea permanente.
-    localStorage.setItem(VENTAS_STORAGE_KEY, JSON.stringify(migradas));
-    const rawOrdenes = localStorage.getItem(ORDENES_PRODUCCION_STORAGE_KEY);
-    if (rawOrdenes) {
-      const ordenes: unknown = JSON.parse(rawOrdenes);
-      if (Array.isArray(ordenes)) {
-        const remapeadas = ordenes.map((o) =>
-          esObjeto(o) && typeof o.ventaId === "string" && mapa[o.ventaId]
-            ? { ...o, ventaId: mapa[o.ventaId] }
-            : o
-        );
-        localStorage.setItem(
-          ORDENES_PRODUCCION_STORAGE_KEY,
-          JSON.stringify(remapeadas)
-        );
-      }
-    }
-    return migradas;
-  } catch {
-    // localStorage bloqueado o JSON ilegible: se sigue con lo leído tal cual.
-    return ventas;
-  }
-};
-
-const leerVentasPersistidas = () =>
-  migrarIdsVentasEnArranque(
-    leerListaPersistida<Venta>(
-      VENTAS_STORAGE_KEY,
-      // [0, 0, 1, 2, 3, 4, 6, 9, 0]: hoy (2 ventas a distintas horas + la
-      // "completado" 18:30), ayer, y el resto esparcido por la semana/mes.
-      semillaConFechasRelativas(INITIAL_VENTAS, "fecha", [0, 0, 1, 2, 3, 4, 6, 9, 0]),
-      esVentaValida,
-    )
-  );
 const esNoConformidadValida = (x: unknown) =>
   esObjeto(x) &&
   typeof x.id === "string" &&
@@ -6952,6 +6910,29 @@ const esCartItemValido = (i: unknown): i is CartItem => {
     typeof item.sizePrice === "number" &&
     typeof item.extrasPrice === "number"
   );
+};
+
+const hayIdsProductoLegacyEnCarritos = (): boolean => {
+  try {
+    const contieneLegacy = (raw: string | null) => {
+      if (!raw) return false;
+      const parsed: unknown = JSON.parse(raw);
+      const contiene = (items: unknown[]) => items.some((item) => {
+        if (!item || typeof item !== "object") return false;
+        const producto = (item as { product?: { id?: unknown } }).product;
+        return typeof producto?.id === "string" && /^PROD-/i.test(producto.id);
+      });
+      if (Array.isArray(parsed)) return contiene(parsed);
+      if (parsed && typeof parsed === "object") {
+        return Object.values(parsed).some((items) => Array.isArray(items) && contiene(items));
+      }
+      return false;
+    };
+    return contieneLegacy(localStorage.getItem(CARRITO_STORAGE_KEY)) ||
+      contieneLegacy(localStorage.getItem(CARRITOS_USUARIOS_STORAGE_KEY));
+  } catch {
+    return false;
+  }
 };
 
 // El producto guardado se re-resuelve contra PRODUCTS por id, igual que hacen
@@ -7155,7 +7136,7 @@ export default function App() {
   // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
   // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
   const [restauracionSesionLista, setRestauracionSesionLista] = useState(!sesionActiva);
-  const [ventas, setVentas] = useState<Venta[]>(leerVentasPersistidas);
+  const [ventas, setVentas] = useState<Venta[]>([]);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
@@ -7170,6 +7151,9 @@ export default function App() {
   // `Producto` quedaron importados y sin usar, y App reventaba con
   // "ReferenceError: productos is not defined" al renderizar el dashboard.
   const [productos, setProductos] = useState<Producto[]>(leerProductosPersistidos);
+  // Catálogo público independiente del almacenamiento local de Gestión de Productos.
+  const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
+  const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
   // Capturado en el primer render: si la sesión arranca SIN stock persistido,
   // el catálogo volvió a la semilla y las marcas "productosDescontados" de las
   // órdenes guardadas en localStorage apuntan a descuentos que ya no existen
@@ -7224,6 +7208,41 @@ export default function App() {
       ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
       : null,
   );
+  useEffect(() => {
+    let activo = true;
+    obtenerCatalogo()
+      .then(({ productos: filasProductos, categorias: filasCategorias }) => {
+        if (!activo) return;
+        const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
+        const productosApi = filasProductos.map(productoApiAProducto);
+        const categoriasApi = filasCategorias.map(categoriaApiACategoria);
+        setProductosCatalogo(productosApi);
+        setCategoriasCatalogo(categoriasApi);
+        const idsValidos = new Set(productosApi.map((p) => Number(p.id)));
+        setCart((actuales) => {
+          const validos = actuales
+            .filter((item) => idsValidos.has(item.product.id))
+            .map((item) => {
+              const actualizado = productosApi.find((p) => Number(p.id) === item.product.id);
+              return actualizado
+                ? { ...item, product: productoACatalogo(actualizado, categoriasApi) }
+                : item;
+            });
+          if (validos.length < actuales.length) {
+            toast.info("Se quitaron del carrito productos que ya no están disponibles en el catálogo.");
+          }
+          return validos;
+        });
+        if (teniaIdsAntiguos) {
+          toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
+        }
+      })
+      .catch((error) => {
+        console.error("No se pudo cargar el catálogo público:", error);
+        if (activo) toast.error("No se pudo cargar el catálogo. Intenta recargar la página.");
+      });
+    return () => { activo = false; };
+  }, []);
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
@@ -7696,45 +7715,18 @@ export default function App() {
   }, [noConformidades]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(VENTAS_STORAGE_KEY, JSON.stringify(ventas));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
+    if (screen === "ventas-pedidos") {
+      void obtenerVentasPanel().then(setVentas).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudieron cargar las ventas."));
     }
-  }, [ventas]);
-
-  // ── Sincronización de ventas entre pestañas (Fase 3.1) ──
-  // Cuando otra pestaña (p. ej. el admin) cambia una venta, esta pestaña la
-  // recibe sin recargar. El `storage` solo se dispara en las OTRAS pestañas, y
-  // solo se aplica el cambio si el JSON realmente difiere del actual, para no
-  // entrar en bucles de escritura.
-  const ventasRef = useRef(ventas);
-  useEffect(() => {
-    ventasRef.current = ventas;
-  }, [ventas]);
-  useEffect(() => {
-    const onVentasStorage = (e: StorageEvent) => {
-      if (e.key !== VENTAS_STORAGE_KEY || e.newValue === null) return;
-      if (e.newValue === JSON.stringify(ventasRef.current)) return;
-      try {
-        const nueva: unknown = JSON.parse(e.newValue);
-        if (Array.isArray(nueva)) setVentas(nueva as Venta[]);
-      } catch {
-        // JSON corrupto: se ignora.
-      }
-    };
-    window.addEventListener("storage", onVentasStorage);
-    return () => window.removeEventListener("storage", onVentasStorage);
-  }, []);
+  }, [screen]);
 
   // ── Avance automático del estado de la venta (§13) ──
   // El estado NO se cambia a mano: sigue el proceso del pedido. Acá se
   // resuelve el último salto, el que ningún humano debe tocar: un pedido
-  // que quedó "por entregar" (llega ahí cuando su orden de producción se
-  // completa, punto C2) pasa solo a "completado" cuando se cumple la hora de
+  // que quedó Por entregar pasa localmente a Completado cuando se cumple la hora de
   // recogida que eligió el cliente. Es el segundo disparador de ese salto:
   // el primero es el botón "Entregar" de VentasScreen; ambos están
-  // registrados en services/estadosVenta.ts. Un "por-verificar" NO se
+  // registrados en services/estadosVenta.ts. Una venta Por verificar no se
   // autocumple: ese salto exige que el admin revise el comprobante, que es
   // una decisión humana.
   useEffect(() => {
@@ -7743,7 +7735,7 @@ export default function App() {
         const ahora = new Date();
         let cambio = false;
         const siguientes = prev.map((v) => {
-          if (v.estado !== "venta") return v;
+          if (v.estado !== "Por entregar") return v;
           const minutos = minutosDeHora(v.horaRecogida);
           if (minutos === null) return v;
           const horaHoy = ahora.getHours() * 60 + ahora.getMinutes();
@@ -7758,11 +7750,11 @@ export default function App() {
           cambio = true;
           return {
             ...v,
-            estado: "completado" as VentaStatus,
+            estado: "Completado" as VentaStatus,
             historial: [
               ...(v.historial ?? []),
               {
-                estado: "completado" as VentaStatus,
+                estado: "Completado" as VentaStatus,
                 hora: ahora.toLocaleTimeString("es-CO", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -7816,20 +7808,14 @@ export default function App() {
   }, []);
 
   // Creación automática de la orden de producción (§3a / P2) — punto C2:
-  // cuando una venta queda PAGADA y pasa a "en-preparacion" se le crea sola
+  // cuando una venta pagada queda Por entregar se le crea una orden local
   // una orden tipo "Pedido" en Pendiente. Mientras la venta está
-  // "por-verificar" no se crea nada, que es justo cuando NO se prepara. Y
-  // cuando esa orden se completa (callback `onVentaLista` más abajo) la venta
-  // vuelve a avanzar, a "venta" ("Por entregar").
+  // las ventas pendientes de verificación no generan la orden. La orden
+  // local se conserva para los flujos de Producción que aún no usan API.
   //
   // El filtro es por ESTADO, no por transición, así que cubre los flujos:
-  // - Ventas web: nacen en "por-verificar" (registrarPedido) y, al aprobarlas
-  //   en VentasScreen, pasan a "en-preparacion" → el efecto reacciona.
-  // - Ventas del admin: VentasScreen las crea directamente en
-  //   "en-preparacion" (vía setVentas) → el efecto las detecta aunque nunca
-  //   "pasaron" por otro estado.
-  // - Datos previos al C2: una venta ya en "venta" (o en "completado" con
-  //   Efectivo) sin orden también la arma, para que no se quede sin producir.
+  // Ventas que ya están Por entregar pueden alimentar la vista local de
+  // Producción mientras ese módulo se conecta a su propia API.
   // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
   // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
   // orden por producto.
@@ -7847,10 +7833,7 @@ export default function App() {
       return;
     }
     const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
-    const preparable = (v: Venta) =>
-      v.estado === "en-preparacion" ||
-      v.estado === "venta" ||
-      (v.estado === "completado" && v.metodoPago === "Efectivo");
+    const preparable = (v: Venta) => v.estado === "Por entregar";
     const nuevas = ventas.filter((v) => preparable(v) && !conOrden.has(v.id));
     if (nuevas.length === 0) return;
 
@@ -7959,56 +7942,6 @@ export default function App() {
     );
   };
 
-  /** Invocada solo después de que el endpoint de búsqueda confirme 404.
-      Reutiliza una ficha local creada previamente en esta sesión; en otro caso
-      agrega la ficha local mínima antes de guardar el pedido. */
-  const registrarClienteVenta = (
-    datos: { tipoDocumento: string; numeroDocumento: string; nombre: string },
-  ): "creado" | "existente" => {
-    const tipo = datos.tipoDocumento.trim();
-    const numero = datos.numeroDocumento.trim();
-    const clave = `${tipo.toLowerCase()}||${numero}`;
-    const mismaClave = (c: { tipoDocumento?: string; numeroDocumento?: string }) =>
-      `${(c.tipoDocumento ?? "").trim().toLowerCase()}||${(c.numeroDocumento ?? "").trim()}` === clave;
-
-    if (clientes.some(mismaClave)) {
-      setClientes((prev) =>
-        prev.map((c) => (mismaClave(c) ? { ...c, pedidos: c.pedidos + 1 } : c)),
-      );
-      return "existente";
-    }
-    const nombre = datos.nombre.trim();
-    const iniciales = nombre
-      .split(/\s+/)
-      .map((w) => w[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
-    setClientes((prev) => {
-      const maxNum = prev.reduce(
-        (max, c) => Math.max(max, parseInt(c.id.replace("CLI-", "")) || 0),
-        0,
-      );
-      return [
-        {
-          id: `CLI-${String(maxNum + 1).padStart(3, "0")}`,
-          nombre,
-          iniciales,
-          avatarColor: AVATAR_PALETTE[prev.length % AVATAR_PALETTE.length],
-          correo: "",
-          telefono: "",
-          tipoDocumento: tipo,
-          numeroDocumento: numero,
-          pedidos: 1,
-          activo: true,
-        },
-        ...prev,
-      ];
-    });
-    return "creado";
-  };
-
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
     const claveSesion = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
     setEmpleados(prev => prev.map(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveSesion
@@ -8058,33 +7991,25 @@ export default function App() {
       // El nombre que queda registrado es el del invitado (si lo
       // llegó a escribir) o el de la cuenta que inicia sesión.
       const nombrePedido = orderToResume.nombre?.trim() || user.nombre;
-      const idVenta = registrarPedido(
+      void registrarPedido(
         orderToResume.metodoPago,
         orderToResume.comprobante,
         orderToResume.items,
         orderToResume.horaRecogida,
         nombrePedido,
         orderToResume.documento,
-      );
-      setCart([]);
-      // Confirmación como objeto (no solo la hora) para que la
-      // pantalla del carrito muestre exactamente lo mismo que tras
-      // un pedido normal: número, productos, cliente y recogida.
-      setOrderConfirmation({
-        id: idVenta,
-        hora: hora12(orderToResume.horaRecogida),
-        nombre: nombrePedido,
-        documento: orderToResume.documento?.trim(),
-        items: orderToResume.items,
-        total: orderToResume.items.reduce(
-          (s, i) => s + (i.sizePrice + i.extrasPrice) * i.quantity,
-          0,
-        ),
-      });
-      window.setTimeout(() => {
-        setPendingOrder(null);
-        navigate("cart");
-      }, 0);
+      ).then(({ id, total }) => {
+        setCart([]);
+        setOrderConfirmation({
+          id,
+          hora: hora12(orderToResume.horaRecogida),
+          nombre: nombrePedido,
+          documento: orderToResume.documento?.trim(),
+          items: orderToResume.items,
+          total,
+        });
+        window.setTimeout(() => { setPendingOrder(null); navigate("cart"); }, 0);
+      }).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido."));
     }
 
     setLoggedInUserId(user.id);
@@ -8171,7 +8096,7 @@ export default function App() {
       );
     });
 
-  const registrarPedido = (
+  const registrarPedido = async (
     metodoPago: string,
     comprobante: string,
     items: CartItem[],
@@ -8179,58 +8104,25 @@ export default function App() {
     clienteNombre?: string,
     clienteDocumento?: string,
     clienteTelefono?: string,
-  ): string => {
-    // ID único (punto C1): el generador ÚNICO es `siguienteIdVenta`, que
-    // devuelve el siguiente numérico canónico ("10", "11", …) contra los ids
-    // reales existentes (no contra el largo de la lista, que se desincroniza
-    // si se borra o se importa una venta).
-    const newVenta: Venta = {
-      id: siguienteIdVenta(ventas),
-      usuario: clienteNombre?.trim() || pedidosUsuarioNombre,
-      documento: clienteDocumento?.trim() || undefined,
-      telefono: clienteTelefono?.trim() || undefined,
-      fecha: new Date().toLocaleDateString("en-CA"),
-      productos: items
-        .map((i) => `${i.product.name} x${i.quantity}`)
-        .join(", "),
-      cantidad: items.reduce((s, i) => s + i.quantity, 0),
-      total: items.reduce(
-        (s, i) => s + (i.sizePrice + i.extrasPrice) * i.quantity,
-        0,
-      ),
-      estado: "por-verificar" as VentaStatus,
-      metodoPago,
-      comprobante,
-      // Se guarda ya en formato 12 h ("6:30 p. m."): así todas las pantallas
-      // muestran la recogida igual, sin depender del locale del navegador.
-      horaRecogida: hora12(horaRecogida),
-      // El historial es lo que alimenta la columna "Hora de estado" del panel
-      // de ventas: sin esta entrada el pedido aparecería sin hora.
-      historial: [
-        {
-          estado: "por-verificar" as VentaStatus,
-          hora: new Date().toLocaleTimeString("es-CO", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ],
-      detalle: items.map((i) => ({
-        nombre: `${i.product.name} — ${i.size}`,
-        precio: i.sizePrice + i.extrasPrice,
-        cantidad: i.quantity,
-        imagen: i.product.image,
-        extras: i.selectedExtras,
-        tamaño: i.size,
-        // El id del producto del catálogo de Productos. Se guarda para que la
-        // Orden de Producción no tenga que deducir el producto del nombre
-        // ("Pizza Peperoni — Mediana"); si el nombre no está en el catálogo
-        // queda sin id y se resuelve por nombre.
-        productoId: productos.find((p) => normalizarNombre(p.nombre) === normalizarNombre(i.product.name))?.id,
+  ): Promise<{ id: string; total: number }> => {
+    const itemsConId = items.map((item) => {
+      const producto = productosCatalogo.find((p) => normalizarNombre(p.nombre) === normalizarNombre(item.product.name));
+      return { item, id: producto ? Number(producto.id) : NaN };
+    });
+    if (itemsConId.some(({ id }) => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new Error("No se pudo identificar uno de los productos del catálogo. Actualiza la página e intenta de nuevo.");
+    }
+    const creada = await crearVentaCliente({
+      hora_recogida: horaRecogida,
+      productos: itemsConId.map(({ item, id }) => ({
+        id_producto: id,
+        cantidad: item.quantity,
+        tamano: /bebida/i.test(item.product.category ?? "") ? null : item.size,
       })),
-    };
-    setVentas((prev) => [newVenta, ...prev]);
-    return newVenta.id;
+      pago: { tipo: metodoPago, comprobante },
+    });
+    setVentas((prev) => [creada.venta, ...prev]);
+    return { id: creada.id, total: creada.total };
   };
 
   /** El cliente envía el comprobante del dinero faltante: se agrega a la venta
@@ -8247,12 +8139,12 @@ export default function App() {
         const nuevo: ComprobanteVenta = { url: comprobanteUrl, tipo: "faltante", fecha, hora };
         return {
           ...v,
-          estado: "por-verificar" as VentaStatus,
+          estado: "Por verificar" as VentaStatus,
           comprobantes: [...base, nuevo],
           // `comprobante` se conserva apuntando al pago inicial (compatibilidad
           // con vistas viejas que solo leen ese campo).
           comprobante: base[0]?.url ?? v.comprobante,
-          historial: [...(v.historial ?? []), { estado: "por-verificar" as VentaStatus, hora }],
+          historial: [...(v.historial ?? []), { estado: "Por verificar" as VentaStatus, hora }],
         };
       }),
     );
@@ -8803,8 +8695,8 @@ export default function App() {
                     setCatalogCat(cat);
                     navigate("catalog");
                   }}
-                  categorias={categorias}
-                  productos={productos}
+                  categorias={categoriasCatalogo}
+                  productos={productosCatalogo}
                   onOpenDetail={(p) => {
                     setDetalleOrigen("landing");
                     setSelectedProduct(p);
@@ -8829,26 +8721,8 @@ export default function App() {
                   }}
                   cart={cart}
                   updateQty={updateQty}
-                  categorias={categorias}
-                  productos={productos
-                    // Un producto "Descontinuado" no aparece en el catálogo
-                    // público; "No disponible" sí aparece pero no se puede
-                    // agregar (el botón queda deshabilitado en ProductCard).
-                    .filter((p) => p.estado !== "Descontinuado")
-                    .map((p) => ({
-                    id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
-                    name: p.nombre,
-                    description: DESCRIPCIONES[p.nombre] ?? "",
-                    price: p.precioUnitario,
-                    idCategoria: p.idCategoria,
-                    image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
-                    category: nombreCategoria(p.idCategoria, categorias),
-                    sizes: sizesDeProducto(p),
-                    extras: [],
-                    status: p.estado === "Disponible" ? "disponible" : "no disponible",
-                    rating: 4.5,
-                    sales: 0,
-                  }))}
+                  categorias={categoriasCatalogo}
+                  productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
                 />
               )}
               {screen === "product-detail" && (
@@ -8986,7 +8860,7 @@ export default function App() {
                 <ProductosPerecederosScreen
                   {...getPerms("perecederos")}
                   ventasPerdidas={ventas
-                    .filter((v) => v.estado === "perdida")
+                    .filter((v) => v.estado === "Devolucion")
                     .map((v) => ({
                       id: v.id,
                       usuario: v.usuario,
@@ -9155,8 +9029,7 @@ export default function App() {
                   {...getPerms("ventas-pedidos")}
                   pedidos={ventas}
                   setPedidos={setVentas}
-                  productos={productosMenu}
-                  onRegistrarClienteVenta={registrarClienteVenta}
+                  productos={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />
               )}
@@ -9269,24 +9142,23 @@ export default function App() {
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
                   // Punto C2: al completarse la orden de producción de una
-                  // venta, ésta sale de cocina y pasa a "venta" ("Por
-                  // entregar"); recién ahí la cierra el botón "Entregar" o la
+                  // venta, ésta permanece Por entregar; recién ahí la cierra el botón "Entregar" o la
                   // hora de recogida (§13). La transición se valida contra la
                   // tabla de `estadosVenta.ts`.
                   onVentaLista={(ventaId) => {
                     setVentas((prev) =>
                       prev.map((v) => {
-                        if (v.id !== ventaId || !puedeTransicionar(v.estado, "venta")) return v;
+                        if (v.id !== ventaId || !puedeTransicionar(v.estado, "Por entregar")) return v;
                         const hora = new Date().toLocaleTimeString("es-CO", {
                           hour: "2-digit",
                           minute: "2-digit",
                         });
                         return {
                           ...v,
-                          estado: "venta" as VentaStatus,
+                          estado: "Por entregar" as VentaStatus,
                           historial: [
                             ...(v.historial ?? []),
-                            { estado: "venta" as VentaStatus, hora },
+                            { estado: "Por entregar" as VentaStatus, hora },
                           ],
                         };
                       }),

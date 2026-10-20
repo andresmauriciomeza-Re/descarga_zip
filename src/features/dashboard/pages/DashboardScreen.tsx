@@ -166,13 +166,13 @@ export function DashboardScreen({
   const [periodo, setPeriodo] = useState<Periodo>("semana");
 
   /**
-   * Regla única de ingresos: solo las ventas confirmadas ("venta") o
-   * entregadas ("completado") suman dinero y conteo. La misma función se usa
+   * Regla única de ingresos: solo las ventas Por entregar o Completado
+   * suman dinero y conteo. La misma función se usa
    * en las tarjetas Y en todas las gráficas de ventas para que los números
    * nunca se contradigan. Anuladas, devoluciones, rechazos y pagos sin
    * confirmar no cuentan; las devoluciones se siguen contando aparte.
    */
-  const esVentaIngresante = (v: Venta) => v.estado === "venta" || v.estado === "completado";
+  const esVentaIngresante = (v: Venta) => v.estado === "Por entregar" || v.estado === "Completado";
 
   /** Ventas que suman dentro de un periodo dado (filtro de cada gráfica). */
   const ventasEn = (p: Periodo) =>
@@ -189,7 +189,7 @@ export function DashboardScreen({
   // Filtro global → tarjetas de indicadores.
   const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha, periodo));
   const ingresantesGlobal = ventasPeriodo.filter(esVentaIngresante);
-  const devolucionesPeriodo = ventasPeriodo.filter((v) => v.estado === "perdida");
+  const devolucionesPeriodo = ventasPeriodo.filter((v) => v.estado === "Devolucion");
   const ncPeriodo = noConformidades.filter((nc) => enPeriodo(nc.fechaRegistro, periodo));
 
   const ingresosPeriodo = ingresantesGlobal.reduce((s, v) => s + v.total, 0);
@@ -463,7 +463,7 @@ export function DashboardScreen({
     const hoy = hoyISO();
     const ventasHoy = ventas.filter((v) => v.fecha === hoy && esVentaIngresante(v));
     const totalVendidoHoy = ventasHoy.reduce((s, v) => s + v.total, 0);
-    const porVerificar = ventas.filter((v) => v.estado === "por-verificar");
+    const porVerificar = ventas.filter((v) => v.estado === "Por verificar");
     const devoluciones = ventas.filter((v) => v.devolucionTipo !== undefined);
     const devolucionesPendientes = devoluciones.filter((v) => v.devolucionResuelta !== true);
     const ordenesEnCurso = ordenesProduccion.filter(
@@ -522,14 +522,12 @@ export function DashboardScreen({
     const insumosTabla = insumosBajo.slice(0, 5);
 
     const ESTADO_VENTA: Record<Venta["estado"], string> = {
-      venta: "Por entregar",
-      perdida: "Devolución",
-      "por-verificar": "Por verificar",
-      "en-preparacion": "En preparación",
-      completado: "Completado",
-      anulado: "Anulado",
-      rechazado: "Rechazado",
-      "en-espera": "En espera",
+      "Por verificar": "Por verificar",
+      "En espera": "En espera",
+      "Por entregar": "Por entregar",
+      Completado: "Completado",
+      Devolucion: "Devuelta",
+      Anulado: "Rechazado",
     };
     const ESTADO_OP: Record<string, string> = {
       pendiente: "Pendiente",

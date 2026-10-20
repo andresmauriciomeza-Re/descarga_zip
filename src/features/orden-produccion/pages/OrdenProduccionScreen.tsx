@@ -949,7 +949,7 @@ export function OrdenProduccionScreen({
   noConformidades: NoConformidad[];
   setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
   /** Punto C2: avisa a App cuando se completa una orden que pertenece a una
-      venta (`ventaId`), para que esa venta salga de cocina y pase a "venta"
+      venta (`ventaId`), para que esa venta quede Por entregar
       ("Por entregar"). Sin callback la pantalla sigue funcionando igual. */
   onVentaLista?: (ventaId: string) => void;
   canCreate?: boolean;
@@ -1057,15 +1057,14 @@ export function OrdenProduccionScreen({
   // ── Numeración ─────────────────────────────────────────────────────
   const siguienteId = () => siguienteOrdenId(ordenes);
 
-  /** Venta pagada y "en preparación" que todavía no tiene orden (punto C2).
+  /** Venta pagada y Por entregar que todavía no tiene orden.
       Una venta = una sola orden: el buscador manual y la creación automática
       de App comparten esta lista, así que no se puede duplicar. El estado
-      "venta" (legacy, anterior al C2) también se ofrece por si alguna venta
-      quedó aprobada sin orden: igual hay que producirla. */
+      Por entregar también se ofrece si una venta pagada quedó sin orden. */
   const ventasSinOrden = useMemo(() => {
     const conOrden = new Set(ordenes.map((o) => o.ventaId).filter(Boolean) as string[]);
     return ventas.filter(
-      (v) => (v.estado === "en-preparacion" || v.estado === "venta") && !conOrden.has(v.id),
+      (v) => v.estado === "Por entregar" && !conOrden.has(v.id),
     );
   }, [ventas, ordenes]);
 
@@ -1173,8 +1172,8 @@ export function OrdenProduccionScreen({
         return;
       }
       const estadoVenta = ventas.find((v) => v.id === form.ventaId)?.estado;
-      if (estadoVenta !== "en-preparacion" && estadoVenta !== "venta") {
-        toast.error("Solo se puede preparar una venta pagada (en preparación)");
+      if (estadoVenta !== "Por entregar") {
+        toast.error("Solo se puede preparar una venta pagada (Por entregar)");
         return;
       }
       if (ordenes.some((o) => o.ventaId === form.ventaId)) {

@@ -10,6 +10,20 @@ import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
 import pizzaPollo from "@/assets/img/pizza_pollo.png";
 import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
 
+const assetsImagen = import.meta.glob<string>("@/assets/img/*", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+export const resolverImagenCatalogo = (imagen?: string | null): string => {
+  const valor = imagen?.trim() ?? "";
+  if (/^https?:\/\//i.test(valor)) return valor;
+  const nombre = valor.split(/[\\/]/).pop() ?? "";
+  const asset = Object.entries(assetsImagen).find(([ruta]) => ruta.endsWith(`/${nombre}`));
+  return asset?.[1] ?? "";
+};
+
 export interface Product {
   id: number;
   name: string;
@@ -34,13 +48,13 @@ export const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + 
     - Pizza (CAT-001): Mediana = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
     - Lasaña (CAT-002): Normal = precio de venta.
     - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
-export const sizesDeProducto = (p: Producto): Product["sizes"] =>
-  p.idCategoria === "CAT-001"
+export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes"] =>
+  (p.idCategoria === "CAT-001" || categoria?.toLowerCase().includes("pizza"))
     ? [
         { label: "Mediana", price: p.precioUnitario },
         { label: "Grande", price: p.precioUnitario + RECARGO_TAMANO_GRANDE },
       ]
-    : p.idCategoria === "CAT-002"
+    : (p.idCategoria === "CAT-002" || categoria?.toLowerCase().includes("lasaña") || categoria?.toLowerCase().includes("lasana"))
       ? [{ label: "Normal", price: p.precioUnitario }]
       : [];
 
@@ -108,6 +122,9 @@ export const DESCRIPCIONES: Record<string, string> = {
   "Lasaña Carne": "Capas de pasta con carne molida y queso gratinado.",
   "Lasaña Pollo": "Lasaña de pollo con capas de pasta, salsa y queso gratinado.",
   "Lasaña Mixta": "Lasaña mixta con capas de pasta, salsa y queso gratinado.",
+  "Pizza Jamón": "Peperoni y hierbas sobre queso derretido.",
+  "Pizza Hawaiana": "Jamón y trozos de piña sobre queso derretido.",
+  "Gaseosa Premium": "Gaseosa Premium en botella, ideal para acompañar tu pizza.",
 };
 
 // Convierte un `Producto` del panel al `Product` que consumen el catálogo, el
@@ -120,16 +137,54 @@ export const nombreCategoria = (idCategoria: string, categorias: CategoriaProduc
 };
 
 export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => ({
-  id: parseInt(p.id.replace("PROD-", ""), 10) || 0,
+  id: Number(p.id.replace(/^PROD-/, "")) || 0,
   name: p.nombre,
   description: DESCRIPCIONES[p.nombre] ?? "",
   price: p.precioUnitario,
-  image: IMAGENES_PIZZA[p.nombre] || p.imagen || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+  image: p.imagen || IMAGENES_PIZZA[p.nombre] || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
   idCategoria: p.idCategoria,
   category: nombreCategoria(p.idCategoria, categorias),
-  sizes: sizesDeProducto(p),
+  sizes: sizesDeProducto(p, nombreCategoria(p.idCategoria, categorias)),
   extras: [],
   status: p.estado === "Disponible" ? "disponible" : "no disponible",
   rating: 4.5,
   sales: 0,
+});
+
+export const productoApiAProducto = (p: {
+  id_producto: number;
+  id_categoria: number;
+  nombre: string;
+  tipo: string;
+  precio_venta: number | string;
+  costo_unitario?: number | string;
+  unidad_venta: string;
+  stock?: number;
+  imagen: string | null;
+  estado: string;
+}): Producto => ({
+  id: String(p.id_producto),
+  imagen: resolverImagenCatalogo(p.imagen),
+  nombre: p.nombre,
+  idCategoria: String(p.id_categoria),
+  tipo: p.tipo === "Elaborado" ? "Producto insumo" : "Producto terminado",
+  costoUnitario: Number(p.costo_unitario ?? 0),
+  precioUnitario: Number(p.precio_venta),
+  unidadVenta: p.unidad_venta,
+  stockDisponible: p.stock ?? 0,
+  estado: p.estado as Producto["estado"],
+});
+
+export const categoriaApiACategoria = (c: {
+  id_categoria: number;
+  nombre: string;
+  descripcion: string | null;
+  emoji: string | null;
+  estado: boolean;
+}): CategoriaProducto => ({
+  id: String(c.id_categoria),
+  nombre: c.nombre,
+  descripcion: c.descripcion ?? undefined,
+  icono: c.emoji ?? undefined,
+  estado: c.estado ? "Activo" : "Inactivo",
 });

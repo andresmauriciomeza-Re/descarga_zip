@@ -21,6 +21,7 @@ import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { PasoPagoTransferencia, PAYMENT_INFO } from "@/shared/components/PasoPagoTransferencia";
 import { VisorImagen } from "@/shared/components/VisorImagen";
+import { obtenerMisVentas, subirComprobanteVenta } from "../services/ventasApi";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -33,45 +34,35 @@ const ESTADO: Record<
   VentaStatus,
   { label: string; color: string; mensaje: string }
 > = {
-  "por-verificar": {
-    label: "Verificando pago",
+  "Por verificar": {
+    label: "Por verificar",
     color: "bg-amber-100 text-amber-800",
     mensaje: "Estamos revisando tu comprobante de pago.",
   },
   // Punto C2: estado nuevo entre "pago verificado" y "listo para recoger":
   // la venta espera a que su orden de producción se complete en cocina.
-  "en-preparacion": {
-    label: "Preparando tu pedido",
-    color: "bg-teal-100 text-teal-800",
-    mensaje: "Tu pago fue confirmado y tu pedido ya está en cocina.",
-  },
-  venta: {
-    label: "Listo para recoger",
+  "Por entregar": {
+    label: "Por entregar",
     color: "bg-blue-100 text-blue-800",
     mensaje: "Tu pago fue confirmado. Tu pedido está listo para recoger.",
   },
-  completado: {
-    label: "Entregado",
+  Completado: {
+    label: "Completado",
     color: "bg-emerald-100 text-emerald-800",
     mensaje: "Pedido entregado. ¡Gracias por elegir La Sirena!",
   },
-  perdida: {
-    label: "Devolución",
+  Devolucion: {
+    label: "Devuelta",
     color: "bg-orange-100 text-orange-800",
     mensaje: "Este pedido tiene una devolución registrada.",
   },
-  anulado: {
-    label: "Anulado",
-    color: "bg-red-100 text-red-700",
-    mensaje: "Este pedido fue anulado y no se tiene en cuenta.",
-  },
-  rechazado: {
+  Anulado: {
     label: "Rechazado",
     color: "bg-red-100 text-red-700",
     mensaje: "El comprobante de este pedido fue rechazado.",
   },
-  "en-espera": {
-    label: "Falta completar el pago",
+  "En espera": {
+    label: "En espera",
     color: "bg-violet-100 text-violet-800",
     mensaje: "Falta un valor por pagar para completar tu pedido.",
   },
@@ -98,15 +89,21 @@ function Dato({
 }
 
 interface Props {
-  pedidos: Venta[];
+  pedidos?: Venta[];
   usuarioNombre: string;
   onVerMenu: () => void;
   /** Envía el comprobante del dinero faltante: agrega el comprobante a la
       venta y la devuelve a estado "Por verificar". */
-  onCompletarFaltante: (id: string, comprobanteUrl: string) => void;
+  onCompletarFaltante?: (id: string, comprobanteUrl: string) => void;
 }
 
-export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompletarFaltante }: Props) {
+export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, onVerMenu }: Props) {
+  const [misPedidos, setMisPedidos] = useState<Venta[]>([]);
+  const cargar = async () => {
+    try { setMisPedidos(await obtenerMisVentas()); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "No se pudieron cargar tus pedidos."); }
+  };
+  useEffect(() => { void cargar(); }, []);
   const [abierto, setAbierto] = useState<string | null>(null);
   /** Pestaña activa: todos los pedidos o solo los de hoy. */
   const [pestana, setPestana] = useState<"todos" | "recientes">("todos");
@@ -122,14 +119,12 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
   /** Visor del comprobante de devolución (rechazo por dinero faltante). */
   const [visorSrc, setVisorSrc] = useState<string | null>(null);
 
-  const misPedidos = pedidos
-    .filter((p) => p.usuario === usuarioNombre)
-    .sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const pedidosHoy = misPedidos.filter((p) => p.fecha === hoyISO());
-  const lista = pestana === "recientes" ? pedidosHoy : misPedidos;
+  const pedidosOrdenados = [...misPedidos].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const pedidosHoy = pedidosOrdenados.filter((p) => p.fecha === hoyISO());
+  const lista = pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
 
   // Pedido en espera del que se está completando el pago (para montos).
-  const pedidoCompletar = completarId ? misPedidos.find((p) => p.id === completarId) ?? null : null;
+  const pedidoCompletar = completarId ? pedidosOrdenados.find((p) => p.id === completarId) ?? null : null;
 
   // QR del método elegido en el paso 2 (mismo contenido que el checkout).
   useEffect(() => {
@@ -170,7 +165,7 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
       for (const p of misPedidos) prevEstadosRef.current[p.id] = p.estado;
       // Aviso de pedidos que ya esperan dinero faltante.
       for (const p of misPedidos) {
-        if (p.estado === "en-espera") {
+        if (p.estado === "En espera") {
           toast.info(`El pedido ${p.id} espera un faltante de ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
         }
       }
@@ -179,20 +174,20 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
     for (const p of misPedidos) {
       const prev = prevEstadosRef.current[p.id];
       if (prev !== undefined && prev !== p.estado) {
-        if (p.estado === "venta") {
+        if (p.estado === "Por entregar") {
           toast.success(`Tu pedido ${p.id} está listo para recoger.`);
-        } else if (p.estado === "en-espera") {
+        } else if (p.estado === "En espera") {
           toast.info(`El pedido ${p.id}: falta ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
-        } else if (p.estado === "rechazado") {
+        } else if (p.estado === "Anulado") {
           toast.error(`El pedido ${p.id} fue rechazado.`);
-        } else if (p.estado === "completado") {
+        } else if (p.estado === "Completado") {
           toast.success(`Tu pedido ${p.id} fue entregado. ¡Gracias!`);
         }
       }
       prevEstadosRef.current[p.id] = p.estado;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedidos]);
+  }, [misPedidos]);
 
   // Limpieza del modal al abrir/cerrar.
   const abrirCompletar = (id: string) => {
@@ -212,9 +207,9 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
 
   const enviarFaltante = () => {
     if (!completarId || !compComprobante) return;
-    onCompletarFaltante(completarId, compComprobante);
-    toast.success("Recibimos tu comprobante, lo estamos verificando");
-    cerrarCompletar();
+    void subirComprobanteVenta(completarId, { tipo: metodo, comprobante: compComprobante })
+      .then(() => { toast.success("Recibimos tu comprobante, lo estamos verificando"); cerrarCompletar(); void cargar(); })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo enviar el comprobante."));
   };
 
   return (
@@ -326,14 +321,15 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
               </button>
 
               {/* Alerta de falta de pago: visible sin expandir la tarjeta. */}
-              {p.estado === "en-espera" && (
+              {p.estado === "En espera" && (
                 <div className="px-5 pb-4 -mt-1">
                   <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 text-violet-900">
-                      <AlertTriangle className="w-5 h-5 shrink-0" />
-                      <p className="text-sm font-semibold">
-                        Falta {fmtCOP(p.montoFaltante ?? 0)} para completar tu pago
-                      </p>
+                    <div className="flex items-start gap-2 text-violet-900">
+                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-semibold">Completa el saldo de tu pedido</p>
+                        <p>Total: {fmtCOP(p.total)} · Recibido: {fmtCOP(p.montoPagado ?? 0)} · Pendiente: {fmtCOP(p.montoFaltante ?? 0)}</p>
+                      </div>
                     </div>
                     <button
                       onClick={() => abrirCompletar(p.id)}
@@ -351,17 +347,17 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
                   <p className="text-sm text-muted-foreground">{est.mensaje}</p>
 
                   {/* Rechazado: motivo claro y comprobante de devolución. */}
-                  {p.estado === "rechazado" && (
+                  {p.estado === "Anulado" && (
                     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
                       <div className="flex items-start gap-2 text-red-900">
                         <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
                         <p className="text-sm">
-                          {p.motivoRechazo === "dinero-faltante"
+                          {p.motivoRechazo === "Dinero faltante"
                             ? "Rechazado: el valor recibido no cubría el total y el dinero fue devuelto."
-                            : p.motivoRechazo === "comprobante-falso"
+                            : p.motivoRechazo === "Comprobante falso"
                               ? "Rechazado: el comprobante de pago no fue válido."
                               // Sin motivo de verificación = la venta fue anulada
-                              // desde el panel (anular deja "rechazado").
+                              // desde el panel (anular deja Anulado).
                               : "Rechazado: el pedido fue anulado por el administrador."}
                         </p>
                       </div>
@@ -376,7 +372,7 @@ export function MisPedidosScreen({ pedidos, usuarioNombre, onVerMenu, onCompleta
                     </div>
                   )}
 
-                  {p.estado === "perdida" && (
+                  {p.estado === "Devolucion" && (
                     <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-start gap-3">
                       <RefreshCw className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                       <div>
