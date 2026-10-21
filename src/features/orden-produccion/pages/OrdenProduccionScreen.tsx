@@ -926,7 +926,6 @@ export function OrdenProduccionScreen({
   setOrdenes,
   noConformidades,
   setNoConformidades,
-  onVentaLista,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -948,10 +947,6 @@ export function OrdenProduccionScreen({
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
   noConformidades: NoConformidad[];
   setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
-  /** Punto C2: avisa a App cuando se completa una orden que pertenece a una
-      venta (`ventaId`), para que esa venta quede Por entregar
-      ("Por entregar"). Sin callback la pantalla sigue funcionando igual. */
-  onVentaLista?: (ventaId: string) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1394,12 +1389,6 @@ export function OrdenProduccionScreen({
         : orden.notasFaltantes,
     };
     setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizado : o)));
-
-    // Punto C2: si la orden pertenece a una venta, al completarse ésta sale
-    // de cocina y pasa a "Por entregar" (transición en-preparacion → venta,
-    // registrada en services/estadosVenta.ts). Es el paso que antes no estaba
-    // cableado: la venta y su orden avanzaban por separado.
-    if (orden.ventaId) onVentaLista?.(orden.ventaId);
 
     if (faltantes.length > 0) {
       toast.warning(actualizado.notasFaltantes ?? "Completó con faltantes");

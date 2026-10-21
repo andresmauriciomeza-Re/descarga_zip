@@ -153,6 +153,10 @@ export async function verificarVentaApi(id: string, payload: {
   await api.patch(`/ventas/${id}/verificacion`, payload);
 }
 
+export async function entregarVentaApi(id: string) {
+  await api.patch(`/ventas/${id}/entrega`);
+}
+
 export async function subirComprobanteVenta(id: string, payload: { tipo: string; comprobante: string }) {
   await api.post(`/ventas/${id}/comprobantes`, payload);
 }

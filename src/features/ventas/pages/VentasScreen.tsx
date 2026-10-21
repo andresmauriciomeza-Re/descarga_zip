@@ -16,7 +16,6 @@ import {
   FileText,
   Download,
   ImageIcon,
-  Ban,
   Undo2,
   CalendarDays,
   Upload,
@@ -30,15 +29,14 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { buscarClientePorDocumento } from "@/shared/services/authService";
+import { buscarClientePorDocumento, buscarClientesPorNombre, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
-import { crearVentaPanel, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { crearVentaPanel, entregarVentaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import {
   type EstadoVenta,
-  puedeTransicionar,
 } from "@/features/ventas/services/estadosVenta";
 
 const SERIF = "var(--font-titulo)";
@@ -454,10 +452,6 @@ export function VentasScreen({
   const devolFileRef = useRef<HTMLInputElement | null>(null);
   /** Imagen abierta en el visor ampliado (comprobante u otro). */
   const [visorSrc, setVisorSrc] = useState<string | null>(null);
-  const [confirmAccionV, setConfirmAccionV] = useState<{
-    id: string;
-    accion: "anular" | "devolucion";
-  } | null>(null);
   /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
   const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
 
@@ -511,18 +505,19 @@ export function VentasScreen({
     void ejecutarVerificacion(id, { accion: "aceptar" });
   };
 
-  /** Botón "Entregar" (punto C2): uno de los dos disparadores del paso
-      "Por entregar → Completado"; el otro es el auto-completado por hora de
-      recogida (§13, en App). Ambos están registrados en `estadosVenta.ts`. */
-  const entregarVenta = (id: string) => {
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id && puedeTransicionar(x.estado, "Completado")
-          ? { ...x, estado: "Completado" as VentaStatus, historial: [...(x.historial ?? []), { estado: "Completado" as VentaStatus, hora: nowHora() }] }
-          : x,
-      ),
-    );
-    toast.success("Pedido entregado");
+  /** Botón "Entregar": pide al backend la transición "Por entregar →
+      Completado" y recarga la lista desde la API. Si la llamada falla, se
+      avisa con un toast y la pantalla NO cambia: el estado solo se refleja
+      cuando el servidor confirma la entrega. */
+  const entregarVenta = async (id: string) => {
+    try {
+      await entregarVentaApi(id);
+      const ventasActualizadas = await obtenerVentasPanel();
+      setPedidos(ventasActualizadas);
+      toast.success("Pedido entregado");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo registrar la entrega.");
+    }
   };
 
   /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución.
@@ -545,46 +540,9 @@ export function VentasScreen({
     void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: "Dinero faltante" });
   };
 
-  /** Anular una venta: el pedido queda en Anulado (badge Rechazado)
-      y misma regla de conteo que un rechazo de pago: no cuenta como venta)
-      y deja su entrada en el historial, sin tocar el módulo de devoluciones.
-      el estado persistido es Anulado. */
-  const anularVenta = (id: string) => {
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado: "Anulado" as VentaStatus,
-              historial: [...(x.historial ?? []), { estado: "Anulado" as VentaStatus, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.success("Venta anulada");
-  };
-
-  /** Registrar una devolución: la venta pasa a "Devolución" y queda disponible
-      en el módulo de devoluciones para resolverla. */
-  const registrarDevolucion = (id: string) => {
-    setPedidos((prev) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              estado: "Devolucion" as VentaStatus,
-              devolucionResuelta: false,
-              historial: [...(x.historial ?? []), { estado: "Devolucion" as VentaStatus, hora: nowHora() }],
-            }
-          : x,
-      ),
-    );
-    toast.success("Devolución registrada");
-  };
-
   /** Cambio de estado: YA NO existe desde la tabla (punto C2). La columna es
       de solo lectura y cada avance sale de `estadosVenta.ts` (verificación,
-      orden de producción, botón "Entregar", hora de recogida). */
+      orden de producción, botón "Entregar"). */
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
@@ -669,7 +627,7 @@ export function VentasScreen({
     onConfirm,
   }: {
     onClose: () => void;
-    onConfirm: (v: Omit<Venta, "id">) => void;
+    onConfirm: (v: Omit<Venta, "id">) => Promise<boolean>;
   }) => {
     const [documento, setDocumento] = useState("");
     const [tipoDocumento, setTipoDocumento] = useState("CC");
@@ -682,11 +640,25 @@ export function VentasScreen({
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
+    /** Estado "guardando": bloquea el botón Guardar mientras el pedido se
+        registra. El `ref` es la barrera real anti doble clic (el `disabled`
+        del botón no alcanza si llegan dos clics en el mismo tick). */
+    const [guardando, setGuardando] = useState(false);
+    const guardandoRef = useRef(false);
 
     type EstadoBusquedaDocumento = "inactivo" | "pendiente" | "buscando" | "registrado" | "no-encontrado" | "error";
     const [estadoBusqueda, setEstadoBusqueda] = useState<EstadoBusquedaDocumento>("inactivo");
     const [clienteInactivo, setClienteInactivo] = useState(false);
     const busquedaId = useRef(0);
+    const busquedaNombreId = useRef(0);
+    const clienteElegidoPorNombre = useRef(false);
+    const nombreClienteElegido = useRef("");
+    const usuarioActual = useRef(usuario);
+    const campoNombreRef = useRef<HTMLInputElement>(null);
+    const [resultadosNombre, setResultadosNombre] = useState<ClientePorNombreApi[]>([]);
+    const [buscandoNombre, setBuscandoNombre] = useState(false);
+    const [listaNombreAbierta, setListaNombreAbierta] = useState(false);
+    const [indiceNombreActivo, setIndiceNombreActivo] = useState(-1);
     const documentoActual = useRef(documento);
     const tipoActual = useRef(tipoDocumento);
     const digitosDe = (valor: string) => valor.replace(/\D/g, "");
@@ -706,6 +678,7 @@ export function VentasScreen({
           numero !== documentoActual.current.trim() ||
           tipo !== tipoActual.current
         ) return "obsoleto";
+        usuarioActual.current = resultado.nombre;
         setUsuario(resultado.nombre);
         setClienteInactivo(!resultado.estado);
         setEstadoBusqueda("registrado");
@@ -729,6 +702,7 @@ export function VentasScreen({
 
     useEffect(() => {
       const numero = documento.trim();
+      if (clienteElegidoPorNombre.current && numero === documentoActual.current.trim()) return;
       if (digitosDe(numero).length < 6) {
         setEstadoBusqueda("inactivo");
         return;
@@ -744,14 +718,115 @@ export function VentasScreen({
       };
     }, [documento, tipoDocumento]);
 
+    useEffect(() => {
+      const termino = usuario.trim();
+      const id = ++busquedaNombreId.current;
+      if (
+        (estadoBusqueda === "registrado" && !clienteElegidoPorNombre.current) ||
+        (clienteElegidoPorNombre.current && normalizarNombre(termino) === nombreClienteElegido.current) ||
+        termino.length < 3
+      ) {
+        setResultadosNombre([]);
+        setBuscandoNombre(false);
+        setListaNombreAbierta(false);
+        setIndiceNombreActivo(-1);
+        return;
+      }
+      setListaNombreAbierta(true);
+      setBuscandoNombre(true);
+      const timer = window.setTimeout(() => {
+        void buscarClientesPorNombre(termino)
+          .then((resultados) => {
+            if (id !== busquedaNombreId.current || termino !== usuarioActual.current.trim()) return;
+            setResultadosNombre(resultados);
+            setIndiceNombreActivo(-1);
+          })
+          .catch(() => {
+            if (id !== busquedaNombreId.current || termino !== usuarioActual.current.trim()) return;
+            setResultadosNombre([]);
+          })
+          .finally(() => {
+            if (id === busquedaNombreId.current && termino === usuarioActual.current.trim()) setBuscandoNombre(false);
+          });
+      }, 300);
+      return () => window.clearTimeout(timer);
+    }, [usuario, estadoBusqueda]);
+
+    const elegirClientePorNombre = (cliente: ClientePorNombreApi) => {
+      busquedaNombreId.current += 1;
+      clienteElegidoPorNombre.current = true;
+      const numero = String(cliente.documento);
+      documentoActual.current = numero;
+      tipoActual.current = cliente.tipoDocumento;
+      nombreClienteElegido.current = normalizarNombre(cliente.nombre);
+      setDocumento(numero);
+      setTipoDocumento(cliente.tipoDocumento);
+      usuarioActual.current = cliente.nombre;
+      setUsuario(cliente.nombre);
+      setClienteInactivo(!cliente.estado);
+      setEstadoBusqueda("registrado");
+      setListaNombreAbierta(false);
+      setResultadosNombre([]);
+    };
+
+    const manejarTeclasNombre = (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape") {
+        setListaNombreAbierta(false);
+        return;
+      }
+      if (!listaNombreAbierta || resultadosNombre.length === 0) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setIndiceNombreActivo(indice => (indice + 1) % resultadosNombre.length);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setIndiceNombreActivo(indice => (indice <= 0 ? resultadosNombre.length - 1 : indice - 1));
+      } else if (event.key === "Enter" && indiceNombreActivo >= 0) {
+        event.preventDefault();
+        elegirClientePorNombre(resultadosNombre[indiceNombreActivo]);
+      }
+    };
+
+    const desvincularCliente = () => {
+      busquedaId.current += 1;
+      busquedaNombreId.current += 1;
+      clienteElegidoPorNombre.current = false;
+      nombreClienteElegido.current = "";
+      documentoActual.current = "";
+      tipoActual.current = "CC";
+      setDocumento("");
+      setTipoDocumento("CC");
+      setClienteInactivo(false);
+      setEstadoBusqueda("inactivo");
+      setListaNombreAbierta(false);
+      setResultadosNombre([]);
+    };
+
+    const borrarClienteYNombre = () => {
+      if (estadoBusqueda === "registrado") desvincularCliente();
+      else {
+        busquedaNombreId.current += 1;
+        setResultadosNombre([]);
+        setListaNombreAbierta(false);
+      }
+      usuarioActual.current = "";
+      setUsuario("");
+      window.requestAnimationFrame(() => campoNombreRef.current?.focus());
+    };
+
     const cambiarDocumento = (valor: string) => {
       const estabaRegistrado = estadoBusqueda === "registrado";
       busquedaId.current += 1;
+      clienteElegidoPorNombre.current = false;
+      nombreClienteElegido.current = "";
       documentoActual.current = valor;
       setDocumento(valor);
       setEstadoBusqueda(digitosDe(valor).length >= 6 ? "pendiente" : "inactivo");
       setClienteInactivo(false);
-      if (estabaRegistrado) setUsuario("");
+      if (estabaRegistrado) {
+        usuarioActual.current = "";
+        setUsuario("");
+      }
     };
 
 
@@ -844,27 +919,29 @@ export function VentasScreen({
       .map((p) => `${p.nombre} (${p.tamaño}) x${p.cantidad}`)
       .join(", ");
 
-    const handleSave = async () => {
+    /** Valida el formulario y devuelve los datos del pedido. `false` = no se
+        puede guardar (falta un dato o la consulta del cliente falló). */
+    const prepararPedido = async (): Promise<Omit<Venta, "id"> | null> => {
       if (!usuario.trim()) {
         toast.error("El nombre del cliente es obligatorio");
-        return;
+        return null;
       }
       const errDoc = validarDocumento(documento, tipoDocumento);
       if (errDoc) {
         toast.error(errDoc);
-        return;
+        return null;
       }
       if (selProductos.length === 0) {
         toast.error("Agrega al menos un producto");
-        return;
+        return null;
       }
       if (!metodoPago) {
         toast.error("Selecciona el método de pago");
-        return;
+        return null;
       }
       if (!horaRecogida) {
         toast.error("Selecciona la hora de recogida");
-        return;
+        return null;
       }
       let estadoCliente: EstadoBusquedaDocumento | "obsoleto" = estadoBusqueda;
       if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
@@ -872,19 +949,17 @@ export function VentasScreen({
       }
       if (estadoCliente === "error" || estadoCliente === "obsoleto") {
         toast.error("No se pudo verificar el documento. Intenta de nuevo antes de guardar.");
-        return;
+        return null;
       }
       if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
         toast.error("Espera a que termine la búsqueda del cliente.");
-        return;
+        return null;
       }
       // Solo la respuesta 404 confirma que se debe crear la ficha local. Un
       // resultado registrado en PostgreSQL nunca pasa por este callback.
       // Punto C2: el pago se recibe en el momento (nada que verificar), pero
       // la pizza todavía hay que hacerla, así que TODOS los pedidos tomados en
-      // el local nacen "En preparación". Ahí se crea su orden de producción y
-      // recién cuando esa orden se completa pasa a "Por entregar"; la entrega
-      // la cierra el botón "Entregar" o la hora de recogida (§13).
+      // el local nacen "Por verificar" y el flujo los va avanzando.
       const finalEstado: VentaStatus = "Por verificar";
       const detalle: DetalleProd[] = selProductos.map((p) => ({
         nombre: p.nombre,
@@ -894,22 +969,44 @@ export function VentasScreen({
         tamaño: p.tamaño === "Única" ? undefined : p.tamaño,
         productoId: String(p.id),
       }));
-      onConfirm(
-        {
-          usuario: normalizarNombre(usuario),
-          documento: documento.trim(),
-          tipoDocumento,
-          fecha,
-          estado: finalEstado,
-          productos: productosStr,
-          cantidad: cantidadTotal,
-          total: totalCalculado,
-          detalle,
-          metodoPago,
-          horaRecogida,
-          historial: [{ estado: finalEstado, hora: nowHora() }],
-        },
-      );
+      return {
+        usuario: normalizarNombre(usuario),
+        documento: documento.trim(),
+        tipoDocumento,
+        fecha,
+        estado: finalEstado,
+        productos: productosStr,
+        cantidad: cantidadTotal,
+        total: totalCalculado,
+        detalle,
+        metodoPago,
+        horaRecogida,
+        historial: [{ estado: finalEstado, hora: nowHora() }],
+      };
+    };
+
+    const handleSave = async () => {
+      // Barrera anti doble clic: el segundo clic no llega a la API.
+      if (guardandoRef.current) return;
+      guardandoRef.current = true;
+      setGuardando(true);
+      try {
+        const pedido = await prepararPedido();
+        if (!pedido) {
+          guardandoRef.current = false;
+          setGuardando(false);
+          return;
+        }
+        const ok = await onConfirm(pedido);
+        if (!ok) {
+          // El guardado falló: el botón vuelve a estar disponible.
+          guardandoRef.current = false;
+          setGuardando(false);
+        }
+      } catch {
+        guardandoRef.current = false;
+        setGuardando(false);
+      }
     };
 
     const iCls =
@@ -982,21 +1079,78 @@ export function VentasScreen({
             {/* Nombre del cliente: editable solo si el backend confirma que es nuevo */}
             <div className="relative">
               {estadoBusqueda === "no-encontrado" && <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <MarcaObligatorio /></label>}
-              {estadoBusqueda === "no-encontrado" && <select value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)} className={`${iCls} mb-2`}>
+              {estadoBusqueda === "no-encontrado" && <select value={tipoDocumento} onChange={(e) => { tipoActual.current = e.target.value; setTipoDocumento(e.target.value); }} className={`${iCls} mb-2`}>
                 {OPCIONES_TIPO_DOCUMENTO.filter(t => ["CC", "CE", "PP", "Pasaporte"].includes(t.code)).map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
               </select>}
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                  Nombre del cliente <MarcaObligatorio />
               </label>
-              <input
+              <div className="relative">
+                <input
+                ref={campoNombreRef}
                 value={usuario}
-                onChange={(e) => setUsuario(e.target.value)}
-                onBlur={() => setUsuario(normalizarNombre(usuario))}
-                readOnly={estadoBusqueda === "registrado"}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (estadoBusqueda === "registrado") desvincularCliente();
+                  usuarioActual.current = valor;
+                  setUsuario(valor);
+                  setResultadosNombre([]);
+                  setIndiceNombreActivo(-1);
+                  setBuscandoNombre(valor.trim().length >= 3);
+                  setListaNombreAbierta(valor.trim().length >= 3);
+                }}
+                onBlur={() => {
+                  const nombre = normalizarNombre(usuario);
+                  usuarioActual.current = nombre;
+                  setUsuario(nombre);
+                  setListaNombreAbierta(false);
+                }}
+                onKeyDown={manejarTeclasNombre}
                 placeholder="Escribe el nombre del cliente..."
-                className={iCls}
+                className={`${iCls} ${usuario ? "pr-10" : ""}`}
                 autoComplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={listaNombreAbierta}
+                aria-controls="resultados-clientes-nombre"
               />
+              {usuario && (
+                <button
+                  type="button"
+                  aria-label="Borrar nombre y cliente seleccionado"
+                  title="Borrar nombre y cliente"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={borrarClienteYNombre}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {listaNombreAbierta && usuario.trim().length >= 3 && (
+                <div id="resultados-clientes-nombre" role="listbox" className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                  {buscandoNombre ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Buscando clientes…</p>
+                  ) : resultadosNombre.length > 0 ? (
+                    resultadosNombre.map((cliente, indice) => (
+                      <button
+                        key={String(cliente.documento)}
+                        type="button"
+                        role="option"
+                        aria-selected={indice === indiceNombreActivo}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => elegirClientePorNombre(cliente)}
+                        className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted ${indice === indiceNombreActivo ? "bg-muted" : ""}`}
+                      >
+                        <span className="min-w-0 truncate text-foreground">{cliente.nombre} — {cliente.tipoDocumento} {cliente.documento}</span>
+                        {!cliente.estado && <span className="shrink-0 text-xs font-semibold text-amber-600">Inactivo</span>}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">No hay clientes con ese nombre</p>
+                  )}
+                </div>
+              )}
+            </div>
             </div>
 
             {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
@@ -1335,10 +1489,11 @@ export function VentasScreen({
             >
               Cancelar
             </button>            <button
-              onClick={handleSave}
-              className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+              onClick={() => void handleSave()}
+              disabled={guardando}
+              className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
             >
-              Guardar
+              {guardando ? "Guardando…" : "Guardar"}
             </button>
           </div>
         </motion.div>
@@ -1522,12 +1677,11 @@ export function VentasScreen({
                             Verificar
                           </button>
                         )}
-                        {/* Punto C2: botón "Entregar", disparador manual del
-                            paso Por entregar → Completado (el otro disparador
-                            es el auto-completado por hora de recogida, §13). */}
+                        {/* Botón "Entregar": dispara el paso Por entregar →
+                            Completado contra el backend y recarga la lista. */}
                         {p.estado === "Por entregar" && (
                           <button
-                            onClick={() => entregarVenta(p.id)}
+                            onClick={() => void entregarVenta(p.id)}
                             title="Entregar pedido"
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
                           >
@@ -1536,29 +1690,14 @@ export function VentasScreen({
                           </button>
                         )}
                         <ActionIcons onView={() => abrirDetalle(p)} />
-                        {/* Anular venta: la deja en estado Anulado (Rechazado). Un círculo con
-                            la línea en diagonal dice "anular" mejor que una papelera,
-                            que parecía borrar el pedido. Una venta rechazada es
-                            final: no se anula ni se devuelve. */}
-                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && p.estado !== "Devolucion" && (
+                        {/* Devolución: todavía no está conectada al backend. Se
+                            muestra solo en ventas ya completadas y permanece
+                            deshabilitada hasta que exista el flujo. */}
+                        {p.estado === "Completado" && (
                           <button
-                            onClick={() =>
-                              setConfirmAccionV({ id: p.id, accion: "anular" })
-                            }
-                            title="Anular venta"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                        {/* Registrar devolución: pasa la venta a "Devolución". */}
-                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && p.estado !== "Devolucion" && (
-                          <button
-                            onClick={() =>
-                              setConfirmAccionV({ id: p.id, accion: "devolucion" })
-                            }
-                            title="Registrar devolución"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                            disabled
+                            title="Disponible próximamente"
+                            className="p-1.5 rounded-lg text-muted-foreground/50 cursor-not-allowed"
                           >
                             <Undo2 className="w-4 h-4" />
                           </button>
@@ -1925,55 +2064,32 @@ export function VentasScreen({
         {showCreate && (
           <VentaModal
             onClose={() => setShowCreate(false)}
-            onConfirm={(v) => {
-              void crearVentaPanel({
-                cliente: {
-                  tipo_documento: (v as Venta).tipoDocumento ?? "CC",
-                  numero_documento: v.documento ?? "",
-                  nombre: v.usuario,
-                },
-                hora_recogida: v.horaRecogida ?? "",
-                productos: (v.detalle ?? []).map((detalle) => ({
-                  id_producto: Number(detalle.productoId),
-                  cantidad: detalle.cantidad,
-                  tamano: detalle.tamaño ?? null,
-                })),
-                pago: { tipo: v.metodoPago ?? "" },
-              }).then(async ({ id }) => {
+            onConfirm={async (v) => {
+              try {
+                const { id } = await crearVentaPanel({
+                  cliente: {
+                    tipo_documento: (v as Venta).tipoDocumento ?? "CC",
+                    numero_documento: v.documento ?? "",
+                    nombre: v.usuario,
+                  },
+                  hora_recogida: v.horaRecogida ?? "",
+                  productos: (v.detalle ?? []).map((detalle) => ({
+                    id_producto: Number(detalle.productoId),
+                    cantidad: detalle.cantidad,
+                    tamano: detalle.tamaño ?? null,
+                  })),
+                  pago: { tipo: v.metodoPago ?? "" },
+                });
                 const ventasActualizadas = await obtenerVentasPanel();
                 setPedidos(ventasActualizadas);
                 setShowCreate(false);
                 toast.success(`Pedido #${id} registrado correctamente`);
-              }).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido."));
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Confirmar anulación / devolución ── */}
-      <AnimatePresence>
-        {confirmAccionV && (
-          <ConfirmModal
-            title={
-              confirmAccionV.accion === "anular"
-                ? "Anular venta"
-                : "Registrar devolución"
-            }
-            tone={confirmAccionV.accion === "anular" ? "peligro" : "aviso"}
-            message={
-              confirmAccionV.accion === "anular"
-                ? "¿Estás seguro de anular esta venta? El pedido quedará marcado como Rechazado y dejará de contar como venta."
-                : "¿Estás seguro de registrar la devolución? La venta pasará a estado Devolución y quedará en el módulo de devoluciones."
-            }
-            onConfirm={() => {
-              if (confirmAccionV.accion === "anular") {
-                anularVenta(confirmAccionV.id);
-              } else {
-                registrarDevolucion(confirmAccionV.id);
+                return true;
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");
+                return false;
               }
-              setConfirmAccionV(null);
             }}
-            onCancel={() => setConfirmAccionV(null)}
           />
         )}
       </AnimatePresence>

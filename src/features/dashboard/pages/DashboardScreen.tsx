@@ -166,13 +166,14 @@ export function DashboardScreen({
   const [periodo, setPeriodo] = useState<Periodo>("semana");
 
   /**
-   * Regla única de ingresos: solo las ventas Por entregar o Completado
-   * suman dinero y conteo. La misma función se usa
-   * en las tarjetas Y en todas las gráficas de ventas para que los números
-   * nunca se contradigan. Anuladas, devoluciones, rechazos y pagos sin
-   * confirmar no cuentan; las devoluciones se siguen contando aparte.
+   * Regla única de ingresos: SOLO las ventas Completado suman dinero y
+   * conteo. La misma función se usa en las tarjetas Y en todas las gráficas
+   * de ventas para que los números nunca se contradigan. Las ventas que
+   * todavía no se entregan (Por verificar, En espera, Por entregar), las
+   * anuladas, las devoluciones y los rechazos no cuentan; las devoluciones
+   * se siguen contando aparte.
    */
-  const esVentaIngresante = (v: Venta) => v.estado === "Por entregar" || v.estado === "Completado";
+  const esVentaIngresante = (v: Venta) => v.estado === "Completado";
 
   /** Ventas que suman dentro de un periodo dado (filtro de cada gráfica). */
   const ventasEn = (p: Periodo) =>
@@ -189,8 +190,6 @@ export function DashboardScreen({
   // Filtro global → tarjetas de indicadores.
   const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha, periodo));
   const ingresantesGlobal = ventasPeriodo.filter(esVentaIngresante);
-  const devolucionesPeriodo = ventasPeriodo.filter((v) => v.estado === "Devolucion");
-  const ncPeriodo = noConformidades.filter((nc) => enPeriodo(nc.fechaRegistro, periodo));
 
   const ingresosPeriodo = ingresantesGlobal.reduce((s, v) => s + v.total, 0);
 
@@ -199,6 +198,7 @@ export function DashboardScreen({
   const tarjetas: {
     label: string;
     value: string;
+    sub?: string;
     Icon: typeof DollarSign;
     bg: string;
     ic: string;
@@ -221,16 +221,20 @@ export function DashboardScreen({
       screen: "ventas-pedidos",
     },
     {
+      // El módulo de devoluciones todavía no está conectado al backend.
       label: "Devoluciones",
-      value: String(devolucionesPeriodo.length),
+      value: "—",
+      sub: "Sin conectar",
       Icon: RotateCcw,
       bg: "bg-orange-50",
       ic: "text-orange-600",
       screen: "devoluciones",
     },
     {
+      // El módulo de productos no conformes todavía no está conectado.
       label: "Productos no conformes",
-      value: String(ncPeriodo.length),
+      value: "—",
+      sub: "Sin conectar",
       Icon: AlertTriangle,
       bg: "bg-red-50",
       ic: "text-red-600",
@@ -374,27 +378,9 @@ export function DashboardScreen({
   });
   const hayComprasProveedores = gestionesProv.length > 0;
 
-  // ── 6. No conformes agrupados por el eje de SU filtro, apilados por tipo ──
-  const TIPOS_NC_TOP = 5;
-  const ncGrafica = noConformidades.filter((nc) => enPeriodo(nc.fechaRegistro, fNC));
-  const conteoTipos = [...ncGrafica.reduce<Map<string, number>>((acc, nc) => {
-    const t = nc.tipoSolucion?.trim() || "Sin solución asignada";
-    acc.set(t, (acc.get(t) ?? 0) + 1);
-    return acc;
-  }, new Map())].sort((a, b) => b[1] - a[1]);
-  const tiposTop = conteoTipos.slice(0, TIPOS_NC_TOP).map(([t]) => t);
-  const tiposNC = [...tiposTop, ...(conteoTipos.length > TIPOS_NC_TOP ? ["Otros"] : [])];
-  const dataNC = gruposEje(fNC).map((g) => {
-    const fila: Record<string, string | number> = { etiqueta: g.etiqueta };
-    tiposNC.forEach((t) => (fila[t] = 0));
-    ncGrafica.forEach((nc) => {
-      if (!esFechaISO(nc.fechaRegistro) || g.extraer(nc.fechaRegistro) !== g.clave) return;
-      const crudo = nc.tipoSolucion?.trim() || "Sin solución asignada";
-      const t = tiposTop.includes(crudo) ? crudo : "Otros";
-      fila[t] = Number(fila[t] ?? 0) + 1;
-    });
-    return fila;
-  });
+  // ── 6. No conformes: módulo todavía sin conectar ──
+  // La gráfica ya no lee datos de ejemplo: cuando el módulo de productos no
+  // conformes se conecte al backend, aquí se vuelve a calcular la serie.
 
   const vacio = (valores: number[]) => valores.every((v) => !v);
   const cop = (v: number) => fmt(v);
@@ -465,11 +451,9 @@ export function DashboardScreen({
     const totalVendidoHoy = ventasHoy.reduce((s, v) => s + v.total, 0);
     const porVerificar = ventas.filter((v) => v.estado === "Por verificar");
     const devoluciones = ventas.filter((v) => v.devolucionTipo !== undefined);
-    const devolucionesPendientes = devoluciones.filter((v) => v.devolucionResuelta !== true);
     const ordenesEnCurso = ordenesProduccion.filter(
       (o) => o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso",
     );
-    const ncPendientes = noConformidades.filter((nc) => nc.estado === "Pendiente");
     const insumosBajo = insumos.filter((i) => i.stockActual < i.stockMinimo);
     const ocPorRecibir = ordenes.filter((o) => o.estado === "Enviado");
     const clientesActivos = clientes.filter((c) => c.activo);
@@ -480,9 +464,11 @@ export function DashboardScreen({
       ver("Ventas", "Ventas") && { label: "Ventas de hoy", value: String(ventasHoy.length), sub: fmt(totalVendidoHoy), Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600" },
       ver("Ventas", "Ventas") && { label: "Pedidos por verificar pago", value: String(porVerificar.length), sub: "Pago sin confirmar", Icon: ClipboardList, bg: "bg-amber-50", ic: "text-amber-600" },
       ver("Ventas", "Clientes") && { label: "Clientes", value: String(clientesActivos.length), sub: "Registrados en el sistema", Icon: Users, bg: "bg-violet-50", ic: "text-violet-600" },
-      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: String(devolucionesPendientes.length), sub: "Por resolver", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
+      // El módulo de devoluciones todavía no está conectado al backend.
+      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: "—", sub: "Sin conectar", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
       ver("Producción", "Orden de Producción") && { label: "Órdenes en curso", value: String(ordenesEnCurso.length), sub: "Pendientes y en proceso", Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600" },
-      ver("Producción", "Producto No Conforme") && { label: "No conformes pendientes", value: String(ncPendientes.length), sub: "Sin solución aún", Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600" },
+      // El módulo de productos no conformes todavía no está conectado.
+      ver("Producción", "Producto No Conforme") && { label: "No conformes pendientes", value: "—", sub: "Sin conectar", Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600" },
       ver("Compras", "Insumos") && { label: "Insumos bajo mínimo", value: String(insumosBajo.length), sub: "Stock por debajo del mínimo", Icon: Package, bg: "bg-emerald-50", ic: "text-emerald-600" },
       ver("Compras", "Orden de Compra") && { label: "Compras por recibir", value: String(ocPorRecibir.length), sub: "Órdenes enviadas al proveedor", Icon: Truck, bg: "bg-cyan-50", ic: "text-cyan-600" },
     ].filter(Boolean).slice(0, 4) as KpiEmp[];
@@ -745,7 +731,7 @@ export function DashboardScreen({
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {tarjetas.map(({ label, value, Icon, bg, ic, screen }) => (
+            {tarjetas.map(({ label, value, sub, Icon, bg, ic, screen }) => (
               <button
                 key={label}
                 type="button"
@@ -761,7 +747,7 @@ export function DashboardScreen({
                   {value}
                 </p>
                 <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                <p className="text-[11px] text-muted-foreground mt-1">{etiquetaPeriodoTxt}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{sub ?? etiquetaPeriodoTxt}</p>
               </button>
             ))}
           </div>
@@ -924,36 +910,15 @@ export function DashboardScreen({
               )}
             </ChartCard>
 
-            {/* 6. No conformes según su filtro, apilados por tipo de solución */}
+            {/* 6. No conformes: módulo sin conectar (todavía no hay fuente
+                real de datos, así que no se muestran datos de ejemplo). */}
             <ChartCard
               titulo="Productos no conformes"
-              etiqueta={`Conteo por fechaRegistro ${ejeDe(fNC)}, apilado por tipo de solución`}
+              etiqueta="Módulo sin conectar"
               periodo={fNC}
               onPeriodo={setFNC}
             >
-              {vacio(dataNC.flatMap((fila) => tiposNC.map((t) => Number(fila[t] ?? 0)))) ? (
-                <SinDatos texto="Sin no conformes registrados en este periodo" />
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={dataNC} margin={{ left: -4, right: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} no conforme${v === 1 ? "" : "s"}`} />} />
-                    <Legend />
-                    {tiposNC.map((t, i) => (
-                      <Bar
-                        key={t}
-                        dataKey={t}
-                        name={t}
-                        stackId="nc"
-                        fill={PALETA[i % PALETA.length]}
-                        radius={i === tiposNC.length - 1 ? [4, 4, 0, 0] : undefined}
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+              <SinDatos texto="Sin conectar" />
             </ChartCard>
           </div>
         </div>
