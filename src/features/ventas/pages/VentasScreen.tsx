@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
+import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 import { hora12 } from "@/shared/utils/hora";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -19,6 +19,7 @@ import {
   Undo2,
   CalendarDays,
   Upload,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
@@ -28,14 +29,15 @@ import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { buscarClientePorDocumento, buscarClientesPorNombre, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
-import { crearVentaPanel, entregarVentaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { crearVentaPanel, anularVentaApi, marcarDevolucionApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
+  ESTADOS_ANULABLES,
   type EstadoVenta,
 } from "@/features/ventas/services/estadosVenta";
 
@@ -81,12 +83,12 @@ function ConfirmModal({
   /** "aviso" pinza el botón en naranja, para acciones que no son destructivas
       (p. ej. registrar una devolución). */
   tone?: "peligro" | "aviso";
-  /** Punto 3.4: slot opcional entre el mensaje y los botones. Lo usa
-      "Rechazar por comprobante falso" para pedir el adjunto (antes este
-      rechazo no exigía comprobante y el de dinero faltante sí). */
+  /** Slot opcional entre el mensaje y los botones. Lo usa el rechazo del pago
+      para pedir el motivo obligatorio (y el texto cuando es "Otro"). */
   children?: ReactNode;
-  /** Apaga el botón de confirmar sin desmontar el modal (falta el adjunto
-      obligatorio). El clic nunca llega a `onConfirm`. */
+  /** Apaga el botón de confirmar sin desmontar el modal (falta elegir el
+      motivo o escribir el detalle de "Otro"). El clic nunca llega a
+      `onConfirm`. */
   confirmDisabled?: boolean;
   confirmLabel?: string;
 }) {
@@ -148,11 +150,12 @@ function ConfirmModal({
 }
 
 /**
- * Punto 3.4: bloque de comprobante (input oculto + vista previa + "Quitar").
- * Antes vivía copiado a mano dentro del modal "Devolución del dinero recibido";
- * ahora lo comparten ese modal y el `ConfirmModal` de "Rechazar por comprobante
- * falso", que antes no pedía adjunto y así dejaba el rechazo sin evidencia.
- * Mismos formatos y tope que ya aplica `useSubirArchivo` (JPG/PNG/WEBP/PDF, 5 MB).
+ * Bloque de comprobante (input oculto + vista previa + "Quitar") que comparten
+ * los modales que adjuntan un soporte: sube a Cloudinary con las mismas reglas
+ * de `useSubirArchivo` (JPG/PNG/WEBP/PDF, máx. 5 MB).
+ * Se dejó de usar en la verificación de pago (el rechazo ya no pide adjunto y
+ * su motivo se elige en el modal de confirmación); lo retoman los modales de
+ * anulación, donde el comprobante de la devolución es opcional.
  */
 function CampoComprobante({
   fileRef,
@@ -233,18 +236,54 @@ export const VENTA_STATUS_MANUALES: VentaStatus[] = ["Devolucion"];
     Anulado y En espera. La tabla completa vive en `estadosVenta.ts`. */
 export const VENTA_STATUS_FLUJO: VentaStatus[] = ["Anulado", "En espera"];
 
-/** Motivos estandarizados de rechazo de pago. */
-export type MotivoRechazo = "Comprobante falso" | "Dinero faltante";
+/** Motivo de rechazo: es el literal que queda guardado en
+    `tb_venta.motivo_rechazo` (varchar 100). Puede ser uno de los motivos
+    fijos o "Otro: <texto escrito por el usuario>". */
+export type MotivoRechazo = string;
 
-export const MOTIVOS_RECHAZO: { value: MotivoRechazo; label: string }[] = [
+/** Opciones que ofrece el panel al rechazar un pago. El backend valida la
+    misma lista (más "Otro: <texto>"): ver `validarMotivoRechazo`. */
+export type MotivoRechazoOpcion =
+  | "Comprobante falso"
+  | "La imagen no corresponde a un comprobante"
+  | "Comprobante borroso"
+  | "Otro";
+
+export const MOTIVOS_RECHAZO: { value: MotivoRechazoOpcion; label: string }[] = [
   { value: "Comprobante falso", label: "Comprobante falso" },
-  { value: "Dinero faltante", label: "Dinero faltante" },
+  { value: "La imagen no corresponde a un comprobante", label: "La imagen no corresponde a un comprobante" },
+  { value: "Comprobante borroso", label: "Comprobante borroso" },
+  { value: "Otro", label: "Otro" },
 ];
 
-export const MOTIVO_RECHAZO_LABEL: Record<MotivoRechazo, string> = {
-  "Comprobante falso": "Comprobante falso",
-  "Dinero faltante": "Dinero faltante",
-};
+/** Máximo de caracteres del texto que acompaña al motivo "Otro" (el backend
+    valida el mismo tope antes de guardar "Otro: <texto>" en motivo_rechazo). */
+export const MOTIVO_OTRO_MAX = 80;
+
+export const etiquetaMotivoRechazo = (motivo?: MotivoRechazo) => motivo || "—";
+
+/** Motivo de anulación: el literal que queda en `tb_venta.motivo_rechazo`
+    cuando se anula desde el listado del panel. La misma lista la valida el
+    backend (`validarMotivoAnulacion`). */
+export type MotivoAnulacion =
+  | "Cliente canceló el pedido"
+  | "Error al registrar el pedido"
+  | "Producto no disponible"
+  | "Otro";
+
+export const MOTIVOS_ANULACION: { value: MotivoAnulacion; label: string }[] = [
+  { value: "Cliente canceló el pedido", label: "Cliente canceló el pedido" },
+  { value: "Error al registrar el pedido", label: "Error al registrar el pedido" },
+  { value: "Producto no disponible", label: "Producto no disponible" },
+  { value: "Otro", label: "Otro" },
+];
+
+/** Porcentaje del total que la pizzería devuelve al anular según el motivo:
+    "Cliente canceló el pedido" deja el 20 % (se devuelve el 80 %); el resto
+    de los motivos, incluido "Otro", devuelven el 100 %. El backend calcula lo
+    mismo para guardar `tb_venta.monto_reembolso`. */
+export const porcentajeReembolsoAnulacion = (motivo: MotivoAnulacion | "") =>
+  motivo === "Cliente canceló el pedido" ? 0.8 : 1;
 
 /** Un comprobante de una venta: el inicial de pago o el del dinero faltante. */
 export interface ComprobanteVenta {
@@ -285,6 +324,9 @@ interface DetalleProd {
   /** Id del producto en el catálogo de Productos. Lo guarda `registrarPedido`
       (App) para que la Orden de Producción no dependa del nombre. */
   productoId?: string;
+  /** Línea exacta de la venta en el backend (tb_detalle_venta). La devolución
+      la registra por línea, así que cada producto debe poder señalarse. */
+  idDetalleVenta?: number;
 }
 
 // "mixto" es una devolución donde cada producto se compensó de forma distinta:
@@ -310,6 +352,11 @@ export interface Venta {
   /** Teléfono del cliente si lo dejó en el formulario de datos del checkout. */
   telefono?: string;
   historial?: HistorialEntry[];
+  /** Id de la fila de tb_devolucion de esta venta. Hace falta para resolverla
+      (PATCH /devoluciones/:id/resolver); ausente si nunca se marcó. */
+  idDevolucion?: number;
+  /** Venta nueva que creó el canje de esta devolución (si la hubo). */
+  idVentaReemplazo?: number;
   devolucionTipo?: DevolucionTipo;
   devolucionResuelta?: boolean;
   devolucionNota?: string;
@@ -329,6 +376,15 @@ export interface Venta {
   montoFaltante?: number;
   /** URL del comprobante con el que el admin devolvió el dinero al cliente. */
   comprobanteDevolucion?: string;
+  /** Quién dejó la venta en Anulado: 'Administrador' o 'Cliente'. */
+  anuladoPor?: string;
+  /** Valor a devolver al cliente (80 % o 100 % según el motivo). */
+  montoReembolso?: number;
+  /** Comprobante de la devolución del dinero subido al anular. */
+  comprobanteAnulacion?: string;
+  /** Segundos que quedan de la ventana de 10 minutos para anular, medidos
+      por el backend al cargar la lista (0 = ventana cerrada). */
+  segundosRestantesAnulacion?: number;
 }
 
 /** Colores de estado de la venta, con variante dark (fondo translúcido
@@ -352,6 +408,15 @@ const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
   "En espera": "En espera",
 };
 
+/** Etiqueta de estado para UNA venta concreta: "Anulado" tapa dos flujos
+    distintos — el rechazo de pago (que se pinta "Rechazado") y la
+    anulación/cancelación, la única que trae `montoReembolso` porque devuelve
+    dinero. El detalle y la lista usan la misma regla. */
+export const etiquetaEstadoVenta = (p: Venta) =>
+  p.estado === "Anulado" && p.montoReembolso !== undefined
+    ? "Anulado"
+    : VENTA_STATUS_LABEL[p.estado];
+
 /** Etiquetas PARA EL CLIENTE de cada estado (tabla de la sección 3). El panel
     admin usa `VENTA_STATUS_LABEL`; el portal del cliente estas. */
 export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
@@ -365,7 +430,8 @@ export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
 
 // Punto C2: ya NO existe el desplegable de estado en la tabla. La columna es
 // de solo lectura y los avances los produce el flujo: verificación de pago,
-// orden de producción, botón "Entregar" y la hora de recogida (§13).
+// orden de producción y la hora de recogida (§13). La venta pasa a
+// "Completado" sola, al llegar su hora de entrega (sin botón manual).
 // La tabla completa de transiciones vive en `services/estadosVenta.ts`.
 
 /** Métodos de pago. "Efectivo" solo existe para los pedidos que genera el
@@ -412,204 +478,6 @@ const hoyFecha = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-// ─────────────────────────── VENTAS SCREEN ───────────────────────────
-
-export function VentasScreen({
-  pedidos,
-  setPedidos,
-  productos,
-  onGestionarDevolucion,
-  canCreate: _canCreate = true,
-  canEdit: _canEdit = true,
-  canExportExcel = true,
-}: {
-  pedidos: Venta[];
-  setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
-  productos: ProductoMenu[];
-  /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
-  onGestionarDevolucion: (id: string) => void;
-  canCreate?: boolean;
-  canEdit?: boolean;
-  canExportExcel?: boolean;
-}) {
-  const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [detailItem, setDetailItem] = useState<Venta | null>(
-    null,
-  );
-  // ── Verificación de pago (Fase 3) ──
-  // Motivo elegido en el panel de verificación (vacío = ninguno).
-  const [motivoSel, setMotivoSel] = useState<MotivoRechazo | "">("");
-  // Confirmación simple (aprobar / rechazar por comprobante falso).
-  const [confirmVerif, setConfirmVerif] = useState<"aprobar" | "rechazar-falso" | null>(null);
-  // Modal "Pedir dinero faltante" (estado En espera).
-  const [modalFaltante, setModalFaltante] = useState(false);
-  const [montoFaltanteValor, setMontoFaltanteValor] = useState("");
-  // Modal "Devolución del dinero recibido" (rechazo por dinero faltante).
-  const [modalDevolucion, setModalDevolucion] = useState(false);
-  const [devolUrl, setDevolUrl] = useState<string | null>(null);
-  const { subir: subirDevol, subiendo: subiendoDevol } = useSubirArchivo();
-  const devolFileRef = useRef<HTMLInputElement | null>(null);
-  /** Imagen abierta en el visor ampliado (comprobante u otro). */
-  const [visorSrc, setVisorSrc] = useState<string | null>(null);
-  /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
-  const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
-
-  /** Modal para enviar factura por correo. */
-  const [enviarFacturaModal, setEnviarFacturaModal] = useState(false);
-  const [facturaParaEnviar, setFacturaParaEnviar] = useState<Venta | null>(null);
-  const [correoEnviar, setCorreoEnviar] = useState("");
-  const [errorCorreo, setErrorCorreo] = useState("");
-
-  /** Última hora registrada en el historial: es la hora en que se colocó el
-      estado actual y la que se muestra a la derecha de la columna Estado. */
-  const horaEstado = (p: Venta) =>
-    p.historial?.[p.historial.length - 1]?.hora ?? "—";
-
-  // ── Flujo de verificación de pago (Fase 3) ──
-
-  /** Limpia todo el estado transitorio del panel/modal de verificación. */
-  const resetVerificacion = () => {
-    setMotivoSel("");
-    setConfirmVerif(null);
-    setModalFaltante(false);
-    setMontoFaltanteValor("");
-    setModalDevolucion(false);
-    setDevolUrl(null);
-  };
-
-  const abrirDetalle = (v: Venta) => {
-    resetVerificacion();
-    setDetailItem(v);
-    void obtenerVentaPanel(v.id).then(setDetailItem).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo cargar el detalle de la venta."));
-  };
-  const cerrarDetalle = () => {
-    resetVerificacion();
-    setDetailItem(null);
-  };
-
-  /** Aprobar el pago (punto C2): la venta pasa a "En preparación" y su orden
-      de producción se crea sola (la escucha el efecto de App). Sólo cuando la
-      orden se completa vuelve a avanzar, a "Por entregar". */
-  const ejecutarVerificacion = async (id: string, payload: Parameters<typeof verificarVentaApi>[1]) => {
-    try {
-      await verificarVentaApi(id, payload);
-      const respuesta = await (await import("../services/ventasApi")).obtenerVentasPanel();
-      setPedidos(respuesta);
-      toast.success(payload.accion === "aceptar" ? "Pago aprobado — orden de producción creada" : payload.accion === "monto_faltante" ? "Se notificó el saldo pendiente al cliente" : "Venta rechazada");
-      cerrarDetalle();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta."); }
-  };
-
-  const aprobarPago = (id: string) => {
-    void ejecutarVerificacion(id, { accion: "aceptar" });
-  };
-
-  /** Botón "Entregar": pide al backend la transición "Por entregar →
-      Completado" y recarga la lista desde la API. Si la llamada falla, se
-      avisa con un toast y la pantalla NO cambia: el estado solo se refleja
-      cuando el servidor confirma la entrega. */
-  const entregarVenta = async (id: string) => {
-    try {
-      await entregarVentaApi(id);
-      const ventasActualizadas = await obtenerVentasPanel();
-      setPedidos(ventasActualizadas);
-      toast.success("Pedido entregado");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo registrar la entrega.");
-    }
-  };
-
-  /** Rechazar por comprobante falso: estado final "Rechazado", sin devolución.
-      Punto 3.4: además guarda el adjunto como evidencia, en el MISMO campo que
-      ya lee el detalle (`comprobanteDevolucion`), así el rechazo no queda sin
-      soporte documental. El botón de confirmar llega con `devolUrl` lleno. */
-  const rechazarPorFalso = (id: string) => {
-    void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: motivoSel || "Comprobante falso" });
-  };
-
-  /** Pedir el dinero faltante: la venta pasa a "En espera" con el monto. */
-  const pedirFaltante = (id: string) => {
-    const pagado = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
-    void ejecutarVerificacion(id, { accion: "monto_faltante", pagado });
-  };
-
-  /** Rechazar por dinero faltante: guarda el comprobante de devolución y la
-      venta queda "Rechazado" (estado final). */
-  const rechazarPorDinero = (id: string) => {
-    void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: "Dinero faltante" });
-  };
-
-  /** Cambio de estado: YA NO existe desde la tabla (punto C2). La columna es
-      de solo lectura y cada avance sale de `estadosVenta.ts` (verificación,
-      orden de producción, botón "Entregar"). */
-
-  const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
-
-  const exportExcel = () => {
-    exportToExcel(
-      pedidos.map((p) => ({
-        id: p.id,
-        cliente: p.usuario,
-        documento: p.documento ?? "",
-        fecha: p.fecha,
-        horaRecogida: hora12(p.horaRecogida),
-        productos: p.productos,
-        cantidad: p.cantidad,
-        total: fmtCOP(p.total),
-        estado: VENTA_STATUS_LABEL[p.estado],
-        horaEstado: horaEstado(p),
-        metodoPago: p.metodoPago,
-      })),
-      [
-        { key: "id", label: "ID" },
-        { key: "cliente", label: "Cliente" },
-        { key: "documento", label: "Documento" },
-        { key: "fecha", label: "Fecha del pedido" },
-        { key: "horaRecogida", label: "Hora de recogida" },
-        { key: "productos", label: "Productos" },
-        { key: "cantidad", label: "Cantidad" },
-        { key: "total", label: "Total" },
-        { key: "estado", label: "Estado" },
-        { key: "horaEstado", label: "Hora del estado" },
-        { key: "metodoPago", label: "Método de Pago" },
-      ],
-      "ventas"
-    );
-    toast.success("Excel descargado");
-  };
-
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
-
-  const filtered = useMemo(
-    () =>
-      pedidos.filter((p) => p.estado !== "Devolucion").filter(
-        (p) =>
-          p.id.toLowerCase().includes(search.toLowerCase()) ||
-          p.usuario
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          p.productos
-            .toLowerCase()
-            .includes(search.toLowerCase()),
-      ),
-    [pedidos, search],
-  );
-
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice(
-    (page - 1) * PER_PAGE,
-    page * PER_PAGE,
-  );
-
-  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
-  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
-  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, totalPages)));
-  }, [totalPages]);
-
   // Interfaz para productos seleccionados en el picker
   interface ProductoSeleccionado {
     id: number;
@@ -620,15 +488,21 @@ export function VentasScreen({
   }
 
   /** Modal exclusivo del panel de administrador: el pedido se toma en el local,
-      frente al cliente, así que no se pide estado, comprobante ni hora de
-      recogida. La fecha se carga sola con el día en que se hace el pedido. */
-  const VentaModal = ({
+      frente al cliente, así que no se pide estado ni comprobante. La fecha se
+      carga sola con el día en que se hace el pedido y la hora de recogida se
+      auto-asigna en el backend (25 minutos de preparación).
+      Vive a nivel de módulo (no dentro del render de `VentasScreen`) para que
+      los re-renders del panel no lo desmonten y pierda lo que se está
+      escribiendo. */
+  function VentaModal({
     onClose,
     onConfirm,
+    productos,
   }: {
     onClose: () => void;
     onConfirm: (v: Omit<Venta, "id">) => Promise<boolean>;
-  }) => {
+    productos: ProductoMenu[];
+  }) {
     const [documento, setDocumento] = useState("");
     const [tipoDocumento, setTipoDocumento] = useState("CC");
     const [usuario, setUsuario] = useState("");
@@ -636,7 +510,6 @@ export function VentasScreen({
     // guardar. Sin estado no hay forma de editarla.
     const fecha = hoyFecha();
     const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
-    const [horaRecogida, setHoraRecogida] = useState("");
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
@@ -939,10 +812,6 @@ export function VentasScreen({
         toast.error("Selecciona el método de pago");
         return null;
       }
-      if (!horaRecogida) {
-        toast.error("Selecciona la hora de recogida");
-        return null;
-      }
       let estadoCliente: EstadoBusquedaDocumento | "obsoleto" = estadoBusqueda;
       if (digitosDe(documento).length >= 6 && estadoCliente !== "registrado" && estadoCliente !== "no-encontrado") {
         estadoCliente = await consultarDocumento(documento, tipoDocumento);
@@ -980,7 +849,6 @@ export function VentasScreen({
         total: totalCalculado,
         detalle,
         metodoPago,
-        horaRecogida,
         historial: [{ estado: finalEstado, hora: nowHora() }],
       };
     };
@@ -1196,10 +1064,6 @@ export function VentasScreen({
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hora de recogida <MarcaObligatorio /></label>
-              <input type="time" required value={horaRecogida} onChange={(event) => setHoraRecogida(event.target.value)} className={iCls} />
             </div>
           </div>
 
@@ -1500,7 +1364,287 @@ export function VentasScreen({
         </div>
       </div>
     );
+  }
+// ─────────────────────────── VENTAS SCREEN ───────────────────────────
+
+export function VentasScreen({
+  pedidos,
+  setPedidos,
+  productos,
+  onGestionarDevolucion,
+  canCreate: _canCreate = true,
+  canEdit = true,
+  canExportExcel = true,
+}: {
+  pedidos: Venta[];
+  setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
+  productos: ProductoMenu[];
+  /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
+  onGestionarDevolucion: (id: string) => void;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canExportExcel?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [detailItem, setDetailItem] = useState<Venta | null>(
+    null,
+  );
+  // ── Verificación de pago ──
+  // Motivo elegido en el modal de rechazo (vacío = ninguno todavía).
+  const [motivoSel, setMotivoSel] = useState<MotivoRechazoOpcion | "">("");
+  // Texto escrito cuando el motivo es "Otro": obligatorio, máx. 80 caracteres.
+  const [motivoOtroTexto, setMotivoOtroTexto] = useState("");
+  // Confirmación de verificación: aprobar el pago o rechazar con motivo.
+  const [confirmVerif, setConfirmVerif] = useState<"aprobar" | "rechazar" | null>(null);
+  // Modal "Pedir dinero faltante" (estado En espera).
+  const [modalFaltante, setModalFaltante] = useState(false);
+  const [montoFaltanteValor, setMontoFaltanteValor] = useState("");
+  // ── Anulación desde el listado (primeros 10 minutos) ──
+  /** Venta que se va a anular (null = modal cerrado). */
+  const [ventaAnular, setVentaAnular] = useState<Venta | null>(null);
+  const [anularMotivoSel, setAnularMotivoSel] = useState<MotivoAnulacion | "">("");
+  const [anularOtroTexto, setAnularOtroTexto] = useState("");
+  const [anularUrl, setAnularUrl] = useState<string | null>(null);
+  const { subir: subirAnulacion, subiendo: subiendoAnulacion } = useSubirArchivo();
+  const anularFileRef = useRef<HTMLInputElement | null>(null);
+  /** Imagen abierta en el visor ampliado (comprobante u otro). */
+  const [visorSrc, setVisorSrc] = useState<string | null>(null);
+  /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
+  const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
+
+  /** Modal para enviar factura por correo. */
+  const [enviarFacturaModal, setEnviarFacturaModal] = useState(false);
+  const [facturaParaEnviar, setFacturaParaEnviar] = useState<Venta | null>(null);
+  const [correoEnviar, setCorreoEnviar] = useState("");
+  const [errorCorreo, setErrorCorreo] = useState("");
+
+  /** Última hora registrada en el historial: es la hora en que se colocó el
+      estado actual y la que se muestra a la derecha de la columna Estado. */
+  const horaEstado = (p: Venta) =>
+    p.historial?.[p.historial.length - 1]?.hora ?? "—";
+
+  // ── Flujo de verificación de pago (Fase 3) ──
+
+  /** Limpia todo el estado transitorio del panel/modal de verificación. */
+  const resetVerificacion = () => {
+    setMotivoSel("");
+    setMotivoOtroTexto("");
+    setConfirmVerif(null);
+    setModalFaltante(false);
+    setMontoFaltanteValor("");
   };
+
+  const abrirDetalle = (v: Venta) => {
+    resetVerificacion();
+    setDetailItem(v);
+    void obtenerVentaPanel(v.id).then(setDetailItem).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo cargar el detalle de la venta."));
+  };
+  const cerrarDetalle = () => {
+    resetVerificacion();
+    setDetailItem(null);
+  };
+
+  /** Aprobar el pago (punto C2): la venta pasa a "En preparación" y su orden
+      de producción se crea sola (la escucha el efecto de App). Sólo cuando la
+      orden se completa vuelve a avanzar, a "Por entregar". */
+  const ejecutarVerificacion = async (id: string, payload: Parameters<typeof verificarVentaApi>[1]) => {
+    try {
+      await verificarVentaApi(id, payload);
+      const respuesta = await (await import("../services/ventasApi")).obtenerVentasPanel();
+      setPedidos(respuesta);
+      toast.success(payload.accion === "aceptar" ? "Pago aprobado — orden de producción creada" : payload.accion === "monto_faltante" ? "Se notificó el saldo pendiente al cliente" : "Venta rechazada");
+      cerrarDetalle();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta."); }
+  };
+
+  const aprobarPago = (id: string) => {
+    void ejecutarVerificacion(id, { accion: "aceptar" });
+  };
+
+  // ── Anulación desde el listado: ventana de 10 minutos ──
+  // El backend calcula, al cargar la lista, cuántos segundos quedaban de la
+  // ventana. Aquí se descuenta lo transcurrido desde esa carga para que el
+  // botón se deshabilite solo; el límite real lo aplica siempre el servidor.
+  const [ahora, setAhora] = useState(() => Date.now());
+  const cargadoEnRef = useRef(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    cargadoEnRef.current = Date.now();
+    setAhora(Date.now());
+  }, [pedidos]);
+
+  /** Segundos que aún quedan de la ventana de anulación de una venta. */
+  const segundosAnulacion = (p: Venta) =>
+    Math.max(0, (p.segundosRestantesAnulacion ?? 0) - Math.floor((ahora - cargadoEnRef.current) / 1000));
+
+  /** ¿El botón "Anular" aplica a la fila? Sólo en estados anulables y
+      mientras corran los primeros 10 minutos. */
+  const puedeAnular = (p: Venta) =>
+    ESTADOS_ANULABLES.includes(p.estado) && segundosAnulacion(p) > 0;
+
+  /** Abre el modal de anulación ya limpio. */
+  const abrirAnular = (v: Venta) => {
+    setAnularMotivoSel("");
+    setAnularOtroTexto("");
+    setAnularUrl(null);
+    setVentaAnular(v);
+  };
+  const cerrarAnular = () => setVentaAnular(null);
+
+  /** Motivo que se envía: los fijos tal cual y "Otro" como "Otro: <texto>"
+      (mismo formato que espera `validarMotivoAnulacion` en el servidor). */
+  const motivoAnulacionFinal = () =>
+    anularMotivoSel === "Otro" ? `Otro: ${anularOtroTexto.trim()}` : anularMotivoSel;
+
+  const puedeConfirmarAnulacion =
+    anularMotivoSel !== "" &&
+    (anularMotivoSel !== "Otro" ||
+      (anularOtroTexto.trim() !== "" && anularOtroTexto.trim().length <= MOTIVO_OTRO_MAX));
+
+  /** Anula la venta elegida (motivo obligatorio, comprobante opcional) y
+      recarga la lista. Si el backend rechaza la operación (por ejemplo, si se
+      pasaron los 10 minutos), sólo avisa y la pantalla no cambia. */
+  const anularVentaSeleccionada = async () => {
+    const venta = ventaAnular;
+    if (!venta || !puedeConfirmarAnulacion) return;
+    try {
+      await anularVentaApi(venta.id, {
+        motivo: motivoAnulacionFinal(),
+        comprobante: anularUrl ?? undefined,
+      });
+      setPedidos(await obtenerVentasPanel());
+      cerrarAnular();
+      toast.success(`Venta #${venta.id} anulada`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo anular la venta.");
+    }
+  };
+
+  // ── Devolución desde el listado ──
+  /** Venta que se va a marcar como devolución (null = sin modal). */
+  const [ventaDevolver, setVentaDevolver] = useState<Venta | null>(null);
+  const devolviendoRef = useRef(false);
+
+  /** Marca la venta como devolución en el backend (Completado → Devolucion,
+      con fila pendiente en tb_devolucion) y lleva a la pantalla de
+      Devoluciones para gestionar el canje o la devolución del dinero. Si el
+      backend rechaza la transición, sólo se avisa y la lista no cambia. */
+  const confirmarDevolucionVenta = async () => {
+    const venta = ventaDevolver;
+    if (!venta || devolviendoRef.current) return;
+    devolviendoRef.current = true;
+    try {
+      await marcarDevolucionApi(venta.id);
+      setPedidos(await obtenerVentasPanel());
+      setVentaDevolver(null);
+      onGestionarDevolucion(venta.id);
+      toast.success(`Venta #${venta.id} marcada como devolución`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo registrar la devolución.");
+    } finally {
+      devolviendoRef.current = false;
+    }
+  };
+
+  /** Motivo de rechazo que se envía al backend: los motivos fijos viajan tal
+      cual y "Otro" se guarda con el texto escrito, como "Otro: <texto>"
+      (mismo formato que espera `validarMotivoRechazo` en el servidor). */
+  const motivoRechazoFinal = () =>
+    motivoSel === "Otro" ? `Otro: ${motivoOtroTexto.trim()}` : motivoSel;
+
+  /** ¿Se puede confirmar el rechazo? Exige motivo y, si es "Otro", un texto
+      obligatorio de hasta MOTIVO_OTRO_MAX caracteres. */
+  const puedeConfirmarRechazo =
+    motivoSel !== "" &&
+    (motivoSel !== "Otro" || (motivoOtroTexto.trim() !== "" && motivoOtroTexto.trim().length <= MOTIVO_OTRO_MAX));
+
+  /** Rechazar el pago: estado final "Rechazado", con el motivo elegido en el
+      modal de confirmación. No pide comprobante ni devuelve dinero. */
+  const rechazarPago = (id: string) => {
+    if (!puedeConfirmarRechazo) return;
+    void ejecutarVerificacion(id, { accion: "rechazar", motivo_rechazo: motivoRechazoFinal() });
+  };
+
+  /** Pedir el dinero faltante: la venta pasa a "En espera" con el monto. */
+  const pedirFaltante = (id: string) => {
+    const pagado = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
+    void ejecutarVerificacion(id, { accion: "monto_faltante", pagado });
+  };
+
+  /** Cambio de estado: YA NO existe desde la tabla (punto C2). La columna es
+      de solo lectura y cada avance sale de `estadosVenta.ts` (verificación,
+      orden de producción y la hora de recogida). */
+
+  const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
+
+  const exportExcel = () => {
+    exportToExcel(
+      pedidos.map((p) => ({
+        id: p.id,
+        cliente: p.usuario,
+        documento: p.documento ?? "",
+        fecha: p.fecha,
+        horaRecogida: hora12(p.horaRecogida),
+        productos: p.productos,
+        cantidad: p.cantidad,
+        total: fmtCOP(p.total),
+        estado: etiquetaEstadoVenta(p),
+        horaEstado: horaEstado(p),
+        metodoPago: p.metodoPago,
+      })),
+      [
+        { key: "id", label: "ID" },
+        { key: "cliente", label: "Cliente" },
+        { key: "documento", label: "Documento" },
+        { key: "fecha", label: "Fecha del pedido" },
+        { key: "horaRecogida", label: "Hora de recogida" },
+        { key: "productos", label: "Productos" },
+        { key: "cantidad", label: "Cantidad" },
+        { key: "total", label: "Total" },
+        { key: "estado", label: "Estado" },
+        { key: "horaEstado", label: "Hora del estado" },
+        { key: "metodoPago", label: "Método de Pago" },
+      ],
+      "ventas"
+    );
+    toast.success("Excel descargado");
+  };
+
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 5;
+
+  const filtered = useMemo(
+    () =>
+      pedidos.filter((p) => p.estado !== "Devolucion").filter(
+        (p) =>
+          p.id.toLowerCase().includes(search.toLowerCase()) ||
+          p.usuario
+            .toLowerCase()
+            .includes(search.toLowerCase()) ||
+          p.productos
+            .toLowerCase()
+            .includes(search.toLowerCase()),
+      ),
+    [pedidos, search],
+  );
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paged = filtered.slice(
+    (page - 1) * PER_PAGE,
+    page * PER_PAGE,
+  );
+
+  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
+  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
+  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, totalPages)));
+  }, [totalPages]);
+
 
   return (
     <div className="px-4 sm:px-6 py-6">
@@ -1656,7 +1800,7 @@ export function VentasScreen({
                       <span
                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${VENTA_STATUS_COLOR[p.estado]}`}
                       >
-                        {VENTA_STATUS_LABEL[p.estado]}
+                        {etiquetaEstadoVenta(p)}
                       </span>
                     </td>
                     <td
@@ -1677,27 +1821,32 @@ export function VentasScreen({
                             Verificar
                           </button>
                         )}
-                        {/* Botón "Entregar": dispara el paso Por entregar →
-                            Completado contra el backend y recarga la lista. */}
-                        {p.estado === "Por entregar" && (
+                        <ActionIcons onView={() => abrirDetalle(p)} />
+                        {/* "Anular": sólo en estados anulables y dentro de los
+                            primeros 10 minutos. Fuera de la ventana queda
+                            atenuado y explica por qué. */}
+                        {canEdit && ESTADOS_ANULABLES.includes(p.estado) && (
                           <button
-                            onClick={() => void entregarVenta(p.id)}
-                            title="Entregar pedido"
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
+                            onClick={() => { if (puedeAnular(p)) abrirAnular(p); }}
+                            title={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                            aria-label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              puedeAnular(p)
+                                ? "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                : "text-muted-foreground/50 cursor-not-allowed"
+                            }`}
                           >
-                            <Check className="w-3.5 h-3.5" />
-                            Entregar
+                            <Ban className="w-4 h-4" />
                           </button>
                         )}
-                        <ActionIcons onView={() => abrirDetalle(p)} />
-                        {/* Devolución: todavía no está conectada al backend. Se
-                            muestra solo en ventas ya completadas y permanece
-                            deshabilitada hasta que exista el flujo. */}
+                        {/* Devolución: marca la venta como devuelta en el
+                            backend y abre su gestión (canje o dinero). */}
                         {p.estado === "Completado" && (
                           <button
-                            disabled
-                            title="Disponible próximamente"
-                            className="p-1.5 rounded-lg text-muted-foreground/50 cursor-not-allowed"
+                            onClick={() => setVentaDevolver(p)}
+                            title="Registrar devolución"
+                            aria-label="Registrar devolución"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <Undo2 className="w-4 h-4" />
                           </button>
@@ -1771,7 +1920,7 @@ export function VentasScreen({
                 <span className="text-border">·</span>
                 <span className="text-sm text-muted-foreground">Venta {detailItem.id}</span>
                 <span className={`ml-auto text-xs font-semibold px-3 py-1 rounded-full ${VENTA_STATUS_COLOR[detailItem.estado]}`}>
-                  {VENTA_STATUS_LABEL[detailItem.estado]}
+                  {etiquetaEstadoVenta(detailItem)}
                 </span>
               </div>
 
@@ -1929,35 +2078,71 @@ export function VentasScreen({
                     );
                   })()}
 
-                  {/* Rechazado: motivo y comprobante de devolución. */}
-                  {detailItem.estado === "Anulado" && (
-                    <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ShieldX className="w-4 h-4 text-red-600 shrink-0" />
-                        <p className="text-sm font-semibold text-red-900">Pago rechazado</p>
-                      </div>
-                      <p className="text-sm text-red-800 mb-1">
-                        Motivo:{" "}
-                        <span className="font-semibold">
-                          {detailItem.motivoRechazo ? MOTIVO_RECHAZO_LABEL[detailItem.motivoRechazo] : "—"}
-                        </span>
-                      </p>
-                      {detailItem.comprobanteDevolucion && (
-                        <div className="mt-3">
-                          <p className="text-[11px] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
-                          <button
-                            type="button"
-                            onClick={() => setVisorSrc(detailItem.comprobanteDevolucion ?? null)}
-                            title="Ampliar comprobante de devolución"
-                            className="block w-full rounded-xl overflow-hidden border border-red-200 bg-white cursor-zoom-in hover:border-red-400 transition-colors"
-                          >
-                            <img src={detailItem.comprobanteDevolucion} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
-                            <span className="block text-[11px] text-red-700 py-1">Clic para ampliar</span>
-                          </button>
+                  {/* Anulado: quién la anuló, el motivo, el valor a devolver y
+                      el comprobante si lo hay. Un rechazo de verificación no
+                      tiene `montoReembolso`, así que conserva su rótulo. */}
+                  {detailItem.estado === "Anulado" && (() => {
+                    const esAnulacion = detailItem.montoReembolso !== undefined;
+                    const comprobante = detailItem.comprobanteAnulacion ?? detailItem.comprobanteDevolucion;
+                    const titulo = detailItem.anuladoPor === "Cliente"
+                      ? "Cancelado por el cliente"
+                      : esAnulacion
+                        ? "Venta anulada"
+                        : "Pago rechazado";
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <ShieldX className="w-4 h-4 text-red-600 shrink-0" />
+                          <p className="text-sm font-semibold text-red-900">{titulo}</p>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {detailItem.anuladoPor && (
+                          <p className="text-sm text-red-800 mb-1">
+                            Anulada por:{" "}
+                            <span className="font-semibold">{detailItem.anuladoPor}</span>
+                          </p>
+                        )}
+                        <p className="text-sm text-red-800 mb-1">
+                          Motivo:{" "}
+                          <span className="font-semibold">
+                            {etiquetaMotivoRechazo(detailItem.motivoRechazo)}
+                          </span>
+                        </p>
+                        {esAnulacion && (
+                          <p className="text-sm text-red-800 mb-1">
+                            Valor a devolver:{" "}
+                            <span className="font-bold" style={{ fontFamily: MONO }}>
+                              {fmtCOP(detailItem.montoReembolso ?? 0)}
+                            </span>
+                          </p>
+                        )}
+                        {comprobante && (
+                          <div className="mt-3">
+                            <p className="text-[11px] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
+                            {comprobante.endsWith(".pdf") ? (
+                              <a
+                                href={comprobante}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 hover:border-red-400 transition-colors"
+                              >
+                                <FileText className="w-4 h-4 shrink-0" /> Abrir comprobante (PDF)
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setVisorSrc(comprobante)}
+                                title="Ampliar comprobante de devolución"
+                                className="block w-full rounded-xl overflow-hidden border border-red-200 bg-white cursor-zoom-in hover:border-red-400 transition-colors"
+                              >
+                                <img src={comprobante} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
+                                <span className="block text-[11px] text-red-700 py-1">Clic para ampliar</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* En espera: se solicitó el dinero faltante. */}
                   {detailItem.estado === "En espera" && (
@@ -1970,12 +2155,10 @@ export function VentasScreen({
                         Total: <span className="font-bold">{fmtCOP(detailItem.total)}</span> · Recibido: <span className="font-bold">{fmtCOP(detailItem.montoPagado ?? 0)}</span> · Saldo: <span className="font-bold">{fmtCOP(detailItem.montoFaltante ?? 0)}</span>. El pedido
                         espera el comprobante del dinero restante.
                       </p>
-                      <div className="mt-4 flex items-center gap-3">
-                        <select value={motivoSel} onChange={(event) => setMotivoSel(event.target.value as MotivoRechazo | "")} className="flex-1 rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm">
-                          <option value="">Motivo de rechazo</option>
-                          {MOTIVOS_RECHAZO.map((motivo) => <option key={motivo.value} value={motivo.value}>{motivo.label}</option>)}
-                        </select>
-                        <button disabled={!motivoSel} onClick={() => setConfirmVerif("rechazar-falso")} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Rechazar</button>
+                      <div className="mt-4">
+                        <button onClick={() => setConfirmVerif("rechazar")} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold text-white transition-colors active:scale-95 cursor-pointer">
+                          <ShieldX className="w-4 h-4" /> Rechazar
+                        </button>
                       </div>
                     </div>
                   )}
@@ -2008,37 +2191,16 @@ export function VentasScreen({
                               </div>
                             </>
                           )}
-                          {/* Motivo (solo si se va a rechazar). */}
-                          <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
-                            <label className="block text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-1">
-                              Motivo
-                            </label>
-                            <select
-                              value={motivoSel}
-                              onChange={(e) => setMotivoSel(e.target.value as MotivoRechazo | "")}
-                              className="w-full bg-transparent text-sm text-foreground focus:outline-none cursor-pointer"
-                            >
-                              <option value="">Selecciona un motivo (solo si vas a rechazar)</option>
-                              {MOTIVOS_RECHAZO.map((m) => (
-                                <option key={m.value} value={m.value}>{m.label}</option>
-                              ))}
-                            </select>
-                          </div>
+                          {/* Motivo: ya NO se elige aquí. Se pide en el modal
+                              de confirmación que abre "Rechazar". */}
                         </div>
 
-                        {/* Botones según el motivo. */}
+                        {/* Tres acciones: Aceptar, Monto faltante y Rechazar. */}
                         <div className="flex gap-2">
                           <button
-                            onClick={() => {
-                                if (motivoSel) setConfirmVerif("rechazar-falso");
-                            }}
-                            disabled={motivoSel === ""}
-                            title={motivoSel === "" ? "Selecciona un motivo" : "Rechazar pago"}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 text-red-700 text-xs font-semibold transition-colors active:scale-95 ${
-                              motivoSel === ""
-                                ? "bg-red-50/50 opacity-50 cursor-not-allowed"
-                                : "bg-red-50 hover:bg-red-100 cursor-pointer"
-                            }`}
+                            onClick={() => setConfirmVerif("rechazar")}
+                            title="Rechazar pago"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors active:scale-95 cursor-pointer"
                           >
                             <ShieldX className="w-3.5 h-3.5" /> Rechazar
                           </button>
@@ -2063,6 +2225,7 @@ export function VentasScreen({
       <AnimatePresence>
         {showCreate && (
           <VentaModal
+            productos={productos}
             onClose={() => setShowCreate(false)}
             onConfirm={async (v) => {
               try {
@@ -2072,7 +2235,8 @@ export function VentasScreen({
                     numero_documento: v.documento ?? "",
                     nombre: v.usuario,
                   },
-                  hora_recogida: v.horaRecogida ?? "",
+                  // Sin hora: el backend auto-asigna ahora + 25 minutos
+                  // (pedido tomado en local, tiempo de preparación).
                   productos: (v.detalle ?? []).map((detalle) => ({
                     id_producto: Number(detalle.productoId),
                     cantidad: detalle.cantidad,
@@ -2094,27 +2258,91 @@ export function VentasScreen({
         )}
       </AnimatePresence>
 
-      {/* ── Verificación: confirmar Aprobar / Rechazar por comprobante falso ── */}
+      {/* ── Verificación: confirmar Aprobar / Rechazar (el motivo se elige
+             aquí mismo, en un modal que exige al menos una opción) ── */}
       <AnimatePresence>
-        {confirmVerif && detailItem && (
-          <ConfirmModal
-            title={confirmVerif === "aprobar" ? "Aprobar pago" : "Rechazar pago"}
-            tone={confirmVerif === "aprobar" ? "aviso" : "peligro"}
-            message={
-              confirmVerif === "aprobar"
-                ? "¿Aceptar el pago? Se creará la orden de producción y el pedido quedará Por entregar."
-                : `¿Rechazar el pago por ${motivoSel || "el motivo seleccionado"}? La venta quedará Rechazado.`
-            }
-            confirmLabel={confirmVerif === "aprobar" ? "Sí, confirmar" : "Confirmar rechazo"}
-            confirmDisabled={confirmVerif === "rechazar-falso" && !motivoSel}
-            onConfirm={() => {
-              if (confirmVerif === "aprobar") aprobarPago(detailItem.id);
-              else rechazarPorFalso(detailItem.id);
-              setConfirmVerif(null);
-            }}
-            onCancel={() => setConfirmVerif(null)}
-          />
-        )}
+        {confirmVerif && detailItem && (() => {
+          const esRechazo = confirmVerif === "rechazar";
+          const motivoFinal = esRechazo && puedeConfirmarRechazo ? motivoRechazoFinal() : "";
+          return (
+            <ConfirmModal
+              title={esRechazo ? "Rechazar pago" : "Aprobar pago"}
+              tone={esRechazo ? "peligro" : "aviso"}
+              message={
+                esRechazo
+                  ? `¿Rechazar el pago${motivoFinal ? ` por ${motivoFinal}` : ""}? La venta quedará Rechazado.`
+                  : "¿Aceptar el pago? Se creará la orden de producción y el pedido quedará Por entregar."
+              }
+              confirmLabel={esRechazo ? "Confirmar rechazo" : "Sí, confirmar"}
+              confirmDisabled={esRechazo && !puedeConfirmarRechazo}
+              onConfirm={() => {
+                if (esRechazo) rechazarPago(detailItem.id);
+                else aprobarPago(detailItem.id);
+                setConfirmVerif(null);
+              }}
+              onCancel={() => setConfirmVerif(null)}
+            >
+              {esRechazo && (
+                <div className="mb-5 space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    Motivo del rechazo *
+                  </p>
+                  <div className="space-y-1.5">
+                    {MOTIVOS_RECHAZO.map((m) => (
+                      <label
+                        key={m.value}
+                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                          motivoSel === m.value
+                            ? "border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10"
+                            : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="motivo-rechazo-verificacion"
+                          value={m.value}
+                          checked={motivoSel === m.value}
+                          onChange={() => setMotivoSel(m.value)}
+                          className="mt-0.5 accent-red-600 cursor-pointer"
+                        />
+                        <span className="text-sm text-foreground leading-snug">{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* "Otro": exige el texto que quedará como "Otro: <texto>". */}
+                  {motivoSel === "Otro" && (
+                    <div>
+                      <label
+                        htmlFor="motivo-rechazo-otro"
+                        className="block text-xs font-semibold text-muted-foreground mb-1"
+                      >
+                        Describe el motivo *
+                      </label>
+                      <textarea
+                        id="motivo-rechazo-otro"
+                        value={motivoOtroTexto}
+                        onChange={(e) => setMotivoOtroTexto(e.target.value.slice(0, MOTIVO_OTRO_MAX))}
+                        maxLength={MOTIVO_OTRO_MAX}
+                        rows={2}
+                        placeholder="Ej.: el cliente envió una foto de otro pedido"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-red-400"
+                      />
+                      <div className="flex justify-between gap-3 mt-1">
+                        <p className="text-[11px] text-red-600">
+                          {motivoOtroTexto.trim() === "" ? "El texto es obligatorio." : ""}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
+                          {motivoOtroTexto.length}/{MOTIVO_OTRO_MAX}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </ConfirmModal>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Pedir dinero faltante (→ En espera) ── */}
@@ -2185,57 +2413,188 @@ export function VentasScreen({
         })()}
       </AnimatePresence>
 
-      {/* ── Rechazar por dinero faltante: devolución del dinero recibido ── */}
+      {/* ── Registrar devolución (venta Completado → Devolucion): aviso, no
+             confirmación destructiva — la gestión real (canje/dinero) ocurre
+             en la pantalla de Devoluciones ── */}
       <AnimatePresence>
-        {modalDevolucion && detailItem && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <p className="font-bold text-foreground">Devolución del dinero recibido</p>
-                <button onClick={() => setModalDevolucion(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-5 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Sube el comprobante de la transferencia con la que se devuelve el dinero al cliente (a la misma cuenta). Es obligatorio para rechazar.
-                </p>
-                {/* Punto 3.4: el bloque dejó de estar copiado a mano aquí. */}
-                <CampoComprobante
-                  fileRef={devolFileRef}
-                  url={devolUrl}
-                  onQuitar={() => setDevolUrl(null)}
-                  subiendo={subiendoDevol}
-                  onSubir={(file) => {
-                    void subirDevol(file, "comprobantes").then((u) => { if (u) setDevolUrl(u); });
-                  }}
-                  etiquetaBoton="Subir comprobante de devolución"
-                />
-              </div>
-              <div className="flex gap-2 px-5 pb-5">
-                <button
-                  onClick={() => setModalDevolucion(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => { if (devolUrl && !subiendoDevol) rechazarPorDinero(detailItem.id); }}
-                  disabled={!devolUrl || subiendoDevol}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${devolUrl && !subiendoDevol ? "bg-red-600 hover:bg-red-700 cursor-pointer" : "bg-red-600/50 opacity-50 cursor-not-allowed"}`}
-                >
-                  Rechazar y devolver
-                </button>
-              </div>
-            </motion.div>
-          </div>
+        {ventaDevolver && (
+          <ConfirmModal
+            title="Registrar devolución"
+            tone="aviso"
+            message={`¿Marcar la venta #${ventaDevolver.id} de ${ventaDevolver.usuario} como devolución? Luego se gestiona el canje o la devolución del dinero.`}
+            confirmLabel="Sí, registrar devolución"
+            onCancel={() => setVentaDevolver(null)}
+            onConfirm={() => void confirmarDevolucionVenta()}
+          />
         )}
+      </AnimatePresence>
+
+      {/* ── Anular venta (sólo los primeros 10 minutos): motivo obligatorio,
+             comprobante opcional y valor a devolver según el motivo ── */}
+      <AnimatePresence>
+        {ventaAnular && (() => {
+          const porcentaje = porcentajeReembolsoAnulacion(anularMotivoSel);
+          const total = ventaAnular.total;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-500/20 flex items-center justify-center shrink-0">
+                      <Ban className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground">Anular venta</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Pedido #{ventaAnular.id} · {ventaAnular.usuario}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={cerrarAnular} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <p className="text-sm text-muted-foreground">
+                    La venta quedará en <span className="font-semibold">Anulado</span> y sus pagos como{" "}
+                    <span className="font-semibold">Rechazado</span>. Sólo se puede anular dentro de los primeros
+                    10 minutos de haber creado el pedido.
+                  </p>
+
+                  {/* Motivo obligatorio: la misma lista que valida el backend. */}
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+                      Motivo de la anulación *
+                    </p>
+                    <div className="space-y-1.5">
+                      {MOTIVOS_ANULACION.map((m) => (
+                        <label
+                          key={m.value}
+                          className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                            anularMotivoSel === m.value
+                              ? "border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10"
+                              : "border-border hover:bg-muted"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="motivo-anulacion"
+                            value={m.value}
+                            checked={anularMotivoSel === m.value}
+                            onChange={() => setAnularMotivoSel(m.value)}
+                            className="mt-0.5 accent-red-600 cursor-pointer"
+                          />
+                          <span className="text-sm text-foreground leading-snug">{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* "Otro": exige el texto que quedará como "Otro: <texto>". */}
+                    {anularMotivoSel === "Otro" && (
+                      <div className="mt-2">
+                        <label
+                          htmlFor="motivo-anulacion-otro"
+                          className="block text-xs font-semibold text-muted-foreground mb-1"
+                        >
+                          Describe el motivo *
+                        </label>
+                        <textarea
+                          id="motivo-anulacion-otro"
+                          value={anularOtroTexto}
+                          onChange={(e) => setAnularOtroTexto(e.target.value.slice(0, MOTIVO_OTRO_MAX))}
+                          maxLength={MOTIVO_OTRO_MAX}
+                          rows={2}
+                          placeholder="Ej.: el cliente pidió cambiar la hora de recogida"
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-red-400"
+                        />
+                        <div className="flex justify-between gap-3 mt-1">
+                          <p className="text-[11px] text-red-600">
+                            {anularOtroTexto.trim() === "" ? "El texto es obligatorio." : ""}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
+                            {anularOtroTexto.length}/{MOTIVO_OTRO_MAX}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comprobante de la devolución: OPCIONAL. */}
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+                      Comprobante de la devolución (opcional)
+                    </p>
+                    <CampoComprobante
+                      fileRef={anularFileRef}
+                      url={anularUrl}
+                      onQuitar={() => setAnularUrl(null)}
+                      subiendo={subiendoAnulacion}
+                      onSubir={(file) => {
+                        void subirAnulacion(file, "comprobantes").then((url) => {
+                          if (url) setAnularUrl(url);
+                        });
+                      }}
+                      etiquetaBoton="Adjuntar comprobante"
+                    />
+                  </div>
+
+                  {/* Valor a devolver según el motivo. */}
+                  <div className="rounded-xl border border-border bg-muted/50 px-4 py-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Total del pedido</span>
+                      <span className="font-semibold" style={{ fontFamily: MONO }}>{fmtCOP(total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Motivo</span>
+                      <span className="font-semibold text-right">
+                        {anularMotivoSel
+                          ? anularMotivoSel === "Otro"
+                            ? anularOtroTexto.trim() || "Otro"
+                            : anularMotivoSel
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-sm border-t border-border pt-1.5">
+                      <span className="font-semibold text-foreground">
+                        Valor a devolver ({Math.round(porcentaje * 100)} %)
+                      </span>
+                      <span className="font-bold text-red-600" style={{ fontFamily: MONO }}>
+                        {fmtCOP(Math.round(total * porcentaje))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 px-5 pb-5">
+                  <button
+                    onClick={cerrarAnular}
+                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => void anularVentaSeleccionada()}
+                    disabled={!puedeConfirmarAnulacion}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${
+                      puedeConfirmarAnulacion
+                        ? "bg-red-600 hover:bg-red-700 cursor-pointer"
+                        : "bg-red-600/50 opacity-50 cursor-not-allowed"
+                    }`}
+                  >
+                    Anular venta
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Elegir cómo emitir la factura ── */}
