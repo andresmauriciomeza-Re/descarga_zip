@@ -8823,6 +8823,9 @@ export default function App() {
                   // Punto 3.2: el modal que abre este listado necesita el
                   // catálogo para buscar por tipo "Producto".
                   productos={productos}
+                  // Punto B7: al anular la OC se devuelve también el stock
+                  // de las líneas de producto de sus facturas.
+                  setProductos={setProductos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -8867,10 +8870,11 @@ export default function App() {
                   orden={ordenRecepcion}
                   insumos={insumos}
                   setInsumos={setInsumos}
-                  // P14: catálogo de productos SOLO de lectura: un "insumo no
-                  // solicitado" puede ser un producto terminado (reventa), pero
-                  // aquí no se da de alta ni se modifica ninguno.
+                  // P14: catálogo de productos para el selector de tipo de los
+                  // "no solicitados". Punto B5: con `setProductos` la
+                  // recepción además suma stock y escribe precios de venta.
                   productos={productos}
+                  setProductos={setProductos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}

@@ -18,7 +18,13 @@ import {
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { aplicarStockCompra } from "@/features/compras/services/inventario";
+import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
+import {
+  contenidoDe,
+  empaqueDe,
+  nombreBuscable,
+  presentacionCompra,
+} from "@/shared/utils/presentacion";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -59,6 +65,10 @@ export interface OrdenItem {
    *  Compra NO lo captura (se crea desde el catálogo de insumos/productos
    *  sin precio de venta) y las líneas antiguas no lo traen. */
   precioVenta?: number;
+  /** Ajuste de bebidas: unidades que trae la paca/caja de ESTA línea (12 si
+   *  la bebida se pidió en "Paca x12"). Opcional: las líneas viejas y las de
+   *  unidad suelta no lo traen y se leen como 1. */
+  unidadesPorEmpaque?: number;
 }
 
 export interface ItemRecibido {
@@ -80,6 +90,9 @@ export interface ItemRecibido {
   /** Precio de VENTA al público del producto, para mostrar "Producto ·
    *  Venta" en el detalle. Sólo aplica a líneas de tipo producto. */
   precioVenta?: number;
+  /** Ajuste de bebidas: unidades por paca/caja de la línea (las filas de la
+   *  OC heredan el empaque). Opcional: se lee como 1 si no viene. */
+  unidadesPorEmpaque?: number;
 }
 
 export interface Recepcion {
@@ -751,6 +764,10 @@ export function OrdenModal({
   const [aNombre, setANombre] = useState("");
   const [aCant, setACant] = useState(1);
   const [aUnidad, setAUnidad] = useState(UNIDADES[0]);
+  // Ajuste de bebidas: unidades por paca/caja de la línea que se está
+  // agregando (undefined = unidad suelta). Se carga del producto elegido y
+  // se guarda en `OrdenItem.unidadesPorEmpaque`.
+  const [aEmpaque, setAEmpaque] = useState<number | undefined>(undefined);
   const [aPrecio, setAPrecio] = useState(0);
   const [aIva, setAIva] = useState(0);
   const [aFromCat, setAFromCat] = useState(false);
@@ -811,14 +828,22 @@ export function OrdenModal({
       const base = (productos ?? []).filter(
         (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
       );
-      const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
-      // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
-      // calcular) se usa el precio de venta como monto de referencia.
+      // El buscador mira también el contenido ("coca 1.5") para distinguir
+      // presentaciones del mismo producto.
+      const filtrados = q
+        ? base.filter((p) => nombreBuscable(p).toLowerCase().includes(q))
+        : base;
+      // Corrección 4 (punto B1) + ajuste: el monto de un producto en la OC es
+      // su `costoUnitario` (POR UNIDAD en el catálogo) por las unidades de la
+      // presentación: con "Paca x12" se pide el precio de la paca. Si viene
+      // en 0 queda vacío y el usuario lo escribe. NUNCA se usa el precio de
+      // venta como monto.
       return filtrados.slice(0, 3).map((p) => ({
         id: p.id,
         nombre: p.nombre,
-        unidadMedida: p.unidadVenta || "und",
-        costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
+        contenido: contenidoDe(p) || undefined,
+        unidadMedida: presentacionCompra(p),
+        costoUnitario: Number(p.costoUnitario || 0) * empaqueDe(p),
       }));
     }
 
@@ -858,13 +883,29 @@ export function OrdenModal({
   };
 
   /** Punto 3.3: catálogo de productos. Igual que con el insumo, se copian
-   *  nombre, unidad de venta y monto; el producto no tiene IVA propio, así que
-   *  la línea queda en 0 % y el usuario puede ajustarlo en el formulario. */
+   *  nombre, unidad de venta y monto; el producto no tiene IVA propio, así
+   *  que sin historial la línea queda en 0 % y el usuario puede ajustarlo en
+   *  el formulario (con historial de compra se trae ese %).
+   *  Corrección 4: el monto es `costoUnitario` (o 0 = vacío para escribirlo);
+   *  el precio de venta NUNCA se usa como monto. */
   const seleccionarProducto = (p: Producto) => {
     setANombre(p.nombre);
-    setAUnidad(p.unidadVenta?.trim() || "und");
-    setAPrecio(Number(p.costoUnitario || p.precioUnitario || 0));
-    setAIva(0);
+    // Ajuste de bebidas: la Medida (solo lectura) muestra la presentación
+    // de compra y la línea guarda el empaque de la paca/caja.
+    setAUnidad(presentacionCompra(p));
+    const factor = empaqueDe(p);
+    setAEmpaque(factor > 1 ? factor : undefined);
+    // Corrección 4: el monto es `costoUnitario` (POR UNIDAD) por las
+    // unidades de la presentación — con "Paca x12" el precio de la paca —
+    // o 0 = vacío para escribirlo; el precio de venta NUNCA es el monto.
+    // Ajuste: con historial de compra se precarga el último monto SIN IVA y
+    // su % (la OC no suma IVA); sin historial (productos viejos) manda el
+    // costo del catálogo por presentación, como siempre.
+    const hist = historialCompraDe(p);
+    setAPrecio(
+      hist ? hist.montoSinIva : Number(p.costoUnitario || 0) * factor
+    );
+    setAIva(hist ? hist.iva : 0);
     setAInsumoId(p.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -898,12 +939,17 @@ export function OrdenModal({
       actualizarItem(editando, {
         nombre: aNombre.trim(),
         cantidad: aCant,
-        unidad: aUnidad,
+        // Unidad de la fila: "und" si la medida quedó vacía (producto sin
+        // elegir); con presentación cargada va "Paca x12" tal cual.
+        unidad: aUnidad.trim() || "und",
         precioUnitario: aPrecio,
         iva: aIva,
         // Punto 3.3: el ítem puede haber cambiado de catálogo (insumo ↔
         // producto) mientras estaba cargado en el formulario.
         tipoItem: aTipoItem,
+        // Ajuste: el empaque sólo aplica a producto; al quitarlo se limpia.
+        unidadesPorEmpaque:
+          aTipoItem === "producto" && aEmpaque && aEmpaque > 1 ? aEmpaque : undefined,
         ...(aInsumoId ? { idInsumo: aInsumoId } : {}),
       });
       limpiarFilaInsumo();
@@ -928,32 +974,49 @@ export function OrdenModal({
         idInsumo: aInsumoId || `INS-M-${nextRow}`,
         nombre: aNombre.trim(),
         cantidad: aCant,
-        unidad: aUnidad,
+        // Medida: "und" si no se eligió nada (producto a mano); con un ítem
+        // del catálogo elegido trae su unidad / presentación de compra.
+        unidad: aUnidad.trim() || "und",
         costoUnitario: aPrecio,
         precioUnitario: aPrecio,
         iva: aIva,
         // Punto 3.3: la fila guarda de qué catálogo salió (insumo/producto).
         tipoItem: aTipoItem,
+        // Ajuste de bebidas: sólo las líneas de producto en paca/caja
+        // guardan el empaque (unidad suelta ⇒ sin el dato, se lee como 1).
+        ...(aTipoItem === "producto" && aEmpaque && aEmpaque > 1
+          ? { unidadesPorEmpaque: aEmpaque }
+          : {}),
       }],
     });
     limpiarFilaInsumo();
   };
 
   /** Deja la fila "Agregar insumo" lista para el siguiente insumo: campos en
-   *  cero, sin modo edición y foco de vuelta en el buscador de Nombre. */
-  const limpiarFilaInsumo = () => {
+   *  cero, sin modo edición y foco de vuelta en el buscador de Nombre.
+   *  Ajuste: la Medida (solo lectura) vuelve a vacía para producto y a
+   *  `UNIDADES[0]` para insumo — igual que al abrir el formulario — y el
+   *  empaque se limpia siempre. El tipo que se guarda por closure puede ser
+   *  el VIEJO al cambiar Insumo/Producto, así que quien cambia el tipo pasa
+   *  el nuevo EXPLÍCITO (nunca se usa como callback directo). */
+  const limpiarFilaInsumo = (tipo: "insumo" | "producto" = aTipoItem) => {
     setANombre(""); setACant(1); setAPrecio(0); setAIva(0);
+    setAUnidad(tipo === "producto" ? "" : UNIDADES[0]);
+    setAEmpaque(undefined);
     setAFromCat(false); setAInsumoId(""); setAShowSug(false);
     setEditando(null);
     nombreRef.current?.focus();
   };
 
-  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda. */
+  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda (con
+   *  su tipo y su empaque de paca/caja, para poder actualizarlos). */
   const editarItem = (row: InsumoSolicitadoRow) => {
     setEditando(row.rowId);
+    setATipoItem(row.tipoItem ?? "insumo");
     setANombre(row.nombre);
     setACant(row.cantidad);
     setAUnidad(row.unidad);
+    setAEmpaque(row.unidadesPorEmpaque && row.unidadesPorEmpaque > 1 ? row.unidadesPorEmpaque : undefined);
     setAPrecio(row.precioUnitario);
     setAIva(row.iva);
     setAFromCat(false);
@@ -1329,9 +1392,10 @@ export function OrdenModal({
                             if (nuevo === aTipoItem) return;
                             setATipoItem(nuevo);
                             // Al cambiar de catálogo el ítem cargado ya no
-                            // sirve: se limpia la fila y el buscador empieza
-                            // a mirar la otra lista.
-                            limpiarFilaInsumo();
+                            // sirve: se limpia la fila (la Medida según el
+                            // tipo NUEVO) y el buscador empieza a mirar la
+                            // otra lista.
+                            limpiarFilaInsumo(nuevo);
                           }}
                           opciones={[
                             { valor: "insumo", etiqueta: "Insumo" },
@@ -1351,6 +1415,12 @@ export function OrdenModal({
                       setANombre(value);
                       setAFromCat(false);
                       setAInsumoId("");
+                      // En producto, escribir a mano suelta la presentación:
+                      // la Medida queda vacía y el empaque se limpia.
+                      if (aTipoItem === "producto") {
+                        setAUnidad("");
+                        setAEmpaque(undefined);
+                      }
                       setAShowSug(true);
                     }}
                     onNombreFocus={() => setAShowSug(true)}
@@ -1406,9 +1476,10 @@ export function OrdenModal({
                             if (nuevo === aTipoItem) return;
                             setATipoItem(nuevo);
                             // Al cambiar de catálogo el ítem cargado ya no
-                            // sirve: se limpia la fila y el buscador empieza
-                            // a mirar la otra lista.
-                            limpiarFilaInsumo();
+                            // sirve: se limpia la fila (la Medida según el
+                            // tipo NUEVO) y el buscador empieza a mirar la
+                            // otra lista.
+                            limpiarFilaInsumo(nuevo);
                           }}
                           opciones={[
                             { valor: "insumo", etiqueta: "Insumo" },
@@ -2190,12 +2261,15 @@ interface Props {
   /** Punto 3.2: catálogo de Productos para el buscador "Producto" del modal
    *  que se abre desde este listado (antes llegaba `undefined` y salía vacío). */
   productos?: Producto[];
+  /** Punto B7: sin él la anulación se igual no revierte el stock de
+   *  productos de sus facturas (ver `handleAnularOrden`). */
+  setProductos?: SetCatalogo<Producto>;
 }
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, productos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+  insumos, setInsumos, productos, setProductos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
@@ -2312,7 +2386,15 @@ export function OrdenCompraScreen({
       if (g.ordenId !== o.id) return g;
       const revertir = g.estado !== "Anulado" && !!g.stockAplicado && !g.stockRevertido;
       if (revertir) {
-        aplicarStockCompra(g.items ?? [], -1, { insumos, setInsumos });
+        // Punto B7: también se devuelve el stock de las líneas de PRODUCTO
+        // (los precios de venta no se revierten: el precio ya publicado se
+        // conserva; aquí sólo regresa lo que la factura sumó al inventario).
+        aplicarStockCompra(g.items ?? [], -1, {
+          insumos,
+          setInsumos,
+          productos,
+          setProductos,
+        });
       }
       return {
         ...g,

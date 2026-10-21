@@ -31,11 +31,21 @@ import {
   type ProveedorRef,
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 import {
+  aplicarPreciosCompra,
   aplicarStockCompra,
+  historialCompraDe,
+  textoPreciosActualizado,
   textoStockActualizado,
+  unidadesPorLinea,
   type ResumenStock,
   type SetCatalogo,
 } from "@/features/compras/services/inventario";
+import {
+  contenidoDe,
+  empaqueDe,
+  nombreBuscable,
+  presentacionCompra,
+} from "@/shared/utils/presentacion";
 
 // ─── CONTROL DE STOCK DE LAS COMPRAS ─────────────────────────────────────────
 // Las funciones de inventario (sumar/revertir stock) viven en
@@ -162,6 +172,10 @@ type ItemFactura = {
    *  "Producto · Venta: $ X" bajo el nombre. Opcional: las líneas antiguas
    *  y las de insumos no lo traen. */
   precioVenta?: number;
+  /** Ajuste de bebidas: unidades que trae la paca/caja de ESTA línea (12 si
+   *  se compró "Paca x12"). Opcional: las líneas viejas y las de unidad
+   *  suelta no lo traen y se leen como 1. */
+  unidadesPorEmpaque?: number;
 };
 
 export interface NuevaCompraData {
@@ -213,7 +227,7 @@ function TablaItemsFactura({
   /** Lápiz: abre la edición en línea de la fila y avisa al formulario. */
   onEdit: (row: ItemFactura) => void;
   /** ✓: aplica el borrador de la fila (con las mismas validaciones que al agregar). */
-  onCommit: (rowId: string, patch: Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva">) => void;
+  onCommit: (rowId: string, patch: Partial<ItemFactura>) => void;
   /** ✗: descarta el borrador y sale de la edición de esa fila. */
   onCancelarEdicion: () => void;
   onRemove: (rowId: string) => void;
@@ -225,10 +239,15 @@ function TablaItemsFactura({
   rowEditando?: string | null;
   className?: string;
 }) {
-  /** Borrador de la fila en edición (punto B3): sólo cantidad, monto e IVA;
-   *  nombre y medida son texto porque los define el ítem del catálogo. */
+  /** Borrador de la fila en edición (punto B3): cantidad, monto, IVA y — en
+   *  líneas de producto — precio de venta; nombre y medida son texto porque
+   *  los define el ítem del catálogo. */
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva"> | null>(null);
+  const [draft, setDraft] = useState<
+    Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva"> & {
+      precioVenta?: number;
+    }
+  | null>(null);
 
   // Si el padre cancela la edición desde afuera (p. ej. al agregar otra fila,
   // que deja el formulario en "Agregar"), el borrador se descarta con él.
@@ -241,7 +260,12 @@ function TablaItemsFactura({
 
   const startEdit = (row: ItemFactura) => {
     setDraftId(row.rowId);
-    setDraft({ cantidad: row.cantidad, precioUnitario: row.precioUnitario, iva: row.iva });
+    setDraft({
+      cantidad: row.cantidad,
+      precioUnitario: row.precioUnitario,
+      iva: row.iva,
+      precioVenta: row.precioVenta,
+    });
     onEdit(row);
   };
 
@@ -265,6 +289,26 @@ function TablaItemsFactura({
     if (draft.iva < 0 || draft.iva > 100) {
       toast.error("El IVA debe estar entre 0 % y 100 %.");
       return;
+    }
+    // Punto B2 + punto 3 + ajuste: en edición en línea el precio de venta de
+    // un producto sigue siendo obligatorio (> 0 y > costo POR UNIDAD con
+    // IVA), igual que al agregarlo. El costo con IVA usa el modo de precios
+    // de la factura y, con paca/caja, se divide en las unidades de la fila.
+    const fila = items.find((r) => r.rowId === rowId);
+    if (fila && (fila.tipoItem ?? "insumo") === "producto") {
+      const pv = draft.precioVenta ?? 0;
+      const costo =
+        (modoIva && ivaIncluido
+          ? draft.precioUnitario
+          : draft.precioUnitario * (1 + draft.iva / 100)) / unidadesPorLinea(fila);
+      if (pv <= 0) {
+        toast.error("El precio de venta del producto debe ser mayor que cero.");
+        return;
+      }
+      if (pv <= costo) {
+        toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
+        return;
+      }
     }
     onCommit(rowId, draft);
     setDraftId(null);
@@ -418,14 +462,35 @@ function TablaItemsFactura({
                         {row.nombre}
                       </div>
                       {/* P14: si la línea salió del catálogo de productos se
-                          deja ver el precio de venta al público (dato
-                          informativo: la factura sigue calculando con el
-                          monto unitario). */}
+                          deja ver el precio de venta al público. En EDICIÓN
+                          en línea ese precio se edita aquí mismo (punto B3):
+                          es obligatorio y debe superar al monto unitario. */}
                       {(row.tipoItem ?? "insumo") === "producto" && (
                         <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
                           Producto
-                          {row.precioVenta != null && row.precioVenta > 0 && (
-                            <> · Venta: {fmtCOP(row.precioVenta)}</>
+                          {editandoFila && draft ? (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span>Venta</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={draft.precioVenta || ""}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  setDraft({
+                                    ...draft,
+                                    precioVenta: numeroDeInput(
+                                      limpiarNumeroInput(e.target.value)
+                                    ),
+                                  })
+                                }
+                                className={inputCelda + " w-[110px] h-7"}
+                              />
+                            </div>
+                          ) : (
+                            row.precioVenta != null && row.precioVenta > 0 && (
+                              <>· Venta: {fmtCOP(row.precioVenta)}</>
+                            )
                           )}
                         </div>
                       )}
@@ -677,6 +742,10 @@ function CompraForm({
   // defecto es "und" y al guardar se toma SIEMPRE la unidad del insumo o del
   // producto seleccionado (ver `unidadElegida`).
   const [itemUnidad, setItemUnidad] = useState("und");
+  // Ajuste de bebidas: unidades por paca/caja de la línea que se está
+  // agregando (undefined = unidad suelta). Se carga del producto elegido y
+  // se guarda en `ItemFactura.unidadesPorEmpaque`.
+  const [itemEmpaque, setItemEmpaque] = useState<number | undefined>(undefined);
   const [itemPrecio, setItemPrecio] = useState(0);
   const [itemIva, setItemIva] = useState(0);
   const [itemId, setItemId] = useState("");
@@ -685,6 +754,10 @@ function CompraForm({
   // Precio de VENTA al público del producto elegido (sólo se captura cuando
   // el tipo es "producto"; con insumos queda en 0 y no se guarda).
   const [itemPrecioVenta, setItemPrecioVenta] = useState(0);
+  // % de ganancia sobre el monto unitario (punto B2). 0 = sin escribir: NO se
+  // precarga ningún valor por defecto; se deriva del precio de venta cuando
+  // el producto ya tiene uno.
+  const [itemGanancia, setItemGanancia] = useState(0);
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   /** Input de Nombre: recupera el foco tras agregar o actualizar una fila. */
@@ -825,14 +898,23 @@ function CompraForm({
       const base = (productos ?? []).filter(
         (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
       );
-      const filtrados = q ? base.filter((p) => p.nombre.toLowerCase().includes(q)) : base;
-      // `costoUnitario` es el costo de producir; si viene en 0 (pendiente de
-      // calcular) se usa el precio de venta como monto de referencia.
+      // El buscador mira también el contenido ("coca 1.5") para distinguir
+      // presentaciones del mismo producto.
+      const filtrados = q
+        ? base.filter((p) => nombreBuscable(p).toLowerCase().includes(q))
+        : base;
+      // Punto B1 + ajuste de bebidas: el monto de la línea es SIEMPRE el
+      // costo (`costoUnitario`, que en el catálogo es POR UNIDAD) por las
+      // unidades de la presentación: con "Paca x12" se precarga el precio
+      // de la paca. Si viene en 0 (pendiente de calcular) el usuario lo
+      // escribe a mano. Antes se caía al precio de venta y el producto
+      // quedaba "gratis" en la factura.
       return filtrados.slice(0, 3).map((p) => ({
         id: p.id,
         nombre: p.nombre,
-        unidadMedida: p.unidadVenta || "und",
-        costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
+        contenido: contenidoDe(p) || undefined,
+        unidadMedida: presentacionCompra(p),
+        costoUnitario: Number(p.costoUnitario || 0) * empaqueDe(p),
       }));
     }
 
@@ -911,28 +993,138 @@ function CompraForm({
   };
 
   /** P14: catálogo de productos. Igual que con el insumo, se copian nombre,
-   *  unidad de venta y monto; el producto no tiene IVA propio, así que la
-   *  línea queda en 0 % y el usuario puede ajustarlo en el formulario. */
+   *  unidad de venta y monto; el producto no tiene IVA propio, así que sin
+   *  historial de compra la línea queda en 0 % y el usuario puede ajustarlo
+   *  en el formulario (con historial se trae ese %). */
   const seleccionarProducto = (p: Producto) => {
     setItemId(p.id);
     setItemNombre(p.nombre);
-    setItemUnidad(p.unidadVenta?.trim() || "und");
-    setItemPrecio(Number(p.costoUnitario || p.precioUnitario || 0));
-    setItemIva(0);
+    // Ajuste de bebidas: la Medida muestra la presentación de compra
+    // ("Paca x12", "Caja x6" o la unidad de venta) y la línea guarda el
+    // empaque para saber cuántas unidades trae.
+    setItemUnidad(presentacionCompra(p));
+    const factor = empaqueDe(p);
+    setItemEmpaque(factor > 1 ? factor : undefined);
+    // Punto B1: el monto es SIEMPRE `costoUnitario` (que en el catálogo es
+    // POR UNIDAD); nunca el precio de venta. Con paca/caja la línea se
+    // cotiza por presentación: costoUnitario × unidades de la paca.
+    const costoUnit = Number(p.costoUnitario || 0);
+    const pv = Number(p.precioUnitario || 0);
+    // Ajuste: con historial de compra se precarga el último monto SIN IVA (y
+    // su %) según el modo elegido: "Sin IVA" va tal cual y "Con IVA incluido"
+    // trae el IVA sumado al monto. Sin historial (productos viejos) manda el
+    // costo del catálogo por presentación, como siempre.
+    const hist = historialCompraDe(p);
+    const monto = hist
+      ? ivaIncluido === false
+        ? hist.montoSinIva
+        : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
+      : costoUnit * factor;
+    setItemPrecio(monto);
+    setItemIva(hist ? hist.iva : 0);
     // Precio de VENTA al público: es `precioUnitario` del catálogo de
-    // productos (el costo de producir es `costoUnitario`). Se guarda aparte
-    // del monto unitario de la factura para poder mostrarlo en el detalle.
-    setItemPrecioVenta(Number(p.precioUnitario || 0));
+    // productos (el costo es `costoUnitario` POR UNIDAD, y el precio de
+    // venta también se define por unidad suelta). Se guarda aparte del
+    // monto unitario de la factura para poder mostrarlo en el detalle.
+    setItemPrecioVenta(pv);
+    // Punto B2: NO se precarga un % fijo. Si el producto ya tiene precio de
+    // venta, el % se calcula desde él CONTRA EL COSTO POR UNIDAD; si no,
+    // ambos campos quedan vacíos hasta que el usuario escriba uno de los dos
+    // (negativo no aplica: el precio de venta siempre debe superar al costo).
+    setItemGanancia(costoUnit > 0 && pv > 0 ? Math.max(0, Math.round((pv / costoUnit - 1) * 10000) / 100) : 0);
     setItemSugAbierto(false);
   };
 
-  /** P11: unidad que se guarda en la fila. SIEMPRE la del catálogo del ítem
-   *  seleccionado (insumo o producto); sólo si no hay nada seleccionado se
-   *  cae en lo que tenga el campo o en "und". */
+  /** Redondeo a 2 decimales: los porcentajes de ganancia no arrastran
+   *  residuos de punto flotante (33.33333333 %). */
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  /** Punto 3: costo de referencia = costo unitario CON IVA. Con IVA
+   *  incluido el monto ya lo trae; sin IVA incluido se le suma el % de la
+   *  línea. Sobre ese costo se calcula la ganancia y se valida que el precio
+   *  de venta lo superpase. */
+  const costoConIva = (monto: number, iva: number) =>
+    ivaIncluido === false ? monto * (1 + iva / 100) : monto;
+
+  /** Costo con IVA del ítem del formulario (lo ve el usuario bajo el campo):
+   *  POR UNIDAD — si la línea es de paca/caja el monto (por presentación) se
+   *  divide en `itemFactor`; unidad suelta ⇒ factor 1, sin cambios. */
+  const itemFactor = unidadesPorLinea({ unidadesPorEmpaque: itemEmpaque });
+  const costoRef = costoConIva(itemPrecio, itemIva) / itemFactor;
+
+  /** Punto B2/B3 + punto 3: la ganancia se calcula sobre el costo CON IVA;
+   *  con ganancia escrita el precio de venta sale de ese costo y sin
+   *  ganancia escrita se deriva el % desde un precio que ya exista. */
+  const recalcularDesdeGanancia = (costo: number) => {
+    if (itemGanancia > 0 && costo > 0) {
+      setItemPrecioVenta(Math.round(costo * (1 + itemGanancia / 100)));
+    } else if (costo > 0 && itemPrecioVenta > 0) {
+      setItemGanancia(Math.max(0, round2((itemPrecioVenta / costo - 1) * 100)));
+    }
+  };
+
+  const onMontoChange = (v: number) => {
+    setItemPrecio(v);
+    // La ganancia se calcula contra el costo POR UNIDAD (el monto puede ser
+    // el de una paca).
+    recalcularDesdeGanancia(costoConIva(v, itemIva) / itemFactor);
+  };
+
+  /** Punto 3: al cambiar el IVA cambia el costo con IVA, así que la ganancia
+   *  (o el precio) se recalcula igual que al tocar el monto. */
+  const onIvaChange = (v: number) => {
+    setItemIva(v);
+    recalcularDesdeGanancia(costoConIva(itemPrecio, v) / itemFactor);
+  };
+
+  /** Cambiar la ganancia recalcula el precio de venta al instante. Con 0 (o
+   *  vacío) se deja el precio como está para que el usuario lo edite a mano. */
+  const onGananciaChange = (v: number) => {
+    setItemGanancia(v);
+    if (v > 0 && costoRef > 0) {
+      setItemPrecioVenta(Math.round(costoRef * (1 + v / 100)));
+    }
+  };
+
+  /** Escribir el precio de venta a mano recalcula la ganancia que representa
+   *  sobre el costo con IVA (0 si se borra el precio). */
+  const onPrecioVentaChange = (v: number) => {
+    setItemPrecioVenta(v);
+    if (costoRef > 0) {
+      setItemGanancia(v > 0 ? Math.max(0, round2((v / costoRef - 1) * 100)) : 0);
+    }
+  };
+
+  /** Costo con IVA POR UNIDAD de una línea YA agregada (punto 3 + ajuste +
+   *  backstop de guardar): con paca/caja el monto es por presentación. */
+  const costoConIvaDeLinea = (i: ItemFactura) =>
+    (ivaIncluido === false ? i.precioUnitario * (1 + i.iva / 100) : i.precioUnitario) /
+    unidadesPorLinea(i);
+
+  /** Punto B2 + punto 3 + ajuste: precio de venta OBLIGATORIO en líneas de
+   *  producto: vacío, 0 o ≤ al costo por unidad CON IVA es un error en
+   *  tiempo real; el botón Agregar queda deshabilitado y no existe
+   *  "respaldo" de precio = costo. */
+  const errorPrecioVenta =
+    itemTipo === "producto" && itemNombre.trim()
+      ? itemPrecioVenta <= 0
+        ? "Ingresa el precio de venta del producto."
+        : itemPrecioVenta <= costoRef
+          ? "El precio de venta debe ser mayor que el costo por unidad con IVA."
+          : undefined
+      : undefined;
+
+  /** P11 + ajuste: unidad que se guarda en la fila. SIEMPRE la del catálogo
+   *  del ítem seleccionado — para productos, su presentación de compra
+   *  ("Paca x12"); sólo si no hay nada seleccionado se cae en lo que tenga
+   *  el campo o en "und". */
   const unidadElegida = () => {
     const delCatalogo =
       itemTipo === "producto"
-        ? productos?.find((p) => p.id === itemId)?.unidadVenta
+        ? (() => {
+            const p = productos?.find((x) => x.id === itemId);
+            return p ? presentacionCompra(p) : undefined;
+          })()
         : insumos.find((i) => i.id === itemId)?.unidadMedida;
     return delCatalogo?.trim() || itemUnidad.trim() || "und";
   };
@@ -961,6 +1153,20 @@ function CompraForm({
       toast.error("El precio unitario no puede ser negativo.");
       return;
     }
+    // Punto B2 + punto 3: en PRODUCTOS el precio de venta es obligatorio y
+    // tiene que quedar por encima del costo por unidad CON IVA: sin esto la
+    // línea no se agrega y la bebida seguiría sin precio de venta en el
+    // catálogo.
+    if (itemTipo === "producto") {
+      if (itemPrecioVenta <= 0) {
+        toast.error("El precio de venta del producto debe ser mayor que cero.");
+        return;
+      }
+      if (itemPrecioVenta <= costoRef) {
+        toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
+        return;
+      }
+    }
     if (
       items.some(
         (item) =>
@@ -986,9 +1192,17 @@ function CompraForm({
         iva: itemIva,
         // P14: se guarda el tipo para poder mostrarlo en el detalle.
         tipoItem: itemTipo,
-        // Precio de venta al público, sólo para líneas de producto.
-        ...(itemTipo === "producto" && itemPrecioVenta > 0
-          ? { precioVenta: itemPrecioVenta }
+        // Precio de venta al público, sólo para líneas de producto (ya
+        // validado arriba: siempre > 0 y > costo por unidad con IVA). El
+        // empaque (paca/caja) sólo lo guardan las líneas de producto con
+        // presentación; unidad suelta ⇒ sin el dato (se lee como 1).
+        ...(itemTipo === "producto"
+          ? {
+              precioVenta: itemPrecioVenta,
+              ...(itemEmpaque && itemEmpaque > 1
+                ? { unidadesPorEmpaque: itemEmpaque }
+                : {}),
+            }
           : {}),
       },
     ]);
@@ -998,16 +1212,22 @@ function CompraForm({
 
   /** Deja la fila "Agregar insumo" lista para el siguiente insumo: campos en
    *  cero y foco de vuelta en el buscador de Nombre.
-   *  P11: la unidad vuelve a "und"; el TIPO se conserva para poder agregar
-   *  varios productos seguidos sin volver a elegirlo. */
-  const limpiarFilaInsumo = () => {
+   *  P11 + ajuste: la Medida vuelve a "und" para insumos y queda VACÍA para
+   *  productos (la define el catálogo al elegir uno: "Paca x12"); el
+   *  empaque se limpia siempre. El TIPO se conserva para poder agregar
+   *  varios productos seguidos sin volver a elegirlo, salvo que el que
+   *  llama pase el tipo nuevo (cambio de Insumo/Producto: se le pasa
+   *  EXPLÍCITO porque por closure llegaría el valor viejo del estado). */
+  const limpiarFilaInsumo = (tipo: TipoItem = itemTipo) => {
     setItemNombre("");
     setItemCantidad(1);
-    setItemUnidad("und");
+    setItemUnidad(tipo === "producto" ? "" : "und");
+    setItemEmpaque(undefined);
     setItemPrecio(0);
     setItemIva(0);
     setItemId("");
     setItemPrecioVenta(0);
+    setItemGanancia(0);
     setItemSugAbierto(false);
     setEditando(null);
     nombreRef.current?.focus();
@@ -1016,9 +1236,9 @@ function CompraForm({
   /** Lápiz de la tabla (punto B3): abre la edición EN LÍNEA en la fila; el
    *  formulario de la izquierda se deja limpio para seguir agregando ítems.
    *  P14: también el tipo, para que el buscador siga mirando el catálogo
-   *  correcto mientras se edita. */
+   *  correcto mientras se edita (y la Medida se limpia según ESE tipo). */
   const editarItem = (row: ItemFactura) => {
-    limpiarFilaInsumo();
+    limpiarFilaInsumo(row.tipoItem ?? "insumo");
     setItemTipo(row.tipoItem ?? "insumo");
     setEditando(row.rowId);
   };
@@ -1078,6 +1298,23 @@ function CompraForm({
       // habilitado: aquí se avisa en rojo bajo las tarjetas y no se guarda.
       setIvaIntentado(true);
       toast.error(MSJ_IVA_FALTA);
+      return;
+    }
+    // Punto B2 + punto 3 + ajuste: backstop de precios de venta. Ninguna
+    // línea de producto se guarda sin precio de venta válido (> 0 y > costo
+    // POR UNIDAD con IVA), aunque haya llegado de una compra vieja o de una
+    // Orden de Compra.
+    const lineaPrecioMala = items.find((i) => {
+      if ((i.tipoItem ?? "insumo") !== "producto") return false;
+      const pv = i.precioVenta ?? 0;
+      return pv <= 0 || pv <= costoConIvaDeLinea(i);
+    });
+    if (lineaPrecioMala) {
+      toast.error(
+        (lineaPrecioMala.precioVenta ?? 0) <= 0
+          ? `«${lineaPrecioMala.nombre}»: falta el precio de venta del producto.`
+          : `«${lineaPrecioMala.nombre}»: el precio de venta debe ser mayor que el costo por unidad con IVA.`
+      );
       return;
     }
 
@@ -1561,9 +1798,10 @@ function CompraForm({
                             if (nuevo === itemTipo) return;
                             setItemTipo(nuevo);
                             // Al cambiar de catálogo el ítem cargado ya no
-                            // sirve: se limpia la fila y el buscador empieza
-                            // a mirar la otra lista.
-                            limpiarFilaInsumo();
+                            // sirve: se limpia la fila (la Medida según el
+                            // tipo NUEVO) y el buscador empieza a mirar la
+                            // otra lista.
+                            limpiarFilaInsumo(nuevo);
                           }}
                           disabled={ivaIncluido === null}
                           opciones={[
@@ -1583,6 +1821,11 @@ function CompraForm({
                     onNombreChange={(value) => {
                       setItemNombre(value);
                       setItemId("");
+                      // Escribir a mano suelta la presentación elegida: la
+                      // Medida queda vacía (producto) o "und" (insumo) y el
+                      // empaque de la paca/caja se limpia.
+                      setItemUnidad(itemTipo === "producto" ? "" : "und");
+                      setItemEmpaque(undefined);
                       setItemSugAbierto(true);
                     }}
                     onNombreFocus={() => setItemSugAbierto(true)}
@@ -1592,13 +1835,21 @@ function CompraForm({
                     onUnidadChange={setItemUnidad}
                     disabled={ivaIncluido === null}
                     precio={itemPrecio}
-                    onPrecioChange={setItemPrecio}
+                    onPrecioChange={onMontoChange}
                     iva={itemIva}
-                    onIvaChange={setItemIva}
+                    onIvaChange={onIvaChange}
+                    // Punto 3: costo de referencia CON IVA que se muestra
+                    // debajo del monto y sobre el que se calcula la ganancia.
+                    costoConIva={costoRef}
                     // Precio de venta al público: sólo para líneas de producto.
                     mostrarPrecioVenta={itemTipo === "producto"}
                     precioVenta={itemPrecioVenta}
-                    onPrecioVentaChange={setItemPrecioVenta}
+                    onPrecioVentaChange={onPrecioVentaChange}
+                    // Punto B2: ganancia % sobre el monto unitario, enlazada
+                    // con el precio de venta (borrar uno recalcula el otro).
+                    ganancia={itemGanancia}
+                    onGananciaChange={onGananciaChange}
+                    errorPrecioVenta={errorPrecioVenta}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
@@ -1624,12 +1875,14 @@ function CompraForm({
                     // de una fila existente ocurre en línea, en la tabla.
                     buttonLabel="Agregar"
                     variante="compacta"
-                    // P11 + punto 2.6: en el modal la Medida sigue oculta (la
-                    // unidad la define el insumo); en página vuelve a la fila
-                    // de la card como texto de solo lectura, igual que en Orden
-                    // de Compra, para no tener dos controles de medida.
-                    ocultarMedida={!isPage}
-                    medidaSoloLectura={isPage}
+                    // P11 + punto 2.6 + ajuste: en el modal la Medida sigue
+                    // oculta para INSUMOS (la unidad la define el insumo);
+                    // para PRODUCTOS se muestra siempre como texto de solo
+                    // lectura con la presentación de compra ("Paca x12"). En
+                    // página es solo lectura para los dos tipos, igual que en
+                    // Orden de Compra, para no tener dos controles de medida.
+                    ocultarMedida={!isPage && itemTipo !== "producto"}
+                    medidaSoloLectura={isPage || itemTipo === "producto"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
                     placeholder={
@@ -1651,9 +1904,10 @@ function CompraForm({
                             if (nuevo === itemTipo) return;
                             setItemTipo(nuevo);
                             // Al cambiar de catálogo el ítem cargado ya no
-                            // sirve: se limpia la fila y el buscador empieza
-                            // a mirar la otra lista.
-                            limpiarFilaInsumo();
+                            // sirve: se limpia la fila (la Medida según el
+                            // tipo NUEVO) y el buscador empieza a mirar la
+                            // otra lista.
+                            limpiarFilaInsumo(nuevo);
                           }}
                           disabled={ivaIncluido === null}
                           opciones={[
@@ -1957,6 +2211,14 @@ export function NuevaCompraPage({
         })
       : null;
 
+    // Punto B4 + puntos 1/3: la factura es donde se define el precio de venta
+    // y el costo con IVA de las bebidas ("Producto terminado"). Mismo caso de
+    // uso que el stock: sólo con la compra en "Recibido" y sólo si hay setter
+    // con el que escribir; el modo de IVA de la factura decide el costo.
+    const resumenPrecios = recibeStock
+      ? aplicarPreciosCompra(data.items, { productos, setProductos }, data.ivaIncluido)
+      : null;
+
     // `stockAplicado` sólo se marca si de verdad se sumó algo: así una compra
     // creada sin setters (contexto sin control de inventario) no queda
     // registrada como "stock aplicado" y su anulación no resta de más.
@@ -1976,6 +2238,9 @@ export function NuevaCompraPage({
     toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
+    }
+    if (resumenPrecios && resumenPrecios.nombres.length > 0) {
+      toast.info(textoPreciosActualizado(resumenPrecios));
     }
     onBack();
   };
