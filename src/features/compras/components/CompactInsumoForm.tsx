@@ -4,7 +4,11 @@ import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 
 const SERIF = "var(--font-titulo)";
 
-export const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
+/* Re-export (para no romper a quien lo importa desde aquí). La constante vive
+   en shared/utils/unidades: leerla aquí arriba, en el ciclo
+   UnidadSelect ⇄ CompactInsumoForm, lanzaba "Cannot access 'UNIDADES' before
+   initialization" y dejaba la app en blanco. */
+export { UNIDADES } from "@/shared/utils/unidades";
 
 /** Labels de las guías: 13px en gris oscuro (los títulos de sección van en
  *  `seccionCls` de cada formulario). */

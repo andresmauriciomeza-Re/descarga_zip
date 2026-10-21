@@ -14,11 +14,12 @@
  *   - "insumo": ficha de un Producto Insumo → tiempo + rendimiento por
  *     preparación + insumos (SOLO crudos) + pasos.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
+import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   TAMANOS_FICHA,
@@ -44,15 +45,25 @@ export const FICHA_INPUT_CLS =
  */
 function InsumoFilaEditable({
   ins,
+  usarUnidadSelect,
   onSave,
   onCancel,
 }: {
   ins: RInsumo;
+  /** true = la unidad se elige con UnidadSelect (modo insumo, mismo estilo
+      redondeado que "Unidad de medida"); false = select nativo (modo
+      producto, sin cambios). */
+  usarUnidadSelect?: boolean;
   onSave: (r: RInsumo) => void;
   onCancel: () => void;
 }) {
   const [cantidad, setCantidad] = useState(ins.cantidad);
   const [unidad, setUnidad] = useState(ins.unidad);
+  // Lista para UnidadSelect: mismas unidades que el select nativo de siempre.
+  const opcionesUnidad: readonly OpcionUnidad[] = UNIDADES_FICHA.map((u) => ({
+    valor: u,
+    etiqueta: u,
+  }));
   const inputNumCls =
     "w-20 px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   return (
@@ -91,13 +102,23 @@ function InsumoFilaEditable({
         </div>
       </td>
       <td className="px-3 py-2">
-        <select
-          value={unidad}
-          onChange={(e) => setUnidad(e.target.value)}
-          className="px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none cursor-pointer"
-        >
-          {UNIDADES_FICHA.map((u) => <option key={u}>{u}</option>)}
-        </select>
+        {usarUnidadSelect ? (
+          <UnidadSelect
+            value={unidad}
+            onChange={setUnidad}
+            unidades={opcionesUnidad}
+            ariaLabel="Medida"
+            fieldClassName="bg-card text-foreground"
+          />
+        ) : (
+          <select
+            value={unidad}
+            onChange={(e) => setUnidad(e.target.value)}
+            className="px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none cursor-pointer"
+          >
+            {UNIDADES_FICHA.map((u) => <option key={u}>{u}</option>)}
+          </select>
+        )}
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
@@ -133,19 +154,26 @@ function InsumosFichaTable({
   insumos,
   editable,
   editandoIdx,
+  usarUnidadSelect,
   onEdit,
   onChange,
   onRemove,
+  contenedorClassName,
 }: {
   insumos: RInsumo[];
   editable: boolean;
   editandoIdx: number | null;
+  /** true = la fila en edición usa UnidadSelect para la unidad (modo insumo). */
+  usarUnidadSelect?: boolean;
   onEdit: (idx: number | null) => void;
   onChange: (idx: number, patch: Partial<RInsumo>) => void;
   onRemove: (idx: number) => void;
+  /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
+      Insumos). Por defecto solo hay scroll horizontal. */
+  contenedorClassName?: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
+    <div className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}>
       <table className="w-full">
         <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
           <tr>
@@ -162,6 +190,7 @@ function InsumosFichaTable({
                 <InsumoFilaEditable
                   key={idx}
                   ins={ins}
+                  usarUnidadSelect={usarUnidadSelect}
                   onSave={(r) => {
                     onChange(idx, r);
                     onEdit(null);
@@ -223,6 +252,20 @@ export interface FichaTecnicaEditorProps {
       configurada, el padre pasa un único elemento ("Único"). Ausente =
       modo libre (fallback de datos viejos). */
   tamanoFijo?: readonly string[];
+  /** Unidad de medida del Producto Insumo ("kg", "lt", …). SOLO modo insumo:
+      se muestra junto a "Cantidad a hacer" (la cantidad a hacer se expresa
+      en esta unidad). Ausente = solo el número, como antes. */
+  unidadCantidad?: string;
+  /** Mensajes de validación en tiempo real (SOLO modo insumo). El padre
+      decide cuándo mostrarlos (al tocar el campo o al intentar guardar);
+      aquí solo se pintan con el estilo de error del sistema. */
+  errorTiempo?: string;
+  errorCantidad?: string;
+  errorInsumos?: string;
+  /** Campo extra que el padre quiere ENTRE "Cantidad a hacer" e "Insumos a
+      usar" (SOLO modo insumo): el modal de Compras > Insumos mete ahí el
+      selector "Unidad de medida *" del Producto Insumo. */
+  campoAdicional?: ReactNode;
 }
 
 export function FichaTecnicaEditor({
@@ -232,6 +275,11 @@ export function FichaTecnicaEditor({
   modo,
   inputCls = FICHA_INPUT_CLS,
   tamanoFijo,
+  unidadCantidad,
+  errorTiempo,
+  errorCantidad,
+  errorInsumos,
+  campoAdicional,
 }: FichaTecnicaEditorProps) {
   const esInsumo = modo === "insumo";
 
@@ -244,9 +292,11 @@ export function FichaTecnicaEditor({
   const [editandoIdx, setEditandoIdx] = useState<number | null>(null);
   const [paso, setPaso] = useState("");
 
-  // Un Producto Insumo solo se prepara con insumos crudos (nunca con otro
-  // Producto Insumo); un Producto del menú puede usar los dos.
-  const catalogo = esInsumo ? insumos.filter((i) => i.tipo !== "ProductoInsumo") : insumos;
+  // Un Producto Insumo solo se prepara con insumos crudos ACTIVOS (nunca con
+  // otro Producto Insumo); un Producto del menú puede usar los dos.
+  const catalogo = esInsumo
+    ? insumos.filter((i) => i.tipo !== "ProductoInsumo" && i.estado === "activo")
+    : insumos;
 
   // Filas de "Porciones por tamaño". Con `tamanoFijo` (la categoría del
   // producto manda los tamaños) se muestran EXACTAMENTE esas etiquetas: las
@@ -298,7 +348,11 @@ export function FichaTecnicaEditor({
       toast.error("Selecciona un insumo del catálogo de Insumos");
       return;
     }
-    if (ficha.insumos.some((i) => i.nombre === ins.nombre)) {
+    if (
+      ficha.insumos.some(
+        (i) => i.nombre === ins.nombre || (i.insumoId && i.insumoId === ins.id),
+      )
+    ) {
       toast.error("Este insumo ya está en la ficha; edítalo en la tabla");
       return;
     }
@@ -340,7 +394,9 @@ export function FichaTecnicaEditor({
           ("Tiempo | Rendimiento") se mantiene 50/50. */}
       <div className={`grid gap-3 ${esInsumo ? "grid-cols-2" : "grid-cols-[1fr_1.4fr]"}`}>
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Tiempo de preparación (min)</label>
+          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+            Tiempo de preparación (min){esInsumo ? " *" : ""}
+          </label>
           {/* Como todos los numéricos del sistema (punto B1): el 0 se muestra
               vacío con placeholder "0", en producto y en insumo. */}
           <input type="number" min={0}
@@ -348,18 +404,26 @@ export function FichaTecnicaEditor({
             placeholder="0"
             onChange={e => onChange({ ...ficha, tiempoPreparacion: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
             className={inputCls} />
+          {esInsumo && errorTiempo && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errorTiempo}</p>
+          )}
         </div>
         {esInsumo ? (
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Rendimiento (unidades por preparación)</label>
-            {/* Vacío = rendimiento sin escribir (punto B1): al consumirlo los
+            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+              Cantidad a hacer{unidadCantidad ? ` (${unidadCantidad})` : ""} *
+            </label>
+            {/* Vacío = cantidad sin escribir (punto B1): al consumirlo los
                 demás módulos usan `rendimientoDe`, que cae en 1 si es 0. */}
             <input type="number" min={0.1} step={0.1}
               value={ficha.rendimiento && ficha.rendimiento > 0 ? rendimientoDe(ficha) : ""}
               placeholder="0"
-              aria-label="Rendimiento"
+              aria-label="Cantidad a hacer"
               onChange={e => onChange({ ...ficha, rendimiento: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
               className={inputCls} />
+            {errorCantidad && (
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errorCantidad}</p>
+            )}
           </div>
         ) : (
           <div>
@@ -422,23 +486,36 @@ export function FichaTecnicaEditor({
         )}
       </div>
 
+      {/* Campo extra del padre (Unidad de medida del Producto Insumo):
+          vive entre "Cantidad a hacer" e "Insumos a usar". */}
+      {esInsumo && campoAdicional && <div>{campoAdicional}</div>}
+
       {/* Insumos */}
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
+        <label className="block text-xs font-semibold text-muted-foreground mb-2">
+          {esInsumo ? "Insumos a usar *" : "Insumos"}
+        </label>
         {ficha.insumos.length > 0 && (
           <div className="mb-3">
+            {/* SOLO en modo insumo la tabla tiene scroll interno: en el modal
+                de Compras > Insumos es el único scroll permitido. */}
             <InsumosFichaTable
               insumos={ficha.insumos}
               editable={true}
               editandoIdx={editandoIdx}
+              usarUnidadSelect={esInsumo}
               onEdit={setEditandoIdx}
               onChange={updateInsumo}
               onRemove={removeInsumo}
+              contenedorClassName={esInsumo ? "max-h-60 overflow-y-auto" : undefined}
             />
           </div>
         )}
         {ficha.insumos.length === 0 && (
           <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
+        )}
+        {esInsumo && errorInsumos && (
+          <p className="text-xs text-red-500 dark:text-red-400 mt-1 mb-2 leading-tight">{errorInsumos}</p>
         )}
         <div className="flex flex-wrap items-end gap-2">
           <InsumoSearchField
@@ -459,10 +536,22 @@ export function FichaTecnicaEditor({
           </div>
           <div className="w-24">
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
-            <select value={unidad} onChange={e => setUnidad(e.target.value)}
-              className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-              {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-            </select>
+            {/* SOLO modo insumo: mismo UnidadSelect redondeado que "Unidad de
+                medida" (mismas unidades de siempre). En modo producto el
+                select nativo queda exactamente igual que antes. */}
+            {esInsumo ? (
+              <UnidadSelect
+                value={unidad}
+                onChange={setUnidad}
+                unidades={UNIDADES_FICHA.map((u) => ({ valor: u, etiqueta: u }))}
+                ariaLabel="Medida"
+              />
+            ) : (
+              <select value={unidad} onChange={e => setUnidad(e.target.value)}
+                className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
+                {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+              </select>
+            )}
           </div>
           <button onClick={addInsumo} title="Agregar insumo"
             className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
@@ -471,7 +560,10 @@ export function FichaTecnicaEditor({
         </div>
       </div>
 
-      {/* Pasos de elaboración */}
+      {/* Pasos de elaboración — SOLO en modo producto. Un Producto Insumo
+          registra tiempo, cantidad a hacer e insumos; sus pasos históricos se
+          conservan en la ficha pero no se editan aquí. */}
+      {!esInsumo && (
       <div>
         <label className="block text-xs font-semibold text-muted-foreground mb-2">Preparación (pasos de elaboración)</label>
         {ficha.pasos.length > 0 && (
@@ -512,6 +604,7 @@ export function FichaTecnicaEditor({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -528,10 +621,13 @@ export function FichaTecnicaDetalle({
   v,
   readCls,
   modo = "producto",
+  unidadCantidad,
 }: {
   v: FichaVersion;
   readCls: string;
   modo?: "producto" | "insumo";
+  /** Unidad de la "Cantidad a hacer" ("kg", "lt", …). SOLO modo insumo. */
+  unidadCantidad?: string;
 }) {
   return (
     <div className="flex flex-col gap-2 min-h-0 flex-1">
@@ -545,10 +641,12 @@ export function FichaTecnicaDetalle({
         </div>
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-0.5">
-            {modo === "insumo" ? "Rendimiento (unidades)" : "Porciones por tamaño"}
+            {modo === "insumo" ? "Cantidad a hacer" : "Porciones por tamaño"}
           </p>
           {modo === "insumo" ? (
-            <div className={readCls}>{rendimientoDe(v)}</div>
+            <div className={readCls}>
+              {rendimientoDe(v)}{unidadCantidad ? ` ${unidadCantidad}` : ""}
+            </div>
           ) : v.porcionesPorTamano?.length ? (
             /* Mismo patrón de cajitas que el editor: nombre a la izquierda,
                porciones en negrita a la derecha, solo lectura. La piel sale
@@ -569,7 +667,9 @@ export function FichaTecnicaDetalle({
       {/* Insumos: tabla compacta (Insumo | Cantidad | Unidad) con filas de
           menor alto en lugar de las tarjetas apiladas. */}
       <div className="shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground mb-1">Insumos</p>
+        <p className="text-xs font-semibold text-muted-foreground mb-1">
+          {modo === "insumo" ? "Insumos a usar" : "Insumos"}
+        </p>
         {v.insumos.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">Sin insumos registrados</p>
         ) : (
