@@ -8,9 +8,11 @@ import {
   textoStockActualizado,
 } from "@/features/compras/services/inventario";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { abrirPicker } from "@/shared/utils/abrirFecha";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   ConfirmModal,
@@ -47,6 +49,10 @@ interface Props {
   insumos: Insumo[];
   /** Catálogo compartido: "+ Crear insumo" da de alta el insumo aquí. */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
+  /** P14: catálogo de productos, SOLO LECTURA. Un "insumo no solicitado"
+   *  puede ser un producto terminado (reventa): aquí no se da de alta ni se
+   *  modifica ninguno, sólo se lee para ofrecerlo en el selector de tipo. */
+  productos?: Producto[];
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   proveedores: ProveedorRef[];
@@ -99,6 +105,7 @@ export function RecepcionCompraScreen({
   orden,
   insumos,
   setInsumos,
+  productos,
   gestiones,
   setGestiones,
   proveedores,
@@ -155,7 +162,11 @@ export function RecepcionCompraScreen({
         precioReferencia: i.costoUnitario,
         costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
         // El IVA de la línea viene del catálogo/OC (0 % si no está definido).
-        iva: Number(i.iva ?? 0)
+        iva: Number(i.iva ?? 0),
+        // P14: se conserva el catálogo (y el precio de venta si la línea lo
+        // trae) para que la tabla de solicitados pueda mostrar "Producto".
+        tipoItem: i.tipoItem,
+        precioVenta: i.precioVenta
       }));
   });
 
@@ -195,6 +206,11 @@ export function RecepcionCompraScreen({
   const [exUnidad, setExUnidad] = useState(UNIDADES[0]);
   const [exPrecio, setExPrecio] = useState(0);
   const [exIva, setExIva] = useState(0);
+  // P14: qué se está agregando como "no solicitado", insumo o producto.
+  const [exTipo, setExTipo] = useState<"insumo" | "producto">("insumo");
+  // Precio de VENTA al público del producto elegido (sólo con exTipo
+  // "producto"; con insumos queda en 0 y no se guarda en la línea).
+  const [exPrecioVenta, setExPrecioVenta] = useState(0);
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
@@ -265,22 +281,57 @@ export function RecepcionCompraScreen({
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
-  const exSugs = useMemo(
-    () =>
-      exNombre.trim().length >= 1
-        ? insumos
-            .filter(
-              (i) =>
-                (i.tipo ?? "Insumo") === "Insumo" &&
-                i.estado === "activo" &&
-                !registrados.has(i.id) &&
-                !nombresRegistrados.has(i.nombre.toLowerCase().trim()) &&
-                i.nombre.toLowerCase().includes(exNombre.toLowerCase())
-            )
-            .slice(0, 3)
-        : [],
-    [insumos, exNombre, registrados, nombresRegistrados]
-  );
+  /** Sugerencia del desplegable "Agregar no solicitado": misma forma para
+   *  insumos y productos, más el precio de venta (sólo los productos). */
+  type SugEx = {
+    id: string;
+    nombre: string;
+    unidadMedida: string;
+    costoUnitario: number;
+    iva: number;
+    precioVenta?: number;
+  };
+
+  const exSugs = useMemo<SugEx[]>(() => {
+    if (exNombre.trim().length < 1) return [];
+    const q = exNombre.toLowerCase();
+
+    // P14: el buscador mira un catálogo u otro según el tipo elegido.
+    if (exTipo === "producto") {
+      // Mismo criterio que la Nueva compra: sólo productos disponibles y
+      // terminados (los "Producto insumo" se producen, no se compran).
+      return (productos ?? [])
+        .filter(
+          (p) =>
+            p.estado === "Disponible" &&
+            p.tipo === "Producto terminado" &&
+            !nombresRegistrados.has(p.nombre.toLowerCase().trim()) &&
+            p.nombre.toLowerCase().includes(q)
+        )
+        .slice(0, 3)
+        .map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          unidadMedida: p.unidadVenta?.trim() || UNIDADES[0],
+          costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
+          iva: 0,
+          // El precio de VENTA es `precioUnitario` del catálogo (el costo de
+          // producir es `costoUnitario`).
+          precioVenta: Number(p.precioUnitario || 0),
+        }));
+    }
+
+    return insumos
+      .filter(
+        (i) =>
+          (i.tipo ?? "Insumo") === "Insumo" &&
+          i.estado === "activo" &&
+          !registrados.has(i.id) &&
+          !nombresRegistrados.has(i.nombre.toLowerCase().trim()) &&
+          i.nombre.toLowerCase().includes(q)
+      )
+      .slice(0, 3);
+  }, [insumos, productos, exNombre, exTipo, registrados, nombresRegistrados]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -335,7 +386,11 @@ export function RecepcionCompraScreen({
 
   const addExtra = () => {
     if (!exNombre.trim()) {
-      toast.error("Ingresa el nombre del insumo.");
+      toast.error(
+        exTipo === "producto"
+          ? "Ingresa el nombre del producto."
+          : "Ingresa el nombre del insumo."
+      );
       return;
     }
 
@@ -359,7 +414,13 @@ export function RecepcionCompraScreen({
         cantidadRecibida: exCant,
         unidad: exUnidad,
         precioReferencia: exPrecio,
-        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: exIva
+        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: exIva,
+        // P14: de qué catálogo salió la línea y, si es producto, su precio
+        // de venta al público (dato informativo del detalle).
+        tipoItem: exTipo,
+        ...(exTipo === "producto" && exPrecioVenta > 0
+          ? { precioVenta: exPrecioVenta }
+          : {}),
       },
     ]);
 
@@ -367,9 +428,12 @@ export function RecepcionCompraScreen({
     setExCant(1);
     setExPrecio(0);
     setExIva(0);
+    setExPrecioVenta(0);
     setExShowSug(false);
 
-    toast.success("Insumo adicional agregado.");
+    toast.success(
+      exTipo === "producto" ? "Producto adicional agregado." : "Insumo adicional agregado."
+    );
   };
 
   const startEditExtra = (item: ItemRecibido) => {
@@ -553,6 +617,10 @@ export function RecepcionCompraScreen({
           baseSinIva: linea.baseSinIva,
           montoIva: linea.montoIva,
           esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
+          // P14: se conserva el catálogo y el precio de venta para que el
+          // detalle de la compra pueda seguir mostrando "Producto · Venta".
+          tipoItem: item.tipoItem,
+          precioVenta: item.precioVenta,
         };
       }
     );
@@ -898,7 +966,6 @@ export function RecepcionCompraScreen({
                       setFechaFactura(e.target.value)
                     }
                     onClick={() => abrirPicker(fechaFacturaRef)}
-                    onFocus={() => abrirPicker(fechaFacturaRef)}
                     onBlur={() => marcarTocado("fechaFactura")}
                     max={today}
                     className={campoCls(
@@ -1044,7 +1111,7 @@ export function RecepcionCompraScreen({
                                   quitarItem(item.rowId, item.nombre)
                                 }
                                 title="Quitar de esta factura"
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                                className={`${CLASE_BASE} ${CLASE_HOVER}`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -1121,6 +1188,18 @@ export function RecepcionCompraScreen({
                               {/* Nombre */}
                               <td className="px-3 py-2 font-semibold">
                                 {item.nombre}
+                                {/* P14: si la línea salió del catálogo de
+                                    productos se deja ver su precio de venta
+                                    al público (dato informativo; la factura
+                                    calcula con el Monto unitario). */}
+                                {(item.tipoItem ?? "insumo") === "producto" && (
+                                  <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
+                                    Producto
+                                    {item.precioVenta != null && item.precioVenta > 0 && (
+                                      <> · Venta: {fmtCOP(item.precioVenta)}</>
+                                    )}
+                                  </div>
+                                )}
                               </td>
 
                               {/* Cantidad */}
@@ -1242,9 +1321,38 @@ export function RecepcionCompraScreen({
                   ref={exRef}
                   className="border border-dashed border-border rounded-xl p-3 bg-muted/30"
                 >
-                  <p className="text-xs font-bold text-muted-foreground mb-3">
-                    Agregar insumo no solicitado
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <p className="text-xs font-bold text-muted-foreground">
+                      Agregar {exTipo === "producto" ? "producto" : "insumo"} no solicitado
+                    </p>
+                    {/* P14: un "no solicitado" puede venir del catálogo de
+                        insumos o del de productos (reventa). */}
+                    <div className="flex items-center gap-2">
+                      <label className="block text-[11px] font-semibold text-muted-foreground">
+                        Tipo
+                      </label>
+                      <SegmentadoButtons
+                        valor={exTipo}
+                        onChange={(valor) => {
+                          const nuevo = valor as "insumo" | "producto";
+                          if (nuevo === exTipo) return;
+                          setExTipo(nuevo);
+                          // Al cambiar de catálogo lo cargado ya no sirve:
+                          // se limpia la fila para buscar en la otra lista.
+                          setExNombre("");
+                          setExUnidad(UNIDADES[0]);
+                          setExPrecio(0);
+                          setExIva(0);
+                          setExPrecioVenta(0);
+                          setExShowSug(false);
+                        }}
+                        opciones={[
+                          { valor: "insumo", etiqueta: "Insumo" },
+                          { valor: "producto", etiqueta: "Producto" },
+                        ]}
+                      />
+                    </div>
+                  </div>
 
                   <div className="flex flex-wrap items-end gap-2">
                     {/* Nombre */}
@@ -1261,27 +1369,33 @@ export function RecepcionCompraScreen({
                             setExShowSug(true);
                           }}
                           onFocus={() => setExShowSug(true)}
-                          placeholder="Buscar insumo..."
+                          placeholder={
+                            exTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
+                          }
                           className={`${compactInputCls} pl-8`}
                         />
                       </div>
                       {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera
                           opción (aunque el campo esté vacío o sin resultados)
-                          y va separado del resto de la lista. */}
+                          y va separado del resto de la lista. P14: no aplica
+                          cuando se agregan PRODUCTOS (no se da de alta ninguno
+                          desde aquí). */}
                       {exShowSug && (
                         <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setExShowSug(false);
-                              setShowNuevoInsumo(true);
-                            }}
-                            className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Crear insumo {exNombre.trim() && `“${exNombre.trim()}”`}
-                          </button>
+                          {exTipo === "insumo" && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setExShowSug(false);
+                                setShowNuevoInsumo(true);
+                              }}
+                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              Crear insumo {exNombre.trim() && `“${exNombre.trim()}”`}
+                            </button>
+                          )}
                           {exSugs.map((ins) => (
                             <button
                               key={ins.id}
@@ -1297,6 +1411,9 @@ export function RecepcionCompraScreen({
                                 // Punto 2: al elegir del catálogo se completan
                                 // Medida, Monto unitario e IVA.
                                 setExIva(Number(ins.iva ?? 0));
+                                // P14: si es producto se copia también su
+                                // precio de venta al público.
+                                setExPrecioVenta(Number(ins.precioVenta ?? 0));
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
@@ -1382,6 +1499,27 @@ export function RecepcionCompraScreen({
                         className={compactInputCls}
                       />
                     </div>
+
+                    {/* Precio de venta al público del producto: sólo se pinta
+                        al agregar PRODUCTOS. Es dato informativo del detalle;
+                        la factura sigue calculando con el Monto unitario. */}
+                    {exTipo === "producto" && (
+                      <div className="w-32 flex-none">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                          Precio de venta
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={exPrecioVenta || ""}
+                          onChange={(e) =>
+                            setExPrecioVenta(Math.max(0, Number(e.target.value)))
+                          }
+                          placeholder="0"
+                          className={compactInputCls}
+                        />
+                      </div>
+                    )}
 
                     <button
                       onClick={addExtra}

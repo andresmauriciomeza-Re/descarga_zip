@@ -29,16 +29,19 @@ interface ActionIconsProps {
   deleteTitle?: string;
 }
 
-const CLASE_BASE = "p-1.5 rounded-lg transition-colors";
+/** Exportadas: las tablas de ítems (Orden de Compra, Recepción y Compras)
+    pintan a mano su lápiz/basurero y deben usar EXACTAMENTE el mismo estilo
+    que esta columna para que ninguna acción quede azul ni roja. */
+export const CLASE_BASE = "p-1.5 rounded-lg transition-colors";
 
 /** Hover NEUTRO compartido por las tres acciones: "ver" dejó de ser azul y
     "eliminar" dejó de ser rojo para que ninguna acción de la columna
     Acciones tenga color en reposo ni al pasar el mouse. */
-const CLASE_HOVER =
+export const CLASE_HOVER =
   "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer";
 
 /** Atenuado, sin hover y sin acción: mismo aspecto en todos los módulos. */
-const CLASE_DISABLED = "text-muted-foreground/40 cursor-not-allowed";
+export const CLASE_DISABLED = "text-muted-foreground/40 cursor-not-allowed";
 
 export function ActionIcons({
   onView,
