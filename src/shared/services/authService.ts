@@ -210,6 +210,13 @@ export interface ClientePorDocumentoApi {
   estado: boolean;
 }
 
+export interface ClientePorNombreApi {
+  documento: string | number;
+  tipoDocumento: string;
+  nombre: string;
+  estado: boolean;
+}
+
 export async function buscarClientePorDocumento(
   documento: string,
   _tipoDocumento?: string,
@@ -217,6 +224,13 @@ export async function buscarClientePorDocumento(
   const { data } = await api.get<ClientePorDocumentoApi>(
     `/clientes/documento/${encodeURIComponent(documento)}`,
   );
+  return data;
+}
+
+export async function buscarClientesPorNombre(nombre: string): Promise<ClientePorNombreApi[]> {
+  const { data } = await api.get<ClientePorNombreApi[]>("/clientes/buscar", {
+    params: { q: nombre },
+  });
   return data;
 }
 

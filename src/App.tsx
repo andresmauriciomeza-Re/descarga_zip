@@ -107,7 +107,6 @@ import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { puedeTransicionar } from "@/features/ventas/services/estadosVenta";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
@@ -179,7 +178,7 @@ import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
 import {
   SuppliersScreen
 } from "@/features/proveedores/pages/SuppliersScreen";
-import { PagoPill, VentasScreen, comprobantesDe, type ComprobanteVenta, type DevolucionTipo, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
+import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
 import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
 
 // ─────────────────────────── TYPES ───────────────────────────
@@ -2903,6 +2902,9 @@ function CartScreen({
     confirmationData ?? null,
   );
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Barrera anti doble envío: el `disabled` del botón no alcanza si llegan
+      dos clics en el mismo tick. */
+  const enviandoRef = useRef(false);
 
   const cartTotal = (item: CartItem) =>
     (item.sizePrice + item.extrasPrice) * item.quantity;
@@ -3023,6 +3025,8 @@ function CartScreen({
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
       aquí no se vuelve a interrumpir el flujo. */
   const handleConfirm = async () => {
+    // Ya hay un pedido en curso: no se envía otro.
+    if (enviandoRef.current) return;
     if (!comprobante) {
       toast.error("Por favor sube el comprobante de pago");
       return;
@@ -3049,6 +3053,7 @@ function CartScreen({
       return;
     }
     setLoading(true);
+    enviandoRef.current = true;
     try {
       const creada = await onOrder(
         payment,
@@ -3078,6 +3083,7 @@ function CartScreen({
       toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");
     } finally {
       setLoading(false);
+      enviandoRef.current = false;
     }
   };
 
@@ -4672,7 +4678,7 @@ function LoginScreen({
           <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
             Ingresa tus datos para continuar
           </p>
-        </div>
+      </div>
 
         <form
           onSubmit={(event) => {
@@ -5399,24 +5405,14 @@ function RegisterScreen({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="text-center mb-3">
-          {/* El logo va en `h-10` (40px) con `mb-1`: el registro es la tarjeta
-              mas alta de las dos pantallas de auth, y el area visible real del
-              equipo (Windows 150% + Chrome con pestañas) es de ~1280x585, muy
-              inferior al viewport nominal. El login, mas corto, conserva su
-              `h-16`. */}
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-10 w-auto object-contain mx-auto mb-1" />
-
+        <div className="text-center mb-2">
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-1" />
           <h1
             className="text-xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
             Crear cuenta
           </h1>
-          {/* Subtitulo "Completa tus datos para registrarte" eliminado: con el
-              area visible real de ~1280x585 la tarjeta no cabia sin scroll y
-              este era el unico bloque que podia quitarse sin tocar inputs,
-              textos ni logo. */}
         </div>
 
         {/* Grid y no `space-y`: hace falta para que los campos puedan COMPARTIR
@@ -5431,7 +5427,7 @@ function RegisterScreen({
 
             `gap-x-3` (12px) separa las dos columnas y `gap-y-2` (8px) las
             filas; `mb-1` (4px) dentro de cada celda separa label e input. */}
-        <div className="grid gap-x-3 gap-y-2 grid-cols-1 sm:grid-cols-6">
+        <div className="grid gap-x-3 gap-y-1 grid-cols-1 sm:grid-cols-6">
           <div className="sm:col-span-6 grid gap-3 grid-cols-1 sm:grid-cols-[3fr_2fr]">
             <div className="min-w-0">
               <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white whitespace-nowrap">
@@ -5573,7 +5569,7 @@ function RegisterScreen({
         <PrimaryBtn
           onClick={register}
           size="md"
-          className="w-full mt-3 h-10 min-h-0!"
+          className="w-full mt-2 h-10 min-h-0!"
            disabled={loading || !formValido}
         >
           {loading ? (
@@ -7718,62 +7714,17 @@ export default function App() {
     }
   }, [noConformidades]);
 
+  // Las ventas se cargan al entrar a Ventas, al Dashboard y al Inicio: así el
+  // Dashboard no queda en $0 después de un F5. El backend exige el permiso
+  // "Ver" de Ventas, así que sin ese permiso no se llama (ni sale un error).
+  const puedeVerVentas =
+    loggedInUser?.esSuperAdmin === true ||
+    canViewPermission(loggedInAccesos, KEY("Ventas", "Ventas"));
   useEffect(() => {
-    if (screen === "ventas-pedidos") {
-      void obtenerVentasPanel().then(setVentas).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudieron cargar las ventas."));
-    }
-  }, [screen]);
-
-  // ── Avance automático del estado de la venta (§13) ──
-  // El estado NO se cambia a mano: sigue el proceso del pedido. Acá se
-  // resuelve el último salto, el que ningún humano debe tocar: un pedido
-  // que quedó Por entregar pasa localmente a Completado cuando se cumple la hora de
-  // recogida que eligió el cliente. Es el segundo disparador de ese salto:
-  // el primero es el botón "Entregar" de VentasScreen; ambos están
-  // registrados en services/estadosVenta.ts. Una venta Por verificar no se
-  // autocumple: ese salto exige que el admin revise el comprobante, que es
-  // una decisión humana.
-  useEffect(() => {
-    const marcarCompletados = () => {
-      setVentas((prev) => {
-        const ahora = new Date();
-        let cambio = false;
-        const siguientes = prev.map((v) => {
-          if (v.estado !== "Por entregar") return v;
-          const minutos = minutosDeHora(v.horaRecogida);
-          if (minutos === null) return v;
-          const horaHoy = ahora.getHours() * 60 + ahora.getMinutes();
-          const fechaVenta = new Date(`${v.fecha}T00:00:00`);
-          const mismoDia =
-            isNaN(fechaVenta.getTime()) ||
-            fechaVenta.toDateString() === ahora.toDateString();
-          // Hoy se compara contra la hora actual; una fecha anterior ya
-          // venció. Si la fecha no se pudo leer, solo se usa la hora.
-          const vencido = mismoDia ? minutos <= horaHoy : true;
-          if (!vencido) return v;
-          cambio = true;
-          return {
-            ...v,
-            estado: "Completado" as VentaStatus,
-            historial: [
-              ...(v.historial ?? []),
-              {
-                estado: "Completado" as VentaStatus,
-                hora: ahora.toLocaleTimeString("es-CO", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              },
-            ],
-          };
-        });
-        return cambio ? siguientes : prev;
-      });
-    };
-    marcarCompletados();
-    const id = window.setInterval(marcarCompletados, 60000);
-    return () => window.clearInterval(id);
-  }, []);
+    if (screen !== "ventas-pedidos" && screen !== "dashboard" && screen !== "inicio") return;
+    if (screen !== "ventas-pedidos" && !puedeVerVentas) return;
+    void obtenerVentasPanel().then(setVentas).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudieron cargar las ventas."));
+  }, [screen, puedeVerVentas]);
 
   useEffect(() => {
     try {
@@ -8127,31 +8078,6 @@ export default function App() {
     });
     setVentas((prev) => [creada.venta, ...prev]);
     return { id: creada.id, total: creada.total };
-  };
-
-  /** El cliente envía el comprobante del dinero faltante: se agrega a la venta
-      como segundo comprobante (tipo "faltante") y la venta vuelve a estado
-      "Por verificar" para que el admin la revise otra vez. */
-  const completarFaltante = (ventaId: string, comprobanteUrl: string) => {
-    const ahora = new Date();
-    const fecha = ahora.toLocaleDateString("en-CA");
-    const hora = ahora.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
-    setVentas((prev) =>
-      prev.map((v) => {
-        if (v.id !== ventaId) return v;
-        const base = comprobantesDe(v);
-        const nuevo: ComprobanteVenta = { url: comprobanteUrl, tipo: "faltante", fecha, hora };
-        return {
-          ...v,
-          estado: "Por verificar" as VentaStatus,
-          comprobantes: [...base, nuevo],
-          // `comprobante` se conserva apuntando al pago inicial (compatibilidad
-          // con vistas viejas que solo leen ese campo).
-          comprobante: base[0]?.url ?? v.comprobante,
-          historial: [...(v.historial ?? []), { estado: "Por verificar" as VentaStatus, hora }],
-        };
-      }),
-    );
   };
 
   const updateQty = (id: string, qty: number) => {
@@ -8784,7 +8710,6 @@ export default function App() {
                   pedidos={ventas}
                   usuarioNombre={pedidosUsuarioNombre}
                   onVerMenu={() => navigate("catalog")}
-                  onCompletarFaltante={completarFaltante}
                 />
               )}
               {screen === "login" && (
@@ -9149,30 +9074,6 @@ export default function App() {
                   setOrdenes={setOrdenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
-                  // Punto C2: al completarse la orden de producción de una
-                  // venta, ésta permanece Por entregar; recién ahí la cierra el botón "Entregar" o la
-                  // hora de recogida (§13). La transición se valida contra la
-                  // tabla de `estadosVenta.ts`.
-                  onVentaLista={(ventaId) => {
-                    setVentas((prev) =>
-                      prev.map((v) => {
-                        if (v.id !== ventaId || !puedeTransicionar(v.estado, "Por entregar")) return v;
-                        const hora = new Date().toLocaleTimeString("es-CO", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        });
-                        return {
-                          ...v,
-                          estado: "Por entregar" as VentaStatus,
-                          historial: [
-                            ...(v.historial ?? []),
-                            { estado: "Por entregar" as VentaStatus, hora },
-                          ],
-                        };
-                      }),
-                    );
-                    toast.success(`Pedido ${ventaId} listo para recoger`);
-                  }}
                   abrirOrdenId={ordenAAbrir}
                   setOrdenAAbrir={setOrdenAAbrir}
                 />

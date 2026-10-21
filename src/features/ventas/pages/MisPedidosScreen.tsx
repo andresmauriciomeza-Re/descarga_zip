@@ -92,9 +92,6 @@ interface Props {
   pedidos?: Venta[];
   usuarioNombre: string;
   onVerMenu: () => void;
-  /** Envía el comprobante del dinero faltante: agrega el comprobante a la
-      venta y la devuelve a estado "Por verificar". */
-  onCompletarFaltante?: (id: string, comprobanteUrl: string) => void;
 }
 
 export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, onVerMenu }: Props) {
