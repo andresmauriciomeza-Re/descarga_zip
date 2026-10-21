@@ -9246,6 +9246,7 @@ export default function App() {
                     ...productos.map((p) => p.id),
                     ...insumos.map((i) => i.id),
                   ]}
+                  productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
                   abrirOrdenProduccion={abrirOrdenProduccion}
                 />
               )}

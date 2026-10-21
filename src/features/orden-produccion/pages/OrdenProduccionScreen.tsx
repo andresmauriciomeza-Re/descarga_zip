@@ -2211,7 +2211,10 @@ export function OrdenProduccionScreen({
                       )}
                       <div className="flex-1 min-h-0 flex flex-col">
                         <FichaTecnicaDetalle v={fichaVista} readCls={readCls}
-                          modo={detailItem.tipo === "preparacion" ? "insumo" : "producto"} />
+                          modo={detailItem.tipo === "preparacion" ? "insumo" : "producto"}
+                          /* En una preparación, la unidad de la línea es la del
+                             Producto Insumo: acompaña a "Cantidad a hacer". */
+                          unidadCantidad={detailItem.tipo === "preparacion" ? linea.unidad : undefined} />
                       </div>
                     </>
                   )}
