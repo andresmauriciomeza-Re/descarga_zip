@@ -21,7 +21,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { aplicarStockCompra } from "@/features/compras/services/inventario";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 import { Paginador } from "@/shared/components/Paginador";
 
 const SERIF = "var(--font-titulo)";
@@ -53,6 +53,12 @@ export interface OrdenItem {
    *  módulo de productos. Opcional para no romper las órdenes/compras ya
    *  guardadas (se leen como insumo). */
   tipoItem?: "insumo" | "producto";
+  /** Precio de VENTA al público del producto (catálogo de productos). Sólo
+   *  se llena cuando `tipoItem === "producto"` y sirve para mostrar
+   *  "Producto · Venta" en el detalle de la compra. Opcional: la Orden de
+   *  Compra NO lo captura (se crea desde el catálogo de insumos/productos
+   *  sin precio de venta) y las líneas antiguas no lo traen. */
+  precioVenta?: number;
 }
 
 export interface ItemRecibido {
@@ -66,6 +72,14 @@ export interface ItemRecibido {
   costoUnitario: number;
   precioUnitario: number;
   iva: number;
+  /** P14: de qué catálogo salió la línea. Las filas pedidas en la OC ya
+   *  heredan su `tipoItem`; los "no solicitados" de Recepción pueden ser
+   *  insumo o producto según el selector. Opcional: las líneas antiguas se
+   *  leen como insumo. */
+  tipoItem?: "insumo" | "producto";
+  /** Precio de VENTA al público del producto, para mostrar "Producto ·
+   *  Venta" en el detalle. Sólo aplica a líneas de tipo producto. */
+  precioVenta?: number;
 }
 
 export interface Recepcion {
@@ -1961,7 +1975,8 @@ function RecepcionModal({
                             <td className="px-3 py-2">
                               <button
                                 onClick={() => setItemsExtra(p => p.filter(i => i.rowId !== item.rowId))}
-                                className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                                title="Eliminar insumo"
+                                className={`${CLASE_BASE} ${CLASE_HOVER}`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -2788,7 +2803,7 @@ export function OrdenCompraScreen({
                         <button
                           onClick={() => onEditarOrden(o)}
                           title="Editar orden"
-                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>

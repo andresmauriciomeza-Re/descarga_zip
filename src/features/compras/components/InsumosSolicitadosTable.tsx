@@ -3,6 +3,9 @@ import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import { limpiarNumeroInput } from "@/shared/utils/numeroInput";
+// Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
+// de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
+import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 
 export interface InsumoSolicitadoRow {
   rowId: string;
@@ -11,6 +14,13 @@ export interface InsumoSolicitadoRow {
   unidad: string;
   precioUnitario: number;
   iva: number;
+  /** P14: de qué catálogo salió la línea (insumo o producto). Opcional:
+   *  las filas antiguas se leen como insumo y la Orden de Compra no lo
+   *  necesita para calcular nada. */
+  tipoItem?: "insumo" | "producto";
+  /** Precio de VENTA al público del producto: se muestra como
+   *  "Producto · Venta: $ X" bajo el nombre cuando hay tipo producto. */
+  precioVenta?: number;
 }
 
 function fmtCOP(n: number) {
@@ -275,6 +285,18 @@ export function InsumosSolicitadosTable({
                 >
                   {item.nombre}
                 </div>
+                {/* P14: debajo del nombre se deja ver de qué catálogo salió la
+                    línea y, si es producto, su precio de venta al público
+                    (dato informativo: NO entra en los cálculos de la factura,
+                    que usan siempre el monto unitario). */}
+                {(item.tipoItem ?? "insumo") === "producto" && (
+                  <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
+                    Producto
+                    {item.precioVenta != null && item.precioVenta > 0 && (
+                      <> · Venta: {fmtCOP(item.precioVenta)}</>
+                    )}
+                  </div>
+                )}
               </td>
 
               <td className={tdBase + " text-sm"}>
@@ -434,7 +456,7 @@ export function InsumosSolicitadosTable({
                           type="button"
                           onClick={() => startEdit(item)}
                           title="Editar insumo"
-                          className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -443,7 +465,7 @@ export function InsumosSolicitadosTable({
                         type="button"
                         onClick={() => onRemove?.(item.rowId)}
                         title="Eliminar insumo"
-                        className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                        className={`${CLASE_BASE} ${CLASE_HOVER}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

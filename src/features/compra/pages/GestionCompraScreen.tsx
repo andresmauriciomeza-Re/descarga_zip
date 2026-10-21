@@ -14,7 +14,7 @@ import { InsumosSolicitadosTable } from "@/features/compras/components/InsumosSo
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 import { abrirPicker } from "@/shared/utils/abrirFecha";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -157,6 +157,11 @@ type ItemFactura = {
   montoIva?: number;
   /** P14: insumo del catálogo o producto del módulo de productos. */
   tipoItem?: TipoItem;
+  /** Precio de VENTA al público del producto (sólo `tipoItem === "producto"`).
+   *  Se copia del catálogo al agregar el ítem y se muestra como
+   *  "Producto · Venta: $ X" bajo el nombre. Opcional: las líneas antiguas
+   *  y las de insumos no lo traen. */
+  precioVenta?: number;
 };
 
 export interface NuevaCompraData {
@@ -412,6 +417,18 @@ function TablaItemsFactura({
                       <div className="line-clamp-2 break-words" title={row.nombre}>
                         {row.nombre}
                       </div>
+                      {/* P14: si la línea salió del catálogo de productos se
+                          deja ver el precio de venta al público (dato
+                          informativo: la factura sigue calculando con el
+                          monto unitario). */}
+                      {(row.tipoItem ?? "insumo") === "producto" && (
+                        <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
+                          Producto
+                          {row.precioVenta != null && row.precioVenta > 0 && (
+                            <> · Venta: {fmtCOP(row.precioVenta)}</>
+                          )}
+                        </div>
+                      )}
                     </td>
                     {/* Punto 2.8c: columnas numéricas alineadas a la derecha.
                         Punto B3: en edición el 0 se muestra vacío (placeholder
@@ -525,7 +542,7 @@ function TablaItemsFactura({
                               type="button"
                               onClick={() => startEdit(row)}
                               title="Editar ítem"
-                              className="p-1 rounded text-blue-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                              className={`${CLASE_BASE} ${CLASE_HOVER}`}
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
@@ -533,7 +550,7 @@ function TablaItemsFactura({
                               type="button"
                               onClick={() => onRemove(row.rowId)}
                               title="Eliminar ítem"
-                              className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                              className={`${CLASE_BASE} ${CLASE_HOVER}`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -631,6 +648,10 @@ function CompraForm({
     iva: item.iva,
     baseSinIva: item.baseSinIva,
     montoIva: item.montoIva,
+    // P14: se arrastran el catálogo y el precio de venta para que el detalle
+    // pueda seguir mostrando "Producto · Venta" al reabrir la compra.
+    tipoItem: item.tipoItem,
+    precioVenta: item.precioVenta,
   })));
 
   // "¿Los montos de la factura incluyen IVA?".
@@ -661,6 +682,9 @@ function CompraForm({
   const [itemId, setItemId] = useState("");
   // P14: qué se está agregando, insumo del catálogo o producto del módulo.
   const [itemTipo, setItemTipo] = useState<TipoItem>("insumo");
+  // Precio de VENTA al público del producto elegido (sólo se captura cuando
+  // el tipo es "producto"; con insumos queda en 0 y no se guarda).
+  const [itemPrecioVenta, setItemPrecioVenta] = useState(0);
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   /** Input de Nombre: recupera el foco tras agregar o actualizar una fila. */
@@ -895,6 +919,10 @@ function CompraForm({
     setItemUnidad(p.unidadVenta?.trim() || "und");
     setItemPrecio(Number(p.costoUnitario || p.precioUnitario || 0));
     setItemIva(0);
+    // Precio de VENTA al público: es `precioUnitario` del catálogo de
+    // productos (el costo de producir es `costoUnitario`). Se guarda aparte
+    // del monto unitario de la factura para poder mostrarlo en el detalle.
+    setItemPrecioVenta(Number(p.precioUnitario || 0));
     setItemSugAbierto(false);
   };
 
@@ -958,6 +986,10 @@ function CompraForm({
         iva: itemIva,
         // P14: se guarda el tipo para poder mostrarlo en el detalle.
         tipoItem: itemTipo,
+        // Precio de venta al público, sólo para líneas de producto.
+        ...(itemTipo === "producto" && itemPrecioVenta > 0
+          ? { precioVenta: itemPrecioVenta }
+          : {}),
       },
     ]);
 
@@ -975,6 +1007,7 @@ function CompraForm({
     setItemPrecio(0);
     setItemIva(0);
     setItemId("");
+    setItemPrecioVenta(0);
     setItemSugAbierto(false);
     setEditando(null);
     nombreRef.current?.focus();
@@ -1302,7 +1335,6 @@ function CompraForm({
                           value={fechaFactura}
                           onChange={(e) => setFechaFactura(e.target.value)}
                           onClick={() => abrirPicker(fechaFacturaRef)}
-                          onFocus={() => abrirPicker(fechaFacturaRef)}
                           onBlur={() => marcarTocado("fechaFactura")}
                           max={today}
                           className={campoCls(
@@ -1337,7 +1369,6 @@ function CompraForm({
                           value={fechaFactura}
                           onChange={(e) => setFechaFactura(e.target.value)}
                           onClick={() => abrirPicker(fechaFacturaRef)}
-                          onFocus={() => abrirPicker(fechaFacturaRef)}
                           onBlur={() => marcarTocado("fechaFactura")}
                           max={today}
                           className={campoCls(
@@ -1564,6 +1595,10 @@ function CompraForm({
                     onPrecioChange={setItemPrecio}
                     iva={itemIva}
                     onIvaChange={setItemIva}
+                    // Precio de venta al público: sólo para líneas de producto.
+                    mostrarPrecioVenta={itemTipo === "producto"}
+                    precioVenta={itemPrecioVenta}
+                    onPrecioVentaChange={setItemPrecioVenta}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}

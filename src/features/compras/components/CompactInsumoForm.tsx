@@ -82,6 +82,15 @@ export interface CompactInsumoFormProps {
   /** P14: al estar agregando PRODUCTOS no tiene sentido el atajo
    *  "+ Crear insumo" del desplegable de sugerencias. */
   ocultarCrearInsumo?: boolean;
+  /** Precio de VENTA al público del producto elegido. Se muestra SOLO cuando
+   *  `mostrarPrecioVenta` es true (líneas de tipo producto); la Orden de
+   *  Compra no lo pasa, así que ese formulario queda intacto. Es dato
+   *  informativo para el detalle: la factura sigue calculando con el monto
+   *  unitario. */
+  precioVenta?: number;
+  onPrecioVentaChange?: (value: number) => void;
+  /** Muestra el campo "Precio de venta" (sólo al agregar PRODUCTOS). */
+  mostrarPrecioVenta?: boolean;
 }
 
 export function CompactInsumoForm({
@@ -114,6 +123,9 @@ export function CompactInsumoForm({
   medidaSoloLectura = false,
   campoExtra,
   ocultarCrearInsumo = false,
+  precioVenta = 0,
+  onPrecioVentaChange,
+  mostrarPrecioVenta = false,
 }: CompactInsumoFormProps) {
   /** `readOnly` y `disabled` bloquean los controles; el primero es solo lectura
       visual, el segundo deshabilita por completo (p. ej. falta elegir el IVA). */
@@ -316,6 +328,30 @@ export function CompactInsumoForm({
               className={readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}
             />
           </div>
+
+          {/* Precio de venta al público del producto: sólo se pinta al
+              agregar PRODUCTOS (la Orden de Compra no lo usa). Es dato
+              informativo para el detalle; la factura calcula con el monto
+              unitario de arriba. */}
+          {mostrarPrecioVenta && (
+            <div className={esCompacta ? "w-[110px] flex-none" : "w-[116px]"}>
+              <label className={esCompacta ? labelClsCompacta : labelCls}>
+                Precio de venta
+              </label>
+
+              <input
+                type="number"
+                min={0}
+                value={precioVenta || ""}
+                onChange={(e) =>
+                  onPrecioVentaChange?.(Math.max(0, Number(e.target.value)))
+                }
+                placeholder="0"
+                disabled={bloqueado}
+                className={readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}
+              />
+            </div>
+          )}
 
           {/* Botón Agregar: en variante compacta va debajo, alineado a la izquierda */}
           {!esCompacta && (
