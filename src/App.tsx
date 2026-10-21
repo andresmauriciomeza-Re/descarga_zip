@@ -8942,6 +8942,10 @@ export default function App() {
                   orden={ordenRecepcion}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  // P14: catálogo de productos SOLO de lectura: un "insumo no
+                  // solicitado" puede ser un producto terminado (reventa), pero
+                  // aquí no se da de alta ni se modifica ninguno.
+                  productos={productos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}

@@ -1,7 +1,11 @@
 import type { ChangeEvent, ReactNode } from "react";
+import { useRef } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import * as RadixSelect from "@radix-ui/react-select";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { MensajeError } from "@/shared/components/campo";
+import { abrirPicker } from "@/shared/utils/abrirFecha";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
@@ -75,7 +79,23 @@ function Campo({
   );
 }
 
-/** Select genérico: mismo estilo y misma validación en vivo que un input. */
+/** Radix no admite `value=""` (lo reserva para "sin selección"), así que el
+    ítem "vacío" lleva un valor sentinela y al elegirlo se guarda `""`. */
+const SELECT_VACIO = "__vacio__";
+
+/** Clases de cada opción del menú, idénticas en tono a las de `UnidadSelect`. */
+const itemCls =
+  "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 text-sm outline-none transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10";
+
+/**
+ * Select genérico: mismo estilo y misma validación en vivo que un input.
+ *
+ * Usa el mismo Radix Select que `UnidadSelect`/`EstadoSelect` en lugar del
+ * `<select>` nativo, que al desplegarse mostraba la lista CUADRADA y con el
+ * azul del navegador. El trigger calza con `inputCls` para que el campo se vea
+ * idéntico a los demás (redondeo 12px, foco con anillo) y el menú abre con
+ * bordes redondeados, tokens de color y opción resaltada en el primario.
+ */
 function SelectCampo({
   form,
   label,
@@ -84,7 +104,7 @@ function SelectCampo({
   opciones,
   vacio,
   etiquetas,
-  autoFocus = false,
+  ariaLabel,
   className = "",
 }: {
   form: ProveedorFormApi;
@@ -95,30 +115,64 @@ function SelectCampo({
   vacio: string;
   /**
    * Punto 3.1: texto visible distinto del valor guardado ("CC" se ve como
-   * "Cédula de Ciudadanía" y se GUARDA igual). Sin esto el `<option>` pintaría
+   * "Cédula de Ciudadanía" y se GUARDA igual). Sin esto el ítem pintaría
    * el código interno. El `value` siempre es `op`.
    */
   etiquetas?: (valor: string) => string;
-  autoFocus?: boolean;
+  /**
+   * Nombre accesible del disparador (hoy es un `<button>`, no un `<select>`,
+   * y `Campo` no enlaza el label por `htmlFor`). Si no se pasa, el menú queda
+   * sin nombre para los lectores de pantalla.
+   */
+  ariaLabel?: string;
   className?: string;
 }) {
+  const etiquetaDe = (op: string) => (etiquetas ? etiquetas(op) : op);
+
   return (
     <Campo form={form} label={label} campo={campo} className={className}>
-      <select
-        value={valor}
-        onChange={(e) => {
+      <RadixSelect.Root
+        value={valor || undefined}
+        onValueChange={(v) => {
           form.marcarTocado(campo);
-          form.setCampo(campo, e.target.value);
+          form.setCampo(campo, v === SELECT_VACIO ? "" : v);
         }}
-        onBlur={() => form.marcarTocado(campo)}
-        autoFocus={autoFocus}
-        className={`${inputCls} cursor-pointer transition-colors ${form.campoCls(campo)}`}
       >
-        <option value="">{vacio}</option>
-        {opciones.map(op => (
-          <option key={op} value={op}>{etiquetas ? etiquetas(op) : op}</option>
-        ))}
-      </select>
+        <RadixSelect.Trigger
+          aria-label={ariaLabel}
+          className={`${inputCls} flex w-full cursor-pointer items-center justify-between gap-2 text-left transition-colors ${form.campoCls(campo)}`}
+        >
+          <RadixSelect.Value placeholder={vacio} />
+          <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+        </RadixSelect.Trigger>
+
+        <RadixSelect.Portal>
+          {/* z-[100]: el menú va en un portal al <body>, por encima de los
+              overlays de los modales (z-50) y de ConfirmModal. */}
+          <RadixSelect.Content
+            position="popper"
+            sideOffset={6}
+            className="z-[100] min-w-[var(--radix-select-trigger-width)] rounded-xl border border-border bg-popover text-popover-foreground shadow-lg overflow-hidden"
+          >
+            <RadixSelect.Viewport className="p-1">
+              <RadixSelect.Item value={SELECT_VACIO} className={itemCls}>
+                <RadixSelect.ItemText>{vacio}</RadixSelect.ItemText>
+              </RadixSelect.Item>
+              {opciones.map((op) => {
+                const seleccionada = op === valor;
+                return (
+                  <RadixSelect.Item key={op} value={op} className={itemCls}>
+                    <RadixSelect.ItemText>{etiquetaDe(op)}</RadixSelect.ItemText>
+                    {seleccionada && (
+                      <Check className="w-4 h-4 ml-auto shrink-0 text-primary" />
+                    )}
+                  </RadixSelect.Item>
+                );
+              })}
+            </RadixSelect.Viewport>
+          </RadixSelect.Content>
+        </RadixSelect.Portal>
+      </RadixSelect.Root>
     </Campo>
   );
 }
@@ -146,6 +200,10 @@ export function ProveedorFormCampos({
     };
 
   const alTocar = (campo: CampoTexto) => () => form.marcarTocado(campo);
+
+  /** Ref del input de "Fecha de expedición" para abrir el calendario nativo
+      con un clic en cualquier parte del campo (ver `abrirPicker`). */
+  const fechaExpedicionRef = useRef<HTMLInputElement | null>(null);
 
   /**
    * Cámara de Comercio (adjunto). El archivo se sube al backend y la URL
@@ -285,6 +343,7 @@ export function ProveedorFormCampos({
                 opciones={TIPOS_DOCUMENTO}
                 etiquetas={etiquetaTipoDocumento}
                 vacio="Selecciona el tipo de documento"
+                ariaLabel="Tipo de documento"
               />
               <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
                 <input
@@ -379,6 +438,7 @@ export function ProveedorFormCampos({
                 valor={v.tipoSociedad ?? ""}
                 opciones={TIPOS_SOCIEDAD}
                 vacio="Selecciona el tipo de sociedad"
+                ariaLabel="Tipo de sociedad"
               />
             </>
           )}
@@ -433,9 +493,11 @@ export function ProveedorFormCampos({
                 campo="fechaExpedicionCamara"
               >
                 <input
+                  ref={fechaExpedicionRef}
                   type="date"
                   value={v.fechaExpedicionCamara ?? ""}
                   onChange={alEscribir("fechaExpedicionCamara", (x) => x)}
+                  onClick={() => abrirPicker(fechaExpedicionRef)}
                   onBlur={alTocar("fechaExpedicionCamara")}
                   className={`${inputCls} transition-colors ${form.campoCls("fechaExpedicionCamara")}`}
                 />
@@ -511,6 +573,7 @@ export function ProveedorFormCampos({
                 opciones={TIPOS_DOCUMENTO}
                 etiquetas={etiquetaTipoDocumento}
                 vacio="Selecciona el tipo de documento"
+                ariaLabel="Tipo de documento del representante legal"
               />
               <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">
                 <input
