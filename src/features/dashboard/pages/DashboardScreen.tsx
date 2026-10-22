@@ -193,6 +193,14 @@ export function DashboardScreen({
 
   const ingresosPeriodo = ingresantesGlobal.reduce((s, v) => s + v.total, 0);
 
+  // Devoluciones registradas en el periodo (fila en tb_devolucion), contadas
+  // por la FECHA DE LA DEVOLUCIÓN (tb_devolucion.fecha) y no por la de la
+  // venta; si esa fecha no viene, se cae a la de la venta. Mismo enPeriodo que
+  // las tarjetas de Ingresos y Ventas.
+  const devolucionesPeriodo = ventas.filter(
+    (v) => v.idDevolucion != null && enPeriodo(v.devolucionFecha ?? v.fecha, periodo),
+  );
+
   // ── Tarjetas (exactamente 4) ──
   const etiquetaPeriodoTxt = etiquetaPeriodo(periodo);
   const tarjetas: {
@@ -221,10 +229,11 @@ export function DashboardScreen({
       screen: "ventas-pedidos",
     },
     {
-      // El módulo de devoluciones todavía no está conectado al backend.
+      // Devoluciones ya conectadas: cuenta las registradas en el periodo según
+      // la fecha de la devolución. Sin `sub`, muestra la etiqueta del periodo
+      // ("Hoy" / "Esta semana" / "Este mes") como Ingresos y Ventas.
       label: "Devoluciones",
-      value: "—",
-      sub: "Sin conectar",
+      value: String(devolucionesPeriodo.length),
       Icon: RotateCcw,
       bg: "bg-orange-50",
       ic: "text-orange-600",
@@ -451,6 +460,12 @@ export function DashboardScreen({
     const totalVendidoHoy = ventasHoy.reduce((s, v) => s + v.total, 0);
     const porVerificar = ventas.filter((v) => v.estado === "Por verificar");
     const devoluciones = ventas.filter((v) => v.devolucionTipo !== undefined);
+    // Devoluciones registradas y aún sin resolver (tb_devolucion.estado =
+    // 'Pendiente'): sin filtro de periodo, porque son las que faltan por
+    // resolver hoy.
+    const devolucionesPendientes = ventas.filter(
+      (v) => v.idDevolucion != null && v.devolucionResuelta === false,
+    );
     const ordenesEnCurso = ordenesProduccion.filter(
       (o) => o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso",
     );
@@ -464,8 +479,9 @@ export function DashboardScreen({
       ver("Ventas", "Ventas") && { label: "Ventas de hoy", value: String(ventasHoy.length), sub: fmt(totalVendidoHoy), Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600" },
       ver("Ventas", "Ventas") && { label: "Pedidos por verificar pago", value: String(porVerificar.length), sub: "Pago sin confirmar", Icon: ClipboardList, bg: "bg-amber-50", ic: "text-amber-600" },
       ver("Ventas", "Clientes") && { label: "Clientes", value: String(clientesActivos.length), sub: "Registrados en el sistema", Icon: Users, bg: "bg-violet-50", ic: "text-violet-600" },
-      // El módulo de devoluciones todavía no está conectado al backend.
-      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: "—", sub: "Sin conectar", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
+      // Devoluciones ya conectadas: las registradas que siguen 'Pendiente' de
+      // resolver (sin importar el periodo).
+      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: String(devolucionesPendientes.length), sub: "Por resolver", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
       ver("Producción", "Orden de Producción") && { label: "Órdenes en curso", value: String(ordenesEnCurso.length), sub: "Pendientes y en proceso", Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600" },
       // El módulo de productos no conformes todavía no está conectado.
       ver("Producción", "Producto No Conforme") && { label: "No conformes pendientes", value: "—", sub: "Sin conectar", Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600" },

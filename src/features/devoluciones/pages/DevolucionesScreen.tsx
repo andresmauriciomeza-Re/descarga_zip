@@ -5,12 +5,13 @@ import { toast } from "sonner";
 
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
-import { type Product, productoACatalogo, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
+import { type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { crearOrdenReemplazo, normalizarNombre, siguienteOrdenId, type OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { type DevolucionTipo, PagoPill, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
+import { marcarDevolucionApi, obtenerVentasPanel, resolverDevolucionApi } from "@/features/ventas/services/ventasApi";
 
 // ─────────────────────────── DEVOLUCIONES SCREEN ───────────────────────────
 
@@ -77,6 +78,7 @@ export function DevolucionesScreen({
   fichasPorProducto,
   insumos,
   categorias,
+  catalogoCanje,
   abrirDevolucionId,
   onAbierta,
 }: {
@@ -94,6 +96,10 @@ export function DevolucionesScreen({
   insumos: Insumo[];
   /** Para armar el selector de canje con el catálogo vivo (no el mock). */
   categorias: CategoriaProducto[];
+  /** Catálogo real del backend (GET /productos), ya mapeado igual que el modal
+      "Nuevo pedido" de VentasScreen: sus id son los id_producto reales de
+      tb_productos, los únicos que acepta la FK de id_producto_reemplazo. */
+  catalogoCanje: Product[];
   /** Venta a gestionar al entrar. La tabla de ventas la pasa para no obligar a
       buscarla de nuevo entre las pendientes. */
   abrirDevolucionId?: string | null;
@@ -243,16 +249,14 @@ export function DevolucionesScreen({
   };
 
   // Categorías del catálogo, en el orden del menú, para el selector de canje.
-  // El canje se arma con el catálogo VIVO (`productos` + `productoACatalogo`),
-  // igual que "Ver Menú": así el nombre del producto elegido es exactamente el
-  // del panel ("Pizza Jamon") y al confirmar la devolución se puede devolver el
-  // stock y crear la orden del producto nuevo sin traducciones de nombre.
+  // El canje se arma con el catálogo REAL del backend (el mismo que el modal
+  // "Nuevo pedido" de VentasScreen): sus id son los id_producto reales de
+  // tb_productos, los únicos que acepta la FK de id_producto_reemplazo al
+  // resolver la devolución. El catálogo local ("PROD-001"…) trae ids que no
+  // existen en la base y la revientan con canje.
   const canjeCatalogo: Product[] = useMemo(
-    () =>
-      productos
-        .filter((p) => p.estado === "Disponible")
-        .map((p) => productoACatalogo(p, categorias)),
-    [productos, categorias],
+    () => catalogoCanje.filter((p) => p.status === "disponible"),
+    [catalogoCanje],
   );
   const categoriasCanje = (() => {
     const disponibles = canjeCatalogo;
@@ -362,7 +366,7 @@ export function DevolucionesScreen({
     );
   }
 
-  const confirmarDevolucion = () => {
+  const confirmarDevolucion = async () => {
     if (!activa || !devActiva) return;
     // P18 — red de seguridad: aunque el botón ya viene deshabilitado, si falta
     // el motivo NO se registra la devolución y se avisa en español.
@@ -377,7 +381,8 @@ export function DevolucionesScreen({
     if (!puedeConfirmar) return;
     // Anti doble clic: los movimientos de stock y de órdenes se aplican UNA vez,
     // aunque se dispare una segunda confirmación antes del re-render. Se libera
-    // al abrir/cerrar la devolución (efecto sobre `activa`).
+    // al abrir/cerrar la devolución (efecto sobre `activa`) y también si el
+    // backend rechaza, para poder reintentar.
     if (confirmarRef.current) return;
     confirmarRef.current = true;
     const devStr = detalleAct
@@ -397,7 +402,73 @@ export function DevolucionesScreen({
       .filter(Boolean)
       .join(" · ");
 
-    // ── Movimiento de stock y órdenes de la devolución (§flujo Ventas) ──
+    const lineasDev = detalleAct
+      .map((d, i) => ({
+        d,
+        i,
+        q: activa.devueltos[i] ?? 0,
+        motivo: activa.motivos[i]?.motivo ?? "",
+        descripcion: activa.motivos[i]?.descripcion ?? "",
+      }))
+      .filter((x) => x.q > 0);
+    const esCambioSabor = lineasDev.some((x) => x.motivo === "Cambio de sabor");
+
+    // ── 1. Registro en el backend (fuente de verdad) ──
+    // La venta de reemplazo del canje la crea el SERVIDOR: mismo cliente, pago
+    // ya verificado y su orden de producción en tb_orden_produccion. Si falla,
+    // no se mueve nada en el navegador y se puede reintentar.
+    let idVentaReemplazo: number | undefined;
+    try {
+      // Asegura la fila en tb_devolucion (venta ya en Devolucion sin fila).
+      let idDevolucion = devActiva.idDevolucion;
+      if (!idDevolucion) {
+        const marcada = await marcarDevolucionApi(devActiva.id);
+        idDevolucion = marcada.id_devolucion == null ? undefined : Number(marcada.id_devolucion);
+      }
+      if (!idDevolucion) {
+        throw new Error("La devolución no tiene registro en el servidor.");
+      }
+      // Con una sola línea devuelta y un solo producto de canje no hay duda de
+      // a qué línea pertenece el reemplazo; con varios, el canje viaja sólo en
+      // la lista global (que es la que arma la venta de reemplazo).
+      const canjeUnico =
+        lineasDev.length === 1 && activa.compensacion.length === 1
+          ? activa.compensacion[0]
+          : null;
+      ({ idVentaReemplazo } = await resolverDevolucionApi(idDevolucion, {
+        // "mixto" se guarda como 'Excedente': canje con saldo en dinero.
+        tipo:
+          modoGlobal === "mixto" ? "Excedente" : modoGlobal === "producto" ? "Producto" : "Dinero",
+        nota,
+        // Dinero que la pizzería devuelve (>= 0); el "extra a cobrar" queda en
+        // la nota, porque `tb_devolucion.monto` no admite negativos.
+        monto: dineroADar,
+        lineas: lineasDev.map((x) => ({
+          id_detalle_venta: x.d.idDetalleVenta ?? 0,
+          cantidad: x.q,
+          motivo: x.motivo,
+          descripcion_motivo: x.descripcion.trim() ? x.descripcion.trim() : null,
+          id_producto_reemplazo: canjeUnico ? canjeUnico.id : null,
+          cantidad_reemplazo: canjeUnico ? canjeUnico.cantidad : null,
+          tamano_reemplazo: canjeUnico ? (canjeUnico.tamaño ?? null) : null,
+        })),
+        canje: activa.compensacion.map((c) => ({
+          id_producto: c.id,
+          cantidad: c.cantidad,
+          tamano: c.tamaño ?? null,
+        })),
+      }));
+    } catch (error) {
+      confirmarRef.current = false;
+      import("sonner").then(({ toast }) =>
+        toast.error(error instanceof Error ? error.message : "No se pudo registrar la devolución en el servidor.", {
+          description: "No se movió ningún producto ni se creó la orden del canje.",
+        }),
+      );
+      return;
+    }
+
+    // ── 2. Movimiento de stock y órdenes de la devolución (§flujo Ventas) ──
     // Regla de stock: el producto solo se calienta, así que su stock ya salió
     // (o no) al INICIAR la orden de producción de la venta. Aquí solo se
     // aplica lo que corresponde según el motivo de cada línea:
@@ -410,14 +481,6 @@ export function DevolucionesScreen({
     const opVenta = ordenes.find(
       (o) => o.ventaId === devActiva.id && o.observacion !== "Canje por devolución",
     );
-    const lineasDev = detalleAct
-      .map((d, i) => ({
-        d,
-        q: activa.devueltos[i] ?? 0,
-        motivo: activa.motivos[i]?.motivo ?? "",
-      }))
-      .filter((x) => x.q > 0);
-    const esCambioSabor = lineasDev.some((x) => x.motivo === "Cambio de sabor");
 
     const productoDeLinea = (d: (typeof detalleAct)[number]): Producto | undefined => {
       const porId = d.productoId
@@ -482,12 +545,18 @@ export function DevolucionesScreen({
       );
     }
 
-    // Orden del canje: el producto nuevo entra a producción y su stock se
-    // descuenta cuando se pulse "Iniciar producción" en esa orden, igual que
-    // en cualquier venta. Si no hay canje (todo en dinero), no se crea nada.
+    // Orden del canje (espejo local del panel de Producción): el producto
+    // nuevo entra a producción y su stock se descuenta al iniciar la orden,
+    // igual que en cualquier venta. El backend YA creó la orden real y la
+    // venta de reemplazo; aquí sólo se pinta el espejo, apuntando a esa venta
+    // nueva para que "Producción" no ofrezca dos veces el mismo pedido. Si no
+    // hay canje (todo en dinero), no se crea nada.
     if (activa.compensacion.length > 0) {
+      const ventaEspejo: Venta = idVentaReemplazo
+        ? { ...devActiva, id: String(idVentaReemplazo) }
+        : devActiva;
       const nueva = crearOrdenReemplazo(
-        devActiva,
+        ventaEspejo,
         activa.compensacion,
         { productos, fichas: fichasPorProducto, insumos },
         siguienteOrdenId(ordenes),
@@ -526,6 +595,13 @@ export function DevolucionesScreen({
         },
       ),
     );
+    // Refresco desde el servidor: la venta de reemplazo del canje ya existe
+    // allá y así aparece en el listado de Ventas sin esperar un F5.
+    void obtenerVentasPanel()
+      .then(setPedidos)
+      .catch(() => {
+        // Silencioso: la resolución ya quedó registrada en el servidor.
+      });
   };
 
   const devolucionDetalle: Venta = detalleDevolucion
