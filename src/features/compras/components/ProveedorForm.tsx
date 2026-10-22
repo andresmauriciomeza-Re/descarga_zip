@@ -5,7 +5,7 @@ import * as RadixSelect from "@radix-ui/react-select";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { MensajeError } from "@/shared/components/campo";
-import { abrirPicker } from "@/shared/utils/abrirFecha";
+import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
@@ -201,9 +201,7 @@ export function ProveedorFormCampos({
 
   const alTocar = (campo: CampoTexto) => () => form.marcarTocado(campo);
 
-  /** Ref del input de "Fecha de expedición" para abrir el calendario nativo
-      con un clic en cualquier parte del campo (ver `abrirPicker`). */
-  const fechaExpedicionRef = useRef<HTMLInputElement | null>(null);
+  // CalendarDropdown reemplaza el input nativo de fecha
 
   /**
    * Cámara de Comercio (adjunto). El archivo se sube al backend y la URL
@@ -342,7 +340,7 @@ export function ProveedorFormCampos({
                 valor={v.tipoDocumento ?? ""}
                 opciones={TIPOS_DOCUMENTO}
                 etiquetas={etiquetaTipoDocumento}
-                vacio="Selecciona el tipo de documento"
+                vacio="Elegir documento"
                 ariaLabel="Tipo de documento"
               />
               <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
@@ -492,14 +490,14 @@ export function ProveedorFormCampos({
                 }
                 campo="fechaExpedicionCamara"
               >
-                <input
-                  ref={fechaExpedicionRef}
-                  type="date"
+                <CalendarDropdown
                   value={v.fechaExpedicionCamara ?? ""}
-                  onChange={alEscribir("fechaExpedicionCamara", (x) => x)}
-                  onClick={() => abrirPicker(fechaExpedicionRef)}
+                  onChange={(val) => {
+                    form.marcarTocado("fechaExpedicionCamara");
+                    form.setCampo("fechaExpedicionCamara", val);
+                  }}
+                  error={!!form.obtenerError("fechaExpedicionCamara")}
                   onBlur={alTocar("fechaExpedicionCamara")}
-                  className={`${inputCls} transition-colors ${form.campoCls("fechaExpedicionCamara")}`}
                 />
               </Campo>
             </div>
@@ -572,7 +570,7 @@ export function ProveedorFormCampos({
                 valor={v.repLegalTipoDocumento ?? ""}
                 opciones={TIPOS_DOCUMENTO}
                 etiquetas={etiquetaTipoDocumento}
-                vacio="Selecciona el tipo de documento"
+                vacio="Elegir documento"
                 ariaLabel="Tipo de documento del representante legal"
               />
               <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">

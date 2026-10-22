@@ -22,7 +22,7 @@ import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { abrirPicker } from "@/shared/utils/abrirFecha";
+import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
@@ -1288,22 +1288,12 @@ export function RecepcionCompraScreen({
                     Fecha de factura <span className="text-red-500">*</span>
                   </label>
 
-                  <input
-                    ref={fechaFacturaRef}
-                    type="date"
+                  <CalendarDropdown
                     value={fechaFactura}
-                    onChange={(e) =>
-                      setFechaFactura(e.target.value)
-                    }
-                    onClick={() => abrirPicker(fechaFacturaRef)}
-                    onBlur={() => marcarTocado("fechaFactura")}
+                    onChange={(v) => setFechaFactura(v)}
                     max={today}
-                    className={campoCls(
-                      (tocado.fechaFactura || intentoGuardar)
-                        ? errorFechaFactura
-                        : undefined
-                    )}
-                    aria-invalid={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                    error={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                    onBlur={() => marcarTocado("fechaFactura")}
                   />
                   {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
                     <p className="text-xs text-red-500 mt-1 ml-0.5">

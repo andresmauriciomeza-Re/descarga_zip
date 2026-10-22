@@ -685,6 +685,7 @@ export function insumoDeAlta(ins: NuevoInsumoCreado): Insumo {
 export function OrdenModal({
   mode, orden, proveedores, insumos, productos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
   onCrearInsumo,
+  onCrearProducto,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
@@ -702,6 +703,8 @@ export function OrdenModal({
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
   onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
+  /** Crea el producto en el catálogo (tipo "Producto terminado") desde "+ Crear producto". */
+  onCrearProducto?: (prod: { id: string; nombre: string; idCategoria: string }) => void;
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -723,6 +726,7 @@ export function OrdenModal({
 
   const [showNuevoProv, setShowNuevoProv] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
+  const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
 
   // Historial de cambios de estado
@@ -925,6 +929,19 @@ export function OrdenModal({
     setAShowSug(false);
     setShowNuevoInsumo(false);
     toast.success(`Insumo "${ins.nombre}" creado`);
+  };
+
+  const handleNuevoProducto = (prod: { id: string; nombre: string; idCategoria: string }) => {
+    onCrearProducto?.(prod);
+    setANombre(prod.nombre);
+    setAUnidad("und");
+    setAPrecio(0);
+    setAIva(0);
+    setAInsumoId(prod.id);
+    setAFromCat(true);
+    setAShowSug(false);
+    setShowNuevoProducto(false);
+    toast.success(`Producto "${prod.nombre}" creado`);
   };
 
   const addItem = () => {
@@ -1452,11 +1469,16 @@ export function OrdenModal({
                       setAShowSug(false);
                       setShowNuevoInsumo(true);
                     }}
+                    onCrearProducto={() => {
+                      setAShowSug(false);
+                      setShowNuevoProducto(true);
+                    }}
                     compacto={isPage}
                     buttonLabel={editando ? "Actualizar" : "Agregar"}
                     variante="compacta"
-                    // Punto 3.3: el atajo "+ Crear insumo" sólo aplica a insumos.
+                    // Punto 3.3: el atajo "+ Crear insumo/producto" según tipo.
                     ocultarCrearInsumo={aTipoItem === "producto"}
+                    ocultarCrearProducto={aTipoItem === "insumo"}
                     placeholder={
                       aTipoItem === "producto" ? "Buscar producto..." : "Buscar insumo..."
                     }
@@ -1670,6 +1692,17 @@ export function OrdenModal({
             insumosExistentes={insumos}
             onGuardar={handleNuevoInsumo}
             onClose={() => setShowNuevoInsumo(false)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showNuevoProducto && (
+          <NuevoProductoModal
+            onClose={() => setShowNuevoProducto(false)}
+            onGuardar={handleNuevoProducto}
+            nombreInicial={aNombre.trim()}
+            productosExistentes={productos ?? []}
+            categoriasProducto={[]}
           />
         )}
       </AnimatePresence>
@@ -3142,6 +3175,198 @@ export function NuevoInsumoModal({
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             Crear Insumo
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── NUEVO PRODUCTO MODAL ─────────────────────────────────────────────────────
+
+export function NuevoProductoModal({
+  onGuardar,
+  onClose,
+  nombreInicial = "",
+  productosExistentes = [],
+  categoriasProducto = [],
+}: {
+  onGuardar: (prod: { id: string; nombre: string; idCategoria: string; unidadVenta: string; precioUnitario: number; costoUnitario: number }) => void;
+  onClose: () => void;
+  nombreInicial?: string;
+  productosExistentes?: { nombre: string }[];
+  categoriasProducto?: { id: string; nombre: string }[];
+}) {
+  const [nombre, setNombre] = useState(nombreInicial);
+  const [idCategoria, setIdCategoria] = useState("");
+  const [contenido, setContenido] = useState("");
+  const [unidadContenido, setUnidadContenido] = useState<"ml" | "L">("ml");
+  const [presentacion, setPresentacion] = useState<"Unidad" | "Paca" | "Caja">("Unidad");
+  const [unidadesPorEmpaque, setUnidadesPorEmpaque] = useState(1);
+  const [tocado, setTocado] = useState({ nombre: false, categoria: false, contenido: false, unidadesPorEmpaque: false });
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
+
+  // Solo categorías de tipo Producto terminado (Bebidas)
+  const categoriasTerminadas = categoriasProducto.filter(c => {
+    const nombre = c.nombre.toLowerCase();
+    return nombre.includes("bebida");
+  });
+  if (categoriasTerminadas.length === 0 && categoriasProducto.length > 0) {
+    // Si no hay categorías específicas, usar las que no sean pizzas/lasañas
+    categoriasProducto.forEach(c => {
+      const nombre = c.nombre.toLowerCase();
+      if (!nombre.includes("pizza") && !nombre.includes("lasaña") && !nombre.includes("lasana")) {
+        if (!categoriasTerminadas.find(ct => ct.id === c.id)) categoriasTerminadas.push(c);
+      }
+    });
+  }
+
+  const errorNombre = nombre.trim()
+    ? (productosExistentes.some(p => p.nombre.toLowerCase() === nombre.trim().toLowerCase())
+      ? "Este producto ya existe."
+      : undefined)
+    : "El nombre es obligatorio.";
+  const errorCategoria = idCategoria ? undefined : "Selecciona una categoría.";
+  const errorContenido = contenido && Number(contenido) > 0 ? undefined : "El contenido es obligatorio.";
+  const errorUnidadesPorEmpaque = (presentacion === "Unidad" || Number(unidadesPorEmpaque) > 0) ? undefined : "Las unidades por empaque son obligatorias.";
+
+  const formValido = !errorNombre && !errorCategoria && !errorContenido && !errorUnidadesPorEmpaque;
+
+  const marcarTocado = (campo: "nombre" | "categoria" | "contenido" | "unidadesPorEmpaque") =>
+    setTocado((t) => ({ ...t, [campo]: true }));
+
+  const submit = () => {
+    setIntentoGuardar(true);
+    if (!formValido) return;
+    onGuardar({
+      id: `PROD-N-${Date.now()}`,
+      nombre: nombre.trim(),
+      idCategoria,
+      unidadVenta: "und",
+      precioUnitario: 0,
+      costoUnitario: 0,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo producto</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Crea un producto terminado para agregar a la orden.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              onBlur={() => marcarTocado("nombre")}
+              autoFocus
+              placeholder="Nombre del producto"
+              className={`${iCls} transition-colors ${(tocado.nombre || intentoGuardar) && errorNombre ? "border-red-400 focus:ring-red-300" : ""}`}
+            />
+            {(tocado.nombre || intentoGuardar) && errorNombre && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNombre}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
+            <select
+              value={idCategoria}
+              onChange={e => { setIdCategoria(e.target.value); marcarTocado("categoria"); }}
+              onBlur={() => marcarTocado("categoria")}
+              className={`${iCls} transition-colors ${(tocado.categoria || intentoGuardar) && errorCategoria ? "border-red-400 focus:ring-red-300" : ""}`}
+            >
+              <option value="">Seleccionar</option>
+              {(categoriasTerminadas.length > 0 ? categoriasTerminadas : categoriasProducto).map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+            {(tocado.categoria || intentoGuardar) && errorCategoria && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorCategoria}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contenido *</label>
+              <input
+                type="number"
+                min={0}
+                value={contenido}
+                onChange={e => setContenido(e.target.value)}
+                onBlur={() => marcarTocado("contenido")}
+                placeholder="Ej: 500"
+                className={`${iCls} transition-colors ${(tocado.contenido || intentoGuardar) && errorContenido ? "border-red-400 focus:ring-red-300" : ""}`}
+              />
+              {(tocado.contenido || intentoGuardar) && errorContenido && (
+                <p className="text-xs text-red-500 mt-1 ml-0.5">{errorContenido}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
+              <select
+                value={unidadContenido}
+                onChange={e => setUnidadContenido(e.target.value as "ml" | "L")}
+                className={iCls}
+              >
+                <option value="ml">ml</option>
+                <option value="L">L</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Presentación de compra</label>
+              <select
+                value={presentacion}
+                onChange={e => setPresentacion(e.target.value as "Unidad" | "Paca" | "Caja")}
+                className={iCls}
+              >
+                <option value="Unidad">Unidad</option>
+                <option value="Paca">Paca</option>
+                <option value="Caja">Caja</option>
+              </select>
+            </div>
+            {presentacion !== "Unidad" && (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidades por empaque *</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={unidadesPorEmpaque}
+                  onChange={e => setUnidadesPorEmpaque(Number(e.target.value))}
+                  onBlur={() => marcarTocado("unidadesPorEmpaque")}
+                  className={`${iCls} transition-colors ${(tocado.unidadesPorEmpaque || intentoGuardar) && errorUnidadesPorEmpaque ? "border-red-400 focus:ring-red-300" : ""}`}
+                />
+                {(tocado.unidadesPorEmpaque || intentoGuardar) && errorUnidadesPorEmpaque && (
+                  <p className="text-xs text-red-500 mt-1 ml-0.5">{errorUnidadesPorEmpaque}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-border">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={submit}
+            disabled={!formValido}
+            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+          >
+            Crear Producto
           </button>
         </div>
       </motion.div>
