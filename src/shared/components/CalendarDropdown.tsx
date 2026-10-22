@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DIAS  = ["DO","LU","MA","MI","JU","VI","SA"];
@@ -29,11 +30,67 @@ export function CalendarDropdown({
     return { year: today.getFullYear(), month: today.getMonth() };
   });
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // Posición (viewport, `fixed`) del panel: el cuadro se pinta en un portal a
+  // <body> para que ningún contenedor padre con overflow lo recorte, y se
+  // ancla al borde del campo midiendo su rectángulo (ver `reposicionar`).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  /** Ancla el panel DEBAJO del botón, alineado a su borde izquierdo. Sólo se
+   *  abre hacia arriba si no cabe abajo en la ventana y sí cabe arriba. */
+  const reposicionar = () => {
+    const btn = triggerRef.current;
+    const panel = panelRef.current;
+    if (!btn || !panel) return;
+    const r = btn.getBoundingClientRect();
+    const gap = 4; // mb-1 / mt-1
+    const altoPanel = Math.min(panel.offsetHeight, window.innerHeight - 2 * gap);
+    const cabeAbajo = window.innerHeight - r.bottom - gap >= altoPanel;
+    const cabeArriba = r.top - gap >= altoPanel;
+    const abajo = cabeAbajo || !cabeArriba;
+    const top = abajo ? r.bottom + gap : Math.max(gap, r.top - gap - altoPanel);
+    // Nunca sale del borde derecho de la ventana (si no cabe a la derecha se
+    // desplaza a la izquierda manteniendo el ancho).
+    const left = Math.max(
+      gap,
+      Math.min(r.left, window.innerWidth - panel.offsetWidth - gap),
+    );
+    setPos({ top, left });
+  };
+
+  // Al abrir: mide y coloca ANTES del pintado (useLayoutEffect) para que no se
+  // vea el panel en una posición provisional; al cerrar se borra la posición.
+  useLayoutEffect(() => {
+    if (open) reposicionar();
+    else setPos(null);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reubica al cambiar de mes (el alto del cuadro varía con 5 o 6 filas).
+  useEffect(() => {
+    if (open) reposicionar();
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mientras esté abierto sigue al campo en scroll (de cualquier contenedor,
+  // por eso `capture`) y en resize de la ventana.
+  useEffect(() => {
+    if (!open) return;
+    const onMove = () => reposicionar();
+    window.addEventListener("scroll", onMove, { capture: true, passive: true });
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, { capture: true });
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      // El panel vive en un portal (fuera del árbol del campo), así que el
+      // clic "fuera" es fuera del campo Y fuera del cuadro.
+      const dentroDelCampo = ref.current?.contains(e.target as Node);
+      const dentroDelPanel = panelRef.current?.contains(e.target as Node);
+      if (!dentroDelCampo && !dentroDelPanel) {
         setOpen(false);
         onClose?.();
         onBlur?.();
@@ -108,6 +165,7 @@ export function CalendarDropdown({
     <div ref={ref} className="relative w-full">
       <button
         type="button"
+        ref={triggerRef}
         onClick={() => {
           setOpen(o => {
             const next = !o;
@@ -135,82 +193,94 @@ export function CalendarDropdown({
         <Calendar className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
       </button>
 
-      {open && (
-        <div
-          ref={panelRef}
-          className="absolute z-50 bottom-full mb-1 left-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64"
-          style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <span className="text-xs font-bold text-foreground capitalize">
-              {MESES[view.month]} de {view.year}
-            </span>
-            <div className="flex gap-0.5">
-              <button type="button" onClick={prevMonth}
-                className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
-                <ChevronLeft className="w-3.5 h-3.5" />
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            // z-[100]: mismo nivel que los portales de los selects del panel
+            // (EstadoSelect/UnidadSelect), por encima de los overlays z-50.
+            className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64"
+            style={{
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              // Invisible hasta medir la posición (useLayoutEffect): evita el
+              // parpadeo del cuadro en la esquina antes de anclarlo al campo.
+              visibility: pos ? "visible" : "hidden",
+              maxHeight: "calc(100vh - 200px)",
+              overflowY: "auto",
+            }}
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+              <span className="text-xs font-bold text-foreground capitalize">
+                {MESES[view.month]} de {view.year}
+              </span>
+              <div className="flex gap-0.5">
+                <button type="button" onClick={prevMonth}
+                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={nextMonth}
+                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 px-2 pt-1.5">
+              {DIAS.map(d => (
+                <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-0.5">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 px-2 pb-1.5">
+              {cells.map((day, i) => (
+                <div key={i} className="flex items-center justify-center p-0.5">
+                  {day ? (
+                    <button
+                      type="button"
+                      onClick={() => pick(day)}
+                      disabled={isDisabled(day)}
+                      className={`w-7 h-7 rounded-full text-xs font-medium transition-all ${
+                        isDisabled(day)
+                          ? "text-muted-foreground/40 cursor-not-allowed"
+                          : isSelected(day)
+                            ? "bg-primary text-white font-bold shadow-sm cursor-pointer"
+                            : isToday(day)
+                              ? "border-2 border-primary text-primary font-bold cursor-pointer"
+                              : "text-foreground hover:bg-muted cursor-pointer"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ) : <span />}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
+              <button type="button" onClick={() => { onChange(""); setOpen(false); onClose?.(); onBlur?.(); }}
+                className="text-[11px] font-semibold text-muted-foreground hover:text-primary cursor-pointer">
+                Borrar
               </button>
-              <button type="button" onClick={nextMonth}
-                className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
-                <ChevronRight className="w-3.5 h-3.5" />
+              <button type="button" onClick={() => {
+                // No se delega en `pick`: leería el `view` viejo del closure, ya
+                // que `setView` es asíncrono, así que si el usuario estaba viendo
+                // otro mes la fecha se armaba en ese mes y "Hoy" podía caer en el
+                // mes siguiente (ver el 31 de enero sobre febrero, p. ej.).
+                const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const isoToday = toIso(d);
+                if (max && isoToday > max) return;
+                if (min && isoToday < min) return;
+                setView({ year: d.getFullYear(), month: d.getMonth() });
+                onChange(isoToday);
+                setOpen(false);
+                onClose?.();
+                onBlur?.();
+              }}
+                className="text-[11px] font-semibold text-primary hover:text-red-700 cursor-pointer">
+                Hoy
               </button>
             </div>
-          </div>
-          <div className="grid grid-cols-7 px-2 pt-1.5">
-            {DIAS.map(d => (
-              <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-0.5">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 px-2 pb-1.5">
-            {cells.map((day, i) => (
-              <div key={i} className="flex items-center justify-center p-0.5">
-                {day ? (
-                  <button
-                    type="button"
-                    onClick={() => pick(day)}
-                    disabled={isDisabled(day)}
-                    className={`w-7 h-7 rounded-full text-xs font-medium transition-all ${
-                      isDisabled(day)
-                        ? "text-muted-foreground/40 cursor-not-allowed"
-                        : isSelected(day)
-                          ? "bg-primary text-white font-bold shadow-sm cursor-pointer"
-                          : isToday(day)
-                            ? "border-2 border-primary text-primary font-bold cursor-pointer"
-                            : "text-foreground hover:bg-muted cursor-pointer"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ) : <span />}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
-            <button type="button" onClick={() => { onChange(""); setOpen(false); onClose?.(); onBlur?.(); }}
-              className="text-[11px] font-semibold text-muted-foreground hover:text-primary cursor-pointer">
-              Borrar
-            </button>
-            <button type="button" onClick={() => {
-              // No se delega en `pick`: leería el `view` viejo del closure, ya
-              // que `setView` es asíncrono, así que si el usuario estaba viendo
-              // otro mes la fecha se armaba en ese mes y "Hoy" podía caer en el
-              // mes siguiente (ver el 31 de enero sobre febrero, p. ej.).
-              const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-              const isoToday = toIso(d);
-              if (max && isoToday > max) return;
-              if (min && isoToday < min) return;
-              setView({ year: d.getFullYear(), month: d.getMonth() });
-              onChange(isoToday);
-              setOpen(false);
-              onClose?.();
-              onBlur?.();
-            }}
-              className="text-[11px] font-semibold text-primary hover:text-red-700 cursor-pointer">
-              Hoy
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

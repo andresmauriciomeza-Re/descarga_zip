@@ -177,8 +177,7 @@ export function RecepcionCompraScreen({
       .filter((i) => !previos.has(i.idInsumo))
       .map((i) => {
         // Punto 2: si la bebida ya tiene precio de venta (en la línea de la
-        // OC o en el catálogo) se precarga; después el % de ganancia se
-        // deriva de ese precio.
+        // OC o en el catálogo) se precarga para poder editarlo a mano.
         const pvLinea = Number(i.precioVenta ?? 0);
         const pvCatalogo =
           (i.tipoItem ?? "insumo") === "producto"
@@ -262,12 +261,8 @@ export function RecepcionCompraScreen({
   // al escribir, al trocar de tipo y al reiniciar el formulario, para no
   // arrastrar el id de otro ítem y que dos líneas no se fusionen en el stock.
   const [exId, setExId] = useState("");
-  // Punto 2/3: % de ganancia del "Agregar producto no solicitado" (enlazado
-  // con su precio de venta, igual que en la Nueva compra). 0 = sin escribir.
-  const [exGanancia, setExGanancia] = useState(0);
-  // % de ganancia tecleado a mano fila por fila en "Recibido según factura".
-  // Sin override (clave ausente) el % se deriva del precio de venta.
-  const [gFila, setGFila] = useState<Record<string, number>>({});
+  // Ajuste (bloque 2): el % de ganancia se quitó de la pantalla; el precio de
+  // venta del producto se escribe a mano y se valida contra el costo con IVA.
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
@@ -340,14 +335,10 @@ export function RecepcionCompraScreen({
 
   /** Punto 3: esta recepción SIEMPRE se guarda como "precios sin IVA"
    *  (ver `ivaIncluido` arriba), así que el costo de referencia CON IVA de
-   *  una línea = monto × (1 + iva%/100). Sobre ese costo se calcula la
-   *  ganancia y se valida el precio de venta de los productos. */
+   *  una línea = monto × (1 + iva%/100). Es contra ese costo (POR UNIDAD)
+   *  que se valida el precio de venta de los productos. */
   const costoConIva = (monto: number, iva: number) =>
     monto * (1 + (iva || 0) / 100);
-
-  /** Redondeo a 2 decimales: los % de ganancia no arrastran residuos de
-   *  punto flotante (33.33333333 %). */
-  const round2 = (n: number) => Math.round(n * 100) / 100;
 
   /** Costo con IVA POR UNIDAD de una línea ya montada (solicitada o extra):
    *  con paca/caja el costoUnitario de la línea es por presentación, así que
@@ -358,17 +349,6 @@ export function RecepcionCompraScreen({
     unidadesPorEmpaque?: number;
   }) =>
     costoConIva(item.costoUnitario, item.iva ?? 0) / unidadesPorLinea(item);
-
-  /** Punto 2: % de ganancia de una fila de "Recibido según factura": el
-   *  override tecleado o, sin override, el que se deriva del precio de venta
-   *  actual sobre el costo con IVA (0 si todavía no hay precio). */
-  const gDeFila = (item: ItemRecibido) => {
-    const override = gFila[item.rowId];
-    if (override != null) return override;
-    const costo = costoConIvaDeLinea(item);
-    const pv = item.precioVenta ?? 0;
-    return pv > 0 && costo > 0 ? Math.max(0, round2((pv / costo - 1) * 100)) : 0;
-  };
 
   /** Punto 2: precio de venta inválido (vacío, 0 o ≤ costo con IVA). */
   const pvInvalido = (item: ItemRecibido) => {
@@ -404,6 +384,14 @@ export function RecepcionCompraScreen({
     ),
   ];
 
+  /** Ajuste (bloque 2): columna "Precio de vta" de "Recibido según factura".
+   *  Se muestra sólo si la orden trae al menos una fila de PRODUCTO; en las
+   *  filas de insumo la celda queda vacía y si la orden es sólo de insumos no
+   *  se pinta la columna. */
+  const mostrarColPrecioVta = items.some(
+    (i) => (i.tipoItem ?? "insumo") === "producto"
+  );
+
   /** Punto B6 + punto 3 + ajuste: precio de venta OBLIGATORIO en productos
    *  no solicitados, con las mismas reglas que la Nueva compra: > 0 y > al
    *  costo CON IVA POR UNIDAD (con paca/caja el monto del formulario es por
@@ -419,43 +407,11 @@ export function RecepcionCompraScreen({
           : undefined
       : undefined;
 
-  /** Punto 3: los atajos enlazados de los extras (igual que la Nueva compra),
-   *  siempre sobre el costo CON IVA. */
-  const recalcExDesdeGanancia = (costo: number) => {
-    if (exGanancia > 0 && costo > 0) {
-      setExPrecioVenta(Math.round(costo * (1 + exGanancia / 100)));
-    } else if (costo > 0 && exPrecioVenta > 0) {
-      setExGanancia(Math.max(0, round2((exPrecioVenta / costo - 1) * 100)));
-    }
-  };
+  const onExMontoChange = (v: number) => setExPrecio(v);
 
-  const onExMontoChange = (v: number) => {
-    setExPrecio(v);
-    // La ganancia se calcula contra el costo POR UNIDAD (el monto puede ser
-    // el de una paca).
-    recalcExDesdeGanancia(costoConIva(v, exIva) / exFactor);
-  };
+  const onExIvaChange = (v: number) => setExIva(v);
 
-  const onExIvaChange = (v: number) => {
-    setExIva(v);
-    recalcExDesdeGanancia(costoConIva(exPrecio, v) / exFactor);
-  };
-
-  const onExGananciaChange = (v: number) => {
-    setExGanancia(v);
-    if (v > 0 && exCostoRef > 0) {
-      setExPrecioVenta(Math.round(exCostoRef * (1 + v / 100)));
-    }
-  };
-
-  const onExPrecioVentaChange = (v: number) => {
-    setExPrecioVenta(v);
-    if (exCostoRef > 0) {
-      setExGanancia(
-        v > 0 ? Math.max(0, round2((v / exCostoRef - 1) * 100)) : 0
-      );
-    }
-  };
+  const onExPrecioVentaChange = (v: number) => setExPrecioVenta(v);
 
   /** Sugerencia del desplegable "Agregar no solicitado": misma forma para
    *  insumos y productos, más el precio de venta (sólo los productos). */
@@ -586,9 +542,8 @@ export function RecepcionCompraScreen({
     toast.success(`"${nombre}" no viene en esta factura. Queda pendiente.`);
   };
 
-  /** Punto 2: precio de venta a mano en una fila pedida en la OC. Al escribir
-   *  el precio se borra el override de ganancia para que el % se derive otra
-   *  vez de lo que el usuario escribió. */
+  /** Punto 2: precio de venta a mano en una fila pedida en la OC (sólo las
+   *  filas de producto lo muestran). */
   const updPvFila = (rowId: string, value: number) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -597,56 +552,18 @@ export function RecepcionCompraScreen({
           : item
       )
     );
-    setGFila((prev) => {
-      if (!(rowId in prev)) return prev;
-      const next = { ...prev };
-      delete next[rowId];
-      return next;
-    });
   };
 
-  /** Punto 2: escribir la ganancia recalcula el precio de venta de la fila al
-   *  instante (precio = costo con IVA × (1 + g/100)). Con 0 se deja el precio
-   *  como está, igual que en el formulario de la Nueva compra. */
-  const updGFila = (rowId: string, value: number) => {
-    setGFila((prev) => ({ ...prev, [rowId]: value }));
-    if (value > 0) {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.rowId === rowId
-            ? {
-                ...item,
-                precioVenta: Math.round(
-                  costoConIvaDeLinea(item) * (1 + value / 100)
-                ),
-              }
-            : item
-        )
-      );
-    }
-  };
-
-  /** Punto 3 + ajuste: al editar el Monto unitario de una fila el costo con
-   *  IVA POR UNIDAD cambia (el monto puede ser el de una paca, que se divide
-   *  en su empaque), así que su precio de venta se recalcula sólo si esa fila
-   *  tiene ganancia tecleada (override activo). */
+  /** Cambiar el Monto unitario sólo actualiza el monto: con el % de ganancia
+   *  fuera de la pantalla el precio de venta ya no se recalcula solo (queda a
+   *  criterio del usuario y se valida al guardar). */
   const updMontoFila = (rowId: string, value: number) => {
-    const g = gFila[rowId];
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.rowId !== rowId) return item;
-        const monto = Math.max(0, value);
-        const base = { ...item, costoUnitario: monto };
-        return g != null && g > 0
-          ? {
-              ...base,
-              precioVenta: Math.round(
-                (costoConIva(monto, item.iva ?? 0) / unidadesPorLinea(item)) *
-                  (1 + g / 100)
-              ),
-            }
-          : base;
-      })
+      prev.map((item) =>
+        item.rowId === rowId
+          ? { ...item, costoUnitario: Math.max(0, value) }
+          : item
+      )
     );
   };
 
@@ -722,7 +639,6 @@ export function RecepcionCompraScreen({
     setExPrecio(0);
     setExIva(0);
     setExPrecioVenta(0);
-    setExGanancia(0);
     setExEmpaque(undefined);
     setExShowSug(false);
 
@@ -1343,7 +1259,7 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[760px]">
+                    <table className="w-full text-sm min-w-[620px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -1358,13 +1274,13 @@ export function RecepcionCompraScreen({
                             Monto unitario
                           </th>
 
-                          <th className="px-3 py-3 text-left font-semibold">
-                            Ganancia %
-                          </th>
-
-                          <th className="px-3 py-3 text-left font-semibold">
-                            Precio de vta
-                          </th>
+                          {/* Ajuste (bloque 2): sin "Ganancia %"; "Precio de
+                              vta" sólo si la orden trae productos. */}
+                          {mostrarColPrecioVta && (
+                            <th className="px-3 py-3 text-left font-semibold">
+                              Precio de vta
+                            </th>
+                          )}
 
                           <th className="px-3 py-3 text-left font-semibold">
                             Subtotal
@@ -1378,7 +1294,7 @@ export function RecepcionCompraScreen({
                         {items.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={7}
+                              colSpan={mostrarColPrecioVta ? 6 : 5}
                               className="px-3 py-8 text-center text-xs text-muted-foreground"
                             >
                               Todos los insumos de la OC {orden.id} ya
@@ -1432,10 +1348,10 @@ export function RecepcionCompraScreen({
                                 className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                               {/* Punto 3 + ajuste: el costo de referencia CON
-                                  IVA POR UNIDAD con el que se calcula la
-                                  ganancia y se valida el precio de venta
-                                  (sólo en productos). Con paca/caja se
-                                  muestra también el costo de la presentación. */}
+                                  IVA POR UNIDAD con el que se valida el
+                                  precio de venta (sólo en productos). Con
+                                  paca/caja se muestra también el costo de la
+                                  presentación. */}
                               {(item.tipoItem ?? "insumo") === "producto" && (
                                 <>
                                   <p className="text-[10px] text-muted-foreground mt-1 text-center whitespace-nowrap">
@@ -1456,27 +1372,12 @@ export function RecepcionCompraScreen({
                               )}
                             </td>
 
-                            {/* Punto 2: ganancia y precio de venta de los
-                                productos pedidos en la OC. Los insumos no
-                                llevan precio, así que la celda queda vacía. */}
-                            {(item.tipoItem ?? "insumo") === "producto" ? (
-                              <>
-                                <td className="px-3 py-3 align-top">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={gDeFila(item) === 0 ? "" : gDeFila(item)}
-                                    placeholder="0"
-                                    onChange={(e) =>
-                                      updGFila(
-                                        item.rowId,
-                                        Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))
-                                      )
-                                    }
-                                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                  />
-                                </td>
-
+                            {/* Ajuste (bloque 2): sin columna de ganancia.
+                                "Precio de vta" sólo se pinta en filas de
+                                producto (y sólo si la orden trae productos);
+                                los insumos no llevan precio. */}
+                            {mostrarColPrecioVta &&
+                              ((item.tipoItem ?? "insumo") === "producto" ? (
                                 <td className="px-3 py-3 align-top">
                                   <input
                                     type="number"
@@ -1505,17 +1406,11 @@ export function RecepcionCompraScreen({
                                     </p>
                                   )}
                                 </td>
-                              </>
-                            ) : (
-                              <>
+                              ) : (
                                 <td className="px-3 py-3 text-center text-xs text-muted-foreground">
                                   —
                                 </td>
-                                <td className="px-3 py-3 text-center text-xs text-muted-foreground">
-                                  —
-                                </td>
-                              </>
-                            )}
+                              ))}
 
                             <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
                               {fmtCOP(
@@ -1547,7 +1442,7 @@ export function RecepcionCompraScreen({
                       <tfoot className="bg-muted/50 border-t border-border">
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={mostrarColPrecioVta ? 4 : 3}
                             className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
                           >
                             Total recibido
@@ -1774,7 +1669,6 @@ export function RecepcionCompraScreen({
                           setExPrecio(0);
                           setExIva(0);
                           setExPrecioVenta(0);
-                          setExGanancia(0);
                           setExShowSug(false);
                         }}
                         opciones={[
@@ -1882,25 +1776,10 @@ export function RecepcionCompraScreen({
                                 // Medida, Monto unitario e IVA.
                                 setExIva(ivaSel);
                                 // P14: si es producto se copia también su
-                                // precio de venta al público.
+                                // precio de venta al público (se escribe a
+                                // mano: el % de ganancia ya no existe).
                                 const pvSug = Number(ins.precioVenta ?? 0);
                                 setExPrecioVenta(pvSug);
-                                // Punto 3 + ajuste: la ganancia que representa
-                                // ese precio sobre el costo con IVA POR UNIDAD
-                                // del monto realmente precargado (por
-                                // presentación, así que se divide en el
-                                // empaque).
-                                const costoSug =
-                                  costoConIva(montoSel, ivaSel) /
-                                  unidadesPorLinea(ins);
-                                setExGanancia(
-                                  pvSug > 0 && costoSug > 0
-                                    ? Math.max(
-                                        0,
-                                        round2((pvSug / costoSug - 1) * 100)
-                                      )
-                                    : 0
-                                );
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
@@ -2003,28 +1882,6 @@ export function RecepcionCompraScreen({
                       />
                     </div>
 
-                    {/* Punto 2/3: ganancia enlazada con el precio de venta, en
-                       lazada sobre el costo CON IVA (sólo en productos). */}
-                    {exTipo === "producto" && (
-                      <div className="w-[76px] flex-none">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Ganancia (%)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={exGanancia === 0 ? "" : exGanancia}
-                          onChange={(e) =>
-                            onExGananciaChange(
-                              Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))
-                            )
-                          }
-                          placeholder="0"
-                          className={compactInputCls}
-                        />
-                      </div>
-                    )}
-
                     {/* Precio de venta al público del producto: sólo se pinta
                         al agregar PRODUCTOS. Es OBLIGATORIO (punto B6 + 3): el
                         campo queda en rojo y el Agregar se deshabilita si el
@@ -2064,9 +1921,9 @@ export function RecepcionCompraScreen({
                   </div>
 
                   {/* Punto 3 + ajuste: el costo de referencia CON IVA POR
-                      UNIDAD con el que se calcula la ganancia y se valida el
-                      precio de venta (con paca/caja el Monto unitario es por
-                      presentación y ya viene dividido). */}
+                      UNIDAD con el que se valida el precio de venta (con
+                      paca/caja el Monto unitario es por presentación y ya
+                      viene dividido). */}
                   {exTipo === "producto" && (
                     <p className="text-[11px] text-muted-foreground mt-1.5">
                       Costo por unidad: {fmtCOP(exCostoRef)}
