@@ -102,19 +102,14 @@ export interface CompactInsumoFormProps {
   onPrecioVentaChange?: (value: number) => void;
   /** Muestra el campo "Precio de venta" (sólo al agregar PRODUCTOS). */
   mostrarPrecioVenta?: boolean;
-  /** Punto B2: % de ganancia sobre el monto unitario, enlazado con el precio
-   *  de venta (cambiar uno recalcula el otro). Se muestra SOLO junto al
-   *  precio de venta, es decir, sólo en líneas de producto. */
-  ganancia?: number;
-  onGananciaChange?: (value: number) => void;
   /** Punto B2: precio de venta inválido (vacío, 0 o ≤ monto unitario). Pinta
    *  el campo en rojo, muestra el mensaje bajo la fila y deshabilita el
    *  botón Agregar: un producto nunca se agrega sin precio de venta válido. */
   errorPrecioVenta?: string;
   /** Punto 3: costo de referencia CON IVA, POR UNIDAD (con paca/caja el
    *  monto de la factura es por presentación y la pantalla que lo pasa ya lo
-   *  dividió). Es sobre él que se calcula la ganancia y se valida el precio
-   *  de venta; se muestra debajo de la fila. */
+   *  dividió). Es contra él que se valida el precio de venta; se muestra
+   *  debajo de la fila. */
   costoConIva?: number;
 }
 
@@ -153,8 +148,6 @@ export function CompactInsumoForm({
   precioVenta = 0,
   onPrecioVentaChange,
   mostrarPrecioVenta = false,
-  ganancia = 0,
-  onGananciaChange,
   errorPrecioVenta,
   costoConIva,
 }: CompactInsumoFormProps) {
@@ -374,29 +367,6 @@ export function CompactInsumoForm({
             />
           </div>
 
-          {/* Punto B2: % de ganancia sobre el monto unitario. Está enlazado
-              con el precio de venta: gana+escribe precio al escribir el % y
-              deriva el % al escribir el precio. Sólo en productos. */}
-          {mostrarPrecioVenta && (
-            <div className={esCompacta ? "w-[84px] flex-none" : "w-[92px]"}>
-              <label className={esCompacta ? labelClsCompacta : labelCls}>
-                Ganancia %
-              </label>
-
-              <input
-                type="number"
-                min={0}
-                value={ganancia || ""}
-                onChange={(e) =>
-                  onGananciaChange?.(Math.max(0, Number(e.target.value)))
-                }
-                placeholder="0"
-                disabled={bloqueado}
-                className={readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}
-              />
-            </div>
-          )}
-
           {/* Precio de venta al público del producto: sólo se pinta al
               agregar PRODUCTOS (la Orden de Compra no lo usa). Es OBLIGATORIO
               (punto B2): con `errorPrecioVenta` el campo se pinta en rojo. */}
@@ -442,8 +412,8 @@ export function CompactInsumoForm({
 
         {/* Punto 3 + ajuste de bebidas: el costo de referencia CON IVA POR
             UNIDAD (el monto de una paca ya viene dividido en las unidades),
-            con el que se calcula la ganancia y se valida el precio de venta
-            (sólo en productos, donde esos campos existen). */}
+            contra el que se valida el precio de venta (sólo en productos,
+            donde ese campo existe). */}
         {mostrarPrecioVenta && costoConIva != null && (
           <p className="text-[11px] text-muted-foreground mt-1.5">
             Costo por unidad: {fmtCompactCOP(costoConIva)}

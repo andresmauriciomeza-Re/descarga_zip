@@ -692,7 +692,7 @@ export function OrdenModal({
   proveedores: ProveedorRef[];
   insumos: Insumo[];
   /** Punto 3.3: catálogo de productos del módulo de Productos — la otra mitad
-   *  del selector "Tipo de ítem" (Insumo | Producto) del formulario. */
+   *  del selector "Tipo" (Insumo | Producto) del formulario. */
   productos?: Producto[];
   /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
   tipo?: "orden" | "compra";
@@ -1391,7 +1391,7 @@ export function OrdenModal({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {/* Punto 2.6: en página el "Tipo de ítem" sale del hueco de
+                  {/* Punto 2.6: en página el "Tipo" sale del hueco de
                       Medida y sube a la fila de título, a la derecha del
                       título; el formulario ya no lo recibe (`campoExtra` solo
                       en el modal, donde el título sigue dentro de la card). */}
@@ -1400,7 +1400,7 @@ export function OrdenModal({
                       <p className={seccionCls}>Agregar ítem</p>
                       <div className="flex items-center gap-2">
                         <label className="block text-[11px] font-semibold text-muted-foreground">
-                          Tipo de ítem
+                          Tipo
                         </label>
                         <SegmentadoButtons
                           valor={aTipoItem}
@@ -1489,7 +1489,7 @@ export function OrdenModal({
                       isPage ? undefined : (
                       <div className="min-w-[118px]">
                         <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
-                          Tipo de ítem
+                          Tipo
                         </label>
                         <SegmentadoButtons
                           valor={aTipoItem}
@@ -1735,7 +1735,7 @@ interface NuevaOrdenCompraPageProps {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
-  /** Punto 3.3: catálogo de productos para el selector "Tipo de ítem". */
+  /** Punto 3.3: catálogo de productos para el selector "Tipo". */
   productos: Producto[];
   /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;

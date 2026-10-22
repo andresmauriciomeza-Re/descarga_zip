@@ -680,7 +680,7 @@ function CompraForm({
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
   /** P14: catálogo de productos del módulo de Productos: son la otra mitad
-   *  del selector "Tipo de ítem" de la Nueva compra. */
+   *  del selector "Tipo" de la Nueva compra. */
   productos?: Producto[];
   /** Gestiones de compra existentes para validar factura única. */
   gestiones: GestionCompra[];
@@ -754,10 +754,8 @@ function CompraForm({
   // Precio de VENTA al público del producto elegido (sólo se captura cuando
   // el tipo es "producto"; con insumos queda en 0 y no se guarda).
   const [itemPrecioVenta, setItemPrecioVenta] = useState(0);
-  // % de ganancia sobre el monto unitario (punto B2). 0 = sin escribir: NO se
-  // precarga ningún valor por defecto; se deriva del precio de venta cuando
-  // el producto ya tiene uno.
-  const [itemGanancia, setItemGanancia] = useState(0);
+  // Ajuste (bloque 2): el % de ganancia se quitó de la pantalla; el precio de
+  // venta se escribe a mano y se valida contra el costo por unidad con IVA.
   const [itemSugAbierto, setItemSugAbierto] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
   /** Input de Nombre: recupera el foco tras agregar o actualizar una fila. */
@@ -1027,22 +1025,13 @@ function CompraForm({
     // venta también se define por unidad suelta). Se guarda aparte del
     // monto unitario de la factura para poder mostrarlo en el detalle.
     setItemPrecioVenta(pv);
-    // Punto B2: NO se precarga un % fijo. Si el producto ya tiene precio de
-    // venta, el % se calcula desde él CONTRA EL COSTO POR UNIDAD; si no,
-    // ambos campos quedan vacíos hasta que el usuario escriba uno de los dos
-    // (negativo no aplica: el precio de venta siempre debe superar al costo).
-    setItemGanancia(costoUnit > 0 && pv > 0 ? Math.max(0, Math.round((pv / costoUnit - 1) * 10000) / 100) : 0);
     setItemSugAbierto(false);
   };
 
-  /** Redondeo a 2 decimales: los porcentajes de ganancia no arrastran
-   *  residuos de punto flotante (33.33333333 %). */
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-
   /** Punto 3: costo de referencia = costo unitario CON IVA. Con IVA
    *  incluido el monto ya lo trae; sin IVA incluido se le suma el % de la
-   *  línea. Sobre ese costo se calcula la ganancia y se valida que el precio
-   *  de venta lo superpase. */
+   *  línea. Es contra ese costo que se valida que el precio de venta lo
+   *  superpase. */
   const costoConIva = (monto: number, iva: number) =>
     ivaIncluido === false ? monto * (1 + iva / 100) : monto;
 
@@ -1052,48 +1041,13 @@ function CompraForm({
   const itemFactor = unidadesPorLinea({ unidadesPorEmpaque: itemEmpaque });
   const costoRef = costoConIva(itemPrecio, itemIva) / itemFactor;
 
-  /** Punto B2/B3 + punto 3: la ganancia se calcula sobre el costo CON IVA;
-   *  con ganancia escrita el precio de venta sale de ese costo y sin
-   *  ganancia escrita se deriva el % desde un precio que ya exista. */
-  const recalcularDesdeGanancia = (costo: number) => {
-    if (itemGanancia > 0 && costo > 0) {
-      setItemPrecioVenta(Math.round(costo * (1 + itemGanancia / 100)));
-    } else if (costo > 0 && itemPrecioVenta > 0) {
-      setItemGanancia(Math.max(0, round2((itemPrecioVenta / costo - 1) * 100)));
-    }
-  };
+  const onMontoChange = (v: number) => setItemPrecio(v);
 
-  const onMontoChange = (v: number) => {
-    setItemPrecio(v);
-    // La ganancia se calcula contra el costo POR UNIDAD (el monto puede ser
-    // el de una paca).
-    recalcularDesdeGanancia(costoConIva(v, itemIva) / itemFactor);
-  };
+  const onIvaChange = (v: number) => setItemIva(v);
 
-  /** Punto 3: al cambiar el IVA cambia el costo con IVA, así que la ganancia
-   *  (o el precio) se recalcula igual que al tocar el monto. */
-  const onIvaChange = (v: number) => {
-    setItemIva(v);
-    recalcularDesdeGanancia(costoConIva(itemPrecio, v) / itemFactor);
-  };
-
-  /** Cambiar la ganancia recalcula el precio de venta al instante. Con 0 (o
-   *  vacío) se deja el precio como está para que el usuario lo edite a mano. */
-  const onGananciaChange = (v: number) => {
-    setItemGanancia(v);
-    if (v > 0 && costoRef > 0) {
-      setItemPrecioVenta(Math.round(costoRef * (1 + v / 100)));
-    }
-  };
-
-  /** Escribir el precio de venta a mano recalcula la ganancia que representa
-   *  sobre el costo con IVA (0 si se borra el precio). */
-  const onPrecioVentaChange = (v: number) => {
-    setItemPrecioVenta(v);
-    if (costoRef > 0) {
-      setItemGanancia(v > 0 ? Math.max(0, round2((v / costoRef - 1) * 100)) : 0);
-    }
-  };
+  /** Escribir el precio de venta a mano (sin % de ganancia: el precio manda
+   *  y se valida contra el costo con IVA). */
+  const onPrecioVentaChange = (v: number) => setItemPrecioVenta(v);
 
   /** Costo con IVA POR UNIDAD de una línea YA agregada (punto 3 + ajuste +
    *  backstop de guardar): con paca/caja el monto es por presentación. */
@@ -1227,7 +1181,6 @@ function CompraForm({
     setItemIva(0);
     setItemId("");
     setItemPrecioVenta(0);
-    setItemGanancia(0);
     setItemSugAbierto(false);
     setEditando(null);
     nombreRef.current?.focus();
@@ -1768,7 +1721,7 @@ function CompraForm({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {/* Punto 2.6: en página el "Tipo de ítem" sube a la fila de
+                  {/* Punto 2.6: en página el "Tipo" sube a la fila de
                       título (a la derecha) en vez de ocupar el hueco de Medida;
                       el formulario ya no lo recibe (`campoExtra` solo en el
                       modal, donde el título sigue dentro de la card). */}
@@ -1777,7 +1730,7 @@ function CompraForm({
                       <p className={seccionCls}>Agregar ítem</p>
                       <div className="flex items-center gap-2">
                         <label className="block text-[11px] font-semibold text-muted-foreground">
-                          Tipo de ítem
+                          Tipo
                         </label>
                         <SegmentadoButtons
                           valor={itemTipo}
@@ -1827,16 +1780,13 @@ function CompraForm({
                     iva={itemIva}
                     onIvaChange={onIvaChange}
                     // Punto 3: costo de referencia CON IVA que se muestra
-                    // debajo del monto y sobre el que se calcula la ganancia.
+                    // debajo del monto y contra el que se valida el precio
+                    // de venta.
                     costoConIva={costoRef}
                     // Precio de venta al público: sólo para líneas de producto.
                     mostrarPrecioVenta={itemTipo === "producto"}
                     precioVenta={itemPrecioVenta}
                     onPrecioVentaChange={onPrecioVentaChange}
-                    // Punto B2: ganancia % sobre el monto unitario, enlazada
-                    // con el precio de venta (borrar uno recalcula el otro).
-                    ganancia={itemGanancia}
-                    onGananciaChange={onGananciaChange}
                     errorPrecioVenta={errorPrecioVenta}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
@@ -1883,7 +1833,7 @@ function CompraForm({
                       isPage ? undefined : (
                       <div className="min-w-[118px]">
                         <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
-                          Tipo de ítem
+                          Tipo
                         </label>
                         <SegmentadoButtons
                           valor={itemTipo}

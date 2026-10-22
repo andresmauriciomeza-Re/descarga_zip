@@ -259,7 +259,9 @@ export function aplicarPreciosCompra(
     { pv: number; costo: number; montoSinIva: number; iva: number }
   >();
   for (const item of items) {
-    const pv = item.precioUnitario ?? 0;
+    // Precio de VENTA de la línea (no el monto de compra: `precioUnitario` es
+    // la base para el costo de referencia, ver `LineaPrecio`).
+    const pv = item.precioVenta ?? 0;
     if (pv <= 0) continue;
     const costo = costoConIva(item);
     if (pv <= costo) continue;
