@@ -1,5 +1,6 @@
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import type { EstadoProducto } from "@/shared/components/EstadoProducto";
 
 import pizzaCarnes from "@/assets/img/pizza_carnes.png";
 import pizzaCañon from "@/assets/img/pizza_cañon.png";
@@ -35,6 +36,11 @@ export interface Product {
   sizes: { label: string; price: number }[];
   extras: { label: string; price: number }[];
   status: "disponible" | "no disponible";
+  /** Estado REAL del producto en Gestión de Productos, tal cual lo ve el
+      cliente: "Disponible" | "No disponible" | "Descontinuado". Es el que usa
+      el menú público (etiqueta, tarjeta atenuada, carrito y caja). `status`
+      se conserva por compatibilidad con pantallas que no lo migraron. */
+  estado: EstadoProducto;
   rating: number;
   sales: number;
 }
@@ -94,7 +100,7 @@ export const SECCIONES_MENU: { categoria: string; titulo: string }[] = [
 export const IMAGENES_PIZZA: Record<string, string> = {
   "Pizza Peperoni": pizzaPeperoni,
   "Pizza Jamon": pizzaJamonQueso,
-  "Pizza Hawai": pizzaHawaii,
+  "Pizza Hawaiana": pizzaHawaii,
   "Pizza Pollo": pizzaPollo,
   "Pizza Cañon": pizzaCañon,
   "Pizza Maicitos": pizzaMaicitos,
@@ -109,22 +115,20 @@ export const IMAGENES_PIZZA: Record<string, string> = {
 export const DESCRIPCIONES: Record<string, string> = {
   "Pizza Peperoni": "Rodajas de peperoni sobre queso derretido.",
   "Pizza Jamon": "Peperoni y hierbas sobre queso derretido.",
-  "Pizza Hawai": "Jamón y trozos de piña sobre queso derretido.",
+  "Pizza Hawaiana": "Jamón y trozos de piña sobre queso derretido.",
   "Pizza Pollo": "Tiras de pollo y queso derretido con hierbas.",
   "Pizza Cañon": "Trozos de jamón sobre queso derretido.",
   "Pizza Maicitos": "Granos de maíz sobre queso derretido con hierbas.",
   "Pizza Paisa": "Carne molida, trozos de carne y peperoni sobre queso derretido.",
   "Pizza Tocineta": "Trozos de tocineta sobre queso derretido.",
   "Gaseosa Cuatro": "Gaseosa Cuatro en botella, ideal para acompañar tu pizza.",
-  "Gaseosa Premiun": "Gaseosa Premiun en botella, ideal para acompañar tu pizza.",
+  "Gaseosa Premium": "Gaseosa Premium en botella, ideal para acompañar tu pizza.",
   "Gaseosa Coca-Cola": "Gaseosa Coca-Cola en botella, ideal para acompañar tu pizza.",
   "Gaseosa Pepsi": "Gaseosa Pepsi en botella, ideal para acompañar tu pizza.",
   "Lasaña Carne": "Capas de pasta con carne molida y queso gratinado.",
   "Lasaña Pollo": "Lasaña de pollo con capas de pasta, salsa y queso gratinado.",
   "Lasaña Mixta": "Lasaña mixta con capas de pasta, salsa y queso gratinado.",
   "Pizza Jamón": "Peperoni y hierbas sobre queso derretido.",
-  "Pizza Hawaiana": "Jamón y trozos de piña sobre queso derretido.",
-  "Gaseosa Premium": "Gaseosa Premium en botella, ideal para acompañar tu pizza.",
 };
 
 // Convierte un `Producto` del panel al `Product` que consumen el catálogo, el
@@ -135,6 +139,18 @@ export const nombreCategoria = (idCategoria: string, categorias: CategoriaProduc
   const cat = categorias.find((c) => c.id === idCategoria);
   return cat ? cat.nombre : "Otros";
 };
+
+// Estado del menú público para un `Product`. Tolera productos guardados en un
+// carrito viejo (localStorage de una build anterior) que todavía no traen
+// `estado`: en ese caso se cae al `status` legacy. "Descontinuado" y "No
+// disponible" se tratan igual para el cliente (no se puede pedir), pero el
+// menú filtra los descontinuados antes de pintarlos.
+export const estadoDeProducto = (p: Product): EstadoProducto =>
+  p.estado ?? (p.status === "disponible" ? "Disponible" : "No disponible");
+
+/** ¿Se puede pedir? Solo "Disponible": ni "No disponible" ni "Descontinuado". */
+export const productoDisponible = (p: Product): boolean =>
+  estadoDeProducto(p) === "Disponible";
 
 export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => ({
   id: Number(p.id.replace(/^PROD-/, "")) || 0,
@@ -147,6 +163,9 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
   sizes: sizesDeProducto(p, nombreCategoria(p.idCategoria, categorias)),
   extras: [],
   status: p.estado === "Disponible" ? "disponible" : "no disponible",
+  // El estado REAL que ve el cliente en Gestión de Productos: es el que usa el
+  // menú público (etiqueta, tarjeta atenuada, carrito y caja).
+  estado: p.estado,
   rating: 4.5,
   sales: 0,
 });
