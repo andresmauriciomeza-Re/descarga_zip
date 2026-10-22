@@ -13,15 +13,14 @@ import {
   Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Venta, VentaStatus } from "./VentasScreen";
 import { hora12 } from "@/shared/utils/hora";
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { PasoPagoTransferencia, PAYMENT_INFO } from "@/shared/components/PasoPagoTransferencia";
+import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VisorImagen } from "@/shared/components/VisorImagen";
-import { obtenerMisVentas, subirComprobanteVenta } from "../services/ventasApi";
+import { cancelarVentaApi, obtenerMisVentas, subirComprobanteVenta } from "../services/ventasApi";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -68,6 +67,18 @@ const ESTADO: Record<
   },
 };
 
+/** Estado a mostrar para UN pedido concreto: el estado "Anulado" tapa dos
+    flujos — el comprobante rechazado (Rechazado) y la anulación/cancelación,
+    la única que trae `montoReembolso` porque devuelve dinero. */
+const estadoCliente = (p: Venta): (typeof ESTADO)[Venta["estado"]] =>
+  p.estado === "Anulado" && p.montoReembolso !== undefined
+    ? {
+        label: "Anulado",
+        color: ESTADO.Anulado.color,
+        mensaje: "Este pedido fue anulado por la pizzería.",
+      }
+    : ESTADO[p.estado];
+
 function Dato({
   Icon,
   titulo,
@@ -101,16 +112,69 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
     catch (error) { toast.error(error instanceof Error ? error.message : "No se pudieron cargar tus pedidos."); }
   };
   useEffect(() => { void cargar(); }, []);
+  // Refresco automático cada 60 s: el backend avanza solo "Por entregar" →
+  // "Completado" al llegar la hora de recogida, y este tick lo refleja sin F5.
+  useEffect(() => {
+    const id = setInterval(() => {
+      void obtenerMisVentas().then(setMisPedidos).catch(() => {
+        // Silencioso: refresco de fondo, no acción del usuario.
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Cancelación del cliente (primeros 10 minutos) ──
+  // El backend calcula, al cargar la lista, cuántos segundos quedaban de la
+  // ventana. Aquí se descuenta lo transcurrido desde esa carga para ocultar el
+  // botón solo; el límite real lo aplica siempre el servidor.
+  const [ahora, setAhora] = useState(() => Date.now());
+  const cargadoEnRef = useRef(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    cargadoEnRef.current = Date.now();
+    setAhora(Date.now());
+  }, [misPedidos]);
+
+  /** Segundos que aún quedan de la ventana de cancelación de un pedido. */
+  const segundosCancelacion = (p: Venta) =>
+    Math.max(0, (p.segundosRestantesAnulacion ?? 0) - Math.floor((ahora - cargadoEnRef.current) / 1000));
+
+  /** ¿Puede el cliente cancelar este pedido? Sólo estados cancelables y
+      mientras corran los primeros 10 minutos desde la creación. */
+  const puedeCancelar = (p: Venta) =>
+    (p.estado === "Por verificar" || p.estado === "En espera" || p.estado === "Por entregar") &&
+    segundosCancelacion(p) > 0;
+
+  /** Pedido que se está cancelando (null = sin modal). */
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const cancelandoEnRef = useRef(false);
+
+  const cancelarPedido = async (id: string) => {
+    if (cancelandoEnRef.current) return;
+    cancelandoEnRef.current = true;
+    try {
+      await cancelarVentaApi(id);
+      setCancelandoId(null);
+      toast.success(`Pedido #${id} cancelado. Te devolvemos el 80 % del valor.`);
+      await cargar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo cancelar el pedido.");
+    } finally {
+      cancelandoEnRef.current = false;
+    }
+  };
   const [abierto, setAbierto] = useState<string | null>(null);
-  /** Pestaña activa: todos los pedidos o solo los de hoy. */
-  const [pestana, setPestana] = useState<"todos" | "recientes">("todos");
+  /** Pestaña activa: todos, los de hoy o los que esperan el saldo faltante. */
+  const [pestana, setPestana] = useState<"todos" | "recientes" | "pendientes">("todos");
 
   // ── Modal "Completar pago" (falta de dinero) ──
   const [completarId, setCompletarId] = useState<string | null>(null);
   const [paso, setPaso] = useState<1 | 2>(1);
   const [metodo, setMetodo] = useState<"Nequi" | "Bancolombia" | "">("");
   const [compComprobante, setCompComprobante] = useState("");
-  const [qrDataUrl, setQrDataUrl] = useState("");
   const { subir, subiendo } = useSubirArchivo();
   const compFileRef = useRef<HTMLInputElement | null>(null);
   /** Visor del comprobante de devolución (rechazo por dinero faltante). */
@@ -118,37 +182,39 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
 
   const pedidosOrdenados = [...misPedidos].sort((a, b) => b.fecha.localeCompare(a.fecha));
   const pedidosHoy = pedidosOrdenados.filter((p) => p.fecha === hoyISO());
-  const lista = pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
+  // Con saldo faltante ("En espera"): los de la pestaña "Pedidos pendientes".
+  const pendientes = pedidosOrdenados.filter(
+    (p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0,
+  );
+  const lista =
+    pestana === "pendientes" ? pendientes : pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
 
   // Pedido en espera del que se está completando el pago (para montos).
   const pedidoCompletar = completarId ? pedidosOrdenados.find((p) => p.id === completarId) ?? null : null;
 
   // QR del método elegido en el paso 2 (mismo contenido que el checkout).
+  const qrDataUrl = useQrPago(
+    paso === 2 && metodo && pedidoCompletar ? metodo : "",
+    pedidoCompletar?.montoFaltante ?? 0,
+  );
+
+  // Si al entrar hay pedidos con saldo faltante, la pantalla abre directamente
+  // en la pestaña "Pedidos pendientes" (solo al abrir: el refresco automático
+  // no debe mover al usuario de la pestaña en la que esté).
+  const pestanaInicialRef = useRef(false);
   useEffect(() => {
-    let vivo = true;
-    if (paso !== 2 || !metodo || !pedidoCompletar) {
-      setQrDataUrl("");
-      return;
+    if (pestanaInicialRef.current || misPedidos.length === 0) return;
+    pestanaInicialRef.current = true;
+    if (misPedidos.some((p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0)) {
+      setPestana("pendientes");
     }
-    const base = PAYMENT_INFO[metodo]?.qr ?? "";
-    const payload = base
-      ? `${base}${base.includes("?") ? "&" : "?"}valor=${pedidoCompletar.montoFaltante ?? 0}`
-      : "";
-    if (!payload) {
-      setQrDataUrl("");
-      return;
-    }
-    QRCode.toDataURL(payload, {
-      margin: 1,
-      width: 260,
-      color: { dark: "#141414", light: "#ffffff" },
-    })
-      .then((url) => vivo && setQrDataUrl(url))
-      .catch(() => vivo && setQrDataUrl(""));
-    return () => {
-      vivo = false;
-    };
-  }, [paso, metodo, pedidoCompletar]);
+  }, [misPedidos]);
+
+  // Si se resuelve el último pendiente estando en esa pestaña, volver a
+  // "todos" (la pestaña deja de existir).
+  useEffect(() => {
+    if (pestana === "pendientes" && pendientes.length === 0) setPestana("todos");
+  }, [pestana, pendientes.length]);
 
   // ── Cambios de estado en tiempo real (3.7) ──
   // Compara el estado anterior con el actual de cada pedido y avisa con un
@@ -192,14 +258,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
     setPaso(1);
     setMetodo("");
     setCompComprobante("");
-    setQrDataUrl("");
   };
   const cerrarCompletar = () => {
     setCompletarId(null);
     setPaso(1);
     setMetodo("");
     setCompComprobante("");
-    setQrDataUrl("");
   };
 
   const enviarFaltante = () => {
@@ -248,21 +312,39 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
         >
           Pedidos recientes ({pedidosHoy.length})
         </button>
+        {pendientes.length > 0 && (
+          <button
+            role="tab"
+            aria-selected={pestana === "pendientes"}
+            onClick={() => setPestana("pendientes")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              pestana === "pendientes"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Pedidos pendientes ({pendientes.length})
+          </button>
+        )}
       </div>
 
       <p className="text-muted-foreground mt-1 mb-6">
-        {lista.length === 0
-          ? "Aún no has hecho pedidos."
-          : `Has hecho ${lista.length} pedido${lista.length !== 1 ? "s" : ""}${pestana === "recientes" ? " hoy" : ""}.`}
+        {pestana === "pendientes"
+          ? `Tienes ${lista.length} pedido${lista.length !== 1 ? "s" : ""} con saldo pendiente.`
+          : lista.length === 0
+            ? "Aún no has hecho pedidos."
+            : `Has hecho ${lista.length} pedido${lista.length !== 1 ? "s" : ""}${pestana === "recientes" ? " hoy" : ""}.`}
       </p>
 
       {lista.length === 0 && (
         <div className="bg-card border border-border rounded-2xl p-10 text-center">
           <ShoppingBag className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-lg font-semibold text-foreground mb-4">
-            {pestana === "recientes"
-              ? "Hoy no has hecho pedidos"
-              : "Todavía no tienes pedidos"}
+            {pestana === "pendientes"
+              ? "No tienes pedidos con saldo pendiente"
+              : pestana === "recientes"
+                ? "Hoy no has hecho pedidos"
+                : "Todavía no tienes pedidos"}
           </p>
           <button
             onClick={onVerMenu}
@@ -275,7 +357,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
 
       <div className="space-y-4">
         {lista.map((p) => {
-          const est = ESTADO[p.estado];
+          const est = estadoCliente(p);
           const abierta = abierto === p.id;
 
           return (
@@ -338,36 +420,102 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                 </div>
               )}
 
+              {/* Pendientes: faltante destacado. El botón de arriba
+                  ("Enviar dinero faltante") abre el modal "Completar pago",
+                  donde está el QR para enviar el saldo y subir el comprobante:
+                  mismo flujo, sin duplicar. */}
+              {pestana === "pendientes" && p.estado === "En espera" && (
+                <div className="px-5 pb-4 -mt-1">
+                  <p className="text-sm font-semibold text-violet-900">
+                    Monto que falta:{" "}
+                    <span
+                      className="text-xl font-bold text-violet-800"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {fmtCOP(p.montoFaltante ?? 0)}
+                    </span>
+                  </p>
+                </div>
+              )}
+
               {/* Detalle completo */}
               {abierta && (
                 <div className="border-t border-border px-5 py-5 space-y-5">
                   <p className="text-sm text-muted-foreground">{est.mensaje}</p>
 
-                  {/* Rechazado: motivo claro y comprobante de devolución. */}
-                  {p.estado === "Anulado" && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
+                  {/* Cancelar pedido: sólo dentro de los primeros 10 minutos. */}
+                  {puedeCancelar(p) && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-start gap-2 text-red-900">
                         <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                        <p className="text-sm">
-                          {p.motivoRechazo === "Dinero faltante"
-                            ? "Rechazado: el valor recibido no cubría el total y el dinero fue devuelto."
-                            : p.motivoRechazo === "Comprobante falso"
-                              ? "Rechazado: el comprobante de pago no fue válido."
-                              // Sin motivo de verificación = la venta fue anulada
-                              // desde el panel (anular deja Anulado).
-                              : "Rechazado: el pedido fue anulado por el administrador."}
-                        </p>
+                        <div className="text-sm">
+                          <p className="font-semibold">¿Te arrepentiste del pedido?</p>
+                          <p>
+                            Puedes cancelarlo dentro de los primeros 10 minutos. Te
+                            devolvemos el 80 % del valor ({fmtCOP(Math.round(p.total * 0.8))}).
+                          </p>
+                        </div>
                       </div>
-                      {p.comprobanteDevolucion && (
-                        <button
-                          onClick={() => setVisorSrc(p.comprobanteDevolucion ?? null)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:underline cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Ver comprobante de devolución
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setCancelandoId(p.id)}
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
+                      >
+                        Cancelar pedido ({segundosCancelacion(p)} s)
+                      </button>
                     </div>
                   )}
+
+                  {/* Rechazado / anulado: motivo claro, valor a devolver y
+                      comprobante de devolución si lo hay. */}
+                  {p.estado === "Anulado" && (() => {
+                    // `montoReembolso` sólo lo trae una anulación/cancelación
+                    // (con su reembolso): un rechazo de verificación no lo tiene.
+                    const esAnulacion = p.montoReembolso !== undefined;
+                    const mensaje = p.motivoRechazo === "Dinero faltante"
+                      ? "Rechazado: el valor recibido no cubría el total y el dinero fue devuelto."
+                      : p.motivoRechazo === "Comprobante falso"
+                        ? "Rechazado: el comprobante de pago no fue válido."
+                        : p.motivoRechazo
+                          ? esAnulacion
+                            ? `Pedido anulado por la pizzería: ${p.motivoRechazo}.`
+                            : `Rechazado por la pizzería: ${p.motivoRechazo}.`
+                          // Sin motivo de verificación = la venta fue anulada
+                          // desde el panel (anular deja Anulado).
+                          : "Rechazado: el pedido fue anulado por el administrador.";
+                    const comp = p.comprobanteDevolucion;
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
+                        <div className="flex items-start gap-2 text-red-900">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <p className="text-sm">{mensaje}</p>
+                        </div>
+                        {esAnulacion && (
+                          <p className="text-sm font-semibold text-red-800">
+                            Valor a devolver: {fmtCOP(p.montoReembolso ?? 0)}
+                          </p>
+                        )}
+                        {comp && (
+                          comp.endsWith(".pdf") ? (
+                            <a
+                              href={comp}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:underline"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Ver comprobante de devolución (PDF)
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => setVisorSrc(comp)}
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Ver comprobante de devolución
+                            </button>
+                          )
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {p.estado === "Devolucion" && (
                     <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-start gap-3">
@@ -641,6 +789,65 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       Continuar
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal: confirmar cancelación del pedido (10 minutos) ── */}
+      {cancelandoId && (() => {
+        const pedido = misPedidos.find((p) => p.id === cancelandoId);
+        if (!pedido) return null;
+        return (
+          <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <p className="font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                    Cancelar pedido #{pedido.id}
+                  </p>
+                  <button
+                    onClick={() => setCancelandoId(null)}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    aria-label="Cerrar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="px-5 py-5 space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    El pedido quedará <span className="font-semibold">cancelado</span> y te
+                    devolvemos el <span className="font-semibold">80 %</span> del valor pagado.
+                    Esta acción no se puede deshacer.
+                  </p>
+                  <div className="rounded-xl border border-border bg-muted/50 px-4 py-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Total del pedido</span>
+                      <span className="font-semibold" style={{ fontFamily: MONO }}>{fmtCOP(pedido.total)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-sm border-t border-border pt-1.5">
+                      <span className="font-semibold text-foreground">Valor a devolver (80 %)</span>
+                      <span className="font-bold text-red-600" style={{ fontFamily: MONO }}>
+                        {fmtCOP(Math.round(pedido.total * 0.8))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 px-5 pb-5">
+                  <button
+                    onClick={() => setCancelandoId(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    onClick={() => void cancelarPedido(pedido.id)}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-95 transition-colors cursor-pointer"
+                  >
+                    Sí, cancelar pedido
+                  </button>
                 </div>
               </div>
             </div>
