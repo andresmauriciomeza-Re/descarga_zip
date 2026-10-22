@@ -15,7 +15,7 @@ import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
-import { abrirPicker } from "@/shared/utils/abrirFecha";
+import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
@@ -1196,10 +1196,10 @@ function CompraForm({
                   donde la columna apila y se suma la tabla — el
                   `overflow-y-auto` del contenedor deja alcanzables "Agregar" y
                   el pie Cancelar/Guardar. */}
-              <div
+               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6"
+                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:h-full"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1323,24 +1323,18 @@ function CompraForm({
                     )}
                   </div>
 
-                  {!isView && isPage && (
+                      {!isView && isPage && (
                     <>
                       <div className="relative">
                         <label className={labelCls}>
                           Fecha de factura <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          ref={fechaFacturaRef}
-                          type="date"
+                        <CalendarDropdown
                           value={fechaFactura}
-                          onChange={(e) => setFechaFactura(e.target.value)}
-                          onClick={() => abrirPicker(fechaFacturaRef)}
-                          onBlur={() => marcarTocado("fechaFactura")}
+                          onChange={(v) => setFechaFactura(v)}
                           max={today}
-                          className={campoCls(
-                            (tocado.fechaFactura || intentoGuardar) ? errorFechaFactura : undefined
-                          )}
-                          aria-invalid={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                          error={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                          onBlur={() => marcarTocado("fechaFactura")}
                         />
                         {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
                           <p className="absolute left-0 top-full text-xs text-red-500">{errorFechaFactura}</p>
@@ -1357,24 +1351,18 @@ function CompraForm({
                     </>
                   )}
 
-                  {!isView && !isPage && (
+                      {!isView && !isPage && (
                     <>
                       <div className={campoCortoCls}>
                         <label className={labelCls}>
                           Fecha de factura <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          ref={fechaFacturaRef}
-                          type="date"
+                        <CalendarDropdown
                           value={fechaFactura}
-                          onChange={(e) => setFechaFactura(e.target.value)}
-                          onClick={() => abrirPicker(fechaFacturaRef)}
-                          onBlur={() => marcarTocado("fechaFactura")}
+                          onChange={(v) => setFechaFactura(v)}
                           max={today}
-                          className={campoCls(
-                            (tocado.fechaFactura || intentoGuardar) ? errorFechaFactura : undefined
-                          )}
-                          aria-invalid={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                          error={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                          onBlur={() => marcarTocado("fechaFactura")}
                         />
                         {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
                           <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
@@ -1682,7 +1670,7 @@ function CompraForm({
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6"
+                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6 lg:h-full"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1790,14 +1778,14 @@ function CompraForm({
                   ivaIncluido={ivaIncluido ?? true}
                   enPagina={isPage}
                   rowEditando={editando}
-                  className={isPage ? "flex-1 min-h-0" : ""}
+                  className={isPage ? "flex-1 min-h-0 flex flex-col" : ""}
                 />
               )}
 
                 {/* Acciones: en pantalla completa van al final de ESTA columna
                     (siempre visibles); en el modal siguen en el pie general. */}
                 {isPage && !isView && (
-                  <div className="flex gap-3 shrink-0 pt-1">
+                  <div className="flex gap-3 shrink-0 mt-auto pt-2">
                     <button
                       onClick={salir}
                       className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"

@@ -86,6 +86,10 @@ export interface CompactInsumoFormProps {
   /** P14: al estar agregando PRODUCTOS no tiene sentido el atajo
    *  "+ Crear insumo" del desplegable de sugerencias. */
   ocultarCrearInsumo?: boolean;
+  /** Callback para crear producto desde el buscador (cuando se agrega producto). */
+  onCrearProducto?: () => void;
+  /** Ocultar opción de crear producto. */
+  ocultarCrearProducto?: boolean;
   /** Precio de VENTA al público del producto elegido. Se muestra SOLO cuando
    *  `mostrarPrecioVenta` es true (líneas de tipo producto); la Orden de
    *  Compra no lo pasa, así que ese formulario queda intacto. Es dato
@@ -116,6 +120,7 @@ export function CompactInsumoForm({
   showSuggestions,
   onSelectSuggestion,
   onCrearInsumo,
+  onCrearProducto,
   containerRef,
   readOnly = false,
   disabled = false,
@@ -127,6 +132,7 @@ export function CompactInsumoForm({
   medidaSoloLectura = false,
   campoExtra,
   ocultarCrearInsumo = false,
+  ocultarCrearProducto = false,
   precioVenta = 0,
   onPrecioVentaChange,
   mostrarPrecioVenta = false,
@@ -179,16 +185,25 @@ export function CompactInsumoForm({
 
             {!readOnly && !disabled && showSuggestions && (
               <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-                {/* "+ Crear insumo" es SIEMPRE la primera opción, estén o no
-                    resultados de búsqueda, y va separado del resto de la lista. */}
-                {!ocultarCrearInsumo && (
+                {/* "+ Crear insumo/producto" es SIEMPRE la primera opción */}
+                {!ocultarCrearInsumo && onCrearInsumo && (
                   <button
                     type="button"
-                    onMouseDown={onCrearInsumo ? () => onCrearInsumo() : undefined}
+                    onMouseDown={() => onCrearInsumo()}
                     className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
+                  </button>
+                )}
+                {!ocultarCrearProducto && onCrearProducto && (
+                  <button
+                    type="button"
+                    onMouseDown={() => onCrearProducto()}
+                    className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Crear producto {nombre.trim() && `“${nombre.trim()}”`}
                   </button>
                 )}
                 {suggestions.map((ins) => (
