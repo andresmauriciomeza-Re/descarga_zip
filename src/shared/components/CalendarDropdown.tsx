@@ -4,28 +4,85 @@ import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 const DIAS  = ["DO","LU","MA","MI","JU","VI","SA"];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
-export function CalendarDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function CalendarDropdown({
+  value,
+  onChange,
+  max,
+  min,
+  error = false,
+  onBlur,
+  onClose,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  max?: string;
+  min?: string;
+  error?: boolean;
+  onBlur?: () => void;
+  onClose?: () => void;
+}) {
   const today    = new Date();
   const selected = value ? new Date(value + "T12:00:00") : null;
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  const [view, setView] = useState(() => {
+    if (selected) return { year: selected.getFullYear(), month: selected.getMonth() };
+    return { year: today.getFullYear(), month: today.getMonth() };
+  });
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        onClose?.();
+        onBlur?.();
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [onBlur, onClose]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) {
+        setOpen(false);
+        onClose?.();
+        onBlur?.();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onBlur, onClose]);
+
+  useEffect(() => {
+    if (open && selected) {
+      setView({ year: selected.getFullYear(), month: selected.getMonth() });
+    } else if (open && !selected) {
+      setView({ year: today.getFullYear(), month: today.getMonth() });
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevMonth = () => setView(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { ...v, month: v.month - 1 });
   const nextMonth = () => setView(v => v.month === 11 ? { year: v.year + 1, month: 0  } : { ...v, month: v.month + 1 });
 
-  const pick = (day: number) => {
+  const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+  const isDisabled = (day: number) => {
     const d = new Date(view.year, view.month, day);
-    onChange(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    const iso = toIso(d);
+    if (max && iso > max) return true;
+    if (min && iso < min) return true;
+    return false;
+  };
+
+  const pick = (day: number) => {
+    if (isDisabled(day)) return;
+    const d = new Date(view.year, view.month, day);
+    onChange(toIso(d));
     setOpen(false);
+    onClose?.();
+    onBlur?.();
   };
 
   const isSelected = (day: number) =>
@@ -51,8 +108,26 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
     <div ref={ref} className="relative w-full">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground hover:border-primary/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+        onClick={() => {
+          setOpen(o => {
+            const next = !o;
+            if (!next) {
+              onClose?.();
+              onBlur?.();
+            }
+            return next;
+          });
+        }}
+        onBlur={(e) => {
+          // Only blur if focus leaves the component
+          if (!ref.current?.contains(e.relatedTarget as Node)) {
+            if (!open) onBlur?.();
+          }
+        }}
+        aria-invalid={error}
+        className={`w-full flex items-center justify-between px-3 py-2.5 bg-muted rounded-xl border text-sm text-foreground hover:border-primary/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+          error ? "border-red-400 focus:ring-red-300" : "border-border"
+        }`}
       >
         <span className={displayDate ? "text-foreground" : "text-muted-foreground"}>
           {displayDate || "DD/MM/AAAA"}
@@ -61,7 +136,11 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64">
+        <div
+          ref={panelRef}
+          className="absolute z-50 bottom-full mb-1 left-0 bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64"
+          style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}
+        >
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <span className="text-xs font-bold text-foreground capitalize">
               {MESES[view.month]} de {view.year}
@@ -89,10 +168,15 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
                   <button
                     type="button"
                     onClick={() => pick(day)}
-                    className={`w-7 h-7 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                      isSelected(day) ? "bg-primary text-white font-bold shadow-sm"
-                      : isToday(day)  ? "border-2 border-primary text-primary font-bold"
-                      : "text-foreground hover:bg-muted"
+                    disabled={isDisabled(day)}
+                    className={`w-7 h-7 rounded-full text-xs font-medium transition-all ${
+                      isDisabled(day)
+                        ? "text-muted-foreground/40 cursor-not-allowed"
+                        : isSelected(day)
+                          ? "bg-primary text-white font-bold shadow-sm cursor-pointer"
+                          : isToday(day)
+                            ? "border-2 border-primary text-primary font-bold cursor-pointer"
+                            : "text-foreground hover:bg-muted cursor-pointer"
                     }`}
                   >
                     {day}
@@ -102,7 +186,7 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
             ))}
           </div>
           <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
-            <button type="button" onClick={() => { onChange(""); setOpen(false); }}
+            <button type="button" onClick={() => { onChange(""); setOpen(false); onClose?.(); onBlur?.(); }}
               className="text-[11px] font-semibold text-muted-foreground hover:text-primary cursor-pointer">
               Borrar
             </button>
@@ -112,9 +196,14 @@ export function CalendarDropdown({ value, onChange }: { value: string; onChange:
               // otro mes la fecha se armaba en ese mes y "Hoy" podía caer en el
               // mes siguiente (ver el 31 de enero sobre febrero, p. ej.).
               const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              const isoToday = toIso(d);
+              if (max && isoToday > max) return;
+              if (min && isoToday < min) return;
               setView({ year: d.getFullYear(), month: d.getMonth() });
-              onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+              onChange(isoToday);
               setOpen(false);
+              onClose?.();
+              onBlur?.();
             }}
               className="text-[11px] font-semibold text-primary hover:text-red-700 cursor-pointer">
               Hoy
