@@ -18,8 +18,17 @@ import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
-import type { Producto, FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
+import { tipoDe, type Producto, type FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
 import { porcionesReferencia, type FichaVersion } from "@/shared/utils/fichas";
+import {
+  convertirUnidad,
+  faltantesPara,
+  fmtCant,
+  motivoFaltante,
+  requeridosPorUnidad,
+  unidadesCompatibles,
+  type FaltanteUnidad,
+} from "@/shared/utils/disponibilidad";
 import { nextNoConformidadId, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -161,15 +170,18 @@ export interface OrdenProduccion {
   descripcionPreparacion?: string;
   tiempoPreparacionMin?: number | null;
   /** Marcas contables: garantizan que un movimiento se aplique UNA sola vez.
-      Las tres se escriben al COMPLETAR la orden (Iniciar ya no mueve stock).
-      Un flag ya encendido = ese movimiento ya se aplicó antes (orden legacy
-      que descontaba al Iniciar) y NO se vuelve a aplicar. */
+      `insumosDescontados` se pone al INICIAR (ahí se valida el inventario y
+      se descuentan los insumos); `productosDescontados` y `stockAplicado`,
+      al COMPLETAR. Un flag ya encendido = ese movimiento ya se aplicó (orden
+      legacy, o Iniciar y Completar en la misma orden) y NO se vuelve a
+      aplicar. */
   insumosDescontados?: boolean;
-  /** El stock de Productos terminados (pizza del menú) ya salió al completar. */
+  /** El stock de las líneas de bebida de un pedido ya salió al completar. */
   productosDescontados?: boolean;
   /** La cantidad real producida ya sumó stock al Producto Insumo. */
   stockAplicado?: boolean;
-  /** Nota de los faltantes con los que se completó igual (solo Forma 2). */
+  /** Nota de los faltantes con los que se completó (órdenes viejas: el
+      camino "completar igual" se eliminó y ya no se escribe). */
   notasFaltantes?: string;
 }
 
@@ -178,33 +190,9 @@ const UNIDADES_DECIMALES = ["kg", "g", "lt", "litros", "ml"];
 
 const esDecimal = (unidad: string) => UNIDADES_DECIMALES.includes(unidad);
 
-/** ¿Se pueden convertir estas dos unidades? Solo masa (kg↔g) y volumen
-    (lt↔ml); cualquier otro par es incompatibles. */
-const unidadesCompatibles = (de: string, a: string): boolean =>
-  de === a ||
-  ([de, a].includes("kg") && [de, a].includes("g")) ||
-  ([de, a].includes("lt") && [de, a].includes("ml"));
-
-/** Cantidad llevada a la unidad con que mide el inventario. Si las unidades
-    son incompatibles devuelve `null` — nunca la misma cantidad, para que el
-    descuento no se haga con una cifra falsa. */
-function convertirUnidad(cantidad: number, de: string, a: string): number | null {
-  if (de === a) return cantidad;
-  if ([de, a].includes("kg") && [de, a].includes("g")) {
-    return de === "kg" ? cantidad * 1000 : cantidad / 1000;
-  }
-  if ([de, a].includes("lt") && [de, a].includes("ml")) {
-    return de === "lt" ? cantidad * 1000 : cantidad / 1000;
-  }
-  return null;
-}
-
-/** Cantidad con su unidad: "48 kg", "96 und". Sin decimales de relleno. */
-function fmtCant(n: number | null | undefined, unidad: string): string {
-  if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const txt = Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
-  return `${txt} ${unidad}`;
-}
+/** `unidadesCompatibles`, `convertirUnidad` y `fmtCant` se mudaron a
+    `shared/utils/disponibilidad`: son el mismo cálculo con el que Gestión de
+    Productos muestra "Se pueden preparar", así que vive en un solo lugar. */
 
 function fmtMinutos(min: number): string {
   if (min <= 0) return "0 min";
@@ -295,38 +283,26 @@ function fichaParaVer(
 
 const esProductoInsumo = (i: Insumo) => i.tipo === "ProductoInsumo";
 
-/** Un insumo que no alcanza: lo que se pide, lo que hay y lo que falta. */
-export interface Faltante extends InsumoRequerido {
-  stock: number;
-  falta: number;
-}
+/** Un insumo que no alcanza: lo que se pide, lo que hay y lo que falta. Sale
+    del cálculo compartido `faltantesPara` (shared/utils/disponibilidad), que
+    además avisa con un `motivo` cuando el insumo no está en el catálogo, está
+    inactivo o sus unidades no se pueden convertir. */
+export type Faltante = FaltanteUnidad;
 
-/** Insumos que la orden va a consumir según el catálogo actual, ya medidos en
-    la unidad con que mide el inventario. Los que la receta menciona y no
-    existen en el catálogo se dejan fuera: no son faltantes. Las unidades
-    incompatibles tampoco se evalúan aquí: el completado las bloquea antes
-    (`unidadesCompatibles`), para no informar una cifra falsa. */
-export function faltantesDe(orden: OrdenProduccion, insumos: Insumo[]): Faltante[] {
-  const salida: Faltante[] = [];
-  for (const r of orden.insumosRequeridos) {
-    if (r.noEncontrado) continue;
-    const ins = insumos.find((i) => i.id === r.insumoId);
-    if (!ins) {
-      // Sigue mencionado en la ficha pero ya no está en el catálogo: se
-      // compara en la unidad de la ficha contra un stock de 0.
-      const falta = Math.max(0, Math.round(r.cantidad * 1000) / 1000);
-      if (falta > 0.0001) salida.push({ ...r, stock: 0, falta });
-      continue;
-    }
-    if (!unidadesCompatibles(r.unidad, ins.unidadMedida)) continue;
-    const requerido = convertirUnidad(r.cantidad, r.unidad, ins.unidadMedida);
-    if (requerido === null) continue;
-    const falta = Math.max(0, Math.round((requerido - ins.stockActual) * 1000) / 1000);
-    if (falta > 0.0001) {
-      salida.push({ ...r, cantidad: requerido, unidad: ins.unidadMedida, stock: ins.stockActual, falta });
-    }
-  }
-  return salida;
+/** ¿Es la línea una bebida (gaseosa, jugo…)? Se decide por el TIPO del
+    producto en el catálogo —"Producto terminado" llega tal cual, sin ficha—
+    y, si el producto ya no existe, por la marca `sinFicha` de la línea. Es la
+    ÚNICA línea de un pedido que baja `stockDisponible` (pizza y lasaña se
+    preparan con sus insumos) y la ÚNICA que no pide insumos al Iniciar. Una
+    pizza o lasaña sin ficha NO es bebida: bloquea con su propio aviso. */
+function esBebida(l: LineaOrden, productos: Producto[]): boolean {
+  // Mismo criterio de resolución que `lineasDeVenta`: por id y, si la línea es
+  // vieja, por nombre normalizado (el detalle trae el tamaño pegado con " — ").
+  const porId = l.productoId ? productos.find((p) => p.id === l.productoId) : undefined;
+  const base = l.nombre.split(" — ")[0].trim();
+  const producto = porId ?? productos.find((p) => normalizar(p.nombre) === normalizar(base));
+  if (!producto) return l.sinFicha === true;
+  return tipoDe(producto) === "Producto terminado";
 }
 
 // ─────────────────────────── Semilla de órdenes ───────────────────────────
@@ -391,7 +367,7 @@ export const INITIAL_ORDENES: OrdenProduccion[] = [
     tipo: "pedido",
     lineas: [
       { idProducto: "PROD-001", productoId: "PROD-001", nombre: "Pizza Peperoni", unidad: "und", cantidadEstimada: 2, tamano: "Mediana", porciones: 16, sinFicha: false },
-      { idProducto: "PROD-013", productoId: "PROD-013", nombre: "Gaseosa Cuatro", unidad: "und", cantidadEstimada: 1, sinFicha: true },
+      { idProducto: "PROD-012", productoId: "PROD-012", nombre: "Gaseosa Cuatro", unidad: "und", cantidadEstimada: 1, sinFicha: true },
     ],
     insumosRequeridos: [
       { insumoId: "INS-004", nombre: "Masa Pre-elaborada", cantidad: 2, unidad: "und" },
@@ -437,6 +413,12 @@ function nuevaLinea(tipo: TipoOrden): LineaOrden {
   return { idProducto: "", nombre: "", unidad: "und", cantidadEstimada: 0 };
 }
 
+/** C6 — En "Preparación en lote" cada línea necesita un Producto Insumo
+    elegido y una cantidad MAYOR O IGUAL A 1. Mientras eso no se cumpla, la
+    línea pinta su error en tiempo real y Guardar queda bloqueado. */
+const preparacionInvalida = (lineas: LineaOrden[]): boolean =>
+  lineas.some((l) => !l.idProducto || l.cantidadEstimada < 1);
+
 const totalEstimado = (lineas: LineaOrden[]) =>
   lineas.reduce((s, l) => s + (l.cantidadEstimada || 0), 0);
 const totalReal = (lineas: LineaOrden[]) =>
@@ -444,27 +426,35 @@ const totalReal = (lineas: LineaOrden[]) =>
 const totalMerma = (lineas: LineaOrden[]) =>
   lineas.reduce((s, l) => s + (l.merma ?? 0), 0);
 
-/** Insumos que consume una línea de "Preparación en lote":
-    cantidadEstimada / rendimiento × cantidad del insumo. Manda el SNAPSHOT de
-    la línea (la foto de la ficha al crear o editar la orden); la ficha vigente
-    solo entra en las líneas viejas que todavía no traen snapshot. */
-function requeridosDeLinea(linea: LineaOrden, fichas: FichasPorProducto, insumos: Insumo[]): InsumoRequerido[] {
+/** Insumos que consume una línea, para UNA unidad y con el factor de su
+    tamaño. Manda el SNAPSHOT de la línea (la foto de la ficha al crear o
+    editar la orden: sus filas y su rendimiento); solo para el factor de
+    tamaño —que el snapshot no guarda— se leen los tamaños de la ficha
+    vigente. Sin snapshot se cae a la ficha vigente. Es el cálculo
+    compartido: `lineasDeVenta`, `crearOrdenReemplazo`, Productos y el
+    control de faltantes usan la misma fórmula. */
+function requeridosDeLinea(linea: LineaOrden, fichas: FichasPorProducto): InsumoRequerido[] {
   const snap = linea.fichaSnapshot;
-  const ficha = snap ? null : fichaVigente(fichas, linea.idProducto);
-  const filas = snap?.insumos ?? ficha?.insumos;
-  if (!filas) return [];
-  const rendimiento = snap
-    ? (snap.rendimiento > 0 ? snap.rendimiento : 1)
-    : (ficha?.rendimiento && ficha.rendimiento > 0 ? ficha.rendimiento : 1);
-  return filas.map(r => {
-    const cat = insumos.find((i) => i.id === r.insumoId);
-    return {
-      insumoId: r.insumoId ?? cat?.id ?? r.nombre,
-      nombre: r.nombre,
-      cantidad: linea.cantidadEstimada / rendimiento * r.cantidad,
-      unidad: r.unidad,
-    };
-  });
+  const ficha = fichaVigente(fichas, linea.idProducto);
+  const base = snap
+    ? { insumos: snap.insumos, rendimiento: snap.rendimiento, porcionesPorTamano: ficha?.porcionesPorTamano }
+    : ficha;
+  if (!base) return [];
+  const cantidad = linea.cantidadEstimada || 0;
+  return requeridosPorUnidad(base, linea.tamano).map((r) => ({
+    ...r,
+    cantidad: cantidad * r.cantidad,
+  }));
+}
+
+/** "Necesita: 1 masa · 0,2 kg queso mozzarella" de UNA línea, a partir de los
+    requeridos que ya salieron de `requeridosDeLinea` (× cantidad × factor de
+    tamaño, con rendimiento y con unidades contables sin multiplicar). Es el
+    mismo número que descuenta Insumos al Iniciar, así que el texto nunca
+    miente. Las líneas sin ficha (bebidas) no necesitan nada → texto vacío. */
+function resumenNecesita(requeridos: InsumoRequerido[]): string {
+  if (requeridos.length === 0) return "";
+  return requeridos.map((r) => `${fmtCant(r.cantidad, r.unidad)} ${r.nombre}`).join(" · ");
 }
 
 /** Insumos legacy: solo para líneas SIN fichaSnapshot ya creadas. */
@@ -526,15 +516,17 @@ function lineasDeVenta(
     });
 
     if (!ficha) continue;
-    // TODO factor por tamaño: Mediana y Grande usan la misma ficha. Cuando
-    // exista, aquí se multiplica la receta por ese factor.
-    for (const r of ficha.insumos) {
-      const cantidad = d.cantidad * (r.cantidad || 0);
-      // La ficha guarda {nombre, cantidad, unidad}, no el id del insumo: se
-      // busca en Gestión de Insumos por nombre (mismo criterio que
-      // `resolverInsumo`) para descontar contra el stock real.
-      const ins = insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
-      const clave = ins?.id ?? normalizar(r.nombre);
+    // Insumos del cálculo compartido (`requeridosPorUnidad`), que ya trae la
+    // receta con el factor del tamaño de la venta y su rendimiento.
+    for (const r of requeridosPorUnidad(ficha, tamano)) {
+      const cantidad = d.cantidad * r.cantidad;
+      // La ficha guarda {nombre, cantidad, unidad} y, desde la unificación,
+      // también el id del insumo: se resuelve contra Gestión de Insumos por id
+      // y, si no, por nombre (mismo criterio que `resolverInsumo`) para
+      // descontar contra el stock real.
+      const ins = insumos.find((i) => i.id === r.insumoId)
+        ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+      const clave = ins?.id ?? r.insumoId;
       const previa = acc.get(clave);
       acc.set(clave, previa
         ? { ...previa, cantidad: previa.cantidad + cantidad }
@@ -593,8 +585,9 @@ export type ItemReemplazo = { nombre: string; cantidad: number; tamaño?: string
 
 /** Orden "Pedido de cliente" para el CANJE de una devolución: la OP anterior
     (vinculada por `ventaId`) queda cancelada y esta reemplaza lo que el
-    cliente se lleva. Nace en "pendiente": el stock del producto nuevo baja
-    recién al COMPLETAR la orden (§5), igual que en cualquier pedido. */
+    cliente se lleva. Nace en "pendiente": al INICIAR descuenta sus insumos
+    (si alcanza el inventario) y al COMPLETAR solo baja el stock de las líneas
+    de bebida, igual que cualquier pedido. */
 export function crearOrdenReemplazo(
   venta: Venta,
   items: ItemReemplazo[],
@@ -630,10 +623,13 @@ export function crearOrdenReemplazo(
     });
 
     if (!ficha) continue;
-    for (const r of ficha.insumos) {
-      const req = cantidad * (r.cantidad || 0);
-      const ins = ctx.insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
-      const clave = ins?.id ?? normalizar(r.nombre);
+    // Mismo cálculo compartido que `lineasDeVenta`, con el factor del tamaño
+    // que eligió el cliente en el canje.
+    for (const r of requeridosPorUnidad(ficha, it.tamaño)) {
+      const req = cantidad * r.cantidad;
+      const ins = ctx.insumos.find((i) => i.id === r.insumoId)
+        ?? ctx.insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+      const clave = ins?.id ?? r.insumoId;
       const previa = acc.get(clave);
       acc.set(clave, previa
         ? { ...previa, cantidad: previa.cantidad + req }
@@ -820,7 +816,10 @@ function LineaPreparacion({
   const opciones = insumos.filter((i) => esProductoInsumo(i) && i.estado === "activo");
   const pi = insumos.find((i) => i.id === linea.idProducto);
   const bajo = !!pi && pi.stockActual < pi.stockMinimo;
-  const requeridos = requeridosDeLinea(linea, fichas, insumos);
+  const requeridos = requeridosDeLinea(linea, fichas);
+  // C8: "Necesita: …" de ESTA línea, con el mismo número que descuenta el
+  // Inicio (factor de tamaño y unidades contables incluidos).
+  const necesita = resumenNecesita(requeridos);
 
   const elegir = (id: string) => {
     const elegido = insumos.find((i) => i.id === id);
@@ -866,16 +865,23 @@ function LineaPreparacion({
           <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
             Cantidad a producir ({linea.unidad})
           </label>
-          {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta como 0. */}
+          {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
+              como 0. C6: mínimo 1 una vez elegido el producto, con error en
+              tiempo real y el botón Guardar bloqueado. */}
           <input
             type="number"
-            min={0}
+            min={1}
             step={esDecimal(linea.unidad) ? 0.1 : 1}
             value={linea.cantidadEstimada === 0 ? "" : linea.cantidadEstimada}
             placeholder="0"
             onChange={(e) => onChange({ ...linea, cantidadEstimada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
             className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
+          {linea.idProducto && linea.cantidadEstimada < 1 && (
+            <p className="mt-1 text-[11px] font-semibold text-red-600">
+              La cantidad mínima es 1 {linea.unidad}
+            </p>
+          )}
         </div>
         {puedeQuitar && (
           <button
@@ -891,6 +897,14 @@ function LineaPreparacion({
 
       {pi && (
         <div className="space-y-3">
+          {necesita && (
+            // C8: lo que esta línea gasta en total, con el factor de su
+            // tamaño y con las unidades contables sin multiplicar. Es el
+            // mismo número que descuenta Insumos al Iniciar.
+            <p className="text-[11px] text-muted-foreground">
+              Necesita: <span className="font-semibold text-foreground">{necesita}</span>
+            </p>
+          )}
           <div>
             <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos requeridos</p>
             <TablaInsumosRequeridos requeridos={requeridos} insumos={insumos} />
@@ -1001,12 +1015,17 @@ export function OrdenProduccionScreen({
     setShowCreate(true);
   }, [abrirOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Estado del modal "Registrar producción real" (§5).
+  // Estado del modal de Completar: `reales` guarda la "Cantidad que salió"
+  // de cada línea (obligatoria en preparación; vacío en un pedido, que es de
+  // solo lectura).
   const [completarItem, setCompletarItem] = useState<OrdenProduccion | null>(null);
   const [reales, setReales] = useState<Record<number, string>>({});
-  // Faltantes detectados al completar: se pintan en el modal y el guardado
-  // espera una segunda confirmación (§5, paso 2).
-  const [faltantesCompletar, setFaltantesCompletar] = useState<Faltante[] | null>(null);
+  // Faltantes detectados al INICIAR: abren el modal "Inventario insuficiente"
+  // (lista de "Faltan X de Y (hay Z)" con su motivo) y la orden se queda
+  // Pendiente: no se descuenta nada ni cambia de estado.
+  const [faltantesIniciar, setFaltantesIniciar] = useState<
+    { ordenId: string; faltantes: Faltante[] } | null
+  >(null);
 
   const [darBajaItem, setDarBajaItem] = useState<OrdenProduccion | null>(null);
   const [darBajaForm, setDarBajaForm] = useState<{
@@ -1099,24 +1118,18 @@ export function OrdenProduccionScreen({
           },
         };
       });
-      // Requeridos: SIEMPRE del snapshot si existe, si no, legacy.
+      // Requeridos: SIEMPRE del snapshot si existe, si no, legacy. Sale del
+      // mismo cálculo que pinta la línea (`requeridosDeLinea`), así que lo
+      // que se muestra y lo que se guarda nunca pueden dar distinto.
       for (const l of lineas) {
-        if (l.fichaSnapshot) {
-          const rend = l.fichaSnapshot.rendimiento > 0 ? l.fichaSnapshot.rendimiento : 1;
-          for (const r of l.fichaSnapshot.insumos) {
-            const cat = insumos.find((i) => i.id === r.insumoId);
-            const insumoId = r.insumoId ?? cat?.id ?? r.nombre;
-            const cantidad = l.cantidadEstimada / rend * r.cantidad;
-            const prev = acc.get(insumoId);
-            acc.set(insumoId, prev
-              ? { ...prev, cantidad: prev.cantidad + cantidad }
-              : { insumoId, nombre: r.nombre, cantidad, unidad: r.unidad });
-          }
-        } else {
-          requeridosDePreparacion(l, insumos).forEach((r) => {
-            const prev = acc.get(r.insumoId);
-            acc.set(r.insumoId, prev ? { ...prev, cantidad: prev.cantidad + r.cantidad } : r);
-          });
+        const req = l.fichaSnapshot
+          ? requeridosDeLinea(l, fichasPorProducto)
+          : requeridosDePreparacion(l, insumos);
+        for (const r of req) {
+          const prev = acc.get(r.insumoId);
+          acc.set(r.insumoId, prev
+            ? { ...prev, cantidad: prev.cantidad + r.cantidad }
+            : r);
         }
       }
       insumosRequeridos = [...acc.values()];
@@ -1175,8 +1188,10 @@ export function OrdenProduccionScreen({
         toast.error("Esa venta ya tiene una orden de producción");
         return;
       }
-    } else if (form.lineas.some((l) => !l.idProducto) || form.lineas.every((l) => l.cantidadEstimada <= 0)) {
-      toast.error("Elige un Producto Insumo y una cantidad mayor a 0");
+    } else if (preparacionInvalida(form.lineas)) {
+      // C6: producto elegido y cantidad ≥ 1 en cada línea. El error ya se
+      // pinta en la propia línea y el botón Crear viene bloqueado.
+      toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
       return;
     }
     guardarOrden(form);
@@ -1184,9 +1199,8 @@ export function OrdenProduccionScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
-    if (editItem.tipo === "preparacion" &&
-        (editItem.lineas.some((l) => !l.idProducto) || editItem.lineas.every((l) => l.cantidadEstimada <= 0))) {
-      toast.error("Elige un Producto Insumo y una cantidad mayor a 0");
+    if (editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas)) {
+      toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
       return;
     }
     guardarOrden({
@@ -1205,26 +1219,32 @@ export function OrdenProduccionScreen({
     toast.success("Orden eliminada");
   };
 
-  // ── Movimientos de inventario (§5) ────────────────────────────────
-  // Regla: TODO el inventario se mueve AL COMPLETAR, nunca al Iniciar. Cada
-  // movimiento lleva su propia marca en la orden (`insumosDescontados`,
-  // `productosDescontados`, `stockAplicado`), así que se aplica UNA sola vez:
-  // con la marca encendida no se repite (orden legacy que ya descontaba al
-  // Iniciar, u orden que se vuelve a guardar o a abrir). Los cálculos se
-  // hacen FUERA de los updaters de setState, nunca dentro de un updater.
+  // ── Movimientos de inventario ─────────────────────────────────────
+  // Regla: los insumos se descuentan AL INICIAR —después de validar que
+  // alcanzan— y el resto (stock de bebidas y producción del Producto Insumo)
+  // AL COMPLETAR. Cada movimiento lleva su propia marca en la orden
+  // (`insumosDescontados`, `productosDescontados`, `stockAplicado`), así que
+  // se aplica UNA sola vez: con la marca encendida no se repite (orden
+  // legacy, u orden que se vuelve a completar). Los cálculos se hacen FUERA
+  // de los updaters de setState, nunca dentro de un updater.
 
-  /** Descuento de insumos y Productos Insumo requeridos. Las cantidades salen
-      de `insumosRequeridos`, la foto congelada desde el SNAPSHOT de la línea
-      al crear/guardar la orden: aquí NUNCA se lee la ficha vigente. Cada
-      cantidad se lleva a la unidad del catálogo (kg↔g, lt↔ml). */
-  const descontarInsumos = (orden: OrdenProduccion) => {
+  /** Descuento de insumos y Productos Insumo (la masa de la pizza cuenta como
+      insumo): recibe los requeridos YA calculados. Al INICIAR salen del
+      recálculo del pedido (o de la foto guardada en preparación en lote) y al
+      COMPLETAR solo en órdenes legacy sin `insumosDescontados` (C2), desde la
+      foto de la orden. El stock nunca baja de 0. */
+  const descontarInsumos = (requeridos: InsumoRequerido[]) => {
     const aDescontar = new Map<string, number>();
-    for (const r of orden.insumosRequeridos) {
-      if (r.noEncontrado) continue;
-      const ins = insumos.find((i) => i.id === r.insumoId);
+    for (const r of requeridos) {
+      // Resuelve igual que `faltantesPara`: primero por id real y, si la fila
+      // de la ficha no lo trae, por nombre normalizado — así lo que pasó la
+      // validación del Inicio es exactamente lo que se descuenta.
+      const ins = insumos.find((i) => i.id === r.insumoId)
+        ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
       if (!ins) continue;
       const cant = convertirUnidad(r.cantidad, r.unidad, ins.unidadMedida);
-      // Unidades incompatibles no llegan hasta acá: el completado las bloquea.
+      // Unidades incompatibles no llegan hasta acá: el Inicio las bloquea con
+      // el modal de faltantes (motivo "unidad-incompatible").
       if (cant === null) continue;
       aDescontar.set(ins.id, (aDescontar.get(ins.id) ?? 0) + cant);
     }
@@ -1237,14 +1257,23 @@ export function OrdenProduccionScreen({
   };
 
   /** Descuento del stock de Productos terminados al COMPLETAR una orden
-      "Pedido de cliente": es lo que esa orden entrega (la pizza solo se
-      calienta) y baja exactamente una vez, mientras `productosDescontados`
-      siga apagado. Las órdenes "Preparación en lote" no tocan este stock: sus
-      líneas son Productos Insumo. Devuelve el resumen para el toast. */
+      "Pedido de cliente": baja exactamente una vez, mientras
+      `productosDescontados` siga apagado. Solo lo hacen las líneas de BEBIDA
+      (C3): la pizza y la lasaña no se entregan desde stock, se preparan con
+      sus insumos, y su disponibilidad se mira en Gestión de Productos. Las
+      órdenes "Preparación en lote" no tocan este stock: sus líneas son
+      Productos Insumo. Si una línea de bebida ya no resuelve ningún producto
+      se avisa con un toast (la orden se completa igual). Devuelve el resumen
+      para el toast. */
   const descontarProductos = (orden: OrdenProduccion): string[] => {
     if (orden.tipo !== "pedido" || orden.productosDescontados) return [];
     const req = new Map<string, number>();
+    // Bebidas cuyo producto YA NO existe en Productos (nombre cambiado o borrado):
+    // en vez de saltarlas en silencio se avisa UNA vez por nombre y la orden se
+    // completa igual — no hay stock que descontar, pero el operador se entera.
+    const noEncontrados = new Set<string>();
     for (const l of orden.lineas) {
+      if (!esBebida(l, productos)) continue;
       const cantidad = l.cantidadEstimada || 0;
       if (cantidad <= 0) continue;
       // Mismo criterio que `lineasDeVenta`: por id y, si la línea es vieja, por
@@ -1253,8 +1282,16 @@ export function OrdenProduccionScreen({
       const base = l.nombre.split(" — ")[0].trim();
       const porNombre = productos.find((p) => normalizar(p.nombre) === normalizar(base));
       const producto = porId ?? porNombre;
-      if (!producto) continue;
+      if (!producto) {
+        noEncontrados.add(l.nombre);
+        continue;
+      }
       req.set(producto.id, (req.get(producto.id) ?? 0) + cantidad);
+    }
+    // El aviso sale ANTES del `return` de abajo: una orden con todas las bebidas
+    // sin resolver también tiene que contarlo (el resto del flujo no cambia).
+    for (const nombre of noEncontrados) {
+      toast.warning(`No se encontró «${nombre}» en Productos: su stock no se descontó`);
     }
     if (req.size === 0) return [];
     // El resumen se calcula FUERA del updater para no duplicarlo si React lo
@@ -1287,93 +1324,166 @@ export function OrdenProduccionScreen({
     return HORNEADO_MIN;
   };
 
+  /** Iniciar (Pendiente → En proceso), para los dos tipos:
+      1) Pide los insumos AHORA. En pedido se recalcula por línea —foto
+         `fichaSnapshot` primero, si no la ficha vigente, × cantidad × factor
+         de tamaño— y se guarda el resultado en `insumosRequeridos`; la línea
+         de bebida no pide nada y una pizza o lasaña sin ficha bloquea con su
+         aviso. En preparación en lote manda la foto ya guardada en la orden.
+      2) Valida contra el stock de hoy con `faltantesPara`: si falta algo abre
+         "Inventario insuficiente" y la orden SE QUEDA PENDIENTE (no se
+         descuenta nada ni cambia de estado).
+      3) Si alcanza, descuenta los insumos —incluye Productos Insumo como la
+         masa—, marca `insumosDescontados` (así el descuento ocurre UNA sola
+         vez) y registra el historial con fecha y hora. Con la marca ya puesta
+         no se vuelve a descontar. */
   const iniciar = (id: string) => {
     const orden = ordenes.find((o) => o.id === id);
     if (!orden) return;
-    // Iniciar SOLO cambia el estado y registra el historial: no descuenta
-    // insumos, no baja el stock de Productos ni suma producción (§5: eso pasa
-    // recién en `confirmarCompletar`).
+
+    // ── 1) Requeridos de la orden, calculados ahora ──
+    let requeridos: InsumoRequerido[] = orden.insumosRequeridos;
+    if (orden.tipo === "pedido") {
+      const acc = new Map<string, InsumoRequerido>();
+      for (const l of orden.lineas) {
+        // Bebidas: no piden insumos.
+        if (esBebida(l, productos)) continue;
+        const clave = l.productoId ?? l.idProducto;
+        const conFicha = l.fichaSnapshot ?? (clave ? fichaVigente(fichasPorProducto, clave) : null);
+        if (!conFicha) {
+          toast.error(`«${l.nombre}» no tiene ficha técnica`);
+          return;
+        }
+        // Mismo cálculo que se muestra en la línea (`requeridosDeLinea`):
+        // snapshot primero, × cantidad × factor de tamaño.
+        for (const r of requeridosDeLinea(l, fichasPorProducto)) {
+          const ins = insumos.find((i) => i.id === r.insumoId)
+            ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+          const claveIns = ins?.id ?? r.insumoId;
+          const previo = acc.get(claveIns);
+          acc.set(claveIns, previo
+            ? { ...previo, cantidad: previo.cantidad + r.cantidad }
+            : { insumoId: claveIns, nombre: r.nombre, cantidad: r.cantidad, unidad: r.unidad, noEncontrado: !ins });
+        }
+      }
+      requeridos = [...acc.values()];
+    }
+
+    // ── 2) ¿Alcanza el inventario de hoy? ──
+    const faltantes = faltantesPara(requeridos, 1, insumos);
+    if (faltantes.length > 0) {
+      // La foto fresca queda guardada en la orden (sigue Pendiente) y se abre
+      // el modal: lista de faltantes con su motivo y solo botón Cerrar.
+      setOrdenes((p) => p.map((o) => (o.id === id ? { ...o, insumosRequeridos: requeridos } : o)));
+      setFaltantesIniciar({ ordenId: id, faltantes });
+      return;
+    }
+
+    // ── 3) Pasa a En proceso y descuenta UNA sola vez ──
+    const descuenta = !orden.insumosDescontados;
     const now = nowISO();
     const actualizado: OrdenProduccion = {
       ...orden,
+      insumosRequeridos: requeridos,
       estadoOrden: "en-proceso",
       inicioProduccion: now,
       entregaEstimada: addMinutesISO(now, tiempoTotalOrden(orden)),
+      insumosDescontados: orden.insumosDescontados || descuenta,
       historial: [...orden.historial, { de: orden.estadoOrden, a: "en-proceso", fechaHora: now }],
     };
     setOrdenes((p) => p.map((o) => (o.id === id ? actualizado : o)));
-    toast.success(`${id} en proceso`);
+    if (descuenta) descontarInsumos(requeridos);
+    toast.success(descuenta ? `${id} en proceso — insumos descontados` : `${id} en proceso`);
   };
 
   const abrirCompletar = (id: string) => {
     const orden = ordenes.find((o) => o.id === id);
     if (!orden) return;
     setCompletarItem(orden);
-    // La cantidad real arranca precargada con la estimada, y la confirmación
-    // de faltantes se limpia en cada apertura del modal.
-    const precarga: Record<number, string> = {};
-    orden.lineas.forEach((l, i) => { precarga[i] = String(l.cantidadEstimada); });
-    setReales(precarga);
-    setFaltantesCompletar(null);
+    // En preparación en lote, "Cantidad que salió" arranca VACÍA: es
+    // obligatoria, con error en tiempo real y con Completar deshabilitado
+    // hasta que cada línea tenga un valor ≥ 0. En pedido no se pide nada: el
+    // modal es de solo lectura (producto, tamaño y cantidad).
+    setReales({});
   };
 
-  /** Completa la orden: registra la producción real y aplica TODO el
-      inventario que la orden consume/produce, en este orden:
-      1) insumos y Productos Insumo requeridos (bajan, convertidos a la unidad
-         del catálogo),
-      2) Productos terminados del menú (solo tipo "pedido", es lo que se
-         entrega),
-      3) stock del Producto Insumo producido (solo tipo "preparación", solo
-         la cantidad real).
-      Cada paso queda marcado con su bandera, así que repetir el guardado no
-      vuelve a mover stock ni se duplica al reabrir la orden. Las unidades
-      incompatibles bloquean ANTES de tocar nada; los faltantes se piden una
-      sola vez y el stock nunca baja de 0. */
+  /** C4 — ¿Cada línea de "Cantidad que salió" trae un número ≥ 0? El vacío o
+      un negativo dejan el error en rojo en la propia línea y bloquean el botón
+      Completar (la red de seguridad de `confirmarCompletar` repite esto). */
+  const realesOk = (o: OrdenProduccion | null): boolean =>
+    !!o && o.lineas.every((_, i) => {
+      const txt = (reales[i] ?? "").trim();
+      const n = Number(txt);
+      return txt !== "" && Number.isFinite(n) && n >= 0;
+    });
+  // Modal de completar: un Pedido se revisa y confirma (solo lectura, C3); una
+  // Preparación en lote necesita todas sus "Cantidad que salió" ≥ 0 (C4).
+  const completarEsPedido = completarItem?.tipo === "pedido";
+  const completarOk = !completarItem || completarEsPedido || realesOk(completarItem);
+
+  /** Completa la orden: registra la producción real (solo Preparación en lote;
+      un Pedido es de solo lectura) y aplica el inventario pendiente:
+      1) insumos y Productos Insumo requeridos —solo si `insumosDescontados`
+         está apagado: lo que ya se descontó al Iniciar no se repite (C2)—,
+      2) stock de Productos terminados, SOLO de las líneas de bebida (C3),
+      3) stock del Producto Insumo producido (solo preparación, solo la
+         cantidad real).
+      Cada paso lleva su bandera, así que repetir el guardado no vuelve a
+      mover stock ni se duplica al reabrir la orden. El camino "completar
+      igual" con faltantes ya no existe (C5): la validación de inventario pasó
+      —o sigue bloqueando— en el Inicio. */
   const confirmarCompletar = () => {
     if (!completarItem) return;
     const orden = ordenes.find((o) => o.id === completarItem.id);
     if (!orden) return;
 
-    // 1) Unidades incompatibles: bloquean el completado antes de mover stock.
-    const incompatibles: { nombre: string; unidadFicha: string; unidadCatalogo: string }[] = [];
-    for (const r of orden.insumosRequeridos) {
-      if (r.noEncontrado) continue;
-      const ins = insumos.find((i) => i.id === r.insumoId);
-      if (!ins || unidadesCompatibles(r.unidad, ins.unidadMedida)) continue;
-      incompatibles.push({ nombre: r.nombre, unidadFicha: r.unidad, unidadCatalogo: ins.unidadMedida });
-    }
-    if (incompatibles.length > 0) {
-      toast.error(
-        `No se puede completar: unidades incompatibles — ${incompatibles
-          .map((x) => `${x.nombre} (${x.unidadFicha} en la ficha, ${x.unidadCatalogo} en el catálogo)`)
-          .join(", ")}`,
-      );
-      return;
-    }
-
-    // 2) Faltantes: si los hay y todavía no se confirmaron, se avisa y se
-    // pide una segunda confirmación (el modal queda abierto).
-    const faltantes = faltantesDe(orden, insumos);
-    if (faltantes.length > 0 && !faltantesCompletar) {
-      setFaltantesCompletar(faltantes);
-      return;
-    }
-
-    const lineas: LineaOrden[] = orden.lineas.map((l, i) => {
-      const real = Number(reales[i]);
-      if (!Number.isFinite(real) || real < 0) return l;
-      // Si lo real supera lo estimado no hay merma: es sobrante, y la merma
-      // queda en 0 (la confirmación se pide en el modal).
-      const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
-      return { ...l, cantidadReal: real, merma };
-    });
-
     // Marca cada movimiento que se va a aplicar AHORA. Si la marca ya estaba
-    // encendida, ese movimiento ocurrió antes (orden legacy que descontaba al
-    // Iniciar, o una orden que se completa dos veces) y NO se repite.
+    // encendida, ese movimiento ocurrió antes (orden que descontó al Iniciar,
+    // o una orden que se completa dos veces) y NO se repite.
     const aplicarInsumos = !orden.insumosDescontados;
     const aplicarProductos = orden.tipo === "pedido" && !orden.productosDescontados;
     const aplicarStock = orden.tipo === "preparacion" && !orden.stockAplicado;
+
+    // 1) Unidades incompatibles: solo frenan cuando AHORA se va a descontar
+    // insumos. Si la marca ya está puesta, no se vuelve a tocar el stock.
+    if (aplicarInsumos) {
+      const incompatibles: { nombre: string; unidadFicha: string; unidadCatalogo: string }[] = [];
+      for (const r of orden.insumosRequeridos) {
+        if (r.noEncontrado) continue;
+        const ins = insumos.find((i) => i.id === r.insumoId)
+          ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+        if (!ins || unidadesCompatibles(r.unidad, ins.unidadMedida)) continue;
+        incompatibles.push({ nombre: r.nombre, unidadFicha: r.unidad, unidadCatalogo: ins.unidadMedida });
+      }
+      if (incompatibles.length > 0) {
+        toast.error(
+          `No se puede completar: unidades incompatibles — ${incompatibles
+            .map((x) => `${x.nombre} (${x.unidadFicha} en la ficha, ${x.unidadCatalogo} en el catálogo)`)
+            .join(", ")}`,
+        );
+        return;
+      }
+    }
+
+    // 2) Producción real: SOLO preparación en lote (C4). Cada línea necesita
+    // su "Cantidad que salió" ≥ 0; el vacío o un negativo bloquean (el botón
+    // ya viene deshabilitado, esto es la red de seguridad). Un pedido no pide
+    // cantidades: su modal es de solo lectura y sus líneas no llevan real ni
+    // merma.
+    let lineas: LineaOrden[] = orden.lineas;
+    if (orden.tipo === "preparacion") {
+      if (!realesOk(orden)) {
+        toast.error("Cada línea necesita su «Cantidad que salió» (0 o más)");
+        return;
+      }
+      lineas = orden.lineas.map((l, i) => {
+        const real = Number(reales[i]);
+        // Si lo real supera lo estimado no hay merma: es sobrante, y la merma
+        // queda en 0 (la confirmación se pide en el modal).
+        const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
+        return { ...l, cantidadReal: real, merma };
+      });
+    }
 
     const now = nowISO();
     const actualizado: OrdenProduccion = {
@@ -1384,18 +1494,14 @@ export function OrdenProduccionScreen({
       insumosDescontados: orden.insumosDescontados || aplicarInsumos,
       productosDescontados: orden.productosDescontados || aplicarProductos,
       stockAplicado: orden.stockAplicado || aplicarStock,
-      notasFaltantes: faltantes.length > 0
-        ? `Completó con faltantes: ${faltantes.map((f) => `${f.nombre} (faltan ${fmtCant(f.falta, f.unidad)})`).join(", ")}`
-        : orden.notasFaltantes,
+      // `notasFaltantes` ya no se escribe: el camino "completar igual" se
+      // eliminó (C5). Las notas que guardaron órdenes viejas siguen a la vista
+      // en el detalle.
     };
     setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizado : o)));
 
-    if (faltantes.length > 0) {
-      toast.warning(actualizado.notasFaltantes ?? "Completó con faltantes");
-    }
-
-    // ── a) Insumos y Productos Insumo consumidos (§5) ──
-    if (aplicarInsumos) descontarInsumos(orden);
+    // ── a) Insumos y Productos Insumo consumidos ──
+    if (aplicarInsumos) descontarInsumos(orden.insumosRequeridos);
 
     // ── b) Productos terminados del menú (solo pedidos de cliente) ──
     const bajaron = aplicarProductos ? descontarProductos(orden) : [];
@@ -1466,7 +1572,6 @@ export function OrdenProduccionScreen({
       });
     }
     setCompletarItem(null);
-    setFaltantesCompletar(null);
     setReales({});
   };
 
@@ -1521,9 +1626,12 @@ export function OrdenProduccionScreen({
   };
 
   // ── Modales ────────────────────────────────────────────────────────
-  const Modal = ({ title, onClose, onConfirm, label, ancho, children }: {
+  const Modal = ({ title, onClose, onConfirm, label, ancho, deshabilitado, children }: {
     title: string; onClose: () => void; onConfirm: () => void; label: string;
-    ancho?: string; children: React.ReactNode;
+    ancho?: string;
+    /** C6: bloquea el botón de confirmar (preparaciones con cantidad < 1). */
+    deshabilitado?: boolean;
+    children: React.ReactNode;
   }) => (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
@@ -1536,7 +1644,10 @@ export function OrdenProduccionScreen({
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
           <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{label}</button>
+          <button onClick={onConfirm} disabled={deshabilitado}
+            className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+              deshabilitado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"
+            }`}>{label}</button>
         </div>
       </motion.div>
     </div>
@@ -1707,6 +1818,9 @@ export function OrdenProduccionScreen({
           onConfirm: handleCreate,
           label: "Crear Orden",
           ancho: "max-w-2xl",
+          // C6: Guardar bloqueado mientras alguna línea de preparación no
+          // tenga producto o su cantidad sea menor a 1.
+          deshabilitado: form.tipo === "preparacion" && preparacionInvalida(form.lineas),
           children: (
             <div className="space-y-4">
               <div>
@@ -1772,6 +1886,8 @@ export function OrdenProduccionScreen({
           onConfirm: handleEdit,
           label: "Guardar",
           ancho: "max-w-2xl",
+          // C6: ídem Crear.
+          deshabilitado: editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas),
           children: (
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/60 rounded-xl border border-border">
@@ -1836,7 +1952,10 @@ export function OrdenProduccionScreen({
         })}
       </AnimatePresence>
 
-      {/* ── Modal: Registrar producción real ── */}
+      {/* ── Modal: Completar ── Pedido = solo lectura (C3); Preparación en
+          lote = "Cantidad que salió" obligatoria y ≥ 0 con error en tiempo
+          real (C4). El bloque rojo de "completar igual" ya no existe (C5):
+          el inventario se valida en el Inicio. */}
       <AnimatePresence>
         {completarItem && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -1845,86 +1964,159 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Registrar producción real — {completarItem.id}
+                  {completarEsPedido ? "Completar pedido" : "Registrar producción real"} — {completarItem.id}
                 </h3>
-                <button onClick={() => { setCompletarItem(null); setFaltantesCompletar(null); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setCompletarItem(null); setReales({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  {completarItem.tipo === "preparacion"
-                    ? "Al completar, al stock del Producto Insumo sube solo la cantidad real; la merma no existe como producto."
-                    : "Al completar se registra la producción real y la merma. No se suma stock a ningún producto."}
+                  {completarEsPedido
+                    ? "Solo lectura: revisa las líneas del pedido y confirma. Al completar solo baja su stock lo que se entrega directo (bebidas); la pizza y la lasaña se preparan con sus insumos."
+                    : "Al completar, al stock del Producto Insumo sube solo la cantidad real; la merma no existe como producto. «Cantidad que salió» es obligatoria."}
                 </p>
-                {faltantesCompletar && faltantesCompletar.length > 0 && (
-                  <div className="p-4 border border-red-300 rounded-2xl bg-red-50 space-y-1">
-                    <p className="text-sm font-bold text-red-700 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" /> Inventario insuficiente
-                    </p>
-                    {faltantesCompletar.map((f) => (
-                      <p key={f.insumoId} className="text-sm text-red-700 flex items-center gap-2">
-                        <Minus className="w-3.5 h-3.5 shrink-0" />
-                        Faltan {fmtCant(f.falta, f.unidad)} de {f.nombre} (hay {fmtCant(f.stock, f.unidad)})
-                      </p>
-                    ))}
-                    <p className="text-xs text-red-700 pt-1">
-                      Si completas igual, el stock baja hasta 0 y la orden guarda la nota de los faltantes.
-                    </p>
-                  </div>
-                )}
-                {completarItem.lineas.map((l, i) => {
-                  const real = Number(reales[i]);
-                  const ok = Number.isFinite(real);
-                  const sobra = ok && real > l.cantidadEstimada;
-                  const merma = ok ? Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000) : 0;
-                  return (
-                    <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
-                      <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad estimada</label>
-                          <input value={fmtCant(l.cantidadEstimada, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                            Cantidad real {l.unidad}
-                          </label>
-                          <input
-                            type="number" min={0}
-                            step={esDecimal(l.unidad) ? 0.01 : 1}
-                            // Texto con vacío permitido (punto B1); se limpian
-                            // los ceros a la izquierda al teclear.
-                            value={reales[i] ?? ""}
-                            placeholder="0"
-                            onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
-                            className={iCls}
-                          />
-                        </div>
+                {completarItem.lineas.map((l, i) => completarEsPedido ? (
+                  // ── C3: pedido en solo lectura (producto, tamaño, cantidad)
+                  <div key={i} className="p-4 border border-border rounded-2xl bg-card">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {[l.tamano ? `Tamaño ${l.tamano}` : "Tamaño único",
+                            l.porciones ? `${l.porciones} porciones` : null].filter(Boolean).join(" · ")}
+                        </p>
                       </div>
-                      <p className={`text-xs font-semibold ${sobra ? "text-blue-600" : merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                        {sobra
-                          ? `Sobrante: ${fmtCant(real - l.cantidadEstimada, l.unidad)} — se confirma al completar y la merma queda en 0`
-                          : `Merma: ${fmtCant(merma, l.unidad)}`}
-                      </p>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad</p>
+                        <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
+                      </div>
                     </div>
-                  );
-                })}
+                    {l.sinFicha && (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
+                    )}
+                  </div>
+                ) : (
+                  // ── C4: preparación en lote con "Cantidad que salió" ──
+                  (() => {
+                    const txt = reales[i] ?? "";
+                    const n = Number(txt);
+                    const vacio = txt.trim() === "";
+                    // Vacío o negativo = error en tiempo real y Completar
+                    // deshabilitado (lo revalida `confirmarCompletar`).
+                    const invalido = vacio || !Number.isFinite(n) || n < 0;
+                    const real = invalido ? 0 : n;
+                    const sobra = !invalido && real > l.cantidadEstimada;
+                    const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
+                    return (
+                      <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
+                        <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad estimada</label>
+                            <input value={fmtCant(l.cantidadEstimada, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                              Cantidad que salió ({l.unidad})
+                            </label>
+                            <input
+                              type="number" min={0}
+                              step={esDecimal(l.unidad) ? 0.01 : 1}
+                              // Texto con vacío permitido (punto B1); se limpian
+                              // los ceros a la izquierda al teclear.
+                              value={txt}
+                              placeholder="0"
+                              onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
+                              className={iCls + (invalido ? " ring-2 ring-red-400" : "")}
+                            />
+                            {invalido && (
+                              <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                {vacio
+                                  ? "Obligatoria: escribe la cantidad que salió (0 o más)"
+                                  : "No se aceptan cantidades negativas"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {!invalido && (
+                          <p className={`text-xs font-semibold ${sobra ? "text-blue-600" : merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                            {sobra
+                              ? `Sobrante: ${fmtCant(real - l.cantidadEstimada, l.unidad)} — se confirma al completar y la merma queda en 0`
+                              : `Merma: ${fmtCant(merma, l.unidad)}`}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()
+                ))}
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
-                <button onClick={() => { setCompletarItem(null); setFaltantesCompletar(null); }}
+                <button onClick={() => { setCompletarItem(null); setReales({}); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
-                <button onClick={() => {
-                  const haySobrante = completarItem.lineas.some((l, i) => Number(reales[i]) > l.cantidadEstimada);
-                  if (haySobrante && !window.confirm(
-                    "Hay líneas con más producción que la estimada. La merma de esas líneas queda en 0. ¿Completar la orden?",
-                  )) return;
-                  confirmarCompletar();
-                }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  {faltantesCompletar && faltantesCompletar.length > 0
-                    ? "Completar de todas formas"
-                    : "Completar orden"}
+                <button
+                  disabled={!completarOk}
+                  onClick={() => {
+                    if (!completarOk) return;
+                    if (!completarEsPedido) {
+                      // C4: con una línea en 0, todo lo planificado de esa
+                      // línea se registra como merma.
+                      if (completarItem.lineas.some((_, i) => Number(reales[i]) === 0) &&
+                          !window.confirm("Se registrará todo como merma. ¿Completar la orden?")) return;
+                      const haySobrante = completarItem.lineas.some((l, i) => Number(reales[i]) > l.cantidadEstimada);
+                      if (haySobrante && !window.confirm(
+                        "Hay líneas con más producción que la estimada. La merma de esas líneas queda en 0. ¿Completar la orden?",
+                      )) return;
+                    }
+                    confirmarCompletar();
+                  }}
+                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+                    completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
+                  }`}>
+                  Completar orden
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal: Inventario insuficiente al Iniciar (C1) ── Lista de
+          faltantes con su motivo y SOLO botón Cerrar: la orden se queda
+          Pendiente y no se descuenta nada. */}
+      <AnimatePresence>
+        {faltantesIniciar && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
+              <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: SERIF }}>
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" /> Inventario insuficiente
+                </h3>
+                <button onClick={() => setFaltantesIniciar(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  La orden <strong className="text-foreground">{faltantesIniciar.ordenId}</strong> se queda{" "}
+                  <strong className="text-foreground">Pendiente</strong>: no se descontó nada ni cambió de estado.
+                </p>
+                {faltantesIniciar.faltantes.map((f) => (
+                  <div key={f.insumoId} className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-0.5">
+                    <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
+                      <Minus className="w-3.5 h-3.5 shrink-0 mt-1" />
+                      <span>Faltan {fmtCant(f.falta, f.unidad)} de {f.nombre} (hay {fmtCant(f.stock, f.unidad)})</span>
+                    </p>
+                    {f.motivo && (
+                      <p className="pl-6 text-[11px] text-red-700">{motivoFaltante(f)}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="shrink-0 px-5 py-4 border-t border-border">
+                <button onClick={() => setFaltantesIniciar(null)}
+                  className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                  Cerrar
                 </button>
               </div>
             </motion.div>
@@ -1988,7 +2180,13 @@ export function OrdenProduccionScreen({
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>
                   <div className="space-y-1.5">
-                    {detailItem.lineas.map((l, i) => (
+                    {detailItem.lineas.map((l, i) => {
+                      // C8: lo que gasta ESTA línea (con el factor de su
+                      // tamaño y las unidades contables sin multiplicar): el
+                      // mismo número que descuenta Insumos al Iniciar. Las
+                      // líneas de bebida no piden nada y no lo pintan.
+                      const necesita = resumenNecesita(requeridosDeLinea(l, fichasPorProducto));
+                      return (
                       <div key={i} className="p-3 bg-muted rounded-xl">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -2015,13 +2213,19 @@ export function OrdenProduccionScreen({
                         {l.sinFicha && (
                           <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
                         )}
+                        {necesita && (
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                            Necesita: <span className="font-semibold text-foreground">{necesita}</span>
+                          </p>
+                        )}
                         {l.pasos && l.pasos.length > 0 && (
                           <ol className="mt-1.5 list-decimal list-inside text-[11px] text-muted-foreground space-y-0.5">
                             {l.pasos.map((p, j) => <li key={j}>{p}</li>)}
                           </ol>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2232,6 +2436,18 @@ export function OrdenProduccionScreen({
                 </div>
 
                 <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
+                  {/* C7: la marca dice si hay algo por devolver. Hoy
+                      `confirmarDarBaja` solo cancela la orden —nunca devuelve
+                      stock—, así que el texto aclara qué pasó con los insumos. */}
+                  <p className={`text-xs rounded-xl px-3 py-2 border ${
+                    darBajaItem.insumosDescontados
+                      ? "bg-amber-50 border-amber-200 text-amber-800"
+                      : "bg-muted border-border text-muted-foreground"
+                  }`}>
+                    {darBajaItem.insumosDescontados
+                      ? "Los insumos ya se descontaron al iniciar: no se devuelven"
+                      : "Todavía no descontó insumos: no hay nada que devolver"}
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
@@ -2425,7 +2641,12 @@ function CamposPedido({
             <div className="px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
               Detalle de la venta (solo lectura)
             </div>
-            {elegidas.lineas.map((l, i) => (
+            {elegidas.lineas.map((l, i) => {
+              // C8: lo que ESTA línea va a gastar al Iniciar (con el factor
+              // de su tamaño y con las unidades contables sin multiplicar).
+              // Las bebidas no llevan ficha y no piden insumos.
+              const necesita = resumenNecesita(requeridosDeLinea(l, fichas));
+              return (
               <div key={i} className="flex items-start justify-between gap-3 px-3 py-2 border-t border-border">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
@@ -2436,6 +2657,11 @@ function CamposPedido({
                   {l.sinFicha && (
                     <p className="text-[11px] text-muted-foreground italic mt-0.5">Sin preparación · se entrega directo</p>
                   )}
+                  {necesita && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Necesita: <span className="font-semibold text-foreground">{necesita}</span>
+                    </p>
+                  )}
                 </div>
                 {l.sinFicha ? (
                   <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">Sin ficha</span>
@@ -2443,7 +2669,8 @@ function CamposPedido({
                   <Layers className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                 )}
               </div>
-            ))}
+              );
+            })}
             <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
               Fecha y hora solicitadas: <strong className="text-foreground">{venta.fecha}{venta.horaRecogida ? ` ${hora12(venta.horaRecogida)}` : ""}</strong> (recogida del cliente)
             </div>

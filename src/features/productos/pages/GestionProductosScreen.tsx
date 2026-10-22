@@ -18,12 +18,20 @@ import {
   emptyFichaVersion,
   fichaTieneCambios,
   numeroNuevoFicha,
-  porcionesReferencia,
   siguienteNumeroFicha,
   type FichaVersion,
   type FichasPorProducto,
   type PorcionesTamano,
 } from "@/shared/utils/fichas";
+// Cálculo de disponibilidad compartido con Orden de Producción: un Producto
+// insumo no tiene stock propio, así que la celda Stock, Ver detalle y el
+// Excel leen cuántas unidades admite preparar SU FICHA con el stock real de
+// Insumos (mismo código que usan para validar y descontar al iniciar).
+import {
+  detalleDisponibilidad,
+  fmtCant,
+  motivoFaltante,
+} from "@/shared/utils/disponibilidad";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { Paginador } from "@/shared/components/Paginador";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
@@ -62,6 +70,26 @@ const MONO = "var(--font-texto)";
     usa Orden de Producción. */
 export const TIPOS_PRODUCTO = ["Producto insumo", "Producto terminado"] as const;
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
+
+// ── Umbrales de stock bajo (SOLO bebidas / Producto terminado) ──────────────
+// El profesor pidió 10 y 5 unidades. Viven en UN solo lugar para que el
+// listado, "Ver detalle" y los tooltips no puedan divergir: se reemplazan los
+// umbrales viejos (15 y 5). Productos Insumo (pizzas, lasañas) NO usan esto:
+// ellos no tienen stock propio.
+const STOCK_BAJO = 10;
+const STOCK_CRITICO = 5;
+
+/** Estado del stock de una bebida: color (con variante para modo oscuro) y la
+    etiqueta que lo acompaña. 0 → "Agotado"; ≤ 5 → "Stock crítico" en rojo;
+    ≤ 10 → "Stock bajo" en amarillo; más de 10 → verde sin etiqueta. */
+const estadoStockBebida = (n: number): { cls: string; etiqueta: string } =>
+  n <= 0
+    ? { cls: "text-red-600 dark:text-red-400", etiqueta: "Agotado" }
+    : n <= STOCK_CRITICO
+      ? { cls: "text-red-600 dark:text-red-400", etiqueta: "Stock crítico" }
+      : n <= STOCK_BAJO
+        ? { cls: "text-yellow-600 dark:text-yellow-400", etiqueta: "Stock bajo" }
+        : { cls: "text-emerald-600 dark:text-emerald-400", etiqueta: "" };
 
 /** Texto explicativo de cada tipo, para los `title` de las pastillas y las
     líneas de ayuda bajo el selector de categoría. */
@@ -807,6 +835,25 @@ function CampoPrecio({
   );
 }
 
+/** Una cifra de "se pueden preparar": las pizzas llevan una por tamaño
+    (Mediana y Grande) y las lasañas o cualquier ficha sin tamaños, una sola. */
+type CifraPrep = {
+  tamano?: string;
+  cantidad: number;
+  /** Texto completo del insumo que limita ("Queso mozzarella (hay 2 kg en
+      Insumos)"): es lo que va en el tooltip y en el "No alcanza" detallado. */
+  limitante?: string;
+  /** true cuando ESTE tamaño se queda en 0: ahí el mensaje va en rojo y
+      dice "No alcanza"; si no, gris y "Limita". */
+  agotado: boolean;
+  /** Nombres de los insumos que marcan el mínimo de ESTE tamaño (con empate
+      puede haber más de uno). */
+  limita: string[];
+};
+
+/** Una fila del desglose de `detalleDisponibilidad` (Ver detalle, B3). */
+type FilaDetalle = ReturnType<typeof detalleDisponibilidad>["filas"][number];
+
 export function GestionProductosScreen({
   productos,
   setProductos,
@@ -840,6 +887,10 @@ export function GestionProductosScreen({
   const [search, setSearch] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"Todos" | TipoProducto>("Todos");
   const [filtroEstado, setFiltroEstado] = useState<"Todos" | EstadoProducto>("Todos");
+  // Aviso de stock bajo: al apretar el aviso el listado queda mostrando SOLO
+  // esas bebidas; el segundo clic lo apaga (el aviso se mantiene visible
+  // mientras el filtro esté activo, para poder salir de él).
+  const [filtroStockBajo, setFiltroStockBajo] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<Producto | null>(
     null,
@@ -1048,16 +1099,176 @@ export function GestionProductosScreen({
     return p.unidadVenta || "und";
   };
 
+  /** Texto de stock de una BEBIDA, igual en la celda, en "Ver detalle" y en
+      los tooltips: "12 und · Stock bajo" — y SOLO "Agotado" cuando vale 0
+      (en vez de "0 und"). Usa los umbrales ÚNICOS de arriba. */
+  const textoStockBebida = (p: Producto): string => {
+    const est = estadoStockBebida(p.stockDisponible);
+    if (p.stockDisponible <= 0) return est.etiqueta;
+    const base = `${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}`;
+    return est.etiqueta ? `${base} · ${est.etiqueta}` : base;
+  };
+
   /** Versión vigente de la ficha (la última: es la que tiene fechaFin null). */
   const fichaVigente = (id: string): FichaVersion | null => {
     const l = fichas[id];
     return l && l.length > 0 ? l[l.length - 1] : null;
   };
 
-  const ayudaStock = (p: Producto): string =>
-    tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
-      ? "Se actualiza al completar órdenes de producción"
-      : "Sube con las compras y baja con las ventas";
+  const ayudaStock = (p: Producto): string => {
+    if (tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]) {
+      // B4: un Producto insumo no tiene stock propio que suba con compras
+      // ni que baje con ventas: sale de su ficha y de Insumos.
+      return fichaVigente(p.id)
+        ? "Se calcula con la ficha técnica y el stock de Insumos"
+        : "Registra la ficha para poder prepararla";
+    }
+    // Bebidas: a la explicación de siempre se le agrega el estado del stock,
+    // con los MISMOS umbrales que la celda y "Ver detalle" (un solo lugar).
+    const est = estadoStockBebida(p.stockDisponible);
+    return `Sube con las compras y baja con las ventas${est.etiqueta ? ` · ${est.etiqueta}` : ""}`;
+  };
+
+  /** ¿Debe entrar esta bebida en el aviso de stock bajo y en su filtro?
+      Regla ÚNICA para los dos (no pueden divergir): tipo "Producto terminado",
+      estado NO "Descontinuado" y stock ≤ 10. */
+  const esBebidaEnStockBajo = (p: Producto): boolean =>
+    tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] &&
+    p.estado !== "Descontinuado" &&
+    p.stockDisponible <= STOCK_BAJO;
+
+  /** Las bebidas que hoy están en stock bajo, para el aviso del listado. */
+  const bebidasStockBajo = useMemo(
+    () => productos.filter(esBebidaEnStockBajo),
+    [productos],
+  );
+
+  /** Lo que admite preparar un Producto insumo HOY: la MISMA función que usa
+      Orden de Producción al iniciar (`disponibilidadPorFicha`) con su ficha
+      vigente y el stock real de Insumos. Las pizzas llevan una cifra por
+      tamaño ("8 Mediana · 5 Grande") y las lasañas (un solo tamaño), una
+      sola. `null` = no tiene ficha vigente → badge "Sin ficha técnica".
+      `stockDisponible` NO entra en el cálculo: sigue guardado en el producto
+      (B6), solo deja de mostrarse para estos productos. */
+  const prepararDe = (
+    p: Producto,
+  ): { cifras: CifraPrep[]; agotado: boolean } | null => {
+    const ficha = fichaVigente(p.id);
+    if (!ficha) return null;
+    const tam = ficha.porcionesPorTamano ?? [];
+    // Varias filas (pizzas: Mediana y Grande) → un cálculo por tamaño; una
+    // sola o ninguna → factor 1 y una cifra, exactamente como antes.
+    const etiquetas: (string | undefined)[] =
+      tam.length > 1 ? tam.map((t) => t.tamano) : [undefined];
+    const cifras: CifraPrep[] = etiquetas.map((etiqueta) => {
+      // `detalleDisponibilidad` trae la cifra, el motivo y las filas con su
+      // `limita` POR TAMAÑO, así el insumo limitante puede ser distinto en
+      // Mediana y en Grande.
+      const d = detalleDisponibilidad(ficha, insumos, etiqueta);
+      return {
+        tamano: etiqueta,
+        cantidad: d.cantidad,
+        limitante: d.limitante,
+        agotado: d.cantidad === 0,
+        limita: d.filas.filter((f) => f.limita).map((f) => f.nombre),
+      };
+    });
+    return { cifras, agotado: cifras.some((c) => c.agotado) };
+  };
+
+  /** El texto del insumo limitante, con su color:
+      "Limita: Queso mozzarella" en gris cuando todo alcanza (informativo) y
+      "No alcanza: Queso mozzarella" en rojo SOLO para los tamaños que se
+      quedan en 0. Si el limitante cambia por tamaño se nombra cada uno:
+      "Limita Mediana: Masa · Grande: Queso". */
+  const textoLimite = (cifras: CifraPrep[]): { texto: string; rojo: boolean } => {
+    const agotadas = cifras.filter((c) => c.agotado);
+    const relevantes = agotadas.length > 0 ? agotadas : cifras;
+    const rojo = agotadas.length > 0;
+    const partes = relevantes.map((c) => ({
+      tamano: c.tamano,
+      nombre: c.limita.length > 0 ? c.limita.join(" + ") : (c.limitante ?? ""),
+    }));
+    if (partes.length === 0 || !partes[0].nombre) return { texto: "", rojo };
+    const prefijo = rojo ? "No alcanza" : "Limita";
+    const mismo = partes.every((x) => x.nombre === partes[0].nombre);
+    if (mismo) return { texto: `${prefijo}: ${partes[0].nombre}`, rojo };
+    return {
+      texto: partes
+        .map((x, i) => `${i === 0 ? `${prefijo} ` : ""}${x.tamano ?? ""}: ${x.nombre}`)
+        .join(" · "),
+      rojo,
+    };
+  };
+
+  /** Las cifras "8 Mediana · 5 Grande" (o "12 lasañas"), cada una en rojo
+      cuando vale 0. La usan la celda del listado y Ver detalle. */
+  const pintarCifras = (p: Producto, cifras: CifraPrep[]): React.ReactNode => (
+    <>
+      {cifras.map((c, i) => (
+        <React.Fragment key={c.tamano ?? "único"}>
+          {i > 0 && (
+            <span className="text-muted-foreground font-normal"> · </span>
+          )}
+          <span className={c.cantidad === 0 ? "text-red-600" : "text-emerald-600"}>
+            {c.cantidad}
+            {c.tamano ? ` ${c.tamano}` : ` ${palabraStock(p, c.cantidad)}`}
+          </span>
+        </React.Fragment>
+      ))}
+    </>
+  );
+
+  /** Texto completo que queda en el tooltip de la celda y del detalle: las
+      cifras y, detrás, el insumo limitante con su detalle ("hay 2 kg en
+      Insumos"), en rojo solo si hay algún tamaño agotado. */
+  const textoPreparar = (p: Producto, prep: { cifras: CifraPrep[] }): string => {
+    const cifras = `Se pueden preparar: ${prep.cifras
+      .map((c) => `${c.cantidad}${c.tamano ? ` ${c.tamano}` : ` ${palabraStock(p, c.cantidad)}`}`)
+      .join(" · ")}`;
+    const agotada = prep.cifras.find((c) => c.agotado && c.limitante);
+    const tope = agotada ?? prep.cifras.find((c) => c.limitante);
+    if (!tope) return cifras;
+    return `${cifras} — ${agotada ? "No alcanza" : "Limita"} ${tope.tamano ? `${tope.tamano}: ` : ""}${tope.limitante}`;
+  };
+
+  /** Contenido de la celda Stock del listado para un Producto insumo (B1/B2
+      y el ajuste de "Limita"/"No alcanza"). TRES líneas de 10–11 px: etiqueta,
+      cifras y el insumo que limita — gris cuando todo alcanza (informativo),
+      rojo y solo "No alcanza" cuando algún tamaño se queda en 0—. Suman 40 px
+      + 20 px de padding = 60 px, dentro de la altura fija de 61 px de la
+      fila. El texto completo queda en el tooltip. */
+  const celdaPreparar = (p: Producto): React.ReactNode => {
+    const prep = prepararDe(p);
+    if (!prep) {
+      return (
+        <span
+          className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap"
+          title={ayudaStock(p)}
+        >
+          Sin ficha técnica
+        </span>
+      );
+    }
+    const limite = textoLimite(prep.cifras);
+    return (
+      <span className="block" title={textoPreparar(p, prep)}>
+        <span className="block text-[10px] leading-3 text-muted-foreground truncate">
+          Se pueden preparar:
+        </span>
+        <span className="block text-[11px] leading-4 font-bold truncate">
+          {pintarCifras(p, prep.cifras)}
+        </span>
+        {limite.texto && (
+          <span
+            className={`block text-[10px] leading-3 truncate ${limite.rojo ? "text-red-600 font-semibold" : "text-muted-foreground"}`}
+          >
+            {limite.texto}
+          </span>
+        )}
+      </span>
+    );
+  };
 
   const exportExcel = async () => {
     const fecha = new Date();
@@ -1077,7 +1288,24 @@ export function GestionProductosScreen({
         { header: "Tipo", valor: (p) => tipoDe(p, catName(p.idCategoria)) },
         { header: "Categoría", valor: (p) => catName(p.idCategoria) },
         { header: "Precio de venta", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
-        { header: "Stock", valor: (p) => p.stockDisponible, numFmt: "#,##0" },
+        {
+          header: "Stock",
+          // B5: un Producto insumo NO exporta su `stockDisponible` (ese
+          // número ya no significa nada) sino lo que admite preparar hoy con
+          // su ficha vigente y el stock de Insumos — en pizzas, la cantidad
+          // del primer tamaño, Mediana, que es la de referencia de la ficha.
+          // Sin ficha todavía, el aviso. Las bebidas siguen exportando su
+          // número de siempre.
+          valor: (p) => {
+            if (tipoDe(p, catName(p.idCategoria)) !== TIPOS_PRODUCTO[0]) {
+              return p.stockDisponible;
+            }
+            const prep = prepararDe(p);
+            if (!prep) return "Sin ficha técnica";
+            return `Se pueden preparar: ${prep.cifras[0]?.cantidad ?? 0}`;
+          },
+          numFmt: "#,##0",
+        },
         { header: "Estado", valor: (p) => p.estado, esEstado: true },
       ],
     });
@@ -1094,6 +1322,9 @@ export function GestionProductosScreen({
     // tipo; NO por id (el id es interno y ya no se muestra).
     return productos.filter(
       (p) =>
+        // Filtro del aviso de stock bajo: solo esas bebidas (el resto de
+        // condiciones sigue aplicando para que los otros filtros manden igual).
+        (!filtroStockBajo || esBebidaEnStockBajo(p)) &&
         (filtroTipo === "Todos" || tipoDe(p, catName(p.idCategoria)) === filtroTipo) &&
         (filtroEstado === "Todos" || p.estado === filtroEstado) &&
         (presentacionDe(p).toLowerCase().includes(q) ||
@@ -1101,7 +1332,7 @@ export function GestionProductosScreen({
           catName(p.idCategoria).toLowerCase().includes(q) ||
           tipoDe(p, catName(p.idCategoria)).toLowerCase().includes(q)),
     );
-  }, [productos, search, filtroTipo, filtroEstado]);
+  }, [productos, search, filtroTipo, filtroEstado, filtroStockBajo]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice(
@@ -1902,9 +2133,26 @@ export function GestionProductosScreen({
     const readCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
     const tipoDetalle = tipoDe(detailItem, catName(detailItem.idCategoria));
     const llevaFichaDetalle = tipoDetalle === TIPOS_PRODUCTO[0];
-    // Stock: porciones según la ficha VIGENTE del producto.
+    // Stock: la ficha VIGENTE manda, igual que en el listado.
     const vigente = fichaVigente(detailItem.id);
-    const conFichaStock = llevaFichaDetalle && vigente;
+    // B3: para un Producto insumo el dato que se muestra es lo que admite
+    // preparar hoy (mismo cálculo que la celda del listado) y, debajo, el
+    // desglose fila por fila de la ficha contra el stock de Insumos. Con
+    // varios tamaños (pizzas) el desglose se calcula uno por tamaño.
+    const preparacion = llevaFichaDetalle ? prepararDe(detailItem) : null;
+    // El insumo que limita puede ser distinto por tamaño (p. ej. la masa
+    // limita la Mediana y el queso la Grande): el texto lo nombra por tamaño
+    // y la tabla pone una píldora por cada uno.
+    const limiteDetalle = preparacion ? textoLimite(preparacion.cifras) : null;
+    const desglose: { tamano?: string; filas: FilaDetalle[] }[] =
+      preparacion && vigente
+        ? (vigente.porcionesPorTamano ?? []).length > 1
+          ? (vigente.porcionesPorTamano ?? []).map((t) => ({
+              tamano: t.tamano,
+              filas: detalleDisponibilidad(vigente, insumos, t.tamano).filas,
+            }))
+          : [{ filas: detalleDisponibilidad(vigente, insumos).filas }]
+        : [];
     const imagenesDetalle = imagenesDe(detailItem);
     return (
       /* Igual que Crear y Editar: altura fija sobre el viewport menos el
@@ -1955,22 +2203,119 @@ export function GestionProductosScreen({
                     bloque quepa en 1366×768 sin barra en la columna. */}
                 <div className="mt-3 pt-3 border-t border-border">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Stock</p>
-                  <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
-                    <span className={`font-bold ${detailItem.stockDisponible <= 5 ? "text-red-600" : detailItem.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}>
-                      {detailItem.stockDisponible} {palabraStock(detailItem, detailItem.stockDisponible)}
-                    </span>
-                    {conFichaStock && (
-                      <>
-                        <span className="text-muted-foreground">
-                          · {detailItem.stockDisponible * porcionesReferencia(vigente)} porciones
+                  {/* B1/B3/B6: un Producto insumo NO tiene stock propio: aquí
+                      no se pinta `stockDisponible` (sigue guardado en el
+                      producto, solo deja de mostrarse para estos productos)
+                      sino cuántas unidades admite preparar HOY su ficha
+                      vigente con el stock real de Insumos; sin ficha, el
+                      aviso para registrarla. Las bebidas quedan como siempre
+                      (sus "porciones" nunca se mostraban acá). */}
+                  {llevaFichaDetalle ? (
+                    preparacion ? (
+                      <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                        <span className="font-bold">
+                          Se pueden preparar:{" "}
+                          {pintarCifras(detailItem, preparacion.cifras)}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          ({porcionesReferencia(vigente)} porciones por unidad, ficha v{vigente.version})
-                        </span>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        Sin ficha técnica
+                      </span>
+                    )
+                  ) : (
+                    <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                      {/* Bebidas: umbrales únicos (0 Agotado · ≤5 crítico ·
+                          ≤10 bajo · más verde), con variante oscuro. */}
+                      <span className={`font-bold ${estadoStockBebida(detailItem.stockDisponible).cls}`}>
+                        {textoStockBebida(detailItem)}
+                      </span>
+                    </div>
+                  )}
+                  {limiteDetalle?.texto && (
+                    <p
+                      className={`text-xs mt-1 ${limiteDetalle.rojo ? "font-semibold text-red-600" : "text-muted-foreground"}`}
+                    >
+                      {limiteDetalle.texto}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">{ayudaStock(detailItem)}</p>
+                  {/* B3: qué pide la ficha por unidad (uno por tamaño cuando
+                      la ficha tiene varios), cuánto hay hoy en Insumos y qué
+                      insumo marca el límite EN CADA TAMAÑO: con el ajuste de
+                      "Limita"/"No alcanza" la píldora sale por tamaño
+                      ("Limita Mediana", "Limita Grande"). */}
+                  {desglose.length > 0 && (
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-wider text-muted-foreground text-left border-b border-border">
+                            <th className="py-1.5 pr-2 font-semibold">Insumo</th>
+                            <th className="py-1.5 pr-2 font-semibold text-right">
+                              Requerido por unidad
+                            </th>
+                            <th className="py-1.5 pr-2 font-semibold text-right">
+                              Stock actual
+                            </th>
+                            <th className="py-1.5 font-semibold text-right">Límite</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {desglose[0].filas.map((f, i) => {
+                            // Tamaños en los que ESTE insumo marca el mínimo
+                            // (con el ajuste pueden ser varios, y cada uno con
+                            // su píldora: "Limita Mediana", "Limita Grande").
+                            const limitaEn = desglose
+                              .filter((d) => d.filas[i]?.limita)
+                              .map((d) => d.tamano);
+                            return (
+                            <tr key={`${f.insumoId}-${i}`}>
+                              <td className="py-1.5 pr-2 align-top">
+                                <span className="block text-foreground">{f.nombre}</span>
+                                {f.motivo && (
+                                  <span className="block text-[10px] text-red-600">
+                                    {motivoFaltante(f)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-foreground whitespace-nowrap">
+                                {desglose.map((d) => (
+                                  <span
+                                    key={d.tamano ?? "único"}
+                                    className="block leading-4"
+                                  >
+                                    {d.tamano ? `${d.tamano}: ` : ""}
+                                    {fmtCant(
+                                      d.filas[i]?.cantidad,
+                                      d.filas[i]?.unidad ?? f.unidad,
+                                    )}
+                                  </span>
+                                ))}
+                              </td>
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-muted-foreground whitespace-nowrap">
+                                {fmtCant(f.stock, f.unidadStock)}
+                              </td>
+                              <td className="py-1.5 text-right align-top whitespace-nowrap">
+                                {limitaEn.length > 0 ? (
+                                  limitaEn.map((t) => (
+                                    <span
+                                      key={t ?? "único"}
+                                      className="inline-flex px-1.5 py-0.5 mr-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                                    >
+                                      Limita{t ? ` ${t}` : ""}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                            </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </Tarjeta>
               {/* Con 1+ imágenes se muestran las 4 casillas (portada
@@ -2328,6 +2673,39 @@ export function GestionProductosScreen({
         </select>
       </div>
 
+      {/* Aviso de stock bajo (SOLO bebidas activas, sin descontinuadas): el
+          texto es un BOTÓN que filtra el listado y muestra solo esas bebidas;
+          el segundo clic lo apaga. Sigue a la vista mientras el filtro esté
+          activo, así que siempre se puede salir. El detalle completo de los
+          nombres queda en el `title`. */}
+      {bebidasStockBajo.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroStockBajo((v) => !v);
+            setPage(1);
+          }}
+          aria-pressed={filtroStockBajo}
+          title={`${bebidasStockBajo.length} bebida${bebidasStockBajo.length === 1 ? "" : "s"} con stock bajo: ${bebidasStockBajo
+            .map((p) => `${p.nombre} (${p.stockDisponible} ${palabraStock(p, p.stockDisponible)})`)
+            .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
+          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-all ${
+            filtroStockBajo
+              ? "bg-yellow-500 border-yellow-600 text-white shadow-md font-bold"
+              : "bg-yellow-100 border-yellow-300 text-yellow-900 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-300 font-semibold hover:bg-yellow-200 dark:hover:bg-yellow-500/25"
+          }`}
+        >
+          {filtroStockBajo && <span aria-hidden>✓</span>}
+          <span className="font-bold whitespace-nowrap">
+            {bebidasStockBajo.length} bebida{bebidasStockBajo.length === 1 ? "" : "s"} con stock bajo
+          </span>
+          <span className="truncate">
+            · {bebidasStockBajo.slice(0, 3).map((p) => p.nombre).join(", ")}
+            {bebidasStockBajo.length > 3 ? ` y ${bebidasStockBajo.length - 3} más` : ""}
+          </span>
+        </button>
+      )}
+
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -2435,28 +2813,28 @@ export function GestionProductosScreen({
                       {fmtCOP(p.precioUnitario)}
                     </td>
                     <td className="pl-10 pr-4 py-2.5 align-middle" title={ayudaStock(p)}>
-                      {/* Stock en DOS líneas: arriba las unidades (negrita y
-                          color, igual que antes) y debajo las porciones en
-                          gris y más pequeño, sin el "·" y sin recorte.
-                          `align-middle` + la altura fija de la fila (61 px,
-                          más que los 56 px que ocupan las dos líneas) hacen
-                          que todas las filas midan igual en todas las
-                          páginas. El detalle completo queda en el tooltip. */}
-                      <span
-                        className="block"
-                        title={`${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}${tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) ? ` · ${p.stockDisponible * porcionesReferencia(fichaVigente(p.id)!)} porciones` : ""}`}
-                      >
+                      {/* B1/B2/B6: un Producto insumo NO pinta su
+                          `stockDisponible` (sigue guardado en el producto,
+                          solo deja de mostrarse) ni las "porciones" que
+                          salían de ese número: muestra cuántas unidades
+                          admite preparar HOY su ficha vigente con el stock
+                          real de Insumos, o el badge cuando aún no hay
+                          ficha. Las bebidas quedan igual que siempre.
+                          El texto completo queda en el tooltip interno. */}
+                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
+                        celdaPreparar(p)
+                      ) : (
                         <span
-                          className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600" : p.stockDisponible <= 15 ? "text-yellow-600" : "text-emerald-600"}`}
+                          className="block"
+                          title={textoStockBebida(p)}
                         >
-                          {p.stockDisponible} {palabraStock(p, p.stockDisponible)}
-                        </span>
-                        {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] && fichaVigente(p.id) && (
-                          <span className="block text-xs leading-4 text-muted-foreground whitespace-nowrap">
-                            {p.stockDisponible * porcionesReferencia(fichaVigente(p.id)!)} porciones
+                          <span
+                            className={`block text-sm font-bold leading-5 whitespace-nowrap ${estadoStockBebida(p.stockDisponible).cls}`}
+                          >
+                            {textoStockBebida(p)}
                           </span>
-                        )}
-                      </span>
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       {/* Pill de estado (diseño de Proveedores). El estado se
