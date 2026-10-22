@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
-import { type Product, productoACatalogo, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
+import { type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
@@ -78,6 +78,7 @@ export function DevolucionesScreen({
   fichasPorProducto,
   insumos,
   categorias,
+  catalogoCanje,
   abrirDevolucionId,
   onAbierta,
 }: {
@@ -95,6 +96,10 @@ export function DevolucionesScreen({
   insumos: Insumo[];
   /** Para armar el selector de canje con el catálogo vivo (no el mock). */
   categorias: CategoriaProducto[];
+  /** Catálogo real del backend (GET /productos), ya mapeado igual que el modal
+      "Nuevo pedido" de VentasScreen: sus id son los id_producto reales de
+      tb_productos, los únicos que acepta la FK de id_producto_reemplazo. */
+  catalogoCanje: Product[];
   /** Venta a gestionar al entrar. La tabla de ventas la pasa para no obligar a
       buscarla de nuevo entre las pendientes. */
   abrirDevolucionId?: string | null;
@@ -244,16 +249,14 @@ export function DevolucionesScreen({
   };
 
   // Categorías del catálogo, en el orden del menú, para el selector de canje.
-  // El canje se arma con el catálogo VIVO (`productos` + `productoACatalogo`),
-  // igual que "Ver Menú": así el nombre del producto elegido es exactamente el
-  // del panel ("Pizza Jamon") y al confirmar la devolución se puede devolver el
-  // stock y crear la orden del producto nuevo sin traducciones de nombre.
+  // El canje se arma con el catálogo REAL del backend (el mismo que el modal
+  // "Nuevo pedido" de VentasScreen): sus id son los id_producto reales de
+  // tb_productos, los únicos que acepta la FK de id_producto_reemplazo al
+  // resolver la devolución. El catálogo local ("PROD-001"…) trae ids que no
+  // existen en la base y la revientan con canje.
   const canjeCatalogo: Product[] = useMemo(
-    () =>
-      productos
-        .filter((p) => p.estado === "Disponible")
-        .map((p) => productoACatalogo(p, categorias)),
-    [productos, categorias],
+    () => catalogoCanje.filter((p) => p.status === "disponible"),
+    [catalogoCanje],
   );
   const categoriasCanje = (() => {
     const disponibles = canjeCatalogo;

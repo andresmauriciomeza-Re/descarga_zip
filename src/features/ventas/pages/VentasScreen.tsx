@@ -355,6 +355,9 @@ export interface Venta {
   /** Id de la fila de tb_devolucion de esta venta. Hace falta para resolverla
       (PATCH /devoluciones/:id/resolver); ausente si nunca se marcó. */
   idDevolucion?: number;
+  /** Fecha en que se registró la devolución (tb_devolucion.fecha), en formato
+      ISO. Es la que usa el Dashboard para contar devoluciones por periodo. */
+  devolucionFecha?: string;
   /** Venta nueva que creó el canje de esta devolución (si la hubo). */
   idVentaReemplazo?: number;
   devolucionTipo?: DevolucionTipo;

@@ -9060,6 +9060,7 @@ export default function App() {
                   fichasPorProducto={fichasPorProducto}
                   insumos={insumos}
                   categorias={categorias}
+                  catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                   abrirDevolucionId={devolucionAAbrir}
                   onAbierta={() => setDevolucionAAbrir(null)}
                 />

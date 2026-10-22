@@ -48,6 +48,8 @@ export interface VentaApi {
   pagos?: PagoVentaApi[];
   /** Devolución asociada (LEFT JOIN con tb_devolucion en el listado). */
   id_devolucion?: number | string | null;
+  /** Fecha en que se registró la devolución (tb_devolucion.fecha). */
+  devolucion_fecha?: string | null;
   /** 'Pendiente' o 'Resuelta' (CHECK ck_devolucion_estado). */
   devolucion_estado?: string | null;
   /** 'Dinero' | 'Producto' | 'Excedente' | 'Devuelta' (ck_devolucion_tipo).
@@ -149,6 +151,8 @@ export function ventaApiAVenta(row: VentaApi): Venta {
       ? {}
       : {
           idDevolucion: Number(row.id_devolucion),
+          /** Fecha de la devolución (tb_devolucion.fecha), no la de la venta. */
+          devolucionFecha: row.devolucion_fecha ? formatDateBogota(row.devolucion_fecha) : undefined,
           idVentaReemplazo:
             row.id_venta_reemplazo == null ? undefined : Number(row.id_venta_reemplazo),
           // 'Devuelta' es el valor inicial (aún sin resolver): sin tipo ni
