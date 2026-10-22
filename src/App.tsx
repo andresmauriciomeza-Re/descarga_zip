@@ -159,6 +159,7 @@ import {
   OrdenProduccionScreen,
   INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
   crearOrdenPedido,
+  crearOrdenPreparacion,
   crearOrdenReemplazo,
   siguienteOrdenId,
   normalizarNombre,
@@ -7197,6 +7198,10 @@ export default function App() {
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
   const [ordenAAbrir, setOrdenAAbrir] = useState<string | null>(null);
+  /** Orden de producción cuyo DETALLE hay que abrir (A2.3): la pone el toast
+      "Ver orden" de Insumos tras crear la orden automática de un producto
+      insumo nuevo. */
+  const [ordenDetalleAAbrir, setOrdenDetalleAAbrir] = useState<string | null>(null);
   const [ordenRecepcion, setOrdenRecepcion] =
     useState<OrdenCompra | null>(null);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
@@ -8024,6 +8029,27 @@ export default function App() {
       modal de crear ya abierto y el Producto Insumo preseleccionado. */
   const abrirOrdenProduccion = (idProductoInsumo: string) => {
     setOrdenAAbrir(idProductoInsumo);
+    navigate("production-orders");
+  };
+
+  /** A2 — Orden "Preparación en lote" del Producto Insumo recién creado en
+      Insumos: nace Pendiente con su ficha v1 y su "Cantidad a hacer", y sin
+      descontar nada. Los datos llegan como ARGUMENTOS (no del estado) porque
+      el producto insumo y su ficha v1 se acaban de crear en ESTE mismo clic y
+      el estado de App todavía no los tiene. Devuelve el id para el toast. */
+  const crearOrdenPreparacionPI = (pi: Insumo, ficha: FichaVersion): string => {
+    const id = siguienteOrdenId(ordenesProduccion);
+    setOrdenesProduccion((p) => [
+      crearOrdenPreparacion(pi, ficha, { fichas: fichasPorProducto }, id),
+      ...p,
+    ]);
+    return id;
+  };
+
+  /** "Ver orden" del toast de Insumos: salta a Orden de Producción con el
+      detalle de la orden creada ya abierto. */
+  const verOrdenProduccion = (idOrden: string) => {
+    setOrdenDetalleAAbrir(idOrden);
     navigate("production-orders");
   };
 
@@ -9240,6 +9266,8 @@ export default function App() {
                   setNoConformidades={setNoConformidades}
                   abrirOrdenId={ordenAAbrir}
                   setOrdenAAbrir={setOrdenAAbrir}
+                  detalleOrdenId={ordenDetalleAAbrir}
+                  setDetalleOrdenAAbrir={setOrdenDetalleAAbrir}
                 />
               )}
               {screen === "finished-products" && (
@@ -9317,6 +9345,10 @@ export default function App() {
                   ]}
                   productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
                   abrirOrdenProduccion={abrirOrdenProduccion}
+                  /* A2: al crear un producto insumo nace su orden automática
+                     y el toast ofrece "Ver orden". */
+                  crearOrdenProduccion={crearOrdenPreparacionPI}
+                  verOrdenProduccion={verOrdenProduccion}
                 />
               )}
               {isAdmin &&

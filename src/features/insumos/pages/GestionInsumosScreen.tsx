@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, X, Check, Package, AlertTriangle, ChefHat } from "lucide-react";
 import { toast } from "sonner";
-import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
+import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
+import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
@@ -26,6 +27,16 @@ import {
   type FichaVersion,
   type FichasPorProducto,
 } from "@/shared/utils/fichas";
+import {
+  convertirUnidad,
+  faltantesPara,
+  fmtCant,
+  motivoFaltante,
+  requeridosPorUnidad,
+  unidadesCompatibles,
+  type FaltanteUnidad,
+  type RequeridoUnidad,
+} from "@/shared/utils/disponibilidad";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -152,8 +163,6 @@ export const INITIAL_INSUMOS: Insumo[] = [
   },
 ];
 
-const UNIDADES = ["kg", "lt", "und"];
-
 /** ¿Este Producto Insumo tiene ficha vigente? Las fichas viven en App
     (prop de este componente), no en el módulo. */
 const fichaVigente = (fichas: FichasPorProducto, insumo: Insumo): boolean =>
@@ -163,24 +172,30 @@ const fichaVigente = (fichas: FichasPorProducto, insumo: Insumo): boolean =>
 const fmtCOP = (n: number): string =>
   `$${n.toLocaleString("es-CO")}`;
 
-const esStockBajo = (insumo: Insumo): boolean =>
-  insumo.stockActual < insumo.stockMinimo;
+/** A5.5 — Cómo está el stock de un insumo: "sin-stock" (0 o menos),
+    "bajo" (mayor a 0 y hasta el stock mínimo) u "ok". El listado pinta el
+    badge según esto: "Sin stock" en ROJO, "Stock bajo" en ÁMBAR; el aviso
+    del listado y su filtro cuentan los dos primeros. */
+const estadoStock = (insumo: Insumo): "sin-stock" | "bajo" | "ok" =>
+  insumo.stockActual <= 0
+    ? "sin-stock"
+    : insumo.stockActual <= insumo.stockMinimo
+      ? "bajo"
+      : "ok";
 
 const formatearId = (id: string): string => {
   const match = id.match(/(\d+)$/);
   return match ? match[1] : id;
 };
 
-// ─── Producto Insumo: unidad de la ficha y limpieza de nombres ──────────────
-/** Unidades que admite la ficha de un Producto Insumo: la "Cantidad a hacer"
-    se expresa en una de estas cuatro. El valor guardado es la unidad corta
-    ("kg"); la etiqueta larga es solo visual. */
-const UNIDADES_PI: readonly OpcionUnidad[] = [
-  { valor: "kg", etiqueta: "Kilogramos (kg)" },
-  { valor: "g", etiqueta: "Gramos (g)" },
-  { valor: "lt", etiqueta: "Litros (lt)" },
-  { valor: "und", etiqueta: "Unidad (und)" },
-];
+// ─── Producto Insumo: limpieza de nombres ───────────────────────────────────
+/** Nombre listo para guardar: limpio (sin espacios de más) y con la primera
+    letra en MAYÚSCULA ("masa prueba" → "Masa prueba"). Solo se aplica al
+    CREAR: los insumos que ya existen conservan su nombre tal cual. */
+const nombreParaGuardar = (s: string): string => {
+  const limpio = nombreLimpio(s);
+  return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : "";
+};
 
 /** Nombre listo para guardar y comparar: sin saltos de línea, un solo
     espacio entre palabras y sin espacios al inicio o al final. */
@@ -312,9 +327,17 @@ interface Props {
   /** Navega a Orden de Producción con el modal ya abierto y este producto
       preseleccionado. */
   abrirOrdenProduccion?: (idProductoInsumo: string) => void;
+  /** A2 — Crea la Orden de Producción "Preparación en lote" de un Producto
+      Insumo recién creado (Pendiente, cantidad = "Cantidad a hacer" de la
+      ficha v1) y devuelve su id (OP-xxx) para el toast. Lo implementa App,
+      que es donde vive el estado de las órdenes. */
+  crearOrdenProduccion?: (pi: Insumo, ficha: FichaVersion) => string | null;
+  /** "Ver orden" del toast: navega a Orden de Producción con el detalle de
+      esa orden ya abierto. */
+  verOrdenProduccion?: (idOrden: string) => void;
 }
 
-export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion }: Props) {
+export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion, crearOrdenProduccion, verOrdenProduccion }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -323,6 +346,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "activos" | "inactivos">("todos");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "insumos" | "productos">("todos");
+  // A5.5 — Aviso de stock bajo: al apretar el aviso el listado queda
+  // mostrando SOLO esos insumos; el segundo clic lo apaga (el aviso se
+  // mantiene visible mientras el filtro esté activo, para poder salir).
+  const [filtroStockBajo, setFiltroStockBajo] = useState(false);
   /** true = el registro en edición es un Producto Insumo (el tipo del
       formulario queda bloqueado y solo se modifica la ficha técnica). */
   const [editandoProducto, setEditandoProducto] = useState(false);
@@ -330,13 +357,15 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
   // Tipo del formulario del modal: "Insumo" o "Producto insumo".
   const [tipoForm, setTipoForm] = useState<"insumo" | "producto-insumo">("insumo");
 
-  // Form state - compartidos por los dos tipos del modal
+  // Form state - compartidos por los dos tipos del modal. La categoría
+  // arranca VACÍA y es obligatoria (A5.1): antes venía "Lácteos" ya elegida
+  // y se guardaba sin que nadie la eligiera.
   const [nombre, setNombre] = useState("");
-  const [categoriaId, setCategoriaId] = useState(CATEGORIAS_INSUMO[0].id);
+  const [categoriaId, setCategoriaId] = useState("");
   const [stockMinimo, setStockMinimo] = useState(0);
 
   // Form state - solo Insumo
-  const [unidad, setUnidad] = useState(UNIDADES[0]);
+  const [unidad, setUnidad] = useState(UNIDADES_INSUMO[0].valor);
   const [stockActual, setStockActual] = useState(0);
   const [costoUnitario, setCostoUnitario] = useState(0);
 
@@ -364,9 +393,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     usadosEn?: string[];
   }>({ tipo: null, mensaje: "" });
 
-  // Alerta de stock bajo al cargar
+  // Alerta de stock bajo al cargar (A5.5): solo activos, contando los que
+  // están en 0 ("Sin stock") y los que llegaron al mínimo ("Stock bajo").
   useEffect(() => {
-    const bajos = insumos.filter(i => i.estado === "activo" && esStockBajo(i));
+    const bajos = insumos.filter(i => i.estado === "activo" && estadoStock(i) !== "ok");
     if (bajos.length > 0) {
       const nombres = bajos.map(b => b.nombre).join(", ");
       toast.warning(
@@ -385,6 +415,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     if (filtroEstado === "inactivos") result = result.filter(i => i.estado === "inactivo");
     if (filtroTipo === "insumos") result = result.filter(i => i.tipo !== "ProductoInsumo");
     if (filtroTipo === "productos") result = result.filter(i => i.tipo === "ProductoInsumo");
+    // A5.5: filtro del aviso de stock bajo (solo activos, igual que el aviso).
+    if (filtroStockBajo)
+      result = result.filter(i => i.estado === "activo" && estadoStock(i) !== "ok");
     if (q) {
       result = result.filter(i =>
         i.nombre.toLowerCase().includes(q) ||
@@ -401,10 +434,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     // ARRIBA, así que manda el orden de creación. Paginación, filtros y la
     // descarga a Excel siguen funcionando igual: solo cambia el orden de las filas.
     return result;
-  }, [insumos, search, filtroEstado, filtroTipo]);
+  }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  /** A5.5 — Insumos activos que hoy están en "Sin stock" o "Stock bajo":
+      los que cuentan el aviso del listado y los que muestra su filtro. */
+  const insumosStockBajo = useMemo(
+    () => insumos.filter(i => i.estado === "activo" && estadoStock(i) !== "ok"),
+    [insumos],
+  );
 
   // Descarga del listado completo (buscador + estado + tipo, sin importar
   // la página actual del paginador).
@@ -451,16 +491,22 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
   const errores = useMemo(() => {
     const e: {
       nombre?: string;
+      categoria?: string;
       stockMinimo?: string;
       tiempo?: string;
       cantidad?: string;
       unidad?: string;
       insumos?: string;
+      filas?: string;
     } = {};
     const limpio = nombreLimpio(nombre);
     if (!limpio) e.nombre = "El nombre es obligatorio.";
     else if (nombreDuplicado(limpio))
-      e.nombre = "Ya existe un registro con este nombre.";
+      e.nombre = "Ya existe un insumo con ese nombre";
+    // A5.1: la categoría arranca vacía y hay que elegirla. En edición el
+    // campo viene bloqueado con la categoría del registro, así que nunca
+    // queda vacío ahí.
+    if (!categoriaId) e.categoria = "Selecciona una categoría.";
     if (!Number.isFinite(stockMinimo) || stockMinimo < 0)
       e.stockMinimo = "El stock mínimo no puede ser negativo.";
     if (tipoForm === "producto-insumo") {
@@ -471,9 +517,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       if (!piUnidadMedida) e.unidad = "Selecciona una unidad de medida.";
       if (!piFicha.insumos.some(r => r.cantidad > 0))
         e.insumos = "Agrega al menos un insumo con cantidad mayor a 0.";
+      // A5.4: ninguna fila puede quedar en 0 (o vacía o negativa). El
+      // mensaje se pinta FILA POR FILA (`erroresFilaPI`); aquí solo se
+      // bloquea el guardado.
+      if (piFicha.insumos.some(r => !(r.cantidad > 0)))
+        e.filas = "Hay filas con cantidad 0.";
     }
     return e;
-  }, [nombre, editingId, stockMinimo, tipoForm, piFicha, piUnidadMedida, insumos]);
+  }, [nombre, categoriaId, editingId, stockMinimo, tipoForm, piFicha, piUnidadMedida, insumos]);
 
   /** Marca un campo como tocado (habilita su mensaje de error en vivo). */
   const tocar = (campo: string) =>
@@ -499,6 +550,108 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     setPiFicha(sig);
   };
 
+  // ───────── Validación de stock al CREAR un Producto Insumo (A1) ─────────
+  /** Mientras se arma la ficha de un Producto Insumo NUEVO, cada insumo de
+      "Insumos a usar" se compara contra el stock del catálogo para la
+      "Cantidad a hacer" completa. Es el MISMO cálculo compartido que usan
+      Productos y Orden de Producción (`requeridosPorUnidad` + `faltantesPara`):
+      cantidad × lo que pide la ficha ÷ rendimiento, con cada fila convertida
+      a la unidad del catálogo con `convertirUnidad`. Si la ficha repite un
+      insumo, sus filas se SUMAN antes de comparar (A1.5).
+      Solo aplica al CREAR: al editar un producto insumo existente no se
+      valida contra stock ni se crea orden —allí solo nace la versión nueva
+      de siempre—, porque el producto ya existe y su producción se programa
+      desde "Programar producción". */
+  const validacionStockPI = useMemo(() => {
+    const vacio = {
+      faltantes: [] as FaltanteUnidad[],
+      porFila: {} as Record<number, string>,
+      aviso: "",
+    };
+    if (tipoForm !== "producto-insumo" || editandoProducto) return vacio;
+    const veces = piFicha.rendimiento && piFicha.rendimiento > 0 ? piFicha.rendimiento : 0;
+    // Sin "Cantidad a hacer" manda el error clásico ("debe ser mayor a 0"),
+    // no el de faltantes.
+    if (!(veces > 0)) return vacio;
+
+    // Requeridos de UNA unidad × la "Cantidad a hacer": la misma fórmula con
+    // la que la orden va a descontar los insumos al iniciarse.
+    const requeridos = requeridosPorUnidad(piFicha).map((r) => ({
+      ...r,
+      cantidad: (r.cantidad || 0) * veces,
+    }));
+
+    // Agrupa por insumo del catálogo, medido en SU unidad de medida, para
+    // que un insumo repetido en la ficha se compare por la suma de sus filas.
+    const grupo = new Map<string, RequeridoUnidad>();
+    const sueltos: RequeridoUnidad[] = [];
+    for (const r of requeridos) {
+      if (!(r.cantidad > 0)) continue;
+      const ins = insumos.find((i) => i.id === r.insumoId)
+        ?? insumos.find((i) => nombreComparable(i.nombre) === nombreComparable(r.nombre));
+      // Inexistente, inactivo o unidades que no se pueden convertir: la fila
+      // pasa tal cual para que `faltantesPara` avise con su motivo claro.
+      const cantidadEnCatalogo = ins
+        && ins.estado !== "inactivo"
+        && unidadesCompatibles(r.unidad, ins.unidadMedida)
+        ? convertirUnidad(r.cantidad, r.unidad, ins.unidadMedida)
+        : null;
+      if (!ins || cantidadEnCatalogo === null) {
+        sueltos.push(r);
+        continue;
+      }
+      const previo = grupo.get(ins.id);
+      grupo.set(ins.id, previo
+        ? { ...previo, cantidad: previo.cantidad + cantidadEnCatalogo }
+        : { insumoId: ins.id, nombre: r.nombre, cantidad: cantidadEnCatalogo, unidad: ins.unidadMedida });
+    }
+
+    const faltantes = faltantesPara([...grupo.values(), ...sueltos], 1, insumos);
+    if (faltantes.length === 0) return vacio;
+
+    // Mensaje por FILA de "Insumos a usar": a cada fila se le busca su
+    // faltante con el mismo criterio con que `faltantesPara` resuelve (id
+    // real y, si no, nombre normalizado). Si el mismo insumo tiene un faltante
+    // con motivo (unidad incompatible, inactivo) manda ese.
+    const porFila: Record<number, string> = {};
+    piFicha.insumos.forEach((fila, idx) => {
+      if (!(fila.cantidad > 0)) return;
+      const r = requeridos[idx];
+      if (!r) return;
+      const ins = insumos.find((i) => i.id === r.insumoId)
+        ?? insumos.find((i) => nombreComparable(i.nombre) === nombreComparable(r.nombre));
+      const clave = ins?.id ?? r.insumoId;
+      const f = faltantes.find((x) => x.insumoId === clave && x.motivo)
+        ?? faltantes.find((x) => x.insumoId === clave);
+      if (!f) return;
+      porFila[idx] = f.motivo
+        ? motivoFaltante(f)
+        : `No tiene la cantidad para hacer ese producto insumo. Hay ${fmtCant(f.stock, f.unidad)}.`;
+    });
+
+    const nombrePI = nombreLimpio(nombre) || "este producto insumo";
+    return {
+      faltantes,
+      porFila,
+      aviso: `No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad de ${nombrePI}.`,
+    };
+  }, [tipoForm, editandoProducto, piFicha, insumos, nombre]);
+
+  /** A5.4 + A1 — Mensajes por FILA de la ficha del Producto Insumo: una fila
+      con cantidad 0 (o vacía o negativa) no puede guardarse, y las filas que
+      no alcanzan en stock conservan su mensaje de A1. En edición de un
+      producto insumo existente también aplica la regla de cantidad > 0 (es
+      calidad de dato, no validación de stock). Las fichas de pizzas/lasañas
+      no pasan por aquí: el modo "producto" ignora estos mensajes. */
+  const erroresFilaPI = useMemo(() => {
+    if (tipoForm !== "producto-insumo") return {};
+    const cantidades: Record<number, string> = {};
+    piFicha.insumos.forEach((fila, idx) => {
+      if (!(fila.cantidad > 0)) cantidades[idx] = "La cantidad debe ser mayor a 0.";
+    });
+    return { ...validacionStockPI.porFila, ...cantidades };
+  }, [tipoForm, piFicha, validacionStockPI]);
+
   /** Escribe el nombre sin saltos de línea (tampoco al pegar texto). */
   const escribirNombre = (valor: string) => {
     setNombre(valor.replace(/[\r\n]+/g, " "));
@@ -513,9 +666,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     setEditandoProducto(false);
     setTipoForm("insumo");
     setNombre("");
-    setCategoriaId(CATEGORIAS_INSUMO[0].id);
+    setCategoriaId("");
     setStockMinimo(0);
-    setUnidad(UNIDADES[0]);
+    setUnidad(UNIDADES_INSUMO[0].valor);
     setStockActual(0);
     setCostoUnitario(0);
     setPiFicha(emptyFichaVersion(1));
@@ -561,8 +714,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       setPiFicha(borrador);
       setPiUnidadMedida(insumo.unidadMedida);
     } else {
-      // Editar insumo normal
-      setCategoriaId(insumo.categoriaId);
+      // Editar insumo normal. Los registros viejos pueden traer un
+      // categoriaId ajeno al catálogo: en edición solo se MUESTRA (no se
+      // guarda), así que se pinta el primero en vez de un vacío.
+      setCategoriaId(
+        CATEGORIAS_INSUMO.some(c => c.id === insumo.categoriaId)
+          ? insumo.categoriaId
+          : CATEGORIAS_INSUMO[0].id,
+      );
       setUnidad(insumo.unidadMedida);
       setStockActual(insumo.stockActual);
       setCostoUnitario(insumo.costoUnitario);
@@ -578,9 +737,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
 
   const handleSave = () => {
     setIntentoGuardar(true);
-    const limpio = nombreLimpio(nombre);
     // Si hay errores no se guarda: quedan visibles bajo cada campo.
-    if (!limpio || nombreDuplicado(limpio) || !(stockMinimo >= 0)) return;
+    if (!nombreLimpio(nombre) || !categoriaId || nombreDuplicado(nombreLimpio(nombre)) || !(stockMinimo >= 0)) return;
 
     if (editingId) {
       if (costoUnitario < 0) {
@@ -601,7 +759,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
           : i
       ));
       const actualizado: Insumo = { ...original, stockMinimo };
-      if (esStockBajo(actualizado)) {
+      if (estadoStock(actualizado) !== "ok") {
         toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 2000 });
       } else {
         toast.success(`Insumo "${original.nombre}" actualizado`);
@@ -612,9 +770,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         return Math.max(max, n);
       }, 0);
       const newId = `INS-${String(maxNum + 1).padStart(3, "0")}`;
+      // A5.3: el nombre se guarda limpio y con mayúscula inicial ("masa
+      // prueba" → "Masa prueba"). Solo aquí, al CREAR: los existentes no se
+      // renombran.
+      const nombreNuevo = nombreParaGuardar(nombre);
       const nuevo: Insumo = {
         id: newId,
-        nombre: limpio,
+        nombre: nombreNuevo,
         categoriaId,
         unidadMedida: unidad,
         // Punto 10: la creación ya no pide estos tres campos, así que nacen
@@ -630,10 +792,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         estado: "activo",
       };
       setInsumos(prev => [nuevo, ...prev]);
-      if (esStockBajo(nuevo)) {
+      // El stock nace en 0 por diseño (el formulario ya no lo pide), así que
+      // aquí solo avisa si el stock MÍNIMO pedido queda por encima de ese 0;
+      // el aviso permanente es el badge "Sin stock"/"Stock bajo" del listado.
+      if (nuevo.stockActual < nuevo.stockMinimo) {
         toast.warning(`Alerta: el stock de ${nuevo.nombre} está bajo (${nuevo.stockActual} ${nuevo.unidadMedida}, mínimo ${nuevo.stockMinimo} ${nuevo.unidadMedida})`, { duration: 2000 });
       } else {
-        toast.success(`Insumo "${limpio}" creado`);
+        toast.success(`Insumo "${nombreNuevo}" creado`);
       }
     }
     cerrarModal();
@@ -682,7 +847,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     if (tipo === tipoForm) return;
     if (tipo === "producto-insumo") {
       // Campos propios del insumo normal que no aplican aquí.
-      setUnidad(UNIDADES[0]);
+      setUnidad(UNIDADES_INSUMO[0].valor);
       setStockActual(0);
       setCostoUnitario(0);
       // La unidad de la ficha arranca vacía: es un campo obligatorio.
@@ -701,7 +866,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     setIntentoGuardar(true);
     // Si hay errores no se abre la confirmación: quedan visibles en vivo.
     const e = errores;
-    if (e.nombre || e.stockMinimo || e.tiempo || e.cantidad || e.unidad || e.insumos) return;
+    if (e.nombre || e.categoria || e.stockMinimo || e.tiempo || e.cantidad || e.unidad || e.insumos || e.filas) return;
+    // A1: mientras falte insumo para la "Cantidad a hacer" no se crea el
+    // producto (la orden que se mandaría a Producción quedaría sin sustento).
+    // Al EDITAR un producto insumo existente no se valida contra stock.
+    if (!editandoProducto && validacionStockPI.faltantes.length > 0) return;
     setConfirmState({
       tipo: "crear-producto",
       mensaje: editandoProducto ? "¿Deseas guardar los cambios?" : "¿Deseas crear este producto insumo?",
@@ -767,7 +936,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
           return Math.max(max, n);
         }, 0);
         const newId = `PIN-${String(maxNum + 1).padStart(3, "0")}`;
-        const nombreNuevo = nombreLimpio(nombre);
+        // A5.3: nombre limpio y con mayúscula inicial, igual que un insumo
+        // normal. Solo aquí, al CREAR.
+        const nombreNuevo = nombreParaGuardar(nombre);
         const nuevo: Insumo = {
           id: newId,
           nombre: nombreNuevo,
@@ -787,26 +958,41 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         // siguiente número de la serie compartida (001, 002, …). Los campos
         // que el formulario no usa quedan en su valor por defecto para no
         // romper el tipo FichaVersion.
-        setFichas(prev => ({
-          ...prev,
-          [newId]: [{
-            ...piFicha,
-            version: 1,
-            idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
-            destino: { tipo: "producto-insumo", insumoId: newId },
-            porciones: 1,
-            porcionesPorTamano: [],
-            pasos: [],
-            fechaInicio: new Date().toISOString(),
-            fechaFin: null,
-          }],
-        }));
-        toast.success(`Producto Insumo "${nombreNuevo}" creado`, {
-          action: {
-            label: "Programar producción",
-            onClick: () => abrirOrdenProduccion?.(newId),
-          },
-        });
+        const fichaV1: FichaVersion = {
+          ...piFicha,
+          version: 1,
+          idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
+          destino: { tipo: "producto-insumo", insumoId: newId },
+          porciones: 1,
+          porcionesPorTamano: [],
+          pasos: [],
+          fechaInicio: new Date().toISOString(),
+          fechaFin: null,
+        };
+        setFichas(prev => ({ ...prev, [newId]: [fichaV1] }));
+        // A2: el producto insumo nuevo sale CON su Orden de Producción
+        // "Preparación en lote" pendiente: cantidad = "Cantidad a hacer" y
+        // ficha v1. No descuenta nada — el stock baja al iniciarla —. Sin
+        // callback (pantalla montada sin App) sigue el toast de siempre.
+        const ordenId = crearOrdenProduccion?.(nuevo, fichaV1) ?? null;
+        toast.success(
+          ordenId
+            ? `Producto insumo «${nombreNuevo}» creado y enviado a Orden de Producción (${ordenId})`
+            : `Producto Insumo "${nombreNuevo}" creado`,
+          ordenId
+            ? {
+                action: {
+                  label: "Ver orden",
+                  onClick: () => verOrdenProduccion?.(ordenId),
+                },
+              }
+            : {
+                action: {
+                  label: "Programar producción",
+                  onClick: () => abrirOrdenProduccion?.(newId),
+                },
+              },
+        );
         cerrarModal();
       }
     } else if (confirmState.tipo === "cancelar-producto") {
@@ -919,6 +1105,40 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         </select>
       </div>
 
+      {/* A5.5 — Aviso de stock bajo (solo insumos activos): el texto es un
+          BOTÓN que filtra el listado y muestra solo esos insumos; el segundo
+          clic lo apaga. Sigue a la vista mientras el filtro esté activo, así
+          que siempre se puede salir. El detalle completo de los nombres queda
+          en el `title`. */}
+      {insumosStockBajo.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroStockBajo(v => !v);
+            setPage(1);
+          }}
+          aria-pressed={filtroStockBajo}
+          title={`${insumosStockBajo.length} insumo${insumosStockBajo.length === 1 ? "" : "s"} con stock bajo: ${insumosStockBajo
+            .map(i => `${i.nombre} (${fmtCant(i.stockActual, i.unidadMedida)}${estadoStock(i) === "sin-stock" ? ", sin stock" : ""})`)
+            .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
+          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-all ${
+            filtroStockBajo
+              ? "bg-amber-500 border-amber-600 text-white shadow-md font-bold"
+              : "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-500/15 dark:border-amber-500/40 dark:text-amber-300 font-semibold hover:bg-amber-200 dark:hover:bg-amber-500/25"
+          }`}
+        >
+          {filtroStockBajo && <span aria-hidden>✓</span>}
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="font-bold whitespace-nowrap">
+            {insumosStockBajo.length} insumo{insumosStockBajo.length === 1 ? "" : "s"} con stock bajo
+          </span>
+          <span className="truncate">
+            · {insumosStockBajo.slice(0, 3).map(i => i.nombre).join(", ")}
+            {insumosStockBajo.length > 3 ? ` y ${insumosStockBajo.length - 3} más` : ""}
+          </span>
+        </button>
+      )}
+
       {/* Table */}
       <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
@@ -951,7 +1171,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
               </tr>
             ) : paged.map(insumo => {
               const esProductoInsumo = insumo.tipo === "ProductoInsumo";
-              const stockBajo = insumo.estado === "activo" && esStockBajo(insumo);
+              // A5.5: "Sin stock" en rojo cuando vale 0; "Stock bajo" en
+              // ámbar solo si es mayor a 0 y llegó al mínimo.
+              const stock = estadoStock(insumo);
               const inactivo = insumo.estado === "inactivo";
               return (
                 <tr key={insumo.id} className={`hover:bg-muted/20 dark:hover:bg-muted/10 transition-colors ${inactivo ? "opacity-50" : ""}`}>
@@ -969,12 +1191,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                   <td className="px-3 py-3.5">
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
-                      {stockBajo && (
+                      {insumo.estado === "activo" && stock === "sin-stock" && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap">
+                          Sin stock
+                        </span>
+                      )}
+                      {insumo.estado === "activo" && stock === "bajo" && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
                           Stock bajo
                         </span>
                       )}
-                      {!stockBajo && insumo.estado === "activo" && (
+                      {insumo.estado === "activo" && stock === "ok" && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
                           OK
                         </span>
@@ -1121,16 +1348,21 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
                       <select
                         value={categoriaId}
-                        onChange={e => setCategoriaId(e.target.value)}
+                        onChange={e => { setCategoriaId(e.target.value); tocar("categoria"); }}
+                        onBlur={() => tocar("categoria")}
                         disabled={!!editingId}
                         className={`${ICLS_MODAL} ${
                           editingId ? "text-muted-foreground cursor-not-allowed" : "cursor-pointer"
                         }`}
                       >
+                        <option value="">Selecciona una categoría</option>
                         {CATEGORIAS_INSUMO.map(c => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
                         ))}
                       </select>
+                      {errorDe("categoria", errores.categoria) && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.categoria}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
@@ -1170,8 +1402,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                          aquí abajo (la del propio Producto Insumo). */
                       unidadCantidad={piUnidadMedida || undefined}
                       errorTiempo={errorDe("tiempo", errores.tiempo)}
-                      errorCantidad={errorDe("cantidad", errores.cantidad)}
+                      /* Bajo "Cantidad a hacer", además del error clásico,
+                         avisa si la "Cantidad a hacer" no se puede producir
+                         con el stock de hoy (A1). */
+                      errorCantidad={
+                        errorDe("cantidad", errores.cantidad) ??
+                        (validacionStockPI.faltantes.length > 0 ? validacionStockPI.aviso : undefined)
+                      }
                       errorInsumos={errorDe("insumos", errores.insumos)}
+                      /* Mensaje en rojo por fila: insumo que no alcanza en
+                         stock (A1) o fila en cantidad 0 (A5.4). */
+                      erroresInsumosFila={erroresFilaPI}
                       /* Selector de unidad entre "Cantidad a hacer" e
                          "Insumos a usar" (el orden que pide el formulario). */
                       campoAdicional={
@@ -1181,7 +1422,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                             value={piUnidadMedida}
                             onChange={v => { setPiUnidadMedida(v); tocar("unidad"); }}
                             disabled={editandoProducto}
-                            unidades={UNIDADES_PI}
+                            /* A5.2: la MISMA lista compartida que Crear
+                               Insumo y que la "Medida" de cada fila. */
+                            unidades={UNIDADES_INSUMO}
                             placeholder="Seleccionar unidad..."
                             ariaLabel="Unidad de medida"
                             fieldClassName={
@@ -1225,28 +1468,37 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
                       <select
                         value={categoriaId}
-                        onChange={e => setCategoriaId(e.target.value)}
+                        onChange={e => { setCategoriaId(e.target.value); tocar("categoria"); }}
+                        onBlur={() => tocar("categoria")}
                         disabled={!!editingId}
                         className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
                           editingId
                             ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                            : "bg-muted dark:bg-input text-foreground cursor-pointer"
+                            : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30 cursor-pointer"
                         }`}
                       >
+                        <option value="">Selecciona una categoría</option>
                         {CATEGORIAS_INSUMO.map(c => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
                         ))}
                       </select>
+                      {errorDe("categoria", errores.categoria) && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.categoria}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida *</label>
                       {/* Select personalizado (Radix, igual que los estados): el
                           `<select>` nativo desplegaba la lista CUADRADA y con el
                           azul del navegador. */}
+                      {/* A5.2: UNA sola lista de unidades (UNIDADES_INSUMO),
+                          la misma que la del Producto Insumo y la de cada
+                          fila de la ficha. */}
                       <UnidadSelect
                         value={unidad}
                         onChange={setUnidad}
                         disabled={!!editingId}
+                        unidades={UNIDADES_INSUMO}
                         fieldClassName={
                           editingId
                             ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
@@ -1323,7 +1575,20 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                 </button>
                 <button
                   onClick={tipoForm === "producto-insumo" ? handleGuardarProducto : handleSave}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                  /* A1: mientras falte insumo para la "Cantidad a hacer", el
+                     producto insumo nuevo no se puede crear. */
+                  disabled={
+                    tipoForm === "producto-insumo" &&
+                    !editandoProducto &&
+                    validacionStockPI.faltantes.length > 0
+                  }
+                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+                    tipoForm === "producto-insumo" &&
+                    !editandoProducto &&
+                    validacionStockPI.faltantes.length > 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-red-700 cursor-pointer active:scale-95"
+                  }`}
                 >
                   <Check className="w-4 h-4" />
                   {editingId
