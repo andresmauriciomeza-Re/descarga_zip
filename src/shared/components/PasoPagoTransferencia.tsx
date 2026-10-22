@@ -1,5 +1,6 @@
 import { QrCode, Upload, X, ImageIcon } from "lucide-react";
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
+import QRCode from "qrcode";
 
 const MONO = "var(--font-texto)";
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
@@ -32,6 +33,76 @@ export const PAYMENT_INFO: Record<
     qr: "https://banco.example.com/pagar?cuenta=690123456789&titular=La%20Sirena%20Pizza%20SAS",
   },
 };
+
+/** Payload que codifica el QR de pago: la base del medio elegido + el monto
+    (`valor=`). Si la base ya trae "?" se concatena con "&"; si no, con "?".
+    DEBE quedar igual en el backend (mail.service.js): el QR del correo de
+    saldo faltante codifica exactamente lo mismo. */
+export const payloadQrPago = (payment: string, monto: number): string => {
+  const base = PAYMENT_INFO[payment]?.qr ?? "";
+  return base ? `${base}${base.includes("?") ? "&" : "?"}valor=${monto}` : "";
+};
+
+/** Genera el QR de pago en el navegador (data URL) con la librería `qrcode`.
+    Mismo contenido y estilo en el checkout, el modal "Completar pago" de Mis
+    pedidos y las tarjetas de pedidos pendientes. */
+export function useQrPago(payment: string, monto: number): string {
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    const payload = payloadQrPago(payment, monto);
+    if (!payload) {
+      setQrDataUrl("");
+      return;
+    }
+    QRCode.toDataURL(payload, {
+      margin: 1,
+      width: 260,
+      color: { dark: "#141414", light: "#ffffff" },
+    })
+      .then((url) => vivo && setQrDataUrl(url))
+      .catch(() => vivo && setQrDataUrl(""));
+    return () => {
+      vivo = false;
+    };
+  }, [payment, monto]);
+  return qrDataUrl;
+}
+
+/** Bloque "O deposita escaneando el QR": el mismo recuadro del checkout y del
+    modal "Completar pago" de Mis pedidos (y de los pedidos pendientes). */
+export function BloqueQrPago({
+  payment,
+  monto,
+  qrDataUrl,
+}: {
+  payment: string;
+  monto: number;
+  qrDataUrl: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/50 p-4 flex flex-col items-center gap-3">
+      <p className="w-full text-sm font-semibold text-foreground flex items-center gap-1.5">
+        <QrCode className="w-4 h-4 text-primary" />
+        O deposita escaneando el QR
+      </p>
+      <div className="bg-white rounded-xl p-3 border border-border shadow-sm">
+        {qrDataUrl ? (
+          <img src={qrDataUrl} alt={`QR de pago ${payment}`} className="w-44 h-44" />
+        ) : (
+          <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground px-5">
+            <span className="text-2xl">📱</span>
+            Generando el QR…
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground text-center">
+        Escanea con la cámara o con tu app de pago y paga{" "}
+        <strong className="text-foreground">{fmt(monto)}</strong>.
+      </p>
+    </div>
+  );
+}
 
 /** Paso de pago por transferencia: datos de la cuenta + QR a la izquierda y
     subida del comprobante a la derecha. Es el mismo cuerpo que usa el checkout
@@ -86,26 +157,7 @@ export function PasoPagoTransferencia({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/50 p-4 flex flex-col items-center gap-3">
-          <p className="w-full text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <QrCode className="w-4 h-4 text-primary" />
-            O deposita escaneando el QR
-          </p>
-          <div className="bg-white rounded-xl p-3 border border-border shadow-sm">
-            {qrDataUrl ? (
-              <img src={qrDataUrl} alt={`QR de pago ${payment}`} className="w-44 h-44" />
-            ) : (
-              <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground px-5">
-                <span className="text-2xl">📱</span>
-                Generando el QR…
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground text-center">
-            Escanea con la cámara o con tu app de pago y paga{" "}
-            <strong className="text-foreground">{fmt(subtotal)}</strong>.
-          </p>
-        </div>
+        <BloqueQrPago payment={payment} monto={subtotal} qrDataUrl={qrDataUrl} />
       </div>
 
       {/* RIGHT: subir comprobante */}
