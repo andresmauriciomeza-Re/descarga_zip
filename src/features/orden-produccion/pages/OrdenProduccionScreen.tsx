@@ -289,19 +289,30 @@ const esProductoInsumo = (i: Insumo) => i.tipo === "ProductoInsumo";
     inactivo o sus unidades no se pueden convertir. */
 export type Faltante = FaltanteUnidad;
 
-/** ¿Es la línea una bebida (gaseosa, jugo…)? Se decide por el TIPO del
-    producto en el catálogo —"Producto terminado" llega tal cual, sin ficha—
-    y, si el producto ya no existe, por la marca `sinFicha` de la línea. Es la
-    ÚNICA línea de un pedido que baja `stockDisponible` (pizza y lasaña se
-    preparan con sus insumos) y la ÚNICA que no pide insumos al Iniciar. Una
-    pizza o lasaña sin ficha NO es bebida: bloquea con su propio aviso. */
-function esBebida(l: LineaOrden, productos: Producto[]): boolean {
-  // Mismo criterio de resolución que `lineasDeVenta`: por id y, si la línea es
-  // vieja, por nombre normalizado (el detalle trae el tamaño pegado con " — ").
+/** Producto de una línea del pedido: por id y, si la línea es vieja o el id ya
+    no está en Productos, por nombre normalizado (el detalle trae el tamaño
+    pegado con " — "). Mismo criterio que `lineasDeVenta`. */
+function productoDeLinea(l: LineaOrden, productos: Producto[]): Producto | undefined {
   const porId = l.productoId ? productos.find((p) => p.id === l.productoId) : undefined;
   const base = l.nombre.split(" — ")[0].trim();
-  const producto = porId ?? productos.find((p) => normalizar(p.nombre) === normalizar(base));
-  if (!producto) return l.sinFicha === true;
+  return porId ?? productos.find((p) => normalizar(p.nombre) === normalizar(base));
+}
+
+/** ¿Es la línea una bebida (gaseosa, jugo…)? Es la ÚNICA línea de un pedido
+    que baja `stockDisponible` (pizza y lasaña se preparan con sus insumos) y
+    la ÚNICA que no pide insumos al Iniciar. Se decide por el TAMAÑO de la
+    línea: las bebidas llegan sin tamaño y pizzas y lasañas con Mediana,
+    Grande o Normal. Si la línea tiene tamaño pero su producto NO se encuentra
+    en Productos, NO se asume bebida: `iniciar` la bloquea con su aviso (mismo
+    espíritu que una pizza o lasaña sin ficha). */
+function esBebida(l: LineaOrden, productos: Producto[]): boolean {
+  // Sin tamaño = bebida: no pide insumos ni descuenta stock de insumos.
+  if (!l.tamano) return true;
+  // Con tamaño solo puede ser pizza o lasaña. Si el producto existe, manda su
+  // TIPO ("Producto terminado" llega tal cual, sin ficha); si no existe, la
+  // línea NO es bebida y el bloqueo lo hace `iniciar` al recalcular.
+  const producto = productoDeLinea(l, productos);
+  if (!producto) return false;
   return tipoDe(producto) === "Producto terminado";
 }
 
@@ -1328,8 +1339,9 @@ export function OrdenProduccionScreen({
       1) Pide los insumos AHORA. En pedido se recalcula por línea —foto
          `fichaSnapshot` primero, si no la ficha vigente, × cantidad × factor
          de tamaño— y se guarda el resultado en `insumosRequeridos`; la línea
-         de bebida no pide nada y una pizza o lasaña sin ficha bloquea con su
-         aviso. En preparación en lote manda la foto ya guardada en la orden.
+         de bebida (sin tamaño) no pide nada, y una línea CON tamaño cuyo
+         producto no está en Productos bloquea con "No se encontró …", igual
+         que una pizza o lasaña sin ficha. En preparación en lote manda la foto ya guardada en la orden.
       2) Valida contra el stock de hoy con `faltantesPara`: si falta algo abre
          "Inventario insuficiente" y la orden SE QUEDA PENDIENTE (no se
          descuenta nada ni cambia de estado).
@@ -1348,6 +1360,13 @@ export function OrdenProduccionScreen({
       for (const l of orden.lineas) {
         // Bebidas: no piden insumos.
         if (esBebida(l, productos)) continue;
+        // Con tamaño pero sin producto en Productos (nombre borrado o escrito
+        // distinto al del menú): no se puede calcular su receta y la orden se
+        // queda Pendiente con este aviso, en vez de tratarla como bebida.
+        if (!productoDeLinea(l, productos)) {
+          toast.error(`No se encontró «${l.nombre}» en Productos: revisa que el nombre sea igual al del menú`);
+          return;
+        }
         const clave = l.productoId ?? l.idProducto;
         const conFicha = l.fichaSnapshot ?? (clave ? fichaVigente(fichasPorProducto, clave) : null);
         if (!conFicha) {

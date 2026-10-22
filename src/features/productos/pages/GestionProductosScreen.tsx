@@ -255,7 +255,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   {
     id: "PROD-003",
     imagen: "/src/assets/img/pizzafondo-removebg-preview.png",
-    nombre: "Pizza Hawai",
+    nombre: "Pizza Hawaiana",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
     costoUnitario: 14000, precioUnitario: 14000,
@@ -367,7 +367,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   {
     id: "PROD-013",
     imagen: "/src/assets/img/Premio.png",
-    nombre: "Gaseosa Premiun",
+    nombre: "Gaseosa Premium",
     idCategoria: "CAT-003",
     tipo: TIPOS_PRODUCTO[1],
     costoUnitario: 3500, precioUnitario: 3500,

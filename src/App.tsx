@@ -109,7 +109,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, categoriaApiACategoria, verImagenCompleta, type Product } from "@/shared/utils/catalogo";
+import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
@@ -130,7 +130,7 @@ import {
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { ESTADO_COLORES } from "@/shared/components/EstadoProducto";
+import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -260,6 +260,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -274,6 +275,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -288,6 +290,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -302,6 +305,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -316,6 +320,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -330,6 +335,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -344,6 +350,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -358,6 +365,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_DEFAULT,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 0,
     sales: 0,
   },
@@ -373,6 +381,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_LASANA,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.8,
     sales: 450,
   },
@@ -387,6 +396,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_LASANA,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.7,
     sales: 380,
   },
@@ -401,6 +411,7 @@ const PRODUCTS: Product[] = [
     sizes: SIZES_LASANA,
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.9,
     sales: 520,
   },
@@ -416,12 +427,13 @@ const PRODUCTS: Product[] = [
     sizes: [],
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.5,
     sales: 2100,
   },
   {
     id: 13,
-    name: "Gaseosa Premiun",
+    name: "Gaseosa Premium",
     description: "Botella de 2.5 L. Sabor frutal y refrescante.",
     price: 3500,
     image: "/src/assets/img/Premio.png",
@@ -430,6 +442,7 @@ const PRODUCTS: Product[] = [
     sizes: [],
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.4,
     sales: 1800,
   },
@@ -444,6 +457,7 @@ const PRODUCTS: Product[] = [
     sizes: [],
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.8,
     sales: 3200,
   },
@@ -458,6 +472,7 @@ const PRODUCTS: Product[] = [
     sizes: [],
     extras: [],
     status: "disponible",
+    estado: "Disponible",
     rating: 4.6,
     sales: 2800,
   },
@@ -1935,6 +1950,10 @@ function LandingScreen({
                 });
                 if (!producto) return null;
                 const favorita = productoACatalogo(producto, categorias);
+                // Un producto descontinuado no se muestra en ningún lugar del
+                // menú público, tampoco acá.
+                if (estadoDeProducto(favorita) === "Descontinuado") return null;
+                const noDisponible = !productoDisponible(favorita);
                 return (
                   <motion.div
                     key={producto.id}
@@ -1942,20 +1961,27 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
-                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer flex flex-col"
+                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-200 ease-out cursor-pointer flex flex-col motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
                   >
                     {/* Image */}
                     <div className="relative h-52 bg-muted overflow-hidden">
                       <img
                         src={favorita.image}
                         alt={favorita.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
                       />
-                      {/* Badge */}
-                      <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
-                        <Star className="w-3 h-3 fill-white text-white" />
-                        Favorita
+                      {/* Estado del producto (arriba a la izquierda, 12 px)
+                          y, debajo, la insignia "Favorita" de siempre. */}
+                      <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
+                        <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
+                        <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
+                          <Star className="w-3 h-3 fill-white text-white" />
+                          Favorita
+                        </div>
                       </div>
+                      {noDisponible && (
+                        <NoDisponibleOverlay className="absolute inset-0 z-[5]" />
+                      )}
                     </div>
 
                     {/* Body */}
@@ -1973,7 +1999,7 @@ function LandingScreen({
                       {/* Price + Rating */}
                       <div className="flex items-center justify-between mt-auto">
                         <span
-                          className="text-[#DC2626] text-lg font-semibold"
+                          className={`text-[#DC2626] text-lg font-semibold ${noDisponible ? "opacity-60" : ""}`}
                           style={{ fontFamily: MONO }}
                         >
                           $ {favorita.price.toLocaleString("es-CO")}
@@ -2256,13 +2282,17 @@ function ProductCard({
   cart: CartItem[];
   updateQty: (id: string, qty: number) => void;
 }) {
+  // Estado real del producto (menú público). "Descontinuado" no llega acá:
+  // CatalogScreen lo filtra antes de armar el grid.
+  const estado = estadoDeProducto(p);
+  const noDisponible = estado !== "Disponible";
   return (
     <motion.div
       data-producto-id={p.id}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
+      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-200 ease-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-lg"
     >
       <button
         className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
@@ -2271,22 +2301,20 @@ function ProductCard({
         <img
           src={p.image}
           alt={p.name}
-          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
+            noDisponible ? "grayscale opacity-60" : ""
+          } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
-        <div className="absolute top-3 right-3 z-10">
-          {/* Mismos colores de estado que el panel (ESTADO_COLORES). */}
-          <Badge
-            className="border-0"
-            style={{
-              backgroundColor: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"] + "1A",
-              color: ESTADO_COLORES[p.status === "disponible" ? "Disponible" : "No disponible"],
-            }}
-          >
-            {p.status === "disponible"
-              ? "Disponible"
-              : "No disponible"}
-          </Badge>
-        </div>
+        {/* Etiqueta de estado: fondo sólido, arriba a la izquierda con 12 px
+            de separación, legible sobre cualquier foto (claras, oscuras o de
+            cuadritos) y en ambos modos. */}
+        <EstadoMenuBadge
+          estado={estado}
+          className="absolute top-3 left-3 z-10"
+        />
+        {noDisponible && (
+          <NoDisponibleOverlay className="absolute inset-0 z-10" />
+        )}
       </button>
       <div className="p-4">
         <div className="mb-1">
@@ -2302,7 +2330,7 @@ function ProductCard({
         </p>
         <div className="flex items-center justify-between">
           <span
-            className="font-bold text-lg text-foreground"
+            className={`font-bold text-lg ${noDisponible ? "text-muted-foreground opacity-60" : "text-foreground"}`}
             style={{ fontFamily: MONO }}
           >
             {fmt(p.price)}
@@ -2320,10 +2348,14 @@ function ProductCard({
                 ("Ver más" o la imagen). */}
             <button
               onClick={() => onQuickAdd(p)}
-              disabled={p.status !== "disponible"}
-              title="Agregar al carrito"
-              aria-label={`Agregar ${p.name} al carrito`}
-              className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              disabled={noDisponible}
+              title={noDisponible ? "No disponible por ahora" : "Agregar al carrito"}
+              aria-label={
+                noDisponible
+                  ? `${p.name} no está disponible por ahora`
+                  : `Agregar ${p.name} al carrito`
+              }
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer motion-reduce:active:scale-100"
             >
               <ShoppingCart className="w-4 h-4" />
             </button>
@@ -2376,13 +2408,22 @@ function CatalogScreen({
   // En móvil: 6 por página (2 columnas de 3).
   const PER_PAGE = isMobile ? 6 : 9;
 
+  // Productos que el menú público SÍ muestra: los descontinuados se ocultan
+  // en todos los lugares del menú (catálogo, favoritas y detalle). Los
+  // botones de filtro se derivan de esta misma lista, así una categoría cuyo
+  // único producto se descontinuó deja de ofrecer su filtro vacío.
+  const visibles = useMemo(
+    () => productosSeguros.filter((p) => estadoDeProducto(p) !== "Descontinuado"),
+    [productosSeguros],
+  );
+
   // Botones de filtro. Se derivan de los PRODUCTOS que se están listando y no
   // de la lista de categorías del admin: así, aunque una categoría se haya
   // guardado con otro id o quede marcada como inactiva en localStorage, el menú
   // siempre muestra sus botones (antes no salía ninguno y solo se veía "Todas").
   const filtros = useMemo(() => {
     const porId = new Map<string, string>();
-    productosSeguros.forEach((p) => {
+    visibles.forEach((p) => {
       const id = p.idCategoria ?? "";
       if (!id || porId.has(id)) return;
       const nombre =
@@ -2392,7 +2433,7 @@ function CatalogScreen({
       porId.set(id, nombre);
     });
     return [...porId.entries()].map(([id, nombre]) => ({ id, nombre }));
-  }, [productosSeguros, categoriasSeguras]);
+  }, [visibles, categoriasSeguras]);
 
   const nombreFiltroActivo = filtros.find((f) => f.id === cat)?.nombre;
 
@@ -2403,23 +2444,27 @@ function CatalogScreen({
     if (cat !== "Todas" && !filtros.some((f) => f.id === cat)) setCat("Todas");
   }, [cat, filtros]);
 
-  const filtered = useMemo(
-    () =>
-      productosSeguros.filter(
-        (p) =>
-          (cat === "Todas" ||
-            p.idCategoria === cat ||
-            (nombreFiltroActivo !== undefined && p.category === nombreFiltroActivo)) &&
-          (search === "" ||
-            (p.name ?? "")
-              .toLowerCase()
-              .includes(search.toLowerCase()) ||
-            (p.description ?? "")
-              .toLowerCase()
-              .includes(search.toLowerCase())),
-      ),
-    [search, cat, nombreFiltroActivo, productosSeguros],
-  );
+  // Del filtro de categoría/búsqueda salen SOLO productos visibles (sin
+  // descontinuados) y ordenados: primero los disponibles y al final los no
+  // disponibles, conservando el orden original dentro de cada grupo (el sort
+  // de JS es estable), así "sin cambiar el resto del orden".
+  const filtered = useMemo(() => {
+    const porCategoriaYBusqueda = visibles.filter(
+      (p) =>
+        (cat === "Todas" ||
+          p.idCategoria === cat ||
+          (nombreFiltroActivo !== undefined && p.category === nombreFiltroActivo)) &&
+        (search === "" ||
+          (p.name ?? "")
+            .toLowerCase()
+            .includes(search.toLowerCase()) ||
+          (p.description ?? "")
+            .toLowerCase()
+            .includes(search.toLowerCase())),
+    );
+    const peso = (p: Product) => (productoDisponible(p) ? 0 : 1);
+    return [...porCategoriaYBusqueda].sort((a, b) => peso(a) - peso(b));
+  }, [search, cat, nombreFiltroActivo, visibles]);
 
   // Sin paginado el menú volcaba los 13 productos de una vez, así que al
   // llegar a la última categoría había que hacer scroll largo para volver
@@ -2625,6 +2670,11 @@ function ProductDetailScreen({
   );
   const sizePrice = sizeDe(product, sizeIdx).price;
   const total = (sizePrice + extrasPrice) * qty;
+  // Estado del producto en el menú: la etiqueta se muestra igual que en la
+  // tarjeta y, si no está disponible, el pedido se bloquea desde acá (el
+  // botón "Agregar al carrito" antes ignoraba el estado).
+  const estado = estadoDeProducto(product);
+  const noDisponible = estado !== "Disponible";
 
   const toggleExtra = (label: string) =>
     setExtras((prev) =>
@@ -2634,6 +2684,11 @@ function ProductDetailScreen({
     );
 
   const handleAdd = () => {
+    // Red de seguridad además del `disabled` del botón.
+    if (noDisponible) {
+      toast.error("Este producto no está disponible por ahora");
+      return;
+    }
     const size = sizeDe(product, sizeIdx);
     addDetailed({
       id: `${product.id}-${Date.now()}`,
@@ -2666,12 +2721,21 @@ function ProductDetailScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Image */}
-        <div className={`rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
+        <div className={`relative rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
           <img
             src={product.image}
             alt={product.name}
-            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"}`}
+            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${noDisponible ? "grayscale opacity-60" : ""}`}
           />
+          {/* Mismo estado que en la tarjeta del catálogo: fondo sólido,
+              arriba a la izquierda con 12 px de separación. */}
+          <EstadoMenuBadge
+            estado={estado}
+            className="absolute top-3 left-3 z-10"
+          />
+          {noDisponible && (
+            <NoDisponibleOverlay className="absolute inset-0 z-10" />
+          )}
         </div>
 
         {/* Info */}
@@ -2804,10 +2868,11 @@ function ProductDetailScreen({
           <PrimaryBtn
             onClick={handleAdd}
             size="lg"
+            disabled={noDisponible}
             className="w-full"
           >
-            <ShoppingCart className="w-5 h-5" /> Agregar al
-            carrito
+            <ShoppingCart className="w-5 h-5" />{" "}
+            {noDisponible ? "No disponible por ahora" : "Agregar al carrito"}
           </PrimaryBtn>
         </div>
       </div>
@@ -2908,6 +2973,11 @@ function CartScreen({
   const cartTotal = (item: CartItem) =>
     (item.sizePrice + item.extrasPrice) * item.quantity;
   const subtotal = cart.reduce((s, i) => s + cartTotal(i), 0);
+  // Un producto del carrito puede pasar a "No disponible" al recargar el
+  // catálogo (el efecto de App refresca `item.product`). La línea NO se borra:
+  // se marca, no se puede aumentar y el pago queda bloqueado hasta que el
+  // cliente la quite o la deje en 0.
+  const itemsNoDisponibles = cart.filter((i) => !productoDisponible(i.product));
   // Quién está haciendo el pedido. El nombre sí se guardaba en la venta, pero
   // el checkout no lo mostraba en ningún paso ni en la confirmación, así que el
   // cliente no tenía forma de confirmar a nombre de quién estaba comprando.
@@ -3288,15 +3358,17 @@ function CartScreen({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Items */}
           <div className="lg:col-span-2 space-y-4">
-            {cart.map((item) => (
+            {cart.map((item) => {
+              const itemNoDisponible = !productoDisponible(item.product);
+              return (
               <div
                 key={item.id}
-                className="bg-card border border-border rounded-2xl p-4 flex gap-4"
+                className={`bg-card border rounded-2xl p-4 flex gap-4 ${itemNoDisponible ? "border-zinc-400 dark:border-zinc-600" : "border-border"}`}
               >
                 <img
                   src={item.product.image}
                   alt={item.product.name}
-                  className="w-20 h-20 rounded-xl object-cover shrink-0 bg-muted"
+                  className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between">
@@ -3304,8 +3376,14 @@ function CartScreen({
                       <h3 className="font-bold text-foreground">
                         {item.product.name}
                       </h3>
+                      {/* Estado del producto HOY en el catálogo: la línea se
+                          marca pero no se borra sola. */}
+                      <EstadoMenuBadge
+                        estado={estadoDeProducto(item.product)}
+                        className="mt-1.5"
+                      />
                       {item.size && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground mt-1">
                           {item.size}
                         </p>
                       )}
@@ -3335,11 +3413,19 @@ function CartScreen({
                       <span className="w-6 text-center text-sm font-bold">
                         {item.quantity}
                       </span>
+                      {/* No disponible: no se puede aumentar (el cliente debe
+                          quitar la línea para poder pagar). */}
                       <button
                         onClick={() =>
                           updateQty(item.id, item.quantity + 1)
                         }
-                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                        disabled={itemNoDisponible}
+                        title={
+                          itemNoDisponible
+                            ? "No disponible por ahora"
+                            : "Aumentar cantidad"
+                        }
+                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -3361,7 +3447,8 @@ function CartScreen({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Resumen + CTA. Sticky en escritorio: con muchos productos el
@@ -3380,11 +3467,20 @@ function CartScreen({
                 subtotal={subtotal}
                 className="space-y-2 mb-4 text-sm"
               />
+              {/* Un producto del carrito dejó de estar disponible: no se
+                  puede pagar hasta que el cliente lo quite (la línea no se
+                  borra sola). */}
+              {itemsNoDisponibles.length > 0 && (
+                <p className="mb-3 text-sm font-semibold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-xl px-3 py-2 text-center">
+                  Quita los productos no disponibles para continuar
+                </p>
+              )}
               <PrimaryBtn
                 // Sin sesión lo primero es el formulario de datos; con sesión
                 // se entra directo al resumen como siempre.
                 onClick={() => setCheckoutStep(isLoggedIn ? 1 : 3)}
                 size="lg"
+                disabled={itemsNoDisponibles.length > 0}
                 className="w-full"
               >
                 <CreditCard className="w-5 h-5" />
@@ -5649,6 +5745,7 @@ function ManageProductsScreen() {
       ],
       extras: [],
       status: "disponible",
+      estado: "Disponible",
       rating: 0,
       sales: 0,
     };
@@ -9019,11 +9116,16 @@ export default function App() {
                 />
               )}
               {screen === "ventas-pedidos" && (
+                // La caja solo ofrece productos que hoy están Disponibles: si
+                // el backend marca uno como "No disponible" o "Descontinuado"
+                // desaparece del picker sin tocar VentasScreen.
                 <VentasScreen
                   {...getPerms("ventas-pedidos")}
                   pedidos={ventas}
                   setPedidos={setVentas}
-                  productos={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
+                  productos={productosCatalogo
+                    .filter((producto) => producto.estado === "Disponible")
+                    .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                   onGestionarDevolucion={abrirGestionDevolucion}
                 />
               )}
