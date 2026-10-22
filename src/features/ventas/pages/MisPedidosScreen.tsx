@@ -13,13 +13,12 @@ import {
   Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import type { Venta, VentaStatus } from "./VentasScreen";
 import { hora12 } from "@/shared/utils/hora";
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { PasoPagoTransferencia, PAYMENT_INFO } from "@/shared/components/PasoPagoTransferencia";
+import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VisorImagen } from "@/shared/components/VisorImagen";
 import { cancelarVentaApi, obtenerMisVentas, subirComprobanteVenta } from "../services/ventasApi";
 
@@ -168,15 +167,14 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
     }
   };
   const [abierto, setAbierto] = useState<string | null>(null);
-  /** Pestaña activa: todos los pedidos o solo los de hoy. */
-  const [pestana, setPestana] = useState<"todos" | "recientes">("todos");
+  /** Pestaña activa: todos, los de hoy o los que esperan el saldo faltante. */
+  const [pestana, setPestana] = useState<"todos" | "recientes" | "pendientes">("todos");
 
   // ── Modal "Completar pago" (falta de dinero) ──
   const [completarId, setCompletarId] = useState<string | null>(null);
   const [paso, setPaso] = useState<1 | 2>(1);
   const [metodo, setMetodo] = useState<"Nequi" | "Bancolombia" | "">("");
   const [compComprobante, setCompComprobante] = useState("");
-  const [qrDataUrl, setQrDataUrl] = useState("");
   const { subir, subiendo } = useSubirArchivo();
   const compFileRef = useRef<HTMLInputElement | null>(null);
   /** Visor del comprobante de devolución (rechazo por dinero faltante). */
@@ -184,37 +182,39 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
 
   const pedidosOrdenados = [...misPedidos].sort((a, b) => b.fecha.localeCompare(a.fecha));
   const pedidosHoy = pedidosOrdenados.filter((p) => p.fecha === hoyISO());
-  const lista = pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
+  // Con saldo faltante ("En espera"): los de la pestaña "Pedidos pendientes".
+  const pendientes = pedidosOrdenados.filter(
+    (p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0,
+  );
+  const lista =
+    pestana === "pendientes" ? pendientes : pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
 
   // Pedido en espera del que se está completando el pago (para montos).
   const pedidoCompletar = completarId ? pedidosOrdenados.find((p) => p.id === completarId) ?? null : null;
 
   // QR del método elegido en el paso 2 (mismo contenido que el checkout).
+  const qrDataUrl = useQrPago(
+    paso === 2 && metodo && pedidoCompletar ? metodo : "",
+    pedidoCompletar?.montoFaltante ?? 0,
+  );
+
+  // Si al entrar hay pedidos con saldo faltante, la pantalla abre directamente
+  // en la pestaña "Pedidos pendientes" (solo al abrir: el refresco automático
+  // no debe mover al usuario de la pestaña en la que esté).
+  const pestanaInicialRef = useRef(false);
   useEffect(() => {
-    let vivo = true;
-    if (paso !== 2 || !metodo || !pedidoCompletar) {
-      setQrDataUrl("");
-      return;
+    if (pestanaInicialRef.current || misPedidos.length === 0) return;
+    pestanaInicialRef.current = true;
+    if (misPedidos.some((p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0)) {
+      setPestana("pendientes");
     }
-    const base = PAYMENT_INFO[metodo]?.qr ?? "";
-    const payload = base
-      ? `${base}${base.includes("?") ? "&" : "?"}valor=${pedidoCompletar.montoFaltante ?? 0}`
-      : "";
-    if (!payload) {
-      setQrDataUrl("");
-      return;
-    }
-    QRCode.toDataURL(payload, {
-      margin: 1,
-      width: 260,
-      color: { dark: "#141414", light: "#ffffff" },
-    })
-      .then((url) => vivo && setQrDataUrl(url))
-      .catch(() => vivo && setQrDataUrl(""));
-    return () => {
-      vivo = false;
-    };
-  }, [paso, metodo, pedidoCompletar]);
+  }, [misPedidos]);
+
+  // Si se resuelve el último pendiente estando en esa pestaña, volver a
+  // "todos" (la pestaña deja de existir).
+  useEffect(() => {
+    if (pestana === "pendientes" && pendientes.length === 0) setPestana("todos");
+  }, [pestana, pendientes.length]);
 
   // ── Cambios de estado en tiempo real (3.7) ──
   // Compara el estado anterior con el actual de cada pedido y avisa con un
@@ -258,14 +258,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
     setPaso(1);
     setMetodo("");
     setCompComprobante("");
-    setQrDataUrl("");
   };
   const cerrarCompletar = () => {
     setCompletarId(null);
     setPaso(1);
     setMetodo("");
     setCompComprobante("");
-    setQrDataUrl("");
   };
 
   const enviarFaltante = () => {
@@ -314,21 +312,39 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
         >
           Pedidos recientes ({pedidosHoy.length})
         </button>
+        {pendientes.length > 0 && (
+          <button
+            role="tab"
+            aria-selected={pestana === "pendientes"}
+            onClick={() => setPestana("pendientes")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              pestana === "pendientes"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Pedidos pendientes ({pendientes.length})
+          </button>
+        )}
       </div>
 
       <p className="text-muted-foreground mt-1 mb-6">
-        {lista.length === 0
-          ? "Aún no has hecho pedidos."
-          : `Has hecho ${lista.length} pedido${lista.length !== 1 ? "s" : ""}${pestana === "recientes" ? " hoy" : ""}.`}
+        {pestana === "pendientes"
+          ? `Tienes ${lista.length} pedido${lista.length !== 1 ? "s" : ""} con saldo pendiente.`
+          : lista.length === 0
+            ? "Aún no has hecho pedidos."
+            : `Has hecho ${lista.length} pedido${lista.length !== 1 ? "s" : ""}${pestana === "recientes" ? " hoy" : ""}.`}
       </p>
 
       {lista.length === 0 && (
         <div className="bg-card border border-border rounded-2xl p-10 text-center">
           <ShoppingBag className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-lg font-semibold text-foreground mb-4">
-            {pestana === "recientes"
-              ? "Hoy no has hecho pedidos"
-              : "Todavía no tienes pedidos"}
+            {pestana === "pendientes"
+              ? "No tienes pedidos con saldo pendiente"
+              : pestana === "recientes"
+                ? "Hoy no has hecho pedidos"
+                : "Todavía no tienes pedidos"}
           </p>
           <button
             onClick={onVerMenu}
@@ -401,6 +417,24 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       Enviar dinero faltante
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Pendientes: faltante destacado. El botón de arriba
+                  ("Enviar dinero faltante") abre el modal "Completar pago",
+                  donde está el QR para enviar el saldo y subir el comprobante:
+                  mismo flujo, sin duplicar. */}
+              {pestana === "pendientes" && p.estado === "En espera" && (
+                <div className="px-5 pb-4 -mt-1">
+                  <p className="text-sm font-semibold text-violet-900">
+                    Monto que falta:{" "}
+                    <span
+                      className="text-xl font-bold text-violet-800"
+                      style={{ fontFamily: MONO }}
+                    >
+                      {fmtCOP(p.montoFaltante ?? 0)}
+                    </span>
+                  </p>
                 </div>
               )}
 

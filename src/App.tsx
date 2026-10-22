@@ -91,7 +91,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import QRCode from "qrcode";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
@@ -102,7 +101,7 @@ import {
 } from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
-import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPagoTransferencia";
+import { PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
@@ -2998,28 +2997,7 @@ function CartScreen({
   // QR de pago de la cuenta elegida (Nequi o Bancolombia). Se genera en el
   // cliente para que el recuadro funcione sin depender de ningún servicio
   // externo; si falla, el recuadro muestra el mensaje de reserva.
-  const [qrDataUrl, setQrDataUrl] = useState("");
-  useEffect(() => {
-    let vivo = true;
-    const base = PAYMENT_INFO[payment]?.qr ?? "";
-    const payload = base
-      ? `${base}${base.includes("?") ? "&" : "?"}valor=${subtotal}`
-      : "";
-    if (!payload) {
-      setQrDataUrl("");
-      return;
-    }
-    QRCode.toDataURL(payload, {
-      margin: 1,
-      width: 260,
-      color: { dark: "#141414", light: "#ffffff" },
-    })
-      .then((url) => vivo && setQrDataUrl(url))
-      .catch(() => vivo && setQrDataUrl(""));
-    return () => {
-      vivo = false;
-    };
-  }, [payment, subtotal]);
+  const qrDataUrl = useQrPago(payment, subtotal);
 
   /** Último paso: registra la venta con los datos del formulario (invitado)
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que

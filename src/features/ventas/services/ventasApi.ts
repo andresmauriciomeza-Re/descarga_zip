@@ -1,4 +1,5 @@
 import api from '@/shared/services/api';
+import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
 import type { Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
 
 export interface PagoVentaApi {
@@ -113,7 +114,9 @@ export function ventaApiAVenta(row: VentaApi): Venta {
       nombre: detalle.nombre,
       precio: Number(detalle.precio_unitario),
       cantidad: detalle.cantidad,
-      imagen: detalle.imagen ?? undefined,
+      // Misma imagen que el catálogo: la BD guarda nombres/rutas locales que
+      // hay que resolver a los assets empaquetados (igual que productoACatalogo).
+      imagen: resolverImagenCatalogo(detalle.imagen) || IMAGENES_PIZZA[detalle.nombre] || undefined,
       tamaño: detalle.tamano ?? undefined,
       productoId: String(detalle.id_producto),
       idDetalleVenta: detalle.id_detalle_venta,

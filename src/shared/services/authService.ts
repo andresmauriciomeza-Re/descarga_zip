@@ -119,6 +119,8 @@ export interface ClienteListadoApi {
   id_rol: string | number;
   rol: string;
   rol_estado: boolean;
+  /** Pedidos del cliente (tb_venta sin estado 'Anulado'); los cuenta el backend. */
+  pedidos?: number | string | null;
 }
 
 export async function listarUsuarios(): Promise<UsuarioListadoApi[]> {
