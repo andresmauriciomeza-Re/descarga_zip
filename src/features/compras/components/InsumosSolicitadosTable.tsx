@@ -21,6 +21,9 @@ export interface InsumoSolicitadoRow {
   /** Precio de VENTA al público del producto: se muestra como
    *  "Producto · Venta: $ X" bajo el nombre cuando hay tipo producto. */
   precioVenta?: number;
+  /** Ajuste de bebidas: unidades que trae la paca/caja de la línea (las
+   *  filas de la OC heredan el empaque). Se lee como 1 si no viene. */
+  unidadesPorEmpaque?: number;
 }
 
 function fmtCOP(n: number) {

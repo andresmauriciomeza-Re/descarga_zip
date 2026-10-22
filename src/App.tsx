@@ -91,7 +91,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import QRCode from "qrcode";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
@@ -102,7 +101,7 @@ import {
 } from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
-import { PAYMENT_INFO, PasoPagoTransferencia } from "@/shared/components/PasoPagoTransferencia";
+import { PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO } from "@/shared/utils/fechas";
@@ -128,7 +127,7 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "@/features/insumos/pages/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { ESTADO_COLORES } from "@/shared/components/EstadoProducto";
@@ -2998,28 +2997,7 @@ function CartScreen({
   // QR de pago de la cuenta elegida (Nequi o Bancolombia). Se genera en el
   // cliente para que el recuadro funcione sin depender de ningún servicio
   // externo; si falla, el recuadro muestra el mensaje de reserva.
-  const [qrDataUrl, setQrDataUrl] = useState("");
-  useEffect(() => {
-    let vivo = true;
-    const base = PAYMENT_INFO[payment]?.qr ?? "";
-    const payload = base
-      ? `${base}${base.includes("?") ? "&" : "?"}valor=${subtotal}`
-      : "";
-    if (!payload) {
-      setQrDataUrl("");
-      return;
-    }
-    QRCode.toDataURL(payload, {
-      margin: 1,
-      width: 260,
-      color: { dark: "#141414", light: "#ffffff" },
-    })
-      .then((url) => vivo && setQrDataUrl(url))
-      .catch(() => vivo && setQrDataUrl(""));
-    return () => {
-      vivo = false;
-    };
-  }, [payment, subtotal]);
+  const qrDataUrl = useQrPago(payment, subtotal);
 
   /** Último paso: registra la venta con los datos del formulario (invitado)
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
@@ -7726,6 +7704,20 @@ export default function App() {
     void obtenerVentasPanel().then(setVentas).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudieron cargar las ventas."));
   }, [screen, puedeVerVentas]);
 
+  // Refresco automático cada 60 s mientras se está en Ventas/Dashboard: el
+  // backend avanza solo las ventas "Por entregar" a "Completado" al llegar su
+  // hora de recogida, y este tick hace que el cambio se vea sin recargar.
+  useEffect(() => {
+    if (screen !== "ventas-pedidos" && screen !== "dashboard" && screen !== "inicio") return;
+    if (!puedeVerVentas) return;
+    const id = setInterval(() => {
+      void obtenerVentasPanel().then(setVentas).catch(() => {
+        // Silencioso: es un refresco de fondo, no una acción del usuario.
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [screen, puedeVerVentas]);
+
   useEffect(() => {
     try {
       localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
@@ -7808,6 +7800,71 @@ export default function App() {
       toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
     );
   }, [ventas, ordenesProduccion, productos, fichasPorProducto, insumos]);
+
+  // ── Venta anulada → su orden local de Producción se cancela ──
+  // El backend hace lo mismo en la base (estado 'Cancelada' con
+  // `fecha_cancelada` y devolución de las bebidas al stock); aquí se replica en
+  // el espejo local que lee la pantalla de Producción.
+  //
+  // El MONTAJE sólo limpia órdenes huérfanas de una sesión anterior: la
+  // reposición de stock queda reservada a las anulaciones observadas en vivo,
+  // porque al arrancar el stock vuelve a la semilla y ya no se sabe qué salió
+  // de verdad (mismo criterio que el efecto de "stock fresco" de arriba).
+  // Sólo vuelven las BEBIDAS (Producto terminado): los elaborados salieron al
+  // producirse y no son reventa, igual que en `cancelarOrdenProduccionDeVenta`.
+  const montajeAnulacionesRef = useRef(true);
+  useEffect(() => {
+    const esMontaje = montajeAnulacionesRef.current;
+    montajeAnulacionesRef.current = false;
+    const anuladas = new Set(ventas.filter((v) => v.estado === "Anulado").map((v) => v.id));
+    if (anuladas.size === 0) return;
+    const pendientes = ordenesProduccion.filter(
+      (o) => !!o.ventaId && anuladas.has(o.ventaId) && o.estadoOrden !== "cancelada",
+    );
+    if (pendientes.length === 0) return;
+
+    if (!esMontaje) {
+      const reponer = new Map<string, number>();
+      for (const orden of pendientes) {
+        if (!orden.productosDescontados) continue;
+        for (const linea of orden.lineas) {
+          if (!linea.productoId) continue;
+          const producto = productos.find((p) => p.id === linea.productoId);
+          if (producto?.tipo !== TIPOS_PRODUCTO[1]) continue;
+          reponer.set(producto.id, (reponer.get(producto.id) ?? 0) + (linea.cantidadEstimada || 0));
+        }
+      }
+      if (reponer.size > 0) {
+        setProductos((prev) =>
+          prev.map((p) =>
+            reponer.has(p.id)
+              ? { ...p, stockDisponible: p.stockDisponible + (reponer.get(p.id) ?? 0) }
+              : p,
+          ),
+        );
+      }
+      const ids = pendientes.map((o) => o.id);
+      toast.info(
+        ids.length === 1
+          ? `Orden de producción ${ids[0]} cancelada por la anulación de la venta`
+          : `Órdenes de producción ${ids.join(", ")} canceladas por la anulación de las ventas`,
+      );
+    }
+
+    const cancelar = new Set(pendientes.map((o) => o.id));
+    const ahora = new Date().toISOString();
+    setOrdenesProduccion((prev) =>
+      prev.map((o) =>
+        cancelar.has(o.id) && o.estadoOrden !== "cancelada"
+          ? {
+              ...o,
+              estadoOrden: "cancelada",
+              historial: [...o.historial, { de: o.estadoOrden, a: "cancelada", fechaHora: ahora }],
+            }
+          : o,
+      ),
+    );
+  }, [ventas, ordenesProduccion, productos]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8823,6 +8880,9 @@ export default function App() {
                   // Punto 3.2: el modal que abre este listado necesita el
                   // catálogo para buscar por tipo "Producto".
                   productos={productos}
+                  // Punto B7: al anular la OC se devuelve también el stock
+                  // de las líneas de producto de sus facturas.
+                  setProductos={setProductos}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -8867,10 +8927,11 @@ export default function App() {
                   orden={ordenRecepcion}
                   insumos={insumos}
                   setInsumos={setInsumos}
-                  // P14: catálogo de productos SOLO de lectura: un "insumo no
-                  // solicitado" puede ser un producto terminado (reventa), pero
-                  // aquí no se da de alta ni se modifica ninguno.
+                  // P14: catálogo de productos para el selector de tipo de los
+                  // "no solicitados". Punto B5: con `setProductos` la
+                  // recepción además suma stock y escribe precios de venta.
                   productos={productos}
+                  setProductos={setProductos}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}
@@ -8977,6 +9038,7 @@ export default function App() {
                   fichasPorProducto={fichasPorProducto}
                   insumos={insumos}
                   categorias={categorias}
+                  catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                   abrirDevolucionId={devolucionAAbrir}
                   onAbierta={() => setDevolucionAAbrir(null)}
                 />

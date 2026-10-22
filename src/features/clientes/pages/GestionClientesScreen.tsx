@@ -34,7 +34,7 @@ function adaptarClienteApi(c: ClienteListadoApi, index: number): Cliente {
     iniciales: nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
     avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length], correo: c.correo ?? "",
     tipoDocumento: c.tipo_documento ?? "", numeroDocumento: String(c.id_usuario),
-    telefono: c.telefono ?? "", pedidos: 0, activo: c.cliente_estado && c.usuario_estado,
+    telefono: c.telefono ?? "", pedidos: Number(c.pedidos ?? 0), activo: c.cliente_estado && c.usuario_estado,
   };
 }
 

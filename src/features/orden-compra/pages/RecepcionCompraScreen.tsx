@@ -4,9 +4,20 @@ import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import {
+  aplicarPreciosCompra,
   aplicarStockCompra,
+  historialCompraDe,
+  textoPreciosActualizado,
   textoStockActualizado,
+  unidadesPorLinea,
+  type SetCatalogo,
 } from "@/features/compras/services/inventario";
+import {
+  contenidoDe,
+  empaqueDe,
+  nombreBuscable,
+  presentacionCompra,
+} from "@/shared/utils/presentacion";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -49,10 +60,13 @@ interface Props {
   insumos: Insumo[];
   /** Catálogo compartido: "+ Crear insumo" da de alta el insumo aquí. */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
-  /** P14: catálogo de productos, SOLO LECTURA. Un "insumo no solicitado"
-   *  puede ser un producto terminado (reventa): aquí no se da de alta ni se
-   *  modifica ninguno, sólo se lee para ofrecerlo en el selector de tipo. */
+  /** P14: catálogo de productos. Se lee para ofrecerlo en el selector de
+   *  tipo y — con `setProductos` (punto B5) — para sumar el stock recibido y
+   *  escribir el precio de venta de las líneas de producto al guardar. */
   productos?: Producto[];
+  /** Opcional: sin él la recepción se guarda igual y no se toca el catálogo
+   *  de productos (ver `guardarConfirmado`). */
+  setProductos?: SetCatalogo<Producto>;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   proveedores: ProveedorRef[];
@@ -106,6 +120,7 @@ export function RecepcionCompraScreen({
   insumos,
   setInsumos,
   productos,
+  setProductos,
   gestiones,
   setGestiones,
   proveedores,
@@ -137,6 +152,14 @@ export function RecepcionCompraScreen({
     return set;
   }, [gestiones, orden.id]);
 
+  /** Ids del detalle de la OC (punto B6): un producto cuyo id ya está pedido
+   *  o facturado en la orden no se ofrece de nuevo como "no solicitado",
+   *  para que su línea no se fusione con la existente al aplicar stock. */
+  const idsOrdenActual = useMemo(
+    () => new Set(orden.items.map((i) => i.idInsumo)),
+    [orden]
+  );
+
   // Si todos los insumos ya están registrados, redirigir al listado
   useEffect(() => {
     const todosRegistrados = orden.items.every(item => registrados.has(item.idInsumo));
@@ -152,22 +175,40 @@ export function RecepcionCompraScreen({
 
     return orden.items
       .filter((i) => !previos.has(i.idInsumo))
-      .map((i) => ({
-        rowId: i.rowId,
-        idInsumo: i.idInsumo,
-        nombre: i.nombre,
-        cantidadSolicitada: i.cantidad,
-        cantidadRecibida: i.cantidad,
-        unidad: i.unidad,
-        precioReferencia: i.costoUnitario,
-        costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
-        // El IVA de la línea viene del catálogo/OC (0 % si no está definido).
-        iva: Number(i.iva ?? 0),
-        // P14: se conserva el catálogo (y el precio de venta si la línea lo
-        // trae) para que la tabla de solicitados pueda mostrar "Producto".
-        tipoItem: i.tipoItem,
-        precioVenta: i.precioVenta
-      }));
+      .map((i) => {
+        // Punto 2: si la bebida ya tiene precio de venta (en la línea de la
+        // OC o en el catálogo) se precarga; después el % de ganancia se
+        // deriva de ese precio.
+        const pvLinea = Number(i.precioVenta ?? 0);
+        const pvCatalogo =
+          (i.tipoItem ?? "insumo") === "producto"
+            ? Number(
+                productos?.find((p) => p.id === i.idInsumo)?.precioUnitario ?? 0
+              )
+            : 0;
+        const precioVenta = pvLinea > 0 ? pvLinea : pvCatalogo;
+
+        return {
+          rowId: i.rowId,
+          idInsumo: i.idInsumo,
+          nombre: i.nombre,
+          cantidadSolicitada: i.cantidad,
+          cantidadRecibida: i.cantidad,
+          unidad: i.unidad,
+          precioReferencia: i.costoUnitario,
+          costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
+          // El IVA de la línea viene del catálogo/OC (0 % si no está definido).
+          iva: Number(i.iva ?? 0),
+          // P14: se conserva el catálogo (y el precio de venta si la línea lo
+          // trae) para que la tabla de solicitados pueda mostrar "Producto".
+          tipoItem: i.tipoItem,
+          precioVenta: precioVenta > 0 ? precioVenta : undefined,
+          // Ajuste de bebidas: la línea hereda el empaque de la OC (paca/
+          // caja) para repartir el monto en sus unidades. Las líneas sin el
+          // dato (unidad suelta, OCs viejas) se leen como 1.
+          unidadesPorEmpaque: i.unidadesPorEmpaque,
+        };
+      });
   });
 
   const [itemsExtra, setItemsExtra] = useState<ItemRecibido[]>([]);
@@ -204,6 +245,11 @@ export function RecepcionCompraScreen({
   const [exNombre, setExNombre] = useState("");
   const [exCant, setExCant] = useState(1);
   const [exUnidad, setExUnidad] = useState(UNIDADES[0]);
+  // Ajuste de bebidas: unidades por paca/caja del producto no solicitado que
+  // se está agregando (undefined = unidad suelta). El Monto unitario del
+  // formulario es entonces por PRESENTACIÓN y el costo de referencia se
+  // divide en estas unidades.
+  const [exEmpaque, setExEmpaque] = useState<number | undefined>(undefined);
   const [exPrecio, setExPrecio] = useState(0);
   const [exIva, setExIva] = useState(0);
   // P14: qué se está agregando como "no solicitado", insumo o producto.
@@ -211,6 +257,17 @@ export function RecepcionCompraScreen({
   // Precio de VENTA al público del producto elegido (sólo con exTipo
   // "producto"; con insumos queda en 0 y no se guarda en la línea).
   const [exPrecioVenta, setExPrecioVenta] = useState(0);
+  // Punto B6: id real del catálogo elegido en las sugerencias. Vacío = nombre
+  // escrito a mano (la línea se guarda con id sintético `INS-EX-…`). Se limpia
+  // al escribir, al trocar de tipo y al reiniciar el formulario, para no
+  // arrastrar el id de otro ítem y que dos líneas no se fusionen en el stock.
+  const [exId, setExId] = useState("");
+  // Punto 2/3: % de ganancia del "Agregar producto no solicitado" (enlazado
+  // con su precio de venta, igual que en la Nueva compra). 0 = sin escribir.
+  const [exGanancia, setExGanancia] = useState(0);
+  // % de ganancia tecleado a mano fila por fila en "Recibido según factura".
+  // Sin override (clave ausente) el % se deriva del precio de venta.
+  const [gFila, setGFila] = useState<Record<string, number>>({});
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
 
@@ -281,6 +338,125 @@ export function RecepcionCompraScreen({
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
+  /** Punto 3: esta recepción SIEMPRE se guarda como "precios sin IVA"
+   *  (ver `ivaIncluido` arriba), así que el costo de referencia CON IVA de
+   *  una línea = monto × (1 + iva%/100). Sobre ese costo se calcula la
+   *  ganancia y se valida el precio de venta de los productos. */
+  const costoConIva = (monto: number, iva: number) =>
+    monto * (1 + (iva || 0) / 100);
+
+  /** Redondeo a 2 decimales: los % de ganancia no arrastran residuos de
+   *  punto flotante (33.33333333 %). */
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  /** Costo con IVA POR UNIDAD de una línea ya montada (solicitada o extra):
+   *  con paca/caja el costoUnitario de la línea es por presentación, así que
+   *  se divide en `unidadesPorLinea` (unidad suelta y líneas viejas ⇒ 1). */
+  const costoConIvaDeLinea = (item: {
+    costoUnitario: number;
+    iva?: number;
+    unidadesPorEmpaque?: number;
+  }) =>
+    costoConIva(item.costoUnitario, item.iva ?? 0) / unidadesPorLinea(item);
+
+  /** Punto 2: % de ganancia de una fila de "Recibido según factura": el
+   *  override tecleado o, sin override, el que se deriva del precio de venta
+   *  actual sobre el costo con IVA (0 si todavía no hay precio). */
+  const gDeFila = (item: ItemRecibido) => {
+    const override = gFila[item.rowId];
+    if (override != null) return override;
+    const costo = costoConIvaDeLinea(item);
+    const pv = item.precioVenta ?? 0;
+    return pv > 0 && costo > 0 ? Math.max(0, round2((pv / costo - 1) * 100)) : 0;
+  };
+
+  /** Punto 2: precio de venta inválido (vacío, 0 o ≤ costo con IVA). */
+  const pvInvalido = (item: ItemRecibido) => {
+    const pv = item.precioVenta ?? 0;
+    return pv <= 0 || pv <= costoConIvaDeLinea(item);
+  };
+
+  /** Punto 2: mensaje en vivo de una fila pedida en la OC. Aplica sólo a
+   *  PRODUCTOS con cantidad recibida > 0 (los insumos no llevan precio; con
+   *  0 recibido la fila queda fuera de la factura y no exige precio). */
+  const errorPvDe = (item: ItemRecibido): string | undefined => {
+    if ((item.tipoItem ?? "insumo") !== "producto") return undefined;
+    if (item.cantidadRecibida <= 0) return undefined;
+    if ((item.precioVenta ?? 0) <= 0) return "Falta el precio de venta.";
+    if (pvInvalido(item)) return "Debe superar el costo por unidad con IVA.";
+    return undefined;
+  };
+
+  /** Filas de producto de "Recibido según factura" con precio inválido. */
+  const filasPvMala = items.filter(
+    (i) =>
+      (i.tipoItem ?? "insumo") === "producto" &&
+      i.cantidadRecibida > 0 &&
+      pvInvalido(i)
+  );
+
+  /** Punto 2: TODO lo que impide guardar — productos pedidos recibidos sin
+   *  precio válido + los extras de producto (que siempre van en la factura). */
+  const lineasPvMala = [
+    ...filasPvMala,
+    ...itemsExtra.filter(
+      (i) => (i.tipoItem ?? "insumo") === "producto" && pvInvalido(i)
+    ),
+  ];
+
+  /** Punto B6 + punto 3 + ajuste: precio de venta OBLIGATORIO en productos
+   *  no solicitados, con las mismas reglas que la Nueva compra: > 0 y > al
+   *  costo CON IVA POR UNIDAD (con paca/caja el monto del formulario es por
+   *  presentación y se divide en el empaque). */
+  const exFactor = unidadesPorLinea({ unidadesPorEmpaque: exEmpaque });
+  const exCostoRef = costoConIva(exPrecio, exIva) / exFactor;
+  const errorExPrecioVenta =
+    exTipo === "producto" && exNombre.trim()
+      ? exPrecioVenta <= 0
+        ? "Ingresa el precio de venta del producto."
+        : exPrecioVenta <= exCostoRef
+          ? "El precio de venta debe ser mayor que el costo por unidad con IVA."
+          : undefined
+      : undefined;
+
+  /** Punto 3: los atajos enlazados de los extras (igual que la Nueva compra),
+   *  siempre sobre el costo CON IVA. */
+  const recalcExDesdeGanancia = (costo: number) => {
+    if (exGanancia > 0 && costo > 0) {
+      setExPrecioVenta(Math.round(costo * (1 + exGanancia / 100)));
+    } else if (costo > 0 && exPrecioVenta > 0) {
+      setExGanancia(Math.max(0, round2((exPrecioVenta / costo - 1) * 100)));
+    }
+  };
+
+  const onExMontoChange = (v: number) => {
+    setExPrecio(v);
+    // La ganancia se calcula contra el costo POR UNIDAD (el monto puede ser
+    // el de una paca).
+    recalcExDesdeGanancia(costoConIva(v, exIva) / exFactor);
+  };
+
+  const onExIvaChange = (v: number) => {
+    setExIva(v);
+    recalcExDesdeGanancia(costoConIva(exPrecio, v) / exFactor);
+  };
+
+  const onExGananciaChange = (v: number) => {
+    setExGanancia(v);
+    if (v > 0 && exCostoRef > 0) {
+      setExPrecioVenta(Math.round(exCostoRef * (1 + v / 100)));
+    }
+  };
+
+  const onExPrecioVentaChange = (v: number) => {
+    setExPrecioVenta(v);
+    if (exCostoRef > 0) {
+      setExGanancia(
+        v > 0 ? Math.max(0, round2((v / exCostoRef - 1) * 100)) : 0
+      );
+    }
+  };
+
   /** Sugerencia del desplegable "Agregar no solicitado": misma forma para
    *  insumos y productos, más el precio de venta (sólo los productos). */
   type SugEx = {
@@ -290,6 +466,15 @@ export function RecepcionCompraScreen({
     costoUnitario: number;
     iva: number;
     precioVenta?: number;
+    /** Presentación de la bebida ("1.5 L") para la segunda línea. */
+    contenido?: string;
+    /** Unidades por paca/caja del producto (sólo con presentación). */
+    unidadesPorEmpaque?: number;
+    /** Historial de compra: último monto SIN IVA de la presentación y su %
+     *  (los escribe `aplicarPreciosCompra`); sin él la precarga es la de
+     *  siempre. */
+    ultimoMontoSinIva?: number;
+    ultimoIvaCompra?: number;
   };
 
   const exSugs = useMemo<SugEx[]>(() => {
@@ -299,26 +484,45 @@ export function RecepcionCompraScreen({
     // P14: el buscador mira un catálogo u otro según el tipo elegido.
     if (exTipo === "producto") {
       // Mismo criterio que la Nueva compra: sólo productos disponibles y
-      // terminados (los "Producto insumo" se producen, no se compran).
+      // terminados (los "Producto insumo" se producen, no se compran). Punto
+      // B6: además se excluyen los ids que ya están en la OC o en facturas
+      // previas de la orden.
       return (productos ?? [])
         .filter(
           (p) =>
             p.estado === "Disponible" &&
             p.tipo === "Producto terminado" &&
+            !idsOrdenActual.has(p.id) &&
+            !registrados.has(p.id) &&
             !nombresRegistrados.has(p.nombre.toLowerCase().trim()) &&
-            p.nombre.toLowerCase().includes(q)
+            // El buscador mira también el contenido ("coca 1.5") para
+            // distinguir presentaciones del mismo producto.
+            (nombreBuscable(p).toLowerCase().includes(q) ||
+              p.nombre.toLowerCase().includes(q))
         )
         .slice(0, 3)
-        .map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          unidadMedida: p.unidadVenta?.trim() || UNIDADES[0],
-          costoUnitario: Number(p.costoUnitario || p.precioUnitario || 0),
-          iva: 0,
-          // El precio de VENTA es `precioUnitario` del catálogo (el costo de
-          // producir es `costoUnitario`).
-          precioVenta: Number(p.precioUnitario || 0),
-        }));
+        .map((p) => {
+          const factor = empaqueDe(p);
+          return {
+            id: p.id,
+            nombre: p.nombre,
+            contenido: contenidoDe(p) || undefined,
+            // La Medida muestra la presentación de compra ("Paca x12").
+            unidadMedida: presentacionCompra(p),
+            unidadesPorEmpaque: factor > 1 ? factor : undefined,
+            // Punto B1 + ajuste: el monto es SIEMPRE `costoUnitario` (POR
+            // UNIDAD en el catálogo) por las unidades de la presentación —
+            // el precio de la paca. NUNCA el precio de venta como respaldo.
+            costoUnitario: Number(p.costoUnitario || 0) * factor,
+            iva: 0,
+            // El precio de VENTA es `precioUnitario` del catálogo (por
+            // unidad suelta; el costo es `costoUnitario` también por unidad).
+            precioVenta: Number(p.precioUnitario || 0),
+            // Ajuste: historial de compra para precargar monto e IVA.
+            ultimoMontoSinIva: p.ultimoMontoSinIva,
+            ultimoIvaCompra: p.ultimoIvaCompra,
+          };
+        });
     }
 
     return insumos
@@ -331,7 +535,15 @@ export function RecepcionCompraScreen({
           i.nombre.toLowerCase().includes(q)
       )
       .slice(0, 3);
-  }, [insumos, productos, exNombre, exTipo, registrados, nombresRegistrados]);
+  }, [
+    insumos,
+    productos,
+    exNombre,
+    exTipo,
+    registrados,
+    nombresRegistrados,
+    idsOrdenActual,
+  ]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -374,13 +586,67 @@ export function RecepcionCompraScreen({
     toast.success(`"${nombre}" no viene en esta factura. Queda pendiente.`);
   };
 
-  const updPrice = (rowId: string, value: number) => {
+  /** Punto 2: precio de venta a mano en una fila pedida en la OC. Al escribir
+   *  el precio se borra el override de ganancia para que el % se derive otra
+   *  vez de lo que el usuario escribió. */
+  const updPvFila = (rowId: string, value: number) => {
     setItems((prev) =>
       prev.map((item) =>
         item.rowId === rowId
-          ? { ...item, costoUnitario: Math.max(0, value) }
+          ? { ...item, precioVenta: Math.max(0, value) }
           : item
       )
+    );
+    setGFila((prev) => {
+      if (!(rowId in prev)) return prev;
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  /** Punto 2: escribir la ganancia recalcula el precio de venta de la fila al
+   *  instante (precio = costo con IVA × (1 + g/100)). Con 0 se deja el precio
+   *  como está, igual que en el formulario de la Nueva compra. */
+  const updGFila = (rowId: string, value: number) => {
+    setGFila((prev) => ({ ...prev, [rowId]: value }));
+    if (value > 0) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.rowId === rowId
+            ? {
+                ...item,
+                precioVenta: Math.round(
+                  costoConIvaDeLinea(item) * (1 + value / 100)
+                ),
+              }
+            : item
+        )
+      );
+    }
+  };
+
+  /** Punto 3 + ajuste: al editar el Monto unitario de una fila el costo con
+   *  IVA POR UNIDAD cambia (el monto puede ser el de una paca, que se divide
+   *  en su empaque), así que su precio de venta se recalcula sólo si esa fila
+   *  tiene ganancia tecleada (override activo). */
+  const updMontoFila = (rowId: string, value: number) => {
+    const g = gFila[rowId];
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.rowId !== rowId) return item;
+        const monto = Math.max(0, value);
+        const base = { ...item, costoUnitario: monto };
+        return g != null && g > 0
+          ? {
+              ...base,
+              precioVenta: Math.round(
+                (costoConIva(monto, item.iva ?? 0) / unidadesPorLinea(item)) *
+                  (1 + g / 100)
+              ),
+            }
+          : base;
+      })
     );
   };
 
@@ -404,31 +670,60 @@ export function RecepcionCompraScreen({
       return;
     }
 
+    // Punto B6 + punto 3 + ajuste: mismo bloqueo que en la Nueva compra — un
+    // producto no solicitado se agrega únicamente con precio de venta > 0 y >
+    // al costo CON IVA POR UNIDAD.
+    if (exTipo === "producto") {
+      if (exPrecioVenta <= 0) {
+        toast.error("El precio de venta del producto debe ser mayor que cero.");
+        return;
+      }
+      if (exPrecioVenta <= exCostoRef) {
+        toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
+        return;
+      }
+    }
+
     setItemsExtra((prev) => [
       ...prev,
       {
         rowId: `ex-${Date.now()}`,
-        idInsumo: `INS-EX-${Date.now()}`,
+        // Punto B6: con id elegido del catálogo la línea se asimila a ese
+        // ítem (y el stock se aplica sobre él); sin selección se guarda con
+        // id sintético para no fusionar líneas distintas.
+        idInsumo: exId || `INS-EX-${Date.now()}`,
         nombre: exNombre.trim(),
         cantidadSolicitada: 0,
         cantidadRecibida: exCant,
-        unidad: exUnidad,
+        // Medida de la fila: la presentación de compra del producto o la
+        // unidad elegida; vacía ⇒ "und" para no dejar la fila en blanco.
+        unidad: exUnidad.trim() || "und",
         precioReferencia: exPrecio,
         costoUnitario: exPrecio, precioUnitario: exPrecio, iva: exIva,
         // P14: de qué catálogo salió la línea y, si es producto, su precio
-        // de venta al público (dato informativo del detalle).
+        // de venta al público (ya validado arriba: siempre > 0 y > costo).
         tipoItem: exTipo,
-        ...(exTipo === "producto" && exPrecioVenta > 0
-          ? { precioVenta: exPrecioVenta }
+        ...(exTipo === "producto"
+          ? {
+              precioVenta: exPrecioVenta,
+              // Ajuste de bebidas: sólo producto en paca/caja guarda el
+              // empaque (unidad suelta ⇒ sin el dato, se lee como 1).
+              ...(exEmpaque && exEmpaque > 1
+                ? { unidadesPorEmpaque: exEmpaque }
+                : {}),
+            }
           : {}),
       },
     ]);
 
     setExNombre("");
+    setExId("");
     setExCant(1);
     setExPrecio(0);
     setExIva(0);
     setExPrecioVenta(0);
+    setExGanancia(0);
+    setExEmpaque(undefined);
     setExShowSug(false);
 
     toast.success(
@@ -568,6 +863,20 @@ export function RecepcionCompraScreen({
       return;
     }
 
+    // Punto 2 + punto 3 + ajuste: ninguna recepción se guarda con un producto
+    // cuyo precio de venta esté vacío, en 0 o ≤ costo POR UNIDAD con IVA (el
+    // botón Guardar ya viene deshabilitado y la tabla lo marca en rojo; esto
+    // es el backstop).
+    const pvMala = lineasPvMala[0];
+    if (pvMala) {
+      toast.error(
+        (pvMala.precioVenta ?? 0) <= 0
+          ? `«${pvMala.nombre}»: falta el precio de venta del producto.`
+          : `«${pvMala.nombre}»: el precio de venta debe ser mayor que el costo por unidad con IVA.`
+      );
+      return;
+    }
+
     setShowGuardarConf(true);
   };
 
@@ -621,6 +930,10 @@ export function RecepcionCompraScreen({
           // detalle de la compra pueda seguir mostrando "Producto · Venta".
           tipoItem: item.tipoItem,
           precioVenta: item.precioVenta,
+          // Ajuste de bebidas: el empaque viaja con la línea para que stock
+          // y costo por unidad se repartan en sus unidades (sin el dato se
+          // lee como 1: unidad suelta y compras viejas no cambian).
+          unidadesPorEmpaque: item.unidadesPorEmpaque,
         };
       }
     );
@@ -665,11 +978,25 @@ export function RecepcionCompraScreen({
 
     // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido. Mismo
     // camino que la Nueva compra, para que las dos formas de facturar entren
-    // igual al inventario.
-    const resumen = aplicarStockCompra(itemsFactura, 1, { insumos, setInsumos });
+    // igual al inventario (punto B5: también el catálogo de productos).
+    const resumen = aplicarStockCompra(itemsFactura, 1, {
+      insumos,
+      setInsumos,
+      productos,
+      setProductos,
+    });
     if (resumen && resumen.nombres.length > 0) {
       nuevaCompra.stockAplicado = true;
     }
+
+    // Punto B5 + puntos 1/3: la recepción también define el precio de venta y
+    // el costo con IVA de las líneas de producto (mismas reglas que la Nueva
+    // compra: precio > 0 y > costo con IVA). La recepción se guarda SIEMPRE
+    // como "precios sin IVA", así que el costo con IVA = monto × (1 + iva/100).
+    const resumenPrecios = aplicarPreciosCompra(itemsFactura, {
+      productos,
+      setProductos,
+    }, ivaIncluido);
 
     setGestiones((prev) => [nuevaCompra, ...prev]);
 
@@ -743,6 +1070,9 @@ export function RecepcionCompraScreen({
     );
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
+    }
+    if (resumenPrecios && resumenPrecios.nombres.length > 0) {
+      toast.info(textoPreciosActualizado(resumenPrecios));
     }
 
     onBack();
@@ -996,13 +1326,24 @@ export function RecepcionCompraScreen({
                   </p>
                 )}
 
+                {/* Punto 2: aviso en vivo de los precios de venta faltantes o
+                    inválidos (mismo criterio que pinta las celdas en rojo y
+                    deshabilita el botón Guardar). */}
+                {filasPvMala.length > 0 && (
+                  <p className="text-xs font-medium text-red-500 mb-2 ml-0.5">
+                    Corrige el precio de venta de {filasPvMala.length}{" "}
+                    {filasPvMala.length === 1 ? "producto" : "productos"}: debe
+                    ser mayor que el costo por unidad con IVA.
+                  </p>
+                )}
+
                 <h3 className="text-sm font-bold text-foreground mb-3">
                   Recibido según factura
                 </h3>
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[560px]">
+                    <table className="w-full text-sm min-w-[760px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -1018,6 +1359,14 @@ export function RecepcionCompraScreen({
                           </th>
 
                           <th className="px-3 py-3 text-left font-semibold">
+                            Ganancia %
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Precio de vta
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
                             Subtotal
                           </th>
 
@@ -1029,7 +1378,7 @@ export function RecepcionCompraScreen({
                         {items.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={5}
+                              colSpan={7}
                               className="px-3 py-8 text-center text-xs text-muted-foreground"
                             >
                               Todos los insumos de la OC {orden.id} ya
@@ -1075,14 +1424,98 @@ export function RecepcionCompraScreen({
                                 value={item.costoUnitario === 0 ? "" : item.costoUnitario}
                                 placeholder="0"
                                 onChange={(e) =>
-                                  updPrice(
+                                  updMontoFila(
                                     item.rowId,
                                     numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
                                 className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
+                              {/* Punto 3 + ajuste: el costo de referencia CON
+                                  IVA POR UNIDAD con el que se calcula la
+                                  ganancia y se valida el precio de venta
+                                  (sólo en productos). Con paca/caja se
+                                  muestra también el costo de la presentación. */}
+                              {(item.tipoItem ?? "insumo") === "producto" && (
+                                <>
+                                  <p className="text-[10px] text-muted-foreground mt-1 text-center whitespace-nowrap">
+                                    C/und: {fmtCOP(costoConIvaDeLinea(item))}
+                                  </p>
+                                  {unidadesPorLinea(item) > 1 && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 text-center whitespace-nowrap">
+                                      C/empaque:{" "}
+                                      {fmtCOP(
+                                        costoConIva(
+                                          item.costoUnitario,
+                                          item.iva ?? 0,
+                                        ),
+                                      )}
+                                    </p>
+                                  )}
+                                </>
+                              )}
                             </td>
+
+                            {/* Punto 2: ganancia y precio de venta de los
+                                productos pedidos en la OC. Los insumos no
+                                llevan precio, así que la celda queda vacía. */}
+                            {(item.tipoItem ?? "insumo") === "producto" ? (
+                              <>
+                                <td className="px-3 py-3 align-top">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={gDeFila(item) === 0 ? "" : gDeFila(item)}
+                                    placeholder="0"
+                                    onChange={(e) =>
+                                      updGFila(
+                                        item.rowId,
+                                        Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))
+                                      )
+                                    }
+                                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  />
+                                </td>
+
+                                <td className="px-3 py-3 align-top">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={
+                                      (item.precioVenta ?? 0) === 0
+                                        ? ""
+                                        : item.precioVenta
+                                    }
+                                    placeholder="0"
+                                    onChange={(e) =>
+                                      updPvFila(
+                                        item.rowId,
+                                        numeroDeInput(limpiarNumeroInput(e.target.value))
+                                      )
+                                    }
+                                    className={`w-24 px-2 py-2 bg-background border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
+                                      errorPvDe(item)
+                                        ? "border-red-400 focus:ring-red-300"
+                                        : "border-border"
+                                    }`}
+                                  />
+                                  {errorPvDe(item) && (
+                                    <p className="text-[10px] font-medium text-red-500 mt-1">
+                                      {errorPvDe(item)}
+                                    </p>
+                                  )}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-3 py-3 text-center text-xs text-muted-foreground">
+                                  —
+                                </td>
+                                <td className="px-3 py-3 text-center text-xs text-muted-foreground">
+                                  —
+                                </td>
+                              </>
+                            )}
 
                             <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
                               {fmtCOP(
@@ -1114,7 +1547,7 @@ export function RecepcionCompraScreen({
                       <tfoot className="bg-muted/50 border-t border-border">
                         <tr>
                           <td
-                            colSpan={3}
+                            colSpan={5}
                             className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
                           >
                             Total recibido
@@ -1213,9 +1646,12 @@ export function RecepcionCompraScreen({
                                 )}
                               </td>
 
-                              {/* Unidad */}
+                              {/* Unidad — en productos la presentación de
+                                  compra ("Paca x12") es sólo lectura: no
+                                  está en la lista de unidades y cambiarla
+                                  rompería el empaque de la línea. */}
                               <td className="px-3 py-2">
-                                {draft ? (
+                                {draft && (item.tipoItem ?? "insumo") !== "producto" ? (
                                   <UnidadSelect
                                     value={draft.unidad}
                                     onChange={(unidad) =>
@@ -1229,7 +1665,7 @@ export function RecepcionCompraScreen({
                                   />
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
-                                    {item.unidad}
+                                    {draft ? draft.unidad : item.unidad}
                                   </span>
                                 )}
                               </td>
@@ -1328,12 +1764,17 @@ export function RecepcionCompraScreen({
                           if (nuevo === exTipo) return;
                           setExTipo(nuevo);
                           // Al cambiar de catálogo lo cargado ya no sirve:
-                          // se limpia la fila para buscar en la otra lista.
+                          // se limpia la fila para buscar en la otra lista
+                          // (la Medida queda vacía en producto y el empaque
+                          // de paca/caja se borra).
                           setExNombre("");
-                          setExUnidad(UNIDADES[0]);
+                          setExId("");
+                          setExUnidad(nuevo === "producto" ? "" : UNIDADES[0]);
+                          setExEmpaque(undefined);
                           setExPrecio(0);
                           setExIva(0);
                           setExPrecioVenta(0);
+                          setExGanancia(0);
                           setExShowSug(false);
                         }}
                         opciones={[
@@ -1356,6 +1797,16 @@ export function RecepcionCompraScreen({
                           value={exNombre}
                           onChange={(e) => {
                             setExNombre(e.target.value);
+                            // Punto B6: al editar el texto a mano el id de la
+                            // sugerencia elegida ya no corresponde.
+                            setExId("");
+                            // Ajuste: en producto la presentación elegida ya
+                            // no aplica: la Medida queda vacía y el empaque
+                            // se limpia.
+                            if (exTipo === "producto") {
+                              setExUnidad("");
+                              setExEmpaque(undefined);
+                            }
                             setExShowSug(true);
                           }}
                           onFocus={() => setExShowSug(true)}
@@ -1392,25 +1843,75 @@ export function RecepcionCompraScreen({
                               type="button"
                               onMouseDown={() => {
                                 setExNombre(ins.nombre);
+                                // Punto B6: se recuerda el id real elegido
+                                // para guardarlo en la línea.
+                                setExId(ins.id);
+                                // Ajuste: en PRODUCTO la Medida es solo
+                                // lectura con la presentación de compra
+                                // ("Paca x12"), que no está en la lista de
+                                // unidades; en insumo sigue la regla de
+                                // pertenencia a UNIDADES.
                                 setExUnidad(
-                                  UNIDADES.includes(ins.unidadMedida)
+                                  exTipo === "producto"
                                     ? ins.unidadMedida
-                                    : UNIDADES[0]
+                                    : UNIDADES.includes(ins.unidadMedida)
+                                      ? ins.unidadMedida
+                                      : UNIDADES[0]
                                 );
-                                setExPrecio(ins.costoUnitario);
+                                // Empaque de la presentación elegida.
+                                setExEmpaque(
+                                  ins.unidadesPorEmpaque &&
+                                    ins.unidadesPorEmpaque > 1
+                                    ? ins.unidadesPorEmpaque
+                                    : undefined
+                                );
+                                // Ajuste: con historial de compra se precarga
+                                // el último monto SIN IVA y su % (la
+                                // Recepción guarda montos sin IVA); sin
+                                // historial manda el costo del catálogo por
+                                // presentación, como siempre.
+                                const hist = historialCompraDe(ins);
+                                const montoSel = hist
+                                  ? hist.montoSinIva
+                                  : ins.costoUnitario;
+                                const ivaSel = hist
+                                  ? hist.iva
+                                  : Number(ins.iva ?? 0);
+                                setExPrecio(montoSel);
                                 // Punto 2: al elegir del catálogo se completan
                                 // Medida, Monto unitario e IVA.
-                                setExIva(Number(ins.iva ?? 0));
+                                setExIva(ivaSel);
                                 // P14: si es producto se copia también su
                                 // precio de venta al público.
-                                setExPrecioVenta(Number(ins.precioVenta ?? 0));
+                                const pvSug = Number(ins.precioVenta ?? 0);
+                                setExPrecioVenta(pvSug);
+                                // Punto 3 + ajuste: la ganancia que representa
+                                // ese precio sobre el costo con IVA POR UNIDAD
+                                // del monto realmente precargado (por
+                                // presentación, así que se divide en el
+                                // empaque).
+                                const costoSug =
+                                  costoConIva(montoSel, ivaSel) /
+                                  unidadesPorLinea(ins);
+                                setExGanancia(
+                                  pvSug > 0 && costoSug > 0
+                                    ? Math.max(
+                                        0,
+                                        round2((pvSug / costoSug - 1) * 100)
+                                      )
+                                    : 0
+                                );
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
                             >
                               <p className="text-sm font-semibold">{ins.nombre}</p>
+                              {/* Contenido ("1.5 L") + medida de compra +
+                                  monto de la presentación. */}
                               <p className="text-xs text-muted-foreground">
-                                {ins.unidadMedida} · {fmtCOP(ins.costoUnitario)}
+                                {[ins.contenido, ins.unidadMedida, fmtCOP(ins.costoUnitario)]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </p>
                             </button>
                           ))}
@@ -1442,17 +1943,29 @@ export function RecepcionCompraScreen({
                     {/* Medida — select personalizado (mismo componente que Nueva
                         Compra). Punto 2.7: a la misma altura que los inputs
                         vecinos (`compactInputCls` = py-2 ≈ 38 px) y con el mismo
-                        padding/redondeo; antes era h-11 (44 px) y desentonaba. */}
-                    <div className="w-16 flex-none">
+                        padding/redondeo; antes era h-11 (44 px) y desentonaba.
+                        Ajuste: con PRODUCTO es texto de solo lectura con la
+                        presentación de compra ("Paca x12"), que no pertenece a
+                        la lista de unidades. */}
+                    <div className={exTipo === "producto" ? "w-[92px] flex-none" : "w-16 flex-none"}>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         Medida
                       </label>
-                      <UnidadSelect
-                        value={exUnidad}
-                        onChange={setExUnidad}
-                        ariaLabel="Medida"
-                        fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-sm"
-                      />
+                      {exTipo === "producto" ? (
+                        <div
+                          title="La medida la define el ítem del catálogo"
+                          className="w-full h-9 px-2.5 rounded-lg text-sm bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none truncate"
+                        >
+                          {exUnidad}
+                        </div>
+                      ) : (
+                        <UnidadSelect
+                          value={exUnidad}
+                          onChange={setExUnidad}
+                          ariaLabel="Medida"
+                          fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-sm"
+                        />
+                      )}
                     </div>
 
                     {/* Precio — la factura SIEMPRE se trabaja SIN IVA */}
@@ -1464,7 +1977,7 @@ export function RecepcionCompraScreen({
                         type="number"
                         min={0}
                         value={exPrecio || ""}
-                        onChange={(e) => setExPrecio(Number(e.target.value))}
+                        onChange={(e) => onExMontoChange(Number(e.target.value))}
                         className={compactInputCls}
                       />
                     </div>
@@ -1481,7 +1994,7 @@ export function RecepcionCompraScreen({
                         max={100}
                         value={exIva === 0 ? "" : exIva}
                         onChange={(e) =>
-                          setExIva(
+                          onExIvaChange(
                             Math.min(100, Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value))))
                           )
                         }
@@ -1490,9 +2003,32 @@ export function RecepcionCompraScreen({
                       />
                     </div>
 
+                    {/* Punto 2/3: ganancia enlazada con el precio de venta, en
+                       lazada sobre el costo CON IVA (sólo en productos). */}
+                    {exTipo === "producto" && (
+                      <div className="w-[76px] flex-none">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                          Ganancia (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={exGanancia === 0 ? "" : exGanancia}
+                          onChange={(e) =>
+                            onExGananciaChange(
+                              Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))
+                            )
+                          }
+                          placeholder="0"
+                          className={compactInputCls}
+                        />
+                      </div>
+                    )}
+
                     {/* Precio de venta al público del producto: sólo se pinta
-                        al agregar PRODUCTOS. Es dato informativo del detalle;
-                        la factura sigue calculando con el Monto unitario. */}
+                        al agregar PRODUCTOS. Es OBLIGATORIO (punto B6 + 3): el
+                        campo queda en rojo y el Agregar se deshabilita si el
+                        precio está vacío, en 0 o ≤ al costo con IVA. */}
                     {exTipo === "producto" && (
                       <div className="w-32 flex-none">
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -1503,22 +2039,47 @@ export function RecepcionCompraScreen({
                           min={0}
                           value={exPrecioVenta || ""}
                           onChange={(e) =>
-                            setExPrecioVenta(Math.max(0, Number(e.target.value)))
+                            onExPrecioVentaChange(Math.max(0, Number(e.target.value)))
                           }
                           placeholder="0"
-                          className={compactInputCls}
+                          className={`${compactInputCls} ${
+                            errorExPrecioVenta ? "border-red-400 focus:ring-red-300" : ""
+                          }`}
                         />
                       </div>
                     )}
 
                     <button
                       onClick={addExtra}
-                      className="flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
+                      disabled={!!errorExPrecioVenta}
+                      className={`flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
+                        errorExPrecioVenta
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-red-700 cursor-pointer"
+                      }`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Agregar
                     </button>
                   </div>
+
+                  {/* Punto 3 + ajuste: el costo de referencia CON IVA POR
+                      UNIDAD con el que se calcula la ganancia y se valida el
+                      precio de venta (con paca/caja el Monto unitario es por
+                      presentación y ya viene dividido). */}
+                  {exTipo === "producto" && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      Costo por unidad: {fmtCOP(exCostoRef)}
+                    </p>
+                  )}
+
+                  {/* Punto B6: el precio de venta inválido se avisa en tiempo
+                      real, debajo de la fila completa. */}
+                  {errorExPrecioVenta && (
+                    <p className="text-xs font-medium text-red-500 mt-1.5">
+                      {errorExPrecioVenta}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1532,7 +2093,15 @@ export function RecepcionCompraScreen({
 
                 <button
                   onClick={guardarRecepcion}
-                  className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer inline-flex items-center justify-center gap-2"
+                  // Punto 2: con un producto de precio de venta inválido no se
+                  // puede guardar (el backstop en `guardarRecepcion` cubre la
+                  // tecla Enter y cualquier otro camino).
+                  disabled={lineasPvMala.length > 0}
+                  className={`flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 ${
+                    lineasPvMala.length > 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-red-700 cursor-pointer"
+                  }`}
                 >
                   <Check className="w-4 h-4" />
                   Guardar
