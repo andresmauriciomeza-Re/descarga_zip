@@ -191,8 +191,26 @@ export const productoApiAProducto = (p: {
   precioUnitario: Number(p.precio_venta),
   unidadVenta: p.unidad_venta,
   stockDisponible: p.stock ?? 0,
+  // Bloque 5: el stock REAL que trajo el backend (GET /productos), aparte de
+  // `stockDisponible` porque es OPCIONAL: si la API no envía `stock` queda
+  // `undefined` y `limiteStockDe` lo traduce en "sin límite". Los datos
+  // viejos de localStorage cargan igual (el campo no existía antes).
+  stockApi: p.stock,
   estado: p.estado as Producto["estado"],
 });
+
+/** Bloque 5 — Tope de unidades que el menú/carrito permite de un producto
+    TERMINADO (bebida): el stock que trajo el backend (`stockApi`).
+    `undefined` = SIN límite — la API no envió el dato, producto local o
+    carrito viejo que no lo trae — para no dejar el menú vacío. Los
+    productos insumo (pizza/lasaña) NO se limitan con esto: no tienen stock
+    propio, su tope sale de la ficha técnica (ver `limiteDeProducto` en App). */
+export const limiteStockDe = (
+  p?: { stockApi?: number } | null,
+): number | undefined => {
+  const s = p?.stockApi;
+  return s !== undefined && Number.isFinite(s) && s >= 0 ? s : undefined;
+};
 
 export const categoriaApiACategoria = (c: {
   id_categoria: number;

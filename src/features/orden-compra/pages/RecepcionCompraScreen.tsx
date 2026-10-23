@@ -20,6 +20,9 @@ import {
 } from "@/shared/utils/presentacion";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
+// Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
+import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
+import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
@@ -67,6 +70,11 @@ interface Props {
   /** Opcional: sin él la recepción se guarda igual y no se toca el catálogo
    *  de productos (ver `guardarConfirmado`). */
   setProductos?: SetCatalogo<Producto>;
+  /** Bloque 2: categorías del panel y alta de productos desde "+ Crear
+   *  producto" (callback de App; sin él el atajo del desplegable no se
+   *  muestra). */
+  categorias?: CategoriaProducto[];
+  onCrearProducto?: (p: Producto) => void;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   proveedores: ProveedorRef[];
@@ -121,6 +129,8 @@ export function RecepcionCompraScreen({
   setInsumos,
   productos,
   setProductos,
+  categorias,
+  onCrearProducto,
   gestiones,
   setGestiones,
   proveedores,
@@ -240,6 +250,8 @@ export function RecepcionCompraScreen({
   // Al guardar, la compra se registra como "precios sin IVA" (ivaIncluido: false).
   const ivaIncluido = false;
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
+  // Bloque 2: "+ Crear producto" del desplegable de no solicitados.
+  const [showNuevoProducto, setShowNuevoProducto] = useState(false);
 
   const [exNombre, setExNombre] = useState("");
   const [exCant, setExCant] = useState(1);
@@ -439,14 +451,16 @@ export function RecepcionCompraScreen({
 
     // P14: el buscador mira un catálogo u otro según el tipo elegido.
     if (exTipo === "producto") {
-      // Mismo criterio que la Nueva compra: sólo productos disponibles y
-      // terminados (los "Producto insumo" se producen, no se compran). Punto
-      // B6: además se excluyen los ids que ya están en la OC o en facturas
+      // Mismo criterio que la Nueva compra: sólo productos terminados (los
+      // "Producto insumo" se producen, no se compran). Bloque 2.5: se ofrecen
+      // aunque estén "No disponible" (los recién creados con "+ Crear
+      // producto" nacen así); sólo se excluyen los DESCONTINUADOS. Punto B6:
+      // además se excluyen los ids que ya están en la OC o en facturas
       // previas de la orden.
       return (productos ?? [])
         .filter(
           (p) =>
-            p.estado === "Disponible" &&
+            p.estado !== "Descontinuado" &&
             p.tipo === "Producto terminado" &&
             !idsOrdenActual.has(p.id) &&
             !registrados.has(p.id) &&
@@ -1799,6 +1813,25 @@ export function RecepcionCompraScreen({
                               Sin resultados
                             </div>
                           )}
+                          {/* Bloque 2.2: "+ Crear producto «texto»" al FINAL
+                              del desplegable y sólo cuando el texto no
+                              coincide con ningún producto del catálogo. */}
+                          {exTipo === "producto" &&
+                            onCrearProducto &&
+                            exSugs.length === 0 &&
+                            exNombre.trim() !== "" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExShowSug(false);
+                                  setShowNuevoProducto(true);
+                                }}
+                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                Crear producto {`“${exNombre.trim()}”`}
+                              </button>
+                            )}
                         </div>
                       )}
                     </div>
@@ -1986,6 +2019,36 @@ export function RecepcionCompraScreen({
                       toast.success(`Insumo "${ins.nombre}" creado`);
                     }}
                     onClose={() => setShowNuevoInsumo(false)}
+                  />
+                )}
+              </AnimatePresence>
+
+              {/* Bloque 2: Modal de nuevo producto ("+ Crear producto"). */}
+              <AnimatePresence>
+                {showNuevoProducto && (
+                  <CrearProductoModal
+                    nombreInicial={exNombre.trim()}
+                    productos={productos ?? []}
+                    categorias={categorias ?? []}
+                    onGuardar={(p) => {
+                      onCrearProducto?.(p);
+                      // Queda seleccionado en la fila como si viniera del
+                      // desplegable, para seguir con cantidad y precios.
+                      setExNombre(p.nombre);
+                      setExId(p.id);
+                      setExUnidad(presentacionCompra(p));
+                      const factor = empaqueDe(p);
+                      setExEmpaque(factor > 1 ? factor : undefined);
+                      // Sin historial de compra: monto e IVA en 0 — el usuario
+                      // los captura con la factura.
+                      setExPrecio(0);
+                      setExIva(0);
+                      setExPrecioVenta(0);
+                      setExShowSug(false);
+                      setShowNuevoProducto(false);
+                      toast.success(`Producto "${p.nombre}" creado`);
+                    }}
+                    onClose={() => setShowNuevoProducto(false)}
                   />
                 )}
               </AnimatePresence>

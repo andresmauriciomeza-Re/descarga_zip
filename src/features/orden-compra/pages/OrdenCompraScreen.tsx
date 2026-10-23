@@ -1,11 +1,23 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+// Bloque 3: el "+ Crear insumo" comparte el mismo catálogo de categorías
+// obligatorias (A5.1) que usa Gestión de Insumos.
+import { CATEGORIAS_INSUMO, type CategoriaInsumo, type Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
+// Bloque 2: "+ Crear producto" con el mismo modal que Nueva Compra y
+// Recepción (reemplaza al NuevoProductoModal local, que se eliminó).
+import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
+import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { motion, AnimatePresence } from "motion/react";
 import { CompactInsumoForm, UNIDADES, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
+// Bloque 3 (A5.2): el modal de Nuevo Insumo usa la MISMA lista de unidades
+// (con etiqueta larga) que Crear Insumo en Gestión de Insumos.
+import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
+// Bloque 3: comparación de nombres (sin tildes ni mayúsculas) y nombre con
+// mayúscula inicial, compartidos con Gestión de Insumos y Productos.
+import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { useProveedorForm, soloLetras, siguienteProveedorId, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
@@ -662,10 +674,13 @@ export type NuevoInsumoCreado = {
   unidadMedida: string;
   precioUnitario: number;
   iva: number;
+  /** Bloque 3: categoría obligatoria del catálogo de insumos (A5.1). */
+  categoriaId: string;
 };
 
 /** Construye el Insumo que nace desde "+ Crear insumo": entra al catálogo como
- *  tipo "Insumo" con stocks en cero y sin categoría asignada todavía. */
+ *  tipo "Insumo" con stocks en cero y CON la categoría elegida en el modal
+ *  (bloque 3: antes quedaba vacía y había que reclasificarlo a mano). */
 export function insumoDeAlta(ins: NuevoInsumoCreado): Insumo {
   return {
     id: ins.id,
@@ -677,13 +692,13 @@ export function insumoDeAlta(ins: NuevoInsumoCreado): Insumo {
     tipo: "Insumo",
     stockActual: 0,
     stockMinimo: 0,
-    categoriaId: "",
+    categoriaId: ins.categoriaId,
     estado: "activo",
   };
 }
 
 export function OrdenModal({
-  mode, orden, proveedores, insumos, productos, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
+  mode, orden, proveedores, insumos, productos, categorias, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
   onCrearInsumo,
   onCrearProducto,
 }: {
@@ -694,6 +709,9 @@ export function OrdenModal({
   /** Punto 3.3: catálogo de productos del módulo de Productos — la otra mitad
    *  del selector "Tipo" (Insumo | Producto) del formulario. */
   productos?: Producto[];
+  /** Bloque 2: categorías del panel para el "+ Crear producto" (sólo las de
+   *  tipo "Producto terminado" se ofrecen). */
+  categorias?: CategoriaProducto[];
   /** "orden" = Orden de Compra · "compra" = Compra (Gestión de Compra) */
   tipo?: "orden" | "compra";
   /** Renderiza el formulario como una página independiente en vez de modal. */
@@ -703,8 +721,10 @@ export function OrdenModal({
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
   onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
-  /** Crea el producto en el catálogo (tipo "Producto terminado") desde "+ Crear producto". */
-  onCrearProducto?: (prod: { id: string; nombre: string; idCategoria: string }) => void;
+  /** Crea el producto en el catálogo (tipo "Producto terminado") desde
+   *  "+ Crear producto" (bloque 2): recibe el Producto COMPLETO que arma
+   *  CrearProductoModal (precio 0, sin imagen, "No disponible"). */
+  onCrearProducto?: (prod: Producto) => void;
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -829,8 +849,11 @@ export function OrdenModal({
       // Punto 3.2: sólo se compran "Producto terminado" (bebidas y reventa).
       // Con sólo `estado === "Disponible"` entraban también Pizzas y Lasañas,
       // que son "Producto insumo" (se producen, no se compran al proveedor).
+      // Bloque 2.5: se compran productos aunque estén "No disponible" (los
+      // recién creados con "+ Crear producto" nacen así); sólo se excluyen
+      // los DESCONTINUADOS, que ya no vuelven a comprarse.
       const base = (productos ?? []).filter(
-        (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
+        (p) => p.estado !== "Descontinuado" && p.tipo === "Producto terminado",
       );
       // El buscador mira también el contenido ("coca 1.5") para distinguir
       // presentaciones del mismo producto.
@@ -931,14 +954,11 @@ export function OrdenModal({
     toast.success(`Insumo "${ins.nombre}" creado`);
   };
 
-  const handleNuevoProducto = (prod: { id: string; nombre: string; idCategoria: string }) => {
+  const handleNuevoProducto = (prod: Producto) => {
     onCrearProducto?.(prod);
-    setANombre(prod.nombre);
-    setAUnidad("und");
-    setAPrecio(0);
-    setAIva(0);
-    setAInsumoId(prod.id);
-    setAFromCat(true);
+    // Bloque 2: se selecciona como si viniera del desplegable — presentación,
+    // empaque y monto salen del propio producto y queda listo para la fila.
+    seleccionarProducto(prod);
     setAShowSug(false);
     setShowNuevoProducto(false);
     toast.success(`Producto "${prod.nombre}" creado`);
@@ -1697,12 +1717,12 @@ export function OrdenModal({
       </AnimatePresence>
       <AnimatePresence>
         {showNuevoProducto && (
-          <NuevoProductoModal
+          <CrearProductoModal
             onClose={() => setShowNuevoProducto(false)}
             onGuardar={handleNuevoProducto}
             nombreInicial={aNombre.trim()}
-            productosExistentes={productos ?? []}
-            categoriasProducto={[]}
+            productos={productos ?? []}
+            categorias={categorias ?? []}
           />
         )}
       </AnimatePresence>
@@ -1737,6 +1757,10 @@ interface NuevaOrdenCompraPageProps {
   insumos: Insumo[];
   /** Punto 3.3: catálogo de productos para el selector "Tipo". */
   productos: Producto[];
+  /** Bloque 2: categorías y alta de productos desde "+ Crear producto" (el
+   *  callback viene de App y agrega al catálogo del panel). */
+  categorias?: CategoriaProducto[];
+  onCrearProducto?: (p: Producto) => void;
   /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
@@ -1752,6 +1776,8 @@ export function NuevaOrdenCompraPage({
   setProveedores,
   insumos,
   productos,
+  categorias,
+  onCrearProducto,
   setInsumos,
   onNuevoProveedor,
   onBack,
@@ -1833,6 +1859,9 @@ export function NuevaOrdenCompraPage({
       proveedores={proveedores}
       insumos={insumos}
       productos={productos}
+      // Bloque 2: "+ Crear producto" con las categorías del panel.
+      categorias={categorias}
+      onCrearProducto={onCrearProducto}
       onClose={onBack}
       onGuardar={handleGuardar}
       onNuevoProveedor={handleNuevoProveedor}
@@ -2297,12 +2326,16 @@ interface Props {
   /** Punto B7: sin él la anulación se igual no revierte el stock de
    *  productos de sus facturas (ver `handleAnularOrden`). */
   setProductos?: SetCatalogo<Producto>;
+  /** Bloque 2: categorías y alta de productos desde "+ Crear producto" del
+   *  OrdenModal que abre este listado. */
+  categorias?: CategoriaProducto[];
+  onCrearProducto?: (p: Producto) => void;
 }
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, productos, setProductos, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+  insumos, setInsumos, productos, setProductos, categorias, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
@@ -2966,6 +2999,9 @@ export function OrdenCompraScreen({
             // Punto 3.2: sin el catálogo el buscador "Producto" de este modal
             // no tenía con qué filtrar y quedaba siempre vacío.
             productos={productos}
+            // Bloque 2: "+ Crear producto" con las categorías del panel.
+            categorias={categorias}
+            onCrearProducto={onCrearProducto}
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}
@@ -3046,31 +3082,40 @@ export function OrdenCompraScreen({
 
 export function NuevoInsumoModal({
   onGuardar, onClose, nombreInicial = "", insumosExistentes = [],
+  categoriasInsumo = CATEGORIAS_INSUMO,
 }: {
-  onGuardar: (ins: { id: string; nombre: string; unidadMedida: string; precioUnitario: number; iva: number }) => void;
+  onGuardar: (ins: NuevoInsumoCreado) => void;
   onClose: () => void;
   nombreInicial?: string;
   insumosExistentes?: { nombre: string }[];
+  /** Bloque 3: categorías de insumos (A5.1: la categoría es OBLIGATORIA,
+   *  igual que en Crear Insumo de Gestión de Insumos). Por defecto el mismo
+   *  catálogo `CATEGORIAS_INSUMO`; cada pantalla puede pasar el suyo. */
+  categoriasInsumo?: CategoriaInsumo[];
 }) {
   const [nombre, setNombre] = useState(nombreInicial);
-  const [unidad, setUnidad] = useState(UNIDADES[0]);
+  const [categoriaId, setCategoriaId] = useState("");
+  const [unidad, setUnidad] = useState(UNIDADES_INSUMO[0].valor);
   const [precio, setPrecio] = useState(0);
   const [iva, setIva] = useState(0);
-  const [tocado, setTocado] = useState({ nombre: false, unidad: false, precio: false, iva: false });
+  const [tocado, setTocado] = useState({ nombre: false, categoria: false, unidad: false, precio: false, iva: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
 
-  const errorNombre = nombre.trim()
-    ? (insumosExistentes.some(i => i.nombre.toLowerCase() === nombre.trim().toLowerCase())
-      ? "Este insumo ya existe."
+  // Bloque 3: mismas reglas que Gestión de Insumos — nombre único comparando
+  // sin tildes ni mayúsculas de más (`mismoNombre`) y categoría obligatoria.
+  const errorNombre = nombreLimpio(nombre)
+    ? (insumosExistentes.some(i => mismoNombre(i.nombre, nombre))
+      ? "Ya existe un insumo con ese nombre"
       : undefined)
     : "El nombre es obligatorio.";
+  const errorCategoria = categoriaId ? undefined : "Selecciona una categoría.";
   const errorUnidad = unidad ? undefined : "Selecciona una unidad.";
   const errorPrecio = precio > 0 ? undefined : "El monto debe ser mayor que cero.";
   const errorIva = iva >= 0 && iva <= 100 ? undefined : "El IVA debe estar entre 0 y 100.";
 
-  const formValido = !errorNombre && !errorUnidad && !errorPrecio && !errorIva;
+  const formValido = !errorNombre && !errorCategoria && !errorUnidad && !errorPrecio && !errorIva;
 
-  const marcarTocado = (campo: "nombre" | "unidad" | "precio" | "iva") =>
+  const marcarTocado = (campo: "nombre" | "categoria" | "unidad" | "precio" | "iva") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
   const submit = () => {
@@ -3078,10 +3123,13 @@ export function NuevoInsumoModal({
     if (!formValido) return;
     onGuardar({
       id: `INS-N-${Date.now()}`,
-      nombre: nombre.trim(),
+      // Bloque 3: misma limpieza que Gestión de Insumos — un solo espacio
+      // entre palabras y primera letra en MAYÚSCULA.
+      nombre: nombreParaGuardar(nombre),
       unidadMedida: unidad,
       precioUnitario: precio,
       iva,
+      categoriaId,
     });
   };
 
@@ -3118,14 +3166,36 @@ export function NuevoInsumoModal({
               <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNombre}</p>
             )}
           </div>
+          {/* Bloque 3 (A5.1): la categoría es obligatoria, igual que en
+              Crear Insumo de Gestión de Insumos — sin ella el insumo queda
+              sin clasificar en el catálogo. */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
+            <select
+              value={categoriaId}
+              onChange={e => { setCategoriaId(e.target.value); marcarTocado("categoria"); }}
+              onBlur={() => marcarTocado("categoria")}
+              className={`${iCls} transition-colors ${(tocado.categoria || intentoGuardar) && errorCategoria ? "border-red-400 focus:ring-red-300" : ""}`}
+            >
+              <option value="">Seleccionar</option>
+              {categoriasInsumo.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+            {(tocado.categoria || intentoGuardar) && errorCategoria && (
+              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorCategoria}</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
               {/* Select personalizado (Radix, igual que los estados): el
                   `<select>` nativo desplegaba la lista CUADRADA y con el azul
-                  del navegador. */}
+                  del navegador. Bloque 3 (A5.2): con la lista compartida
+                  UNIDADES_INSUMO (etiqueta larga, mismo valor guardado). */}
               <UnidadSelect
                 value={unidad}
+                unidades={UNIDADES_INSUMO}
                 onChange={(v) => {
                   setUnidad(v);
                   marcarTocado("unidad");
@@ -3175,198 +3245,6 @@ export function NuevoInsumoModal({
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             Crear Insumo
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-// ─── NUEVO PRODUCTO MODAL ─────────────────────────────────────────────────────
-
-export function NuevoProductoModal({
-  onGuardar,
-  onClose,
-  nombreInicial = "",
-  productosExistentes = [],
-  categoriasProducto = [],
-}: {
-  onGuardar: (prod: { id: string; nombre: string; idCategoria: string; unidadVenta: string; precioUnitario: number; costoUnitario: number }) => void;
-  onClose: () => void;
-  nombreInicial?: string;
-  productosExistentes?: { nombre: string }[];
-  categoriasProducto?: { id: string; nombre: string }[];
-}) {
-  const [nombre, setNombre] = useState(nombreInicial);
-  const [idCategoria, setIdCategoria] = useState("");
-  const [contenido, setContenido] = useState("");
-  const [unidadContenido, setUnidadContenido] = useState<"ml" | "L">("ml");
-  const [presentacion, setPresentacion] = useState<"Unidad" | "Paca" | "Caja">("Unidad");
-  const [unidadesPorEmpaque, setUnidadesPorEmpaque] = useState(1);
-  const [tocado, setTocado] = useState({ nombre: false, categoria: false, contenido: false, unidadesPorEmpaque: false });
-  const [intentoGuardar, setIntentoGuardar] = useState(false);
-
-  // Solo categorías de tipo Producto terminado (Bebidas)
-  const categoriasTerminadas = categoriasProducto.filter(c => {
-    const nombre = c.nombre.toLowerCase();
-    return nombre.includes("bebida");
-  });
-  if (categoriasTerminadas.length === 0 && categoriasProducto.length > 0) {
-    // Si no hay categorías específicas, usar las que no sean pizzas/lasañas
-    categoriasProducto.forEach(c => {
-      const nombre = c.nombre.toLowerCase();
-      if (!nombre.includes("pizza") && !nombre.includes("lasaña") && !nombre.includes("lasana")) {
-        if (!categoriasTerminadas.find(ct => ct.id === c.id)) categoriasTerminadas.push(c);
-      }
-    });
-  }
-
-  const errorNombre = nombre.trim()
-    ? (productosExistentes.some(p => p.nombre.toLowerCase() === nombre.trim().toLowerCase())
-      ? "Este producto ya existe."
-      : undefined)
-    : "El nombre es obligatorio.";
-  const errorCategoria = idCategoria ? undefined : "Selecciona una categoría.";
-  const errorContenido = contenido && Number(contenido) > 0 ? undefined : "El contenido es obligatorio.";
-  const errorUnidadesPorEmpaque = (presentacion === "Unidad" || Number(unidadesPorEmpaque) > 0) ? undefined : "Las unidades por empaque son obligatorias.";
-
-  const formValido = !errorNombre && !errorCategoria && !errorContenido && !errorUnidadesPorEmpaque;
-
-  const marcarTocado = (campo: "nombre" | "categoria" | "contenido" | "unidadesPorEmpaque") =>
-    setTocado((t) => ({ ...t, [campo]: true }));
-
-  const submit = () => {
-    setIntentoGuardar(true);
-    if (!formValido) return;
-    onGuardar({
-      id: `PROD-N-${Date.now()}`,
-      nombre: nombre.trim(),
-      idCategoria,
-      unidadVenta: "und",
-      precioUnitario: 0,
-      costoUnitario: 0,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div>
-            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo producto</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Crea un producto terminado para agregar a la orden.</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-            <input
-              value={nombre}
-              onChange={e => setNombre(e.target.value)}
-              onBlur={() => marcarTocado("nombre")}
-              autoFocus
-              placeholder="Nombre del producto"
-              className={`${iCls} transition-colors ${(tocado.nombre || intentoGuardar) && errorNombre ? "border-red-400 focus:ring-red-300" : ""}`}
-            />
-            {(tocado.nombre || intentoGuardar) && errorNombre && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorNombre}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
-            <select
-              value={idCategoria}
-              onChange={e => { setIdCategoria(e.target.value); marcarTocado("categoria"); }}
-              onBlur={() => marcarTocado("categoria")}
-              className={`${iCls} transition-colors ${(tocado.categoria || intentoGuardar) && errorCategoria ? "border-red-400 focus:ring-red-300" : ""}`}
-            >
-              <option value="">Seleccionar</option>
-              {(categoriasTerminadas.length > 0 ? categoriasTerminadas : categoriasProducto).map(c => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
-            {(tocado.categoria || intentoGuardar) && errorCategoria && (
-              <p className="text-xs text-red-500 mt-1 ml-0.5">{errorCategoria}</p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Contenido *</label>
-              <input
-                type="number"
-                min={0}
-                value={contenido}
-                onChange={e => setContenido(e.target.value)}
-                onBlur={() => marcarTocado("contenido")}
-                placeholder="Ej: 500"
-                className={`${iCls} transition-colors ${(tocado.contenido || intentoGuardar) && errorContenido ? "border-red-400 focus:ring-red-300" : ""}`}
-              />
-              {(tocado.contenido || intentoGuardar) && errorContenido && (
-                <p className="text-xs text-red-500 mt-1 ml-0.5">{errorContenido}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
-              <select
-                value={unidadContenido}
-                onChange={e => setUnidadContenido(e.target.value as "ml" | "L")}
-                className={iCls}
-              >
-                <option value="ml">ml</option>
-                <option value="L">L</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Presentación de compra</label>
-              <select
-                value={presentacion}
-                onChange={e => setPresentacion(e.target.value as "Unidad" | "Paca" | "Caja")}
-                className={iCls}
-              >
-                <option value="Unidad">Unidad</option>
-                <option value="Paca">Paca</option>
-                <option value="Caja">Caja</option>
-              </select>
-            </div>
-            {presentacion !== "Unidad" && (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidades por empaque *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={unidadesPorEmpaque}
-                  onChange={e => setUnidadesPorEmpaque(Number(e.target.value))}
-                  onBlur={() => marcarTocado("unidadesPorEmpaque")}
-                  className={`${iCls} transition-colors ${(tocado.unidadesPorEmpaque || intentoGuardar) && errorUnidadesPorEmpaque ? "border-red-400 focus:ring-red-300" : ""}`}
-                />
-                {(tocado.unidadesPorEmpaque || intentoGuardar) && errorUnidadesPorEmpaque && (
-                  <p className="text-xs text-red-500 mt-1 ml-0.5">{errorUnidadesPorEmpaque}</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-            Cancelar
-          </button>
-          <button
-            onClick={submit}
-            disabled={!formValido}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
-          >
-            Crear Producto
           </button>
         </div>
       </motion.div>

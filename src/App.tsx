@@ -109,7 +109,8 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
+import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
+import { requeridosPorUnidad, faltantesPara, type RequeridoUnidad } from "@/shared/utils/disponibilidad";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
@@ -127,7 +128,7 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "@/features/insumos/pages/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
@@ -163,6 +164,7 @@ import {
   crearOrdenPreparacion,
   crearOrdenReemplazo,
   siguienteOrdenId,
+  fichaVigente,
   normalizarNombre,
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
@@ -2265,6 +2267,119 @@ function LandingScreen({
 
 // ─────────────────────────── CATALOG ───────────────────────────
 
+// ── Bloque 5: topes del carrito ──
+
+/** Lo que el tope necesita saber de una línea del carrito: el producto, su
+    tamaño y —si ya está en el carrito— su id, para excluir la línea de los
+    consumos ajenos. `CartItem` lo cumple tal cual. */
+type LineaLimiteRef = {
+  id?: string;
+  product: { name: string };
+  size?: string;
+};
+
+/** Tope de UNA línea del carrito (Bloque 5): `max` es el TOTAL de unidades
+    que esa línea puede tener (undefined = sin límite) y `elaborado` dice si
+    es un producto insumo, para elegir el mensaje de máximo. */
+type LimiteLinea = { max: number | undefined; elaborado: boolean };
+
+/** Mensaje exacto al llegar al máximo (Bloque 5, punto 4): bebidas con el
+    stock disponible y productos insumo con lo que alcanza a preparar su
+    ficha técnica. */
+const mensajeMaximoDe = (
+  nombre: string,
+  max: number,
+  tamano: string | undefined,
+  elaborado: boolean,
+): string =>
+  elaborado
+    ? `Solo se pueden preparar ${max} ${nombre}${tamano ? ` ${tamano}` : ""} con lo que hay`
+    : `Máximo disponible: ${max}. No hay más unidades de ${nombre}`;
+
+/** Cantidad ajustada al rango permitido: nunca baja de 1 y nunca pasa del
+    máximo (si se pasa —escribiendo o sumando— se ajusta sola y el aviso lo
+    dispara quien la recibe). `max` undefined = sin límite. */
+const ajustarCantidad = (cantidad: number, max?: number): number =>
+  Math.min(
+    Math.max(1, Math.round(cantidad) || 1),
+    Math.max(1, max ?? Infinity),
+  );
+
+/** Bebida con poco stock (Bloque 5, punto 5): ≤10 disponibles ámbar,
+    ≤5 rojo. Solo aplica a productos terminados. */
+const avisoStockBajoCls = (max: number): string =>
+  max <= 5
+    ? "bg-red-100 dark:bg-red-950/50 border-red-300 dark:border-red-800 text-red-700 dark:text-red-400"
+    : "bg-amber-100 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400";
+
+/** Aviso "¡Quedan solo {N}!" del detalle y de la fila del carrito. */
+function AvisoStockBajo({
+  max,
+  className = "",
+}: {
+  max: number;
+  className?: string;
+}) {
+  return (
+    <p
+      className={`text-xs font-semibold border rounded-xl px-3 py-1.5 ${avisoStockBajoCls(max)} ${className}`}
+    >
+      ¡Quedan solo {max}!
+    </p>
+  );
+}
+
+/** Campo de cantidad entre − y + (Bloque 5, punto 3): escribible con el
+    teclado, mínimo 1; si se escribe más del máximo se ajusta solo y sale
+    el mensaje. `max` undefined = sin límite. */
+function CantidadInput({
+  value,
+  max,
+  mensajeMaximo,
+  onChange,
+}: {
+  value: number;
+  /** undefined = sin límite. */
+  max: number | undefined;
+  /** Texto que avisa si se escribe sobre el máximo. */
+  mensajeMaximo: string;
+  onChange: (nueva: number) => void;
+}) {
+  // Texto en edición: permite borrar al vacío sin pelearse con el valor
+  // controlado; al salir del campo vuelve a mostrar la cantidad real.
+  const [texto, setTexto] = useState<string | null>(null);
+  const tope = Math.max(1, max ?? Infinity);
+  return (
+    <input
+      type="number"
+      min={1}
+      value={texto ?? String(value)}
+      aria-label="Cantidad"
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (raw.trim() === "") {
+          setTexto("");
+          return;
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n)) {
+          setTexto(raw);
+          return;
+        }
+        const entero = Math.round(n);
+        // Punto 3: se escribe más del máximo → se ajusta sola y sale el aviso.
+        if (entero > tope) toast.warning(mensajeMaximo);
+        const ajustada = Math.min(Math.max(1, entero), tope);
+        setTexto(String(ajustada));
+        if (ajustada !== value) onChange(ajustada);
+      }}
+      onBlur={() => setTexto(null)}
+      className="w-12 text-center text-sm font-bold bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg py-1"
+    />
+  );
+}
+
 // Tarjeta de producto del catálogo. Vive fuera de `CatalogScreen` porque el
 // grid se pinta por dos caminos —grid único al elegir una categoría y grid por
 // secciones con "Todas"— y los dos tienen que mostrar exactamente la misma
@@ -2274,20 +2389,50 @@ function ProductCard({
   index,
   onOpen,
   onQuickAdd,
+  cart,
+  limiteDe,
 }: {
   product: Product;
   index: number;
   onOpen: (p: Product) => void;
   onQuickAdd: (p: Product) => void;
-  /** Siguen llegando desde CatalogScreen; ya no se usan acá porque la tarjeta
-      dejó de tener el stepper [− cantidad +]. */
   cart: CartItem[];
+  /** Sigue llegando desde CatalogScreen, pero ya no se usa acá: la tarjeta
+      no tiene stepper [− cantidad +], solo el botón rápido de +1. */
   updateQty: (id: string, qty: number) => void;
+  /** Bloque 5 — Tope de la línea que completaría el botón rápido, con TODO
+      el carrito; lo calcula App (panel, fichas e insumos). */
+  limiteDe: (linea: LineaLimiteRef) => LimiteLinea;
 }) {
   // Estado real del producto (menú público). "Descontinuado" no llega acá:
   // CatalogScreen lo filtra antes de armar el grid.
   const estado = estadoDeProducto(p);
   const noDisponible = estado !== "Disponible";
+  // Bloque 5 — El botón suma 1 con el tamaño por defecto, pero si ya hay una
+  // línea sin extras de ESTE producto el +1 se acumula en ella (mismo
+  // criterio que `quickAdd`), así que el tope es el de ESA línea.
+  const tamanoDefecto = sizeDe(p, 0).label;
+  const enCarrito = cart.find(
+    (i) => i.product.id === p.id && i.selectedExtras.length === 0,
+  );
+  const tope = limiteDe(enCarrito ?? { product: p, size: tamanoDefecto });
+  const max = tope.max;
+  const adicional =
+    max === undefined ? undefined : max - (enCarrito?.quantity ?? 0);
+  // Punto 6: no queda nada por agregar = "Agotado" (sin cambiar el estado
+  // del producto; la etiqueta de estado sigue pintándose igual).
+  const agotado = adicional !== undefined && adicional <= 0;
+  const mensajeMax =
+    max === undefined
+      ? ""
+      : max === 0
+        ? "Agotado"
+        : mensajeMaximoDe(
+            p.name,
+            max,
+            enCarrito?.size || tamanoDefecto,
+            tope.elaborado,
+          );
   return (
     <motion.div
       data-producto-id={p.id}
@@ -2314,6 +2459,12 @@ function ProductCard({
           estado={estado}
           className="absolute top-3 left-3 z-10"
         />
+        {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto). */}
+        {agotado && (
+          <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
+            Agotado
+          </span>
+        )}
         {noDisponible && (
           <NoDisponibleOverlay className="absolute inset-0 z-10" />
         )}
@@ -2350,12 +2501,22 @@ function ProductCard({
                 ("Ver más" o la imagen). */}
             <button
               onClick={() => onQuickAdd(p)}
-              disabled={noDisponible}
-              title={noDisponible ? "No disponible por ahora" : "Agregar al carrito"}
+              // Puntos 4 y 6: no disponible o sin nada que agregar (tope en
+              // 0 o ya en el máximo) → el botón queda deshabilitado.
+              disabled={noDisponible || agotado}
+              title={
+                noDisponible
+                  ? "No disponible por ahora"
+                  : agotado
+                    ? mensajeMax
+                    : "Agregar al carrito"
+              }
               aria-label={
                 noDisponible
                   ? `${p.name} no está disponible por ahora`
-                  : `Agregar ${p.name} al carrito`
+                  : agotado
+                    ? `${p.name} agotado`
+                    : `Agregar ${p.name} al carrito`
               }
               className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer motion-reduce:active:scale-100"
             >
@@ -2382,10 +2543,12 @@ function CatalogScreen({
   cart,
   updateQty,
   categorias,
+  limiteDe,
 }: {
   navigate: (s: Screen) => void;
   setProduct: (p: Product) => void;
-  quickAdd: (p: Product) => void;
+  /** Bloque 5: devuelve si algo se agregó; si no, el mensaje de máximo. */
+  quickAdd: (p: Product) => { agregado: boolean; mensaje?: string };
   initialCat?: string;
   /** Página del catálogo, controlada por App para que sobreviva al detalle. */
   page: number;
@@ -2401,6 +2564,8 @@ function CatalogScreen({
   updateQty: (id: string, delta: number) => void;
   /** Categorías del admin, para filtros dinámicos. */
   categorias: CategoriaProducto[];
+  /** Bloque 5 — Tope por línea con TODO el carrito; lo calcula App. */
+  limiteDe: (linea: LineaLimiteRef) => LimiteLinea;
 }) {
   const [cat, setCat] = useState(initialCat);
   const isMobile = useIsMobile();
@@ -2492,7 +2657,14 @@ function CatalogScreen({
   };
 
   const agregarAlCarrito = (p: Product) => {
-    quickAdd(p);
+    const r = quickAdd(p);
+    // Bloque 5 (punto 4): si no se agregó nada —la línea ya está en su
+    // máximo— solo sale el aviso; el toast nunca dice "agregada al carrito"
+    // sin que se haya agregado nada.
+    if (r.mensaje) {
+      toast.warning(r.mensaje);
+      return;
+    }
     // Una pizza se agrega con su tamaño por defecto (Mediana) y eso se dice en
     // el toast; las lasañas y bebidas conservan su mensaje original.
     const tamano = p.sizes.length > 1 ? ` ${sizeDe(p, 0).label}` : "";
@@ -2591,6 +2763,7 @@ function CatalogScreen({
               onQuickAdd={agregarAlCarrito}
               cart={cart}
               updateQty={updateQty}
+              limiteDe={limiteDe}
             />
           ))}
         </div>
@@ -2651,12 +2824,19 @@ function ProductDetailScreen({
   product,
   navigate,
   addDetailed,
+  limiteDe,
   onBack,
   backLabel,
 }: {
   product: Product;
   navigate: (s: Screen, options?: { restaurar?: boolean }) => void;
-  addDetailed: (item: CartItem) => void;
+  /** Bloque 5 — Devuelve si algo se agregó; si no, el mensaje de máximo (el
+      toast jamás dice "agregada" si no se agregó nada). */
+  addDetailed: (item: CartItem) => { agregado: boolean; mensaje?: string };
+  /** Bloque 5 — Tope de ESTE producto/tamaño considerando TODO lo que ya hay
+      en el carrito (el detalle no tiene id: todo el carrito cuenta, así `max`
+      son las unidades que se pueden AGREGAR); lo calcula App. */
+  limiteDe: (linea: LineaLimiteRef) => LimiteLinea;
   onBack: () => void;
   backLabel: string;
 }) {
@@ -2677,6 +2857,33 @@ function ProductDetailScreen({
   // botón "Agregar al carrito" antes ignoraba el estado).
   const estado = estadoDeProducto(product);
   const noDisponible = estado !== "Disponible";
+  // Bloque 5 — Tope de ESTE producto/tamaño considerando TODO lo que ya hay
+  // en el carrito (el detalle no tiene id: todas las líneas cuentan como
+  // ajenas, así `max` son las unidades que se pueden AGREGAR ahora).
+  // undefined = sin límite (sin ficha, sin stock o fuera del panel).
+  const tamanoElegido = sizeDe(product, sizeIdx).label;
+  const limite = limiteDe({ product, size: tamanoElegido });
+  const max = limite.max;
+  // La cantidad se ajusta sola si el máximo baja —al cambiar de tamaño o al
+  // bajar el stock— y nunca baja de 1.
+  const tope = Math.max(1, max ?? Infinity);
+  useEffect(() => {
+    setQty((q) => Math.max(1, Math.min(q, tope)));
+  }, [tope]);
+  // Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto).
+  const agotado = max === 0;
+  // Punto 4: al llegar al máximo el + queda deshabilitado y sale el mensaje.
+  const enTope = max !== undefined && qty >= max;
+  const mensajeMax =
+    max === undefined
+      ? ""
+      : max === 0
+        ? "Agotado"
+        : mensajeMaximoDe(product.name, max, tamanoElegido, limite.elaborado);
+  // Punto 5: bebida con 10 o menos disponibles avisa acá (ámbar ≤10, rojo
+  // ≤5); los productos insumo se rigen por su ficha técnica.
+  const bajoStock =
+    !limite.elaborado && max !== undefined && max > 0 && max <= 10;
 
   const toggleExtra = (label: string) =>
     setExtras((prev) =>
@@ -2692,17 +2899,25 @@ function ProductDetailScreen({
       return;
     }
     const size = sizeDe(product, sizeIdx);
-    addDetailed({
+    // Bloque 5: la cantidad se ajusta sola al máximo permitido (mínimo 1).
+    const cantidad = Math.max(1, Math.min(qty, tope));
+    const r = addDetailed({
       id: `${product.id}-${Date.now()}`,
       product,
-      quantity: qty,
+      quantity: cantidad,
       size: size.label,
       sizePrice,
       selectedExtras: extras,
       extrasPrice,
     });
+    // Punto 4: si no se agregó nada, solo el aviso de máximo; el toast nunca
+    // dice "agregada al carrito" sin que se haya agregado nada.
+    if (r.mensaje) {
+      toast.warning(r.mensaje);
+      return;
+    }
     setQty(1);
-    toast.success(`${product.name} ${size.label} × ${qty} agregada al carrito`, {
+    toast.success(`${product.name} ${size.label} × ${cantidad} agregada al carrito`, {
       action: {
         label: "Ver carrito",
         onClick: () => navigate("cart"),
@@ -2735,6 +2950,12 @@ function ProductDetailScreen({
             estado={estado}
             className="absolute top-3 left-3 z-10"
           />
+          {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). */}
+          {agotado && (
+            <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
+              Agotado
+            </span>
+          )}
           {noDisponible && (
             <NoDisponibleOverlay className="absolute inset-0 z-10" />
           )}
@@ -2827,32 +3048,56 @@ function ProductDetailScreen({
           )}
 
           {/* Cantidad */}
-          <div className="flex items-center gap-4 mb-6">
-            <span className="font-bold text-foreground">
-              Cantidad
-            </span>
-            <div className="flex items-center gap-2 bg-muted rounded-xl p-1">
-              <button
-                onClick={() =>
-                  setQty((q) => Math.max(1, q - 1))
-                }
-                className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <span
-                className="w-8 text-center font-bold text-lg"
-                style={{ fontFamily: MONO }}
-              >
-                {qty}
+          <div className="mb-6">
+            <div className="flex items-center gap-4">
+              <span className="font-bold text-foreground">
+                Cantidad
               </span>
-              <button
-                onClick={() => setQty((q) => q + 1)}
-                className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 bg-muted rounded-xl p-1">
+                <button
+                  onClick={() =>
+                    setQty((q) => Math.max(1, q - 1))
+                  }
+                  className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                {/* Bloque 5 (punto 3): campo editable con el teclado; si se
+                    escribe más del máximo se ajusta solo y avisa. */}
+                <CantidadInput
+                  value={qty}
+                  max={max}
+                  mensajeMaximo={mensajeMax}
+                  onChange={setQty}
+                />
+                {/* Punto 4: al estar en el máximo el + queda deshabilitado y
+                    el título del botón (y el mensaje de abajo) lo dicen. */}
+                <button
+                  onClick={() => setQty((q) => Math.min(q + 1, tope))}
+                  disabled={agotado || enTope}
+                  title={
+                    agotado
+                      ? "Agotado"
+                      : enTope
+                        ? mensajeMax
+                        : "Aumentar cantidad"
+                  }
+                  className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+            {/* Puntos 4 y 5: mensaje de máximo y aviso de stock bajo de
+                bebidas, visibles sin tener que pasar el cursor. */}
+            {!agotado && enTope && (
+              <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                {mensajeMax}
+              </p>
+            )}
+            {bajoStock && (
+              <AvisoStockBajo max={max} className="mt-2 inline-block" />
+            )}
           </div>
 
           {/* Total */}
@@ -2870,11 +3115,16 @@ function ProductDetailScreen({
           <PrimaryBtn
             onClick={handleAdd}
             size="lg"
-            disabled={noDisponible}
+            // Puntos 4 y 6: no disponible o agotado → sin agregar.
+            disabled={noDisponible || agotado}
             className="w-full"
           >
             <ShoppingCart className="w-5 h-5" />{" "}
-            {noDisponible ? "No disponible por ahora" : "Agregar al carrito"}
+            {noDisponible
+              ? "No disponible por ahora"
+              : agotado
+                ? "Agotado"
+                : "Agregar al carrito"}
           </PrimaryBtn>
         </div>
       </div>
@@ -2897,6 +3147,7 @@ function CartScreen({
   cart,
   navigate,
   updateQty,
+  limiteDe,
   remove,
   clear,
   onOrder,
@@ -2909,6 +3160,8 @@ function CartScreen({
   cart: CartItem[];
   navigate: (s: Screen) => void;
   updateQty: (id: string, q: number) => void;
+  /** Bloque 5 — Tope de cada línea con TODO el carrito; lo calcula App. */
+  limiteDe: (linea: LineaLimiteRef) => LimiteLinea;
   remove: (id: string) => void;
   clear: () => void;
   onOrder: (
@@ -2980,6 +3233,14 @@ function CartScreen({
   // se marca, no se puede aumentar y el pago queda bloqueado hasta que el
   // cliente la quite o la deje en 0.
   const itemsNoDisponibles = cart.filter((i) => !productoDisponible(i.product));
+  // Bloque 5 (punto 7): líneas por encima de su máximo —p. ej. un carrito
+  // guardado de antes con menos stock o insumos—. Se marcan en rojo con su
+  // mensaje y el pago queda deshabilitado hasta que el cliente las baje; el
+  // carrito NUNCA se corrige en silencio.
+  const lineasExcedidas = cart.filter((i) => {
+    const { max } = limiteDe(i);
+    return max !== undefined && i.quantity > max;
+  });
   // Quién está haciendo el pedido. El nombre sí se guardaba en la venta, pero
   // el checkout no lo mostraba en ningún paso ni en la confirmación, así que el
   // cliente no tenía forma de confirmar a nombre de quién estaba comprando.
@@ -3362,10 +3623,34 @@ function CartScreen({
           <div className="lg:col-span-2 space-y-4">
             {cart.map((item) => {
               const itemNoDisponible = !productoDisponible(item.product);
+              // Bloque 5 — Tope de ESTA línea (la propia no se cuenta dos
+              // veces como consumo) y las señales para pintar la fila.
+              const limite = limiteDe(item);
+              const max = limite.max;
+              const excedida = max !== undefined && item.quantity > max;
+              const enTope = max !== undefined && item.quantity >= max;
+              const bajoStock =
+                !limite.elaborado && max !== undefined && max > 0 && max <= 10;
+              const mensajeMax =
+                max === undefined
+                  ? ""
+                  : mensajeMaximoDe(
+                      item.product.name,
+                      max,
+                      item.size || undefined,
+                      limite.elaborado,
+                    );
               return (
               <div
                 key={item.id}
-                className={`bg-card border rounded-2xl p-4 flex gap-4 ${itemNoDisponible ? "border-zinc-400 dark:border-zinc-600" : "border-border"}`}
+                // Punto 7: una línea pasada del máximo se marca en rojo.
+                className={`bg-card border rounded-2xl p-4 flex gap-4 ${
+                  excedida
+                    ? "border-red-400 dark:border-red-700"
+                    : itemNoDisponible
+                      ? "border-zinc-400 dark:border-zinc-600"
+                      : "border-border"
+                }`}
               >
                 <img
                   src={item.product.image}
@@ -3412,20 +3697,27 @@ function CartScreen({
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="w-6 text-center text-sm font-bold">
-                        {item.quantity}
-                      </span>
-                      {/* No disponible: no se puede aumentar (el cliente debe
-                          quitar la línea para poder pagar). */}
+                      {/* Bloque 5 (punto 3): campo editable con el teclado;
+                          más del máximo se ajusta solo y avisa. */}
+                      <CantidadInput
+                        value={item.quantity}
+                        max={max}
+                        mensajeMaximo={mensajeMax}
+                        onChange={(n) => updateQty(item.id, n)}
+                      />
+                      {/* Punto 4: no disponible o ya en el máximo → no se
+                          puede aumentar (el título lleva el mensaje). */}
                       <button
                         onClick={() =>
                           updateQty(item.id, item.quantity + 1)
                         }
-                        disabled={itemNoDisponible}
+                        disabled={itemNoDisponible || enTope}
                         title={
                           itemNoDisponible
                             ? "No disponible por ahora"
-                            : "Aumentar cantidad"
+                            : enTope
+                              ? mensajeMax
+                              : "Aumentar cantidad"
                         }
                         className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
@@ -3447,6 +3739,23 @@ function CartScreen({
                       </div>
                     </div>
                   </div>
+                  {/* Bloque 5 (puntos 4, 5 y 7): mensaje de máximo —rojo si
+                      la línea pasa del máximo, ámbar si está en él— y aviso
+                      de stock bajo de bebidas, visibles sin el cursor. */}
+                  {enTope && (
+                    <p
+                      className={`mt-2 text-xs font-semibold ${
+                        excedida
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-amber-700 dark:text-amber-400"
+                      }`}
+                    >
+                      {mensajeMax}
+                    </p>
+                  )}
+                  {bajoStock && (
+                    <AvisoStockBajo max={max} className="mt-2 inline-block" />
+                  )}
                 </div>
               </div>
               );
@@ -3477,12 +3786,23 @@ function CartScreen({
                   Quita los productos no disponibles para continuar
                 </p>
               )}
+              {/* Bloque 5 (punto 7): una línea pasó de su máximo (carrito
+                  guardado de antes); que el cliente la baje para pagar. El
+                  carrito no se corrige en silencio. */}
+              {lineasExcedidas.length > 0 && (
+                <p className="mb-3 text-sm font-semibold text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800 rounded-xl px-3 py-2 text-center">
+                  Baja las cantidades que pasan del máximo para continuar
+                </p>
+              )}
               <PrimaryBtn
                 // Sin sesión lo primero es el formulario de datos; con sesión
                 // se entra directo al resumen como siempre.
                 onClick={() => setCheckoutStep(isLoggedIn ? 1 : 3)}
                 size="lg"
-                disabled={itemsNoDisponibles.length > 0}
+                disabled={
+                  itemsNoDisponibles.length > 0 ||
+                  lineasExcedidas.length > 0
+                }
                 className="w-full"
               >
                 <CreditCard className="w-5 h-5" />
@@ -8258,18 +8578,153 @@ export default function App() {
     return { ok: true };
   };
 
-  const quickAdd = (product: Product) => {
+  /** Bloque 5 — Requeridos ABSOLUTOS que una línea del carrito ya consume
+      de Insumos: solo los productos insumo con ficha técnica; las bebidas y
+      las líneas sin ficha no consumen insumos calculables y por eso no
+      limitan a las demás. */
+  const requeridosAbsolutosDe = (linea: CartItem): RequeridoUnidad[] => {
+    const p = productos.find(
+      (x) =>
+        normalizarNombre(x.nombre) === normalizarNombre(linea.product.name),
+    );
+    if (!p) return [];
+    const enCategoria = categorias.find((c) => c.id === p.idCategoria)?.nombre;
+    if (tipoDe(p, enCategoria) !== "Producto insumo") return [];
+    const ficha = fichaVigente(fichasPorProducto, p.id);
+    if (!ficha) return [];
+    return requeridosPorUnidad(ficha, linea.size).map((r) => ({
+      ...r,
+      cantidad: r.cantidad * (linea.quantity || 0),
+    }));
+  };
+
+  /** Bloque 5 — Tope de UNA línea del carrito considerando TODO lo que ya
+      hay en el carrito (punto 2):
+      · Producto que NO está en el panel (ningún nombre casa con él, está
+        borrado o renombrado): sin límite, `max` undefined.
+      · Producto insumo (pizza/lasaña): el mayor N para ESTA línea tal que
+        los requeridos del resto del carrito —cada línea con su tamaño y su
+        cantidad, vía `requeridosPorUnidad`— más N de esta línea no tengan
+        faltantes (`faltantesPara`); sin ficha técnica: sin límite (como
+        hasta ahora).
+      · Producto terminado (bebida): `stockApi` si la API lo envió, si no
+        el `stockDisponible` del producto del panel emparejado por nombre
+        (el catálogo público no trae stock), menos las unidades de esa
+        bebida que ya hay en OTRAS líneas.
+      `max` es el TOTAL que la línea puede tener: la propia línea se excluye
+      de los consumos ajenos por id; sin id —tarjeta y detalle— todo el
+      carrito cuenta. El mínimo sigue siendo 1 (lo aplican los puntos que
+      usan este tope). */
+  const limiteDeLinea = (
+    linea: LineaLimiteRef,
+    carrito: CartItem[],
+  ): LimiteLinea => {
+    const nombre = linea.product.name;
+    const mismoNombre = (n?: string) =>
+      normalizarNombre(n ?? "") === normalizarNombre(nombre);
+    const enPanel = productos.find((p) => mismoNombre(p.nombre));
+    if (!enPanel) return { max: undefined, elaborado: false };
+    const enCategoria = categorias.find(
+      (c) => c.id === enPanel.idCategoria,
+    )?.nombre;
+    const elaborado = tipoDe(enPanel, enCategoria) === "Producto insumo";
+    // Lo que ya consumen las OTRAS líneas (la propia no se cuenta dos veces).
+    const otras = carrito.filter((l) => l.id !== linea.id);
+
+    if (elaborado) {
+      const ficha = fichaVigente(fichasPorProducto, enPanel.id);
+      if (!ficha) return { max: undefined, elaborado };
+      const porUnidad = requeridosPorUnidad(ficha, linea.size);
+      // Ficha sin filas: nada que restrinja (se maneja como sin límite).
+      if (porUnidad.length === 0) return { max: undefined, elaborado };
+      const ajenos = otras.flatMap(requeridosAbsolutosDe);
+      // ¿Cabe esta línea con N unidades? Todo va en cantidades absolutas
+      // (`veces = 1`): los ajenos ya salen multiplicados por su cantidad y
+      // `porUnidad` se multiplica por N a mano.
+      const cabe = (n: number) =>
+        faltantesPara(
+          [
+            ...ajenos,
+            ...porUnidad.map((r) => ({ ...r, cantidad: r.cantidad * n })),
+          ],
+          1,
+          insumos,
+        ).length === 0;
+      // Ni el carrito de hoy cabe: esta línea no puede tener nada.
+      if (!cabe(0)) return { max: 0, elaborado };
+      // Búsqueda exponencial + binaria (`cabe` es monótona en n). Si no se
+      // acota dentro del techo, la respuesta es "sin límite".
+      const CAP = 100000;
+      let lo = 0;
+      let hi = 1;
+      while (hi < CAP && cabe(hi)) {
+        lo = hi;
+        hi = Math.min(hi * 2, CAP);
+      }
+      if (hi === CAP && cabe(hi)) return { max: undefined, elaborado };
+      while (lo + 1 < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (cabe(mid)) lo = mid;
+        else hi = mid;
+      }
+      return { max: lo, elaborado };
+    }
+
+    // Terminado (bebida): el stock del backend manda si la API lo envió; si
+    // no, el del panel. Lo que ya está en otras líneas de ESTA bebida
+    // descuenta (puntos 1 y 2).
+    const stock =
+      limiteStockDe(
+        productosCatalogo.find((p) => mismoNombre(p.nombre)),
+      ) ?? enPanel.stockDisponible;
+    if (stock === undefined || !Number.isFinite(stock)) {
+      return { max: undefined, elaborado: false };
+    }
+    const enOtras = otras
+      .filter((l) => mismoNombre(l.product.name))
+      .reduce((s, l) => s + (l.quantity || 0), 0);
+    return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado: false };
+  };
+
+  /** Bloque 5 — Agregar 1 unidad desde la tarjeta. Devuelve si algo se
+      agregó: si la línea ya está en su máximo NO se agrega nada y trae el
+      mensaje de máximo, para que el toast nunca diga "agregada al carrito"
+      sin que se haya agregado nada (punto 4). */
+  const quickAdd = (
+    product: Product,
+  ): { agregado: boolean; mensaje?: string } => {
     const size = sizeDe(product, 0);
+    // El botón suma 1 con el tamaño por defecto, pero si ya hay una línea
+    // sin extras de ESTE producto el +1 se acumula en ella: el tope es el
+    // de ESA línea (la propia no se cuenta dos veces como consumo ajeno).
+    const existente = cart.find(
+      (i) => i.product.id === product.id && i.selectedExtras.length === 0,
+    );
+    const objetivo = limiteDeLinea(
+      existente ?? { product, size: size.label },
+      cart,
+    );
+    const max = objetivo.max;
+    const adicional =
+      max === undefined ? undefined : max - (existente?.quantity ?? 0);
+    if (max !== undefined && (adicional ?? 0) <= 0) {
+      return {
+        agregado: false,
+        mensaje: mensajeMaximoDe(
+          product.name,
+          max,
+          existente?.size ?? size.label,
+          objetivo.elaborado,
+        ),
+      };
+    }
     setCart((prev) => {
-      const existing = prev.find(
-        (i) =>
-          i.product.id === product.id &&
-          i.selectedExtras.length === 0,
-      );
-      if (existing) {
+      if (existente) {
         return prev.map((i) =>
-          i.id === existing.id
-            ? { ...i, quantity: i.quantity + 1 }
+          i.id === existente.id
+            // Si ya está en el máximo, el clic no suma (la cantidad se
+            // ajusta sola); las líneas nuevas siempre entran con 1.
+            ? { ...i, quantity: ajustarCantidad(i.quantity + 1, max) }
             : i,
         );
       }
@@ -8286,6 +8741,7 @@ export default function App() {
         },
       ];
     });
+    return { agregado: true };
   };
 
   // Punto 2.4: agregar desde el detalle acumulaba unidades en líneas separadas
@@ -8293,16 +8749,59 @@ export default function App() {
   // fusionarCarritos ya lo hacían). Se reutiliza `mismaConfig`: si la misma
   // configuración ya está en el carrito, se suman las unidades a esa línea (la
   // primera que entró); si no, se agrega al final.
-  const addDetailed = (item: CartItem) =>
+  /** Bloque 5 — Agregar desde el detalle. El ítem todavía no está en el
+      carrito (id nuevo): todas las líneas cuentan como ajenas, así `max`
+      son las unidades que se pueden AGREGAR ahora. Devuelve si algo se
+      agregó y, si no, el mensaje de máximo (punto 4: el toast jamás dice
+      "agregada" sin agregar nada). */
+  const addDetailed = (
+    item: CartItem,
+  ): { agregado: boolean; mensaje?: string } => {
+    const objetivo = limiteDeLinea(item, cart);
+    const max = objetivo.max;
+    const existente = cart.find((x) => mismaConfig(x, item));
+    const actual = existente?.quantity ?? 0;
+    const disponible =
+      max === undefined
+        ? item.quantity
+        : Math.max(0, Math.min(item.quantity, max));
+    if (disponible <= 0) {
+      return {
+        agregado: false,
+        mensaje: mensajeMaximoDe(
+          item.product.name,
+          max ?? 0,
+          (existente ?? item).size,
+          objetivo.elaborado,
+        ),
+      };
+    }
     setCart((p) => {
       const i = p.findIndex((x) => mismaConfig(x, item));
-      if (i === -1) return [...p, item];
+      if (i === -1) return [...p, { ...item, quantity: disponible }];
       return p.map((x, idx) =>
         idx === i
-          ? { ...x, quantity: x.quantity + item.quantity }
+          // El tope de la línea fusionada es el `max` (que ya descuenta lo
+          // que había en el carrito) más lo que había en ESTA línea.
+          ? {
+              ...x,
+              quantity: ajustarCantidad(
+                x.quantity + disponible,
+                max === undefined ? undefined : max + actual,
+              ),
+            }
           : x,
       );
     });
+    return { agregado: true };
+  };
+
+  /** Bloque 2: "+ Crear producto" desde Nueva Compra / Orden de Compra /
+      Recepción. El producto entra al catálogo del panel por el MISMO setter
+      que usa Gestión de Productos, vía callback: al conectar la API este será
+      el único punto a cambiar (una sola llamada de creación). */
+  const crearProductoDesdeCompras = (p: Producto) =>
+    setProductos((prev) => [p, ...prev]);
 
   const registrarPedido = async (
     metodoPago: string,
@@ -8339,7 +8838,18 @@ export default function App() {
       return;
     }
     setCart((p) =>
-      p.map((i) => (i.id === id ? { ...i, quantity: qty } : i)),
+      p.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              // Bloque 5: máximo el tope de ESTA línea con todo el resto
+              // del carrito (la propia no se cuenta dos veces); si quien
+              // edita se pasa, la cantidad se ajusta sola. El mínimo sigue
+              // siendo 1 y el − en 1 sigue quitando la línea (como siempre).
+              quantity: ajustarCantidad(qty, limiteDeLinea(i, p).max),
+            }
+          : i,
+      ),
     );
   };
 
@@ -8915,6 +9425,7 @@ export default function App() {
                   }}
                   cart={cart}
                   updateQty={updateQty}
+                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
                   categorias={categoriasCatalogo}
                   productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
                 />
@@ -8924,6 +9435,7 @@ export default function App() {
                   product={selectedProduct}
                   navigate={navigate}
                   addDetailed={addDetailed}
+                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
                   onBack={() => {
                     navigate(detalleOrigen, { restaurar: true });
                     // Al volver al catálogo, hace scroll a la tarjeta del producto
@@ -8955,6 +9467,7 @@ export default function App() {
                   cart={cart}
                   navigate={navigate}
                   updateQty={updateQty}
+                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
                   remove={remove}
                   clear={() => setCart([])}
                   onOrder={registrarPedido}
@@ -9105,6 +9618,10 @@ export default function App() {
                   // Punto B7: al anular la OC se devuelve también el stock
                   // de las líneas de producto de sus facturas.
                   setProductos={setProductos}
+                  // Bloque 2: el "+ Crear producto" del OrdenModal necesita
+                  // las categorías del panel y el alta en el catálogo.
+                  categorias={categorias}
+                  onCrearProducto={crearProductoDesdeCompras}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -9136,6 +9653,9 @@ export default function App() {
                   setProveedores={setProveedores}
                   insumos={insumos}
                   productos={productos}
+                  // Bloque 2: "+ Crear producto" con las categorías del panel.
+                  categorias={categorias}
+                  onCrearProducto={crearProductoDesdeCompras}
                   setInsumos={setInsumos}
                   onBack={() => {
                     setOrdenAEditar(null);
@@ -9154,6 +9674,10 @@ export default function App() {
                   // recepción además suma stock y escribe precios de venta.
                   productos={productos}
                   setProductos={setProductos}
+                  // Bloque 2: "+ Crear producto" del desplegable de no
+                  // solicitados (categorías del panel y alta en el catálogo).
+                  categorias={categorias}
+                  onCrearProducto={crearProductoDesdeCompras}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}
@@ -9211,6 +9735,10 @@ export default function App() {
                   productos={productos}
                   setInsumos={setInsumos}
                   setProductos={setProductos}
+                  // Bloque 2: se pasan a CompraForm (el detalle es de sólo
+                  // lectura, pero ambas pantallas quedan iguales).
+                  categorias={categorias}
+                  onCrearProducto={crearProductoDesdeCompras}
                   onNuevaCompra={() => navigate("nueva-compra")}
                 />
               )}
@@ -9228,6 +9756,10 @@ export default function App() {
                   // opcionales: sin ellos la compra se guarda igual).
                   setInsumos={setInsumos}
                   setProductos={setProductos}
+                  // Bloque 2: "+ Crear producto" del desplegable de ítems
+                  // (categorías del panel y alta en el catálogo).
+                  categorias={categorias}
+                  onCrearProducto={crearProductoDesdeCompras}
                   onBack={() => navigate("gestion-compra")}
                 />
               )}

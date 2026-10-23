@@ -27,6 +27,10 @@ interface ActionIconsProps {
   viewTitle?: string;
   editTitle?: string;
   deleteTitle?: string;
+  /** Nombre accesible de la acción de eliminar cuando el módulo la usa para
+   *  otra cosa (p. ej. Productos la convirtió en "Descontinuar"). Por defecto
+   *  sigue siendo "Eliminar". */
+  deleteLabel?: string;
 }
 
 /** Exportadas: las tablas de ítems (Orden de Compra, Recepción y Compras)
@@ -53,6 +57,7 @@ export function ActionIcons({
   viewTitle,
   editTitle,
   deleteTitle,
+  deleteLabel = "Eliminar",
 }: ActionIconsProps) {
   return (
     <div className="flex items-center gap-1.5">
@@ -85,8 +90,8 @@ export function ActionIcons({
           type="button"
           onClick={deleteDisabled ? undefined : onDelete}
           disabled={deleteDisabled}
-          aria-label="Eliminar"
-          title={deleteTitle ?? "Eliminar"}
+          aria-label={deleteLabel}
+          title={deleteTitle ?? deleteLabel}
           className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Trash2 className="w-4 h-4" />
