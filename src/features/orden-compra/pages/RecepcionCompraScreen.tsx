@@ -4,10 +4,9 @@ import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import {
-  aplicarPreciosCompra,
+  aplicarEntradasCompraApi,
   aplicarStockCompra,
   historialCompraDe,
-  textoPreciosActualizado,
   textoStockActualizado,
   unidadesPorLinea,
   type SetCatalogo,
@@ -18,6 +17,7 @@ import {
   nombreBuscable,
   presentacionCompra,
 } from "@/shared/utils/presentacion";
+import { mismoNombre } from "@/shared/utils/nombres";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
@@ -74,7 +74,8 @@ interface Props {
    *  producto" (callback de App; sin él el atajo del desplegable no se
    *  muestra). */
   categorias?: CategoriaProducto[];
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
+  onRecargarCatalogo?: () => Promise<void>;
   gestiones: GestionCompra[];
   setGestiones: React.Dispatch<React.SetStateAction<GestionCompra[]>>;
   proveedores: ProveedorRef[];
@@ -131,6 +132,7 @@ export function RecepcionCompraScreen({
   setProductos,
   categorias,
   onCrearProducto,
+  onRecargarCatalogo,
   gestiones,
   setGestiones,
   proveedores,
@@ -192,7 +194,8 @@ export function RecepcionCompraScreen({
         const pvCatalogo =
           (i.tipoItem ?? "insumo") === "producto"
             ? Number(
-                productos?.find((p) => p.id === i.idInsumo)?.precioUnitario ?? 0
+                (productos?.find((p) => p.id === i.idInsumo)
+                  ?? productos?.find((p) => mismoNombre(p.nombre, i.nombre)))?.precioUnitario ?? 0
               )
             : 0;
         const precioVenta = pvLinea > 0 ? pvLinea : pvCatalogo;
@@ -277,6 +280,7 @@ export function RecepcionCompraScreen({
   // venta del producto se escribe a mano y se valida contra el costo con IVA.
   const [exShowSug, setExShowSug] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   // ������ Edición en línea de insumos adicionales ������������������������������������������������������������������������������������������������
   const [editExtraId, setEditExtraId] = useState<string | null>(null);
@@ -810,23 +814,27 @@ export function RecepcionCompraScreen({
     setShowGuardarConf(true);
   };
 
-  const confirmarGuardar = () => {
-    setShowGuardarConf(false);
+  const confirmarGuardar = async () => {
+    if (guardando) return;
+    setGuardando(true);
 
     // Guardar NUNCA puede fallar en silencio: cualquier excepción (props mal
     // pasadas, error del backend al persistir, etc.) se informa en pantalla y
     // la recepción queda como estaba para poder reintentar.
     try {
-      guardarConfirmado();
+      await guardarConfirmado();
+      setShowGuardarConf(false);
     } catch (e) {
       console.error("No se pudo guardar la recepción:", e);
       toast.error(
         `No se pudo guardar la recepción: ${e instanceof Error ? e.message : String(e)}`
       );
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const guardarConfirmado = () => {
+  const guardarConfirmado = async () => {
     const filasRecibidas = items.filter((item) => item.cantidadRecibida > 0);
 
     // Un insumo es "no solicitado" si su id no está en el detalle de la OC:
@@ -909,24 +917,22 @@ export function RecepcionCompraScreen({
     // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido. Mismo
     // camino que la Nueva compra, para que las dos formas de facturar entren
     // igual al inventario (punto B5: también el catálogo de productos).
-    const resumen = aplicarStockCompra(itemsFactura, 1, {
+    const itemsInsumo = itemsFactura.filter((item) =>
+      item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
+    );
+    const resumen = aplicarStockCompra(itemsInsumo, 1, {
       insumos,
       setInsumos,
-      productos,
-      setProductos,
     });
-    if (resumen && resumen.nombres.length > 0) {
+    const resultadoApi = productos && setProductos
+      ? await aplicarEntradasCompraApi(itemsFactura, productos, setProductos, ivaIncluido)
+      : { items: itemsFactura, errores: itemsFactura.flatMap((item, indice) => item.tipoItem === "producto" ? [{ nombre: item.nombre, mensaje: "No está disponible la actualización de Productos API.", indice }] : []) };
+    nuevaCompra.items = resultadoApi.items as OrdenItem[];
+    resultadoApi.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
+    if (nuevaCompra.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
+    if ((resumen && resumen.nombres.length > 0) || nuevaCompra.items.some((item) => item.stockApiAplicado)) {
       nuevaCompra.stockAplicado = true;
     }
-
-    // Punto B5 + puntos 1/3: la recepción también define el precio de venta y
-    // el costo con IVA de las líneas de producto (mismas reglas que la Nueva
-    // compra: precio > 0 y > costo con IVA). La recepción se guarda SIEMPRE
-    // como "precios sin IVA", así que el costo con IVA = monto × (1 + iva/100).
-    const resumenPrecios = aplicarPreciosCompra(itemsFactura, {
-      productos,
-      setProductos,
-    }, ivaIncluido);
 
     setGestiones((prev) => [nuevaCompra, ...prev]);
 
@@ -1000,9 +1006,6 @@ export function RecepcionCompraScreen({
     );
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
-    }
-    if (resumenPrecios && resumenPrecios.nombres.length > 0) {
-      toast.info(textoPreciosActualizado(resumenPrecios));
     }
 
     onBack();
@@ -2030,14 +2033,15 @@ export function RecepcionCompraScreen({
                     nombreInicial={exNombre.trim()}
                     productos={productos ?? []}
                     categorias={categorias ?? []}
-                    onGuardar={(p) => {
-                      onCrearProducto?.(p);
+                    onGuardar={async (p) => {
+                      const creado = await onCrearProducto?.(p);
+                      if (!creado) throw new Error("No se pudo crear el producto en el servidor.");
                       // Queda seleccionado en la fila como si viniera del
                       // desplegable, para seguir con cantidad y precios.
-                      setExNombre(p.nombre);
-                      setExId(p.id);
-                      setExUnidad(presentacionCompra(p));
-                      const factor = empaqueDe(p);
+                      setExNombre(creado.nombre);
+                      setExId(creado.id);
+                      setExUnidad(presentacionCompra(creado));
+                      const factor = empaqueDe(creado);
                       setExEmpaque(factor > 1 ? factor : undefined);
                       // Sin historial de compra: monto e IVA en 0 — el usuario
                       // los captura con la factura.
@@ -2046,7 +2050,8 @@ export function RecepcionCompraScreen({
                       setExPrecioVenta(0);
                       setExShowSug(false);
                       setShowNuevoProducto(false);
-                      toast.success(`Producto "${p.nombre}" creado`);
+                      toast.success(`Producto "${creado.nombre}" creado`);
+                      return creado;
                     }}
                     onClose={() => setShowNuevoProducto(false)}
                   />
@@ -2059,13 +2064,14 @@ export function RecepcionCompraScreen({
                     title="¿Está seguro de los cambios?"
                     detail="Una vez guardado no se podrá modificar."
                     confirmLabel="Confirmar"
+                    loading={guardando}
                     icon={
                       <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                       </div>
                     }
-                    onConfirm={confirmarGuardar}
-                    onCancel={() => setShowGuardarConf(false)}
+                    onConfirm={() => void confirmarGuardar()}
+                    onCancel={() => !guardando && setShowGuardarConf(false)}
                   />
                 )}
               </AnimatePresence>

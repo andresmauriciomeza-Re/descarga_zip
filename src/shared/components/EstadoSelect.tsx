@@ -17,6 +17,8 @@ export interface EstadoOption<T extends string> {
   value: T;
   label: string;
   color: string; // clases Tailwind para el badge
+  disabled?: boolean;
+  help?: string;
 }
 
 interface EstadoSelectProps<T extends string> {
@@ -69,6 +71,8 @@ export function EstadoSelect<T extends string>({
                 <Select.Item
                   key={opt.value}
                   value={opt.value}
+                  disabled={opt.disabled}
+                  title={opt.help}
                   className={`relative flex w-full select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 ${
                     esSeleccionada ? "bg-primary/10 text-primary" : "text-foreground"
                   }`}

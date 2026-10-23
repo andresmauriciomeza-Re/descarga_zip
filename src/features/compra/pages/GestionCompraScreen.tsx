@@ -28,16 +28,18 @@ import {
   ConfirmModal,
   FORM_MAXW,
   type GestionCompra,
+  type OrdenItem,
   type OrdenCompra,
   type EstadoGestion,
   type EstadoOrden,
   type ProveedorRef,
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 import {
-  aplicarPreciosCompra,
   aplicarStockCompra,
   historialCompraDe,
-  textoPreciosActualizado,
+  aplicarEntradasCompraApi,
+  revertirEntradasCompraApi,
+  esLineaProducto,
   textoStockActualizado,
   unidadesPorLinea,
   type ResumenStock,
@@ -179,6 +181,10 @@ type ItemFactura = {
    *  se compró "Paca x12"). Opcional: las líneas viejas y las de unidad
    *  suelta no lo traen y se leen como 1. */
   unidadesPorEmpaque?: number;
+  stockApiAplicado?: boolean;
+  stockApiRevertido?: boolean;
+  stockApiPendiente?: boolean;
+  stockApiPendienteReversa?: boolean;
 };
 
 export interface NuevaCompraData {
@@ -698,10 +704,10 @@ function CompraForm({
   /** Órdenes de compra: necesarias para separar solicitados / no solicitados. */
   ordenes?: OrdenCompra[];
   onClose: () => void;
-  onGuardar: (data: NuevaCompraData) => void;
+  onGuardar: (data: NuevaCompraData) => void | Promise<void>;
   /** Bloque 2: alta de productos desde "+ Crear producto" (callback de App:
    *  agrega el producto al catálogo del panel; sin él el atajo no se muestra). */
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
 }) {
   const isView = mode === "view";
   const isPage = fullPage;
@@ -797,6 +803,7 @@ function CompraForm({
   const [provSugAbierto, setProvSugAbierto] = useState(false);
   const [mostrarNuevoProveedor, setMostrarNuevoProveedor] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
+  const [guardandoCompra, setGuardandoCompra] = useState(false);
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const provRef = useRef<HTMLDivElement>(null);
 
@@ -1289,9 +1296,11 @@ function CompraForm({
     setShowGuardarConf(true);
   };
 
-  const confirmarGuardar = () => {
-    setShowGuardarConf(false);
-    onGuardar({
+  const confirmarGuardar = async () => {
+    if (guardandoCompra) return;
+    setGuardandoCompra(true);
+    try {
+      await onGuardar({
       proveedor: provQuery.trim(),
       proveedorId: provId,
       numeroFactura: numeroFactura.trim(),
@@ -1310,7 +1319,13 @@ function CompraForm({
       subtotalSinIva,
       totalIva,
       totalPagado,
-    });
+      });
+      setShowGuardarConf(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo guardar la compra.");
+    } finally {
+      setGuardandoCompra(false);
+    }
   };
 
   /** Subtítulo de la cabecera (solo cuando aporta algo). */
@@ -2094,13 +2109,15 @@ function CompraForm({
             nombreInicial={itemNombre.trim()}
             productos={productos ?? []}
             categorias={categorias ?? []}
-            onGuardar={(p) => {
-              onCrearProducto?.(p);
+            onGuardar={async (p) => {
+              const creado = await onCrearProducto?.(p);
+              if (!creado) throw new Error("No se pudo crear el producto en el servidor.");
               // Queda seleccionado en la fila para seguir con cantidad,
               // monto e IVA (mismo camino que elegirlo del desplegable).
-              seleccionarProducto(p);
+              seleccionarProducto(creado);
               setShowNuevoProducto(false);
-              toast.success(`Producto "${p.nombre}" creado`);
+              toast.success(`Producto "${creado.nombre}" creado`);
+              return creado;
             }}
             onClose={() => setShowNuevoProducto(false)}
           />
@@ -2113,6 +2130,7 @@ function CompraForm({
             title="¿Está seguro de los cambios?"
             detail="Una vez guardado no se podrá modificar."
             confirmLabel="Confirmar"
+            loading={guardandoCompra}
             icon={
               <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -2140,12 +2158,13 @@ interface NuevaCompraPageProps {
   /** Bloque 2: categorías y alta de productos desde "+ Crear producto" (el
    *  callback viene de App y agrega al catálogo del panel). */
   categorias?: CategoriaProducto[];
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
   /** Control de inventario al guardar la compra. Opcionales: sin ellos la
    *  compra se guarda igual y simplemente no se suma el stock (ver
    *  `handleGuardar`). */
   setInsumos?: SetCatalogo<Insumo>;
   setProductos?: SetCatalogo<Producto>;
+  onRecargarCatalogo?: () => Promise<void>;
   onBack: () => void;
 }
 
@@ -2160,9 +2179,10 @@ export function NuevaCompraPage({
   onCrearProducto,
   setInsumos,
   setProductos,
+  onRecargarCatalogo,
   onBack,
 }: NuevaCompraPageProps) {
-  const handleGuardar = (data: NuevaCompraData) => {
+  const handleGuardar = async (data: NuevaCompraData) => {
     const nuevoId = String(
       Math.max(0, ...gestiones.map((g) => parseInt(g.id, 10) || 0)) + 1
     ).padStart(3, "0");
@@ -2185,27 +2205,24 @@ export function NuevaCompraPage({
       totalPagado: data.totalPagado,
     };
 
-    // Compra guardada en "Recibido" ⇒ suma el stock de lo comprado. Si la
-    // compra naciera anulada no se toca el inventario. Los updates son
-    // funcionales (dentro de `aplicarStockCompra`) para no pisar estados
-    // concurrentes del panel.
+    // Los insumos siguen usando inventario local; las bebidas se aplican en
+    // API por línea y conservan marca individual para reintentar sin duplicar.
     const recibeStock = data.estado === "Recibido";
+    const itemsInsumo = data.items.filter((item) =>
+      item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
+    );
     const resumen = recibeStock
-      ? aplicarStockCompra(data.items, 1, {
+      ? aplicarStockCompra(itemsInsumo, 1, {
           insumos,
-          productos,
           setInsumos,
-          setProductos,
         })
       : null;
-
-    // Punto B4 + puntos 1/3: la factura es donde se define el precio de venta
-    // y el costo con IVA de las bebidas ("Producto terminado"). Mismo caso de
-    // uso que el stock: sólo con la compra en "Recibido" y sólo si hay setter
-    // con el que escribir; el modo de IVA de la factura decide el costo.
-    const resumenPrecios = recibeStock
-      ? aplicarPreciosCompra(data.items, { productos, setProductos }, data.ivaIncluido)
-      : null;
+    const resultadoApi = recibeStock && productos && setProductos
+      ? await aplicarEntradasCompraApi(data.items, productos, setProductos, data.ivaIncluido)
+      : { items: data.items, errores: data.items.flatMap((item, indice) => item.tipoItem === "producto" ? [{ nombre: item.nombre, mensaje: "No está disponible la actualización de Productos API.", indice }] : []) };
+    nueva.items = resultadoApi.items as OrdenItem[];
+    resultadoApi.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
+    if (nueva.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
 
     // `stockAplicado` sólo se marca si de verdad se sumó algo: así una compra
     // creada sin setters (contexto sin control de inventario) no queda
@@ -2217,7 +2234,7 @@ export function NuevaCompraPage({
     // `CompraForm` sólo se usa en "create" (crear) y en "view" (detalle de
     // solo lectura), y `editarItem` edita una fila ANTES de guardar, cuando
     // todavía no se tocó el inventario.
-    if (resumen && resumen.nombres.length > 0) {
+    if ((resumen && resumen.nombres.length > 0) || nueva.items.some((item) => item.stockApiAplicado)) {
       nueva.stockAplicado = true;
     }
 
@@ -2226,9 +2243,6 @@ export function NuevaCompraPage({
     toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
     if (resumen && resumen.nombres.length > 0) {
       toast.info(textoStockActualizado(resumen));
-    }
-    if (resumenPrecios && resumenPrecios.nombres.length > 0) {
-      toast.info(textoPreciosActualizado(resumenPrecios));
     }
     onBack();
   };
@@ -2266,13 +2280,14 @@ interface Props {
    *  modal de detalle es de sólo lectura pero se mantienen iguales las
    *  dos pantallas que renderizan CompraForm). */
   categorias?: CategoriaProducto[];
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   /** Control de inventario al anular. Opcionales: sin ellos la anulación
    *  sólo cambia el estado y NO se revierte stock (no se rompe nada). */
   setInsumos?: SetCatalogo<Insumo>;
   setProductos?: SetCatalogo<Producto>;
+  onRecargarCatalogo?: () => Promise<void>;
   onNuevaCompra: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
@@ -2284,6 +2299,7 @@ export function GestionCompraScreen({
   gestiones, setGestiones, ordenes, setOrdenes, insumos, productos, proveedores, setProveedores,
   categorias, onCrearProducto,
   setInsumos, setProductos,
+  onRecargarCatalogo,
   onNuevaCompra,
   canCreate = true,
   canExportExcel = true,
@@ -2354,7 +2370,7 @@ export function GestionCompraScreen({
     setEstadoConfirm({ id, from: actual, next });
   };
 
-  const handleCambiarEstado = (id: string, next: EstadoGestion, motivo?: string) => {
+  const handleCambiarEstado = async (id: string, next: EstadoGestion, motivo?: string) => {
     const compra = gestiones.find((g) => g.id === id);
 
     // ANULACIÓN: hay que devolver al inventario lo que esta compra sumó, para
@@ -2373,13 +2389,23 @@ export function GestionCompraScreen({
     // sin control de inventario) devuelve `null` y no se marca `stockRevertido`,
     // de modo que un intento posterior con setters sí pueda revertir.
     let revertido: ResumenStock | null = null;
+    let itemsActualizados = compra?.items ?? [];
+    let erroresReversa: { nombre: string; mensaje: string }[] = [];
     if (correspondeRevertir && compra) {
-      revertido = aplicarStockCompra(compra.items ?? [], -1, {
+      const itemsInsumo = (compra.items ?? []).filter((item) =>
+        item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
+      );
+      revertido = aplicarStockCompra(itemsInsumo, -1, {
         insumos,
-        productos,
         setInsumos,
-        setProductos,
       });
+      if (productos && setProductos) {
+        const resultadoApi = await revertirEntradasCompraApi(compra.items ?? [], productos, setProductos);
+        itemsActualizados = resultadoApi.items as OrdenItem[];
+        erroresReversa = resultadoApi.errores;
+        erroresReversa.forEach((error) => toast.error(`No se revirtió «${error.nombre}»: ${error.mensaje}`));
+        if (resultadoApi.items.some((item) => item.stockApiRevertido)) await onRecargarCatalogo?.();
+      }
     }
 
     // Solo se actualiza el estado de la Compra puntual (por su ID).
@@ -2388,11 +2414,12 @@ export function GestionCompraScreen({
     setGestiones((prev) => prev.map((x) => (x.id === id ? {
       ...x,
       estado: next,
+      items: x.id === id ? itemsActualizados : x.items,
       motivoAnulacion: next === "Anulado" ? motivo : undefined,
       fechaAnulacion: next === "Anulado" ? new Date().toISOString() : undefined,
       // Guard anti doble-reversión: queda en true sólo si de verdad se restó
       // (o si ya no quedaba nada que restar).
-      stockRevertido: correspondeRevertir && revertido ? true : x.stockRevertido,
+      stockRevertido: correspondeRevertir && revertido && erroresReversa.length === 0 ? true : x.stockRevertido,
     } : x)));
 
     setEstadoConfirm(null);
@@ -2423,6 +2450,35 @@ export function GestionCompraScreen({
     }
 
     toast.success(`Estado cambiado a: ${next}`);
+  };
+
+  const reintentarReversaCompra = async (compra: GestionCompra) => {
+    if (!productos || !setProductos) return;
+    const resultado = await revertirEntradasCompraApi(compra.items ?? [], productos, setProductos);
+    const completo = resultado.errores.length === 0;
+    setGestiones((prev) => prev.map((g) => g.id === compra.id
+      ? { ...g, items: resultado.items as OrdenItem[], stockRevertido: completo || g.stockRevertido }
+      : g));
+    resultado.errores.forEach((error) => toast.error(`No se revirtió «${error.nombre}»: ${error.mensaje}`));
+    if (resultado.items.some((item) => item.stockApiRevertido)) await onRecargarCatalogo?.();
+    if (completo) toast.success(`Stock de productos de la compra ${compra.id} revertido`);
+  };
+
+  const reintentarEntradasCompra = async (compra: GestionCompra) => {
+    if (compra.estado !== "Recibido" || !productos || !setProductos) return;
+    const resultado = await aplicarEntradasCompraApi(
+      compra.items ?? [],
+      productos,
+      setProductos,
+      compra.ivaIncluido ?? true,
+      true,
+    );
+    setGestiones((prev) => prev.map((g) => g.id === compra.id
+      ? { ...g, items: resultado.items as OrdenItem[], stockAplicado: resultado.items.some((item) => item.stockApiAplicado) || g.stockAplicado }
+      : g));
+    resultado.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
+    if (resultado.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
+    if (resultado.errores.length === 0) toast.success(`Stock de productos de la compra ${compra.id} actualizado`);
   };
 
   const handleDownload = async () => {
@@ -2548,6 +2604,8 @@ export function GestionCompraScreen({
                 )
                 : paged.map(g => {
                   const orden = getOrden(g.ordenId);
+                  const puedeReintentarEntrada = g.estado === "Recibido" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiPendiente);
+                  const puedeReintentarReversa = g.estado === "Anulado" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiAplicado && !item.stockApiRevertido && item.stockApiPendienteReversa);
                   // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
                   const prov = g.proveedorId
                     ? proveedores.find(p => p.id === g.proveedorId)
@@ -2597,6 +2655,15 @@ export function GestionCompraScreen({
                         />
                       </td>
                       <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
+                        {(puedeReintentarEntrada || puedeReintentarReversa) && (
+                          <button
+                            onClick={() => void (puedeReintentarReversa ? reintentarReversaCompra(g) : reintentarEntradasCompra(g))}
+                            title="Reintentar actualización de stock"
+                            className="mr-1 rounded-lg border border-amber-300 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-50"
+                          >
+                            Reintentar stock
+                          </button>
+                        )}
                         <button
                           onClick={() => setDetail(g)}
                           title="Ver detalle"
@@ -2625,6 +2692,8 @@ export function GestionCompraScreen({
               )
               : paged.map(g => {
                 const orden = getOrden(g.ordenId);
+                const puedeReintentarEntrada = g.estado === "Recibido" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiPendiente);
+                const puedeReintentarReversa = g.estado === "Anulado" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiAplicado && !item.stockApiRevertido && item.stockApiPendienteReversa);
                 const prov = g.proveedorId
                   ? proveedores.find(p => p.id === g.proveedorId)
                   : proveedores.find(p =>
@@ -2677,7 +2746,15 @@ export function GestionCompraScreen({
                     </div>
 
                     {/* Ver detalle */}
-                    <div className="mt-2.5 flex items-center justify-end">
+                    <div className="mt-2.5 flex items-center justify-end gap-2">
+                      {(puedeReintentarEntrada || puedeReintentarReversa) && (
+                        <button
+                          onClick={() => void (puedeReintentarReversa ? reintentarReversaCompra(g) : reintentarEntradasCompra(g))}
+                          className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700"
+                        >
+                          Reintentar stock
+                        </button>
+                      )}
                       <button
                         onClick={() => setDetail(g)}
                         title="Ver detalle"

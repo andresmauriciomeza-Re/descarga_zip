@@ -30,7 +30,7 @@ import {
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
+import { aplicarStockCompra, revertirEntradasCompraApi, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
 import {
   contenidoDe,
   empaqueDe,
@@ -81,6 +81,11 @@ export interface OrdenItem {
    *  la bebida se pidió en "Paca x12"). Opcional: las líneas viejas y las de
    *  unidad suelta no lo traen y se leen como 1. */
   unidadesPorEmpaque?: number;
+  /** Estado línea-a-línea del puente temporal con Productos API. */
+  stockApiAplicado?: boolean;
+  stockApiRevertido?: boolean;
+  stockApiPendiente?: boolean;
+  stockApiPendienteReversa?: boolean;
 }
 
 export interface ItemRecibido {
@@ -483,7 +488,7 @@ const iCls = "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-s
 // ��������� CONFIRM MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 export function ConfirmModal({
-  title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel, showMotivo = false, motivo, onMotivoChange,
+  title, body, detail, confirmLabel = "Confirmar", danger = false, icon, onConfirm, onCancel, showMotivo = false, motivo, onMotivoChange, loading = false,
 }: {
   // `body` es opcional: hay confirmaciones que solo llevan `detail` como
   // advertencia (p. ej. "¿Está seguro de los cambios?"). Antes era obligatorio y
@@ -491,6 +496,7 @@ export function ConfirmModal({
   title: string; body?: string; detail?: string; confirmLabel?: string;
   danger?: boolean; icon?: React.ReactNode; onConfirm: () => void; onCancel: () => void;
   showMotivo?: boolean; motivo?: string; onMotivoChange?: (value: string) => void;
+  loading?: boolean;
 }) {
   // Punto 6: sin motivo no hay anulación. Mientras el campo esté vacío el botón
   // de confirmación queda bloqueado y el aviso se mantiene visible (no aparece
@@ -534,21 +540,22 @@ export function ConfirmModal({
         <div className="flex gap-3">
           <button
             onClick={onCancel}
+            disabled={loading}
             className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            disabled={motivoVacio}
-            aria-disabled={motivoVacio}
+            disabled={motivoVacio || loading}
+            aria-disabled={motivoVacio || loading}
             className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${
               motivoVacio
                 ? "bg-red-300 cursor-not-allowed"
                 : "cursor-pointer active:scale-95 " + (danger ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-red-700")
             }`}
           >
-            {confirmLabel}
+            {loading ? "Guardando…" : confirmLabel}
           </button>
         </div>
       </motion.div>
@@ -724,7 +731,7 @@ export function OrdenModal({
   /** Crea el producto en el catálogo (tipo "Producto terminado") desde
    *  "+ Crear producto" (bloque 2): recibe el Producto COMPLETO que arma
    *  CrearProductoModal (precio 0, sin imagen, "No disponible"). */
-  onCrearProducto?: (prod: Producto) => void;
+  onCrearProducto?: (prod: Producto) => Promise<Producto>;
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -954,14 +961,16 @@ export function OrdenModal({
     toast.success(`Insumo "${ins.nombre}" creado`);
   };
 
-  const handleNuevoProducto = (prod: Producto) => {
-    onCrearProducto?.(prod);
+  const handleNuevoProducto = async (prod: Producto) => {
+    const creado = await onCrearProducto?.(prod);
+    if (!creado) throw new Error("No se pudo crear el producto en el servidor.");
     // Bloque 2: se selecciona como si viniera del desplegable — presentación,
     // empaque y monto salen del propio producto y queda listo para la fila.
-    seleccionarProducto(prod);
+    seleccionarProducto(creado);
     setAShowSug(false);
     setShowNuevoProducto(false);
-    toast.success(`Producto "${prod.nombre}" creado`);
+    toast.success(`Producto "${creado.nombre}" creado`);
+    return creado;
   };
 
   const addItem = () => {
@@ -1760,7 +1769,7 @@ interface NuevaOrdenCompraPageProps {
   /** Bloque 2: categorías y alta de productos desde "+ Crear producto" (el
    *  callback viene de App y agrega al catálogo del panel). */
   categorias?: CategoriaProducto[];
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
   /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
@@ -2326,16 +2335,17 @@ interface Props {
   /** Punto B7: sin él la anulación se igual no revierte el stock de
    *  productos de sus facturas (ver `handleAnularOrden`). */
   setProductos?: SetCatalogo<Producto>;
+  onRecargarCatalogo?: () => Promise<void>;
   /** Bloque 2: categorías y alta de productos desde "+ Crear producto" del
    *  OrdenModal que abre este listado. */
   categorias?: CategoriaProducto[];
-  onCrearProducto?: (p: Producto) => void;
+  onCrearProducto?: (p: Producto) => Promise<Producto>;
 }
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-  insumos, setInsumos, productos, setProductos, categorias, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+   insumos, setInsumos, productos, setProductos, onRecargarCatalogo, categorias, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
@@ -2345,6 +2355,7 @@ export function OrdenCompraScreen({
   const [recepcionOrden, setRecepcionOrden] = useState<OrdenCompra | null>(null);
   const [sendConfirm, setSendConfirm] = useState<OrdenCompra | null>(null);
   const [anularConfirm, setAnularConfirm] = useState<OrdenCompra | null>(null);
+  const [anulandoOrden, setAnulandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
@@ -2441,34 +2452,52 @@ export function OrdenCompraScreen({
     toast.success(`OC ${o.id} enviada al proveedor`);
   };
 
-  const handleAnularOrden = (o: OrdenCompra) => {
-    setOrdenes(p => p.map(x => x.id === o.id ? conHistorial(x, "Anulado") : x));
-
+  const handleAnularOrden = async (o: OrdenCompra) => {
+    if (anulandoOrden) return;
+    setAnulandoOrden(true);
     // Anular la orden anula también sus facturas: la compra queda cerrada y no
     // vuelve al estado "Recibido". Al pasarlas a "Anulado" se devuelve al
     // inventario lo que cada una llegó a sumar (mismo camino que anular la
     // compra desde Gestión de compra).
-    const comprasTras = gestiones.map((g) => {
-      if (g.ordenId !== o.id) return g;
+    const comprasTras: GestionCompra[] = [];
+    const erroresApi: string[] = [];
+    for (const g of gestiones) {
+      if (g.ordenId !== o.id) {
+        comprasTras.push(g);
+        continue;
+      }
       const revertir = g.estado !== "Anulado" && !!g.stockAplicado && !g.stockRevertido;
+      let itemsActualizados = g.items ?? [];
+      let errorApi = false;
       if (revertir) {
         // Punto B7: también se devuelve el stock de las líneas de PRODUCTO
         // (los precios de venta no se revierten: el precio ya publicado se
         // conserva; aquí sólo regresa lo que la factura sumó al inventario).
-        aplicarStockCompra(g.items ?? [], -1, {
+        const itemsInsumo = (g.items ?? []).filter((item) =>
+          item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
+        );
+        aplicarStockCompra(itemsInsumo, -1, {
           insumos,
           setInsumos,
-          productos,
-          setProductos,
         });
+        if (productos && setProductos) {
+          const resultado = await revertirEntradasCompraApi(g.items ?? [], productos, setProductos);
+          itemsActualizados = resultado.items as OrdenItem[];
+          errorApi = resultado.errores.length > 0;
+          resultado.errores.forEach((error) => {
+            erroresApi.push(`No se revirtió «${error.nombre}»: ${error.mensaje}`);
+          });
+        }
       }
-      return {
+      comprasTras.push({
         ...g,
         estado: "Anulado" as EstadoGestion,
+        items: itemsActualizados,
         // Guard anti doble-reversión, igual que en Gestión de compra.
-        stockRevertido: revertir ? true : g.stockRevertido,
-      };
-    });
+        stockRevertido: revertir && !errorApi ? true : g.stockRevertido,
+      });
+    }
+    setOrdenes((prev) => prev.map((x) => x.id === o.id ? conHistorial(x, "Anulado") : x));
 
     const anuladas = comprasTras.filter((g) => g.ordenId === o.id);
 
@@ -2476,13 +2505,19 @@ export function OrdenCompraScreen({
       setGestiones(() => comprasTras);
     }
 
+    if (comprasTras.some((g) => g.ordenId === o.id && (g.items ?? []).some((item) => item.stockApiRevertido))) {
+      await onRecargarCatalogo?.();
+    }
+
     setAnularConfirm(null);
     setRecepcionOrden(null);
+    erroresApi.forEach((mensaje) => toast.error(mensaje));
     toast.success(
       anuladas.length > 0
         ? `OC ${o.id} y sus compras anuladas`
         : `OC ${o.id} anulada`
     );
+    setAnulandoOrden(false);
   };
 
   const handleCambiarEstado = (id: string, next: EstadoOrden) => {
@@ -3037,14 +3072,15 @@ export function OrdenCompraScreen({
                 : "Esta acción no puede revertirse."
             }
             confirmLabel="Anular"
+            loading={anulandoOrden}
             danger={true}
             icon={
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <Ban className="w-5 h-5 text-red-600" />
               </div>
             }
-            onConfirm={() => handleAnularOrden(anularConfirm)}
-            onCancel={() => setAnularConfirm(null)}
+            onConfirm={() => void handleAnularOrden(anularConfirm)}
+            onCancel={() => !anulandoOrden && setAnularConfirm(null)}
           />
         )}
         {estadoConfirm && (

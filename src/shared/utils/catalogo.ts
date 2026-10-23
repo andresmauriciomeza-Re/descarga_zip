@@ -1,6 +1,7 @@
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
+import { mapearProductoApi, type ProductoApi } from "@/features/productos/services/productosApi";
 
 import pizzaCarnes from "@/assets/img/pizza_carnes.png";
 import pizzaCañon from "@/assets/img/pizza_cañon.png";
@@ -58,7 +59,7 @@ export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes
   (p.idCategoria === "CAT-001" || categoria?.toLowerCase().includes("pizza"))
     ? [
         { label: "Mediana", price: p.precioUnitario },
-        { label: "Grande", price: p.precioUnitario + RECARGO_TAMANO_GRANDE },
+        { label: "Grande", price: p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE },
       ]
     : (p.idCategoria === "CAT-002" || categoria?.toLowerCase().includes("lasaña") || categoria?.toLowerCase().includes("lasana"))
       ? [{ label: "Normal", price: p.precioUnitario }]
@@ -152,52 +153,34 @@ export const estadoDeProducto = (p: Product): EstadoProducto =>
 export const productoDisponible = (p: Product): boolean =>
   estadoDeProducto(p) === "Disponible";
 
-export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => ({
-  id: Number(p.id.replace(/^PROD-/, "")) || 0,
-  name: p.nombre,
-  description: DESCRIPCIONES[p.nombre] ?? "",
-  price: p.precioUnitario,
-  image: p.imagen || IMAGENES_PIZZA[p.nombre] || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
-  idCategoria: p.idCategoria,
-  category: nombreCategoria(p.idCategoria, categorias),
-  sizes: sizesDeProducto(p, nombreCategoria(p.idCategoria, categorias)),
-  extras: [],
-  status: p.estado === "Disponible" ? "disponible" : "no disponible",
-  // El estado REAL que ve el cliente en Gestión de Productos: es el que usa el
-  // menú público (etiqueta, tarjeta atenuada, carrito y caja).
-  estado: p.estado,
-  rating: 4.5,
-  sales: 0,
-});
+export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => {
+  const categoria = nombreCategoria(p.idCategoria, categorias);
+  const categoriaVisible = categoria === "Otros" && p.categoriaNombre ? p.categoriaNombre : categoria;
+  return {
+    id: Number(p.id.replace(/^PROD-/, "")) || 0,
+    name: p.nombre,
+    description: DESCRIPCIONES[p.nombre] ?? "",
+    price: p.precioUnitario,
+    image: p.imagen || IMAGENES_PIZZA[p.nombre] || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+    idCategoria: p.idCategoria,
+    category: categoriaVisible,
+    sizes: sizesDeProducto(p, categoriaVisible),
+    extras: [],
+    status: p.estado === "Disponible" ? "disponible" : "no disponible",
+    estado: p.estado,
+    rating: 4.5,
+    sales: 0,
+  };
+};
 
-export const productoApiAProducto = (p: {
-  id_producto: number;
-  id_categoria: number;
-  nombre: string;
-  tipo: string;
-  precio_venta: number | string;
-  costo_unitario?: number | string;
-  unidad_venta: string;
-  stock?: number;
-  imagen: string | null;
-  estado: string;
-}): Producto => ({
-  id: String(p.id_producto),
-  imagen: resolverImagenCatalogo(p.imagen),
-  nombre: p.nombre,
-  idCategoria: String(p.id_categoria),
-  tipo: p.tipo === "Elaborado" ? "Producto insumo" : "Producto terminado",
-  costoUnitario: Number(p.costo_unitario ?? 0),
-  precioUnitario: Number(p.precio_venta),
-  unidadVenta: p.unidad_venta,
-  stockDisponible: p.stock ?? 0,
-  // Bloque 5: el stock REAL que trajo el backend (GET /productos), aparte de
-  // `stockDisponible` porque es OPCIONAL: si la API no envía `stock` queda
-  // `undefined` y `limiteStockDe` lo traduce en "sin límite". Los datos
-  // viejos de localStorage cargan igual (el campo no existía antes).
-  stockApi: p.stock,
-  estado: p.estado as Producto["estado"],
-});
+export const productoApiAProducto = (p: ProductoApi): Producto => {
+  const producto = mapearProductoApi(p);
+  return {
+    ...producto,
+    imagen: resolverImagenCatalogo(p.imagen),
+    stockApi: p.stock == null ? undefined : Number(p.stock),
+  };
+};
 
 /** Bloque 5 — Tope de unidades que el menú/carrito permite de un producto
     TERMINADO (bebida): el stock que trajo el backend (`stockApi`).
