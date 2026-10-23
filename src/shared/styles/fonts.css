@@ -1,1 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Poppins:wght@400;500&display=swap');
+/* Las fuentes de Google ahora se cargan desde index.html con <link> +
+   preconnect (más rápido que un @import de CSS, que es render-blocking).
+   Mantener los mismos pesos: Montserrat 400/700 (títulos) y Poppins 400/500 (texto). */

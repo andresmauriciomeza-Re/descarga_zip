@@ -906,7 +906,6 @@ export function OrdenModal({
     // Punto 2: el precio del catálogo viene en `costoUnitario` (number), que es
     // el mismo que muestra la lista desplegable. `precioUnitario` es null en las
     // semillas, por eso el Monto unitario quedaba en 0.
-    console.log("[Punto 2] onSelect insumo:", ins);
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setAPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
@@ -2713,8 +2712,6 @@ export function OrdenCompraScreen({
           {canCreate && (
             <button
               onClick={(e) => {
-                console.log("[OrdenCompraScreen] + Crear Orden clicked");
-                console.log("[OrdenCompraScreen] onNuevaOrden:", onNuevaOrden);
                 onNuevaOrden();
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
