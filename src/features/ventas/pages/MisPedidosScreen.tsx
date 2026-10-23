@@ -51,7 +51,7 @@ const ESTADO: Record<
     mensaje: "Pedido entregado. ¡Gracias por elegir La Sirena!",
   },
   Devolucion: {
-    label: "Devuelta",
+    label: "Devolución",
     color: "bg-orange-100 text-orange-800",
     mensaje: "Este pedido tiene una devolución registrada.",
   },
@@ -78,6 +78,20 @@ const estadoCliente = (p: Venta): (typeof ESTADO)[Venta["estado"]] =>
         mensaje: "Este pedido fue anulado por la pizzería.",
       }
     : ESTADO[p.estado];
+
+/** Cómo se resolvió una devolución ya cerrada, en una línea para el cliente:
+    "Cambio de producto · nuevo pedido #11", "Devolución de dinero", … El pedido
+    nuevo del canje lo crea el backend, así que se muestra su número para poder
+    seguirlo desde este mismo listado. */
+const resolucionDevolucion = (p: Venta): string => {
+  const tipo =
+    p.devolucionTipo === "producto"
+      ? "Cambio de producto"
+      : p.devolucionTipo === "dinero"
+        ? "Devolución de dinero"
+        : "Cambio de producto y devolución de dinero";
+  return p.idVentaReemplazo ? `${tipo} · nuevo pedido #${p.idVentaReemplazo}` : tipo;
+};
 
 function Dato({
   Icon,
@@ -381,6 +395,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       {est.label}
                     </span>
                   </div>
+                  {/* Devolución resuelta: debajo del badge, cómo se resolvió. */}
+                  {p.estado === "Devolucion" && p.devolucionResuelta && (
+                    <p className="text-sm font-semibold text-orange-700 mt-1">
+                      {resolucionDevolucion(p)}
+                    </p>
+                  )}
                   <p className="text-base font-semibold text-foreground mt-1 truncate">
                     {p.productos}
                   </p>
@@ -523,9 +543,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       <div>
                         <p className="text-sm font-semibold text-orange-900">
                           {p.devolucionResuelta
-                            ? p.devolucionTipo === "producto"
-                              ? "Devolución resuelta: canje por producto"
-                              : "Devolución resuelta: reembolso en dinero"
+                            ? resolucionDevolucion(p)
                             : "Devolución en gestión"}
                         </p>
                         {p.devolucionNota && (
