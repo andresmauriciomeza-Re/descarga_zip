@@ -32,6 +32,7 @@ export function SegmentadoButtons({
   disabled = false,
   title,
   className = "",
+  fullWidth = false,
 }: {
   valor: string;
   opciones: readonly SegmentadoOpcion[];
@@ -42,9 +43,15 @@ export function SegmentadoButtons({
   /** Texto al pasar el cursor sobre una opción bloqueada del grupo. */
   title?: string;
   className?: string;
+  /** Ocupa todo el ancho disponible y reparte las opciones por igual. */
+  fullWidth?: boolean;
 }) {
   return (
-    <div className={`inline-flex flex-wrap gap-1 p-1 bg-muted border border-border rounded-xl ${className}`}>
+    <div
+      className={`${
+        fullWidth ? "flex w-full" : "inline-flex flex-wrap"
+      } gap-1 p-1 bg-muted border border-border rounded-xl ${className}`}
+    >
       {opciones.map((op) => {
         const elegida = valor === op.valor;
         const bloqueada = disabled || !!op.deshabilitada;
@@ -53,13 +60,19 @@ export function SegmentadoButtons({
         const tooltip = op.titulo ?? (bloqueada ? title : undefined);
 
         return (
-          <span key={op.valor} title={tooltip}>
+          <span
+            key={op.valor}
+            title={tooltip}
+            className={fullWidth ? "flex-1 min-w-0" : ""}
+          >
             <button
               type="button"
               onClick={() => !bloqueada && onChange(op.valor)}
               aria-pressed={elegida}
               disabled={bloqueada}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                fullWidth ? "w-full" : ""
+              } ${
                 elegida
                   ? "bg-primary text-white shadow-sm"
                   : bloqueada

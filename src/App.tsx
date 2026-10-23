@@ -9556,6 +9556,15 @@ export default function App() {
         .overflow-auto::-webkit-scrollbar-thumb:hover {
           background-color: rgba(117, 117, 117, 0.85);
         }
+
+        /* Scroll sin barra visible (mantiene el desplazamiento). */
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
     </div>
   );

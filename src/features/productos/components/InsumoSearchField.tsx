@@ -70,7 +70,7 @@ export function InsumoSearchField({
     return () => document.removeEventListener("mousedown", onClickFuera);
   }, [abierto]);
 
-  const mostrar = abierto && sugerencias.length > 0;
+  const mostrar = abierto;
 
   return (
     <div ref={contenedorRef} className="relative flex-[2] min-w-[180px]">
@@ -95,24 +95,33 @@ export function InsumoSearchField({
       </div>
 
       {mostrar && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-          {sugerencias.map((ins) => (
-            <button
-              key={ins.id}
-              type="button"
-              // onMouseDown corre antes que el blur del input: evita que la
-              // lista se cierre antes de registrar la selección.
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect(ins);
-                setAbierto(false);
-              }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted cursor-pointer border-b border-border last:border-0"
-            >
-              <span className="font-semibold text-foreground">{ins.nombre}</span>
-              <span className="text-muted-foreground"> · {ins.unidadMedida}</span>
-            </button>
-          ))}
+        <div
+          className="absolute bottom-full left-0 mb-2 w-full max-h-44 overflow-y-auto overscroll-contain no-scrollbar bg-card border border-border rounded-xl shadow-xl z-50"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {sugerencias.length > 0 ? (
+            sugerencias.map((ins) => (
+              <button
+                key={ins.id}
+                type="button"
+                // onMouseDown corre antes que el blur del input: evita que la
+                // lista se cierre antes de registrar la selección.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(ins);
+                  setAbierto(false);
+                }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-muted cursor-pointer border-b border-border last:border-0"
+              >
+                <span className="font-semibold text-foreground">{ins.nombre}</span>
+                <span className="text-muted-foreground"> · {ins.unidadMedida}</span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm italic text-muted-foreground">
+              Sin resultados
+            </div>
+          )}
         </div>
       )}
     </div>
