@@ -7793,6 +7793,27 @@ export default function App() {
     void recargarCatalogo().catch(() => {});
   }, []);
 
+  // SEO: título único por pantalla (sin librerías). Se actualiza al cambiar de
+  // vista. Las pantallas públicas tienen título propio; las del panel usan el
+  // de SCREEN_META; si no hay, se mantiene el título general del sistema.
+  useEffect(() => {
+    const titulosPublicos: Partial<Record<Screen, string>> = {
+      landing: "La Sirena Pizza | Pizzas artesanales en Medellín",
+      catalog: "Menú del restaurante | La Sirena Pizza",
+      cart: "Tu carrito | La Sirena Pizza",
+      "product-detail": "Detalle del producto | La Sirena Pizza",
+      "mis-pedidos": "Mis pedidos | La Sirena Pizza",
+      login: "Iniciar sesión | S.I.V.PRO",
+      register: "Crear cuenta | La Sirena Pizza",
+      "client-profile": "Mi perfil | La Sirena Pizza",
+    };
+    const meta =
+      titulosPublicos[screen] ??
+      (SCREEN_META[screen] ? `${SCREEN_META[screen].title} | S.I.V.PRO` : undefined);
+    document.title =
+      meta ?? "S.I.V.PRO | Sistema de Ventas y Producción - La Sirena Pizza";
+  }, [screen]);
+
   const aplicarProductoRespuesta = (producto: Producto, crear = false) => {
     setProductos((prev) => crear
       ? [producto, ...prev.filter((p) => p.id !== producto.id)]
