@@ -14,7 +14,7 @@
  *   - "insumo": ficha de un Producto Insumo → tiempo + rendimiento por
  *     preparación + insumos (SOLO crudos) + pasos.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -159,6 +159,8 @@ function InsumosFichaTable({
   onChange,
   onRemove,
   contenedorClassName,
+  contenedorRef,
+  stickyHeader,
 }: {
   insumos: RInsumo[];
   editable: boolean;
@@ -171,11 +173,22 @@ function InsumosFichaTable({
   /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
       Insumos). Por defecto solo hay scroll horizontal. */
   contenedorClassName?: string;
+  /** Ref al contenedor con scroll (para bajar al último insumo agregado). */
+  contenedorRef?: Ref<HTMLDivElement>;
+  /** Encabezado sticky cuando el contenedor tiene scroll vertical. */
+  stickyHeader?: boolean;
 }) {
   return (
-    <div className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}>
+    <div
+      ref={contenedorRef}
+      className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}
+    >
       <table className="w-full">
-        <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+        <thead
+          className={`text-xs text-muted-foreground uppercase tracking-wider ${
+            stickyHeader ? "sticky top-0 z-10 bg-muted" : "bg-muted/50"
+          }`}
+        >
           <tr>
             <th className="px-3 py-2 text-left font-semibold">Insumo</th>
             <th className="px-3 py-2 text-left font-semibold">Cantidad</th>
@@ -282,6 +295,20 @@ export function FichaTecnicaEditor({
   campoAdicional,
 }: FichaTecnicaEditorProps) {
   const esInsumo = modo === "insumo";
+  const filaInputCls = esInsumo ? `${inputCls} h-12` : inputCls;
+  const insumosScrollRef = useRef<HTMLDivElement>(null);
+  const insumosCantidadRef = useRef(ficha.insumos.length);
+
+  useEffect(() => {
+    if (!esInsumo) return;
+    if (ficha.insumos.length > insumosCantidadRef.current) {
+      const contenedor = insumosScrollRef.current;
+      if (contenedor) {
+        contenedor.scrollTo({ top: contenedor.scrollHeight, behavior: "smooth" });
+      }
+    }
+    insumosCantidadRef.current = ficha.insumos.length;
+  }, [ficha.insumos.length, esInsumo]);
 
   // Búsqueda y alta de insumos (una sola fila a la vez).
   const [sel, setSel] = useState<Insumo | null>(null);
@@ -388,14 +415,26 @@ export function FichaTecnicaEditor({
     onChange({ ...ficha, pasos: moverEnLista(ficha.pasos, idx, dir) });
 
   return (
-    <div className="space-y-4">
+    <div className={esInsumo ? "flex min-h-0 flex-col gap-4 lg:h-full" : "space-y-4"}>
       {/* En producto la rejilla "Tiempo | Porciones" es 1 : 1.4 (la columna de
-          porciones es más ancha: lleva las cajitas lado a lado); en insumo
-          ("Tiempo | Rendimiento") se mantiene 50/50. */}
-      <div className={`grid gap-3 ${esInsumo ? "grid-cols-2" : "grid-cols-[1fr_1.4fr]"}`}>
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-            Tiempo de preparación (min){esInsumo ? " *" : ""}
+          porciones es más ancha: lleva las cajitas lado a lado). En insumo,
+          Tiempo, Cantidad a hacer y Unidad de medida comparten una sola fila. */}
+      <div
+        className={`shrink-0 grid ${
+          esInsumo
+            ? "grid-cols-1 sm:grid-cols-3 items-end gap-4"
+            : "grid-cols-[1fr_1.4fr] gap-3"
+        }`}
+      >
+        <div className={esInsumo ? "flex min-w-0 flex-col gap-2" : undefined}>
+          <label
+            className={
+              esInsumo
+                ? "flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground"
+                : "block text-xs font-semibold text-muted-foreground mb-0.5"
+            }
+          >
+            {esInsumo ? "Tiempo (min) *" : "Tiempo de preparación (min)"}
           </label>
           {/* Como todos los numéricos del sistema (punto B1): el 0 se muestra
               vacío con placeholder "0", en producto y en insumo. */}
@@ -403,14 +442,14 @@ export function FichaTecnicaEditor({
             value={ficha.tiempoPreparacion === 0 ? "" : ficha.tiempoPreparacion}
             placeholder="0"
             onChange={e => onChange({ ...ficha, tiempoPreparacion: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
-            className={inputCls} />
+            className={esInsumo ? filaInputCls : inputCls} />
           {esInsumo && errorTiempo && (
-            <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errorTiempo}</p>
+            <p className="text-xs text-red-500 dark:text-red-400 leading-tight">{errorTiempo}</p>
           )}
         </div>
         {esInsumo ? (
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+          <div className="flex min-w-0 flex-col gap-2">
+            <label className="flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground">
               Cantidad a hacer{unidadCantidad ? ` (${unidadCantidad})` : ""} *
             </label>
             {/* Vacío = cantidad sin escribir (punto B1): al consumirlo los
@@ -420,9 +459,9 @@ export function FichaTecnicaEditor({
               placeholder="0"
               aria-label="Cantidad a hacer"
               onChange={e => onChange({ ...ficha, rendimiento: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
-              className={inputCls} />
+              className={filaInputCls} />
             {errorCantidad && (
-              <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errorCantidad}</p>
+              <p className="text-xs text-red-500 dark:text-red-400 leading-tight">{errorCantidad}</p>
             )}
           </div>
         ) : (
@@ -484,19 +523,16 @@ export function FichaTecnicaEditor({
             )}
           </div>
         )}
+        {esInsumo && campoAdicional}
       </div>
 
-      {/* Campo extra del padre (Unidad de medida del Producto Insumo):
-          vive entre "Cantidad a hacer" e "Insumos a usar". */}
-      {esInsumo && campoAdicional && <div>{campoAdicional}</div>}
-
       {/* Insumos */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-2">
+      <div className={esInsumo ? "flex min-h-0 flex-col lg:flex-1" : ""}>
+        <label className="shrink-0 block text-xs font-semibold text-muted-foreground mb-2">
           {esInsumo ? "Insumos a usar *" : "Insumos"}
         </label>
-        {ficha.insumos.length > 0 && (
-          <div className="mb-3">
+        {ficha.insumos.length > 0 ? (
+          <div className={esInsumo ? "mb-3 flex min-h-0 flex-col lg:flex-1" : "mb-3"}>
             {/* SOLO en modo insumo la tabla tiene scroll interno: en el modal
                 de Compras > Insumos es el único scroll permitido. */}
             <InsumosFichaTable
@@ -507,17 +543,26 @@ export function FichaTecnicaEditor({
               onEdit={setEditandoIdx}
               onChange={updateInsumo}
               onRemove={removeInsumo}
-              contenedorClassName={esInsumo ? "max-h-60 overflow-y-auto" : undefined}
+              contenedorClassName={
+                esInsumo
+                  ? "no-scrollbar max-h-60 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0"
+                  : undefined
+              }
+              contenedorRef={esInsumo ? insumosScrollRef : undefined}
+              stickyHeader={esInsumo}
             />
           </div>
-        )}
-        {ficha.insumos.length === 0 && (
+        ) : esInsumo ? (
+          <div className="mb-3 flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-3 text-xs italic text-muted-foreground lg:flex-1">
+            Sin insumos agregados
+          </div>
+        ) : (
           <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
         )}
         {esInsumo && errorInsumos && (
-          <p className="text-xs text-red-500 dark:text-red-400 mt-1 mb-2 leading-tight">{errorInsumos}</p>
+          <p className="shrink-0 text-xs text-red-500 dark:text-red-400 mt-1 mb-2 leading-tight">{errorInsumos}</p>
         )}
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2 shrink-0">
           <InsumoSearchField
             insumos={catalogo}
             valor={nombre}

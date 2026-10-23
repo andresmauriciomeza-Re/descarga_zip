@@ -1076,10 +1076,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                 )}
               </div>
 
-              {/* Tipo * — primer campo del formulario, igual en los dos tipos.
-                  Al editar queda bloqueado (no se puede cambiar de categoría
-                  de registro a mitad de edición). */}
-              <div className="px-6 pt-4 shrink-0">
+              {/* Tipo * — fila superior fija, a todo el ancho. Al editar queda
+                  bloqueado (no se puede cambiar de categoría a mitad de edición). */}
+              <div className="shrink-0 px-6 pt-4">
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tipo *</label>
                 <SegmentadoButtons
                   valor={tipoForm}
@@ -1090,116 +1089,148 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                   onChange={cambiarTipo}
                   disabled={!!editingId}
                   title={editingId ? "El tipo no se puede cambiar al editar" : undefined}
+                  fullWidth={tipoForm === "producto-insumo"}
                 />
               </div>
 
               {tipoForm === "producto-insumo" ? (
-                /* ── Producto Insumo: dos columnas separadas SOLO por una
-                    línea vertical (sin cards ni contenedores con borde). ── */
-                <div className="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-border">
-                  {/* Columna izquierda: Datos */}
-                  <div className="w-full lg:w-[38%] px-6 py-4 space-y-4">
+                /* ── Producto Insumo: grid de dos columnas de igual alto, con
+                    divisor vertical y scroll interno independiente. ── */
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[38%_62%] divide-y lg:divide-y-0 lg:divide-x divide-border overflow-y-auto lg:overflow-visible">
+                  {/* Columna izquierda: Datos + resumen */}
+                  <div className="flex min-h-0 flex-col gap-4 px-6 py-4 lg:overflow-y-auto">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       Datos
                     </p>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-                      <input
-                        value={nombre}
-                        onChange={e => escribirNombre(e.target.value)}
-                        placeholder="Ej: Guacamole"
-                        disabled={!!editingId}
-                        className={`${ICLS_MODAL} ${
-                          editingId ? "text-muted-foreground cursor-not-allowed" : ""
-                        }`}
-                      />
-                      {errorDe("nombre", errores.nombre) && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.nombre}</p>
-                      )}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
+                        <input
+                          value={nombre}
+                          onChange={e => escribirNombre(e.target.value)}
+                          placeholder="Ej: Guacamole"
+                          disabled={!!editingId}
+                          className={`${ICLS_MODAL} ${
+                            editingId ? "text-muted-foreground cursor-not-allowed" : ""
+                          }`}
+                        />
+                        {errorDe("nombre", errores.nombre) && (
+                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.nombre}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
+                        <select
+                          value={categoriaId}
+                          onChange={e => setCategoriaId(e.target.value)}
+                          disabled={!!editingId}
+                          className={`${ICLS_MODAL} ${
+                            editingId ? "text-muted-foreground cursor-not-allowed" : "cursor-pointer"
+                          }`}
+                        >
+                          {CATEGORIAS_INSUMO.map(c => (
+                            <option key={c.id} value={c.id}>{c.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={stockMinimo === 0 ? "" : stockMinimo}
+                          placeholder="0"
+                          onChange={e => {
+                            setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)));
+                            tocar("stockMinimo");
+                          }}
+                          onBlur={() => tocar("stockMinimo")}
+                          disabled={!!editingId}
+                          className={`${ICLS_MODAL} ${
+                            editingId ? "text-muted-foreground cursor-not-allowed" : ""
+                          }`}
+                        />
+                        {errorDe("stockMinimo", errores.stockMinimo) && (
+                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.stockMinimo}</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
-                      <select
-                        value={categoriaId}
-                        onChange={e => setCategoriaId(e.target.value)}
-                        disabled={!!editingId}
-                        className={`${ICLS_MODAL} ${
-                          editingId ? "text-muted-foreground cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                      >
-                        {CATEGORIAS_INSUMO.map(c => (
-                          <option key={c.id} value={c.id}>{c.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Mínimo *</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={stockMinimo === 0 ? "" : stockMinimo}
-                        placeholder="0"
-                        onChange={e => {
-                          setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)));
-                          tocar("stockMinimo");
-                        }}
-                        onBlur={() => tocar("stockMinimo")}
-                        disabled={!!editingId}
-                        className={`${ICLS_MODAL} ${
-                          editingId ? "text-muted-foreground cursor-not-allowed" : ""
-                        }`}
-                      />
-                      {errorDe("stockMinimo", errores.stockMinimo) && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.stockMinimo}</p>
-                      )}
+
+                    <div className="mt-auto rounded-xl border border-border bg-muted/40 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Resumen
+                      </p>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Insumos agregados</span>
+                          <span className="font-semibold text-foreground">{piFicha.insumos.length}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Tiempo de preparación</span>
+                          <span className="font-semibold text-foreground">
+                            {piFicha.tiempoPreparacion > 0 ? `${piFicha.tiempoPreparacion} min` : "—"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">Rendimiento</span>
+                          <span className="font-semibold text-foreground">
+                            {piFicha.rendimiento && piFicha.rendimiento > 0
+                              ? `${piFicha.rendimiento}${piUnidadMedida ? ` ${piUnidadMedida}` : ""}`
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* Columna derecha: Ficha técnica */}
-                  <div className="w-full lg:w-[62%] px-6 py-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                  <div className="flex min-h-0 flex-col px-6 py-4">
+                    <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
                       Ficha Técnica
                     </p>
-                    <FichaTecnicaEditor
-                      ficha={piFicha}
-                      onChange={cambiarFichaPI}
-                      insumos={insumos}
-                      modo="insumo"
-                      inputCls={ICLS_MODAL}
-                      /* La cantidad a hacer se expresa en la unidad elegida
-                         aquí abajo (la del propio Producto Insumo). */
-                      unidadCantidad={piUnidadMedida || undefined}
-                      errorTiempo={errorDe("tiempo", errores.tiempo)}
-                      errorCantidad={errorDe("cantidad", errores.cantidad)}
-                      errorInsumos={errorDe("insumos", errores.insumos)}
-                      /* Selector de unidad entre "Cantidad a hacer" e
-                         "Insumos a usar" (el orden que pide el formulario). */
-                      campoAdicional={
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Unidad de medida *</label>
-                          <UnidadSelect
-                            value={piUnidadMedida}
-                            onChange={v => { setPiUnidadMedida(v); tocar("unidad"); }}
-                            disabled={editandoProducto}
-                            unidades={UNIDADES_PI}
-                            placeholder="Seleccionar unidad..."
-                            ariaLabel="Unidad de medida"
-                            fieldClassName={
-                              editandoProducto
-                                ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
-                                : "bg-muted dark:bg-input text-foreground"
-                            }
-                          />
-                          {errorDe("unidad", errores.unidad) && (
-                            <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.unidad}</p>
-                          )}
-                        </div>
-                      }
-                    />
+                    <div className="min-h-0 lg:flex-1">
+                      <FichaTecnicaEditor
+                        ficha={piFicha}
+                        onChange={cambiarFichaPI}
+                        insumos={insumos}
+                        modo="insumo"
+                        inputCls={ICLS_MODAL}
+                        /* La cantidad a hacer se expresa en la unidad elegida
+                           aquí al lado (la del propio Producto Insumo). */
+                        unidadCantidad={piUnidadMedida || undefined}
+                        errorTiempo={errorDe("tiempo", errores.tiempo)}
+                        errorCantidad={errorDe("cantidad", errores.cantidad)}
+                        errorInsumos={errorDe("insumos", errores.insumos)}
+                        /* Tercera columna de la fila superior: junto a Tiempo
+                           y Cantidad a hacer. */
+                        campoAdicional={
+                          <div className="flex min-w-0 flex-col gap-2">
+                            <label className="flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground">Unidad de medida *</label>
+                            <UnidadSelect
+                              value={piUnidadMedida}
+                              onChange={v => { setPiUnidadMedida(v); tocar("unidad"); }}
+                              disabled={editandoProducto}
+                              unidades={UNIDADES_PI}
+                              placeholder="Seleccionar unidad..."
+                              ariaLabel="Unidad de medida"
+                              fieldClassName={`h-12 border border-border ${
+                                editandoProducto
+                                  ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
+                                  : "bg-muted dark:bg-input text-foreground"
+                              }`}
+                            />
+                            {errorDe("unidad", errores.unidad) && (
+                              <p className="text-xs text-red-500 dark:text-red-400 leading-tight">{errores.unidad}</p>
+                            )}
+                          </div>
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               ) : (
                 /* ── Insumo normal: un solo campo, exactamente como siempre ── */
+                <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="px-6 py-5 space-y-4">
                   {/* Nombre */}
                   <div>
@@ -1311,6 +1342,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                       />
                     </div>
                   )}
+                </div>
                 </div>
               )}
 
