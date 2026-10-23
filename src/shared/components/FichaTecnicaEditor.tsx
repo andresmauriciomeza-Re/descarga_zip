@@ -14,12 +14,14 @@
  *   - "insumo": ficha de un Producto Insumo → tiempo + rendimiento por
  *     preparación + insumos (SOLO crudos) + pasos.
  */
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
+import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
+import { unidadesCompatibles } from "@/shared/utils/disponibilidad";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   TAMANOS_FICHA,
@@ -37,6 +39,28 @@ import {
 export const FICHA_INPUT_CLS =
   "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
+/** A5.2 — Lista de "Medida" para una fila de la ficha, según el modo:
+    - Modo INSUMO: solo las unidades COMPATIBLES con la del insumo del
+      catálogo (kg↔g, lt↔ml o la misma unidad), empezando por la del propio
+      insumo. Así una fila no puede quedar con una medida que el sistema no
+      sabría convertir al descontar stock. Si la fila trae un valor legacy
+      fuera de esa lista se agrega al final: se puede ver y corregir sin
+      perderlo de vista.
+    - Modo PRODUCTO: la lista histórica UNIDADES_FICHA, exactamente igual que
+      siempre (las fichas de pizzas/lasañas no cambian). */
+const opcionesMedidaFila = (
+  unidadFila: string,
+  unidadCatalogo?: string,
+): readonly OpcionUnidad[] => {
+  if (!unidadCatalogo) return UNIDADES_FICHA.map((u) => ({ valor: u, etiqueta: u }));
+  const compatibles: readonly OpcionUnidad[] = UNIDADES_INSUMO.filter((u) =>
+    unidadesCompatibles(u.valor, unidadCatalogo),
+  );
+  return compatibles.some((u) => u.valor === unidadFila)
+    ? compatibles
+    : [...compatibles, { valor: unidadFila, etiqueta: unidadFila }];
+};
+
 /**
  * Fila en edición de un insumo de la ficha: la cantidad se corrige con un
  * input de borde visible y botones −/+, la unidad con un select visible, y se
@@ -46,6 +70,7 @@ export const FICHA_INPUT_CLS =
 function InsumoFilaEditable({
   ins,
   usarUnidadSelect,
+  unidadCatalogo,
   onSave,
   onCancel,
 }: {
@@ -54,16 +79,18 @@ function InsumoFilaEditable({
       redondeado que "Unidad de medida"); false = select nativo (modo
       producto, sin cambios). */
   usarUnidadSelect?: boolean;
+  /** Unidad de medida del insumo del catálogo (SOLO modo insumo): la
+      "Medida" de la fila ofrece solo las unidades compatibles con ella
+      (A5.2). Ausente = lista histórica UNIDADES_FICHA (modo producto). */
+  unidadCatalogo?: string;
   onSave: (r: RInsumo) => void;
   onCancel: () => void;
 }) {
   const [cantidad, setCantidad] = useState(ins.cantidad);
   const [unidad, setUnidad] = useState(ins.unidad);
-  // Lista para UnidadSelect: mismas unidades que el select nativo de siempre.
-  const opcionesUnidad: readonly OpcionUnidad[] = UNIDADES_FICHA.map((u) => ({
-    valor: u,
-    etiqueta: u,
-  }));
+  // A5.2: en modo insumo solo unidades compatibles con la del catálogo; en
+  // modo producto, la lista de siempre.
+  const opcionesUnidad: readonly OpcionUnidad[] = opcionesMedidaFila(unidad, unidadCatalogo);
   const inputNumCls =
     "w-20 px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   return (
@@ -155,22 +182,34 @@ function InsumosFichaTable({
   editable,
   editandoIdx,
   usarUnidadSelect,
+  insumosCatalogo,
   onEdit,
   onChange,
   onRemove,
   contenedorClassName,
+  erroresPorFila,
 }: {
   insumos: RInsumo[];
   editable: boolean;
   editandoIdx: number | null;
   /** true = la fila en edición usa UnidadSelect para la unidad (modo insumo). */
   usarUnidadSelect?: boolean;
+  /** Catálogo COMPLETO de Insumos (SOLO modo insumo): con él cada fila
+      resuelve la unidad de medida de su insumo y la "Medida" en edición
+      ofrece solo las unidades compatibles (A5.2). Ausente = modo producto,
+      sin cambios. */
+  insumosCatalogo?: Insumo[];
   onEdit: (idx: number | null) => void;
   onChange: (idx: number, patch: Partial<RInsumo>) => void;
   onRemove: (idx: number) => void;
   /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
       Insumos). Por defecto solo hay scroll horizontal. */
   contenedorClassName?: string;
+  /** Mensaje de validación por FILA (índice de `insumos`), en rojo debajo de
+      la propia fila, con su cantidad también en rojo. Solo lo llena el modal
+      de Crear Producto Insumo (modo "insumo"): las fichas de Productos del
+      menú pasan sin esto y se ven exactamente igual que siempre. */
+  erroresPorFila?: Record<number, string>;
 }) {
   return (
     <div className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}>
@@ -184,13 +223,25 @@ function InsumosFichaTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {insumos.map((ins, idx) => (
-            <tr key={`${ins.nombre}-${idx}`} className="bg-muted/40">
+          {insumos.map((ins, idx) => {
+            const errorFila = erroresPorFila?.[idx];
+            return (
+            <Fragment key={`${ins.nombre}-${idx}`}>
+            <tr className="bg-muted/40">
               {editable && editandoIdx === idx ? (
                 <InsumoFilaEditable
                   key={idx}
                   ins={ins}
                   usarUnidadSelect={usarUnidadSelect}
+                  /* A5.2: unidad del insumo del catálogo (por id real o, en
+                     fichas viejas, por nombre normalizado) para filtrar las
+                     medidas compatibles de la fila. */
+                  unidadCatalogo={
+                    insumosCatalogo
+                      ? (insumosCatalogo.find((i) => i.id === ins.insumoId)?.unidadMedida ??
+                        resolverInsumo(insumosCatalogo, ins.nombre)?.unidadMedida)
+                      : undefined
+                  }
                   onSave={(r) => {
                     onChange(idx, r);
                     onEdit(null);
@@ -200,7 +251,7 @@ function InsumosFichaTable({
               ) : (
                 <>
                   <td className="px-3 py-2 text-sm font-medium text-foreground">{ins.nombre}</td>
-                  <td className="px-3 py-2 text-sm text-muted-foreground font-mono">{ins.cantidad}</td>
+                  <td className={`px-3 py-2 text-sm font-mono ${errorFila ? "text-red-600 dark:text-red-400 font-semibold" : "text-muted-foreground"}`}>{ins.cantidad}</td>
                   <td className="px-3 py-2 text-sm text-muted-foreground font-mono">{ins.unidad}</td>
                   {editable && (
                     <td className="px-3 py-2">
@@ -227,7 +278,18 @@ function InsumosFichaTable({
                 </>
               )}
             </tr>
-          ))}
+            {/* Mensaje de validación de ESTA fila (p. ej. el insumo no alcanza
+                para la "Cantidad a hacer"): el `divide-y` de arriba queda entre
+                la fila y su mensaje, como una continuación en rojo. */}
+            {errorFila && (
+              <tr>
+                <td colSpan={editable ? 4 : 3} className="px-3 pb-2 text-xs font-semibold text-red-600 dark:text-red-400 leading-tight">
+                  {errorFila}
+                </td>
+              </tr>
+            )}
+            </Fragment>
+          );})}
         </tbody>
       </table>
     </div>
@@ -262,6 +324,12 @@ export interface FichaTecnicaEditorProps {
   errorTiempo?: string;
   errorCantidad?: string;
   errorInsumos?: string;
+  /** Mensaje de validación por FILA de "Insumos a usar" (índice de
+      `ficha.insumos`), en rojo debajo de esa fila. SOLO modo insumo: el
+      modal de Crear Producto Insumo avisa así cuando un insumo no alcanza
+      en stock para la "Cantidad a hacer". En modo "producto" se ignora, así
+      las fichas de los productos del menú se ven igual que siempre. */
+  erroresInsumosFila?: Record<number, string>;
   /** Campo extra que el padre quiere ENTRE "Cantidad a hacer" e "Insumos a
       usar" (SOLO modo insumo): el modal de Compras > Insumos mete ahí el
       selector "Unidad de medida *" del Producto Insumo. */
@@ -279,6 +347,7 @@ export function FichaTecnicaEditor({
   errorTiempo,
   errorCantidad,
   errorInsumos,
+  erroresInsumosFila,
   campoAdicional,
 }: FichaTecnicaEditorProps) {
   const esInsumo = modo === "insumo";
@@ -333,11 +402,19 @@ export function FichaTecnicaEditor({
   };
 
   // Al elegir del buscador se autocompleta la "Medida" con la unidad del
-  // catálogo; sigue siendo editable a mano después.
+  // catálogo; sigue siendo editable a mano después. A5.2: en modo insumo la
+  // "Medida" arranca SIEMPRE con la unidad del propio insumo elegido (antes
+  // podía quedar "kg" fijo), y su lista se reduce a las compatibles.
   const seleccionarInsumo = (ins: Insumo) => {
     setSel(ins);
     setNombre(ins.nombre);
-    setUnidad(UNIDADES_FICHA.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES_FICHA[0]);
+    setUnidad(
+      esInsumo
+        ? ins.unidadMedida
+        : UNIDADES_FICHA.includes(ins.unidadMedida)
+          ? ins.unidadMedida
+          : UNIDADES_FICHA[0],
+    );
   };
 
   // Solo se agrega un insumo que exista en el catálogo: o se seleccionó del
@@ -360,7 +437,16 @@ export function FichaTecnicaEditor({
       ...ficha,
       insumos: [
         ...ficha.insumos,
-        { insumoId: ins.id, nombre: ins.nombre, cantidad, unidad },
+        // A5.2: en modo insumo la fila debe quedar en una unidad
+        // COMPATIBLE con la del catálogo (el resto del sistema solo convierte
+        // kg↔g y lt↔ml); si se escribió otro insumo distinto al seleccionado
+        // y la medida ya no corresponde, vuelve a la unidad del insumo.
+        {
+          insumoId: ins.id,
+          nombre: ins.nombre,
+          cantidad,
+          unidad: esInsumo && !unidadesCompatibles(unidad, ins.unidadMedida) ? ins.unidadMedida : unidad,
+        },
       ],
     });
     setNombre("");
@@ -508,6 +594,12 @@ export function FichaTecnicaEditor({
               onChange={updateInsumo}
               onRemove={removeInsumo}
               contenedorClassName={esInsumo ? "max-h-60 overflow-y-auto" : undefined}
+              /* En modo insumo cada fila conoce la unidad de su insumo del
+                 catálogo (A5.2); en modo producto se ignora. */
+              insumosCatalogo={esInsumo ? insumos : undefined}
+              /* Los mensajes por fila son exclusivos del modo insumo (el
+                 modal de Crear Producto Insumo valida contra stock). */
+              erroresPorFila={esInsumo ? erroresInsumosFila : undefined}
             />
           </div>
         )}
@@ -537,13 +629,17 @@ export function FichaTecnicaEditor({
           <div className="w-24">
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
             {/* SOLO modo insumo: mismo UnidadSelect redondeado que "Unidad de
-                medida" (mismas unidades de siempre). En modo producto el
-                select nativo queda exactamente igual que antes. */}
+                medida", pero con la lista compartida UNIDADES_INSUMO y, una
+                vez elegido el insumo, reducida a las unidades compatibles
+                con la suya (A5.2). En modo producto el select nativo queda
+                exactamente igual que antes. */}
             {esInsumo ? (
               <UnidadSelect
                 value={unidad}
                 onChange={setUnidad}
-                unidades={UNIDADES_FICHA.map((u) => ({ valor: u, etiqueta: u }))}
+                unidades={
+                  sel ? opcionesMedidaFila(unidad, sel.unidadMedida) : UNIDADES_INSUMO
+                }
                 ariaLabel="Medida"
               />
             ) : (

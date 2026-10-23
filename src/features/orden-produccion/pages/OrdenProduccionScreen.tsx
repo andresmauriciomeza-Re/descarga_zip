@@ -145,6 +145,11 @@ interface TransicionEstado {
   de: EstadoOrden;
   a: EstadoOrden;
   fechaHora: string; // ISO
+  /** Motivo del paso, cuando no es un cambio de estado (p. ej. "Creada desde
+      Insumos" en las órdenes que nacen al crear un Producto Insumo). Opcional:
+      las órdenes viejas y las transiciones normales no lo traen y se pintan
+      igual que siempre. */
+  detalle?: string;
 }
 
 export interface OrdenProduccion {
@@ -437,6 +442,20 @@ const totalReal = (lineas: LineaOrden[]) =>
 const totalMerma = (lineas: LineaOrden[]) =>
   lineas.reduce((s, l) => s + (l.merma ?? 0), 0);
 
+/** Mermas de la orden agrupadas por la UNIDAD de cada línea ("0.5 lt" o
+    "0.5 lt · 2 und"): cada línea mide su merma en su propia unidad, así que
+    un total único con una sola unidad mentía en el listado y en el Excel
+    (la orden de Guacamole decía "−0.5 und merma" siendo "0.5 lt"). */
+const resumenMerma = (lineas: LineaOrden[]): string => {
+  const acc = new Map<string, number>();
+  for (const l of lineas) {
+    const m = l.merma ?? 0;
+    if (m <= 0) continue;
+    acc.set(l.unidad, (acc.get(l.unidad) ?? 0) + m);
+  }
+  return [...acc.entries()].map(([unidad, cant]) => fmtCant(cant, unidad)).join(" · ");
+};
+
 /** Insumos que consume una línea, para UNA unidad y con el factor de su
     tamaño. Manda el SNAPSHOT de la línea (la foto de la ficha al crear o
     editar la orden: sus filas y su rendimiento); solo para el factor de
@@ -667,6 +686,55 @@ export function crearOrdenReemplazo(
   };
 }
 
+/** Orden "Preparación en lote" de UN Producto Insumo, con la "Cantidad a
+    hacer" de su ficha. La crea Gestión de Insumos al crear un producto insumo
+    NUEVO (A2): nace "pendiente" con la foto de la ficha en la línea, sus
+    insumos requeridos ya calculados —el MISMO cálculo de `requeridosDeLinea`,
+    así lo que se ve y lo que se descuenta dan igual— y, en el historial, el
+    motivo "Creada desde Insumos". NO descuenta nada al crearse: el stock baja
+    al INICIAR la orden, con la validación de inventario de siempre.
+    La ficha llega como ARGUMENTO (la v1 recién creada) porque al ser el mismo
+    clic, el estado `fichas` de App todavía no la contiene. */
+export function crearOrdenPreparacion(
+  pi: Insumo,
+  ficha: FichaVersion | null,
+  ctx: { fichas: FichasPorProducto },
+  id: string,
+): OrdenProduccion {
+  const ahora = nowISO();
+  const linea: LineaOrden = {
+    idProducto: pi.id,
+    nombre: pi.nombre,
+    unidad: pi.unidadMedida,
+    // La "Cantidad a hacer" de la ficha es lo que se va a producir. El
+    // mínimo válido de una línea de preparación es 1, así que una ficha sin
+    // rendimiento (no debería pasar: el modal lo exige) cae ahí.
+    cantidadEstimada:
+      ficha && ficha.rendimiento && ficha.rendimiento > 0 ? ficha.rendimiento : 1,
+    // Foto de la ficha v1: desde aquí la orden no vuelve a leer la vigente.
+    fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
+  };
+  return {
+    id,
+    tipo: "preparacion",
+    lineas: [linea],
+    insumosRequeridos: requeridosDeLinea(linea, ctx.fichas),
+    ventaId: null,
+    ventaNumero: null,
+    cliente: null,
+    fechaSolicitada: hoyLocal(),
+    horaSolicitada: "",
+    estadoOrden: "pendiente",
+    observacion: "",
+    creadaEn: ahora,
+    inicioProduccion: null,
+    entregaEstimada: null,
+    historial: [{ de: "pendiente", a: "pendiente", fechaHora: ahora, detalle: "Creada desde Insumos" }],
+    descripcionPreparacion: ficha?.pasos.join("\n") || undefined,
+    tiempoPreparacionMin: ficha ? ficha.tiempoPreparacion : null,
+  };
+}
+
 async function exportExcel(ordenes: OrdenProduccion[]) {
   const fecha = new Date();
   const archivo = await exportarExcelEstilizado({
@@ -696,7 +764,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
           ? o.lineas.map((l) => fmtCant(l.cantidadReal ?? 0, l.unidad)).join("; ")
           : "—"),
       },
-      { header: "Merma", valor: (o) => (totalMerma(o.lineas) > 0 ? fmtCant(totalMerma(o.lineas), "und") : "0"), numFmt: "#,##0.00" },
+      { header: "Merma", valor: (o) => (totalMerma(o.lineas) > 0 ? resumenMerma(o.lineas) : "0"), numFmt: "#,##0.00" },
       { header: "Estado", valor: (o) => ESTADO_LABEL[o.estadoOrden], esEstado: true },
       { header: "Fecha/Hora de estado", valor: (o) => fmtDT(o.historial[o.historial.length - 1]?.fechaHora ?? o.creadaEn) },
       { header: "Observación", valor: (o) => o.observacion },
@@ -957,6 +1025,8 @@ export function OrdenProduccionScreen({
   canExportExcel = true,
   abrirOrdenId,
   setOrdenAAbrir,
+  detalleOrdenId,
+  setDetalleOrdenAAbrir,
 }: {
   productos: Producto[];
   /** Stock de Productos terminados: al iniciar una orden tipo "Pedido" se
@@ -981,6 +1051,13 @@ export function OrdenProduccionScreen({
   /** Limpia `abrirOrdenId` apenas se consume: si queda guardado, cada vuelta
       a esta pantalla reabriría el modal con el último producto programado. */
   setOrdenAAbrir?: Dispatch<SetStateAction<string | null>>;
+  /** id de una orden EXISTENTE cuyo DETALLE hay que abrir (A2.3): lo usa
+      Insumos tras crear la orden automática de un producto insumo nuevo,
+      cuando el toast dice "Ver orden". */
+  detalleOrdenId?: string | null;
+  /** Limpia `detalleOrdenId` apenas se consume, por el mismo motivo que
+      `setOrdenAAbrir`. */
+  setDetalleOrdenAAbrir?: Dispatch<SetStateAction<string | null>>;
 }) {
   const [search, setSearch] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | TipoOrden>("todos");
@@ -1025,6 +1102,16 @@ export function OrdenProduccionScreen({
     });
     setShowCreate(true);
   }, [abrirOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cuando llega detalleOrdenId (Insumos creó la orden automática de un
+  // producto insumo nuevo), se abre su detalle. Se consume de una vez: no
+  // puede quedar pendiente para la próxima entrada a la pantalla.
+  useEffect(() => {
+    if (!detalleOrdenId) return;
+    setDetalleOrdenAAbrir?.(null);
+    const orden = ordenes.find((o) => o.id === detalleOrdenId);
+    if (orden) setDetailItem(orden);
+  }, [detalleOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Estado del modal de Completar: `reales` guarda la "Cantidad que salió"
   // de cada línea (obligatoria en preparación; vacío en un pedido, que es de
@@ -1770,7 +1857,7 @@ export function OrdenProduccionScreen({
                               : fmtCant(totalReal(o.lineas), "und")}
                           </span>
                           {merma > 0 && (
-                            <p className="text-[11px] font-semibold text-red-600 tabular-nums">−{fmtCant(merma, "und")} merma</p>
+                            <p className="text-[11px] font-semibold text-red-600 tabular-nums">−{resumenMerma(o.lineas)} merma</p>
                           )}
                         </>
                       )}
@@ -2309,11 +2396,18 @@ export function OrdenProduccionScreen({
                           </div>
                           {detailItem.historial.map((h, i) => (
                             <div key={i} className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
-                                <span className="text-muted-foreground text-xs">→</span>
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
-                              </div>
+                              {h.detalle ? (
+                                // Paso sin cambio de estado (p. ej. "Creada
+                                // desde Insumos"): manda el motivo, no la
+                                // flecha de transiciones.
+                                <span className="text-xs font-semibold text-foreground">{h.detalle}</span>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                                  <span className="text-muted-foreground text-xs">→</span>
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                                </div>
+                              )}
                               <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{fmtDT(h.fechaHora)}</span>
                             </div>
                           ))}
