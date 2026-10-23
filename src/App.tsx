@@ -57,27 +57,27 @@ import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
-import imgCocaCola from "@/assets/img/Coca-Cola.png";
+import imgCocaCola from "@/assets/img/Coca-Cola.webp";
 import fondoBienvenidoDark from "@/assets/img/bienvenido-la-sirena-dark.webp";
 import fondoBienvenidoLight from "@/assets/img/bienvenido-la-sirena-light.webp";
-import pizzaHero from "@/assets/img/image-23.png";
-import imagenLocal from "@/assets/img/imagen_local.png";
-import lasanaCarne from "@/assets/img/lasaña_carne.png";
-import lasanaMixta from "@/assets/img/lasaña_mixta.png";
-import lasanaPollo from "@/assets/img/lasaña_pollo.png";
-import logoBlanco from "@/assets/img/logo-blanco.png";
-import logoClaro from "@/assets/img/logoclaro2.png";
-import imgPepsi from "@/assets/img/Pepsi.png";
-import pizzaCarnes from "@/assets/img/pizza_carnes.png";
-import pizzaCañon from "@/assets/img/pizza_cañon.png";
-import pizzaHawaii from "@/assets/img/pizza_hawaii.png";
-import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.png";
-import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
-import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
-import pizzaPollo from "@/assets/img/pizza_pollo.png";
-import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
-import imgPremio from "@/assets/img/Premio.png";
-import imgQuatro from "@/assets/img/Quatro.png";
+import pizzaHero from "@/assets/img/image-23.webp";
+import imagenLocal from "@/assets/img/imagen_local.webp";
+import lasanaCarne from "@/assets/img/lasaña_carne.webp";
+import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
+import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
+import logoBlanco from "@/assets/img/logo-blanco.webp";
+import logoClaro from "@/assets/img/logoclaro2.webp";
+import imgPepsi from "@/assets/img/Pepsi.webp";
+import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
+import pizzaCañon from "@/assets/img/pizza_cañon.webp";
+import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
+import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.webp";
+import pizzaMaicitos from "@/assets/img/pizza_maicitos.webp";
+import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
+import pizzaPollo from "@/assets/img/pizza_pollo.webp";
+import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
+import imgPremio from "@/assets/img/Premio.webp";
+import imgQuatro from "@/assets/img/Quatro.webp";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
 import {
   Bar,
@@ -381,7 +381,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Carne",
     description: "Lasaña de carne con salsa boloñesa, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_carne.png",
+    image: lasanaCarne,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -396,7 +396,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Pollo",
     description: "Lasaña de pollo con salsa blanca, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_pollo.png",
+    image: lasanaPollo,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -411,7 +411,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Mixta",
     description: "Lasaña mixta con carne y pollo, salsa boloñesa y queso gratinado.",
     price: 22000,
-    image: "/src/assets/img/lasaña_mixta.png",
+    image: lasanaMixta,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -427,7 +427,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Cuatro",
     description: "Botella de 2.5 L. Sabor cítrico y refrescante.",
     price: 3000,
-    image: "/src/assets/img/Quatro.png",
+    image: imgQuatro,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -442,7 +442,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Premium",
     description: "Botella de 2.5 L. Sabor frutal y refrescante.",
     price: 3500,
-    image: "/src/assets/img/Premio.png",
+    image: imgPremio,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -457,7 +457,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Coca-Cola",
     description: "Botella de 2.5 L. El sabor clásico de siempre.",
     price: 2500,
-    image: "/src/assets/img/Coca-Cola.png",
+    image: imgCocaCola,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -472,7 +472,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Pepsi",
     description: "Botella de 2.5 L. Sabor cola y refrescante.",
     price: 2500,
-    image: "/src/assets/img/Pepsi.png",
+    image: imgPepsi,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -1738,10 +1738,15 @@ function LandingScreen({
     <div>
       {/* Hero – full width con imagen de fondo */}
       <section className="relative w-full min-h-screen overflow-hidden">
-        {/* Imagen de fondo full-bleed */}
+        {/* Imagen de fondo full-bleed. Es el LCP de la página: por eso lleva
+            fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy. */}
         <img
           src={pizzaHero}
           alt="Pizza pepperoni artesanal La Sirena recién horneada"
+          width={1536}
+          height={1024}
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center"
         />
 
@@ -2030,6 +2035,8 @@ function LandingScreen({
                 <img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -7603,6 +7610,11 @@ export default function App() {
   // Catálogo público independiente del almacenamiento local de Gestión de Productos.
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
+  // Estado de la carga del catálogo público (landing / Ver Menú). Si la API no
+  // responde, el aviso fijo informa al usuario y ofrece reintentar sin que la
+  // página se rompa ni cambie de diseño en el caso normal.
+  const [catalogoCargando, setCatalogoCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState<string | null>(null);
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido.
@@ -7655,6 +7667,8 @@ export default function App() {
       : null,
   );
   const recargarCatalogo = async () => {
+    setCatalogoCargando(true);
+    setCatalogoError(null);
     try {
       const { productos: filasProductos, categorias: filasCategorias } = await obtenerCatalogo();
       const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
@@ -7678,8 +7692,13 @@ export default function App() {
       if (teniaIdsAntiguos) toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
     } catch (error) {
       console.error("No se pudo cargar el catálogo público:", error);
-      toast.error(error instanceof Error ? error.message : "No se pudo cargar el catálogo público.");
+      const mensaje =
+        error instanceof Error && error.message ? error.message : "No se pudo cargar el catálogo público.";
+      setCatalogoError(mensaje);
+      toast.error(mensaje);
       throw error;
+    } finally {
+      setCatalogoCargando(false);
     }
   };
 
@@ -9464,6 +9483,36 @@ export default function App() {
             isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
+          {/* Aviso fijo del catálogo público: solo aparece si la API no respondió.
+              Va con posición fija para no desplazar ni alterar el layout existente
+              (evita CLS y no cambia el diseño en el caso normal de éxito). */}
+          {catalogoError && (
+            <div
+              role="alert"
+              className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(92vw,26rem)] rounded-2xl border border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-950/80 p-4 shadow-xl backdrop-blur"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    No pudimos cargar el menú
+                  </p>
+                  <p className="mt-1 text-xs text-red-700/90 dark:text-red-200/80">
+                    Revisa tu conexión o inténtalo de nuevo en unos segundos.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void recargarCatalogo().catch(() => {})}
+                    disabled={catalogoCargando}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${catalogoCargando ? "animate-spin" : ""}`} />
+                    {catalogoCargando ? "Reintentando…" : "Reintentar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div
               key={screen}

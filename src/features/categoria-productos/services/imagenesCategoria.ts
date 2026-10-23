@@ -1,19 +1,19 @@
 import pizzaDefinitiva from "@/assets/img/pizzaDefinitivaCompleta.png";
-import pizzaCarnes from "@/assets/img/pizza_carnes.png";
-import pizzaCañon from "@/assets/img/pizza_cañon.png";
-import pizzaHawaii from "@/assets/img/pizza_hawaii.png";
-import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.png";
-import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
-import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
-import pizzaPollo from "@/assets/img/pizza_pollo.png";
-import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
-import lasanaCarne from "@/assets/img/lasaña_carne.png";
-import lasanaMixta from "@/assets/img/lasaña_mixta.png";
-import lasanaPollo from "@/assets/img/lasaña_pollo.png";
-import imgCocaCola from "@/assets/img/Coca-Cola.png";
-import imgPepsi from "@/assets/img/Pepsi.png";
-import imgPremio from "@/assets/img/Premio.png";
-import imgQuatro from "@/assets/img/Quatro.png";
+import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
+import pizzaCañon from "@/assets/img/pizza_cañon.webp";
+import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
+import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.webp";
+import pizzaMaicitos from "@/assets/img/pizza_maicitos.webp";
+import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
+import pizzaPollo from "@/assets/img/pizza_pollo.webp";
+import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
+import lasanaCarne from "@/assets/img/lasaña_carne.webp";
+import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
+import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
+import imgCocaCola from "@/assets/img/Coca-Cola.webp";
+import imgPepsi from "@/assets/img/Pepsi.webp";
+import imgPremio from "@/assets/img/Premio.webp";
+import imgQuatro from "@/assets/img/Quatro.webp";
 
 /**
  * §5 — Imágenes de categorías (§5): el campo `icono` de `CategoriaProducto`
