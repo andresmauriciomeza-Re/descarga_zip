@@ -104,14 +104,14 @@ import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
-import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
@@ -119,6 +119,13 @@ import {
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos } from "@/features/productos/services/productosApi";
+import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/insumos/services/insumosApi";
+import { mapearFichasApi, obtenerFichasVigentes } from "@/features/productos/services/fichasApi";
+import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/orden-produccion/services/ordenesProduccionApi";
+import { listarProveedores, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
+import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/orden-compra/services/ordenesCompraApi";
+import { listarCompras, mensajeErrorCompras } from "@/features/compras/services/comprasApi";
+import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/configCategoria";
 import { mismoNombre } from "@/shared/utils/nombres";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
@@ -130,6 +137,7 @@ import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
+import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificacionService";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 import type {
@@ -156,7 +164,9 @@ import {
   normalizarNombre,
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
-import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import { ProductosPerecederosScreen, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/cpn/services/noConformesApi";
+import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/categoria-productos/services/categoriasApi";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
 
 // ─── Code splitting (React.lazy) ───
@@ -218,11 +228,11 @@ interface Order {
   items: { name: string; qty: number; price: number }[];
   total: number;
   status:
-    | "pendiente"
-    | "en-produccion"
-    | "listo"
-    | "entregado"
-    | "cancelado";
+  | "pendiente"
+  | "en-produccion"
+  | "listo"
+  | "entregado"
+  | "cancelado";
   date: string;
   paymentMethod: string;
 }
@@ -895,22 +905,22 @@ const SCREEN_META: Partial<
 
 // Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
 const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
-  "gestion-roles":    KEY("Configuración","Roles"),
-  "users":            KEY("Configuración","Usuarios"),
-  "empleados":        KEY("Producción","Empleados"),
-  "supplies":          KEY("Compras",    "Insumos"),
-  "suppliers":         KEY("Compras",    "Proveedores"),
-  "orden-compra":      KEY("Compras",    "Orden de Compra"),
-  "nueva-orden-compra": KEY("Compras",    "Orden de Compra"),
-  "gestion-compra":    KEY("Compras",    "Compra"),
-  "nueva-compra":       KEY("Compras",    "Compra"),
-  "cat-producto":      KEY("Producción", "Categoría de Producto"),
+  "gestion-roles": KEY("Configuración", "Roles"),
+  "users": KEY("Configuración", "Usuarios"),
+  "empleados": KEY("Producción", "Empleados"),
+  "supplies": KEY("Compras", "Insumos"),
+  "suppliers": KEY("Compras", "Proveedores"),
+  "orden-compra": KEY("Compras", "Orden de Compra"),
+  "nueva-orden-compra": KEY("Compras", "Orden de Compra"),
+  "gestion-compra": KEY("Compras", "Compra"),
+  "nueva-compra": KEY("Compras", "Compra"),
+  "cat-producto": KEY("Producción", "Categoría de Producto"),
   "gestion-productos": KEY("Producción", "Productos"),
   "production-orders": KEY("Producción", "Orden de Producción"),
-  "perecederos":       KEY("Producción", "Producto No Conforme"),
-  "clientes":          KEY("Ventas",     "Clientes"),
-  "ventas-pedidos":    KEY("Ventas",     "Ventas"),
-  "devoluciones":      KEY("Ventas",     "Devoluciones"),
+  "perecederos": KEY("Producción", "Producto No Conforme"),
+  "clientes": KEY("Ventas", "Clientes"),
+  "ventas-pedidos": KEY("Ventas", "Ventas"),
+  "devoluciones": KEY("Ventas", "Devoluciones"),
 };
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
@@ -1236,9 +1246,8 @@ function Sidebar({
       ref={asideRef}
       role="navigation"
       aria-label="Menú principal"
-      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${
-        esMovil ? "max-w-[80vw]" : ""
-      } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
+      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil ? "max-w-[80vw]" : ""
+        } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
     >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border shrink-0">
@@ -1380,11 +1389,10 @@ function PublicNav({
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 h-20 transition-all duration-400 rounded-b-3xl ${
-        scrolled
+      className={`fixed top-0 left-0 right-0 z-50 h-20 transition-all duration-400 rounded-b-3xl ${scrolled
           ? "bg-card/85 backdrop-blur-xl shadow-lg shadow-black/[0.06] border-b border-border"
           : "bg-card shadow-sm"
-      }`}
+        }`}
     >
       <div className="max-w-7xl mx-auto px-6 h-full flex flex-wrap items-center justify-between gap-x-3">
         {/* Logo */}
@@ -1464,9 +1472,8 @@ function PublicNav({
               onClick={() =>
                 navigate(isStaff ? "store-profile" : "client-profile")
               }
-              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
-                loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
-              }`}
+              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
+                }`}
               title="Mi perfil"
             >
               {(loggedInUser?.iniciales.charAt(0) ?? (isStaff ? "G" : "S")).toUpperCase()}
@@ -2458,11 +2465,11 @@ function ProductCard({
       : max === 0
         ? "Agotado"
         : mensajeMaximoDe(
-            p.name,
-            max,
-            enCarrito?.size || tamanoDefecto,
-            tope.elaborado,
-          );
+          p.name,
+          max,
+          enCarrito?.size || tamanoDefecto,
+          tope.elaborado,
+        );
   return (
     <motion.div
       data-producto-id={p.id}
@@ -2478,9 +2485,8 @@ function ProductCard({
         <img
           src={p.image}
           alt={p.name}
-          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
-            noDisponible ? "grayscale opacity-60" : ""
-          } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""
+            } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         {/* Etiqueta de estado: fondo sólido, arriba a la izquierda con 12 px
             de separación, legible sobre cualquier foto (claras, oscuras o de
@@ -2755,8 +2761,8 @@ function CatalogScreen({
               setPage(1);
             }}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
-              Todas
-            </button>
+            Todas
+          </button>
           {filtros.map((c) => (
             <button
               key={c.id}
@@ -2765,9 +2771,9 @@ function CatalogScreen({
                 setPage(1);
               }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
-                {c.nombre}
-              </button>
-            ))}
+              {c.nombre}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -2821,11 +2827,10 @@ function CatalogScreen({
                   key={n}
                   onClick={() => irAPagina(n)}
                   aria-current={n === page ? "page" : undefined}
-                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${
-                    n === page
+                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${n === page
                       ? "bg-primary text-white"
                       : "border border-border text-muted-foreground hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {n}
                 </button>
@@ -3321,9 +3326,9 @@ function CartScreen({
   const sinHorariosHoy = horasDisponibles.length === 0;
   const [horaSel, minutoSel] = horaRecogida
     ? [
-        parseInt(horaRecogida.split(":")[0], 10),
-        parseInt(horaRecogida.split(":")[1] ?? "0", 10),
-      ]
+      parseInt(horaRecogida.split(":")[0], 10),
+      parseInt(horaRecogida.split(":")[1] ?? "0", 10),
+    ]
     : [null, null];
   const seleccionValida =
     horaSel !== null &&
@@ -3435,9 +3440,9 @@ function CartScreen({
     if (!datosValidos) {
       toast.error(
         errDocumento ??
-          errNombre ??
-          errTelefono ??
-          "Revisa los datos de tu pedido",
+        errNombre ??
+        errTelefono ??
+        "Revisa los datos de tu pedido",
       );
       // Muestra todos los errores y lleva el foco al primer campo inválido.
       validacionDatos.enfocarPrimero({
@@ -3666,129 +3671,127 @@ function CartScreen({
                 max === undefined
                   ? ""
                   : mensajeMaximoDe(
-                      item.product.name,
-                      max,
-                      item.size || undefined,
-                      limite.elaborado,
-                    );
+                    item.product.name,
+                    max,
+                    item.size || undefined,
+                    limite.elaborado,
+                  );
               return (
-              <div
-                key={item.id}
-                // Punto 7: una línea pasada del máximo se marca en rojo.
-                className={`bg-card border rounded-2xl p-4 flex gap-4 ${
-                  excedida
-                    ? "border-red-400 dark:border-red-700"
-                    : itemNoDisponible
-                      ? "border-zinc-400 dark:border-zinc-600"
-                      : "border-border"
-                }`}
-              >
-                <img
-                  src={item.product.image}
-                  alt={item.product.name}
-                  className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-foreground">
-                        {item.product.name}
-                      </h3>
-                      {/* Estado del producto HOY en el catálogo: la línea se
+                <div
+                  key={item.id}
+                  // Punto 7: una línea pasada del máximo se marca en rojo.
+                  className={`bg-card border rounded-2xl p-4 flex gap-4 ${excedida
+                      ? "border-red-400 dark:border-red-700"
+                      : itemNoDisponible
+                        ? "border-zinc-400 dark:border-zinc-600"
+                        : "border-border"
+                    }`}
+                >
+                  <img
+                    src={item.product.image}
+                    alt={item.product.name}
+                    className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-foreground">
+                          {item.product.name}
+                        </h3>
+                        {/* Estado del producto HOY en el catálogo: la línea se
                           marca pero no se borra sola. */}
-                      <EstadoMenuBadge
-                        estado={estadoDeProducto(item.product)}
-                        className="mt-1.5"
-                      />
-                      {item.size && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {item.size}
-                        </p>
-                      )}
-                      {item.selectedExtras.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          + {item.selectedExtras.join(", ")}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => remove(item.id)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2 bg-muted rounded-xl p-0.5">
+                        <EstadoMenuBadge
+                          estado={estadoDeProducto(item.product)}
+                          className="mt-1.5"
+                        />
+                        {item.size && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {item.size}
+                          </p>
+                        )}
+                        {item.selectedExtras.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            + {item.selectedExtras.join(", ")}
+                          </p>
+                        )}
+                      </div>
                       <button
-                        onClick={() =>
-                          updateQty(item.id, item.quantity - 1)
-                        }
-                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                        onClick={() => remove(item.id)}
+                        className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                      {/* Bloque 5 (punto 3): campo editable con el teclado;
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2 bg-muted rounded-xl p-0.5">
+                        <button
+                          onClick={() =>
+                            updateQty(item.id, item.quantity - 1)
+                          }
+                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        {/* Bloque 5 (punto 3): campo editable con el teclado;
                           más del máximo se ajusta solo y avisa. */}
-                      <CantidadInput
-                        value={item.quantity}
-                        max={max}
-                        mensajeMaximo={mensajeMax}
-                        onChange={(n) => updateQty(item.id, n)}
-                      />
-                      {/* Punto 4: no disponible o ya en el máximo → no se
+                        <CantidadInput
+                          value={item.quantity}
+                          max={max}
+                          mensajeMaximo={mensajeMax}
+                          onChange={(n) => updateQty(item.id, n)}
+                        />
+                        {/* Punto 4: no disponible o ya en el máximo → no se
                           puede aumentar (el título lleva el mensaje). */}
-                      <button
-                        onClick={() =>
-                          updateQty(item.id, item.quantity + 1)
-                        }
-                        disabled={itemNoDisponible || enTope}
-                        title={
-                          itemNoDisponible
-                            ? "No disponible por ahora"
-                            : enTope
-                              ? mensajeMax
-                              : "Aumentar cantidad"
-                        }
-                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-end gap-6">
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Precio unitario</p>
-                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                          {fmt(item.sizePrice + item.extrasPrice)}
-                        </p>
+                        <button
+                          onClick={() =>
+                            updateQty(item.id, item.quantity + 1)
+                          }
+                          disabled={itemNoDisponible || enTope}
+                          title={
+                            itemNoDisponible
+                              ? "No disponible por ahora"
+                              : enTope
+                                ? mensajeMax
+                                : "Aumentar cantidad"
+                          }
+                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Subtotal</p>
-                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                          {fmt(cartTotal(item))}
-                        </p>
+                      <div className="flex items-center justify-end gap-6">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Precio unitario</p>
+                          <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                            {fmt(item.sizePrice + item.extrasPrice)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Subtotal</p>
+                          <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                            {fmt(cartTotal(item))}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {/* Bloque 5 (puntos 4, 5 y 7): mensaje de máximo —rojo si
+                    {/* Bloque 5 (puntos 4, 5 y 7): mensaje de máximo —rojo si
                       la línea pasa del máximo, ámbar si está en él— y aviso
                       de stock bajo de bebidas, visibles sin el cursor. */}
-                  {enTope && (
-                    <p
-                      className={`mt-2 text-xs font-semibold ${
-                        excedida
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-amber-700 dark:text-amber-400"
-                      }`}
-                    >
-                      {mensajeMax}
-                    </p>
-                  )}
-                  {bajoStock && (
-                    <AvisoStockBajo max={max} className="mt-2 inline-block" />
-                  )}
+                    {enTope && (
+                      <p
+                        className={`mt-2 text-xs font-semibold ${excedida
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-amber-700 dark:text-amber-400"
+                          }`}
+                      >
+                        {mensajeMax}
+                      </p>
+                    )}
+                    {bajoStock && (
+                      <AvisoStockBajo max={max} className="mt-2 inline-block" />
+                    )}
+                  </div>
                 </div>
-              </div>
               );
             })}
           </div>
@@ -3849,273 +3852,270 @@ function CartScreen({
         {checkoutStep === 1 && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3
-                  className="text-lg font-bold text-foreground"
-                  style={{ fontFamily: SERIF }}
-                >
-                  Resumen de tu pedido
-                </h3>
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {/* Body: 2 cols */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
-                {/* LEFT: items */}
-                <div className="px-5 py-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                    Descripción del pedido
-                  </p>
-                  {nombreCliente && (
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Cliente:{" "}
-                      <span className="font-semibold text-foreground">
-                        {nombreCliente}
-                      </span>
-                    </p>
-                  )}
-                  <div className="space-y-3">
-                    {cart.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-3"
-                      >
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-10 h-10 rounded-lg object-cover shrink-0 bg-muted"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {item.product.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.size ? `${item.size} · ` : ""}x
-                            {item.quantity}
-                          </p>
-                          {item.selectedExtras.length > 0 && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              +{item.selectedExtras.join(", ")}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end shrink-0 text-right">
-                          <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
-                            {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
-                          </span>
-                          <span
-                            className="text-sm font-bold text-foreground"
-                            style={{ fontFamily: MONO }}
-                          >
-                            {fmt(cartTotal(item))}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Mismas filas que el panel "Resumen" del carrito, para
-                      que el cliente lea el mismo desglose en las dos vistas.
-                      La divisoria ya viene dentro de ResumenTotales. */}
-                  <ResumenTotales
-                    subtotal={subtotal}
-                    className="mt-4 space-y-2 text-sm"
-                  />
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <h3
+                    className="text-lg font-bold text-foreground"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    Resumen de tu pedido
+                  </h3>
+                  <button
+                    onClick={() => setCheckoutStep(0)}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                {/* RIGHT: payment method + pickup time */}
-                <div className="px-5 py-5 space-y-5">
-                  <div>
+                {/* Body: 2 cols */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+                  {/* LEFT: items */}
+                  <div className="px-5 py-5">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Método de pago
+                      Descripción del pedido
                     </p>
-                    <div className="space-y-2">
-                      {["Nequi", "Bancolombia"].map((m) => (
-                        <label
-                          key={m}
-                          className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${payment === m ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                    {nombreCliente && (
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Cliente:{" "}
+                        <span className="font-semibold text-foreground">
+                          {nombreCliente}
+                        </span>
+                      </p>
+                    )}
+                    <div className="space-y-3">
+                      {cart.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3"
                         >
-                          <div
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${payment === m ? "border-primary" : "border-muted-foreground"}`}
-                          >
-                            {payment === m && (
-                              <div className="w-2 h-2 rounded-full bg-primary" />
+                          <img
+                            src={item.product.image}
+                            alt={item.product.name}
+                            className="w-10 h-10 rounded-lg object-cover shrink-0 bg-muted"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {item.product.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.size ? `${item.size} · ` : ""}x
+                              {item.quantity}
+                            </p>
+                            {item.selectedExtras.length > 0 && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                +{item.selectedExtras.join(", ")}
+                              </p>
                             )}
                           </div>
-                          <input
-                            type="radio"
-                            name="payment"
-                            className="sr-only"
-                            value={m}
-                            checked={payment === m}
-                            onChange={() => setPayment(m)}
-                          />
-                          <span className="text-sm font-medium text-foreground">
-                            {PAYMENT_INFO[m].icon} {m}
-                          </span>
-                        </label>
+                          <div className="flex flex-col items-end shrink-0 text-right">
+                            <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
+                              {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
+                            </span>
+                            <span
+                              className="text-sm font-bold text-foreground"
+                              style={{ fontFamily: MONO }}
+                            >
+                              {fmt(cartTotal(item))}
+                            </span>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    {/* Mismas filas que el panel "Resumen" del carrito, para
+                      que el cliente lea el mismo desglose en las dos vistas.
+                      La divisoria ya viene dentro de ResumenTotales. */}
+                    <ResumenTotales
+                      subtotal={subtotal}
+                      className="mt-4 space-y-2 text-sm"
+                    />
                   </div>
+                  {/* RIGHT: payment method + pickup time */}
+                  <div className="px-5 py-5 space-y-5">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                        Método de pago
+                      </p>
+                      <div className="space-y-2">
+                        {["Nequi", "Bancolombia"].map((m) => (
+                          <label
+                            key={m}
+                            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${payment === m ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${payment === m ? "border-primary" : "border-muted-foreground"}`}
+                            >
+                              {payment === m && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <input
+                              type="radio"
+                              name="payment"
+                              className="sr-only"
+                              value={m}
+                              checked={payment === m}
+                              onChange={() => setPayment(m)}
+                            />
+                            <span className="text-sm font-medium text-foreground">
+                              {PAYMENT_INFO[m].icon} {m}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
 
-                  {/* Hora de recogida: dos selects (hora y minutos de 15 en
+                    {/* Hora de recogida: dos selects (hora y minutos de 15 en
                       15), siempre en p. m., de 4:00 p. m. a 9:45 p. m., y solo
                       con los horarios que aún no pasaron hoy. */}
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Hora de recogida
-                    </p>
-                    <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
-                      <p>
-                        Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
-                        <strong className="text-foreground">10:00 p. m.</strong>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                        Hora de recogida
                       </p>
-                      <p className="text-xs mt-0.5">
-                        El último horario de recogida es{" "}
-                        <strong className="text-foreground">9:45 p. m.</strong>
-                      </p>
-                    </div>
-                    <div
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${
-                        horaFueraDeRango(horaRecogida)
-                          ? "border-red-400 focus-within:ring-red-300"
-                          : "border-border"
-                      }`}
-                    >
-                      <span className="text-base shrink-0">🕐</span>
-                      <select
-                        value={seleccionValida && horaSel !== null ? horaSel : ""}
-                        disabled={sinHorariosHoy}
-                        aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
-                        onChange={(e) => {
-                          const nuevaHora = Number(e.target.value);
-                          const minutos = minutosDisponiblesDe(nuevaHora);
-                          const minutoActual = minutos.includes(minutoSel ?? -1)
-                            ? (minutoSel as number)
-                            : minutos[0];
-                          setHoraRecogida(
-                            `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
-                          );
-                        }}
-                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <option value="" disabled>
-                          --:--
-                        </option>
-                        {horasDisponibles.map((h) => (
-                          <option key={h} value={h}>
-                            {`${h > 12 ? h - 12 : h}:00 p. m.`}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={
-                          seleccionValida && minutoSel !== null ? minutoSel : ""
-                        }
-                        disabled={
-                          sinHorariosHoy ||
-                          horaSel === null ||
-                          !horasDisponibles.includes(horaSel)
-                        }
-                        aria-label="Minutos de la hora de recogida"
-                        onChange={(e) => {
-                          if (horaSel === null) return;
-                          setHoraRecogida(
-                            `${String(horaSel).padStart(2, "0")}:${String(
-                              Number(e.target.value),
-                            ).padStart(2, "0")}`,
-                          );
-                        }}
-                        className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <option value="" disabled>
-                          --
-                        </option>
-                        {(
-                          horaSel !== null ? minutosDisponiblesDe(horaSel) : []
-                        ).map((m) => (
-                          <option key={m} value={m}>
-                            {String(m).padStart(2, "0")}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {sinHorariosHoy ? (
-                      <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
-                        ⚠ Ya no hay horarios disponibles para hoy
-                      </p>
-                    ) : (
-                      horaRecogida && (
-                        <p
-                          className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${
-                            horaYaPaso(horaRecogida)
-                              ? "text-red-500"
-                              : horaFueraDeRango(horaRecogida)
-                                ? "text-red-500"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {horaFueraDeRango(horaRecogida)
-                            ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
-                            : horaYaPaso(horaRecogida)
-                              ? "⚠ Esta hora no está disponible — ya pasó"
-                              : `Recogerás a las ${hora12(horaRecogida)}`}
+                      <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
+                        <p>
+                          Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
+                          <strong className="text-foreground">10:00 p. m.</strong>
                         </p>
-                      )
-                    )}
+                        <p className="text-xs mt-0.5">
+                          El último horario de recogida es{" "}
+                          <strong className="text-foreground">9:45 p. m.</strong>
+                        </p>
+                      </div>
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${horaFueraDeRango(horaRecogida)
+                            ? "border-red-400 focus-within:ring-red-300"
+                            : "border-border"
+                          }`}
+                      >
+                        <span className="text-base shrink-0">🕐</span>
+                        <select
+                          value={seleccionValida && horaSel !== null ? horaSel : ""}
+                          disabled={sinHorariosHoy}
+                          aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
+                          onChange={(e) => {
+                            const nuevaHora = Number(e.target.value);
+                            const minutos = minutosDisponiblesDe(nuevaHora);
+                            const minutoActual = minutos.includes(minutoSel ?? -1)
+                              ? (minutoSel as number)
+                              : minutos[0];
+                            setHoraRecogida(
+                              `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
+                            );
+                          }}
+                          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <option value="" disabled>
+                            --:--
+                          </option>
+                          {horasDisponibles.map((h) => (
+                            <option key={h} value={h}>
+                              {`${h > 12 ? h - 12 : h}:00 p. m.`}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={
+                            seleccionValida && minutoSel !== null ? minutoSel : ""
+                          }
+                          disabled={
+                            sinHorariosHoy ||
+                            horaSel === null ||
+                            !horasDisponibles.includes(horaSel)
+                          }
+                          aria-label="Minutos de la hora de recogida"
+                          onChange={(e) => {
+                            if (horaSel === null) return;
+                            setHoraRecogida(
+                              `${String(horaSel).padStart(2, "0")}:${String(
+                                Number(e.target.value),
+                              ).padStart(2, "0")}`,
+                            );
+                          }}
+                          className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <option value="" disabled>
+                            --
+                          </option>
+                          {(
+                            horaSel !== null ? minutosDisponiblesDe(horaSel) : []
+                          ).map((m) => (
+                            <option key={m} value={m}>
+                              {String(m).padStart(2, "0")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {sinHorariosHoy ? (
+                        <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
+                          ⚠ Ya no hay horarios disponibles para hoy
+                        </p>
+                      ) : (
+                        horaRecogida && (
+                          <p
+                            className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${horaYaPaso(horaRecogida)
+                                ? "text-red-500"
+                                : horaFueraDeRango(horaRecogida)
+                                  ? "text-red-500"
+                                  : "text-muted-foreground"
+                              }`}
+                          >
+                            {horaFueraDeRango(horaRecogida)
+                              ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                              : horaYaPaso(horaRecogida)
+                                ? "⚠ Esta hora no está disponible — ya pasó"
+                                : `Recogerás a las ${hora12(horaRecogida)}`}
+                          </p>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {/* Footer */}
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    if (sinHorariosHoy) {
-                      toast.error("Ya no hay horarios disponibles para hoy");
-                      return;
-                    }
-                    if (!horaRecogida) {
-                      toast.error("Por favor ingresa la hora de recogida");
-                      return;
-                    }
-                    const minutos = minutosDeHora(horaRecogida);
-                    if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-                      toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
-                      return;
-                    }
-                    if (horaYaPaso(horaRecogida)) {
-                      toast.error("Esta hora no está disponible — ya pasó");
-                      return;
-                    }
-                    setCheckoutStep(2);
-                  }}
-                  disabled={sinHorariosHoy}
-                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${
-                    sinHorariosHoy
-                      ? "opacity-50 cursor-not-allowed"
-                      : "cursor-pointer"
-                  }`}
-                >
-                  Continuar <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </motion.div>
+                {/* Footer */}
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button
+                    onClick={() => setCheckoutStep(0)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (sinHorariosHoy) {
+                        toast.error("Ya no hay horarios disponibles para hoy");
+                        return;
+                      }
+                      if (!horaRecogida) {
+                        toast.error("Por favor ingresa la hora de recogida");
+                        return;
+                      }
+                      const minutos = minutosDeHora(horaRecogida);
+                      if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
+                        toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+                        return;
+                      }
+                      if (horaYaPaso(horaRecogida)) {
+                        toast.error("Esta hora no está disponible — ya pasó");
+                        return;
+                      }
+                      setCheckoutStep(2);
+                    }}
+                    disabled={sinHorariosHoy}
+                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${sinHorariosHoy
+                        ? "opacity-50 cursor-not-allowed"
+                        : "cursor-pointer"
+                      }`}
+                  >
+                    Continuar <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
         )}
@@ -4168,15 +4168,13 @@ function CartScreen({
                       inputMode="numeric"
                       ref={validacionDatos.refCampo("documento")}
                       {...validacionDatos.ariaCampo("documento", verErrDoc)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     <p
                       id={verErrDoc ? validacionDatos.idError("documento") : undefined}
-                      className={`text-xs mt-1 ${
-                        verErrDoc ? "text-red-500 dark:text-red-400" : "text-muted-foreground"
-                      }`}
+                      className={`text-xs mt-1 ${verErrDoc ? "text-red-500 dark:text-red-400" : "text-muted-foreground"
+                        }`}
                     >
                       {verErrDoc ?? "Entre 6 y 10 dígitos"}
                     </p>
@@ -4200,9 +4198,8 @@ function CartScreen({
                       placeholder="Ej: Laura Martínez"
                       ref={validacionDatos.refCampo("nombre")}
                       {...validacionDatos.ariaCampo("nombre", verErrNom)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     {verErrNom && (
                       <p id={validacionDatos.idError("nombre")} className="text-xs text-red-500 dark:text-red-400 mt-1">
@@ -4230,9 +4227,8 @@ function CartScreen({
                       inputMode="tel"
                       ref={validacionDatos.refCampo("telefono")}
                       {...validacionDatos.ariaCampo("telefono", verErrTel)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     {verErrTel && (
                       <p id={validacionDatos.idError("telefono")} className="text-xs text-red-500 dark:text-red-400 mt-1">
@@ -4260,81 +4256,81 @@ function CartScreen({
         {checkoutStep === 2 && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <div className="flex items-center gap-2">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCheckoutStep(1)}
+                      className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <h3
+                      className="text-lg font-bold text-foreground"
+                      style={{ fontFamily: SERIF }}
+                    >
+                      Datos de pago · {payment}
+                    </h3>
+                  </div>
                   <button
-                    onClick={() => setCheckoutStep(1)}
+                    onClick={() => setCheckoutStep(0)}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
-                  <h3
-                    className="text-lg font-bold text-foreground"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    Datos de pago · {payment}
-                  </h3>
                 </div>
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {/* Body: dos columnas — izquierda cuenta + QR, derecha
+                {/* Body: dos columnas — izquierda cuenta + QR, derecha
                   comprobante. El cuerpo del pago es un componente compartido
                   (PasoPagoTransferencia) que también usa el modal
                   "Completar pago" de Mis pedidos. */}
-              <PasoPagoTransferencia
-                payment={payment}
-                subtotal={subtotal}
-                qrDataUrl={qrDataUrl}
-                comprobante={comprobante}
-                onQuitarComprobante={() => {
-                  setComprobante("");
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
-                subiendo={subiendo}
-                fileRef={fileRef}
-                onFileChange={(file) => {
-                  void subir(file, "comprobantes").then((url) => {
-                    if (url) setComprobante(url);
-                  });
-                }}
-              />
-              {/* Footer */}
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
-                <button
-                  onClick={() => setCheckoutStep(1)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Atrás
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {loading
-                    ? "Enviando..."
-                    : "Enviar"}
-                </button>
-              </div>
-            </motion.div>
+                <PasoPagoTransferencia
+                  payment={payment}
+                  subtotal={subtotal}
+                  qrDataUrl={qrDataUrl}
+                  comprobante={comprobante}
+                  onQuitarComprobante={() => {
+                    setComprobante("");
+                    if (fileRef.current) fileRef.current.value = "";
+                  }}
+                  subiendo={subiendo}
+                  fileRef={fileRef}
+                  onFileChange={(file) => {
+                    void subir(file, "comprobantes").then((url) => {
+                      if (url) setComprobante(url);
+                    });
+                  }}
+                />
+                {/* Footer */}
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button
+                    onClick={() => setCheckoutStep(1)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Atrás
+                  </button>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={loading}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    {loading
+                      ? "Enviando..."
+                      : "Enviar"}
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
         )}
@@ -4537,49 +4533,49 @@ function ClientProfileScreen({
             </div>
           )}
         </div>
-         {/* Fields */}
-         <div className="px-6 py-6 space-y-5">
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-             <div>
-               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                 <FileText className="w-3.5 h-3.5" /> Tipo de documento
-               </label>
-               <input
-                 type="text"
-                 value={tipoDocumento}
-                 readOnly
-                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
-               />
-               <p className="text-[11px] text-muted-foreground mt-1">
-                 Este campo no es editable
-               </p>
-             </div>
-             <div>
-               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                 <FileText className="w-3.5 h-3.5" /> Número de documento
-               </label>
-               <input
-                 type="text"
-                 value={loggedInUser?.numeroDocumento ?? "—"}
-                 readOnly
-                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
-               />
-               <p className="text-[11px] text-muted-foreground mt-1">
-                 Este campo no es editable
-               </p>
-             </div>
-           </div>
-           <div>
+        {/* Fields */}
+        <div className="px-6 py-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                <User className="w-3.5 h-3.5" /> Nombre completo
+                <FileText className="w-3.5 h-3.5" /> Tipo de documento
               </label>
-             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
-               {loggedInUser?.nombre ?? "Sebastián"}
-             </div>
-             <p className="text-[11px] text-muted-foreground mt-1">
-               Este campo no es editable
-             </p>
-           </div>
+              <input
+                type="text"
+                value={tipoDocumento}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Este campo no es editable
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <FileText className="w-3.5 h-3.5" /> Número de documento
+              </label>
+              <input
+                type="text"
+                value={loggedInUser?.numeroDocumento ?? "—"}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Este campo no es editable
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+              <User className="w-3.5 h-3.5" /> Nombre completo
+            </label>
+            <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
+              {loggedInUser?.nombre ?? "Sebastián"}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Este campo no es editable
+            </p>
+          </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
               <Mail className="w-3.5 h-3.5" /> Correo
@@ -4591,9 +4587,9 @@ function ClientProfileScreen({
                   type="email"
                   value={correo}
                   onChange={(e) => {
-                     const value = filtrarCorreo(e.target.value);
-                     setCorreo(value);
-                     setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
+                    const value = filtrarCorreo(e.target.value);
+                    setCorreo(value);
+                    setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
                   }}
                   className={iCls(errores.correo)}
                   autoFocus
@@ -4611,9 +4607,9 @@ function ClientProfileScreen({
             )}
           </div>
           <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                <Phone className="w-3.5 h-3.5" /> Número de teléfono
-              </label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+              <Phone className="w-3.5 h-3.5" /> Número de teléfono
+            </label>
             {editando ? (
               <>
                 <input
@@ -4801,9 +4797,8 @@ function AuthLayout({
           formularios vive dentro de las tarjetas, que si se anuncian. */}
       <div
         aria-hidden="true"
-        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
-          darkMode ? "opacity-0" : "opacity-100"
-        }`}
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${darkMode ? "opacity-0" : "opacity-100"
+          }`}
         style={{ background: RELLENO_CLARO }}
       >
         <div
@@ -4819,9 +4814,8 @@ function AuthLayout({
       </div>
       <div
         aria-hidden="true"
-        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
-          darkMode ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${darkMode ? "opacity-100" : "opacity-0"
+          }`}
         style={{ background: RELLENO_OSCURO }}
       >
         <div
@@ -4949,6 +4943,27 @@ function LoginScreen({
   // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
+  // Cuenta pendiente (403 "Tu cuenta aún no está activada"): se ofrece
+  // "Reenviar correo de confirmación", con 60 s de espera entre envíos (el
+  // backend aplica el mismo intervalo).
+  const [cuentaPendiente, setCuentaPendiente] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
+  const [reenvioEnEspera, setReenvioEnEspera] = useState(false);
+
+  const reenviarConfirmacion = async () => {
+    if (reenviando || reenvioEnEspera) return;
+    setReenviando(true);
+    try {
+      const { mensaje } = await reenviarVerificacion(email.trim().toLowerCase());
+      toast.success(mensaje);
+      setReenvioEnEspera(true);
+      window.setTimeout(() => setReenvioEnEspera(false), 60_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo reenviar el correo.");
+    } finally {
+      setReenviando(false);
+    }
+  };
 
   // Trampa de Tab, foco al primer inválido y aria (lógica compartida).
   const validacion = useValidacionFormulario(["email", "password"]);
@@ -4967,6 +4982,7 @@ function LoginScreen({
       return;
     }
     setRechazo(null);
+    setCuentaPendiente(false);
     setLoading(true);
     try {
       const trimmedEmail = email.trim().toLowerCase();
@@ -4979,11 +4995,11 @@ function LoginScreen({
       );
       const user = usuarioLocal
         ? {
-            ...usuarioLocal,
-            esSuperAdmin: usuarioApi.esSuperAdmin === true,
-            rolCuentaApi: usuarioApi.rol,
-            rolesSesionApi: usuarioApi.roles ?? [],
-          }
+          ...usuarioLocal,
+          esSuperAdmin: usuarioApi.esSuperAdmin === true,
+          rolCuentaApi: usuarioApi.rol,
+          rolesSesionApi: usuarioApi.roles ?? [],
+        }
         : undefined;
 
       if (user && !user.activo) {
@@ -5036,9 +5052,11 @@ function LoginScreen({
           password: "Verifica tu correo y contraseña",
         });
       } else if (status === 403) {
-        // Cuenta de empleado sin activar: el backend manda el motivo
-        // ("Tu cuenta aún no está activada. Revisa tu correo.").
+        // Cuenta sin activar (empleado invitado o cliente que aún no confirma
+        // su correo): el backend manda el motivo ("Tu cuenta aún no está
+        // activada. Revisa tu correo.") y se ofrece reenviar la confirmación.
         setRechazo(mensaje);
+        setCuentaPendiente(true);
       } else {
         // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
         // extrajo el texto que corresponde.
@@ -5101,8 +5119,8 @@ function LoginScreen({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-      <div className="text-center mb-6">
-        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
+        <div className="text-center mb-6">
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground dark:text-white"
@@ -5113,7 +5131,7 @@ function LoginScreen({
           <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
             Ingresa tus datos para continuar
           </p>
-      </div>
+        </div>
 
         <form
           onSubmit={(event) => {
@@ -5121,93 +5139,106 @@ function LoginScreen({
             handleLogin();
           }}
         >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-              Correo electrónico
-            </label>
-            <input
-              value={email}
-              onChange={(e) => {
-                 const value = filtrarCorreo(e.target.value);
-                 setEmail(value);
-                 setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
-              }}
-              type="email"
-              placeholder="correo@lasirena.com"
-              aria-label="Correo electrónico"
-              ref={validacion.refCampo("email")}
-              onKeyDown={validacion.onKeyDownCampo("email", {
-                errores: errors,
-                validar: () => validarCorreo(email),
-                aplicar: (campo, err) =>
-                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
-              })}
-              className={authInputCls(errors.email, "h-12")}
-              {...validacion.ariaCampo("email", errors.email)}
-            />
-            <MensajeError id={validacion.idError("email")} err={errors.email} />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
+                Correo electrónico
+              </label>
+              <input
+                value={email}
+                onChange={(e) => {
+                  const value = filtrarCorreo(e.target.value);
+                  setEmail(value);
+                  setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
+                }}
+                type="email"
+                placeholder="correo@lasirena.com"
+                aria-label="Correo electrónico"
+                ref={validacion.refCampo("email")}
+                onKeyDown={validacion.onKeyDownCampo("email", {
+                  errores: errors,
+                  validar: () => validarCorreo(email),
+                  aplicar: (campo, err) =>
+                    setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+                })}
+                className={authInputCls(errors.email, "h-12")}
+                {...validacion.ariaCampo("email", errors.email)}
+              />
+              <MensajeError id={validacion.idError("email")} err={errors.email} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
+                Contraseña
+              </label>
+              <PasswordField
+                value={password}
+                onChange={(v) => {
+                  setPassword(v);
+                  setErrors((p) => ({
+                    ...p,
+                    password: v ? undefined : "La contraseña es obligatoria",
+                  }));
+                }}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                ariaLabel="Contraseña"
+                inputRef={validacion.refCampo("password")}
+                onKeyDown={validacion.onKeyDownCampo("password", {
+                  errores: errors,
+                  validar: () =>
+                    password ? null : "La contraseña es obligatoria",
+                  aplicar: (campo, err) =>
+                    setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+                })}
+                ariaInvalid={Boolean(errors.password)}
+                ariaDescribedBy={
+                  errors.password ? validacion.idError("password") : undefined
+                }
+                cls={authInputCls(errors.password, "h-12")}
+              />
+              <MensajeError id={validacion.idError("password")} err={errors.password} />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-              Contraseña
-            </label>
-            <PasswordField
-              value={password}
-               onChange={(v) => {
-                 setPassword(v);
-                 setErrors((p) => ({
-                   ...p,
-                   password: v ? undefined : "La contraseña es obligatoria",
-                 }));
-               }}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              ariaLabel="Contraseña"
-              inputRef={validacion.refCampo("password")}
-              onKeyDown={validacion.onKeyDownCampo("password", {
-                errores: errors,
-                validar: () =>
-                  password ? null : "La contraseña es obligatoria",
-                aplicar: (campo, err) =>
-                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
-              })}
-              ariaInvalid={Boolean(errors.password)}
-              ariaDescribedBy={
-                errors.password ? validacion.idError("password") : undefined
-              }
-              cls={authInputCls(errors.password, "h-12")}
-            />
-            <MensajeError id={validacion.idError("password")} err={errors.password} />
+          <div className="text-right mt-2">
+            <button
+              type="button"
+              onClick={() => setShowForgot(true)}
+              className="text-sm text-primary font-medium hover:underline cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
           </div>
-        </div>
-        <div className="text-right mt-2">
-          <button
-            type="button"
-            onClick={() => setShowForgot(true)}
-            className="text-sm text-primary font-medium hover:underline cursor-pointer"
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-        </div>
 
-        <PrimaryBtn
-          type="submit"
-          size="md"
-          className="w-full mt-5 h-12"
-          disabled={loading}
-        >
-          {loading ? (
-            <RefreshCw className="w-5 h-5 animate-spin" />
-          ) : null}
-          {loading ? "Ingresando..." : "Iniciar sesión"}
-        </PrimaryBtn>
+          <PrimaryBtn
+            type="submit"
+            size="md"
+            className="w-full mt-5 h-12"
+            disabled={loading}
+          >
+            {loading ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : null}
+            {loading ? "Ingresando..." : "Iniciar sesión"}
+          </PrimaryBtn>
         </form>
 
         {rechazo && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
             {rechazo}
           </p>
+        )}
+
+        {cuentaPendiente && (
+          <div className="flex justify-center mb-3">
+            <button
+              type="button"
+              onClick={() => void reenviarConfirmacion()}
+              disabled={reenviando || reenvioEnEspera}
+              className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {reenviando ? "Enviando..." : "Reenviar correo de confirmación"}
+            </button>
+          </div>
         )}
 
         {mensajeExito && (
@@ -5353,12 +5384,12 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-      <div
-        className={AUTH_GLASS_OVERLAY}
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-      >
+    <div
+      className={AUTH_GLASS_OVERLAY}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <motion.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -5399,9 +5430,9 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               <input
                 value={forgotEmail}
                 onChange={(e) => {
-                   const value = filtrarCorreo(e.target.value);
-                   setForgotEmail(value);
-                   setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
+                  const value = filtrarCorreo(e.target.value);
+                  setForgotEmail(value);
+                  setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
                 }}
                 type="email"
                 placeholder="correo@lasirena.com"
@@ -5529,6 +5560,7 @@ function RegisterScreen({
   clientes,
   setClientes,
   darkMode,
+  onRegistrado,
 }: {
   navigate: (s: Screen) => void;
   usuarios: Usuario[];
@@ -5537,6 +5569,9 @@ function RegisterScreen({
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   darkMode: boolean;
+  /** Cuenta creada y pendiente de confirmar el correo: App lleva al login con
+   *  el correo escrito y el aviso. `correoEnviado` = salió "Confirma tu correo". */
+  onRegistrado: (correo: string, correoEnviado: boolean) => void;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -5551,41 +5586,41 @@ function RegisterScreen({
   const [errores, setErrores] = useState<Record<string, string>>({});
   const setVal =
     (k: keyof typeof form) =>
-    (v: string) => {
-      const value = k === "email" ? filtrarCorreo(v) : k === "name" ? filtrarNombre(v) : v;
-      setForm((p) => ({ ...p, [k]: value }));
-      setErrores((prev) => {
-        const next = { ...prev };
-        if (k === "email") next.email = "";
-        if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
-        if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
-        if (k === "password") {
-          next.password = value ? validarContrasena(value) ?? "" : "";
-          // Al escribir la contraseña se recalcula también el confirm: si el
-          // usuario repitió la contraseña antes y luego cambió la primera,
-          // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
-          // un desajuste que acaba de producirse).
-          next.confirm = form.confirm
-            ? value === form.confirm
-              ? ""
-              : "Las contraseñas no coinciden"
-            : "";
-        }
-        if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
-        if (k === "name") next.name = validarNombre(value) ?? "";
-        return next;
-      });
-    };
+      (v: string) => {
+        const value = k === "email" ? filtrarCorreo(v) : k === "name" ? filtrarNombre(v) : v;
+        setForm((p) => ({ ...p, [k]: value }));
+        setErrores((prev) => {
+          const next = { ...prev };
+          if (k === "email") next.email = "";
+          if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
+          if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
+          if (k === "password") {
+            next.password = value ? validarContrasena(value) ?? "" : "";
+            // Al escribir la contraseña se recalcula también el confirm: si el
+            // usuario repitió la contraseña antes y luego cambió la primera,
+            // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
+            // un desajuste que acaba de producirse).
+            next.confirm = form.confirm
+              ? value === form.confirm
+                ? ""
+                : "Las contraseñas no coinciden"
+              : "";
+          }
+          if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
+          if (k === "name") next.name = validarNombre(value) ?? "";
+          return next;
+        });
+      };
   const set =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setVal(k)(e.target.value);
+      (e: React.ChangeEvent<HTMLInputElement>) =>
+        setVal(k)(e.target.value);
   // Igual que `set`, pero dejando solo dígitos: el teléfono nunca debe poder
   // guardar letras ni símbolos aunque se peguen desde el portapapeles.
   const setDigitos =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setVal(k)(soloDigitos(e.target.value));
+      (e: React.ChangeEvent<HTMLInputElement>) =>
+        setVal(k)(soloDigitos(e.target.value));
 
   // El botón "Crear cuenta" queda apagado hasta que todos los campos
   // obligatorios estén llenos, la contraseña cumpla las 5 reglas y el
@@ -5637,15 +5672,15 @@ function RegisterScreen({
    *  igual que antes. Shift+Tab y el clic con el mouse no se tocan. */
   const teclaEnRegistro =
     (campo: string) =>
-    (e: React.KeyboardEvent<HTMLElement>) => {
-      validacion.onKeyDownCampo(campo, {
-        errores,
-        validar: validadorDe(campo),
-        aplicar: (c, err) => setErrores((p) => ({ ...p, [c]: err ?? "" })),
-      })(e);
-      if (e.key === "Enter" && (campo === "password" || campo === "confirm"))
-        register();
-    };
+      (e: React.KeyboardEvent<HTMLElement>) => {
+        validacion.onKeyDownCampo(campo, {
+          errores,
+          validar: validadorDe(campo),
+          aplicar: (c, err) => setErrores((p) => ({ ...p, [c]: err ?? "" })),
+        })(e);
+        if (e.key === "Enter" && (campo === "password" || campo === "confirm"))
+          register();
+      };
 
   const register = async () => {
     const errs: Record<string, string> = {};
@@ -5704,7 +5739,7 @@ function RegisterScreen({
 
     setLoading(true);
     try {
-      await registrarCliente({
+      const registro: RegistroConVerificacion = await registrarCliente({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
         nombre: normalizarNombrePersona(form.name),
@@ -5740,11 +5775,11 @@ function RegisterScreen({
             p.map(u =>
               u.id === usuarioPorDoc.id
                 ? {
-                    ...u,
-                    correo: correoNuevo,
-                    telefono: form.phone.trim(),
-                    contrasena: form.password,
-                  }
+                  ...u,
+                  correo: correoNuevo,
+                  telefono: form.phone.trim(),
+                  contrasena: form.password,
+                }
                 : u,
             ),
           );
@@ -5775,8 +5810,8 @@ function RegisterScreen({
           setUsuarios((p) => [...p, nuevoUsuario]);
         }
       }
-      toast.success("¡Cuenta creada exitosamente! Ya puedes ingresar.");
-      navigate("login");
+      // La cuenta queda pendiente hasta confirmar el correo.
+      onRegistrado(correoNuevo, registro.correoEnviado !== false);
     } catch (e) {
       const mensaje =
         e instanceof Error ? e.message : "No se pudo conectar con el servidor.";
@@ -5832,9 +5867,9 @@ function RegisterScreen({
     } finally {
       setLoading(false);
     }
-   };
+  };
 
-   return (
+  return (
     <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -5884,7 +5919,7 @@ function RegisterScreen({
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
-                     setErrores((p) => ({ ...p, docNum: form.docNum ? validarDocumento(form.docNum, e.target.value) ?? "" : "" }));
+                    setErrores((p) => ({ ...p, docNum: form.docNum ? validarDocumento(form.docNum, e.target.value) ?? "" : "" }));
                   }
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
@@ -5907,10 +5942,10 @@ function RegisterScreen({
               </label>
               <input
                 value={form.docNum}
-                 onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
+                onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
                 type="text"
-                 inputMode="numeric"
-                 placeholder="Ej: 12345678"
+                inputMode="numeric"
+                placeholder="Ej: 12345678"
                 aria-label="Número de documento"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
@@ -5945,7 +5980,7 @@ function RegisterScreen({
             {
               label: "Contraseña",
               key: "password" as const,
-               placeholder: "Mínimo 8 caracteres",
+              placeholder: "Mínimo 8 caracteres",
               type: "password",
             },
             {
@@ -6017,7 +6052,7 @@ function RegisterScreen({
           onClick={register}
           size="md"
           className="w-full mt-2 h-10 min-h-0!"
-           disabled={loading || !formValido}
+          disabled={loading || !formValido}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -6359,9 +6394,9 @@ function ManageProductsScreen() {
                       setEditP((p) =>
                         p
                           ? {
-                              ...p,
-                              description: e.target.value,
-                            }
+                            ...p,
+                            description: e.target.value,
+                          }
                           : null,
                       )
                     }
@@ -6382,9 +6417,9 @@ function ManageProductsScreen() {
                       setEditP((p) =>
                         p
                           ? {
-                              ...p,
-                              price: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                            }
+                            ...p,
+                            price: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                          }
                           : null,
                       )
                     }
@@ -7076,47 +7111,25 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
   return INITIAL_EMPLEADOS;
 };
 
-// ── Persistencia de categorías (TEMPORAL) ──────────────────────────────
-// Mismo criterio que la de roles, usuarios y empleados: las categorías vivían
-// solo en el `useState` de la pantalla de Categoría Producto, así que el alta se
-// perdía al salir del módulo y el landing no tenía forma de leerlas. Ahora la
-// lista vive en App y se guarda en localStorage, que es la única fuente que el
-// landing público (mismo origen, sin sesión) puede leer sin backend.
-//
-// AVISO DE ALCANCE: es una persistencia por navegador, no compartida entre
-// equipos. Al guardar el array entero también sobreviven al F5 las ediciones y
-// los borrados. Para volver a la semilla:
-// localStorage.removeItem(CATEGORIAS_STORAGE_KEY).
+// ── Categorías de producto (API) ─────────────────────────────────────────
+// Desde la conexión a la API, la pantalla de Categoría Producto lee y escribe
+// en tb_categoria_productos (GET /categorias-productos/gestion). La lista que
+// vivía en localStorage (`sivpro.categorias.v1`, ids "CAT-00x") NO se sube a
+// la base: se copia UNA vez a `-respaldo-categorias` (mismo patrón que
+// `-respaldo-cpn`) y la clave original deja de usarse.
 const CATEGORIAS_STORAGE_KEY = "sivpro.categorias.v1";
-
-const esCategoriaValida = (c: unknown): c is CategoriaProducto => {
-  if (!c || typeof c !== "object") return false;
-  const cat = c as CategoriaProducto;
-  // `icono` y `estado` se aceptan ausentes: las tres categorías originales no
-  // lo llevan (el suyo está escrito en el landing) y el dato guardado antes de
-  // que existiera el estado tampoco. Con estado inválido NO se acepta la lista:
-  // volvería a la semilla y se perderían todas las categorías guardadas.
-  return (
-    typeof cat.id === "string" &&
-    typeof cat.nombre === "string" &&
-    (cat.icono === undefined || typeof cat.icono === "string") &&
-    (cat.estado === undefined || cat.estado === "Activo" || cat.estado === "Inactivo")
-  );
-};
-
-const leerCategoriasPersistidas = (): CategoriaProducto[] => {
+const CATEGORIAS_RESPALDO_KEY = `${CATEGORIAS_STORAGE_KEY}-respaldo-categorias`;
+const respaldarCategoriasLocales = () => {
   try {
-    const raw = localStorage.getItem(CATEGORIAS_STORAGE_KEY);
-    if (!raw) return INITIAL_CATEGORIAS;
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esCategoriaValida)) {
-      return parsed as CategoriaProducto[];
+    if (localStorage.getItem(CATEGORIAS_RESPALDO_KEY) === null) {
+      const legado = localStorage.getItem(CATEGORIAS_STORAGE_KEY);
+      if (legado !== null) localStorage.setItem(CATEGORIAS_RESPALDO_KEY, legado);
     }
   } catch {
-    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
   }
-  return INITIAL_CATEGORIAS;
 };
+respaldarCategoriasLocales();
 
 // ── Persistencia de producción (cocina) ─────────────────────────────────
 // Las órdenes de producción, los insumos, las ventas y las fichas técnicas
@@ -7133,6 +7146,63 @@ const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
 const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
 const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
 const NO_CONFORMIDADES_STORAGE_KEY = "sivpro.noConformidades.v1";
+// Respaldo único de la fase 2 (insumos, fichas y órdenes pasan a la API).
+const INSUMOS_RESPALDO_FASE2_KEY = `${INSUMOS_STORAGE_KEY}-respaldo-fase2`;
+const FICHAS_RESPALDO_FASE2_KEY = `${FICHAS_STORAGE_KEY}-respaldo-fase2`;
+const ORDENES_RESPALDO_FASE2_KEY = `${ORDENES_PRODUCCION_STORAGE_KEY}-respaldo-fase2`;
+
+// Respaldo único de la fase 3 (proveedores, órdenes de compra y compras pasan
+// a la API). Estas tres listas nunca se persistieron en el navegador (vivían
+// en semillas en memoria), así que el respaldo copia SOLO si alguna clave
+// legada llegara a existir: nunca borra nada ni sobrescribe un respaldo.
+const PROVEEDORES_RESPALDO_FASE3_KEY = "sivpro.proveedores.v1-respaldo-fase3";
+const ORDENES_COMPRA_RESPALDO_FASE3_KEY = "sivpro.ordenesCompra.v1-respaldo-fase3";
+const COMPRAS_RESPALDO_FASE3_KEY = "sivpro.compras.v1-respaldo-fase3";
+
+const respaldarDatosComprasFase3 = () => {
+  try {
+    const parejas: [string, string[]][] = [
+      [PROVEEDORES_RESPALDO_FASE3_KEY, ["sivpro.proveedores.v1"]],
+      [ORDENES_COMPRA_RESPALDO_FASE3_KEY, ["sivpro.ordenesCompra.v1", "sivpro.ordenCompra.v1"]],
+      [COMPRAS_RESPALDO_FASE3_KEY, ["sivpro.compras.v1", "sivpro.gestiones.v1"]],
+    ];
+    for (const [respaldo, originales] of parejas) {
+      if (localStorage.getItem(respaldo) !== null) continue;
+      for (const original of originales) {
+        const legado = localStorage.getItem(original);
+        if (legado !== null) {
+          localStorage.setItem(respaldo, legado);
+          break;
+        }
+      }
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
+};
+respaldarDatosComprasFase3();
+
+/** Copia los datos locales de insumos, fichas y órdenes antes de que dejen de
+    leerse del navegador. Una sola vez, sin borrar nada y sin sobrescribir un
+    respaldo existente (mismo criterio que `respaldarDatosProductosFase1`). */
+const respaldarDatosProduccionFase2 = () => {
+  try {
+    const parejas: [string, string][] = [
+      [INSUMOS_RESPALDO_FASE2_KEY, INSUMOS_STORAGE_KEY],
+      [FICHAS_RESPALDO_FASE2_KEY, FICHAS_STORAGE_KEY],
+      [ORDENES_RESPALDO_FASE2_KEY, ORDENES_PRODUCCION_STORAGE_KEY],
+    ];
+    for (const [respaldo, original] of parejas) {
+      if (localStorage.getItem(respaldo) === null) {
+        const legado = localStorage.getItem(original);
+        if (legado !== null) localStorage.setItem(respaldo, legado);
+      }
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
+};
+respaldarDatosProduccionFase2();
 
 /** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
     forma, se usa la semilla en vez de romper el arranque. */
@@ -7198,44 +7268,22 @@ const mezclarInsumosPersistidos = (): Insumo[] => {
   }
 };
 
-/**
- * Semillas con fechas relativas a hoy. Las pantallas de Semilla traían fechas
- * fijas (2024 / septiembre 2026): con los filtros Diario · Semanal · Mensual
- * del Dashboard eso dejaba las gráficas vacías casi siempre. Aquí solo se
- * recoloca la fecha de cada ítem de la semilla hacia atrás desde hoy; si el
- * usuario ya guardó datos en `localStorage`, esos no se tocan (la semilla solo
- * se usa cuando no hay nada guardado o está corrupto).
- *
- * `diasAtras` reparte los ítems por índice para cubrir hoy, la semana y el mes
- * completos (p. ej. ventas: [0, 0, 1, 2, 3, 4, 6, 9, 0] deja tres ventas de
- * hoy a distintas horas y el resto esparcidas por la semana/mes).
- */
-const semillaConFechasRelativas = <T,>(
-  semilla: T[],
-  campo: keyof T,
-  diasAtras: number[],
-): T[] => {
-  const hoy = new Date();
-  return semilla.map((item, i) => ({
-    ...item,
-    [campo]: fechaISO(agregarDias(hoy, -(diasAtras[i % diasAtras.length] ?? 0))),
-  })) as T[];
+// Productos no conformes: desde la conexión a la API ya no se leen ni se
+// escriben en el navegador. Los registros locales eran de prueba y NO se suben
+// a la base: se copian UNA vez a `-respaldo-cpn` (mismo patrón que la fase 2)
+// y la clave original deja de usarse.
+const NO_CONFORMIDADES_RESPALDO_KEY = `${NO_CONFORMIDADES_STORAGE_KEY}-respaldo-cpn`;
+const respaldarNoConformidadesLocales = () => {
+  try {
+    if (localStorage.getItem(NO_CONFORMIDADES_RESPALDO_KEY) === null) {
+      const legado = localStorage.getItem(NO_CONFORMIDADES_STORAGE_KEY);
+      if (legado !== null) localStorage.setItem(NO_CONFORMIDADES_RESPALDO_KEY, legado);
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
 };
-
-const esNoConformidadValida = (x: unknown) =>
-  esObjeto(x) &&
-  typeof x.id === "string" &&
-  typeof x.tipo === "string" &&
-  typeof x.estado === "string" &&
-  typeof x.fechaRegistro === "string";
-
-const leerNoConformidadesPersistidas = () =>
-  leerListaPersistida<NoConformidad>(
-    NO_CONFORMIDADES_STORAGE_KEY,
-    // [0, 1, 2, 4, 6, 9]: una hoy y el resto repartida por la semana/mes.
-    semillaConFechasRelativas(INITIAL_NO_CONFORMIDADES, "fechaRegistro", [0, 1, 2, 4, 6, 9]),
-    esNoConformidadValida,
-  );
+respaldarNoConformidadesLocales();
 
 // ── Persistencia del stock de Productos (por SESIÓN) ──────────────────
 // A diferencia del resto, este va en `sessionStorage`: el descuento de stock
@@ -7487,7 +7535,7 @@ const mismaConfig = (a: CartItem, b: CartItem) =>
   a.product.id === b.product.id &&
   a.size === b.size &&
   [...a.selectedExtras].sort().join("|") ===
-    [...b.selectedExtras].sort().join("|");
+  [...b.selectedExtras].sort().join("|");
 
 // Al iniciar sesión, el carrito que el cliente ya tenía en pantalla (`base`, el
 // local sin sesión) es el que manda: conserva su id de línea y su precio, o sea
@@ -7645,45 +7693,30 @@ export default function App() {
   const [catalogoError, setCatalogoError] = useState<string | null>(null);
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
-  // cada plato de un pedido.
-  const [fichasPorProducto, setFichasPorProducto] =
-    useState<FichasPorProducto>(() => {
-      // Migración al modelo único + normalización de IDs, UNA sola vez y con
-      // los IDs reales de esta sesión (productos del menú e insumos, porque
-      // los Productos Insumo también guardan ficha). Migrar antes de
-      // normalizar hace que las fichas recién creadas desde el legado ya
-      // entren con número en la serie.
-      const insumosSemilla = mezclarInsumosPersistidos();
-      const fichasLeidas = leerFichasPersistidas();
-      const idsExistentes = [
-        ...leerProductosParaMigracion().map((p) => p.id),
-        ...insumosSemilla.map((i) => i.id),
-        ...Object.keys(fichasLeidas),
-      ];
-      return normalizarIdsFicha(
-        migrarFichasLegacy(fichasLeidas, insumosSemilla),
-        idsExistentes,
-      );
-    });
-  // Órdenes de producción. Antes vivían dentro de OrdenProduccionScreen, así que
-  // se perdían al salir del módulo y no había forma de crear el pedido solo.
-  const [ordenesProduccion, setOrdenesProduccion] =
-    useState<OrdenProduccion[]>(leerOrdenesPersistidas);
-  // No conformidades (módulo Productos no conformes). Subidas a App para que
-  // Orden de Producción pueda registrar mermas y sobrevivan al F5.
-  const [noConformidades, setNoConformidades] =
-    useState<NoConformidad[]>(leerNoConformidadesPersistidas);
-  // Categorías de producto. Las consume el módulo de Categoría Producto (que
-  // las crea, edita y borra) y el landing público, que pinta una tarjeta por
-  // cada categoría nueva. Ver `leerCategoriasPersistidas`.
-  const [categorias, setCategorias] = useState<CategoriaProducto[]>(leerCategoriasPersistidas);
+  // cada plato de un pedido. Desde la fase 2 viven en la API: el estado arranca
+  // vacío y lo llena `cargarInsumosFichas` (GET /fichas/vigentes).
+  const [fichasPorProducto, setFichasPorProducto] = useState<FichasPorProducto>({});
+  // Órdenes de producción (API). Antes vivían dentro de OrdenProduccionScreen y
+  // después en localStorage; ahora la lista viene de GET /ordenes-produccion.
+  const [ordenesProduccion, setOrdenesProduccion] = useState<OrdenProduccion[]>([]);
+  // Productos no conformes (API, GET /productos-no-conformes). Viven en App
+  // porque los leen CPN, el detalle de Orden de Producción y el Dashboard.
+  const [noConformidades, setNoConformidades] = useState<NoConformidad[]>([]);
+  const [noConformesCargando, setNoConformesCargando] = useState(false);
+  const [errorNoConformes, setErrorNoConformes] = useState<string | null>(null);
+  // Categorías de producto de la gestión (API, GET /categorias-productos/gestion):
+  // activas e inactivas, con sus productos asociados. Solo las usa la pantalla
+  // de Categoría Producto; el resto de la app usa `categoriasCatalogo`.
+  const [categorias, setCategorias] = useState<CategoriaProducto[]>([]);
+  const [categoriasCargando, setCategoriasCargando] = useState(false);
+  const [errorCategorias, setErrorCategorias] = useState<string | null>(null);
   // Catálogo del picker de pedidos (VentasScreen) y del canje de devoluciones,
   // armado con el estado `productos` en vez del mock `PRODUCTS`: los nombres
   // ("Pizza Jamon") son los del panel, así el detalle de la venta resuelve el
   // Producto real (id y stock) al crear la orden de producción.
   const productosMenu = useMemo(
-    () => productos.map((p) => productoACatalogo(p, categorias)),
-    [productos, categorias],
+    () => productos.map((p) => productoACatalogo(p, categoriasCatalogo)),
+    [productos, categoriasCatalogo],
   );
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
@@ -7730,25 +7763,167 @@ export default function App() {
     }
   };
 
-  const cargarProductosGestion = async () => {
+  const cargarProductosGestion = async (): Promise<Producto[]> => {
     setProductosCargando(true);
     setErrorCargaProductos(null);
     try {
       const listado = await listarGestion();
       setProductos(listado);
       setProductosGestionCargados(true);
+      return listado;
     } catch (error) {
       setErrorCargaProductos(mensajeErrorProductos(error, "No se pudieron cargar los productos."));
       setProductosGestionCargados(false);
+      return [];
     } finally {
       setProductosCargando(false);
     }
   };
 
+  /** Configuración de la categoría de un producto (tamaños de su ficha), con
+      el catálogo que se pasa como argumento: las fichas de la API sólo traen
+      las porciones del PRIMER tamaño y el resto se arma desde aquí. */
+  const configDeProducto = (
+    idProducto: string,
+    productosCargados: Producto[],
+  ): ConfigCategoria | null => {
+    const p = productosCargados.find((x) => x.id === idProducto);
+    return p ? configDeCategoria(p.idCategoria, p.categoriaNombre) : null;
+  };
+
+  /** Insumos, categorías de insumos y fichas vigentes (API). `productosCargados`
+      es el catálogo ya leído: hace falta para derivar los tamaños de cada
+      ficha. Si falla NO se vuelve a datos de ejemplo: queda el error con
+      "Reintentar". */
+  const cargarInsumosFichas = async (productosCargados?: Producto[]) => {
+    setInsumosCargando(true);
+    setErrorInsumos(null);
+    try {
+      const [categorias, datosInsumos, fichasVigentes] = await Promise.all([
+        listarCategoriasInsumo(),
+        listarInsumos(),
+        obtenerFichasVigentes(),
+      ]);
+      setCategoriasInsumo(categorias);
+      setInsumos(datosInsumos.insumos);
+      // Las fichas de producto insumo ya vienen dentro de cada insumo; las de
+      // producto (pizzas, lasañas) llegan por su cuenta y aquí se les añaden
+      // sus "Porciones por tamaño".
+      const base = productosCargados ?? productos;
+      const fichasDeProducto = mapearFichasApi(
+        fichasVigentes.filter((f) => f.id_insumo == null || f.id_insumo === ""),
+        (id) => configDeProducto(id, base),
+      );
+      setFichasPorProducto({ ...datosInsumos.fichas, ...fichasDeProducto });
+    } catch (error) {
+      setErrorInsumos(mensajeErrorInsumos(error, "No se pudieron cargar los insumos."));
+    } finally {
+      setInsumosCargando(false);
+    }
+  };
+
+  /** Órdenes de producción (API). */
+  const cargarOrdenes = async () => {
+    setOrdenesCargando(true);
+    setErrorOrdenes(null);
+    try {
+      setOrdenesProduccion(await listarOrdenesProduccion());
+    } catch (error) {
+      setErrorOrdenes(mensajeErrorOrdenes(error, "No se pudieron cargar las órdenes de producción."));
+    } finally {
+      setOrdenesCargando(false);
+    }
+  };
+
+  /** Productos no conformes (API). */
+  const cargarNoConformes = async () => {
+    setNoConformesCargando(true);
+    setErrorNoConformes(null);
+    try {
+      setNoConformidades(await listarNoConformidades());
+    } catch (error) {
+      setErrorNoConformes(mensajeErrorNoConformes(error, "No se pudieron cargar los productos no conformes."));
+    } finally {
+      setNoConformesCargando(false);
+    }
+  };
+
+  /** Categorías de producto de la gestión (API). */
+  const cargarCategoriasGestion = async () => {
+    setCategoriasCargando(true);
+    setErrorCategorias(null);
+    try {
+      setCategorias(await listarCategoriasGestion());
+    } catch (error) {
+      setErrorCategorias(mensajeErrorCategorias(error, "No se pudieron cargar las categorías."));
+    } finally {
+      setCategoriasCargando(false);
+    }
+  };
+
+  /** Proveedores (API, fase 3). */
+  const cargarProveedores = async () => {
+    setProveedoresCargando(true);
+    setErrorProveedores(null);
+    try {
+      setProveedores(await listarProveedores());
+    } catch (error) {
+      setErrorProveedores(mensajeErrorProveedores(error, "No se pudieron cargar los proveedores."));
+    } finally {
+      setProveedoresCargando(false);
+    }
+  };
+
+  /** Órdenes de compra (API, fase 3). */
+  const cargarOrdenesCompra = async () => {
+    setOrdenesCompraCargando(true);
+    setErrorOrdenesCompra(null);
+    try {
+      setOrdenes(await listarOrdenesCompra());
+    } catch (error) {
+      setErrorOrdenesCompra(mensajeErrorOrdenesCompra(error, "No se pudieron cargar las órdenes de compra."));
+    } finally {
+      setOrdenesCompraCargando(false);
+    }
+  };
+
+  /** Compras (API, fase 3). */
+  const cargarCompras = async () => {
+    setComprasCargando(true);
+    setErrorCompras(null);
+    try {
+      setGestiones(await listarCompras());
+    } catch (error) {
+      setErrorCompras(mensajeErrorCompras(error, "No se pudieron cargar las compras."));
+    } finally {
+      setComprasCargando(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn || !restauracionSesionLista) return;
-    void cargarProductosGestion();
+    void (async () => {
+      // Primero los productos: las fichas necesitan su categoría para armar
+      // los tamaños de "Porciones por tamaño".
+      const productosCargados = await cargarProductosGestion();
+      await Promise.all([
+        cargarInsumosFichas(productosCargados),
+        cargarOrdenes(),
+        cargarNoConformes(),
+        cargarProveedores(),
+        cargarOrdenesCompra(),
+        cargarCompras(),
+      ]);
+    })();
   }, [isLoggedIn, restauracionSesionLista]);
+
+  // Las categorías de la gestión se cargan al entrar a su pantalla: el backend
+  // exige el permiso "Ver" de Categoría de Producto y así nadie sin él recibe
+  // un 403 de fondo.
+  useEffect(() => {
+    if (!isLoggedIn || !restauracionSesionLista || screen !== "cat-producto") return;
+    void cargarCategoriasGestion();
+  }, [isLoggedIn, restauracionSesionLista, screen]);
 
   useEffect(() => {
     if (!productosGestionCargados) return;
@@ -7790,7 +7965,7 @@ export default function App() {
   }, [productosGestionCargados, productos]);
 
   useEffect(() => {
-    void recargarCatalogo().catch(() => {});
+    void recargarCatalogo().catch(() => { });
   }, []);
 
   // SEO: título único por pantalla (sin librerías). Se actualiza al cambiar de
@@ -7848,6 +8023,42 @@ export default function App() {
     aplicarProductoRespuesta(actualizado);
     await recargarCatalogoTrasCambio();
     return actualizado;
+  };
+
+  // Categorías de producto: cada cambio confirmado por el backend actualiza la
+  // lista de la gestión y refresca el catálogo público, para que landing,
+  // Productos y Ventas lo vean sin F5.
+  const aplicarCategoriaRespuesta = (categoria: CategoriaProducto) => {
+    setCategorias((prev) => prev.some((c) => c.id === categoria.id)
+      ? prev.map((c) => c.id === categoria.id ? categoria : c)
+      : [...prev, categoria]);
+  };
+
+  const crearCategoriaEnServidor = async (datos: CategoriaGuardar) => {
+    const creada = await crearCategoria(datos);
+    aplicarCategoriaRespuesta(creada);
+    await recargarCatalogoTrasCambio();
+    return creada;
+  };
+
+  const editarCategoriaEnServidor = async (id: string, datos: CategoriaGuardar) => {
+    const actualizada = await editarCategoria(id, datos);
+    aplicarCategoriaRespuesta(actualizada);
+    await recargarCatalogoTrasCambio();
+    return actualizada;
+  };
+
+  const cambiarEstadoCategoriaEnServidor = async (id: string, estado: EstadoCategoria) => {
+    const actualizada = await cambiarEstadoCategoria(id, estado === "Activo");
+    aplicarCategoriaRespuesta(actualizada);
+    await recargarCatalogoTrasCambio();
+    return actualizada;
+  };
+
+  const eliminarCategoriaEnServidor = async (id: string) => {
+    await eliminarCategoria(id);
+    setCategorias((prev) => prev.filter((c) => c.id !== id));
+    await recargarCatalogoTrasCambio();
   };
 
   const descontinuarProductoEnServidor = (id: string) => cambiarEstadoEnServidor(id, "Descontinuado");
@@ -8128,7 +8339,7 @@ export default function App() {
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
-      canEdit:   acts.includes("Editar"),
+      canEdit: acts.includes("Editar"),
       canDelete: acts.includes("Eliminar"),
       // Aparte del CRUD: sin este permiso no se monta el botón "Descargar
       // Excel", así que el `.xlsx` no se puede generar desde la interfaz.
@@ -8221,20 +8432,31 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [orders] = useState<Order[]>(ORDERS);
-  const [ordenes, setOrdenes] = useState<OrdenCompra[]>(
-    // Órdenes 2024 → relativas a hoy: [0, 1, 3, 6, 10] cubre hoy, la semana
-    // y el mes para el filtro del Dashboard.
-    semillaConFechasRelativas(INITIAL_ORDENES, "fecha", [0, 1, 3, 6, 10]),
-  );
-  const [gestiones, setGestiones] = useState<GestionCompra[]>(
-    // Facturas ago/sept 2026 → relativas a hoy: [0, 1, 2, 4, 6].
-    semillaConFechasRelativas(INITIAL_GESTIONES, "fechaFactura", [0, 1, 2, 4, 6]),
-  );
-  const [insumos, setInsumos] =
-    useState<Insumo[]>(() => mezclarInsumosPersistidos());
-  const [proveedores, setProveedores] = useState<ProveedorRef[]>(
-    PROVEEDORES_INIT,
-  );
+  // Órdenes de compra y compras (API, fase 3). Sin semillas: las cargan
+  // `cargarOrdenesCompra`/`cargarCompras`; si falla queda el error con
+  // "Reintentar" y no se vuelve a datos de ejemplo.
+  const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
+  const [ordenesCompraCargando, setOrdenesCompraCargando] = useState(false);
+  const [errorOrdenesCompra, setErrorOrdenesCompra] = useState<string | null>(null);
+  const [gestiones, setGestiones] = useState<GestionCompra[]>([]);
+  const [comprasCargando, setComprasCargando] = useState(false);
+  const [errorCompras, setErrorCompras] = useState<string | null>(null);
+  // Catálogo de insumos (API). Sin semilla local: lo llena
+  // `cargarInsumosFichas`; si falla se muestra el error con "Reintentar" y no
+  // se vuelve a datos de ejemplo.
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [insumosCargando, setInsumosCargando] = useState(false);
+  const [errorInsumos, setErrorInsumos] = useState<string | null>(null);
+  // Categorías de insumos (API). Las usan Gestión de Insumos y el
+  // "+ Crear insumo" de Compras; en los selectores solo entran las activas.
+  const [categoriasInsumo, setCategoriasInsumo] = useState<CategoriaInsumo[]>([]);
+  // Estado de carga de las órdenes de producción (API).
+  const [ordenesCargando, setOrdenesCargando] = useState(false);
+  const [errorOrdenes, setErrorOrdenes] = useState<string | null>(null);
+  // Proveedores (API, fase 3). Sin semilla: los carga `cargarProveedores`.
+  const [proveedores, setProveedores] = useState<ProveedorRef[]>([]);
+  const [proveedoresCargando, setProveedoresCargando] = useState(false);
+  const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -8255,18 +8477,6 @@ export default function App() {
     }
     escribirCarritoGuardado(cart);
   }, [cart, loggedInUserId]);
-
-  // Cada alta, edición o borrado de categoría se guarda en localStorage: es lo
-  // que permite que la tarjeta nueva del landing siga ahí después del F5. En la
-  // primera carga se escribe la semilla, que es la misma que trae el módulo.
-  useEffect(() => {
-    try {
-      localStorage.setItem(CATEGORIAS_STORAGE_KEY, JSON.stringify(categorias));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
-      // en memoria durante la sesión.
-    }
-  }, [categorias]);
 
   // Mitad que faltaba del par leer/escribir de los roles: `leerRolesPersistidos`
   // lee `sivpro.roles.v1`, pero nada la escribía, así que cualquier rol creado
@@ -8293,34 +8503,9 @@ export default function App() {
     }
   }, [empleados]);
 
-  // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
-  // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
-  // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
-  // a rehacerlas a mano.
-  useEffect(() => {
-    try {
-      localStorage.setItem(ORDENES_PRODUCCION_STORAGE_KEY, JSON.stringify(ordenesProduccion));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
-      // en memoria durante la sesión.
-    }
-  }, [ordenesProduccion]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(insumos));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [insumos]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(NO_CONFORMIDADES_STORAGE_KEY, JSON.stringify(noConformidades));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [noConformidades]);
+  // Las órdenes de producción, los insumos y los productos no conformes ya NO
+  // se guardan en localStorage: viven en la API (respaldos locales en las
+  // claves `-respaldo-fase2` y `-respaldo-cpn`).
 
   // Las ventas se cargan al entrar a Ventas, al Dashboard y al Inicio: así el
   // Dashboard no queda en $0 después de un F5. El backend exige el permiso
@@ -8348,125 +8533,28 @@ export default function App() {
     return () => clearInterval(id);
   }, [screen, puedeVerVentas]);
 
+  // Las fichas técnicas tampoco se guardan en localStorage: se leen y escriben
+  // en la API (`-respaldo-fase2` conserva la copia local de la fase 1).
+
+  // ── Ventas → órdenes de producción (todo lo hace la API) ──
+  // La orden de una venta la crea el backend al aceptarla (tipo "Pedido") y la
+  // cancela al anularla. Los dos efectos locales que replicaban ese flujo
+  // desaparecen; lo único que queda es recargar las órdenes cuando el ESTADO
+  // de alguna venta cambia (aceptar, anular, pasar a devolución…),
+  // comparándolo contra el valor anterior para no llamar en cada render ni en
+  // cada cambio de la lista.
+  const estadoVentasRef = useRef<Record<string, Venta["estado"]> | null>(null);
   useEffect(() => {
-    try {
-      localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [fichasPorProducto]);
-
-  // Creación automática de la orden de producción (§3a / P2) — punto C2:
-  // cuando una venta pagada queda Por entregar se le crea una orden local
-  // una orden tipo "Pedido" en Pendiente. Mientras la venta está
-  // las ventas pendientes de verificación no generan la orden. La orden
-  // local se conserva para los flujos de Producción que aún no usan API.
-  //
-  // El filtro es por ESTADO, no por transición, así que cubre los flujos:
-  // Ventas que ya están Por entregar pueden alimentar la vista local de
-  // Producción mientras ese módulo se conecta a su propia API.
-  // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
-  // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
-  // orden por producto.
-  //
-  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas de
-  // la semilla y de lo que se cargó de localStorage, y no es un cambio de
-  // estado sino el arranque. A partir de ahí, cada venta que aparece
-  // preparada sin orden genera la suya. La clave anti-duplicados es `ventaId`:
-  // una venta = una sola orden, y el updater vuelve a comprobarlo contra el
-  // estado final por si acaso.
-  const vigilaVentasRef = useRef(false);
-  useEffect(() => {
-    if (!vigilaVentasRef.current) {
-      vigilaVentasRef.current = true;
-      return;
-    }
-    const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
-    const preparable = (v: Venta) => v.estado === "Por entregar";
-    const nuevas = ventas.filter((v) => preparable(v) && !conOrden.has(v.id));
-    if (nuevas.length === 0) return;
-
-    const creada: OrdenProduccion[] = [];
-    let id = siguienteOrdenId(ordenesProduccion);
-    for (const v of nuevas) {
-      creada.push(crearOrdenPedido(v, { productos, fichas: fichasPorProducto, insumos }, id));
-      id = `OP-${String(parseInt(id.replace("OP-", ""), 10) + 1).padStart(3, "0")}`;
-    }
-    setOrdenesProduccion((p) => {
-      // Defensa por `ventaId`: si alguna orden del mismo ventaId ya entró en
-      // `p` (carrera rara con el buscador manual), no se vuelve a crear.
-      const yaTiene = new Set(p.map((o) => o.ventaId).filter(Boolean) as string[]);
-      return [...creada.filter((o) => !o.ventaId || !yaTiene.has(o.ventaId)), ...p];
-    });
-    creada.forEach((o) =>
-      toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
-    );
-  }, [ventas, ordenesProduccion, productos, fichasPorProducto, insumos]);
-
-  // ── Venta anulada → su orden local de Producción se cancela ──
-  // El backend hace lo mismo en la base (estado 'Cancelada' con
-  // `fecha_cancelada` y devolución de las bebidas al stock); aquí se replica en
-  // el espejo local que lee la pantalla de Producción.
-  //
-  // El MONTAJE sólo limpia órdenes huérfanas de una sesión anterior: la
-  // reposición de stock queda reservada a las anulaciones observadas en vivo,
-  // porque al arrancar el stock vuelve a la semilla y ya no se sabe qué salió
-  // de verdad (mismo criterio que el efecto de "stock fresco" de arriba).
-  // Sólo vuelven las BEBIDAS (Producto terminado): los elaborados salieron al
-  // producirse y no son reventa, igual que en `cancelarOrdenProduccionDeVenta`.
-  const montajeAnulacionesRef = useRef(true);
-  useEffect(() => {
-    const esMontaje = montajeAnulacionesRef.current;
-    montajeAnulacionesRef.current = false;
-    const anuladas = new Set(ventas.filter((v) => v.estado === "Anulado").map((v) => v.id));
-    if (anuladas.size === 0) return;
-    const pendientes = ordenesProduccion.filter(
-      (o) => !!o.ventaId && anuladas.has(o.ventaId) && o.estadoOrden !== "cancelada",
-    );
-    if (pendientes.length === 0) return;
-
-    if (!esMontaje) {
-      const reponer = new Map<string, number>();
-      for (const orden of pendientes) {
-        if (!orden.productosDescontados) continue;
-        for (const linea of orden.lineas) {
-          if (!linea.productoId) continue;
-          const producto = productos.find((p) => p.id === linea.productoId);
-          if (producto?.tipo !== TIPOS_PRODUCTO[1]) continue;
-          reponer.set(producto.id, (reponer.get(producto.id) ?? 0) + (linea.cantidadEstimada || 0));
-        }
-      }
-      if (reponer.size > 0) {
-        setProductos((prev) =>
-          prev.map((p) =>
-            reponer.has(p.id)
-              ? { ...p, stockDisponible: p.stockDisponible + (reponer.get(p.id) ?? 0) }
-              : p,
-          ),
-        );
-      }
-      const ids = pendientes.map((o) => o.id);
-      toast.info(
-        ids.length === 1
-          ? `Orden de producción ${ids[0]} cancelada por la anulación de la venta`
-          : `Órdenes de producción ${ids.join(", ")} canceladas por la anulación de las ventas`,
-      );
-    }
-
-    const cancelar = new Set(pendientes.map((o) => o.id));
-    const ahora = new Date().toISOString();
-    setOrdenesProduccion((prev) =>
-      prev.map((o) =>
-        cancelar.has(o.id) && o.estadoOrden !== "cancelada"
-          ? {
-              ...o,
-              estadoOrden: "cancelada",
-              historial: [...o.historial, { de: o.estadoOrden, a: "cancelada", fechaHora: ahora }],
-            }
-          : o,
-      ),
-    );
-  }, [ventas, ordenesProduccion, productos]);
+    const anterior = estadoVentasRef.current;
+    const actual: Record<string, Venta["estado"]> = {};
+    for (const v of ventas) actual[v.id] = v.estado;
+    estadoVentasRef.current = actual;
+    // La primera ejecución es la carga inicial, no un cambio de estado.
+    if (anterior === null) return;
+    const cambio = ventas.some((v) => anterior[v.id] !== undefined && anterior[v.id] !== v.estado);
+    if (!cambio) return;
+    void cargarOrdenes();
+  }, [ventas]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8532,18 +8620,19 @@ export default function App() {
     navigate("production-orders");
   };
 
-  /** A2 — Orden "Preparación en lote" del Producto Insumo recién creado en
-      Insumos: nace Pendiente con su ficha v1 y su "Cantidad a hacer", y sin
-      descontar nada. Los datos llegan como ARGUMENTOS (no del estado) porque
-      el producto insumo y su ficha v1 se acaban de crear en ESTE mismo clic y
-      el estado de App todavía no los tiene. Devuelve el id para el toast. */
-  const crearOrdenPreparacionPI = (pi: Insumo, ficha: FichaVersion): string => {
-    const id = siguienteOrdenId(ordenesProduccion);
-    setOrdenesProduccion((p) => [
-      crearOrdenPreparacion(pi, ficha, { fichas: fichasPorProducto }, id),
-      ...p,
-    ]);
-    return id;
+  /** Recarga insumos, fichas y órdenes desde la API tras una acción del módulo
+      de Producción (crear un producto insumo, iniciar o completar una orden…):
+      el stock de los insumos cambió en la base. */
+  const recargarProduccion = async () => {
+    // CPN también: completar una preparación con merma crea su registro.
+    await Promise.all([cargarInsumosFichas(productos), cargarOrdenes(), cargarNoConformes()]);
+  };
+
+  /** Crear o eliminar un producto no conforme manual mueve stock en la base
+      (producto de reventa o insumo): se recargan productos e insumos. */
+  const recargarInventarioCpn = async () => {
+    const productosCargados = await cargarProductosGestion();
+    await cargarInsumosFichas(productosCargados);
   };
 
   /** "Ver orden" del toast de Insumos: salta a Orden de Producción con el
@@ -8573,6 +8662,45 @@ export default function App() {
     setActivacionToken(token);
     navigate("login");
   }, []);
+
+  // ── Verificación de correo del registro (?verificar=<token>) ───────────
+  // Igual que ?activar: se lee UNA vez, la URL se limpia al instante y se
+  // confirma contra la API. Bien → login con el correo escrito y el aviso
+  // verde; mal (vencido, ya usado) → login con el mensaje del backend.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("verificar");
+    if (!token) return;
+    window.history.replaceState(null, "", "/");
+    // Se navega al login cuando responde la API: LoginScreen toma el correo
+    // precargado solo al montarse.
+    void verificarCorreo(token)
+      .then(({ correo }) => {
+        setLoginEmailPre(correo ?? "");
+        setLoginMensajeExito("Correo verificado. Ya puedes iniciar sesión");
+        toast.success("Correo verificado. Ya puedes iniciar sesión");
+      })
+      .catch((error) => {
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "No se pudo verificar el correo.",
+        );
+      })
+      .finally(() => navigate("login"));
+  }, []);
+
+  /** Fin del registro público: la cuenta queda pendiente de confirmar el
+      correo, así que se va al login con el correo escrito y el aviso. */
+  const trasRegistrarse = (correo: string, correoEnviado: boolean) => {
+    const aviso = correoEnviado
+      ? "Te enviamos un correo para confirmar tu cuenta"
+      : "Tu cuenta quedó creada, pero no pudimos enviar el correo. Inicia sesión y usa «Reenviar correo de confirmación»";
+    setLoginEmailPre(correo);
+    setLoginMensajeExito(aviso);
+    if (correoEnviado) toast.success(aviso);
+    else toast.warning(aviso);
+    navigate("login");
+  };
 
   /** Fin de la activación: login con el correo ya escrito y el aviso verde. */
   const trasActivarCuenta = (correo: string) => {
@@ -8734,7 +8862,7 @@ export default function App() {
         normalizarNombre(x.nombre) === normalizarNombre(linea.product.name),
     );
     if (!p) return [];
-    const enCategoria = categorias.find((c) => c.id === p.idCategoria)?.nombre;
+    const enCategoria = categoriasCatalogo.find((c) => c.id === p.idCategoria)?.nombre;
     if (tipoDe(p, enCategoria) !== "Producto insumo") return [];
     const ficha = fichaVigente(fichasPorProducto, p.id);
     if (!ficha) return [];
@@ -8770,7 +8898,7 @@ export default function App() {
       normalizarNombre(n ?? "") === normalizarNombre(nombre);
     const enPanel = productos.find((p) => mismoNombre(p.nombre));
     if (!enPanel) return { max: undefined, elaborado: false };
-    const enCategoria = categorias.find(
+    const enCategoria = categoriasCatalogo.find(
       (c) => c.id === enPanel.idCategoria,
     )?.nombre;
     const elaborado = tipoDe(enPanel, enCategoria) === "Producto insumo";
@@ -8930,12 +9058,12 @@ export default function App() {
           // El tope de la línea fusionada es el `max` (que ya descuenta lo
           // que había en el carrito) más lo que había en ESTA línea.
           ? {
-              ...x,
-              quantity: ajustarCantidad(
-                x.quantity + disponible,
-                max === undefined ? undefined : max + actual,
-              ),
-            }
+            ...x,
+            quantity: ajustarCantidad(
+              x.quantity + disponible,
+              max === undefined ? undefined : max + actual,
+            ),
+          }
           : x,
       );
     });
@@ -8992,13 +9120,13 @@ export default function App() {
       p.map((i) =>
         i.id === id
           ? {
-              ...i,
-              // Bloque 5: máximo el tope de ESTA línea con todo el resto
-              // del carrito (la propia no se cuenta dos veces); si quien
-              // edita se pasa, la cantidad se ajusta sola. El mínimo sigue
-              // siendo 1 y el − en 1 sigue quitando la línea (como siempre).
-              quantity: ajustarCantidad(qty, limiteDeLinea(i, p).max),
-            }
+            ...i,
+            // Bloque 5: máximo el tope de ESTA línea con todo el resto
+            // del carrito (la propia no se cuenta dos veces); si quien
+            // edita se pasa, la cantidad se ajusta sola. El mínimo sigue
+            // siendo 1 y el − en 1 sigue quitando la línea (como siempre).
+            quantity: ajustarCantidad(qty, limiteDeLinea(i, p).max),
+          }
           : i,
       ),
     );
@@ -9146,10 +9274,10 @@ export default function App() {
         prev.map((u) =>
           u.id === id
             ? {
-                ...u,
-                correo: (perfil.correo || datos.correo).trim().toLowerCase(),
-                telefono: perfil.telefono || datos.telefono,
-              }
+              ...u,
+              correo: (perfil.correo || datos.correo).trim().toLowerCase(),
+              telefono: perfil.telefono || datos.telefono,
+            }
             : u,
         ),
       );
@@ -9207,8 +9335,8 @@ export default function App() {
       cancelado = true;
       if (reintento !== undefined) window.clearTimeout(reintento);
     };
-  // La restauración solo debe iniciarse una vez por sesión persistida.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // La restauración solo debe iniciarse una vez por sesión persistida.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sesionActiva?.userId]);
 
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
@@ -9458,8 +9586,8 @@ export default function App() {
             setTimeout(() => menuButtonRef.current?.focus(), 0);
           }}
           darkMode={darkMode}
-           userRole={userRole}
-           accesos={loggedInAccesos}
+          userRole={userRole}
+          accesos={loggedInAccesos}
           esSuperAdminSesion={esSuperAdminSesion}
           hasDashboardAccess={hasDashboardAccess}
           esMovil={esMovil}
@@ -9551,7 +9679,7 @@ export default function App() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => void recargarCatalogo().catch(() => {})}
+                    onClick={() => void recargarCatalogo().catch(() => { })}
                     disabled={catalogoCargando}
                     className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
                   >
@@ -9578,647 +9706,679 @@ export default function App() {
                   </div>
                 }
               >
-              <LandingErrorBoundary resetKey={screen}>
-              {screen === "landing" && (
-                <LandingScreen
-                  navigate={navigate}
-                  setProduct={setSelectedProduct}
-                  onCategoryNavigate={(cat) => {
-                    setCatalogCat(cat);
-                    navigate("catalog");
-                  }}
-                  categorias={categoriasCatalogo}
-                  productos={productosCatalogo}
-                  onOpenDetail={(p) => {
-                    setDetalleOrigen("landing");
-                    setSelectedProduct(p);
-                    navigate("product-detail");
-                  }}
-                />
-              )}
-              {screen === "catalog" && (
-                <CatalogScreen
-                  navigate={navigate}
-                  setProduct={setSelectedProduct}
-                  quickAdd={quickAdd}
-                  initialCat={catalogCat}
-                  page={catalogPage}
-                  setPage={setCatalogPage}
-                  search={catalogSearch}
-                  setSearch={setCatalogSearch}
-                  onOpenDetail={(p) => {
-                    setDetalleOrigen("catalog");
-                    setSelectedProduct(p);
-                    navigate("product-detail");
-                  }}
-                  cart={cart}
-                  updateQty={updateQty}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  categorias={categoriasCatalogo}
-                  productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
-                />
-              )}
-              {screen === "product-detail" && (
-                <ProductDetailScreen
-                  product={selectedProduct}
-                  navigate={navigate}
-                  addDetailed={addDetailed}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  onBack={() => {
-                    navigate(detalleOrigen, { restaurar: true });
-                    // Al volver al catálogo, hace scroll a la tarjeta del producto
-                    // que se abrió (data-producto-id en ProductCard). Mismo criterio
-                    // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
-                    // montarse por la transición de salida (AnimatePresence).
-                    if (detalleOrigen === "catalog") {
-                      let intentosCard = 0;
-                      const buscarTarjeta = () => {
-                        intentosCard += 1;
-                        const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
-                        if (!el) {
-                          // Mismo presupuesto amplio que `navigate(restaurar)`:
-                          // la tarjeta tarda en montarse por la transición de
-                          // salida (AnimatePresence) y en aparecer las imágenes.
-                          if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
-                          return;
+                <LandingErrorBoundary resetKey={screen}>
+                  {screen === "landing" && (
+                    <LandingScreen
+                      navigate={navigate}
+                      setProduct={setSelectedProduct}
+                      onCategoryNavigate={(cat) => {
+                        setCatalogCat(cat);
+                        navigate("catalog");
+                      }}
+                      categorias={categoriasCatalogo}
+                      productos={productosCatalogo}
+                      onOpenDetail={(p) => {
+                        setDetalleOrigen("landing");
+                        setSelectedProduct(p);
+                        navigate("product-detail");
+                      }}
+                    />
+                  )}
+                  {screen === "catalog" && (
+                    <CatalogScreen
+                      navigate={navigate}
+                      setProduct={setSelectedProduct}
+                      quickAdd={quickAdd}
+                      initialCat={catalogCat}
+                      page={catalogPage}
+                      setPage={setCatalogPage}
+                      search={catalogSearch}
+                      setSearch={setCatalogSearch}
+                      onOpenDetail={(p) => {
+                        setDetalleOrigen("catalog");
+                        setSelectedProduct(p);
+                        navigate("product-detail");
+                      }}
+                      cart={cart}
+                      updateQty={updateQty}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      categorias={categoriasCatalogo}
+                      productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
+                    />
+                  )}
+                  {screen === "product-detail" && (
+                    <ProductDetailScreen
+                      product={selectedProduct}
+                      navigate={navigate}
+                      addDetailed={addDetailed}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      onBack={() => {
+                        navigate(detalleOrigen, { restaurar: true });
+                        // Al volver al catálogo, hace scroll a la tarjeta del producto
+                        // que se abrió (data-producto-id en ProductCard). Mismo criterio
+                        // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
+                        // montarse por la transición de salida (AnimatePresence).
+                        if (detalleOrigen === "catalog") {
+                          let intentosCard = 0;
+                          const buscarTarjeta = () => {
+                            intentosCard += 1;
+                            const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
+                            if (!el) {
+                              // Mismo presupuesto amplio que `navigate(restaurar)`:
+                              // la tarjeta tarda en montarse por la transición de
+                              // salida (AnimatePresence) y en aparecer las imágenes.
+                              if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
+                              return;
+                            }
+                            el.scrollIntoView({ block: "center" });
+                          };
+                          requestAnimationFrame(buscarTarjeta);
                         }
-                        el.scrollIntoView({ block: "center" });
-                      };
-                      requestAnimationFrame(buscarTarjeta);
-                    }
-                  }}
-                  backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
-                />
-              )}
-              {screen === "cart" && (
-                <CartScreen
-                  cart={cart}
-                  navigate={navigate}
-                  updateQty={updateQty}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  remove={remove}
-                  clear={() => setCart([])}
-                  onOrder={registrarPedido}
-                  isLoggedIn={isLoggedIn}
-                  onRequireLogin={(order) => {
-                    setPendingOrder(order);
-                    setLoginNotice(true);
-                    openLogin();
-                  }}
-                  confirmationData={orderConfirmation ?? undefined}
-                  onClearConfirmation={() => setOrderConfirmation(null)}
-                  clienteSesion={loggedInUser?.nombre}
-                />
-              )}
-              {screen === "mis-pedidos" && (
-                <MisPedidosScreen
-                  pedidos={ventas}
-                  usuarioNombre={pedidosUsuarioNombre}
-                  onVerMenu={() => navigate("catalog")}
-                />
-              )}
-              {screen === "login" && (
-                  <LoginScreen
-                    navigate={navigate}
-                    usuarios={usuarios}
-                    roles={roles}
-                    onUsuarioNuevo={agregarUsuarioLocal}
-                    darkMode={darkMode}
-                    loginNotice={loginNotice}
-                    initialEmail={loginEmailPre}
-                    mensajeExito={loginMensajeExito}
-                    onLogin={handleLogin}
-                />
-              )}
-              {screen === "register" && (
-                <RegisterScreen
-                  navigate={navigate}
-                  usuarios={usuarios}
-                  setUsuarios={setUsuarios}
-                  empleados={empleados}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  darkMode={darkMode}
-                />
-              )}
-              {screen === "client-profile" && (
-                <ClientProfileScreen
-                  navigate={navigate}
-                  onLogout={logout}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  isStaff={isStaff}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                />
-              )}
-              {sesionRestaurandose && (screen === "dashboard" || screen === "inicio") ? (
-                /* Sesión restaurándose (F5): /auth/me todavía no responde y los
-                   roles de la sesión no están cargados. En vez de parpadear
-                   "sin rol" / "Sin rol asignado" (o "Empleado / Sin módulos
-                   asignados" en el empleado), se muestra un indicador de carga
-                   con el estilo de la app. */
-                <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-                  <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
-                  <p className="text-sm text-muted-foreground">Cargando tu sesión…</p>
-                </div>
-              ) : (
-                ((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
-                  <DashboardScreen
-                    navigate={navigate}
-                    ventas={ventas}
-                    gestiones={gestiones}
-                    ordenes={ordenes}
-                    noConformidades={noConformidades}
-                    productos={productos}
-                    insumos={insumos}
-                    proveedores={proveedores}
-                    ordenesProduccion={ordenesProduccion}
-                    clientes={clientes}
-                    loggedInUser={loggedInUser}
-                    loggedInRoleName={loggedInRoleName}
-                    tieneRolActivo={loggedInRol !== null}
-                    hasDashboardAccess={hasDashboardAccess}
-                    accesos={loggedInAccesos}
-                    periodoInicio={periodoInicio}
-                    onPeriodoInicio={setPeriodoInicio}
-                  />
-                )
-              )}
-              {screen === "manage-products" && (
-                <ManageProductsScreen />
-              )}
-              {screen === "orders" && (
-                <OrdersScreen initialOrders={orders} />
-              )}
-              {screen === "purchases" && <PurchasesScreen />}
-              {screen === "perecederos" && (
-                <ProductosPerecederosScreen
-                  {...getPerms("perecederos")}
-                  ventasPerdidas={ventas
-                    .filter((v) => v.estado === "Devolucion")
-                    .map((v) => ({
-                      id: v.id,
-                      usuario: v.usuario,
-                      fecha: v.fecha,
-                      productos: v.productos,
-                      cantidad: v.cantidad,
-                      total: v.total,
-                    }))}
-                  insumos={insumos}
-                  productos={productos}
-                  ordenesProduccion={ordenesProduccion}
-                  noConformidades={noConformidades}
-                  setNoConformidades={setNoConformidades}
-                  // P17b: el descuento de stock al registrar un producto no
-                  // conforme necesita poder escribir en el inventario de
-                  // productos (sin esto el descuento es no-op).
-                  setProductos={setProductos}
-                />
-              )}
-              {screen === "orden-compra" && (
-                <OrdenCompraScreen
-                  {...getPerms("orden-compra")}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  // Punto 3.2: el modal que abre este listado necesita el
-                  // catálogo para buscar por tipo "Producto".
-                  productos={productos}
-                  // Punto B7: al anular la OC se devuelve también el stock
-                  // de las líneas de producto de sus facturas.
-                  setProductos={setProductos}
-                  // Bloque 2: el "+ Crear producto" del OrdenModal necesita
-                  // las categorías del panel y el alta en el catálogo.
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onAbrirRecepcion={(orden) => {
-                    setOrdenRecepcion(orden);
-                    setScreen("recepcion-compra");
-                  }}
-                  onNuevaOrden={() => {
-                    setOrdenAEditar(null);
-                    navigate("nueva-orden-compra");
-                  }}
-                  onEditarOrden={(orden) => {
-                    setOrdenAEditar(orden);
-                    navigate("nueva-orden-compra");
-                  }}
-                  page={ordenCompraPage}
-                  setPage={setOrdenCompraPage}
-                  onVerDetalle={(orden) => {
-                    setOrdenDetalle(orden);
-                    setScreen("orden-detalle");
-                  }}
-                />
-              )}
-              {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
+                      }}
+                      backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
+                    />
+                  )}
+                  {screen === "cart" && (
+                    <CartScreen
+                      cart={cart}
+                      navigate={navigate}
+                      updateQty={updateQty}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      remove={remove}
+                      clear={() => setCart([])}
+                      onOrder={registrarPedido}
+                      isLoggedIn={isLoggedIn}
+                      onRequireLogin={(order) => {
+                        setPendingOrder(order);
+                        setLoginNotice(true);
+                        openLogin();
+                      }}
+                      confirmationData={orderConfirmation ?? undefined}
+                      onClearConfirmation={() => setOrderConfirmation(null)}
+                      clienteSesion={loggedInUser?.nombre}
+                    />
+                  )}
+                  {screen === "mis-pedidos" && (
+                    <MisPedidosScreen
+                      pedidos={ventas}
+                      usuarioNombre={pedidosUsuarioNombre}
+                      onVerMenu={() => navigate("catalog")}
+                    />
+                  )}
+                  {screen === "login" && (
+                    <LoginScreen
+                      navigate={navigate}
+                      usuarios={usuarios}
+                      roles={roles}
+                      onUsuarioNuevo={agregarUsuarioLocal}
+                      darkMode={darkMode}
+                      loginNotice={loginNotice}
+                      initialEmail={loginEmailPre}
+                      mensajeExito={loginMensajeExito}
+                      onLogin={handleLogin}
+                    />
+                  )}
+                  {screen === "register" && (
+                    <RegisterScreen
+                      navigate={navigate}
+                      usuarios={usuarios}
+                      setUsuarios={setUsuarios}
+                      empleados={empleados}
+                      clientes={clientes}
+                      setClientes={setClientes}
+                      darkMode={darkMode}
+                      onRegistrado={trasRegistrarse}
+                    />
+                  )}
+                  {screen === "client-profile" && (
+                    <ClientProfileScreen
+                      navigate={navigate}
+                      onLogout={logout}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      isStaff={isStaff}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                    />
+                  )}
+                  {sesionRestaurandose && (screen === "dashboard" || screen === "inicio") ? (
+                    /* Sesión restaurándose (F5): /auth/me todavía no responde y los
+                       roles de la sesión no están cargados. En vez de parpadear
+                       "sin rol" / "Sin rol asignado" (o "Empleado / Sin módulos
+                       asignados" en el empleado), se muestra un indicador de carga
+                       con el estilo de la app. */
+                    <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+                      <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+                      <p className="text-sm text-muted-foreground">Cargando tu sesión…</p>
+                    </div>
+                  ) : (
+                    ((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
+                      <DashboardScreen
+                        navigate={navigate}
+                        ventas={ventas}
+                        gestiones={gestiones}
+                        ordenes={ordenes}
+                        noConformidades={noConformidades}
+                        productos={productos}
+                        insumos={insumos}
+                        proveedores={proveedores}
+                        ordenesProduccion={ordenesProduccion}
+                        clientes={clientes}
+                        loggedInUser={loggedInUser}
+                        loggedInRoleName={loggedInRoleName}
+                        tieneRolActivo={loggedInRol !== null}
+                        hasDashboardAccess={hasDashboardAccess}
+                        accesos={loggedInAccesos}
+                        periodoInicio={periodoInicio}
+                        onPeriodoInicio={setPeriodoInicio}
+                      />
+                    )
+                  )}
+                  {screen === "manage-products" && (
+                    <ManageProductsScreen />
+                  )}
+                  {screen === "orders" && (
+                    <OrdersScreen initialOrders={orders} />
+                  )}
+                  {screen === "purchases" && <PurchasesScreen />}
+                  {screen === "perecederos" && (
+                    <ProductosPerecederosScreen
+                      {...getPerms("perecederos")}
+                      ventasSugeridas={ventas.map((v) => ({ id: v.id, usuario: v.usuario }))}
+                      insumos={insumos}
+                      productos={productos}
+                      ordenesProduccion={ordenesProduccion}
+                      noConformidades={noConformidades}
+                      setNoConformidades={setNoConformidades}
+                      cargando={noConformesCargando}
+                      errorCarga={errorNoConformes}
+                      onReintentar={() => void cargarNoConformes()}
+                      // El stock lo mueve el backend (reventa o insumo): se
+                      // recargan productos e insumos tras crear o eliminar.
+                      onInventarioCambiado={() => void recargarInventarioCpn()}
+                    />
+                  )}
+                  {screen === "orden-compra" && (
+                    <OrdenCompraScreen
+                      {...getPerms("orden-compra")}
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      cargando={ordenesCompraCargando}
+                      errorCarga={errorOrdenesCompra}
+                      onReintentar={() => void cargarOrdenesCompra()}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      // Punto 3.2: el modal que abre este listado necesita el
+                      // catálogo para buscar por tipo "Producto".
+                      productos={productos}
+                      // Punto B7: al anular la OC se devuelve también el stock
+                      // de las líneas de producto de sus facturas.
+                      setProductos={setProductos}
+                      // Bloque 2: el "+ Crear producto" del OrdenModal necesita
+                      // las categorías del panel y el alta en el catálogo.
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onAbrirRecepcion={(orden) => {
+                        setOrdenRecepcion(orden);
+                        setScreen("recepcion-compra");
+                      }}
+                      onNuevaOrden={() => {
+                        setOrdenAEditar(null);
+                        navigate("nueva-orden-compra");
+                      }}
+                      onEditarOrden={(orden) => {
+                        setOrdenAEditar(orden);
+                        navigate("nueva-orden-compra");
+                      }}
+                      page={ordenCompraPage}
+                      setPage={setOrdenCompraPage}
+                      onVerDetalle={(orden) => {
+                        setOrdenDetalle(orden);
+                        setScreen("orden-detalle");
+                      }}
+                    />
+                  )}
+                  {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
                   (igual que Recepción y Ver detalle), sin modal y sin scroll
                   de página. El listado queda desmontado mientras se crea. */}
-              {screen === "nueva-orden-compra" && (
-                <NuevaOrdenCompraPage
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  productos={productos}
-                  // Bloque 2: "+ Crear producto" con las categorías del panel.
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  setInsumos={setInsumos}
-                  onBack={() => {
-                    setOrdenAEditar(null);
-                    navigate("orden-compra");
-                  }}
-                  orden={ordenAEditar}
-                />
-              )}
-              {screen === "recepcion-compra" && ordenRecepcion && (
-                <RecepcionCompraScreen
-                  orden={ordenRecepcion}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  // P14: catálogo de productos para el selector de tipo de los
-                  // "no solicitados". Punto B5: con `setProductos` la
-                  // recepción además suma stock y escribe precios de venta.
-                  productos={productos}
-                  setProductos={setProductos}
-                  // Bloque 2: "+ Crear producto" del desplegable de no
-                  // solicitados (categorías del panel y alta en el catálogo).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  onGuardar={(recepcion, estado) => {
-                    setOrdenes((prev) =>
-                      prev.map((o) => {
-                        if (o.id !== ordenRecepcion.id) return o;
-                        const base = { ...o, estado, recepcion };
-                        // Deja fecha y hora del cambio: es la que muestra el
-                        // detalle de la orden al lado del badge de estado.
-                        return estado === o.estado
-                          ? base
-                          : {
-                              ...base,
-                              historialEstados: [
-                                ...(o.historialEstados ?? []),
-                                { estado, fechaHora: new Date().toISOString() },
-                              ],
-                            };
-                      })
-                    );
+                  {screen === "nueva-orden-compra" && (
+                    <NuevaOrdenCompraPage
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      productos={productos}
+                      // Bloque 2: "+ Crear producto" con las categorías del panel.
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      setInsumos={setInsumos}
+                      onBack={() => {
+                        setOrdenAEditar(null);
+                        navigate("orden-compra");
+                      }}
+                      orden={ordenAEditar}
+                    />
+                  )}
+                  {screen === "recepcion-compra" && ordenRecepcion && (
+                    <RecepcionCompraScreen
+                      orden={ordenRecepcion}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      // P14: catálogo de productos para el selector de tipo de los
+                      // "no solicitados". Punto B5: con `setProductos` la
+                      // recepción además suma stock y escribe precios de venta.
+                      productos={productos}
+                      setProductos={setProductos}
+                      // Bloque 2: "+ Crear producto" del desplegable de no
+                      // solicitados (categorías del panel y alta en el catálogo).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      onGuardar={async (recepcion, estado) => {
+                        setOrdenes((prev) =>
+                          prev.map((o) => {
+                            if (o.id !== ordenRecepcion.id) return o;
+                            const base = { ...o, estado, recepcion };
+                            // Deja fecha y hora del cambio: es la que muestra el
+                            // detalle de la orden al lado del badge de estado.
+                            return estado === o.estado
+                              ? base
+                              : {
+                                ...base,
+                                historialEstados: [
+                                  ...(o.historialEstados ?? []),
+                                  { estado, fechaHora: new Date().toISOString() },
+                                ],
+                              };
+                          })
+                        );
 
-                    setOrdenRecepcion(null);
-                  }}
-                  onBack={() => {
-                    setOrdenRecepcion(null);
-                    setScreen("orden-compra");
-                  }}
-                />
-              )}
-              {screen === "orden-detalle" && ordenDetalle && (
-                <OrdenDetallePage
-                  orden={ordenDetalle}
-                  gestiones={gestiones}
-                  onBack={() => {
-                    setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                  }}
-                  onEditar={() => {}}
-                  onAbrirRecepcion={() => {}}
-                />
-              )}
-              {screen === "gestion-compra" && (
-                <GestionCompraScreen
-                  {...getPerms("gestion-compra")}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  insumos={insumos}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  // Control de inventario: al anular una compra hay que
-                  // devolver al stock lo que ella sumó (productos incluidos).
-                  productos={productos}
-                  setInsumos={setInsumos}
-                  setProductos={setProductos}
-                  // Bloque 2: se pasan a CompraForm (el detalle es de sólo
-                  // lectura, pero ambas pantallas quedan iguales).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onNuevaCompra={() => navigate("nueva-compra")}
-                />
-              )}
-              {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
+                        setOrdenRecepcion(null);
+                        // 5.2: después de la recepción el backend cambió el stock
+                        // y los precios: se recargan la OC, las compras, los
+                        // insumos y los productos.
+                        await Promise.all([
+                          cargarOrdenesCompra(),
+                          cargarCompras(),
+                          cargarInsumosFichas(productos),
+                          cargarProductosGestion(),
+                        ]);
+                      }}
+                      onBack={() => {
+                        setOrdenRecepcion(null);
+                        setScreen("orden-compra");
+                      }}
+                    />
+                  )}
+                  {screen === "orden-detalle" && ordenDetalle && (
+                    <OrdenDetallePage
+                      orden={ordenDetalle}
+                      gestiones={gestiones}
+                      onBack={() => {
+                        setOrdenDetalle(null);
+                        setScreen("orden-compra");
+                      }}
+                      onEditar={() => { }}
+                      onAbrirRecepcion={() => { }}
+                    />
+                  )}
+                  {screen === "gestion-compra" && (
+                    <GestionCompraScreen
+                      {...getPerms("gestion-compra")}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      cargando={comprasCargando}
+                      errorCarga={errorCompras}
+                      onReintentar={() => void cargarCompras()}
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      insumos={insumos}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      // Control de inventario: al anular una compra hay que
+                      // devolver al stock lo que ella sumó (productos incluidos).
+                      productos={productos}
+                      setInsumos={setInsumos}
+                      setProductos={setProductos}
+                      // Bloque 2: se pasan a CompraForm (el detalle es de sólo
+                      // lectura, pero ambas pantallas quedan iguales).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onNuevaCompra={() => navigate("nueva-compra")}
+                    />
+                  )}
+                  {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
                   Recepción), sin modal y sin scroll de página. */}
-              {screen === "nueva-compra" && (
-                <NuevaCompraPage
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  productos={productos}
-                  // Al guardar, los ítems comprados suman su stock (son
-                  // opcionales: sin ellos la compra se guarda igual).
-                  setInsumos={setInsumos}
-                  setProductos={setProductos}
-                  // Bloque 2: "+ Crear producto" del desplegable de ítems
-                  // (categorías del panel y alta en el catálogo).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onBack={() => navigate("gestion-compra")}
-                />
-              )}
-              {screen === "suppliers" && (
-                <SuppliersScreen
-                  {...getPerms("suppliers")}
-                  ordenes={ordenes}
-                  gestiones={gestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                />
-              )}
-              {screen === "ventas-pedidos" && (
-                // La caja solo ofrece productos que hoy están Disponibles: si
-                // el backend marca uno como "No disponible" o "Descontinuado"
-                // desaparece del picker sin tocar VentasScreen.
-                <VentasScreen
-                  {...getPerms("ventas-pedidos")}
-                  pedidos={ventas}
-                  setPedidos={setVentas}
-                  productos={productosCatalogo
-                    .filter((producto) => producto.estado === "Disponible")
-                    .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
-                  onGestionarDevolucion={abrirGestionDevolucion}
-                />
-              )}
-              {screen === "devoluciones" && (
-                <DevolucionesScreen
-                  pedidos={ventas}
-                  setPedidos={setVentas}
-                  productos={productos}
-                  setProductos={setProductos}
-                  ordenes={ordenesProduccion}
-                  setOrdenes={setOrdenesProduccion}
-                  fichasPorProducto={fichasPorProducto}
-                  insumos={insumos}
-                  categorias={categorias}
-                  catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
-                  abrirDevolucionId={devolucionAAbrir}
-                  onAbierta={() => setDevolucionAAbrir(null)}
-                />
-              )}
-              {screen === "gestion-productos" && (
-                <GestionProductosScreen
-                  {...getPerms("gestion-productos")}
-                  productos={productos}
-                  setProductos={setProductos}
-                  insumos={insumos}
-                  fichas={fichasPorProducto}
-                  setFichas={setFichasPorProducto}
-                  categorias={categoriasCatalogo}
-                  cargandoProductos={productosCargando || (isLoggedIn && !productosGestionCargados && !errorCargaProductos)}
-                  errorProductos={errorCargaProductos}
-                  onReintentarCarga={() => void cargarProductosGestion()}
-                  onCrearEnServidor={crearProductoEnServidor}
-                  onEditarEnServidor={editarProductoEnServidor}
-                  onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
-                  onDescontinuarEnServidor={descontinuarProductoEnServidor}
-                />
-              )}
-              {screen === "cat-producto" && (
-                <CategoriaProductoScreen
-                  categorias={categorias}
-                  setCategorias={setCategorias}
-                  {...getPerms("cat-producto")}
-                />
-              )}
-                {screen === "gestion-roles" && (
-                  <GestionConfigScreen
-                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
-                  canCreate={getPerms("gestion-roles").canCreate}
-                  canEdit={getPerms("gestion-roles").canEdit}
-                    canDelete={getPerms("gestion-roles").canDelete}
-                    accesosPropios={loggedInAccesos}
-                    loggedInRolId={loggedInRol?.id ?? null}
-                  />
-                )}
-              {screen === "sales-chart" && (
-                <SalesChartScreen
-                  ventas={ventas}
-                  gestiones={gestiones}
-                  ordenes={ordenes}
-                  onBack={() => navigate(adminHomeScreen)}
-                />
-              )}
-               {screen === "clientes" && (
-                 <GestionClientesScreen
-                   {...getPerms("clientes")}
-                   clientes={clientes}
-                   setClientes={setClientes}
-                   empleados={empleados}
-                   usuarios={usuarios}
-                   roles={roles}
-                   sesionCorreo={correoSesion}
-                   clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
-                   onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
-                 />
-              )}
-                {screen === "users" && (
-                  <GestionUsuariosScreen
-                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
-                   canEdit={getPerms("users").canEdit}
-                   canDelete={getPerms("users").canDelete}
-                   onEditarCliente={u => {
-                     setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                     navigate("clientes");
-                   }}
-                   onEditarEmpleado={u => {
-                     const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
-                     const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
-                     if (!existe) return false;
-                     setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                     navigate("empleados");
-                     return true;
-                   }}
-                 />
-              )}
-                {screen === "empleados" && (
-                  <GestionEmpleadosScreen
-                  roles={roles}
-                  usuarios={usuarios}
-                  empleados={empleados}
-                  setEmpleados={setEmpleados}
-                   setUsuarios={setUsuarios}
-                   clientes={clientes}
-                   empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
-                   onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
-                  />
-              )}
-              {screen === "production-orders" && (
-                <OrdenProduccionScreen
-                  {...getPerms("production-orders")}
-                  productos={productos}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  ventas={ventas}
-                  fichasPorProducto={fichasPorProducto}
-                  ordenes={ordenesProduccion}
-                  setOrdenes={setOrdenesProduccion}
-                  noConformidades={noConformidades}
-                  setNoConformidades={setNoConformidades}
-                  abrirOrdenId={ordenAAbrir}
-                  setOrdenAAbrir={setOrdenAAbrir}
-                  detalleOrdenId={ordenDetalleAAbrir}
-                  setDetalleOrdenAAbrir={setOrdenDetalleAAbrir}
-                />
-              )}
-              {screen === "finished-products" && (
-                <ProductoTerminadoScreen />
-              )}
-              {screen === "store-profile" && (
-                <MiPerfilScreen
-                  userRole={userRole}
-                  navigate={navigate as (s: string) => void}
-                  onLogout={logout}
-                  isStaff={isStaff}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                  contrataciones={loggedInEmpleado?.contrataciones}
-                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
-                  rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
-                  inStore
-                />
-              )}
-              {screen === "profile" && (
-                <MiPerfilScreen
-                  userRole={userRole}
-                  navigate={navigate as (s: string) => void}
-                  onLogout={logout}
-                  isStaff={isStaff}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                  contrataciones={loggedInEmpleado?.contrataciones}
-                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
-                  rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
-                />
-              )}
-              {screen === "supplies" && (
-                <GestionInsumosScreen
-                  {...getPerms("supplies")}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  fichas={fichasPorProducto}
-                  setFichas={setFichasPorProducto}
-                  idsConFicha={[
-                    ...productos.map((p) => p.id),
-                    ...insumos.map((i) => i.id),
-                  ]}
-                  productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
-                  abrirOrdenProduccion={abrirOrdenProduccion}
-                  /* A2: al crear un producto insumo nace su orden automática
-                     y el toast ofrece "Ver orden". */
-                  crearOrdenProduccion={crearOrdenPreparacionPI}
-                  verOrdenProduccion={verOrdenProduccion}
-                />
-              )}
-              {isAdmin &&
-                ![
-                  "dashboard",
-                  "inicio",
-                  "manage-products",
-                  "orders",
-                  "purchases",
-                  "suppliers",
-                  "ventas-pedidos",
-                  "gestion-productos",
-                  "cat-producto",
-                   "gestion-roles",
-                  "clientes",
-                  "users",
-                  "empleados",
-                  "production-orders",
-                  "finished-products",
-                  "profile",
-                  "supplies",
-                  "sales-chart",
-                  "perecederos",
-                  "orden-compra",
-                  "nueva-orden-compra",
-                  "recepcion-compra",
-                  "gestion-compra",
-                  "nueva-compra",
-                  // El detalle real se pinta arriba (screen === "orden-detalle");
-                  // sin estar acá, GenericAdmin se sumaba debajo y repetía el
-                  // placeholder "En desarrollo · Volver al inicio".
-                  "orden-detalle",
-                  "devoluciones",
-                ].includes(screen) && (
-                  <GenericAdmin
-                    screen={screen}
-                    navigate={navigate}
-                    homeScreen={adminHomeScreen}
-                  />
-                )}
-              </LandingErrorBoundary>
+                  {screen === "nueva-compra" && (
+                    <NuevaCompraPage
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      productos={productos}
+                      // Al guardar, los ítems comprados suman su stock (son
+                      // opcionales: sin ellos la compra se guarda igual).
+                      setInsumos={setInsumos}
+                      setProductos={setProductos}
+                      // Bloque 2: "+ Crear producto" del desplegable de ítems
+                      // (categorías del panel y alta en el catálogo).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onBack={() => navigate("gestion-compra")}
+                    />
+                  )}
+                  {screen === "suppliers" && (
+                    <SuppliersScreen
+                      {...getPerms("suppliers")}
+                      cargando={proveedoresCargando}
+                      errorCarga={errorProveedores}
+                      onReintentar={() => void cargarProveedores()}
+                      ordenes={ordenes}
+                      gestiones={gestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                    />
+                  )}
+                  {screen === "ventas-pedidos" && (
+                    // La caja solo ofrece productos que hoy están Disponibles: si
+                    // el backend marca uno como "No disponible" o "Descontinuado"
+                    // desaparece del picker sin tocar VentasScreen.
+                    <VentasScreen
+                      {...getPerms("ventas-pedidos")}
+                      pedidos={ventas}
+                      setPedidos={setVentas}
+                      productos={productosCatalogo
+                        .filter((producto) => producto.estado === "Disponible")
+                        .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
+                      onGestionarDevolucion={abrirGestionDevolucion}
+                    />
+                  )}
+                  {screen === "devoluciones" && (
+                    <DevolucionesScreen
+                      pedidos={ventas}
+                      setPedidos={setVentas}
+                      productos={productos}
+                      setProductos={setProductos}
+                      ordenes={ordenesProduccion}
+                      setOrdenes={setOrdenesProduccion}
+                      fichasPorProducto={fichasPorProducto}
+                      insumos={insumos}
+                      categorias={categoriasCatalogo}
+                      catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
+                      abrirDevolucionId={devolucionAAbrir}
+                      onAbierta={() => setDevolucionAAbrir(null)}
+                      onRecargarOrdenes={cargarOrdenes}
+                      onRecargarNoConformes={cargarNoConformes}
+                    />
+                  )}
+                  {screen === "gestion-productos" && (
+                    <GestionProductosScreen
+                      {...getPerms("gestion-productos")}
+                      productos={productos}
+                      setProductos={setProductos}
+                      insumos={insumos}
+                      fichas={fichasPorProducto}
+                      setFichas={setFichasPorProducto}
+                      categorias={categoriasCatalogo}
+                      cargandoProductos={productosCargando || (isLoggedIn && !productosGestionCargados && !errorCargaProductos)}
+                      errorProductos={errorCargaProductos}
+                      onReintentarCarga={() => void cargarProductosGestion()}
+                      onCrearEnServidor={crearProductoEnServidor}
+                      onEditarEnServidor={editarProductoEnServidor}
+                      onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
+                      onDescontinuarEnServidor={descontinuarProductoEnServidor}
+                    />
+                  )}
+                  {screen === "cat-producto" && (
+                    <CategoriaProductoScreen
+                      categorias={categorias}
+                      cargando={categoriasCargando}
+                      errorCarga={errorCategorias}
+                      onReintentar={() => void cargarCategoriasGestion()}
+                      onCrear={crearCategoriaEnServidor}
+                      onEditar={editarCategoriaEnServidor}
+                      onCambiarEstado={cambiarEstadoCategoriaEnServidor}
+                      onEliminar={eliminarCategoriaEnServidor}
+                      {...getPerms("cat-producto")}
+                    />
+                  )}
+                  {screen === "gestion-roles" && (
+                    <GestionConfigScreen
+                      canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Roles")] ?? []).includes("Ver")}
+                      canCreate={getPerms("gestion-roles").canCreate}
+                      canEdit={getPerms("gestion-roles").canEdit}
+                      canDelete={getPerms("gestion-roles").canDelete}
+                      accesosPropios={loggedInAccesos}
+                      loggedInRolId={loggedInRol?.id ?? null}
+                    />
+                  )}
+                  {screen === "sales-chart" && (
+                    <SalesChartScreen
+                      ventas={ventas}
+                      gestiones={gestiones}
+                      ordenes={ordenes}
+                      onBack={() => navigate(adminHomeScreen)}
+                    />
+                  )}
+                  {screen === "clientes" && (
+                    <GestionClientesScreen
+                      {...getPerms("clientes")}
+                      clientes={clientes}
+                      setClientes={setClientes}
+                      empleados={empleados}
+                      usuarios={usuarios}
+                      roles={roles}
+                      sesionCorreo={correoSesion}
+                      clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
+                      onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
+                    />
+                  )}
+                  {screen === "users" && (
+                    <GestionUsuariosScreen
+                      canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Usuarios")] ?? []).includes("Ver")}
+                      canEdit={getPerms("users").canEdit}
+                      canDelete={getPerms("users").canDelete}
+                      onEditarCliente={u => {
+                        setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                        navigate("clientes");
+                      }}
+                      onEditarEmpleado={u => {
+                        const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
+                        const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
+                        if (!existe) return false;
+                        setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                        navigate("empleados");
+                        return true;
+                      }}
+                    />
+                  )}
+                  {screen === "empleados" && (
+                    <GestionEmpleadosScreen
+                      roles={roles}
+                      usuarios={usuarios}
+                      empleados={empleados}
+                      setEmpleados={setEmpleados}
+                      setUsuarios={setUsuarios}
+                      clientes={clientes}
+                      empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
+                      onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
+                    />
+                  )}
+                  {screen === "production-orders" && (
+                    <OrdenProduccionScreen
+                      {...getPerms("production-orders")}
+                      productos={productos}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      ventas={ventas}
+                      fichasPorProducto={fichasPorProducto}
+                      ordenes={ordenesProduccion}
+                      setOrdenes={setOrdenesProduccion}
+                      noConformidades={noConformidades}
+                      cargando={ordenesCargando}
+                      errorCarga={errorOrdenes}
+                      onReintentar={() => void cargarOrdenes()}
+                      recargarProduccion={recargarProduccion}
+                      abrirOrdenId={ordenAAbrir}
+                      setOrdenAAbrir={setOrdenAAbrir}
+                      detalleOrdenId={ordenDetalleAAbrir}
+                      setDetalleOrdenAAbrir={setOrdenDetalleAAbrir}
+                    />
+                  )}
+                  {screen === "finished-products" && (
+                    <ProductoTerminadoScreen />
+                  )}
+                  {screen === "store-profile" && (
+                    <MiPerfilScreen
+                      userRole={userRole}
+                      navigate={navigate as (s: string) => void}
+                      onLogout={logout}
+                      isStaff={isStaff}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                      contrataciones={loggedInEmpleado?.contrataciones}
+                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      rolesParaCambiar={rolesParaCambiar}
+                      onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                      inStore
+                    />
+                  )}
+                  {screen === "profile" && (
+                    <MiPerfilScreen
+                      userRole={userRole}
+                      navigate={navigate as (s: string) => void}
+                      onLogout={logout}
+                      isStaff={isStaff}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                      contrataciones={loggedInEmpleado?.contrataciones}
+                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      rolesParaCambiar={rolesParaCambiar}
+                      onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                    />
+                  )}
+                  {screen === "supplies" && (
+                    <GestionInsumosScreen
+                      {...getPerms("supplies")}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      categorias={categoriasInsumo}
+                      cargando={insumosCargando}
+                      errorCarga={errorInsumos}
+                      onReintentar={() => void cargarInsumosFichas(productos)}
+                      fichas={fichasPorProducto}
+                      setFichas={setFichasPorProducto}
+                      idsConFicha={[
+                        ...productos.map((p) => p.id),
+                        ...insumos.map((i) => i.id),
+                      ]}
+                      productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
+                      abrirOrdenProduccion={abrirOrdenProduccion}
+                      /* A2: al crear un producto insumo la API crea su orden
+                         automática y el toast ofrece "Ver orden". */
+                      recargarProduccion={recargarProduccion}
+                      verOrdenProduccion={verOrdenProduccion}
+                    />
+                  )}
+                  {isAdmin &&
+                    ![
+                      "dashboard",
+                      "inicio",
+                      "manage-products",
+                      "orders",
+                      "purchases",
+                      "suppliers",
+                      "ventas-pedidos",
+                      "gestion-productos",
+                      "cat-producto",
+                      "gestion-roles",
+                      "clientes",
+                      "users",
+                      "empleados",
+                      "production-orders",
+                      "finished-products",
+                      "profile",
+                      "supplies",
+                      "sales-chart",
+                      "perecederos",
+                      "orden-compra",
+                      "nueva-orden-compra",
+                      "recepcion-compra",
+                      "gestion-compra",
+                      "nueva-compra",
+                      // El detalle real se pinta arriba (screen === "orden-detalle");
+                      // sin estar acá, GenericAdmin se sumaba debajo y repetía el
+                      // placeholder "En desarrollo · Volver al inicio".
+                      "orden-detalle",
+                      "devoluciones",
+                    ].includes(screen) && (
+                      <GenericAdmin
+                        screen={screen}
+                        navigate={navigate}
+                        homeScreen={adminHomeScreen}
+                      />
+                    )}
+                </LandingErrorBoundary>
               </Suspense>
             </motion.div>
           </AnimatePresence>

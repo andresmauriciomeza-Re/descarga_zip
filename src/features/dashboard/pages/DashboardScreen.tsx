@@ -281,6 +281,10 @@ export function DashboardScreen({
     (v) => v.idDevolucion != null && enPeriodo(v.devolucionFecha ?? v.fecha, periodo),
   );
 
+  // Productos no conformes (API) registrados en el periodo, por fecha_registro
+  // (ya es fecha de Bogotá) con el mismo enPeriodo que el resto.
+  const noConformesPeriodo = noConformidades.filter((n) => enPeriodo(n.fechaRegistro, periodo));
+
   // ── Tarjetas (exactamente 4) ──
   const etiquetaPeriodoTxt = etiquetaPeriodo(periodo);
   const tarjetas: {
@@ -320,10 +324,10 @@ export function DashboardScreen({
       screen: "devoluciones",
     },
     {
-      // El módulo de productos no conformes todavía no está conectado.
+      // Registros de productos no conformes del periodo (sin `sub`: muestra
+      // la etiqueta del periodo, igual que Devoluciones).
       label: "Productos no conformes",
-      value: "—",
-      sub: "Sin conectar",
+      value: String(noConformesPeriodo.length),
       Icon: AlertTriangle,
       bg: "bg-red-50",
       ic: "text-red-600",
@@ -467,9 +471,24 @@ export function DashboardScreen({
   });
   const hayComprasProveedores = gestionesProv.length > 0;
 
-  // ── 6. No conformes: módulo todavía sin conectar ──
-  // La gráfica ya no lee datos de ejemplo: cuando el módulo de productos no
-  // conformes se conecte al backend, aquí se vuelve a calcular la serie.
+  // ── 6. Productos no conformes: registros por tipo, eje X del filtro ──
+  // Se cuentan registros (no cantidades: mezclan und, kg, g…).
+  const TIPOS_NC = ["Producto", "Producto insumo", "Venta"] as const;
+  const COLOR_TIPO_NC: Record<(typeof TIPOS_NC)[number], string> = {
+    Producto: "#C62828",
+    "Producto insumo": "#F59E0B",
+    Venta: "#1565C0",
+  };
+  const noConformesGrafica = noConformidades.filter(
+    (n) => esFechaISO(n.fechaRegistro) && enPeriodo(n.fechaRegistro, fNC),
+  );
+  const dataNoConformes = gruposEje(fNC).map((g) => {
+    const fila: Record<string, string | number> = { etiqueta: g.etiqueta };
+    TIPOS_NC.forEach((t) => {
+      fila[t] = noConformesGrafica.filter((n) => n.tipo === t && g.extraer(n.fechaRegistro) === g.clave).length;
+    });
+    return fila;
+  });
 
   const vacio = (valores: number[]) => valores.every((v) => !v);
   const cop = (v: number) => fmt(v);
@@ -561,6 +580,9 @@ export function DashboardScreen({
     const devolucionesPeriodoEmp = ventas.filter(
       (v) => v.idDevolucion != null && enPeriodo(v.devolucionFecha ?? v.fecha, periodoInicio),
     );
+    // Productos no conformes registrados en el periodo del Inicio (por
+    // fecha_registro, mismo enPeriodo).
+    const noConformesPeriodoEmp = noConformidades.filter((n) => enPeriodo(n.fechaRegistro, periodoInicio));
     // ── Tarjetas del inicio: UNA cifra por tarjeta, IGUAL que "Indicadores
     // comerciales" del admin (mismo componente `TarjetaIndicador`). Máximo 3
     // en una fila, en orden de prioridad y según el permiso "Ver" del rol
@@ -587,6 +609,11 @@ export function DashboardScreen({
         label: "Órdenes de producción pendientes",
         value: String(opsPeriodo.filter((o) => o.estadoOrden === "pendiente").length),
         sub: etiqueta, Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600", screen: "production-orders" as Screen,
+      },
+      ver("Producción", "Producto No Conforme") && {
+        label: "No conformes pendientes",
+        value: String(noConformesPeriodoEmp.filter((n) => n.estado === "Pendiente").length),
+        sub: etiqueta, Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600", screen: "perecederos" as Screen,
       },
       ver("Compras", "Compra") && {
         label: "Compras registradas", value: String(comprasPeriodo.length),
@@ -1054,15 +1081,36 @@ export function DashboardScreen({
               )}
             </ChartCard>
 
-            {/* 6. No conformes: módulo sin conectar (todavía no hay fuente
-                real de datos, así que no se muestran datos de ejemplo). */}
+            {/* 6. Productos no conformes: registros por tipo (eje X según su filtro) */}
             <ChartCard
               titulo="Productos no conformes"
-              etiqueta="Módulo sin conectar"
+              etiqueta={`Registros por tipo ${ejeDe(fNC)}, según la fecha de registro`}
               periodo={fNC}
               onPeriodo={setFNC}
             >
-              <SinDatos texto="Sin conectar" />
+              {noConformesGrafica.length === 0 ? (
+                <SinDatos texto="Sin productos no conformes en este periodo" />
+              ) : (
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={dataNoConformes} margin={{ left: -4, right: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
+                    <Legend />
+                    {TIPOS_NC.map((t, i) => (
+                      <Bar
+                        key={t}
+                        dataKey={t}
+                        name={t}
+                        stackId="nc"
+                        fill={COLOR_TIPO_NC[t]}
+                        radius={i === TIPOS_NC.length - 1 ? [4, 4, 0, 0] : undefined}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartCard>
           </div>
         </div>

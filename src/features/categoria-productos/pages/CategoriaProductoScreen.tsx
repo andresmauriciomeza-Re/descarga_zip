@@ -5,6 +5,7 @@ import {
   Plus,
   Check,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MensajeError } from "@/shared/components/campo";
@@ -89,10 +90,10 @@ export interface CategoriaProducto {
   nombre: string;
   /**
    * Clave "img:…" de `IMAGENES_CATEGORIA` con la que la categoría aparece en
-   * el landing, en la tabla y en el detalle (§5). Es opcional a propósito:
-   * solo lo llevan las categorías creadas desde acá. Las tres originales
-   * conservan su imagen fija, resuelta por id en `IMAGEN_FIJA_CATEGORIA`.
-   * (Antes guardaba un emoji; los datos viejos siguen pintándose como texto.)
+   * el landing, en la tabla y en el detalle (§5). Viaja en la columna `emoji`
+   * de tb_categoria_productos. Las tres originales (ids 1, 2 y 3) conservan
+   * ahí su emoji viejo, pero su imagen fija se resuelve por id en
+   * `IMAGEN_FIJA_CATEGORIA`.
    */
   icono?: string;
   /**
@@ -108,6 +109,11 @@ export interface CategoriaProducto {
    * creadas antes de existir el campo.
    */
   descripcion?: string;
+  /** Productos asociados, de cualquier estado (solo en la gestión). */
+  totalProductos?: number;
+  /** Productos que hoy salen en el menú público: los que se ocultan al
+      inactivar la categoría (solo en la gestión). */
+  productosMenu?: number;
 }
 
 export type EstadoCategoria = "Activo" | "Inactivo";
@@ -124,21 +130,31 @@ export const OPCIONES_ESTADO_CATEGORIA: EstadoOption<EstadoCategoria>[] = [
   { value: "Inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
 ];
 
-export const INITIAL_CATEGORIAS: CategoriaProducto[] = [
-  { id: "CAT-001", nombre: "Pizzas", estado: "Activo" },
-  { id: "CAT-002", nombre: "Lasañas", estado: "Activo" },
-  { id: "CAT-003", nombre: "Bebidas", estado: "Activo" },
-];
-
 /**
- * Las tres originales no son editables: su nombre está escrito en el catálogo
- * público y su imagen en el landing, así que cambiarlos aquí dejaría la tarjeta
- * y el filtro del catálogo mostrando cosas distintas. Se pueden borrar, como
- * hoy, pero no renombrar.
+ * Las tres originales (ids 1 Pizza, 2 Lasaña y 3 Bebidas) no cambian de nombre
+ * ni de imagen: el backend y el catálogo público las reconocen por su nombre.
+ * Sí se les edita la descripción y el estado, y no se pueden eliminar. El
+ * backend aplica la misma regla.
  */
-const CATEGORIAS_FIJAS = new Set(["CAT-001", "CAT-002", "CAT-003"]);
+const CATEGORIAS_FIJAS = new Set(["1", "2", "3"]);
 
-const MAX_NOMBRE = 30;
+const MENSAJE_FIJA_ELIMINAR =
+  "Las categorías originales (Pizza, Lasaña y Bebidas) no se pueden eliminar.";
+const MENSAJE_CON_PRODUCTOS =
+  "Esta categoría tiene productos asociados. Puedes inactivarla.";
+
+// Longitudes de tb_categoria_productos.
+const MAX_NOMBRE = 50;
+const MAX_DESCRIPCION = 255;
+
+/** Nombre tal como se guarda: sin espacios de más. */
+const nombreLimpio = (valor: string) => valor.trim().replace(/\s+/g, " ");
+
+/** ¿El error del backend es por nombre repetido? (409 del servicio o del UNIQUE). */
+const esNombreRepetido = (error: unknown) =>
+  (error as { status?: number } | undefined)?.status === 409 &&
+  error instanceof Error &&
+  /nombre/i.test(error.message);
 
 /**
  * Clave de comparación de nombres: sin mayúsculas, sin tildes y sin espacios
@@ -146,8 +162,7 @@ const MAX_NOMBRE = 30;
  * categorías distintas.
  */
 const claveNombre = (valor: string) =>
-  valor
-    .trim()
+  nombreLimpio(valor)
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -329,14 +344,43 @@ function MiniaturaImagen({
   );
 }
 
-export function CategoriaProductoScreen({ categorias, setCategorias, canCreate = true, canEdit = true, canDelete = true }: { categorias: CategoriaProducto[]; setCategorias: React.Dispatch<React.SetStateAction<CategoriaProducto[]>>; canCreate?: boolean; canEdit?: boolean; canDelete?: boolean }) {
+/** Datos que la pantalla envía al guardar (el `emoji` es la clave "img:…"). */
+export interface CategoriaGuardar {
+  nombre?: string;
+  emoji?: string;
+  descripcion?: string | null;
+  estado?: boolean;
+}
+
+/** Las acciones van contra la API (App.tsx): cada una resuelve con éxito o
+    lanza el error del backend, que la pantalla muestra (403, 409…). */
+interface Props {
+  categorias: CategoriaProducto[];
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
+  onCrear: (datos: CategoriaGuardar) => Promise<unknown>;
+  onEditar: (id: string, datos: CategoriaGuardar) => Promise<unknown>;
+  onCambiarEstado: (id: string, estado: EstadoCategoria) => Promise<unknown>;
+  onEliminar: (id: string) => Promise<unknown>;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}
+
+const mensajeError = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
+export function CategoriaProductoScreen({ categorias, cargando = false, errorCarga, onReintentar, onCrear, onEditar, onCambiarEstado, onEliminar, canCreate = true, canEdit = true, canDelete = true }: Props) {
   const [search, setSearch] = useState("");
+  // Evita el doble envío mientras una petición está en curso (sin cambio visual).
+  const [guardando, setGuardando] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] =
     useState<CategoriaProducto | null>(null);
   const [detailItem, setDetailItem] =
     useState<CategoriaProducto | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteItem, setDeleteItem] = useState<CategoriaProducto | null>(null);
   const [formNombre, setFormNombre] = useState("");
   // Clave "img:…" de la imagen elegida en el modal Crear (§5).
   const [formIcono, setFormIcono] = useState("");
@@ -353,6 +397,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     nombre: string;
     current: EstadoCategoria;
     next: EstadoCategoria;
+    productosMenu: number;
   } | null>(null);
 
   const inputCls =
@@ -395,7 +440,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     ignorarId?: string,
   ): Record<string, string> => {
     const errs: Record<string, string> = {};
-    const limpio = nombre.trim();
+    const limpio = nombreLimpio(nombre);
     if (!limpio) errs.nombre = "El nombre es obligatorio";
     else if (limpio.length > MAX_NOMBRE)
       errs.nombre = `El nombre no puede superar ${MAX_NOMBRE} caracteres`;
@@ -408,6 +453,12 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     if (!icono) errs.icono = "Selecciona una imagen";
     return errs;
   };
+
+  /** Descripción opcional: solo se limita su largo (columna de 255). */
+  const validarDescripcion = (descripcion?: string): string | undefined =>
+    (descripcion ?? "").trim().length > MAX_DESCRIPCION
+      ? `La descripción no puede superar ${MAX_DESCRIPCION} caracteres`
+      : undefined;
 
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
@@ -435,70 +486,119 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    if (guardando) return;
     const errs = validarCategoria(formNombre, formIcono);
+    const errDescripcion = validarDescripcion(formDescripcion);
+    if (errDescripcion) errs.descripcion = errDescripcion;
     setCreateErrors(errs);
     if (Object.keys(errs).length) return;
-    // `length + 1` reutilizaba un id existente si se había borrado una categoría
-    // del medio: quedaban dos filas con la misma clave y editar/borrar una
-    // afectaba a la otra. Se toma el mayor sufijo numérico, como en Usuarios.
-    const nextNum = categorias.reduce((max, c) => {
-      const n = parseInt(c.id.replace("CAT-", ""), 10) || 0;
-      return Math.max(max, n);
-    }, 0) + 1;
-    const newId = `CAT-${String(nextNum).padStart(3, "0")}`;
-    setCategorias((p) => [
-      ...p,
-      {
-        id: newId,
-        nombre: formNombre.trim(),
-        icono: formIcono,
-        estado: formEstado,
+    setGuardando(true);
+    try {
+      // El id lo asigna la base (id_categoria).
+      await onCrear({
+        nombre: nombreLimpio(formNombre),
+        emoji: formIcono,
+        estado: formEstado === "Activo",
         // Opcional (P17a): vacío = sin descripción, no se guarda ruido.
-        descripcion: formDescripcion.trim() || undefined,
-      },
-    ]);
-    setShowCreate(false);
-    setFormNombre("");
-    setFormIcono("");
-    setFormDescripcion("");
-    setFormEstado("Activo");
-    toast.success("Categoría creada correctamente");
+        descripcion: formDescripcion.trim() || null,
+      });
+      setShowCreate(false);
+      setFormNombre("");
+      setFormIcono("");
+      setFormDescripcion("");
+      setFormEstado("Activo");
+      toast.success("Categoría creada correctamente");
+    } catch (error) {
+      if (esNombreRepetido(error)) {
+        setCreateErrors((p) => ({ ...p, nombre: "Ese nombre ya está registrado" }));
+      }
+      toast.error(mensajeError(error, "No se pudo crear la categoría."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEdit = () => {
-    if (!editItem) return;
+  const handleEdit = async () => {
+    if (!editItem || guardando) return;
     const esFija = CATEGORIAS_FIJAS.has(editItem.id);
     // Las originales conservan nombre e imagen (la suya es fija por id, en
     // IMAGEN_FIJA_CATEGORIA), así que no se valida lo que no se puede tocar:
-    // solo cambia su estado.
-    if (!esFija) {
-      const errs = validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
-      setEditErrors(errs);
-      if (Object.keys(errs).length) return;
-    }
-    const estado = editItem.estado ?? "Activo";
+    // solo cambian su descripción y su estado.
+    const errs: Record<string, string> = esFija
+      ? {}
+      : validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
+    const errDescripcion = validarDescripcion(editItem.descripcion);
+    if (errDescripcion) errs.descripcion = errDescripcion;
+    setEditErrors(errs);
+    if (Object.keys(errs).length) return;
+    const estado = (editItem.estado ?? "Activo") === "Activo";
     // La descripción se guarda en las dos ramas: es un dato nuevo (P17a), así
     // que es editable también en las originales, cuyo bloqueo sigue siendo
     // solo de nombre e ícono.
-    const descripcion = editItem.descripcion?.trim() || undefined;
-    setCategorias((p) =>
-      p.map((x) =>
-        x.id === editItem.id
-          ? esFija
-            ? { ...x, estado, descripcion }
-            : { ...x, nombre: editItem.nombre.trim(), icono: editItem.icono, estado, descripcion }
-          : x,
-      ),
-    );
-    setEditItem(null);
-    toast.success("Categoría actualizada");
+    const descripcion = editItem.descripcion?.trim() || null;
+    setGuardando(true);
+    try {
+      await onEditar(
+        editItem.id,
+        esFija
+          ? { descripcion, estado }
+          : { nombre: nombreLimpio(editItem.nombre), emoji: editItem.icono, descripcion, estado },
+      );
+      setEditItem(null);
+      toast.success("Categoría actualizada");
+    } catch (error) {
+      if (esNombreRepetido(error)) {
+        setEditErrors((p) => ({ ...p, nombre: "Ese nombre ya está registrado" }));
+      }
+      toast.error(mensajeError(error, "No se pudo actualizar la categoría."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setCategorias((p) => p.filter((x) => x.id !== id));
-    setDeleteId(null);
-    toast.success("Categoría eliminada");
+  /** Abre la confirmación de borrado solo si se puede borrar; si no, avisa
+      con el mismo mensaje que daría el backend. */
+  const pedirEliminar = (c: CategoriaProducto) => {
+    if (CATEGORIAS_FIJAS.has(c.id)) {
+      toast.error(MENSAJE_FIJA_ELIMINAR);
+      return;
+    }
+    if ((c.totalProductos ?? 0) > 0) {
+      toast.error(MENSAJE_CON_PRODUCTOS);
+      return;
+    }
+    setDeleteItem(c);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      await onEliminar(id);
+      setDeleteItem(null);
+      toast.success("Categoría eliminada");
+    } catch (error) {
+      setDeleteItem(null);
+      toast.error(mensajeError(error, "No se pudo eliminar la categoría."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleCambiarEstado = async () => {
+    if (!confirmEstado || guardando) return;
+    setGuardando(true);
+    try {
+      await onCambiarEstado(confirmEstado.id, confirmEstado.next);
+      setConfirmEstado(null);
+      toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+    } catch (error) {
+      setConfirmEstado(null);
+      toast.error(mensajeError(error, "No se pudo cambiar el estado de la categoría."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
   // Ancho amplio (igual que Proveedores/Gestión de Insumos): el listado usa
@@ -535,6 +635,25 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
         )}
       </div>
 
+      {/* Carga y error de la API (igual que Productos No Conformes): nunca se
+          muestran datos de ejemplo. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-4">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
+          <p className="text-sm">Cargando categorías…</p>
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-4">
+          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
+          {onReintentar && (
+            <button onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Search */}
       <SearchInput
         value={search}
@@ -588,12 +707,8 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     className="hover:bg-muted/20 transition-colors h-[61px]"
                   >
                     <td className="px-4 py-2.5 text-sm font-mono font-semibold text-foreground">
-                      {/* Solo el número: de "CAT-005" muestra "005". El dato
-                          `c.id` NO cambia (lo usan CATEGORIAS_FIJAS,
-                          IMAGEN_FIJA_CATEGORIA, borrar/editar y el idCategoria
-                          de los productos), y el buscador sigue comparando
-                          contra `c.id` completo. */}
-                      {c.id.replace("CAT-", "")}
+                      {/* id_categoria de la base (1, 2, 3…). */}
+                      {c.id}
                     </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground">
                       <span className="inline-flex items-center gap-2">
@@ -635,6 +750,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                             nombre: c.nombre,
                             current: estadoDe(c),
                             next,
+                            productosMenu: c.productosMenu ?? 0,
                           });
                         }}
                         options={OPCIONES_ESTADO_CATEGORIA}
@@ -651,7 +767,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                               }
                             : undefined
                         }
-                        onDelete={canDelete ? () => setDeleteId(c.id) : undefined}
+                        onDelete={canDelete ? () => pedirEliminar(c) : undefined}
                       />
                     </td>
                   </tr>
@@ -664,6 +780,8 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
 
       {filtered.length > 0 && (
         <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      )}
+      </>
       )}
 
       {/* ── Crear ── */}
@@ -732,10 +850,15 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                     <textarea
                       rows={2}
                       value={formDescripcion}
-                      onChange={(e) => setFormDescripcion(e.target.value)}
+                      onChange={(e) => {
+                        setFormDescripcion(e.target.value);
+                        setCreateErrors((p) => ({ ...p, descripcion: "" }));
+                      }}
                       placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
+                      maxLength={MAX_DESCRIPCION}
                       className={inputCls + " resize-y"}
                     />
+                    <MensajeError err={createErrors.descripcion} />
                   </div>
                 </div>
                 <div className="bg-muted/50 border border-border rounded-xl p-3">
@@ -943,12 +1066,16 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                 <textarea
                   rows={2}
                   value={editItem.descripcion ?? ""}
-                  onChange={(e) =>
-                    setEditItem((x) => (x ? { ...x, descripcion: e.target.value } : x))
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEditItem((x) => (x ? { ...x, descripcion: v } : x));
+                    setEditErrors((p) => ({ ...p, descripcion: "" }));
+                  }}
                   placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
+                  maxLength={MAX_DESCRIPCION}
                   className={inputCls + " resize-y"}
                 />
+                <MensajeError err={editErrors.descripcion} />
               </div>
               {!CATEGORIAS_FIJAS.has(editItem.id) && (
                 <div>
@@ -1128,7 +1255,13 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
               {confirmEstado.next === "Inactivo" && (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
                   La categoría dejará de mostrarse en el landing y en el selector
-                  de Categoría de producto.
+                  de Categoría de producto.{" "}
+                  {confirmEstado.productosMenu > 0
+                    ? `Se ocultarán ${confirmEstado.productosMenu} ${
+                        confirmEstado.productosMenu === 1 ? "producto" : "productos"
+                      } del menú público`
+                    : "No tiene productos visibles en el menú público"}{" "}
+                  y no se podrán crear productos en ella.
                 </p>
               )}
               <div className="flex gap-3">
@@ -1139,17 +1272,7 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
                   Cancelar
                 </button>
                 <button
-                  onClick={() => {
-                    setCategorias((prev) =>
-                      prev.map((x) =>
-                        x.id === confirmEstado.id
-                          ? { ...x, estado: confirmEstado.next }
-                          : x,
-                      ),
-                    );
-                    setConfirmEstado(null);
-                    toast.success(`Estado cambiado a: ${confirmEstado.next}`);
-                  }}
+                  onClick={() => void handleCambiarEstado()}
                   className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
                 >
                   Confirmar
@@ -1162,12 +1285,12 @@ export function CategoriaProductoScreen({ categorias, setCategorias, canCreate =
 
       {/* ── Eliminar ── */}
       <AnimatePresence>
-        {deleteId && (
+        {deleteItem && (
           <ConfirmDeleteModal
             title="Eliminar categoría"
-            message={`¿Seguro que deseas eliminar la categoría ${deleteId}? Esta acción no se puede deshacer.`}
-            onConfirm={() => handleDelete(deleteId)}
-            onCancel={() => setDeleteId(null)}
+            message={`¿Seguro que deseas eliminar la categoría ${deleteItem.nombre}? Esta acción no se puede deshacer.`}
+            onConfirm={() => void handleDelete(deleteItem.id)}
+            onCancel={() => setDeleteItem(null)}
           />
         )}
       </AnimatePresence>

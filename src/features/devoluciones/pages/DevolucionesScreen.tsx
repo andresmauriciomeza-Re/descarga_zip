@@ -11,7 +11,7 @@ import { productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } f
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
-import { crearOrdenReemplazo, normalizarNombre, siguienteOrdenId, type OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
+import { normalizarNombre, type OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { type DevolucionTipo, PagoPill, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
 import { marcarDevolucionApi, obtenerVentasPanel, resolverDevolucionApi } from "@/features/ventas/services/ventasApi";
 
@@ -94,6 +94,8 @@ export function DevolucionesScreen({
   catalogoCanje,
   abrirDevolucionId,
   onAbierta,
+  onRecargarOrdenes,
+  onRecargarNoConformes,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
@@ -117,6 +119,12 @@ export function DevolucionesScreen({
       buscarla de nuevo entre las pendientes. */
   abrirDevolucionId?: string | null;
   onAbierta?: () => void;
+  /** Recarga las órdenes de producción desde la API (la del canje la crea
+      el backend al resolver la devolución). */
+  onRecargarOrdenes?: () => Promise<void>;
+  /** Recarga Productos no conformes desde la API (las líneas «Producto malo»
+      las registra el backend al resolver la devolución). */
+  onRecargarNoConformes?: () => Promise<void>;
 }) {
   const devoluciones = pedidos.filter((p) => p.estado === "Devolucion");
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
@@ -594,30 +602,17 @@ export function DevolucionesScreen({
       );
     }
 
-    // Orden del canje (espejo local del panel de Producción): el producto
-    // nuevo entra a producción y su stock se descuenta al iniciar la orden,
-    // igual que en cualquier venta. El backend YA creó la orden real y la
-    // venta de reemplazo; aquí sólo se pinta el espejo, apuntando a esa venta
-    // nueva para que "Producción" no ofrezca dos veces el mismo pedido. Si no
-    // hay canje (todo en dinero), no se crea nada.
+    // Orden del canje: el backend YA creó la orden de producción real de la
+    // venta de reemplazo al resolver la devolución, así que aquí no se arma
+    // ninguna orden local: se recargan las órdenes desde la API. Si no hay
+    // canje (todo en dinero), no hay orden nueva que traer.
     if (activa.compensacion.length > 0) {
-      const ventaEspejo: Venta = idVentaReemplazo
-        ? { ...devActiva, id: String(idVentaReemplazo) }
-        : devActiva;
-      const nueva = crearOrdenReemplazo(
-        ventaEspejo,
-        activa.compensacion,
-        { productos, fichas: fichasPorProducto, insumos },
-        siguienteOrdenId(ordenes),
-      );
-      setOrdenes((prev) =>
-        prev.some((o) => o.id === nueva.id) ? prev : [nueva, ...prev],
-      );
-      import("sonner").then(({ toast }) =>
-        toast.success(
-          `Orden de producción ${nueva.id} creada para el canje de ${devActiva.id}`,
-        ),
-      );
+      void onRecargarOrdenes?.();
+    }
+    // Las líneas «Producto malo» quedan como producto no conforme (tipo
+    // Venta): las inserta el backend en la misma transacción; aquí se recarga.
+    if (lineasDev.some(({ motivo }) => motivo === "Producto malo")) {
+      void onRecargarNoConformes?.();
     }
 
     setResumen({

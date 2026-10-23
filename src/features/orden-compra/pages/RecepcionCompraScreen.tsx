@@ -4,13 +4,15 @@ import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import {
-  aplicarEntradasCompraApi,
-  aplicarStockCompra,
   historialCompraDe,
-  textoStockActualizado,
   unidadesPorLinea,
   type SetCatalogo,
 } from "@/features/compras/services/inventario";
+import {
+  mapearRecepcion,
+  recibirOrdenCompra,
+} from "@/features/orden-compra/services/ordenesCompraApi";
+import { mapearCompraApi, type CompraApi } from "@/features/compras/services/comprasApi";
 import {
   contenidoDe,
   empaqueDe,
@@ -18,7 +20,7 @@ import {
   presentacionCompra,
 } from "@/shared/utils/presentacion";
 import { mismoNombre } from "@/shared/utils/nombres";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
@@ -74,6 +76,8 @@ interface Props {
    *  producto" (callback de App; sin él el atajo del desplegable no se
    *  muestra). */
   categorias?: CategoriaProducto[];
+  /** Bloque 2.2: categorías de insumos desde la API para el "+ Crear insumo". */
+  categoriasInsumo?: CategoriaInsumo[];
   onCrearProducto?: (p: Producto) => Promise<Producto>;
   onRecargarCatalogo?: () => Promise<void>;
   gestiones: GestionCompra[];
@@ -131,6 +135,7 @@ export function RecepcionCompraScreen({
   productos,
   setProductos,
   categorias,
+  categoriasInsumo,
   onCrearProducto,
   onRecargarCatalogo,
   gestiones,
@@ -200,12 +205,20 @@ export function RecepcionCompraScreen({
             : 0;
         const precioVenta = pvLinea > 0 ? pvLinea : pvCatalogo;
 
+        // 5.1: lo que queda POR recibir sale del resumen `recepcion` de la OC
+        // (acumulado de las facturas anteriores). En una recepción parcial la
+        // pantalla arranca con ese pendiente, no con el pedido completo.
+        const rec = orden.recepcion?.items.find((r) => r.idInsumo === i.idInsumo);
+        const pendiente = rec
+          ? Math.max(0, rec.cantidadSolicitada - rec.cantidadRecibida)
+          : i.cantidad;
+
         return {
           rowId: i.rowId,
           idInsumo: i.idInsumo,
           nombre: i.nombre,
           cantidadSolicitada: i.cantidad,
-          cantidadRecibida: i.cantidad,
+          cantidadRecibida: pendiente,
           unidad: i.unidad,
           precioReferencia: i.costoUnitario,
           costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
@@ -220,7 +233,8 @@ export function RecepcionCompraScreen({
           // dato (unidad suelta, OCs viejas) se leen como 1.
           unidadesPorEmpaque: i.unidadesPorEmpaque,
         };
-      });
+      })
+      .filter((i) => i.cantidadRecibida > 0);
   });
 
   const [itemsExtra, setItemsExtra] = useState<ItemRecibido[]>([]);
@@ -876,137 +890,47 @@ export function RecepcionCompraScreen({
       }
     );
 
-    // Subtotal sin IVA → IVA → Total pagado (idéntico a `totalRec`).
-    const subtotalSinIvaFactura = itemsFactura.reduce(
-      (s, item) => s + (item.baseSinIva ?? 0),
-      0
-    );
-    const totalIvaGuardado = itemsFactura.reduce(
-      (s, item) => s + (item.montoIva ?? 0),
-      0
-    );
-    const valorTotal = subtotalSinIvaFactura + totalIvaGuardado;
-
-    // 1) Una compra nueva por factura: las facturas anteriores no se tocan.
-    const nuevoId = String(
-      Math.max(0, ...gestiones.map((g) => Number(g.id) || 0)) + 1
-    ).padStart(3, "0");
-
-    // Buscar proveedorId por nombre del proveedor de la orden
-    const prov = proveedores.find(p => p.nombre === orden.proveedor);
-    const proveedorId = prov?.id;
-
-    const nuevaCompra: GestionCompra = {
-      id: nuevoId,
-      ordenId: orden.id,
-      proveedor: orden.proveedor,
-      proveedorId,
-      numeroFactura: numeroFactura.trim(),
-      fechaFactura,
-      valorTotal,
-      estado: "Recibido",
-      items: itemsFactura,
-      // Punto 1: la recepción SIEMPRE guarda como "precios sin IVA".
-      // El Monto unitario es base, el IVA se calcula y suma aparte.
-      ivaIncluido: false,
-      subtotalSinIva: subtotalSinIvaFactura,
-      totalIva: totalIvaGuardado,
-      totalPagado: valorTotal,
-    };
-
-    // Factura guardada en "Recibido" ⇒ suma el stock de lo recibido. Mismo
-    // camino que la Nueva compra, para que las dos formas de facturar entren
-    // igual al inventario (punto B5: también el catálogo de productos).
-    const itemsInsumo = itemsFactura.filter((item) =>
-      item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
-    );
-    const resumen = aplicarStockCompra(itemsInsumo, 1, {
-      insumos,
-      setInsumos,
+    // 5.1: la recepción la registra el backend (crea la compra, suma el stock
+    // de insumos y productos, actualiza costos y recalcula lo pendiente de la
+    // OC). Recepción parcial → la OC queda Enviado; si llegó todo → Completado.
+    // Sin puentes temporales: ya no se llama entradaCompra/reversaCompra ni se
+    // suma stock en local (lo hace el servidor dentro de la recepción).
+    const noSolicitados = itemsFactura.filter((it) => it.esNoSolicitado);
+    const solicitados = itemsFactura.filter((it) => !it.esNoSolicitado);
+    const resultado = await recibirOrdenCompra(orden.id, {
+      n_factura: numeroFactura.trim(),
+      fecha: fechaFactura,
+      // La recepción SIEMPRE guarda como "precios sin IVA": el monto unitario
+      // es base y el IVA se calcula y suma aparte.
+      iva_incluido: false,
+      items: solicitados,
+      items_no_solicitados: noSolicitados,
     });
-    const resultadoApi = productos && setProductos
-      ? await aplicarEntradasCompraApi(itemsFactura, productos, setProductos, ivaIncluido)
-      : { items: itemsFactura, errores: itemsFactura.flatMap((item, indice) => item.tipoItem === "producto" ? [{ nombre: item.nombre, mensaje: "No está disponible la actualización de Productos API.", indice }] : []) };
-    nuevaCompra.items = resultadoApi.items as OrdenItem[];
-    resultadoApi.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
-    if (nuevaCompra.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
-    if ((resumen && resumen.nombres.length > 0) || nuevaCompra.items.some((item) => item.stockApiAplicado)) {
-      nuevaCompra.stockAplicado = true;
-    }
 
-    setGestiones((prev) => [nuevaCompra, ...prev]);
+    const compraCreada = mapearCompraApi(resultado.compra as CompraApi);
+    setGestiones((prev) => [compraCreada, ...prev]);
 
-    // 2) Acumulado de la OC: facturas anteriores + esta.
-    const acum = new Map<
-      string,
-      { nombre: string; unidad: string; cantidad: number; costoUnitario: number; precioUnitario: number; iva: number }
-    >();
-
-    for (const g of gestiones) {
-      if (g.ordenId !== orden.id) continue;
-
-      for (const it of g.items ?? []) acumular(acum, it);
-    }
-
-    itemsFactura.forEach((it) => acumular(acum, it));
-
-    // Un insumo queda cubierto en cuanto se registra en alguna factura: la orden
-    // se completa cuando ninguna factura deja insumos sin registrar.
-    const registradosAhora = new Set(registrados);
-
-    itemsFactura.forEach((it) => registradosAhora.add(it.idInsumo));
-
-    const pendientes = orden.items.filter(
-      (item) => !registradosAhora.has(item.idInsumo)
-    );
-
-    const idsOrden = new Set(orden.items.map((item) => item.idInsumo));
-
-    const recepcion: Recepcion = {
-      items: orden.items
-        .map((pedido) => {
-          const a = acum.get(pedido.idInsumo);
-          if (!a) return null;
-
-          return {
-            rowId: pedido.rowId,
-            idInsumo: pedido.idInsumo,
-            nombre: pedido.nombre,
-            cantidadSolicitada: pedido.cantidad,
-            cantidadRecibida: a.cantidad,
-            unidad: pedido.unidad,
-            precioReferencia: pedido.costoUnitario,
-            costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: a.iva ?? 0
-          } as ItemRecibido;
-        })
-        .filter((x): x is ItemRecibido => x !== null),
-      itemsExtra: [...acum.entries()]
-        .filter(([idInsumo]) => !idsOrden.has(idInsumo))
-        .map(([idInsumo, a]) => ({
-          rowId: `ex-${idInsumo}`,
-          idInsumo,
-          nombre: a.nombre,
-          cantidadSolicitada: 0,
-          cantidadRecibida: a.cantidad,
-          unidad: a.unidad,
-          precioReferencia: a.costoUnitario,
-          costoUnitario: a.costoUnitario, precioUnitario: a.costoUnitario, iva: a.iva ?? 0
-        })),
+    // El resumen del servidor es el que muestra lo pendiente en la pantalla.
+    const recepcion: Recepcion = mapearRecepcion(resultado.recepcion) ?? {
+      items: [],
+      itemsExtra: [],
       usarLotes: false,
       fechaRecepcion: today,
     };
+    const sinCubrir = recepcion.items.filter(
+      (it) => it.cantidadRecibida + 0.000001 < it.cantidadSolicitada,
+    );
 
-    // La orden solo se completa cuando ninguna factura deja insumos pendientes.
-    onGuardar(recepcion, pendientes.length === 0 ? "Completado" : "Enviado");
+    onGuardar(recepcion, resultado.estado);
+    // 5.2: después de guardar se recargan la OC, las compras, los insumos y
+    // los productos (el backend cambió su stock y sus precios).
+    await onRecargarCatalogo?.();
 
     toast.success(
-      pendientes.length === 0
+      resultado.estado === "Completado"
         ? `Factura ${numeroFactura.trim()} guardada · OC ${orden.id} completada`
-        : `Factura ${numeroFactura.trim()} guardada · ${pendientes.length} insumo(s) pendiente(s) en la OC ${orden.id}`
+        : `Factura ${numeroFactura.trim()} guardada · ${sinCubrir.length} insumo(s) pendiente(s) en la OC ${orden.id}`,
     );
-    if (resumen && resumen.nombres.length > 0) {
-      toast.info(textoStockActualizado(resumen));
-    }
 
     onBack();
   };
@@ -1976,6 +1900,14 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
+              {/* Compras aún no está conectada a la API: el stock de insumos
+                  se suma solo en local. */}
+              {[...items, ...itemsExtra].some((i) => (i.tipoItem ?? "insumo") === "insumo") && (
+                <p className="text-[11px] text-muted-foreground">
+                  El stock de insumos se guardará en la base cuando se conecte Compras
+                </p>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={onBack}
@@ -2006,6 +1938,7 @@ export function RecepcionCompraScreen({
                   <NuevoInsumoModal
                     nombreInicial={exNombre.trim()}
                     insumosExistentes={insumos}
+                    categoriasInsumo={categoriasInsumo}
                     onGuardar={(ins) => {
                       // Punto 2: se da de alta en el catálogo como tipo
                       // "Insumo" y queda seleccionado en el formulario.

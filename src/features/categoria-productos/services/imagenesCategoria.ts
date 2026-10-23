@@ -41,23 +41,28 @@ export const IMAGENES_CATEGORIA: Record<string, string> = {
 };
 
 /**
- * Imagen fija de las tres categorías originales: su `icono` está vacío en los
- * datos (el suyo vive aquí, igual que antes el emoji), así que cualquier vista
- * las resuelve por id. Las categorías nuevas llevan su clave en `icono`.
+ * Imagen fija de las tres categorías originales (ids 1 Pizza, 2 Lasaña y
+ * 3 Bebidas de tb_categoria_productos). En la base conservan su emoji viejo
+ * (🍕 🍝 🥤), pero cualquier vista las resuelve por id con esta foto. Las
+ * categorías nuevas llevan su clave en `icono`. Los "CAT-00x" son alias de los
+ * datos locales antiguos.
  */
 export const IMAGEN_FIJA_CATEGORIA: Record<string, string> = {
+  "1": "img:pizza",
+  "2": "img:lasana-carne",
+  "3": "img:coca-cola",
   "CAT-001": "img:pizza",
   "CAT-002": "img:lasana-carne",
   "CAT-003": "img:coca-cola",
 };
 
 /**
- * Clave de imagen de una categoría: la que eligió al crearla (`icono`) o, si
- * no tiene, la fija de las originales. Datos viejos con emoji devuelven el
- * emoji tal cual: `ImagenCategoria` lo pinta como texto.
+ * Clave de imagen de una categoría: la fija de las originales (gana sobre su
+ * emoji viejo de la base) o la que se eligió al crearla (`icono`). Otros datos
+ * con emoji devuelven el emoji tal cual: `ImagenCategoria` lo pinta como texto.
  */
 export const claveImagenDe = (c: { id: string; icono?: string }): string =>
-  c.icono || IMAGEN_FIJA_CATEGORIA[c.id] || "";
+  IMAGEN_FIJA_CATEGORIA[c.id] || c.icono || "";
 
 /** URL de la imagen de una categoría ("" si no hay: ni clave ni emoji). */
 export const imagenDeCategoria = (c: { id: string; icono?: string }): string =>

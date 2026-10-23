@@ -25,11 +25,20 @@ import {
   emptyFichaVersion,
   fichaDesdeLegacyInsumo,
   fichaTieneCambios,
+  idInsumoApiDesdeFront,
   numeroNuevoFicha,
   siguienteNumeroFicha,
   type FichaVersion,
   type FichasPorProducto,
 } from "@/shared/utils/fichas";
+import {
+  actualizarInsumo,
+  cambiarEstadoInsumo,
+  crearInsumo,
+  eliminarInsumo,
+  mensajeErrorInsumos,
+} from "@/features/insumos/services/insumosApi";
+import { crearFicha, mapearFichaApi, obtenerFichasDe, payloadFicha } from "@/features/productos/services/fichasApi";
 import {
   convertirUnidad,
   faltantesPara,
@@ -53,8 +62,14 @@ const ICLS_MODAL =
 export interface CategoriaInsumo {
   id: string;
   nombre: string;
+  /** Solo lo traen las categorías de la API: `false` = categoría inactiva (no
+      aparece en los selectores, pero sí en los listados). */
+  estado?: boolean;
 }
 
+/** Catálogo local de categorías (fase 1). Sigue aquí por si se abre la
+    pantalla sin API, pero desde la fase 2 las categorías vienen de
+    GET /categorias-insumos y llegan por props. */
 export const CATEGORIAS_INSUMO: CategoriaInsumo[] = [
   { id: "CINS-001", nombre: "Lácteos" },
   { id: "CINS-002", nombre: "Carnes y Embutidos" },
@@ -63,14 +78,15 @@ export const CATEGORIAS_INSUMO: CategoriaInsumo[] = [
   { id: "CINS-005", nombre: "Salsas y Condimentos" },
 ];
 
-export const categoriaNombre = (id: string): string =>
-  CATEGORIAS_INSUMO.find(c => c.id === id)?.nombre ?? "";
+/** Nombre de la categoría con el catálogo que se pasa por props (API). */
+export const categoriaNombreEn = (categorias: CategoriaInsumo[], id: string): string =>
+  categorias.find(c => c.id === id)?.nombre ?? "";
 
 /** Categoría lista para mostrar: el nombre solo si el id EXISTE en el
     catálogo; "-" para ids inválidos (los Productos Insumo viejos traen
     "-", u otros ajenos como "CAT-001" de Pizzas). */
-export const categoriaDe = (id: string): string =>
-  CATEGORIAS_INSUMO.some(c => c.id === id) ? categoriaNombre(id) : "-";
+export const categoriaDeEn = (categorias: CategoriaInsumo[], id: string): string =>
+  categorias.some(c => c.id === id) ? categoriaNombreEn(categorias, id) : "-";
 
 // ─────────────────────────── Tipos ───────────────────────────
 export interface Insumo {
@@ -303,6 +319,14 @@ function ConfirmDialog({
 interface Props {
   insumos: Insumo[];
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
+  /** Categorías de insumos desde la API (GET /categorias-insumos). En los
+      selectores solo entran las activas; en los listados se muestran todas. */
+  categorias: CategoriaInsumo[];
+  /** Estado de la carga inicial y su error: "Reintentar" vuelve a llamar a la
+      API, nunca a datos de ejemplo. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
   /** Fichas técnicas única por id de registro (PROD-### / PIN-###). */
   fichas: FichasPorProducto;
   setFichas: React.Dispatch<React.SetStateAction<FichasPorProducto>>;
@@ -315,17 +339,29 @@ interface Props {
   /** Navega a Orden de Producción con el modal ya abierto y este producto
       preseleccionado. */
   abrirOrdenProduccion?: (idProductoInsumo: string) => void;
-  /** A2 — Crea la Orden de Producción "Preparación en lote" de un Producto
-      Insumo recién creado (Pendiente, cantidad = "Cantidad a hacer" de la
-      ficha v1) y devuelve su id (OP-xxx) para el toast. Lo implementa App,
-      que es donde vive el estado de las órdenes. */
-  crearOrdenProduccion?: (pi: Insumo, ficha: FichaVersion) => string | null;
+  /** Recarga insumos, fichas y órdenes desde la API después de una acción que
+      movió stock o creó registros (crear producto insumo, cambiar estado…). */
+  recargarProduccion?: () => Promise<void>;
   /** "Ver orden" del toast: navega a Orden de Producción con el detalle de
       esa orden ya abierto. */
   verOrdenProduccion?: (idOrden: string) => void;
 }
 
-export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion, crearOrdenProduccion, verOrdenProduccion }: Props) {
+export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando, errorCarga, onReintentar, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion, recargarProduccion, verOrdenProduccion }: Props) {
+  // Categorías con las que trabajan el buscador y los selectores: las de la
+  // API (por props) o, si la pantalla se abre sin API, el catálogo local.
+  const cats = categorias.length > 0 ? categorias : CATEGORIAS_INSUMO;
+  const categoriaNombre = (id: string) => categoriaNombreEn(cats, id);
+  const categoriaDe = (id: string) => categoriaDeEn(cats, id);
+  /** Solo las categorías activas entran en los selectores. */
+  const categoriasActivas = cats.filter((c) => c.estado !== false);
+  /** id_insumo de la API de una fila de ficha que no trae `insumoId` (fichas
+      viejas): resuelve por nombre normalizado contra el catálogo. */
+  const idInsumoDeNombre = (nombreFila: string): number | null => {
+    const clave = normalizarTexto(nombreFila);
+    const ins = insumos.find((i) => normalizarTexto(i.nombre) === clave);
+    return ins ? idInsumoApiDesdeFront(ins.id) : null;
+  };
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -380,6 +416,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         ficha VIGENTE usa al registro: solo en el diálogo "no-eliminar". */
     usadosEn?: string[];
   }>({ tipo: null, mensaje: "" });
+  /** "Guardando…" mientras habla la API: bloquea el doble clic. */
+  const [guardando, setGuardando] = useState(false);
 
   // Alerta de stock bajo al cargar (A5.5): solo activos, contando los que
   // están en 0 ("Sin stock") y los que llegaron al mínimo ("Stock bajo").
@@ -646,7 +684,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     tocar("nombre");
   };
 
-  // ─────────────────────────── Insumo CRUD ───────────────────────────
+  // ─────────────────────────── Insumo CRUD (API) ───────────────────────────
   /** Limpia por completo el formulario del modal (al abrir en blanco, al
       guardar y al cancelar el flujo del Producto Insumo). */
   const limpiarFormulario = () => {
@@ -687,9 +725,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       // Los registros viejos traen categoriaId "-" (u otra ajena al catálogo
       // de insumos): se muestra la primera categoría. En edición no se guarda.
       setCategoriaId(
-        CATEGORIAS_INSUMO.some(c => c.id === insumo.categoriaId)
+        cats.some(c => c.id === insumo.categoriaId)
           ? insumo.categoriaId
-          : CATEGORIAS_INSUMO[0].id,
+          : cats[0].id,
       );
       // La ficha sale de las versiones guardadas (borrador = copia de la
       // última) o, si aún no existe, de los campos legacy del propio insumo.
@@ -706,9 +744,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       // categoriaId ajeno al catálogo: en edición solo se MUESTRA (no se
       // guarda), así que se pinta el primero en vez de un vacío.
       setCategoriaId(
-        CATEGORIAS_INSUMO.some(c => c.id === insumo.categoriaId)
+        cats.some(c => c.id === insumo.categoriaId)
           ? insumo.categoriaId
-          : CATEGORIAS_INSUMO[0].id,
+          : cats[0].id,
       );
       setUnidad(insumo.unidadMedida);
       setStockActual(insumo.stockActual);
@@ -723,10 +761,35 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     limpiarFormulario();
   };
 
-  const handleSave = () => {
+  // Bloque 2.4: el historial de versiones de la ficha se pide a la API al abrir
+  // el detalle (el estado solo trae la vigente de GET /fichas/vigentes).
+  useEffect(() => {
+    if (!detalleItem || detalleItem.tipo !== "ProductoInsumo") return;
+    const id = detalleItem.id;
+    if (!id || !id.startsWith("INS-")) return;
+    let cancelado = false;
+    void (async () => {
+      try {
+        const filas = await obtenerFichasDe({ id_insumo: idInsumoApiDesdeFront(id) });
+        const versiones = filas
+          .map((f) => mapearFichaApi(f, null))
+          .sort((a, b) => a.version - b.version);
+        if (cancelado || versiones.length === 0) return;
+        setFichas((prev) => ({ ...prev, [id]: versiones }));
+      } catch {
+        // Sin historial se queda con la vigente del estado.
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [detalleItem]);
+
+  const handleSave = async () => {
     setIntentoGuardar(true);
     // Si hay errores no se guarda: quedan visibles bajo cada campo.
     if (!nombreLimpio(nombre) || !categoriaId || nombreDuplicado(nombreLimpio(nombre)) || !(stockMinimo >= 0)) return;
+    if (guardando) return;
 
     if (editingId) {
       if (costoUnitario < 0) {
@@ -734,66 +797,78 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         return;
       }
 
-      // En edición solo se actualiza el stock mínimo: el stock actual lo
-      // mueven Compras (suma) y Producción (resta), nunca este formulario.
-      // El costoUnitario y los demás campos conservan su valor original
-      // aunque el formulario los envíe modificados (no se confía solo en el
-      // disabled del HTML).
+      // PUT con nombre, categoría, stock mínimo y descripción (+ costo e IVA
+      // si es Insumo). El stock actual lo mueven Compras (suma) y Producción
+      // (resta), nunca este formulario. Descripción e IVA no tienen campo en
+      // el modal: viajan con su valor actual.
       const original = insumos.find(i => i.id === editingId);
       if (!original) return;
-      setInsumos(prev => prev.map(i =>
-        i.id === editingId
-          ? { ...i, stockMinimo }
-          : i
-      ));
-      const actualizado: Insumo = { ...original, stockMinimo };
-      if (estadoStock(actualizado) !== "ok") {
-        toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 2000 });
-      } else {
-        toast.success(`Insumo "${original.nombre}" actualizado`);
+      setGuardando(true);
+      try {
+        const actualizado = await actualizarInsumo(editingId, {
+          nombre: nombreParaGuardar(nombre),
+          id_categoria_insumo: Number(categoriaId),
+          stock_minimo: stockMinimo,
+          descripcion: original.descripcion ?? null,
+          ...(original.tipo === "Insumo"
+            ? { costo_unitario: costoUnitario, iva: original.iva ?? 0 }
+            : {}),
+        });
+        setInsumos(prev => prev.map(i => (i.id === editingId ? actualizado : i)));
+        if (estadoStock(actualizado) !== "ok") {
+          toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 2000 });
+        } else {
+          toast.success(`Insumo "${actualizado.nombre}" actualizado`);
+        }
+        cerrarModal();
+      } catch (error) {
+        toast.error(mensajeErrorInsumos(error, "No se pudo actualizar el insumo."));
+      } finally {
+        setGuardando(false);
       }
-    } else {
-      const maxNum = insumos.reduce((max, i) => {
-        const n = parseInt(i.id.replace("INS-", ""), 10) || 0;
-        return Math.max(max, n);
-      }, 0);
-      const newId = `INS-${String(maxNum + 1).padStart(3, "0")}`;
-      // A5.3: el nombre se guarda limpio y con mayúscula inicial ("masa
-      // prueba" → "Masa prueba"). Solo aquí, al CREAR: los existentes no se
-      // renombran.
-      const nombreNuevo = nombreParaGuardar(nombre);
-      const nuevo: Insumo = {
-        id: newId,
-        nombre: nombreNuevo,
-        categoriaId,
-        unidadMedida: unidad,
-        // Punto 10: la creación ya no pide estos tres campos, así que nacen
-        // en 0 (el stock se carga después de crear el insumo y el costo se
-        // escribe desde Editar). Los estados siguen en 0 porque `openCreate`
-        // los limpia y los campos están ocultos.
-        stockActual,
-        stockMinimo,
-        costoUnitario,
-        precioUnitario: null,
-        iva: null,
-        tipo: "Insumo",
-        estado: "activo",
-      };
-      setInsumos(prev => [nuevo, ...prev]);
-      // El stock nace en 0 por diseño (el formulario ya no lo pide), así que
-      // aquí solo avisa si el stock MÍNIMO pedido queda por encima de ese 0;
-      // el aviso permanente es el badge "Sin stock"/"Stock bajo" del listado.
-      if (nuevo.stockActual < nuevo.stockMinimo) {
-        toast.warning(`Alerta: el stock de ${nuevo.nombre} está bajo (${nuevo.stockActual} ${nuevo.unidadMedida}, mínimo ${nuevo.stockMinimo} ${nuevo.unidadMedida})`, { duration: 2000 });
-      } else {
-        toast.success(`Insumo "${nombreNuevo}" creado`);
-      }
+      return;
     }
-    cerrarModal();
+
+    // Crear insumo normal: el stock nace en 0 (el formulario ya no lo pide) y
+    // el registro se arma con la RESPUESTA del servidor.
+    setGuardando(true);
+    try {
+      const creado = await crearInsumo({
+        nombre: nombreParaGuardar(nombre),
+        tipo: "Insumo",
+        id_categoria_insumo: Number(categoriaId),
+        unidad_medida: unidad,
+        stock_minimo: stockMinimo,
+        costo_unitario: costoUnitario,
+      });
+      setInsumos(prev => [creado.insumo, ...prev]);
+      // El stock nace en 0 por diseño, así que solo se avisa si el stock
+      // MÍNIMO pedido queda por encima; el aviso permanente es el badge del
+      // listado.
+      if (creado.insumo.stockActual < creado.insumo.stockMinimo) {
+        toast.warning(`Alerta: el stock de ${creado.insumo.nombre} está bajo (${creado.insumo.stockActual} ${creado.insumo.unidadMedida}, mínimo ${creado.insumo.stockMinimo} ${creado.insumo.unidadMedida})`, { duration: 2000 });
+      } else {
+        toast.success(`Insumo "${creado.insumo.nombre}" creado`);
+      }
+      cerrarModal();
+    } catch (error) {
+      // 409 (nombre repetido) o 400: el mensaje del servidor se muestra en el
+      // modal y el formulario queda abierto para corregir.
+      toast.error(mensajeErrorInsumos(error, "No se pudo crear el insumo."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const reg = insumos.find(i => i.id === id);
+    try {
+      await eliminarInsumo(id);
+    } catch (error) {
+      // Con historial el servidor responde 409 ("…tiene historial. Desactívalo.").
+      toast.error(mensajeErrorInsumos(error, "No se pudo eliminar el insumo."));
+      return;
+    }
     setInsumos(prev => {
       const next = prev.filter(i => i.id !== id);
       // Si la página actual queda vacía, retroceder
@@ -872,128 +947,123 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     });
   };
 
-  const ejecutarConfirmacion = () => {
+  const ejecutarConfirmacion = async () => {
     if (confirmState.tipo === "crear-producto") {
+      if (guardando) return;
       if (editandoProducto) {
         if (!editingId) return;
-        // Editar producto insumo: ficha técnica única. Las versiones solo
-        // crecen si el borrador cambió frente a la última.
+        // Editar producto insumo: la ficha técnica se guarda contra la API
+        // como VERSIÓN NUEVA (el servidor responde `sinCambios` si el
+        // contenido era el mismo y entonces no hay versión que mostrar).
         const original = insumos.find(i => i.id === editingId);
         if (!original) return;
-        const versiones = fichas[editingId] ?? [];
-        const ultima = versiones[versiones.length - 1];
-        const ahora = new Date().toISOString();
-        if (!ultima) {
-          // Nunca tuvo ficha guardada: el borrador entra como v1.
-          setFichas(prev => ({
-            ...prev,
-            [editingId]: [{
-              ...piFicha,
-              version: 1,
-              idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
-              destino: { tipo: "producto-insumo", insumoId: editingId },
-              fechaInicio: ahora,
-              fechaFin: null,
-            }],
-          }));
-        } else if (fichaTieneCambios(piFicha, ultima)) {
-          setFichas(prev => ({
-            ...prev,
-            [editingId]: [
-              ...versiones.map((v, i) =>
-                i === versiones.length - 1 ? { ...v, fechaFin: ahora } : v
-              ),
-              {
-                ...piFicha,
-                version: ultima.version + 1,
-                idReceta: ultima.idReceta,
-                destino: { tipo: "producto-insumo", insumoId: editingId },
-                fechaInicio: ahora,
-                fechaFin: null,
-              },
-            ],
-          }));
+        setGuardando(true);
+        try {
+          const fichaNueva = await crearFicha(
+            payloadFicha(
+              piFicha,
+              { id_insumo: idInsumoApiDesdeFront(editingId), unidadMedida: piUnidadMedida },
+              (fila) =>
+                fila.insumoId?.startsWith("INS-")
+                  ? idInsumoApiDesdeFront(fila.insumoId)
+                  : idInsumoDeNombre(fila.nombre),
+            ),
+          );
+          setFichas(prev => ({ ...prev, [editingId]: [mapearFichaApi(fichaNueva, null)] }));
+          toast.success(
+            fichaNueva.sinCambios
+              ? `Producto Insumo "${original.nombre}" actualizado (la ficha no cambió)`
+              : `Producto Insumo "${original.nombre}" actualizado`,
+          );
+          cerrarModal();
+        } catch (error) {
+          toast.error(mensajeErrorInsumos(error, "No se pudo guardar la ficha técnica."));
+        } finally {
+          setGuardando(false);
         }
-        toast.success(`Producto Insumo "${original.nombre}" actualizado`);
-        cerrarModal();
       } else {
-        // Crear nuevo producto insumo (IDs: PIN-###, misma regla de siempre)
-        const maxNum = insumos.reduce((max, i) => {
-          if (!i.id.startsWith("PIN-")) return max;
-          const n = parseInt(i.id.replace("PIN-", ""), 10) || 0;
-          return Math.max(max, n);
-        }, 0);
-        const newId = `PIN-${String(maxNum + 1).padStart(3, "0")}`;
-        // A5.3: nombre limpio y con mayúscula inicial, igual que un insumo
-        // normal. Solo aquí, al CREAR.
-        const nombreNuevo = nombreParaGuardar(nombre);
-        const nuevo: Insumo = {
-          id: newId,
-          nombre: nombreNuevo,
-          unidadMedida: piUnidadMedida,
-          costoUnitario: 0,
-          precioUnitario: null,
-          iva: null,
-          tipo: "ProductoInsumo",
-          // El stock se carga después (mismo criterio que un insumo normal).
-          stockActual: 0,
-          stockMinimo,
-          categoriaId,
-          estado: "activo",
-        };
-        setInsumos(prev => [nuevo, ...prev]);
-        // La ficha del Producto Insumo nace junto con el registro, con el
-        // siguiente número de la serie compartida (001, 002, …). Los campos
-        // que el formulario no usa quedan en su valor por defecto para no
-        // romper el tipo FichaVersion.
-        const fichaV1: FichaVersion = {
-          ...piFicha,
-          version: 1,
-          idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)),
-          destino: { tipo: "producto-insumo", insumoId: newId },
-          porciones: 1,
-          porcionesPorTamano: [],
-          pasos: [],
-          fechaInicio: new Date().toISOString(),
-          fechaFin: null,
-        };
-        setFichas(prev => ({ ...prev, [newId]: [fichaV1] }));
-        // A2: el producto insumo nuevo sale CON su Orden de Producción
-        // "Preparación en lote" pendiente: cantidad = "Cantidad a hacer" y
-        // ficha v1. No descuenta nada — el stock baja al iniciarla —. Sin
-        // callback (pantalla montada sin App) sigue el toast de siempre.
-        const ordenId = crearOrdenProduccion?.(nuevo, fichaV1) ?? null;
-        toast.success(
-          ordenId
-            ? `Producto insumo «${nombreNuevo}» creado y enviado a Orden de Producción (${ordenId})`
-            : `Producto Insumo "${nombreNuevo}" creado`,
-          ordenId
-            ? {
-                action: {
-                  label: "Ver orden",
-                  onClick: () => verOrdenProduccion?.(ordenId),
+        // Crear producto insumo: POST /insumos con su ficha y
+        // `crear_orden_produccion: true` (el servidor crea la orden
+        // "Preparación en lote" con la "Cantidad a hacer"). Un 409 trae los
+        // faltantes: se muestran los mensajes ya existentes por fila y bajo
+        // "Cantidad a hacer" (la validación en vivo se mantiene) y el modal
+        // queda abierto.
+        setGuardando(true);
+        try {
+          const creado = await crearInsumo({
+            nombre: nombreParaGuardar(nombre),
+            tipo: "Producto insumo",
+            id_categoria_insumo: Number(categoriaId),
+            unidad_medida: piUnidadMedida,
+            stock_minimo: stockMinimo,
+            ficha: {
+              cantidad: piFicha.rendimiento && piFicha.rendimiento > 0 ? piFicha.rendimiento : 1,
+              tiempo_preparacion: piFicha.tiempoPreparacion,
+              pasos: piFicha.pasos,
+              insumos: piFicha.insumos
+                .filter((r) => r.cantidad > 0)
+                .map((r) => ({
+                  id_insumo: idInsumoDeNombre(r.nombre) ?? (r.insumoId ? idInsumoApiDesdeFront(r.insumoId) : 0),
+                  cantidad: r.cantidad,
+                  medida: r.unidad,
+                })),
+            },
+            crear_orden_produccion: true,
+          });
+          setInsumos(prev => [creado.insumo, ...prev]);
+          if (creado.ficha) {
+            const fichaV1 = creado.ficha;
+            setFichas(prev => ({ ...prev, [creado.insumo.id]: [fichaV1] }));
+          }
+          // Las órdenes cambiaron (nació la de este producto insumo).
+          await recargarProduccion?.();
+          toast.success(
+            creado.ordenId
+              ? `Producto insumo «${creado.insumo.nombre}» creado y enviado a Orden de Producción (${creado.ordenId})`
+              : `Producto Insumo "${creado.insumo.nombre}" creado`,
+            creado.ordenId
+              ? {
+                  action: {
+                    label: "Ver orden",
+                    onClick: () => verOrdenProduccion?.(creado.ordenId!),
+                  },
+                }
+              : {
+                  action: {
+                    label: "Programar producción",
+                    onClick: () => abrirOrdenProduccion?.(creado.insumo.id),
+                  },
                 },
-              }
-            : {
-                action: {
-                  label: "Programar producción",
-                  onClick: () => abrirOrdenProduccion?.(newId),
-                },
-              },
-        );
-        cerrarModal();
+          );
+          cerrarModal();
+        } catch (error) {
+          // 409 con faltantes (o nombre repetido): el mensaje del servidor y
+          // los avisos por fila que ya calcula el formulario.
+          setTocado((t) => ({ ...t, tiempo: true, cantidad: true, unidad: true, insumos: true, filas: true }));
+          toast.error(mensajeErrorInsumos(error, "No se pudo crear el producto insumo."));
+        } finally {
+          setGuardando(false);
+        }
       }
     } else if (confirmState.tipo === "cancelar-producto") {
       cerrarModal();
     } else if (confirmState.tipo === "cambiar-estado" && confirmState.id && confirmState.nuevoEstado) {
-      setInsumos(prev => prev.map(i =>
-        i.id === confirmState.id ? { ...i, estado: confirmState.nuevoEstado! } : i
-      ));
-      toast.success(`Estado actualizado`);
+      const id = confirmState.id;
+      const nuevoEstado = confirmState.nuevoEstado;
+      setGuardando(true);
+      try {
+        const actualizado = await cambiarEstadoInsumo(id, nuevoEstado === "activo");
+        setInsumos(prev => prev.map(i => (i.id === id ? actualizado : i)));
+        toast.success(`Estado actualizado`);
+      } catch (error) {
+        toast.error(mensajeErrorInsumos(error, "No se pudo actualizar el estado."));
+      } finally {
+        setGuardando(false);
+      }
     } else if (confirmState.tipo === "eliminar" && confirmState.id) {
       // Reutiliza handleDelete: mantiene el retroceso de página si queda
       // vacía, filtros y buscador intactos, y el recálculo de stock bajo.
-      handleDelete(confirmState.id);
+      await handleDelete(confirmState.id);
     }
     setConfirmState({ tipo: null, mensaje: "" });
   };
@@ -1127,7 +1197,26 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         </button>
       )}
 
-      {/* Table */}
+      {/* Carga desde la API: mientras carga o si falla se muestra el estado
+          con "Reintentar"; nunca se vuelve a datos de ejemplo. */}
+      {cargando ? (
+        <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
+          Cargando insumos…
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
+          <p className="font-semibold text-foreground">{errorCarga}</p>
+          {onReintentar && (
+            <button
+              type="button"
+              onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
@@ -1246,6 +1335,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
         </table>
         </div>
       </div>
+      )}
 
       {/* Pagination */}
       {filtered.length > 0 && (
@@ -1345,7 +1435,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                           }`}
                         >
                           <option value="">Selecciona una categoría</option>
-                          {CATEGORIAS_INSUMO.map(c => (
+                          {categoriasActivas.map(c => (
                             <option key={c.id} value={c.id}>{c.nombre}</option>
                           ))}
                         </select>
@@ -1497,7 +1587,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                         }`}
                       >
                         <option value="">Selecciona una categoría</option>
-                        {CATEGORIAS_INSUMO.map(c => (
+                        {categoriasActivas.map(c => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
                         ))}
                       </select>
@@ -1598,22 +1688,26 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                   /* A1: mientras falte insumo para la "Cantidad a hacer", el
                      producto insumo nuevo no se puede crear. */
                   disabled={
-                    tipoForm === "producto-insumo" &&
-                    !editandoProducto &&
-                    validacionStockPI.faltantes.length > 0
+                    guardando ||
+                    (tipoForm === "producto-insumo" &&
+                      !editandoProducto &&
+                      validacionStockPI.faltantes.length > 0)
                   }
                   className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
-                    tipoForm === "producto-insumo" &&
-                    !editandoProducto &&
-                    validacionStockPI.faltantes.length > 0
+                    guardando ||
+                    (tipoForm === "producto-insumo" &&
+                      !editandoProducto &&
+                      validacionStockPI.faltantes.length > 0)
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-red-700 cursor-pointer active:scale-95"
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  {editingId
-                    ? "Guardar"
-                    : tipoForm === "producto-insumo" ? "Crear Producto Insumo" : "Crear Insumo"}
+                  {guardando
+                    ? "Guardando…"
+                    : editingId
+                      ? "Guardar"
+                      : tipoForm === "producto-insumo" ? "Crear Producto Insumo" : "Crear Insumo"}
                 </button>
               </div>
             </motion.div>
@@ -1819,10 +1913,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
                 </span>
               ) : undefined
             }
-            textoConfirmar={confirmState.tipo === "eliminar" ? "Eliminar" : "Confirmar"}
+            textoConfirmar={
+              guardando
+                ? "Guardando…"
+                : confirmState.tipo === "eliminar" ? "Eliminar" : "Confirmar"
+            }
             cerrarConEscYOverlay={confirmState.tipo === "eliminar"}
             enfocarCancelar={confirmState.tipo === "eliminar"}
-            onConfirmar={ejecutarConfirmacion}
+            onConfirmar={() => {
+              if (guardando) return;
+              void ejecutarConfirmacion();
+            }}
             onCancelar={cancelarConfirmacion}
           />
         )}

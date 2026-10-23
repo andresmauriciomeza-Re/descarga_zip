@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, X,
-  Upload, ShoppingCart, ChevronDown,
+  Upload, ShoppingCart, ChevronDown, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -17,6 +17,13 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import {
+  actualizarNoConformidad,
+  completarNoConformidad,
+  crearNoConformidad,
+  eliminarNoConformidad,
+  mensajeErrorNoConformes,
+} from "@/features/cpn/services/noConformesApi";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
@@ -50,15 +57,20 @@ export interface NoConformidad {
   solucion?: string;
   ventaRef?: string;
   ordenRef?: string;
+  /** Ids reales del catálogo (vienen de la API). Producto: id_producto como
+      texto; Producto insumo: "INS-###". */
+  idProducto?: string;
+  idInsumo?: string;
+  /** id_orden_produccion de la merma (el detalle de la orden la busca así). */
+  idOrdenProduccion?: number;
+  /** Merma de producción o devolución: los crea el backend y no se eliminan. */
+  generadoPorSistema?: boolean;
 }
 
-interface VentaPerdida {
+/** Venta que se puede enlazar a una no conformidad (buscador del formulario). */
+interface VentaSugerida {
   id: string;
   usuario: string;
-  fecha: string;
-  productos: string;
-  cantidad: number;
-  total: number;
 }
 
 const ESTADO_CONFIG: Record<EstadoNC, string> = {
@@ -73,77 +85,6 @@ const TIPOS_SOLUCION = [
 const CATEGORIAS = ["Pizzas", "Bebidas", "Lasaña", "Insumo seco", "Insumo fresco", "Ventas", "Otro"];
 
 
-
-export const INITIAL_NO_CONFORMIDADES: NoConformidad[] = [
-  {
-    id: "1", tipo: "Producto", nombre: "Pizza Pepperoni", categoria: "Pizzas",
-    fechaRegistro: "2024-01-15", cantidadAfectada: 4, unidadMedida: "und",
-    tipoNoConformidad: "Vencimiento",
-    descripcionProblema: "Pizzas preparadas encontradas fuera del tiempo de refrigeración permitido (más de 24 h). Presentan cambio de color y olor.",
-    causa: "Falla en rotación de producto terminado en nevera",
-    areaProceso: "Producción", lote: "L-2024-015", responsable: "Carlos Gómez",
-    estado: "Pendiente", accionTomada: "Producto separado y retirado de nevera",
-    accionCorrectiva: "Implementar control de fechas FIFO en área de refrigeración",
-    fechaLimite: "2024-01-20", responsableAccion: "María López",
-  },
-  {
-    id: "2", tipo: "Producto insumo", nombre: "Harina de trigo", categoria: "Insumo seco",
-    fechaRegistro: "2024-01-18", cantidadAfectada: 50, unidadMedida: "kg",
-    tipoNoConformidad: "Mal almacenamiento",
-    descripcionProblema: "Sacos de harina con humedad excesiva al abrir. La masa elaborada presenta grumos y no desarrolla bien la fermentación.",
-    causa: "Filtración de humedad por goteras en zona de almacén",
-    areaProceso: "Almacén", proveedor: "Molinos del Valle", lote: "L-2024-042", responsable: "Ana Torres",
-    estado: "Pendiente", accionTomada: "Sacos afectados separados; muestra enviada a cocina para prueba",
-    accionCorrectiva: "Reparación de techo en bodega y reubicación del almacenamiento",
-    fechaLimite: "2024-01-25", responsableAccion: "Juan Ríos",
-  },
-  {
-    id: "3", tipo: "Producto", nombre: "Gaseosa 400ml", categoria: "Bebidas",
-    fechaRegistro: "2024-01-10", cantidadAfectada: 12, unidadMedida: "und",
-    tipoNoConformidad: "Vencimiento",
-    descripcionProblema: "Botellas de gaseosa vencidas encontradas en la nevera de exhibición. Fecha de vencimiento: 05/01/2024.",
-    causa: "Falla en revisión periódica de fechas en nevera de exhibición",
-    areaProceso: "Distribución", lote: "L-2023-210", responsable: "Pedro Salazar",
-    estado: "Completado", accionTomada: "Producto dado de baja y destruido",
-    accionCorrectiva: "Revisión diaria de fechas de vencimiento en nevera de exhibición",
-    tipoSolucion: "Reposición del producto",
-    solucion: "Producto dado de baja y destruido por fecha vencida; se repuso el stock.",
-    fechaLimite: "2024-01-12", responsableAccion: "Pedro Salazar", fechaCierre: "2024-01-12",
-  },
-  {
-    id: "4", tipo: "Producto", nombre: "Lasaña Bolognesa", categoria: "Lasaña",
-    fechaRegistro: "2024-01-22", cantidadAfectada: 2, unidadMedida: "und",
-    tipoNoConformidad: "Defecto de calidad",
-    descripcionProblema: "Dos lasañas devueltas por clientes por presencia de carne mal cocida en el centro. Temperatura interna insuficiente al servir.",
-    causa: "Tiempo de cocción insuficiente por horno con falla de temperatura",
-    areaProceso: "Cocina", lote: "L-2024-022", responsable: "Luis Herrera",
-    estado: "Pendiente", accionTomada: "Producto retirado; se ofreció reposición al cliente",
-    accionCorrectiva: "Calibración del horno y protocolo de verificación de temperatura interna",
-    fechaLimite: "2024-01-27", responsableAccion: "Luis Herrera",
-  },
-  {
-    id: "5", tipo: "Producto insumo", nombre: "Queso mozzarella", categoria: "Insumo fresco",
-    fechaRegistro: "2024-01-25", cantidadAfectada: 8, unidadMedida: "kg",
-    tipoNoConformidad: "Incumplimiento de proveedor",
-    descripcionProblema: "Queso recibido con empaque roto y signos de inicio de deterioro. Presenta olor ácido fuera de lo normal para el producto.",
-    causa: "Transporte sin cadena de frío adecuada por parte del proveedor",
-    areaProceso: "Compras", proveedor: "Lácteos La Esperanza", lote: "L-2024-089", responsable: "Ana Torres",
-    estado: "Pendiente", accionTomada: "Insumo rechazado y devuelto al proveedor",
-    accionCorrectiva: "Solicitar certificado de cadena de frío en cada entrega y evaluar cambio de proveedor",
-    fechaLimite: "2024-01-30", responsableAccion: "Carlos Gómez",
-  },
-  {
-    id: "6", tipo: "Producto", nombre: "Pizza Margarita", categoria: "Pizzas",
-    fechaRegistro: "2024-01-28", cantidadAfectada: 1, unidadMedida: "und",
-    tipoNoConformidad: "Contaminación",
-    descripcionProblema: "Cliente reportó presencia de cuerpo extraño (trozo de plástico) dentro de la pizza al momento de servirla.",
-    causa: "Residuo de empaque de ingrediente no retirado antes del proceso",
-    areaProceso: "Producción", lote: "L-2024-028", responsable: "Luis Herrera",
-    estado: "Pendiente", accionTomada: "Producto separado para análisis; cliente informado y compensado",
-    accionCorrectiva: "Reforzar inspección visual de ingredientes antes del ensamble de pizzas",
-    fechaLimite: "2024-02-03", responsableAccion: "María López",
-  },
-];
 
 const emptyForm = (): Omit<NoConformidad, "id"> => ({
   tipo: "Producto",
@@ -172,15 +113,6 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
   ventaRef: "",
   ordenRef: "",
 });
-
-export function nextNoConformidadId(items: NoConformidad[]) {
-  const nums = items
-    .filter(i => /^\d+$/.test(i.id))
-    .map(i => parseInt(i.id, 10))
-    .filter(n => !isNaN(n));
-  const max = nums.length > 0 ? Math.max(...nums) : 0;
-  return String(max + 1);
-}
 
 function downloadXLSX(data: NoConformidad[]) {
   const wb = XLSX.utils.book_new();
@@ -289,33 +221,43 @@ const sCls = `${iCls} appearance-none cursor-pointer`;
 const tCls = `${iCls} resize-y`;
 
 interface Props {
-  ventasPerdidas: VentaPerdida[];
+  /** Ventas que se pueden enlazar como «Venta relacionada» (buscador). */
+  ventasSugeridas: VentaSugerida[];
   insumos: Insumo[];
   productos: Producto[];
-  /**
-   * Escritor del catálogo de productos que vive en App (P17b). Opcional para
-   * no romper el render actual: mientras App no lo pase, registrar la
-   * no conformidad funciona igual y solo falta el movimiento de stock.
-   */
-  setProductos?: React.Dispatch<React.SetStateAction<Producto[]>>;
   ordenesProduccion: OrdenProduccion[];
   noConformidades: NoConformidad[];
   setNoConformidades: React.Dispatch<React.SetStateAction<NoConformidad[]>>;
+  /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos
+      de ejemplo. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
+  /** Crear o eliminar un registro manual mueve stock en la base (producto de
+      reventa o insumo): App recarga productos e insumos. */
+  onInventarioCambiado?: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
 }
 
-export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos, setProductos, ordenesProduccion, noConformidades, setNoConformidades, canCreate: _canCreate = true, canDelete = true, canExportExcel = true }: Props) {
+export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos, ordenesProduccion, noConformidades, setNoConformidades, cargando = false, errorCarga, onReintentar, onInventarioCambiado, canCreate: _canCreate = true, canEdit = true, canDelete = true, canExportExcel = true }: Props) {
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
   const [page, setPage] = useState(1);
 
   const [viewItem, setViewItem] = useState<NoConformidad | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // Edición (solo Pendiente): reutiliza el formulario con los datos de
+  // identidad (producto, cantidad, motivo…) en solo lectura.
+  const [editItem, setEditItem] = useState<NoConformidad | null>(null);
+  // Cierre: Pendiente → Completado con tipo de solución y solución aplicada.
+  const [completarItem, setCompletarItem] = useState<NoConformidad | null>(null);
+  const [completarForm, setCompletarForm] = useState({ tipoSolucion: "", solucion: "" });
   const [deleteTarget, setDeleteTarget] = useState<NoConformidad | null>(null);
   const [form, setForm] = useState<Omit<NoConformidad, "id">>(emptyForm());
+  const [guardando, setGuardando] = useState(false);
   const { subir, subiendo } = useSubirArchivo();
 
   // Autocomplete state for ventaRef
@@ -325,10 +267,10 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   // Buscador de ventas: número de venta + nombre del cliente.
   const ventaSuggestions = useMemo(() => {
     const q = (form.ventaRef || "").toLowerCase();
-    return ventasPerdidas
+    return ventasSugeridas
       .map(v => ({ id: String(v.id), label: `${v.id} · ${v.usuario}` }))
       .filter(s => !q || s.id.includes(q) || s.label.toLowerCase().includes(q));
-  }, [ventasPerdidas, form.ventaRef]);
+  }, [ventasSugeridas, form.ventaRef]);
 
   // Buscador de órdenes: solo las del tipo que corresponde a la no conformidad.
   const tipoOrdenBuscado = form.tipo === "Producto insumo" ? "preparacion" : "pedido";
@@ -343,32 +285,15 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
 
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const ventasNC: NoConformidad[] = useMemo(() =>
-    ventasPerdidas.map((v, idx) => ({
-      id: `${idx + 1}-${v.id}`,
-      tipo: "Venta" as Tipo,
-      nombre: v.productos,
-      categoria: "Ventas",
-      fechaRegistro: v.fecha,
-      cantidadAfectada: v.cantidad,
-      unidadMedida: "und",
-      tipoNoConformidad: "Pérdida en venta",
-      descripcionProblema: `Total: $${v.total.toLocaleString("es-CO")}`,
-      causa: `Registrado por: ${v.usuario}`,
-      areaProceso: "Ventas",
-      responsable: v.usuario,
-      estado: "Pendiente" as EstadoNC,
-      ventaRef: String(v.id),
-    })),
-  [ventasPerdidas]);
-
+  // Todo viene de la API: las pérdidas en venta son registros tipo "Venta" que
+  // crea el backend al resolver una devolución con «Producto malo».
   const allItems = useMemo(() =>
-    [...ventasNC, ...noConformidades]
+    [...noConformidades]
       .sort((a, b) => {
         if (b.fechaRegistro !== a.fechaRegistro) return b.fechaRegistro.localeCompare(a.fechaRegistro);
         return parseInt(b.id, 10) - parseInt(a.id, 10);
       }),
-  [ventasNC, noConformidades]);
+  [noConformidades]);
 
   const filtered = useMemo(() =>
     allItems.filter(i => {
@@ -388,65 +313,99 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   const set = (patch: Partial<Omit<NoConformidad, "id">>) =>
     setForm(f => ({ ...f, ...patch }));
 
-  /**
-   * Movimiento de stock al registrar un producto no conforme (P17b).
-   *
-   * Una no conformidad de tipo "Producto" es una MERMA: esas unidades dejan
-   * de estar disponibles, así que el stock del producto elegido baja aquí
-   * (nunca por debajo de 0, igual que en Orden de Producción).
-   *
-   * Punto de integración con VENTAS: esta pantalla solo recibe las ventas ya
-   * marcadas como pérdida (`ventasPerdidas`) y SIN detalle por producto, y
-   * llegan después de que la venta existió; por eso el descuento por venta no
-   * puede vivir acá. Lo debe hacer el flujo que CONFIRMA la venta
-   * (VentasScreen / App, al crearla) sobre `setProductos`, con la misma regla
-   * stock = max(0, stock − cantidad vendida): así cada venta descuenta una
-   * sola vez y este formulario no duplica el movimiento.
-   *
-   * Mientras App no pase `setProductos`, esta función no hace nada y el
-   * registro de la no conformidad sigue funcionando tal cual.
-   *
-   * Alcance: solo tipo "Producto". Las no conformidades de "Producto insumo"
-   * afectan el `stockActual` del módulo Insumos y necesitarían su propio
-   * `setInsumos`, que esta pantalla no recibe.
-   */
-  const descontarStockMerma = (nombre: string, cantidad: number) => {
-    if (!setProductos) return;
-    if (!nombre.trim() || !Number.isFinite(cantidad) || cantidad <= 0) return;
-    const producto = productos.find(p => p.nombre === nombre);
-    if (!producto) return;
-    const antes = producto.stockDisponible;
-    const despues = Math.max(0, Math.round((antes - cantidad) * 100) / 100);
-    if (despues === antes) return;
-    setProductos(prev =>
-      prev.map(p => (p.id === producto.id ? { ...p, stockDisponible: despues } : p)),
-    );
-    toast.success(`Stock de ${nombre}: ${antes} → ${despues}`);
-  };
-
-  const handleCreate = () => {
-    if (!form.nombre.trim()) { toast.error("Selecciona un producto."); return; }
+  /** Alta contra la API. El stock lo mueve el backend en la misma transacción
+      (producto de reventa o insumo; los elaborados no tienen stock propio) y
+      rechaza la cantidad si supera el stock actual. */
+  const handleCreate = async () => {
+    const idCatalogo = form.tipo === "Producto" ? form.idProducto : form.idInsumo;
+    if (!idCatalogo || !form.nombre.trim()) { toast.error("Selecciona un producto."); return; }
     if (!form.tipoNoConformidad.trim()) { toast.error("El motivo es obligatorio."); return; }
+    if (!(form.cantidadAfectada > 0)) { toast.error("La cantidad afectada debe ser mayor que cero."); return; }
     const hoy = new Date().toLocaleDateString("en-CA");
     if (form.fechaRegistro > hoy) { toast.error("La fecha de registro no puede ser futura."); return; }
-    const newItem: NoConformidad = { id: nextNoConformidadId(noConformidades), ...form };
-    setNoConformidades(prev => [newItem, ...prev]);
-    // Merma: el producto registrado sale del stock (P17b).
-    if (newItem.tipo === "Producto") {
-      descontarStockMerma(newItem.nombre, newItem.cantidadAfectada);
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      const creada = await crearNoConformidad(form);
+      setNoConformidades(prev => [creada, ...prev]);
+      setShowCreate(false);
+      setForm(emptyForm());
+      setShowVentaSugg(false);
+      setShowOrdenSugg(false);
+      toast.success(`No conformidad ${creada.id} registrada`);
+      onInventarioCambiado?.();
+    } catch (error) {
+      toast.error(mensajeErrorNoConformes(error, "No se pudo registrar la no conformidad."));
+    } finally {
+      setGuardando(false);
     }
-    setShowCreate(false);
-    setForm(emptyForm());
-    setShowVentaSugg(false);
-    setShowOrdenSugg(false);
-    toast.success(`No conformidad ${newItem.id} registrada`);
   };
 
-  const handleDelete = () => {
+  /** Edición (solo Pendiente): descripción, solución y foto. */
+  const abrirEditar = (item: NoConformidad) => {
+    const { id: _id, ...datos } = item;
+    setForm({ ...datos });
+    setEditItem(item);
+  };
+
+  const handleEdit = async () => {
+    if (!editItem || guardando) return;
+    setGuardando(true);
+    try {
+      const actualizada = await actualizarNoConformidad(editItem.id, form);
+      setNoConformidades(prev => prev.map(i => (i.id === actualizada.id ? actualizada : i)));
+      setEditItem(null);
+      setForm(emptyForm());
+      toast.success(`No conformidad ${actualizada.id} actualizada`);
+    } catch (error) {
+      toast.error(mensajeErrorNoConformes(error, "No se pudo actualizar la no conformidad."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const abrirCompletar = (item: NoConformidad) => {
+    setCompletarForm({ tipoSolucion: item.tipoSolucion ?? "", solucion: item.solucion ?? "" });
+    setCompletarItem(item);
+  };
+
+  /** Pendiente → Completado: el backend guarda la fecha de cierre (hoy, Bogotá). */
+  const handleCompletar = async () => {
+    if (!completarItem || guardando) return;
+    if (!completarForm.tipoSolucion) { toast.error("Elige el tipo de solución."); return; }
+    if (!completarForm.solucion.trim()) { toast.error("Describe la solución aplicada."); return; }
+    setGuardando(true);
+    try {
+      const completada = await completarNoConformidad(
+        completarItem.id,
+        completarForm.tipoSolucion,
+        completarForm.solucion.trim(),
+      );
+      setNoConformidades(prev => prev.map(i => (i.id === completada.id ? completada : i)));
+      setCompletarItem(null);
+      toast.success(`No conformidad ${completada.id} completada`);
+    } catch (error) {
+      toast.error(mensajeErrorNoConformes(error, "No se pudo completar la no conformidad."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  /** Solo Pendientes manuales; el backend devuelve el stock descontado. */
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setNoConformidades(prev => prev.filter(i => i.id !== deleteTarget.id));
+    const objetivo = deleteTarget;
+    try {
+      await eliminarNoConformidad(objetivo.id);
+    } catch (error) {
+      toast.error(mensajeErrorNoConformes(error, "No se pudo eliminar el registro."));
+      setDeleteTarget(null);
+      return;
+    }
+    setNoConformidades(prev => prev.filter(i => i.id !== objetivo.id));
     setDeleteTarget(null);
-    toast.success(`${deleteTarget.id} eliminado`);
+    toast.success(`${objetivo.id} eliminado`);
+    onInventarioCambiado?.();
   };
 
 
@@ -471,15 +430,26 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
   };
 
   // ── FormBody rendered as plain function call (not JSX component) to preserve focus ──
-  const renderFormBody = (readOnly: boolean, previewId?: string) => {
-    // En modo consulta lee el registro (viewItem); en modo alta usa el formulario.
+  const renderFormBody = (readOnly: boolean, previewId?: string, edicion = false) => {
+    // En modo consulta lee el registro (viewItem); en alta y edición usa el formulario.
     const f = readOnly && viewItem ? viewItem : form;
+    // En edición, lo que identifica el registro (fecha, tipo, producto,
+    // cantidad, motivo y relaciones) queda en solo lectura: cambiarlo movería
+    // stock. Solo se editan descripción, solución y foto.
+    const fijo = readOnly || edicion;
     // Selector de producto EXISTENTE (P17b): siempre es un <select> con el
-    // catálogo, nunca texto libre. Se muestra el stock porque es el que baja
-    // cuando la merma se registra (ver descontarStockMerma).
+    // catálogo, nunca texto libre, y envía el id real. En "Producto insumo"
+    // entran insumos crudos y productos insumo. `stock` es null en los
+    // productos elaborados (pizzas, lasañas): no tienen stock propio.
     const opcionesProducto = f.tipo === "Producto insumo"
-      ? insumos.filter(i => i.tipo === "ProductoInsumo").map(i => ({ nombre: i.nombre, unidad: i.unidadMedida, stock: i.stockActual }))
-      : productos.filter(p => p.estado !== "Descontinuado").map(p => ({ nombre: p.nombre, unidad: p.unidadVenta || "und", stock: p.stockDisponible }));
+      ? insumos.filter(i => i.estado === "activo").map(i => ({ id: i.id, nombre: i.nombre, unidad: i.unidadMedida, stock: i.stockActual as number | null }))
+      : productos.filter(p => p.estado !== "Descontinuado").map(p => ({
+          id: p.id,
+          nombre: p.nombre,
+          unidad: p.unidadVenta || "und",
+          stock: p.tipo === "Producto terminado" ? p.stockDisponible : null,
+        }));
+    const idSeleccionado = (f.tipo === "Producto insumo" ? f.idInsumo : f.idProducto) ?? "";
     return (
       <div className="space-y-4 px-6 py-5">
         {previewId && (
@@ -493,7 +463,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
-            {readOnly
+            {fijo
               ? <p className="text-sm font-semibold text-foreground py-2">{f.fechaRegistro}</p>
               : <input type="date" value={f.fechaRegistro}
                   max={new Date().toLocaleDateString("en-CA")}
@@ -502,12 +472,12 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
-            {readOnly
+            {fijo
               ? <p className="text-sm font-semibold text-foreground py-2">{f.tipo}</p>
               : <div className="relative">
                   <select value={f.tipo} onChange={e => {
                     const t = e.target.value as Tipo;
-                    set({ tipo: t, nombre: "", unidadMedida: t === "Producto" ? "und" : "", ventaRef: "", ordenRef: "" });
+                    set({ tipo: t, nombre: "", idProducto: undefined, idInsumo: undefined, unidadMedida: t === "Producto" ? "und" : "", ventaRef: "", ordenRef: "" });
                   }} className={sCls}>
                     <option value="Producto">Producto</option>
                     <option value="Producto insumo">Producto insumo</option>
@@ -519,7 +489,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         </div>
 
         {/* Fila 2: Orden de producción relacionada | Venta relacionada (según el tipo) */}
-        {!readOnly && (
+        {!fijo && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className={`relative ${f.tipo === "Producto insumo" ? "sm:col-span-2" : ""}`}>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción relacionada (opcional)</label>
@@ -586,7 +556,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         {/* Fila 3: Producto (selector, ancho completo) */}
         <div>
           <label className="block text-xs font-semibold text-muted-foreground mb-1">Producto</label>
-          {readOnly
+          {fijo
             ? <div>
                 <p className="text-sm font-semibold text-foreground py-2">{f.nombre}</p>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -594,18 +564,21 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                 </span>
               </div>
             : <div className="relative">
-                {/* SELECT de productos existentes (P17b): el valor que sale
-                    del combo es el nombre exacto del catálogo, así que nunca
-                    se puede escribir un producto que no exista. */}
-                <select value={f.nombre} onChange={e => {
-                  const sel = opcionesProducto.find(o => o.nombre === e.target.value);
-                  if (sel) set({ nombre: sel.nombre, unidadMedida: sel.unidad });
-                  else set({ nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "" });
+                {/* SELECT de productos existentes (P17b): el valor es el id
+                    real del catálogo, así que nunca se puede registrar un
+                    producto que no exista. */}
+                <select value={idSeleccionado} onChange={e => {
+                  const sel = opcionesProducto.find(o => o.id === e.target.value);
+                  const ids = f.tipo === "Producto insumo"
+                    ? { idInsumo: sel?.id, idProducto: undefined }
+                    : { idProducto: sel?.id, idInsumo: undefined };
+                  if (sel) set({ ...ids, nombre: sel.nombre, unidadMedida: sel.unidad });
+                  else set({ ...ids, nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "" });
                 }} className={sCls}>
                   <option value="">Selecciona…</option>
                   {opcionesProducto.map(o => (
-                    <option key={o.nombre} value={o.nombre}>
-                      {o.nombre} · {o.stock} {o.unidad} en stock
+                    <option key={o.id} value={o.id}>
+                      {o.stock === null ? o.nombre : `${o.nombre} · ${o.stock} ${o.unidad} en stock`}
                     </option>
                   ))}
                 </select>
@@ -613,9 +586,11 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
               </div>
           }
           {/* Deja visible el movimiento de stock que implica el registro (P17b). */}
-          {!readOnly && f.tipo === "Producto" && (
+          {!fijo && (
             <p className="text-[11px] text-muted-foreground mt-1">
-              Al registrar, las unidades afectadas se descuentan del stock de este producto.
+              {f.tipo === "Producto"
+                ? "Si es un producto de reventa, las unidades afectadas se descuentan de su stock. Los productos elaborados no tienen stock propio."
+                : "Al registrar, la cantidad afectada se descuenta del stock del insumo."}
             </p>
           )}
         </div>
@@ -624,7 +599,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
-            {readOnly
+            {fijo
               ? <p className="text-sm font-semibold text-foreground py-2">{f.cantidadAfectada} {f.unidadMedida}</p>
               : <input type="number" min={1}
                   // Nace en 1 (regla del alta); borra a vacío sin volver a 0
@@ -636,7 +611,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
-            {readOnly
+            {fijo
               ? <p className="text-sm font-semibold text-foreground py-2">{f.unidadMedida}</p>
               : <input value={f.unidadMedida} readOnly placeholder="—"
                   className={`${iCls} opacity-70 cursor-default`} />
@@ -651,7 +626,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
           <div className="p-3 space-y-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Motivo</label>
-              {readOnly
+              {fijo
                 ? <span className="inline-block text-xs font-semibold px-3 py-1 bg-primary/10 text-primary rounded-full">{f.tipoNoConformidad}</span>
                 : <input
                     value={f.tipoNoConformidad}
@@ -691,7 +666,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                   valor={f.tipoSolucion ?? ""}
                   onChange={valor => set({ tipoSolucion: valor })}
                   opciones={TIPOS_SOLUCION.map(t => {
-                    const bloqueado = t === "Reembolso al cliente" && !(f.tipo === "Producto" && f.ventaRef);
+                    const bloqueado = t === "Reembolso al cliente" && !f.ventaRef;
                     return {
                       valor: t,
                       etiqueta: t,
@@ -710,7 +685,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
           </div>
         )}
 
-        {readOnly && (f.ventaRef || f.ordenRef) && (
+        {fijo && (f.ventaRef || f.ordenRef) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {f.ventaRef && (
               <div>
@@ -767,7 +742,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         <ShoppingCart className="w-5 h-5 text-red-600 shrink-0" />
         <div>
           <p className="text-sm font-bold text-red-800">Pérdida originada en Ventas</p>
-          <p className="text-xs text-red-600">Este registro se generó automáticamente al marcar la venta como pérdida.</p>
+          <p className="text-xs text-red-600">Este registro se generó automáticamente al resolver una devolución con «Producto malo».</p>
         </div>
       </div>
       <div className="space-y-3">
@@ -775,7 +750,7 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de venta</label>
-            <p className="text-sm font-semibold text-foreground font-mono">{item.ventaRef || item.id.split("-")[1] || item.id}</p>
+            <p className="text-sm font-semibold text-foreground font-mono">{item.ventaRef || "—"}</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha</label>
@@ -783,11 +758,11 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Responsable</label>
-            <p className="text-sm font-semibold text-foreground">{item.responsable}</p>
+            <p className="text-sm font-semibold text-foreground">{item.responsable || "—"}</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
-            <p className="text-sm font-semibold text-foreground">{item.cantidadAfectada} und</p>
+            <p className="text-sm font-semibold text-foreground">{item.cantidadAfectada} {item.unidadMedida}</p>
           </div>
         </div>
         <div>
@@ -876,6 +851,25 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
         </select>
       </div>
 
+      {/* Carga y error de la API (igual que Insumos y Orden de Producción):
+          nunca se muestran datos de ejemplo. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-4">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
+          <p className="text-sm">Cargando productos no conformes…</p>
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-4">
+          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
+          {onReintentar && (
+            <button onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
         <div className="overflow-x-auto">
@@ -901,12 +895,11 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                 </tr>
               ) : paged.map(item => {
                 const isVenta = item.tipo === "Venta";
+                const pendiente = item.estado === "Pendiente";
                 const origen = item.ventaRef
                   ? `Venta #${item.ventaRef}`
                   : item.ordenRef
                   ? `OP ${item.ordenRef}`
-                  : isVenta
-                  ? `Venta #${item.ventaRef || item.id.split("-")[1] || item.id}`
                   : null;
                 return (
                   <tr key={item.id} className={`hover:bg-muted/20 transition-colors h-[61px] ${isVenta ? "bg-red-50/30" : ""}`}>
@@ -931,10 +924,28 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                       }
                     </td>
                     <td className="px-4 py-2.5">
-                      <ActionIcons
-                        onView={() => setViewItem(item)}
-                        onDelete={canDelete && !isVenta ? () => setDeleteTarget(item) : undefined}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        {/* Editar y Completar: solo Pendiente. Eliminar: solo
+                            Pendientes registrados a mano (la merma de
+                            producción y las devoluciones las crea el sistema). */}
+                        <ActionIcons
+                          onView={() => setViewItem(item)}
+                          onEdit={canEdit ? () => abrirEditar(item) : undefined}
+                          editDisabled={!pendiente}
+                          editTitle={pendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
+                          onDelete={canDelete && !item.generadoPorSistema ? () => setDeleteTarget(item) : undefined}
+                          deleteDisabled={!pendiente}
+                          deleteTitle={pendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                        />
+                        {canEdit && (
+                          <button onClick={() => pendiente && abrirCompletar(item)}
+                            disabled={!pendiente}
+                            title={pendiente ? "Completar" : "Ya está completado"}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -947,6 +958,8 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
       {/* Pagination (unificada) */}
       {filtered.length > 0 && (
         <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      )}
+      </>
       )}
 
 
@@ -1025,9 +1038,109 @@ export function ProductosPerecederosScreen({ ventasPerdidas, insumos, productos,
                 className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleCreate}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                Registrar
+              <button onClick={() => void handleCreate()} disabled={guardando || subiendo}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                {guardando ? "Registrando..." : "Registrar"}
+              </button>
+            </div>
+            </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: EDIT (solo Pendiente) ── */}
+      <AnimatePresence>
+        {editItem && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
+          >
+            <div className="flex min-h-full items-center justify-center">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h3>
+              <button onClick={() => setEditItem(null)}
+                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {renderFormBody(false, editItem.id, true)}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
+              <button onClick={() => setEditItem(null)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                Cancelar
+              </button>
+              <button onClick={() => void handleEdit()} disabled={guardando || subiendo}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                {guardando ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+            </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL: COMPLETAR (Pendiente → Completado) ── */}
+      <AnimatePresence>
+        {completarItem && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
+          >
+            <div className="flex min-h-full items-center justify-center">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
+              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                Completar — {completarItem.id} · {completarItem.nombre}
+              </h3>
+              <button onClick={() => setCompletarItem(null)}
+                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
+                <SegmentadoButtons
+                  valor={completarForm.tipoSolucion}
+                  onChange={valor => setCompletarForm(p => ({ ...p, tipoSolucion: valor }))}
+                  opciones={TIPOS_SOLUCION.map(t => {
+                    const bloqueado = t === "Reembolso al cliente" && !completarItem.ventaRef;
+                    return {
+                      valor: t,
+                      etiqueta: t,
+                      deshabilitada: bloqueado,
+                      titulo: bloqueado ? "Requiere una venta relacionada" : undefined,
+                    };
+                  })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
+                <textarea rows={3} value={completarForm.solucion}
+                  onChange={e => setCompletarForm(p => ({ ...p, solucion: e.target.value }))}
+                  placeholder="Describe qué se hizo para resolver la no conformidad..." className={tCls} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Al completar se guarda la fecha de cierre de hoy y el registro ya no se puede editar ni eliminar.
+              </p>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
+              <button onClick={() => setCompletarItem(null)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                Cancelar
+              </button>
+              <button onClick={() => void handleCompletar()} disabled={guardando}
+                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                {guardando ? "Guardando..." : "Completar"}
               </button>
             </div>
             </motion.div>

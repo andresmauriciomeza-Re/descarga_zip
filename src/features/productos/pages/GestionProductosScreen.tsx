@@ -60,8 +60,18 @@ import {
 import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
 // Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
 // ni espacios de más) compartida con Insumos y Compras.
-import { mismoNombre, nombreLimpio } from "@/shared/utils/nombres";
+import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/nombres";
 import { mensajeErrorProductos } from "@/features/productos/services/productosApi";
+// Bloque 4: las fichas de producto se guardan contra la API (POST /fichas) y
+// las guardadas en local (respaldo fase 1) se suben con "Subir ficha guardada".
+import {
+  crearFicha,
+  leerFichasRespaldoFase1,
+  mapearFichaApi,
+  obtenerFichasDe,
+  payloadFicha,
+} from "@/features/productos/services/fichasApi";
+import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
 
 export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
 export type { ConfigCategoria } from "@/shared/utils/configCategoria";
@@ -932,6 +942,78 @@ export function GestionProductosScreen({
   const [errorNombreServidor, setErrorNombreServidor] = useState("");
   const [errorPrecioGrande, setErrorPrecioGrande] = useState("");
 
+  // ── Bloque 4: fichas guardadas en local (respaldo de la fase 1) ──
+  // NO se suben solas: solo habilitan el botón "Subir ficha guardada" en la
+  // fila de un producto que la tenga y que todavía no tenga ficha en la API.
+  const [fichasRespaldo] = useState<Record<string, FichaVersion[]>>(() => leerFichasRespaldoFase1());
+  const [subiendoFicha, setSubiendoFicha] = useState<string | null>(null);
+
+  /** id_insumo de la API de una fila de ficha: por su id ("INS-###") o, si la
+      ficha es vieja y no lo trae, por nombre normalizado. */
+  const resolverIdInsumoDeFicha = (fila: { insumoId?: string; nombre: string }): number | null => {
+    if (fila.insumoId?.startsWith("INS-")) return idInsumoApiDesdeFront(fila.insumoId);
+    const clave = normalizarTexto(fila.nombre);
+    const ins = insumos.find((i) => normalizarTexto(i.nombre) === clave);
+    return ins ? idInsumoApiDesdeFront(ins.id) : null;
+  };
+
+  /** Sube a la API la ficha que quedó guardada en local de este producto.
+      Cada insumo se convierte por nombre normalizado al `INS-` de la API; si
+      alguno no existe en Insumos NO se sube y se dice cuál falta. */
+  const subirFichaGuardada = async (p: Producto) => {
+    const versiones = fichasRespaldo[p.id] ?? [];
+    const guardada = versiones.find((v) => v.fechaFin === null) ?? versiones[versiones.length - 1];
+    if (!guardada) return;
+    const faltantes = guardada.insumos
+      .map((r) => r.nombre)
+      .filter((nombre) => resolverIdInsumoDeFicha({ nombre }) == null);
+    if (faltantes.length > 0) {
+      toast.error(
+        `No se puede subir la ficha de «${p.nombre}»: no están en Insumos ${faltantes
+          .map((n) => `«${n}»`)
+          .join(", ")}`,
+      );
+      return;
+    }
+    setSubiendoFicha(p.id);
+    try {
+      const creada = await crearFicha(
+        payloadFicha(guardada, { id_producto: Number(p.id) }, resolverIdInsumoDeFicha),
+      );
+      setFichas((prev) => ({ ...prev, [p.id]: [mapearFichaApi(creada, cfgDe(p.idCategoria))] }));
+      toast.success(`Ficha guardada de «${p.nombre}» subida a la API`);
+    } catch (error) {
+      toast.error(mensajeErrorProductos(error, "No se pudo subir la ficha guardada."));
+    } finally {
+      setSubiendoFicha(null);
+    }
+  };
+
+  // Bloque 2.4: el historial de versiones de la ficha se pide a la API al abrir
+  // "Ver detalle" (el estado solo trae la vigente de GET /fichas/vigentes).
+  useEffect(() => {
+    if (!detailItem) return;
+    const id = detailItem.id;
+    if (!id || Number.isNaN(Number(id))) return;
+    let cancelado = false;
+    void (async () => {
+      try {
+        const filas = await obtenerFichasDe({ id_producto: Number(id) });
+        const versiones = filas
+          .map((f) => mapearFichaApi(f, cfgDe(detailItem.idCategoria)))
+          .sort((a, b) => a.version - b.version);
+        if (cancelado || versiones.length === 0) return;
+        setFichas((prev) => ({ ...prev, [id]: versiones }));
+        setDetailVIdx(versiones.length - 1);
+      } catch {
+        // Sin historial se queda con la vigente del estado.
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [detailItem]);
+
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
     // Lista vacía: las imágenes se agregan una a una con CampoImagenes.
@@ -1498,10 +1580,24 @@ export function GestionProductosScreen({
       }));
       if (!creado) throw new Error("No se pudo guardar el producto en el servidor.");
       if (tipoFinal === TIPOS_PRODUCTO[0]) {
-        setFichas((prev) => ({
-          ...prev,
-          [creado.id]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, [...idsConFicha, creado.id])), destino: { tipo: "producto", productoId: creado.id }, fechaInicio: new Date().toISOString(), fechaFin: null }],
-        }));
+        // Bloque 4: la ficha del producto nuevo se guarda contra la API
+        // (POST /fichas con `id_producto`); la respuesta (con su id_ft y su
+        // número de ficha) es la que entra al estado.
+        try {
+          const creada = await crearFicha(
+            payloadFicha(
+              fichaBorrador,
+              { id_producto: Number(creado.id) },
+              resolverIdInsumoDeFicha,
+            ),
+          );
+          setFichas((prev) => ({
+            ...prev,
+            [creado.id]: [mapearFichaApi(creada, cfgDe(creado.idCategoria))],
+          }));
+        } catch (error) {
+          toast.error(mensajeErrorProductos(error, "El producto se creó pero su ficha técnica no se pudo guardar."));
+        }
       }
       setShowCreate(false);
       setForm(emptyForm());
@@ -1631,40 +1727,26 @@ export function GestionProductosScreen({
       setGuardando(false);
       return;
     }
-    // Un solo "Guardar" para producto y ficha: si el borrador cambió frente a
-    // la última versión guardada, se cierra esa versión (fechaFin = ahora) y
-    // el borrador entra como la versión N+1. Si no cambió, no se crea nada y
-    // las versiones guardadas quedan intactas. Un Producto terminado nunca
-    // guarda versiones.
-    const ultima = editFichaVersiones[editFichaVersiones.length - 1];
-    if (tipoFinal === TIPOS_PRODUCTO[0] && ultima) {
-      if (fichaTieneCambios(editFichaBorrador, ultima)) {
-        const now = new Date().toISOString();
-        const n = ultima.version + 1;
-        setFichas(prev => ({
+    // Un solo "Guardar" para producto y ficha: la ficha se envía a la API como
+    // versión nueva (POST /fichas con `id_producto`); si el contenido no cambió
+    // el servidor responde `sinCambios` y la versión vigente sigue siendo la
+    // misma. Un Producto terminado nunca guarda ficha.
+    if (tipoFinal === TIPOS_PRODUCTO[0]) {
+      try {
+        const creada = await crearFicha(
+          payloadFicha(
+            editFichaBorrador,
+            { id_producto: Number(editItem.id) },
+            resolverIdInsumoDeFicha,
+          ),
+        );
+        setFichas((prev) => ({
           ...prev,
-          [editItem.id]: [
-            ...editFichaVersiones.map((v, i) =>
-              i === editFichaVersiones.length - 1 ? { ...v, fechaFin: now } : v
-            ),
-            {
-              ...editFichaBorrador,
-              version: n,
-              // El ID identifica a la FICHA, no a la versión: las versiones
-              // siguientes conservan el mismo número.
-              idReceta: ultima.idReceta,
-              fechaInicio: now,
-              fechaFin: null,
-            },
-          ],
+          [editItem.id]: [mapearFichaApi(creada, cfgDe(editItem.idCategoria))],
         }));
+      } catch (error) {
+        toast.error(mensajeErrorProductos(error, "El producto se actualizó pero su ficha técnica no se pudo guardar."));
       }
-    } else if (tipoFinal === TIPOS_PRODUCTO[0] && fichaConContenido(editFichaBorrador)) {
-      // El producto no tenía ficha: el borrador se guarda como v1.
-      setFichas(prev => ({
-        ...prev,
-          [editItem.id]: [{ ...editFichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)), destino: { tipo: "producto", productoId: editItem.id }, fechaInicio: new Date().toISOString(), fechaFin: null }],
-      }));
     }
     setEditItem(null);
     setConfirmCategoriaEdit(null);
@@ -3079,6 +3161,20 @@ export function GestionProductosScreen({
                         }
                         deleteDisabled={p.estado === "Descontinuado"}
                       />
+                      {/* Bloque 4: la ficha vieja guardada en este navegador se
+                          sube a mano; nunca sola. */}
+                      {(fichasRespaldo[p.id]?.length ?? 0) > 0 &&
+                        (fichas[p.id]?.length ?? 0) === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => void subirFichaGuardada(p)}
+                            disabled={subiendoFicha === p.id}
+                            title="Subir a la API la ficha guardada en este navegador"
+                            className="mt-1 px-2 py-1 rounded-lg bg-card border border-border text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {subiendoFicha === p.id ? "Subiendo…" : "Subir ficha guardada"}
+                          </button>
+                        )}
                     </td>
                   </tr>
                 ))

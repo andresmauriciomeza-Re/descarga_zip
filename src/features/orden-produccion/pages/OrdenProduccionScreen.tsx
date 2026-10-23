@@ -1,8 +1,8 @@
-﻿import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Trash2, X,
-  AlertCircle, AlertTriangle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
+  AlertCircle, AlertTriangle, Clock, PackageX, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
@@ -19,7 +19,7 @@ import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
 import { tipoDe, type Producto, type FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
-import { porcionesReferencia, type FichaVersion } from "@/shared/utils/fichas";
+import { porcionesReferencia, esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/fichas";
 import {
   convertirUnidad,
   faltantesPara,
@@ -29,7 +29,19 @@ import {
   unidadesCompatibles,
   type FaltanteUnidad,
 } from "@/shared/utils/disponibilidad";
-import { nextNoConformidadId, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import type { NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import {
+  actualizarOrdenProduccion,
+  completarOrdenProduccion,
+  crearOrdenPreparacionApi,
+  darBajaOrdenProduccion,
+  eliminarOrdenProduccion,
+  iniciarOrdenProduccion,
+  mapearFaltanteApi,
+  mensajeErrorOrdenes,
+  type ErrorConFaltantes,
+} from "@/features/orden-produccion/services/ordenesProduccionApi";
+import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/fichasApi";
 
 const SERIF = "var(--font-titulo)";
 
@@ -106,6 +118,13 @@ export interface LineaOrden {
   /** Solo Forma 2: id del producto del catálogo y tamaño elegido por el cliente. */
   productoId?: string | null;
   tamano?: string;
+  /** id real de la línea en `tb_detalle_orden_produccion` (API): es el que
+      pide `POST /:id/completar` al registrar la cantidad que salió. */
+  idDetalleOp?: number;
+  /** Ficha congelada en la línea según la API (`id_ft`); se usa para pedir la
+      versión real al abrir "Ver ficha". */
+  idFt?: number | null;
+  versionFicha?: number | null;
   /** Solo Forma 2: porciones = cantidad × porciones de la ficha vigente. */
   porciones?: number;
   /** Solo Forma 2: el producto no tiene ficha técnica (gaseosas, bebidas). */
@@ -154,6 +173,9 @@ interface TransicionEstado {
 
 export interface OrdenProduccion {
   id: string; // "OP-001"
+  /** Número real de `tb_orden_produccion` (API). Ausente en las órdenes que
+      nacieron en local antes de conectar. */
+  idApi?: number;
   tipo: TipoOrden;
   lineas: LineaOrden[];
   /** Foto de los insumos que la orden consume. Vacío = no se descuenta nada. */
@@ -849,57 +871,6 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
 
 // ─────────────────────────── Piezas de UI ───────────────────────────
 
-/** Las dos tarjetas con las que arranca "Crear Orden de Producción". */
-function TarjetasTipo({
-  value,
-  onChange,
-}: {
-  value: TipoOrden;
-  onChange: (t: TipoOrden) => void;
-}) {
-  const opc: { tipo: TipoOrden; icono: React.ReactNode; titulo: string; texto: string }[] = [
-    {
-      tipo: "preparacion",
-      icono: <ChefHat className="w-5 h-5" />,
-      titulo: "Preparación en lote",
-      texto: "Preparar un Producto Insumo (masa, guacamole, guisos) para surtir inventario de la cocina.",
-    },
-    {
-      tipo: "pedido",
-      icono: <ShoppingBag className="w-5 h-5" />,
-      titulo: "Pedido de cliente",
-      texto: "Preparar los platos de una venta ya pagada: se calienta y se arma con lo precocido.",
-    },
-  ];
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {opc.map((o) => {
-        const activo = value === o.tipo;
-        return (
-          <button
-            key={o.tipo}
-            type="button"
-            onClick={() => onChange(o.tipo)}
-            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
-              activo
-                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30"
-                : "border-border bg-card hover:border-primary/50"
-            }`}
-          >
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${activo ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-                {o.icono}
-              </span>
-              <span className="text-sm font-bold text-foreground">{o.titulo}</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{o.texto}</p>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Tabla de solo lectura con los insumos que se van a consumir y el stock de
     hoy de cada uno. Lo que no alcanza sale en rojo. */
 function TablaInsumosRequeridos({
@@ -1091,7 +1062,10 @@ export function OrdenProduccionScreen({
   ordenes,
   setOrdenes,
   noConformidades,
-  setNoConformidades,
+  cargando = false,
+  errorCarga,
+  onReintentar,
+  recargarProduccion,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -1109,8 +1083,15 @@ export function OrdenProduccionScreen({
   fichasPorProducto: FichasPorProducto;
   ordenes: OrdenProduccion[];
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
+  /** Productos no conformes (API): el detalle muestra la merma de la orden. */
   noConformidades: NoConformidad[];
-  setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
+  /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos
+      de ejemplo. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
+  /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
+  recargarProduccion?: () => Promise<void>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1144,6 +1125,43 @@ export function OrdenProduccionScreen({
   useEffect(() => {
     if (!detailItem) setVerFicha(null);
   }, [detailItem]);
+
+  // "Ver ficha": la versión que USÓ la línea (su `id_ft`) se pide a la API al
+  // abrirla y se congela como `fichaSnapshot`; hasta que llega se muestra la
+  // ficha vigente del estado. Si falla, se queda con esa.
+  useEffect(() => {
+    if (!verFicha || !detailItem) return;
+    const linea = detailItem.lineas[verFicha.lineaIdx];
+    if (!linea || linea.fichaSnapshot || linea.idFt == null) return;
+    let cancelado = false;
+    void (async () => {
+      try {
+        const fichas = await obtenerFichasDe(
+          esIdInsumo(linea.idProducto)
+            ? { id_insumo: idInsumoApiDesdeFront(linea.idProducto) }
+            : { id_producto: Number(linea.idProducto) },
+        );
+        const version = fichas
+          .map((f) => mapearFichaApi(f, null))
+          .find((v) => v.idFt === linea.idFt);
+        if (cancelado || !version) return;
+        const snap = snapshotDeFicha(version);
+        setDetailItem((prev) => (prev
+          ? {
+              ...prev,
+              lineas: prev.lineas.map((l, i) =>
+                i === verFicha.lineaIdx && !l.fichaSnapshot ? { ...l, fichaSnapshot: snap } : l,
+              ),
+            }
+          : prev));
+      } catch {
+        // Sin la versión histórica se muestra la ficha vigente.
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [verFicha, detailItem]);
 
   // Cuando llega abrirOrdenId desde Insumos, abrir Crear orden con el
   // Producto Insumo preseleccionado y su ficha vigente ya en la línea.
@@ -1277,71 +1295,51 @@ export function OrdenProduccionScreen({
     );
   }, [ventas, ordenes]);
 
-  // ── Guardar (compartido por Crear y Editar) ────────────────────────
-  const guardarOrden = (form: OrdenForm) => {
+  // ── Guardar (compartido por Crear y Editar) contra la API ─────────
+  // La validación de insumos en vivo (bloque 4) se mantiene: este guardado es
+  // el que habla con el servidor y, si responde 409 con faltantes, se abren en
+  // el modal "Inventario insuficiente".
+  const guardarOrden = async (form: OrdenForm) => {
     const editando = editItem;
-    const id = editando ? editando.id : siguienteId();
-    const pedidos = form.tipo === "pedido" && form.ventaId
-      ? ventas.find((v) => v.id === form.ventaId)
-      : undefined;
-
-    let lineas = form.lineas;
-    let insumosRequeridos: InsumoRequerido[] = editando?.insumosRequeridos ?? [];
-    let descripcionPreparacion: string | undefined;
-    let tiempoPreparacionMin: number | null | undefined;
-
-    if (pedidos) {
-      const armado = lineasDeVenta(pedidos, productos, fichasPorProducto, insumos);
-      lineas = armado.lineas;
-      insumosRequeridos = armado.insumos;
-    } else {
-      // Forma 1: cada línea es un Producto Insumo. Si ya tiene fichaSnapshot
-      // (viene de editar), se conserva; si no, se crea desde la ficha vigente.
-      lineas = prepararLineasSnapshot(form.lineas, fichasPorProducto);
-      // Requeridos: SIEMPRE del snapshot si existe, si no, legacy. Sale del
-      // mismo cálculo que pinta la línea (`requeridosDeLinea`), así que lo
-      // que se muestra y lo que se guarda nunca pueden dar distinto. La
-      // validación de insumos al guardar (bloque 4) llama a estas mismas
-      // funciones: avisa exactamente lo que aquí se guarda.
-      insumosRequeridos = requeridosDePreparaciones(lineas, fichasPorProducto, insumos);
-      // Tiempo y descripción: del snapshot de la primera línea con ficha.
-      const snap = lineas.find((l) => l.fichaSnapshot)?.fichaSnapshot;
-      descripcionPreparacion = snap?.pasos.join("\n") || undefined;
-      tiempoPreparacionMin = snap ? snap.tiempoPreparacion : null;
+    // Los pedidos de venta los crea el backend al aceptarla: el POST de la API
+    // solo registra Preparaciones.
+    if (!editando && form.tipo === "pedido") {
+      toast.error("Los pedidos de venta los crea el backend al aceptar la venta. Recarga la lista para verla.");
+      return;
     }
-
-    const nueva: OrdenProduccion = {
-      id,
-      tipo: form.tipo,
-      lineas,
-      insumosRequeridos,
-      ventaId: pedidos?.id ?? null,
-      ventaNumero: pedidos?.id ?? null,
-      cliente: pedidos?.usuario ?? null,
-      fechaSolicitada: pedidos?.fecha ?? form.fechaSolicitada,
-      horaSolicitada: pedidos?.horaRecogida ?? form.horaSolicitada,
-// Editar solo se ofrece en Pendiente (§7), pero si algún día se abre en
-      // otro estado no se debe rebobinar la orden: se conserva el estado real.
-      estadoOrden: editando?.estadoOrden ?? "pendiente",
-      observacion: form.observacion,
-      creadaEn: editando?.creadaEn ?? nowISO(),
-      inicioProduccion: editando?.inicioProduccion ?? null,
-      entregaEstimada: editando?.entregaEstimada ?? null,
-      historial: editando?.historial ?? [],
-      descripcionPreparacion,
-      tiempoPreparacionMin,
-      insumosDescontados: editando?.insumosDescontados,
-      productosDescontados: editando?.productosDescontados,
-      stockAplicado: editando?.stockAplicado,
-      notasFaltantes: editando?.notasFaltantes,
-    };
-
-    if (editando) setOrdenes((p) => p.map((o) => (o.id === id ? nueva : o)));
-    else setOrdenes((p) => [nueva, ...p]);
-    setShowCreate(false);
-    setEditItem(null);
-    setForm(emptyForm());
-    toast.success(editando ? `Orden ${id} actualizada` : `Orden de producción ${id} creada`);
+    const lineasPayload = form.lineas
+      .filter((l) => l.idProducto && l.cantidadEstimada > 0)
+      .map((l) => ({ id: l.idProducto, cantidad: l.cantidadEstimada }));
+    try {
+      const guardada = editando
+        ? await actualizarOrdenProduccion(editando.id, editando.tipo === "pedido"
+            // Un pedido solo admite cambiar la observación.
+            ? { observacion: form.observacion }
+            : {
+                fecha_solicitada: form.fechaSolicitada,
+                hora_solicitada: form.horaSolicitada || null,
+                observacion: form.observacion,
+                lineas: lineasPayload,
+              })
+        : await crearOrdenPreparacionApi({
+            fecha_solicitada: form.fechaSolicitada,
+            hora_solicitada: form.horaSolicitada || null,
+            observacion: form.observacion,
+            lineas: lineasPayload,
+          });
+      setOrdenes((p) => (editando ? p.map((o) => (o.id === guardada.id ? guardada : o)) : [guardada, ...p]));
+      setShowCreate(false);
+      setEditItem(null);
+      setForm(emptyForm());
+      toast.success(editando ? `Orden ${guardada.id} actualizada` : `Orden de producción ${guardada.id} creada`);
+    } catch (error) {
+      const faltantes = ((error as ErrorConFaltantes).faltantes ?? []).map(mapearFaltanteApi);
+      if (faltantes.length > 0) {
+        setFaltantesIniciar({ ordenId: editando?.id ?? "", faltantes });
+        return;
+      }
+      toast.error(mensajeErrorOrdenes(error, "No se pudo guardar la orden."));
+    }
   };
 
   /** Bloque 4 — Validación de insumos al GUARDAR (crear y editar):
@@ -1446,7 +1444,15 @@ export function OrdenProduccionScreen({
     });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    try {
+      await eliminarOrdenProduccion(id);
+    } catch (error) {
+      // El backend solo deja eliminar Preparaciones Pendientes (un pedido → 409).
+      toast.error(mensajeErrorOrdenes(error, "No se pudo eliminar la orden."));
+      setDeleteId(null);
+      return;
+    }
     setOrdenes((p) => p.filter((o) => o.id !== id));
     setDeleteId(null);
     toast.success("Orden eliminada");
@@ -1499,84 +1505,32 @@ export function OrdenProduccionScreen({
     return HORNEADO_MIN;
   };
 
-  /** Iniciar (Pendiente → En proceso), para los dos tipos:
-      1) Pide los insumos AHORA. En pedido se recalcula por línea —foto
-         `fichaSnapshot` primero, si no la ficha vigente, × cantidad × factor
-         de tamaño— y se guarda el resultado en `insumosRequeridos`; la línea
-         de bebida (sin tamaño) no pide nada, y una línea CON tamaño cuyo
-         producto no está en Productos bloquea con "No se encontró …", igual
-         que una pizza o lasaña sin ficha. En preparación en lote manda la foto ya guardada en la orden.
-      2) Valida contra el stock de hoy con `faltantesPara`: si falta algo abre
-         "Inventario insuficiente" y la orden SE QUEDA PENDIENTE (no se
-         descuenta nada ni cambia de estado).
-      3) Si alcanza, descuenta los insumos —incluye Productos Insumo como la
-         masa—, marca `insumosDescontados` (así el descuento ocurre UNA sola
-         vez) y registra el historial con fecha y hora. Con la marca ya puesta
-         no se vuelve a descontar. */
-  const iniciar = (id: string) => {
+  /** Iniciar (Pendiente → En proceso): lo hace la API (`POST /iniciar`), que
+      valida el inventario y descuenta los insumos una sola vez. Un 409 abre
+      "Inventario insuficiente" con los faltantes DEL SERVIDOR y la orden se
+      queda Pendiente. Después se recargan insumos y órdenes porque el stock
+      cambió en la base. */
+  const iniciar = async (id: string) => {
     const orden = ordenes.find((o) => o.id === id);
     if (!orden) return;
-
-    // ── 1) Requeridos de la orden, calculados ahora ──
-    let requeridos: InsumoRequerido[] = orden.insumosRequeridos;
-    if (orden.tipo === "pedido") {
-      const acc = new Map<string, InsumoRequerido>();
-      for (const l of orden.lineas) {
-        // Bebidas: no piden insumos.
-        if (esBebida(l, productos)) continue;
-        // Con tamaño pero sin producto en Productos (nombre borrado o escrito
-        // distinto al del menú): no se puede calcular su receta y la orden se
-        // queda Pendiente con este aviso, en vez de tratarla como bebida.
-        if (!productoDeLinea(l, productos)) {
-          toast.error(`No se encontró «${l.nombre}» en Productos: revisa que el nombre sea igual al del menú`);
-          return;
-        }
-        const clave = l.productoId ?? l.idProducto;
-        const conFicha = l.fichaSnapshot ?? (clave ? fichaVigente(fichasPorProducto, clave) : null);
-        if (!conFicha) {
-          toast.error(`«${l.nombre}» no tiene ficha técnica`);
-          return;
-        }
-        // Mismo cálculo que se muestra en la línea (`requeridosDeLinea`):
-        // snapshot primero, × cantidad × factor de tamaño.
-        for (const r of requeridosDeLinea(l, fichasPorProducto)) {
-          const ins = insumos.find((i) => i.id === r.insumoId)
-            ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
-          const claveIns = ins?.id ?? r.insumoId;
-          const previo = acc.get(claveIns);
-          acc.set(claveIns, previo
-            ? { ...previo, cantidad: previo.cantidad + r.cantidad }
-            : { insumoId: claveIns, nombre: r.nombre, cantidad: r.cantidad, unidad: r.unidad, noEncontrado: !ins });
-        }
+    try {
+      const actualizada = await iniciarOrdenProduccion(id);
+      setOrdenes((p) => p.map((o) => (o.id === id ? actualizada : o)));
+      toast.success(
+        actualizada.insumosDescontados
+          ? `${id} en proceso — insumos descontados`
+          : `${id} en proceso`,
+      );
+      await recargarProduccion?.();
+    } catch (error) {
+      const faltantes = ((error as ErrorConFaltantes).faltantes ?? []).map(mapearFaltanteApi);
+      if (faltantes.length > 0) {
+        setFaltantesIniciar({ ordenId: id, faltantes });
+        return;
       }
-      requeridos = [...acc.values()];
+      // «X» no tiene ficha técnica, insumo inactivo, etc.
+      toast.error(mensajeErrorOrdenes(error, "No se pudo iniciar la orden."));
     }
-
-    // ── 2) ¿Alcanza el inventario de hoy? ──
-    const faltantes = faltantesPara(requeridos, 1, insumos);
-    if (faltantes.length > 0) {
-      // La foto fresca queda guardada en la orden (sigue Pendiente) y se abre
-      // el modal: lista de faltantes con su motivo y solo botón Cerrar.
-      setOrdenes((p) => p.map((o) => (o.id === id ? { ...o, insumosRequeridos: requeridos } : o)));
-      setFaltantesIniciar({ ordenId: id, faltantes });
-      return;
-    }
-
-    // ── 3) Pasa a En proceso y descuenta UNA sola vez ──
-    const descuenta = !orden.insumosDescontados;
-    const now = nowISO();
-    const actualizado: OrdenProduccion = {
-      ...orden,
-      insumosRequeridos: requeridos,
-      estadoOrden: "en-proceso",
-      inicioProduccion: now,
-      entregaEstimada: addMinutesISO(now, tiempoTotalOrden(orden)),
-      insumosDescontados: orden.insumosDescontados || descuenta,
-      historial: [...orden.historial, { de: orden.estadoOrden, a: "en-proceso", fechaHora: now }],
-    };
-    setOrdenes((p) => p.map((o) => (o.id === id ? actualizado : o)));
-    if (descuenta) descontarInsumos(requeridos);
-    toast.success(descuenta ? `${id} en proceso — insumos descontados` : `${id} en proceso`);
   };
 
   const abrirCompletar = (id: string) => {
@@ -1604,171 +1558,64 @@ export function OrdenProduccionScreen({
   const completarEsPedido = completarItem?.tipo === "pedido";
   const completarOk = !completarItem || completarEsPedido || realesOk(completarItem);
 
-  /** Completa la orden: registra la producción real (solo Preparación en lote;
-      un Pedido es de solo lectura) y aplica el inventario pendiente:
-      1) insumos y Productos Insumo requeridos —solo si `insumosDescontados`
-         está apagado: lo que ya se descontó al Iniciar no se repite (C2)—,
-      2) stock de Productos terminados, SOLO de las líneas de bebida (C3),
-      3) stock del Producto Insumo producido (solo preparación, solo la
-         cantidad real).
-      Cada paso lleva su bandera, así que repetir el guardado no vuelve a
-      mover stock ni se duplica al reabrir la orden. El camino "completar
-      igual" con faltantes ya no existe (C5): la validación de inventario pasó
-      —o sigue bloqueando— en el Inicio. */
-  const confirmarCompletar = () => {
+  /** Completa la orden contra la API (`POST /completar`): la producción real
+      por línea (solo Preparación) y todo el inventario lo aplica el servidor
+      (insumos, bebidas y stock del Producto Insumo producido). La merma la
+      registra el backend en Productos no conformes en la misma transacción;
+      aquí solo se avisa y se recarga (recargarProduccion incluye CPN). */
+  const confirmarCompletar = async () => {
     if (!completarItem) return;
     const orden = ordenes.find((o) => o.id === completarItem.id);
     if (!orden) return;
-
-    // Marca cada movimiento que se va a aplicar AHORA. Si la marca ya estaba
-    // encendida, ese movimiento ocurrió antes (orden que descontó al Iniciar,
-    // o una orden que se completa dos veces) y NO se repite.
-    const aplicarInsumos = !orden.insumosDescontados;
-    const aplicarStock = orden.tipo === "preparacion" && !orden.stockAplicado;
-
-    // 1) Unidades incompatibles: solo frenan cuando AHORA se va a descontar
-    // insumos. Si la marca ya está puesta, no se vuelve a tocar el stock.
-    if (aplicarInsumos) {
-      const incompatibles: { nombre: string; unidadFicha: string; unidadCatalogo: string }[] = [];
-      for (const r of orden.insumosRequeridos) {
-        if (r.noEncontrado) continue;
-        const ins = insumos.find((i) => i.id === r.insumoId)
-          ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
-        if (!ins || unidadesCompatibles(r.unidad, ins.unidadMedida)) continue;
-        incompatibles.push({ nombre: r.nombre, unidadFicha: r.unidad, unidadCatalogo: ins.unidadMedida });
-      }
-      if (incompatibles.length > 0) {
-        toast.error(
-          `No se puede completar: unidades incompatibles — ${incompatibles
-            .map((x) => `${x.nombre} (${x.unidadFicha} en la ficha, ${x.unidadCatalogo} en el catálogo)`)
-            .join(", ")}`,
-        );
-        return;
-      }
-    }
 
     // 2) Producción real: SOLO preparación en lote (C4). Cada línea necesita
     // su "Cantidad que salió" ≥ 0; el vacío o un negativo bloquean (el botón
     // ya viene deshabilitado, esto es la red de seguridad). Un pedido no pide
     // cantidades: su modal es de solo lectura y sus líneas no llevan real ni
     // merma.
-    let lineas: LineaOrden[] = orden.lineas;
-    if (orden.tipo === "preparacion") {
-      if (!realesOk(orden)) {
-        toast.error("Cada línea necesita su «Cantidad que salió» (0 o más)");
-        return;
-      }
-      lineas = orden.lineas.map((l, i) => {
-        const real = Number(reales[i]);
-        // Si lo real supera lo estimado no hay merma: es sobrante, y la merma
-        // queda en 0 (la confirmación se pide en el modal).
-        const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
-        return { ...l, cantidadReal: real, merma };
-      });
+    if (orden.tipo === "preparacion" && !realesOk(orden)) {
+      toast.error("Cada línea necesita su «Cantidad que salió» (0 o más)");
+      return;
     }
 
-    const now = nowISO();
-    const actualizado: OrdenProduccion = {
-      ...orden,
-      lineas,
-      estadoOrden: "completada",
-      historial: [...orden.historial, { de: orden.estadoOrden, a: "completada", fechaHora: now }],
-      insumosDescontados: orden.insumosDescontados || aplicarInsumos,
-      stockAplicado: orden.stockAplicado || aplicarStock,
-      // `notasFaltantes` ya no se escribe: el camino "completar igual" se
-      // eliminó (C5). Las notas que guardaron órdenes viejas siguen a la vista
-      // en el detalle.
-    };
-    setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizado : o)));
-
-    // ── a) Insumos y Productos Insumo consumidos ──
-    if (aplicarInsumos) descontarInsumos(orden.insumosRequeridos);
-
-    // ── c) Stock del Producto Insumo producido (solo preparación en lote) ──
-    // Al stock del Producto Insumo SUBE solo la cantidad real (la merma no
-    // existe como producto).
-    if (aplicarStock) {
-      const produccion = new Map<string, number>();
-      lineas.forEach((l, i) => {
-        const real = Number(reales[i]);
-        if (!Number.isFinite(real)) return;
-        produccion.set(l.idProducto, (produccion.get(l.idProducto) ?? 0) + real);
-      });
-      setInsumos((prev) => prev.map((ins) => {
-        const cant = produccion.get(ins.id);
-        if (cant === undefined) return ins;
-        return { ...ins, stockActual: Math.round((ins.stockActual + cant) * 1000) / 1000 };
-      }));
-      toast.success(
-        `${orden.id} completada — ${[...produccion.entries()]
-          .map(([pid, c]) => `${insumos.find((i) => i.id === pid)?.nombre ?? pid} +${c}`)
-          .join(" · ")}`,
+    try {
+      const actualizada = await completarOrdenProduccion(
+        orden.id,
+        orden.tipo === "preparacion"
+          ? orden.lineas
+              .map((l, i) => ({
+                idDetalleOp: l.idDetalleOp ?? 0,
+                cantidadReal: Number(reales[i]),
+              }))
+              .filter((l) => l.idDetalleOp > 0)
+          : undefined,
       );
-    } else {
+      setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizada : o)));
       toast.success(`${orden.id} completada`);
-    }
-    // Merma como no conformidad: solo órdenes "Preparación en lote" (las de
-    // "Pedido de cliente" entregan platos, no Productos Insumo). El dedupe
-    // vive dentro del updater funcional para que ni un doble clic ni el doble
-    // render de React la dupliquen. Esa cantidad NO se descuenta del stock:
-    // nunca entró al inventario (solo entró la cantidad real).
-    if (orden.tipo === "preparacion") {
-      setNoConformidades((prev) => {
-        const nuevas: NoConformidad[] = [];
+
+      // Merma: solo "Preparación en lote". El registro ya lo creó el backend;
+      // aquí solo se avisa por línea (esa cantidad nunca entró al stock).
+      if (orden.tipo === "preparacion") {
         orden.lineas.forEach((l, i) => {
-          const real = Number(reales[i]);
-          if (!Number.isFinite(real)) return;
-          const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
-          if (merma <= 0) return;
-          const yaExiste = prev.some(
-            (n) => n.ordenRef === orden.id && n.nombre === l.nombre && n.tipoNoConformidad === "Merma de cocina",
-          );
-          if (yaExiste) return;
-          nuevas.push({
-            id: nextNoConformidadId([...prev, ...nuevas]),
-            tipo: "Producto insumo",
-            nombre: l.nombre,
-            categoria: "Producto insumo",
-            fechaRegistro: new Date().toLocaleDateString("en-CA"),
-            cantidadAfectada: merma,
-            unidadMedida: l.unidad,
-            tipoNoConformidad: "Merma de cocina",
-            descripcionProblema: `Se planificaron ${l.cantidadEstimada} ${l.unidad} y se obtuvieron ${real} ${l.unidad}.`,
-            causa: "",
-            areaProceso: "Producción",
-            responsable: "",
-            estado: "Pendiente",
-            tipoSolucion: "",
-            solucion: "",
-            ordenRef: orden.id,
-          });
+          const merma = Math.max(0, Math.round((l.cantidadEstimada - Number(reales[i])) * 1000) / 1000);
+          if (merma > 0) toast.success(`Se registró la merma de ${l.nombre} en Productos no conformes`);
         });
-        nuevas.forEach((n) =>
-          toast.success(`Se registró la merma de ${n.nombre} en Productos no conformes`),
-        );
-        return nuevas.length > 0 ? [...nuevas, ...prev] : prev;
-      });
+      }
+      setCompletarItem(null);
+      setReales({});
+      // El stock de los insumos cambió en la base.
+      await recargarProduccion?.();
+    } catch (error) {
+      toast.error(mensajeErrorOrdenes(error, "No se pudo completar la orden."));
     }
-    setCompletarItem(null);
-    setReales({});
   };
 
-  /** Cambio de estado desde el listado. "Completado" pasa por el modal de
-      producción real; "Cancelada" solo llega por el flujo de Dar de baja. */
+  /** Cambio de estado desde el listado: solo las transiciones del backend.
+      "En proceso" llama a Iniciar y "Completada" abre el modal de producción
+      real; "Cancelada" solo llega por el flujo de Dar de baja. */
   const applyTransition = (id: string, next: EstadoOrden) => {
-    const orden = ordenes.find((o) => o.id === id);
-    if (!orden) return;
     if (next === "en-proceso") return iniciar(id);
     if (next === "completada") return abrirCompletar(id);
-    const now = nowISO();
-    setOrdenes((p) => p.map((o) => o.id === id
-      ? {
-          ...o,
-          estadoOrden: next,
-          historial: [...o.historial, { de: o.estadoOrden, a: next, fechaHora: now }],
-        }
-      : o));
-    toast.success(`Estado cambiado a: ${ESTADO_LABEL[next]}`);
   };
 
   // ── Dar de baja (no se toca el flujo) ──────────────────────────────
@@ -1785,22 +1632,29 @@ export function OrdenProduccionScreen({
     });
   };
 
-  const confirmarDarBaja = () => {
+  const confirmarDarBaja = async () => {
     if (!darBajaForm || !darBajaItem) return;
     if (!darBajaForm.descripcion.trim()) {
       toast.error("Describe el motivo de la baja");
       return;
     }
-    setOrdenes((p) => p.map((o) => o.id === darBajaItem.id
-      ? {
-          ...o,
-          estadoOrden: "cancelada",
-          historial: [...o.historial, { de: o.estadoOrden, a: "cancelada", fechaHora: nowISO() }],
-        }
-      : o));
+    try {
+      // El motivo y la descripción van al backend, que los guarda en el
+      // historial de la orden (dar de baja no crea un producto no conforme).
+      const actualizada = await darBajaOrdenProduccion(
+        darBajaItem.id,
+        darBajaForm.motivo,
+        darBajaForm.descripcion.trim(),
+      );
+      setOrdenes((p) => p.map((o) => (o.id === actualizada.id ? actualizada : o)));
+      toast.success(`Orden ${actualizada.id} dada de baja`);
+      await recargarProduccion?.();
+    } catch (error) {
+      toast.error(mensajeErrorOrdenes(error, "No se pudo dar de baja la orden."));
+      return;
+    }
     setDarBajaItem(null);
     setDarBajaForm(null);
-    toast.success(`Orden ${darBajaItem.id} dada de baja`);
   };
 
   // ── Modales ────────────────────────────────────────────────────────
@@ -1871,7 +1725,26 @@ export function OrdenProduccionScreen({
         </select>
       </div>
 
-      {/* Listado */}
+      {/* Listado. La carga desde la API y su error se muestran con
+          "Reintentar": nunca se vuelve a datos de ejemplo. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
+          Cargando órdenes de producción…
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
+          <p className="font-semibold text-foreground">{errorCarga}</p>
+          {onReintentar && (
+            <button
+              type="button"
+              onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -2014,6 +1887,7 @@ export function OrdenProduccionScreen({
           </table>
         </div>
       </div>
+      )}
 
       {/* Paginación (unificada, fuera de la card) */}
       {filtradas.length > 0 && (
@@ -2035,47 +1909,27 @@ export function OrdenProduccionScreen({
             && (preparacionInvalida(form.lineas) || faltantesForm.length > 0),
           children: (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-2">¿Qué se va a preparar?</label>
-                <TarjetasTipo
-                  value={form.tipo}
-                  onChange={(t) => setForm(p => ({ ...emptyForm(t), observacion: p.observacion }))}
-                />
+              {/* Solo se crean Preparaciones en lote: los pedidos los crea el
+                  backend al aceptar una venta. */}
+              <p className="text-xs font-semibold text-muted-foreground">Preparación en lote (Producto Insumo)</p>
+              <div className="space-y-3">
+                {form.lineas.map((l, idx) => (
+                  <LineaPreparacion
+                    key={idx}
+                    linea={l}
+                    insumos={insumos}
+                    fichas={fichasPorProducto}
+                    puedeQuitar={form.lineas.length > 1}
+                    onChange={(nl) => setForm(p => ({ ...p, lineas: p.lineas.map((x, i) => i === idx ? nl : x) }))}
+                    onRemove={() => setForm(p => ({ ...p, lineas: p.lineas.filter((_, i) => i !== idx) }))}
+                  />
+                ))}
               </div>
-
-              {form.tipo === "preparacion" ? (
-                <>
-                  <div className="space-y-3">
-                    {form.lineas.map((l, idx) => (
-                      <LineaPreparacion
-                        key={idx}
-                        linea={l}
-                        insumos={insumos}
-                        fichas={fichasPorProducto}
-                        puedeQuitar={form.lineas.length > 1}
-                        onChange={(nl) => setForm(p => ({ ...p, lineas: p.lineas.map((x, i) => i === idx ? nl : x) }))}
-                        onRemove={() => setForm(p => ({ ...p, lineas: p.lineas.filter((_, i) => i !== idx) }))}
-                      />
-                    ))}
-                  </div>
-                  <button type="button"
-                    onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
-                  </button>
-                </>
-              ) : (
-                <CamposPedido
-                  form={form}
-                  set={setForm}
-                  ventas={ventas}
-                  ventasSinOrden={ventasSinOrden}
-                  ordenes={ordenes}
-                  productos={productos}
-                  fichas={fichasPorProducto}
-                  insumos={insumos}
-                />
-              )}
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
+                className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+                <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
+              </button>
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}

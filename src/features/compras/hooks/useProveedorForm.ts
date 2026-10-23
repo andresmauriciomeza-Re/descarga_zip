@@ -96,9 +96,9 @@ export function filtrarNumeroDocumento(valor: string): string {
   return valor.replace(/\D/g, "").slice(0, DOCUMENTO_MAX);
 }
 
-/** DV al escribir: solo dígitos, 1 o 2 como pide la DIAN. */
+/** DV al escribir: solo dígitos y UNO solo (el DV de la DIAN es de 1 dígito). */
 export function filtrarDv(valor: string): string {
-  return valor.replace(/\D/g, "").slice(0, 2);
+  return valor.replace(/\D/g, "").slice(0, 1);
 }
 
 /**
@@ -315,6 +315,10 @@ export function useProveedorForm(
   const [values, setValues] = useState<ProveedorFormValues>(() => conCamposNuevos(inicial));
   const [tocado, setTocado] = useState<Partial<Record<keyof ProveedorFormValues, boolean>>>({});
   const [intentoGuardar, setIntentoGuardar] = useState(false);
+  /** Errores que vienen del SERVIDOR (409 "Ya existe un proveedor con ese
+      NIT", "…con ese correo"…): se pintan bajo su campo junto a los locales y
+      se limpian al editar ese campo. */
+  const [erroresServidor, setErroresServidor] = useState<ProveedorFormErrors>({});
 
   /**
    * Único punto de escritura. Además de guardar el campo, mantiene los
@@ -325,6 +329,14 @@ export function useProveedorForm(
    *  · asesor/teléfono/email ← contacto comercial (solo Jurídica).
    */
   const setCampo = useCallback(<K extends keyof ProveedorFormValues>(campo: K, valor: ProveedorFormValues[K]) => {
+    // Al editar un campo se limpia el error del servidor que vivía en él
+    // (p. ej. "Ya existe un proveedor con ese NIT").
+    setErroresServidor(prev => {
+      if (!prev[campo]) return prev;
+      const next = { ...prev };
+      delete next[campo];
+      return next;
+    });
     setValues(prev => {
       const next: ProveedorFormValues = { ...prev, [campo]: valor };
 
@@ -400,13 +412,14 @@ export function useProveedorForm(
       e.nit = "Ya existe un proveedor con este NIT.";
     }
 
-    // ── DV (dígito de verificación): 1 o 2 dígitos. Obligatorio solo en
+    // ── DV (dígito de verificación): UN dígito (el de la DIAN). Obligatorio
+    // solo en Persona Jurídica.
     // Persona Jurídica; en Natural es un dato opcional. ──
     const dv = (values.dv ?? "").trim();
     if (!dv) {
       if (esJuridica) e.dv = "El DV es obligatorio.";
-    } else if (!/^\d{1,2}$/.test(dv)) {
-      e.dv = "El DV debe tener 1 o 2 dígitos.";
+    } else if (!/^\d{1}$/.test(dv)) {
+      e.dv = "El DV debe tener 1 dígito.";
     }
 
     // ── Nombre (derivado de la identificación): sigue obligatorio porque es
@@ -486,11 +499,12 @@ export function useProveedorForm(
     return e;
   }, [values, existentes]);
 
-  const formValido = Object.keys(errors).length === 0;
+  const formValido = Object.keys({ ...errors, ...erroresServidor }).length === 0;
 
   const obtenerError = (campo: keyof ProveedorFormValues): string | undefined => {
     if (opciones.bloquearNombre && campo === "nombre") return undefined;
     if (opciones.bloquearNit && campo === "nit") return undefined;
+    if (erroresServidor[campo]) return erroresServidor[campo];
     return (tocado[campo] || intentoGuardar) ? errors[campo] : undefined;
   };
 
@@ -503,17 +517,25 @@ export function useProveedorForm(
     setValues(conCamposNuevos(inicial));
     setTocado({});
     setIntentoGuardar(false);
+    setErroresServidor({});
   }, [inicial]);
+
+  /** Marca un error del SERVIDOR bajo su campo (NIT/correo repetidos, etc.). */
+  const setErrorServidor = useCallback((campo: keyof ProveedorFormValues, mensaje: string) => {
+    setErroresServidor(prev => ({ ...prev, [campo]: mensaje }));
+    setTocado(prev => ({ ...prev, [campo]: true }));
+  }, []);
 
   return {
     values,
     setCampo,
     marcarTocado,
-    errors,
+    errors: { ...errors, ...erroresServidor },
     formValido,
     obtenerError,
     campoCls,
     reset,
+    setErrorServidor,
     setIntentoGuardar,
     intentoGuardar,
   };

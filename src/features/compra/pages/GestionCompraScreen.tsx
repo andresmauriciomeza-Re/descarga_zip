@@ -7,7 +7,7 @@ import {
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { calcularLineaIva } from "@/features/compras/services/iva";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { CompactInsumoForm, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
 // Bloque 2: "+ Crear producto" desde el desplegable de ítems de la compra.
@@ -35,16 +35,18 @@ import {
   type ProveedorRef,
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 import {
-  aplicarStockCompra,
   historialCompraDe,
-  aplicarEntradasCompraApi,
-  revertirEntradasCompraApi,
   esLineaProducto,
   textoStockActualizado,
   unidadesPorLinea,
-  type ResumenStock,
   type SetCatalogo,
 } from "@/features/compras/services/inventario";
+import {
+  anularCompra as anularCompraApi,
+  crearCompra,
+  mensajeErrorCompras,
+} from "@/features/compras/services/comprasApi";
+import { cambiarEstadoOrdenCompra as cambiarEstadoOrdenCompraApi } from "@/features/orden-compra/services/ordenesCompraApi";
 import {
   contenidoDe,
   empaqueDe,
@@ -686,10 +688,13 @@ function CompraForm({
   onClose,
   onGuardar,
   onCrearProducto,
+  categoriasInsumo,
 }: {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  /** Bloque 2.2: categorías de insumos desde la API para el "+ Crear insumo". */
+  categoriasInsumo?: CategoriaInsumo[];
   /** P14: catálogo de productos del módulo de Productos: son la otra mitad
    *  del selector "Tipo" de la Nueva compra. */
   productos?: Producto[];
@@ -1942,6 +1947,13 @@ function CompraForm({
                     )}
                   </div>
                 )}
+                {/* Compras aún no está conectada a la API: el stock de
+                    insumos se suma solo en local. */}
+                {!isView && nInsumos > 0 && (
+                  <p className="shrink-0 text-[11px] text-muted-foreground">
+                    El stock de insumos se guardará en la base cuando se conecte Compras
+                  </p>
+                )}
 
               {isView ? (
                 <div className="flex flex-col gap-4">
@@ -2089,6 +2101,7 @@ function CompraForm({
           <NuevoInsumoModal
             nombreInicial={itemNombre}
             insumosExistentes={insumos}
+            categoriasInsumo={categoriasInsumo}
             onGuardar={(ins) => {
               setItemNombre(ins.nombre);
               setItemUnidad(ins.unidadMedida);
@@ -2158,6 +2171,8 @@ interface NuevaCompraPageProps {
   /** Bloque 2: categorías y alta de productos desde "+ Crear producto" (el
    *  callback viene de App y agrega al catálogo del panel). */
   categorias?: CategoriaProducto[];
+  /** Bloque 2.2: categorías de insumos desde la API para el "+ Crear insumo". */
+  categoriasInsumo?: CategoriaInsumo[];
   onCrearProducto?: (p: Producto) => Promise<Producto>;
   /** Control de inventario al guardar la compra. Opcionales: sin ellos la
    *  compra se guarda igual y simplemente no se suma el stock (ver
@@ -2176,6 +2191,7 @@ export function NuevaCompraPage({
   insumos,
   productos,
   categorias,
+  categoriasInsumo,
   onCrearProducto,
   setInsumos,
   setProductos,
@@ -2183,68 +2199,26 @@ export function NuevaCompraPage({
   onBack,
 }: NuevaCompraPageProps) {
   const handleGuardar = async (data: NuevaCompraData) => {
-    const nuevoId = String(
-      Math.max(0, ...gestiones.map((g) => parseInt(g.id, 10) || 0)) + 1
-    ).padStart(3, "0");
-
-    const nueva: GestionCompra = {
-      id: nuevoId,
-      ordenId: "",
-      proveedor: data.proveedor,
-      proveedorId: data.proveedorId,
-      numeroFactura: data.numeroFactura,
-      fechaFactura: data.fechaFactura,
-      valorTotal: data.valorTotal,
-      estado: data.estado,
-      items: data.items.map((item) => ({ ...item })),
-      // Punto 1: totales de IVA guardados en la compra (el backend los
-      // recalcula con la misma fórmula antes de persistir).
-      ivaIncluido: data.ivaIncluido,
-      subtotalSinIva: data.subtotalSinIva,
-      totalIva: data.totalIva,
-      totalPagado: data.totalPagado,
-    };
-
-    // Los insumos siguen usando inventario local; las bebidas se aplican en
-    // API por línea y conservan marca individual para reintentar sin duplicar.
-    const recibeStock = data.estado === "Recibido";
-    const itemsInsumo = data.items.filter((item) =>
-      item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
-    );
-    const resumen = recibeStock
-      ? aplicarStockCompra(itemsInsumo, 1, {
-          insumos,
-          setInsumos,
-        })
-      : null;
-    const resultadoApi = recibeStock && productos && setProductos
-      ? await aplicarEntradasCompraApi(data.items, productos, setProductos, data.ivaIncluido)
-      : { items: data.items, errores: data.items.flatMap((item, indice) => item.tipoItem === "producto" ? [{ nombre: item.nombre, mensaje: "No está disponible la actualización de Productos API.", indice }] : []) };
-    nueva.items = resultadoApi.items as OrdenItem[];
-    resultadoApi.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
-    if (nueva.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
-
-    // `stockAplicado` sólo se marca si de verdad se sumó algo: así una compra
-    // creada sin setters (contexto sin control de inventario) no queda
-    // registrada como "stock aplicado" y su anulación no resta de más.
-    // Si la pantalla algún día admite EDITAR una compra existente, aquí habrá
-    // que hacer el mismo camino que la anulación: restar primero la cantidad
-    // PREVIA de `compra.items` (si `compra.stockAplicado`) y recién después
-    // sumar la nueva, dejando `stockAplicado: true`. Hoy no existe ese flujo:
-    // `CompraForm` sólo se usa en "create" (crear) y en "view" (detalle de
-    // solo lectura), y `editarItem` edita una fila ANTES de guardar, cuando
-    // todavía no se tocó el inventario.
-    if ((resumen && resumen.nombres.length > 0) || nueva.items.some((item) => item.stockApiAplicado)) {
-      nueva.stockAplicado = true;
+    try {
+      // 6.1: la compra directa la crea el backend, que además suma el stock de
+      // insumos (convertidos a su unidad) y de productos (bebidas × empaque),
+      // actualiza costos y deja la bebida sin precio en "Disponible". Sin
+      // puentes temporales ni suma local de stock.
+      const creada = await crearCompra({
+        n_factura: data.numeroFactura,
+        fecha: data.fechaFactura,
+        id_proveedor: data.proveedorId ? Number(data.proveedorId) : null,
+        iva_incluido: Boolean(data.ivaIncluido),
+        items: data.items.filter((i) => i.idInsumo && i.cantidad > 0),
+      });
+      setGestiones((prev) => [creada, ...prev]);
+      toast.success(`Compra ${creada.id} creada · Factura ${creada.numeroFactura}`);
+      // El stock de insumos y productos cambió en la base.
+      await onRecargarCatalogo?.();
+      onBack();
+    } catch (error) {
+      toast.error(mensajeErrorCompras(error, "No se pudo crear la compra."));
     }
-
-    setGestiones((prev) => [nueva, ...prev]);
-
-    toast.success(`Compra ${nueva.id} creada · Factura ${nueva.numeroFactura}`);
-    if (resumen && resumen.nombres.length > 0) {
-      toast.info(textoStockActualizado(resumen));
-    }
-    onBack();
   };
 
   return (
@@ -2257,6 +2231,7 @@ export function NuevaCompraPage({
       productos={productos}
       // Bloque 2: "+ Crear producto" del desplegable de ítems.
       categorias={categorias}
+      categoriasInsumo={categoriasInsumo}
       onCrearProducto={onCrearProducto}
       gestiones={gestiones}
       onClose={onBack}
@@ -2280,6 +2255,8 @@ interface Props {
    *  modal de detalle es de sólo lectura pero se mantienen iguales las
    *  dos pantallas que renderizan CompraForm). */
   categorias?: CategoriaProducto[];
+  /** Bloque 2.2: categorías de insumos desde la API para el "+ Crear insumo". */
+  categoriasInsumo?: CategoriaInsumo[];
   onCrearProducto?: (p: Producto) => Promise<Producto>;
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
@@ -2289,6 +2266,11 @@ interface Props {
   setProductos?: SetCatalogo<Producto>;
   onRecargarCatalogo?: () => Promise<void>;
   onNuevaCompra: () => void;
+  /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos de
+      ejemplo cuando falla. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -2297,10 +2279,13 @@ interface Props {
 
 export function GestionCompraScreen({
   gestiones, setGestiones, ordenes, setOrdenes, insumos, productos, proveedores, setProveedores,
-  categorias, onCrearProducto,
+  categorias, categoriasInsumo, onCrearProducto,
   setInsumos, setProductos,
   onRecargarCatalogo,
   onNuevaCompra,
+  cargando = false,
+  errorCarga,
+  onReintentar,
   canCreate = true,
   canExportExcel = true,
 }: Props) {
@@ -2373,112 +2358,49 @@ export function GestionCompraScreen({
   const handleCambiarEstado = async (id: string, next: EstadoGestion, motivo?: string) => {
     const compra = gestiones.find((g) => g.id === id);
 
-    // ANULACIÓN: hay que devolver al inventario lo que esta compra sumó, para
-    // que el stock vuelva al estado previo. Sólo se hace si llegó a sumarlo
-    // (`stockAplicado`) y todavía no se revirtió (`stockRevertido`): así una
-    // compra creada por otro flujo (la Recepción suma por su propio camino) o
-    // una ya anulada no descuadra el stock restando dos veces.
-    const correspondeRevertir =
-      next === "Anulado" &&
-      !!compra?.stockAplicado &&
-      !compra?.stockRevertido &&
-      compra.estado !== "Anulado";
+    // ANULACIÓN (6.2): la hace el backend, que devuelve al inventario lo que
+    // la compra sumó (insumos y productos). Un 409 ("ya se usaron/vendieron
+    // unidades de «X»") muestra su mensaje y NO se anula nada.
+    if (next === "Anulado") {
+      try {
+        const anulada = await anularCompraApi(id, (motivo ?? "").trim());
+        setGestiones((prev) => prev.map((x) => (x.id === id ? anulada : x)));
+        // El stock cambió en la base: se recargan insumos y productos.
+        await onRecargarCatalogo?.();
 
-    // Se calcula ANTES de tocar `gestiones` porque los items a revertir salen
-    // de la versión previa de la compra. Si no hay setters (pantalla montada
-    // sin control de inventario) devuelve `null` y no se marca `stockRevertido`,
-    // de modo que un intento posterior con setters sí pueda revertir.
-    let revertido: ResumenStock | null = null;
-    let itemsActualizados = compra?.items ?? [];
-    let erroresReversa: { nombre: string; mensaje: string }[] = [];
-    if (correspondeRevertir && compra) {
-      const itemsInsumo = (compra.items ?? []).filter((item) =>
-        item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
-      );
-      revertido = aplicarStockCompra(itemsInsumo, -1, {
-        insumos,
-        setInsumos,
-      });
-      if (productos && setProductos) {
-        const resultadoApi = await revertirEntradasCompraApi(compra.items ?? [], productos, setProductos);
-        itemsActualizados = resultadoApi.items as OrdenItem[];
-        erroresReversa = resultadoApi.errores;
-        erroresReversa.forEach((error) => toast.error(`No se revirtió «${error.nombre}»: ${error.mensaje}`));
-        if (resultadoApi.items.some((item) => item.stockApiRevertido)) await onRecargarCatalogo?.();
+        // Caso 2 — Orden de Compra con SOLO una Compra asociada: al anular esa
+        // única Compra, la Orden de Compra asociada también pasa a Anulado (el
+        // backend solo toca sus compras "Recibido", así que no se revierte dos
+        // veces nada).
+        const ordenId = compra?.ordenId ?? "";
+        if (ordenId) {
+          const comprasAsociadas = gestiones.filter((g) => g.ordenId === ordenId);
+          if (comprasAsociadas.length === 1) {
+            try {
+              const orden = await cambiarEstadoOrdenCompraApi(ordenId, "Anulado", (motivo ?? "").trim());
+              setOrdenes((prev) => prev.map((o) => (o.id === ordenId ? orden : o)));
+              toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
+              return;
+            } catch {
+              // Sin transición válida la compra queda anulada igual.
+            }
+          }
+        }
+        toast.success(`Compra ${id} anulada`);
+      } catch (error) {
+        toast.error(mensajeErrorCompras(error, "No se pudo anular la compra."));
+      } finally {
+        setEstadoConfirm(null);
+        setMotivoAnulacion("");
       }
+      return;
     }
 
     // Solo se actualiza el estado de la Compra puntual (por su ID).
-    // Punto 6: al anular se guarda el motivo (obligatorio en el formulario) y
-    // la fecha/hora exacta en la que ocurrió; en los demás cambios se limpian.
-    setGestiones((prev) => prev.map((x) => (x.id === id ? {
-      ...x,
-      estado: next,
-      items: x.id === id ? itemsActualizados : x.items,
-      motivoAnulacion: next === "Anulado" ? motivo : undefined,
-      fechaAnulacion: next === "Anulado" ? new Date().toISOString() : undefined,
-      // Guard anti doble-reversión: queda en true sólo si de verdad se restó
-      // (o si ya no quedaba nada que restar).
-      stockRevertido: correspondeRevertir && revertido && erroresReversa.length === 0 ? true : x.stockRevertido,
-    } : x)));
-
+    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
     setEstadoConfirm(null);
     setMotivoAnulacion("");
-
-    // Va ANTES del bloque de la orden (que hace `return`): el aviso del stock
-    // tiene que verse siempre que se revierta, haya o no orden asociada.
-    if (revertido && revertido.nombres.length > 0) {
-      toast.info("Stock revertido por anulación de la compra");
-    }
-
-    // Caso 2 — Orden de Compra con SOLO una Compra asociada:
-    // Al anular esa única Compra, la Orden de Compra asociada también pasa a Anulado.
-    if (next === "Anulado") {
-      const ordenId = gestiones.find((g) => g.id === id)?.ordenId ?? "";
-      if (ordenId) {
-        const comprasAsociadas = gestiones.filter((g) => g.ordenId === ordenId);
-        if (comprasAsociadas.length === 1) {
-          setOrdenes((prev) =>
-            prev.map((o) =>
-              o.id === ordenId ? { ...o, estado: "Anulado" as EstadoOrden } : o
-            )
-          );
-          toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
-          return;
-        }
-      }
-    }
-
     toast.success(`Estado cambiado a: ${next}`);
-  };
-
-  const reintentarReversaCompra = async (compra: GestionCompra) => {
-    if (!productos || !setProductos) return;
-    const resultado = await revertirEntradasCompraApi(compra.items ?? [], productos, setProductos);
-    const completo = resultado.errores.length === 0;
-    setGestiones((prev) => prev.map((g) => g.id === compra.id
-      ? { ...g, items: resultado.items as OrdenItem[], stockRevertido: completo || g.stockRevertido }
-      : g));
-    resultado.errores.forEach((error) => toast.error(`No se revirtió «${error.nombre}»: ${error.mensaje}`));
-    if (resultado.items.some((item) => item.stockApiRevertido)) await onRecargarCatalogo?.();
-    if (completo) toast.success(`Stock de productos de la compra ${compra.id} revertido`);
-  };
-
-  const reintentarEntradasCompra = async (compra: GestionCompra) => {
-    if (compra.estado !== "Recibido" || !productos || !setProductos) return;
-    const resultado = await aplicarEntradasCompraApi(
-      compra.items ?? [],
-      productos,
-      setProductos,
-      compra.ivaIncluido ?? true,
-      true,
-    );
-    setGestiones((prev) => prev.map((g) => g.id === compra.id
-      ? { ...g, items: resultado.items as OrdenItem[], stockAplicado: resultado.items.some((item) => item.stockApiAplicado) || g.stockAplicado }
-      : g));
-    resultado.errores.forEach((error) => toast.error(`No se aplicó «${error.nombre}»: ${error.mensaje}`));
-    if (resultado.items.some((item) => item.stockApiAplicado)) await onRecargarCatalogo?.();
-    if (resultado.errores.length === 0) toast.success(`Stock de productos de la compra ${compra.id} actualizado`);
   };
 
   const handleDownload = async () => {
@@ -2569,11 +2491,26 @@ export function GestionCompraScreen({
         />
       </div>
 
-      {/* Punto 2.5: la card medía todo el alto restante y se estiraba hasta el
-          fondo (hueco vacío bajo la última fila). Ahora mide su contenido y el
-          paginador queda pegado debajo. La tabla se pagina en filas fijas de 5;
-          sólo queda scroll horizontal en tablet y scroll vertical en movil
-          (tarjetas). */}
+      {/* Carga desde la API y su error con "Reintentar": nunca datos de
+          ejemplo cuando falla. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
+          Cargando compras…
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
+          <p className="font-semibold text-foreground">{errorCarga}</p>
+          {onReintentar && (
+            <button
+              type="button"
+              onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
         <div className="overflow-x-auto">
           {/* Escritorio/tablet (>=768px): tabla. La columna Fecha sólo existe
@@ -2604,8 +2541,7 @@ export function GestionCompraScreen({
                 )
                 : paged.map(g => {
                   const orden = getOrden(g.ordenId);
-                  const puedeReintentarEntrada = g.estado === "Recibido" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiPendiente);
-                  const puedeReintentarReversa = g.estado === "Anulado" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiAplicado && !item.stockApiRevertido && item.stockApiPendienteReversa);
+
                   // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
                   const prov = g.proveedorId
                     ? proveedores.find(p => p.id === g.proveedorId)
@@ -2655,15 +2591,6 @@ export function GestionCompraScreen({
                         />
                       </td>
                       <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
-                        {(puedeReintentarEntrada || puedeReintentarReversa) && (
-                          <button
-                            onClick={() => void (puedeReintentarReversa ? reintentarReversaCompra(g) : reintentarEntradasCompra(g))}
-                            title="Reintentar actualización de stock"
-                            className="mr-1 rounded-lg border border-amber-300 px-2 py-1 text-[10px] font-semibold text-amber-700 hover:bg-amber-50"
-                          >
-                            Reintentar stock
-                          </button>
-                        )}
                         <button
                           onClick={() => setDetail(g)}
                           title="Ver detalle"
@@ -2692,8 +2619,7 @@ export function GestionCompraScreen({
               )
               : paged.map(g => {
                 const orden = getOrden(g.ordenId);
-                const puedeReintentarEntrada = g.estado === "Recibido" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiPendiente);
-                const puedeReintentarReversa = g.estado === "Anulado" && (g.items ?? []).some((item) => esLineaProducto(item) && item.stockApiAplicado && !item.stockApiRevertido && item.stockApiPendienteReversa);
+
                 const prov = g.proveedorId
                   ? proveedores.find(p => p.id === g.proveedorId)
                   : proveedores.find(p =>
@@ -2747,14 +2673,6 @@ export function GestionCompraScreen({
 
                     {/* Ver detalle */}
                     <div className="mt-2.5 flex items-center justify-end gap-2">
-                      {(puedeReintentarEntrada || puedeReintentarReversa) && (
-                        <button
-                          onClick={() => void (puedeReintentarReversa ? reintentarReversaCompra(g) : reintentarEntradasCompra(g))}
-                          className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700"
-                        >
-                          Reintentar stock
-                        </button>
-                      )}
                       <button
                         onClick={() => setDetail(g)}
                         title="Ver detalle"
@@ -2769,6 +2687,7 @@ export function GestionCompraScreen({
           </div>
         </div>
       </div>
+      )}
 
       {/* Paginador fuera y debajo de la card (unificado). */}
       {filtered.length > 0 && (
@@ -2789,7 +2708,7 @@ export function GestionCompraScreen({
             insumos={insumos}
             // Bloque 2: mismos props que en la página Nueva Compra (en modo
             // vista el formulario es de sólo lectura).
-            categorias={categorias}
+            categorias={categorias} categoriasInsumo={categoriasInsumo}
             onCrearProducto={onCrearProducto}
             gestiones={gestiones}
             ordenes={ordenes}

@@ -15,6 +15,13 @@ import {
 } from "@/shared/components/EstadoSelect";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import type { ProveedorRef } from "@/features/orden-compra/pages/OrdenCompraScreen";
+import {
+  actualizarProveedor,
+  cambiarEstadoProveedor,
+  crearProveedor,
+  eliminarProveedor,
+  mensajeErrorProveedores,
+} from "@/features/proveedores/services/proveedoresApi";
 import { Paginador } from "@/shared/components/Paginador";
 
 const SERIF = "var(--font-titulo)";
@@ -49,9 +56,9 @@ function ConfirmModal({
 
 // ─────────────────────────── SUPPLIERS ───────────────────────────
 
-type SupplierStatus = "activo" | "inactivo";
+export type SupplierStatus = "activo" | "inactivo";
 
-interface Supplier {
+export interface Supplier {
   id: string;
   nit: string;
   /** Nombre DERIVADO: Persona Natural → "Nombres Apellidos", Persona Jurídica
@@ -327,6 +334,19 @@ function Modal({
 
 import type { OrdenCompra, GestionCompra } from "@/features/orden-compra/pages/OrdenCompraScreen";
 
+/** 409/400 del servidor: NIT y correo repetidos se pintan bajo su campo; el
+    resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
+async function mostrarErrorProveedor(
+  error: unknown,
+  setErrorServidor: (campo: keyof ProveedorFormValues, mensaje: string) => void,
+  fallback: string,
+) {
+  const mensaje = mensajeErrorProveedores(error, fallback);
+  if (/nit/i.test(mensaje)) setErrorServidor("nit", mensaje);
+  else if (/correo|email/i.test(mensaje)) setErrorServidor("email", mensaje);
+  else toast.error(mensaje);
+}
+
 interface SuppliersScreenProps {
   canCreate?: boolean;
   canEdit?: boolean;
@@ -336,6 +356,10 @@ interface SuppliersScreenProps {
   /** Estado global de proveedores desde App.tsx */
   proveedores?: ProveedorRef[];
   setProveedores?: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
+  /** Carga desde la API y su error ("Reintentar"): nunca datos de ejemplo. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
 }
 
 export function SuppliersScreen({ 
@@ -346,11 +370,16 @@ export function SuppliersScreen({
   gestiones = [],
   proveedores: proveedoresProp,
   setProveedores: setProveedoresProp,
+  cargando = false,
+  errorCarga,
+  onReintentar,
 }: SuppliersScreenProps) {
   // Usar el estado global de proveedores si está disponible, si no, usar datos locales
   const [suppliersLocal, setSuppliersLocal] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const suppliers = proveedoresProp ?? suppliersLocal;
   const setSuppliers = setProveedoresProp ?? setSuppliersLocal;
+  /** "Guardando…" mientras habla la API: bloquea el doble clic. */
+  const [guardando, setGuardando] = useState(false);
   const [search,    setSearch]    = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem,   setEditItem]   = useState<Supplier | null>(null);
@@ -409,24 +438,18 @@ export function SuppliersScreen({
     suppliers.map(s => ({ nit: s.nit, nombre: s.nombre })),
   );
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     proveedorForm.setIntentoGuardar(true);
-    if (!proveedorForm.formValido) {
-      toast.error("Revisa los campos del formulario");
+    if (!proveedorForm.formValido || guardando) {
+      if (!proveedorForm.formValido) toast.error("Revisa los campos del formulario");
       return;
     }
-    // Punto 1: mismo generador de id que "+ Crear proveedor" (Crear Orden y
-    // Crear Compra): un único punto para los tres formularios, ids numéricos
-    // sin prefijo (regla del sistema) y tolerante a registros heredados que
-    // hubieran quedado sin id (antes `s.id.replace(...)` lanzaba TypeError).
-    const newId = siguienteProveedorId(suppliers);
     const v = proveedorForm.values;
-    // El objeto se arma llave por llave: el estado global se guarda como
-    // ProveedorRef (App.tsx no conoce los campos nuevos), así que los campos
-    // viejos SIEMPRE van presentes y los datos por tipo de persona se suman
-    // aparte. `nombre` y el contacto vienen ya derivados del formulario.
+    // El objeto se arma llave por llave: `nombre` y el contacto vienen ya
+    // derivados del formulario, y los datos por tipo de persona se suman
+    // aparte. La API devuelve el proveedor con su id real ("1", "2", …).
     const nuevo: Supplier = {
-      id: newId,
+      id: siguienteProveedorId(suppliers),
       nombre: nombreGuardado(v),
       nit: v.nit.trim(),
       // Persona Jurídica: contacto comercial → asesor/teléfono/email (los que
@@ -437,15 +460,23 @@ export function SuppliersScreen({
       tipoPersona: v.tipoPersona,
       ...datosNuevosProveedor(v),
     };
-    setSuppliers(p => [nuevo, ...p]);
-    setShowCreate(false);
-    setForm(emptySupplier());
-    proveedorForm.reset();
-    toast.success("Proveedor creado exitosamente");
+    setGuardando(true);
+    try {
+      const creado = await crearProveedor(nuevo);
+      setSuppliers(p => [creado, ...p]);
+      setShowCreate(false);
+      setForm(emptySupplier());
+      proveedorForm.reset();
+      toast.success("Proveedor creado exitosamente");
+    } catch (error) {
+      await mostrarErrorProveedor(error, proveedorForm.setErrorServidor, "No se pudo crear el proveedor.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEdit = () => {
-    if (!editItem) return;
+  const handleEdit = async () => {
+    if (!editItem || guardando) return;
     editForm.setIntentoGuardar(true);
     // Se revisan TODOS los campos con error MENOS los dos que este formulario
     // no gestiona como dato editable: el NIT (queda congelado arriba) y el
@@ -471,23 +502,32 @@ export function SuppliersScreen({
     if (renombrarRompeOrdenes) {
       toast.warning("El nombre se mantiene: el proveedor tiene órdenes de compra registradas con su nombre actual.");
     }
-    setSuppliers(p => p.map(s => s.id === editItem.id ? {
-      // `...s` conserva TODO lo que el formulario nuevo no cubre, en especial
-      // la dirección y los datos de contacto de un proveedor viejo: no se borran.
-      ...s,
-      // El NIT y el nombre de la base siguen sin editarse: el NIT es fijo y el
-      // nombre se recalcula desde Nombres+Apellidos / Razón social.
-      nit: s.nit,
-      nombre: renombrarRompeOrdenes ? s.nombre : nombreEditado,
+    const editado: Supplier = {
+      // Se conserva TODO lo que el formulario no cubre, en especial la
+      // dirección y los datos de contacto de un proveedor viejo: no se borran.
+      ...editItem,
+      // El NIT es fijo (el servidor ni lo toca si no cambia) y el nombre se
+      // recalcula desde Nombres+Apellidos / Razón social.
+      nit: editItem.nit,
+      nombre: renombrarRompeOrdenes ? editItem.nombre : nombreEditado,
       // Persona Jurídica: el contacto comercial pisa asesor/teléfono/email;
       // en Persona Natural se conservan los valores anteriores.
-      ...contactoGuardado(v, s),
+      ...contactoGuardado(v, editItem),
       estado: v.estado,
       tipoPersona: v.tipoPersona,
       ...datosNuevosProveedor(v),
-    } : s));
-    setEditItem(null);
-    toast.success("Proveedor editado exitosamente");
+    };
+    setGuardando(true);
+    try {
+      const actualizado = await actualizarProveedor(editado);
+      setSuppliers(p => p.map(s => s.id === editItem.id ? actualizado : s));
+      setEditItem(null);
+      toast.success("Proveedor editado exitosamente");
+    } catch (error) {
+      await mostrarErrorProveedor(error, editForm.setErrorServidor, "No se pudo editar el proveedor.");
+    } finally {
+      setGuardando(false);
+    }
   };
 
   /** Punto 3: un proveedor no se puede eliminar si tiene órdenes de compra o
@@ -510,19 +550,33 @@ export function SuppliersScreen({
     setDeleteItem(s);
   };
 
-  const handleDelete = (s: Supplier) => {
+  const handleDelete = async (s: Supplier) => {
+    try {
+      await eliminarProveedor(s.id);
+    } catch (error) {
+      // Con historial el servidor responde 409: "…tiene historial. Desactívalo."
+      toast.error(mensajeErrorProveedores(error, "No se pudo eliminar el proveedor."));
+      setDeleteItem(null);
+      return;
+    }
     setSuppliers(p => p.filter(x => !(x.id === s.id && x.nombre === s.nombre)));
     setDeleteItem(null);
     toast.success("Proveedor eliminado");
   };
 
-  const applyToggleEstado = (id: string) => {
-    setSuppliers(p => p.map(x =>
-      x.id === id ? { ...x, estado: x.estado === "activo" ? "inactivo" : "activo" } : x
-    ));
-    const nuevoEstado = suppliers.find(s => s.id === id)?.estado === "activo" ? "Inactivo" : "Activo";
-    toast.success(`Estado cambiado a ${nuevoEstado}`);
-    setConfirmToggleId(null);
+  const applyToggleEstado = async (id: string) => {
+    const actual = suppliers.find(s => s.id === id);
+    if (!actual) return;
+    const nuevoEstado = actual.estado === "activo" ? "inactivo" : "activo";
+    try {
+      const actualizado = await cambiarEstadoProveedor(id, nuevoEstado === "activo");
+      setSuppliers(p => p.map(x => (x.id === id ? actualizado : x)));
+      toast.success(`Estado cambiado a ${nuevoEstado === "activo" ? "Activo" : "Inactivo"}`);
+    } catch (error) {
+      toast.error(mensajeErrorProveedores(error, "No se pudo cambiar el estado."));
+    } finally {
+      setConfirmToggleId(null);
+    }
   };
 
   // El NIT y el nombre NUNCA se pueden editar después de creado el proveedor.
@@ -653,14 +707,14 @@ export function SuppliersScreen({
             Cancelar
           </button>
           <button
-            onClick={enAlta ? handleCreate : handleEdit}
+            onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
             // El alta ya venía deshabilitada hasta completar el formulario; la
             // edición valida al guardar (como hasta ahora) para no bloquear
             // registros antiguos con datos heredados.
-            disabled={enAlta ? !proveedorForm.formValido : false}
+            disabled={guardando || (enAlta ? !proveedorForm.formValido : false)}
             className={`${clsBase} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
           >
-            {enAlta ? "Crear" : "Guardar"}
+            {guardando ? "Guardando…" : enAlta ? "Crear" : "Guardar"}
           </button>
         </div>
       </div>
@@ -703,7 +757,24 @@ export function SuppliersScreen({
           Contacto). */}
       <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
         <div className="overflow-x-auto">
-          {filtered.length === 0 ? (
+          {cargando ? (
+            <div className="px-4 py-14 text-center text-muted-foreground">
+              Cargando proveedores…
+            </div>
+          ) : errorCarga ? (
+            <div className="px-4 py-14 text-center text-muted-foreground">
+              <p className="font-semibold text-foreground">{errorCarga}</p>
+              {onReintentar && (
+                <button
+                  type="button"
+                  onClick={onReintentar}
+                  className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+                >
+                  Reintentar
+                </button>
+              )}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="px-4 py-14 text-center text-muted-foreground">
               <p className="text-4xl mb-3">🚛</p>
               <p>No se encontraron proveedores</p>
