@@ -1439,6 +1439,7 @@ function PublicNav({
           <button
             onClick={() => navigate("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
+            aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
@@ -1484,6 +1485,7 @@ function PublicNav({
             onClick={() => setDarkMode(!darkMode)}
             className="w-10 h-10 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
             title="Cambiar tema"
+            aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
             {darkMode ? (
               <Sun className="w-4 h-4" />
@@ -1598,6 +1600,8 @@ function AdminTopBar({
         <button
           onClick={() => navigate("landing")}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          title="Ir a la tienda"
+          aria-label="Ir a la tienda"
         >
           <Store className="w-5 h-5" />
         </button>
@@ -1605,6 +1609,7 @@ function AdminTopBar({
           onClick={() => setDarkMode(!darkMode)}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
           title={darkMode ? "Modo claro" : "Modo oscuro"}
+          aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
         >
           {darkMode ? (
             <Sun className="w-5 h-5" />
@@ -1615,6 +1620,15 @@ function AdminTopBar({
         <div
           className="ml-3 flex items-center gap-2 cursor-pointer"
           onClick={() => navigate("profile")}
+          role="button"
+          tabIndex={0}
+          aria-label="Ir a mi perfil"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("profile");
+            }
+          }}
         >
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
             {userName.charAt(0).toUpperCase()}
@@ -1736,6 +1750,14 @@ function LandingScreen({
           fetchPriority="high"
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+
+        {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
+            garantizar el contraste del texto blanco sobre la foto, sin tocar
+            los colores de marca. El lado derecho queda limpio para ver la pizza. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] bg-gradient-to-r from-black/65 via-black/30 to-transparent"
         />
 
         {/* Contenido sobre la zona oscura izquierda */}
@@ -1960,6 +1982,15 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalles de ${favorita.name}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onOpenDetail(favorita);
+                      }
+                    }}
                     className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-200 ease-out cursor-pointer flex flex-col motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
                   >
                     {/* Image */}
@@ -1967,6 +1998,8 @@ function LandingScreen({
                       <img
                         src={favorita.image}
                         alt={favorita.name}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
                       />
                       {/* Estado del producto (arriba a la izquierda, 12 px)
@@ -2710,6 +2743,7 @@ function CatalogScreen({
               setPage(1);
             }}
             placeholder="Buscar pizza..."
+            aria-label="Buscar pizza en el menú"
             className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
           />
         </div>
@@ -5101,6 +5135,7 @@ function LoginScreen({
               }}
               type="email"
               placeholder="correo@lasirena.com"
+              aria-label="Correo electrónico"
               ref={validacion.refCampo("email")}
               onKeyDown={validacion.onKeyDownCampo("email", {
                 errores: errors,
@@ -5128,6 +5163,7 @@ function LoginScreen({
                }}
               placeholder="••••••••"
               autoComplete="current-password"
+              ariaLabel="Contraseña"
               inputRef={validacion.refCampo("password")}
               onKeyDown={validacion.onKeyDownCampo("password", {
                 errores: errors,
@@ -5844,6 +5880,7 @@ function RegisterScreen({
               <select
                 value={form.docType}
                 ref={validacion.refCampo("docType")}
+                aria-label="Tipo de documento"
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
@@ -5874,6 +5911,7 @@ function RegisterScreen({
                 type="text"
                  inputMode="numeric"
                  placeholder="Ej: 12345678"
+                aria-label="Número de documento"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
                 className={authInputCls(errores.docNum, "h-10")}
@@ -5929,6 +5967,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
+                  ariaLabel={label}
                   cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
@@ -5942,6 +5981,7 @@ function RegisterScreen({
                   type={type}
                   inputMode={numeric ? "numeric" : undefined}
                   placeholder={placeholder}
+                  aria-label={label}
                   ref={validacion.refCampo(key)}
                   onBlur={key === "name" ? () => setForm(p => ({ ...p, name: normalizarNombrePersona(p.name) })) : undefined}
                   onKeyDown={teclaEnRegistro(key)}
