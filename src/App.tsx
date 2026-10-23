@@ -53,44 +53,32 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
-import imgCocaCola from "@/assets/img/Coca-Cola.png";
+import imgCocaCola from "@/assets/img/Coca-Cola.webp";
 import fondoBienvenidoDark from "@/assets/img/bienvenido-la-sirena-dark.webp";
 import fondoBienvenidoLight from "@/assets/img/bienvenido-la-sirena-light.webp";
-import pizzaHero from "@/assets/img/image-23.png";
-import imagenLocal from "@/assets/img/imagen_local.png";
-import lasanaCarne from "@/assets/img/lasaña_carne.png";
-import lasanaMixta from "@/assets/img/lasaña_mixta.png";
-import lasanaPollo from "@/assets/img/lasaña_pollo.png";
-import logoBlanco from "@/assets/img/logo-blanco.png";
-import logoClaro from "@/assets/img/logoclaro2.png";
-import imgPepsi from "@/assets/img/Pepsi.png";
-import pizzaCarnes from "@/assets/img/pizza_carnes.png";
-import pizzaCañon from "@/assets/img/pizza_cañon.png";
-import pizzaHawaii from "@/assets/img/pizza_hawaii.png";
-import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.png";
-import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
-import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
-import pizzaPollo from "@/assets/img/pizza_pollo.png";
-import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
-import imgPremio from "@/assets/img/Premio.png";
-import imgQuatro from "@/assets/img/Quatro.png";
+import pizzaHero from "@/assets/img/image-23.webp";
+import imagenLocal from "@/assets/img/imagen_local.webp";
+import lasanaCarne from "@/assets/img/lasaña_carne.webp";
+import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
+import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
+import logoBlanco from "@/assets/img/logo-blanco.webp";
+import logoClaro from "@/assets/img/logoclaro2.webp";
+import imgPepsi from "@/assets/img/Pepsi.webp";
+import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
+import pizzaCañon from "@/assets/img/pizza_cañon.webp";
+import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
+import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.webp";
+import pizzaMaicitos from "@/assets/img/pizza_maicitos.webp";
+import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
+import pizzaPollo from "@/assets/img/pizza_pollo.webp";
+import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
+import imgPremio from "@/assets/img/Premio.webp";
+import imgQuatro from "@/assets/img/Quatro.webp";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
@@ -119,7 +107,7 @@ import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
-import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
+import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
@@ -147,13 +135,11 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
-import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
 import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificacionService";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
-import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
   GestionCompra,
   OrdenCompra,
@@ -180,20 +166,22 @@ import {
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { ProductosPerecederosScreen, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
 import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/cpn/services/noConformesApi";
-import { ProductoTerminadoScreen } from "@/features/productos/pages/ProductoTerminadoScreen";
-import {
-  PurchasesScreen
-} from "@/features/compras/pages/PurchasesScreen";
-import { RecepcionCompraScreen } from "@/features/orden-compra/pages/RecepcionCompraScreen";
-import {
-  SalesChartScreen,
-} from "@/features/dashboard/pages/SalesChartScreen";
-import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
-import {
-  SuppliersScreen
-} from "@/features/proveedores/pages/SuppliersScreen";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
-import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
+
+// ─── Code splitting (React.lazy) ───
+// Estas pantallas se importan SOLO como componente (no comparten constants ni
+// funciones con App), así que se cargan bajo demanda para reducir el bundle
+// inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
+const ProductoTerminadoScreen = lazy(() => import("@/features/productos/pages/ProductoTerminadoScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
+const PurchasesScreen = lazy(() => import("@/features/compras/pages/PurchasesScreen").then((m) => ({ default: m.PurchasesScreen })));
+const RecepcionCompraScreen = lazy(() => import("@/features/orden-compra/pages/RecepcionCompraScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
+const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
+const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardScreen").then((m) => ({ default: m.DashboardScreen })));
+const SuppliersScreen = lazy(() => import("@/features/proveedores/pages/SuppliersScreen").then((m) => ({ default: m.SuppliersScreen })));
+const DevolucionesScreen = lazy(() => import("@/features/devoluciones/pages/DevolucionesScreen").then((m) => ({ default: m.DevolucionesScreen })));
+const MisPedidosScreen = lazy(() => import("@/features/ventas/pages/MisPedidosScreen").then((m) => ({ default: m.MisPedidosScreen })));
+const MiPerfilScreen = lazy(() => import("@/features/usuarios/pages/MiPerfilScreen").then((m) => ({ default: m.MiPerfilScreen })));
+const GestionClientesScreen = lazy(() => import("@/features/clientes/pages/GestionClientesScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
 // ─────────────────────────── TYPES ───────────────────────────
 
@@ -239,11 +227,11 @@ interface Order {
   items: { name: string; qty: number; price: number }[];
   total: number;
   status:
-    | "pendiente"
-    | "en-produccion"
-    | "listo"
-    | "entregado"
-    | "cancelado";
+  | "pendiente"
+  | "en-produccion"
+  | "listo"
+  | "entregado"
+  | "cancelado";
   date: string;
   paymentMethod: string;
 }
@@ -390,7 +378,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Carne",
     description: "Lasaña de carne con salsa boloñesa, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_carne.png",
+    image: lasanaCarne,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -405,7 +393,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Pollo",
     description: "Lasaña de pollo con salsa blanca, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_pollo.png",
+    image: lasanaPollo,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -420,7 +408,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Mixta",
     description: "Lasaña mixta con carne y pollo, salsa boloñesa y queso gratinado.",
     price: 22000,
-    image: "/src/assets/img/lasaña_mixta.png",
+    image: lasanaMixta,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -436,7 +424,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Cuatro",
     description: "Botella de 2.5 L. Sabor cítrico y refrescante.",
     price: 3000,
-    image: "/src/assets/img/Quatro.png",
+    image: imgQuatro,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -451,7 +439,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Premium",
     description: "Botella de 2.5 L. Sabor frutal y refrescante.",
     price: 3500,
-    image: "/src/assets/img/Premio.png",
+    image: imgPremio,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -466,7 +454,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Coca-Cola",
     description: "Botella de 2.5 L. El sabor clásico de siempre.",
     price: 2500,
-    image: "/src/assets/img/Coca-Cola.png",
+    image: imgCocaCola,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -481,7 +469,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Pepsi",
     description: "Botella de 2.5 L. Sabor cola y refrescante.",
     price: 2500,
-    image: "/src/assets/img/Pepsi.png",
+    image: imgPepsi,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -916,22 +904,22 @@ const SCREEN_META: Partial<
 
 // Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
 const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
-  "gestion-roles":    KEY("Configuración","Roles"),
-  "users":            KEY("Configuración","Usuarios"),
-  "empleados":        KEY("Producción","Empleados"),
-  "supplies":          KEY("Compras",    "Insumos"),
-  "suppliers":         KEY("Compras",    "Proveedores"),
-  "orden-compra":      KEY("Compras",    "Orden de Compra"),
-  "nueva-orden-compra": KEY("Compras",    "Orden de Compra"),
-  "gestion-compra":    KEY("Compras",    "Compra"),
-  "nueva-compra":       KEY("Compras",    "Compra"),
-  "cat-producto":      KEY("Producción", "Categoría de Producto"),
+  "gestion-roles": KEY("Configuración", "Roles"),
+  "users": KEY("Configuración", "Usuarios"),
+  "empleados": KEY("Producción", "Empleados"),
+  "supplies": KEY("Compras", "Insumos"),
+  "suppliers": KEY("Compras", "Proveedores"),
+  "orden-compra": KEY("Compras", "Orden de Compra"),
+  "nueva-orden-compra": KEY("Compras", "Orden de Compra"),
+  "gestion-compra": KEY("Compras", "Compra"),
+  "nueva-compra": KEY("Compras", "Compra"),
+  "cat-producto": KEY("Producción", "Categoría de Producto"),
   "gestion-productos": KEY("Producción", "Productos"),
   "production-orders": KEY("Producción", "Orden de Producción"),
-  "perecederos":       KEY("Producción", "Producto No Conforme"),
-  "clientes":          KEY("Ventas",     "Clientes"),
-  "ventas-pedidos":    KEY("Ventas",     "Ventas"),
-  "devoluciones":      KEY("Ventas",     "Devoluciones"),
+  "perecederos": KEY("Producción", "Producto No Conforme"),
+  "clientes": KEY("Ventas", "Clientes"),
+  "ventas-pedidos": KEY("Ventas", "Ventas"),
+  "devoluciones": KEY("Ventas", "Devoluciones"),
 };
 
 const DASHBOARD_PERM_KEY = KEY("Dashboard", "Dashboard");
@@ -1257,9 +1245,8 @@ function Sidebar({
       ref={asideRef}
       role="navigation"
       aria-label="Menú principal"
-      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${
-        esMovil ? "max-w-[80vw]" : ""
-      } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
+      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil ? "max-w-[80vw]" : ""
+        } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
     >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border shrink-0">
@@ -1401,11 +1388,10 @@ function PublicNav({
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 h-20 transition-all duration-400 rounded-b-3xl ${
-        scrolled
+      className={`fixed top-0 left-0 right-0 z-50 h-20 transition-all duration-400 rounded-b-3xl ${scrolled
           ? "bg-card/85 backdrop-blur-xl shadow-lg shadow-black/[0.06] border-b border-border"
           : "bg-card shadow-sm"
-      }`}
+        }`}
     >
       <div className="max-w-7xl mx-auto px-6 h-full flex flex-wrap items-center justify-between gap-x-3">
         {/* Logo */}
@@ -1460,6 +1446,7 @@ function PublicNav({
           <button
             onClick={() => navigate("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
+            aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
@@ -1484,9 +1471,8 @@ function PublicNav({
               onClick={() =>
                 navigate(isStaff ? "store-profile" : "client-profile")
               }
-              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${
-                loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
-              }`}
+              className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
+                }`}
               title="Mi perfil"
             >
               {(loggedInUser?.iniciales.charAt(0) ?? (isStaff ? "G" : "S")).toUpperCase()}
@@ -1505,6 +1491,7 @@ function PublicNav({
             onClick={() => setDarkMode(!darkMode)}
             className="w-10 h-10 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
             title="Cambiar tema"
+            aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
             {darkMode ? (
               <Sun className="w-4 h-4" />
@@ -1619,6 +1606,8 @@ function AdminTopBar({
         <button
           onClick={() => navigate("landing")}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          title="Ir a la tienda"
+          aria-label="Ir a la tienda"
         >
           <Store className="w-5 h-5" />
         </button>
@@ -1626,6 +1615,7 @@ function AdminTopBar({
           onClick={() => setDarkMode(!darkMode)}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
           title={darkMode ? "Modo claro" : "Modo oscuro"}
+          aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
         >
           {darkMode ? (
             <Sun className="w-5 h-5" />
@@ -1636,6 +1626,15 @@ function AdminTopBar({
         <div
           className="ml-3 flex items-center gap-2 cursor-pointer"
           onClick={() => navigate("profile")}
+          role="button"
+          tabIndex={0}
+          aria-label="Ir a mi perfil"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("profile");
+            }
+          }}
         >
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
             {userName.charAt(0).toUpperCase()}
@@ -1747,11 +1746,24 @@ function LandingScreen({
     <div>
       {/* Hero – full width con imagen de fondo */}
       <section className="relative w-full min-h-screen overflow-hidden">
-        {/* Imagen de fondo full-bleed */}
+        {/* Imagen de fondo full-bleed. Es el LCP de la página: por eso lleva
+            fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy. */}
         <img
           src={pizzaHero}
           alt="Pizza pepperoni artesanal La Sirena recién horneada"
+          width={1536}
+          height={1024}
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+
+        {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
+            garantizar el contraste del texto blanco sobre la foto, sin tocar
+            los colores de marca. El lado derecho queda limpio para ver la pizza. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] bg-gradient-to-r from-black/65 via-black/30 to-transparent"
         />
 
         {/* Contenido sobre la zona oscura izquierda */}
@@ -1976,6 +1988,15 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalles de ${favorita.name}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onOpenDetail(favorita);
+                      }
+                    }}
                     className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-200 ease-out cursor-pointer flex flex-col motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
                   >
                     {/* Image */}
@@ -1983,6 +2004,8 @@ function LandingScreen({
                       <img
                         src={favorita.image}
                         alt={favorita.name}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
                       />
                       {/* Estado del producto (arriba a la izquierda, 12 px)
@@ -2039,6 +2062,8 @@ function LandingScreen({
                 <img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -2439,11 +2464,11 @@ function ProductCard({
       : max === 0
         ? "Agotado"
         : mensajeMaximoDe(
-            p.name,
-            max,
-            enCarrito?.size || tamanoDefecto,
-            tope.elaborado,
-          );
+          p.name,
+          max,
+          enCarrito?.size || tamanoDefecto,
+          tope.elaborado,
+        );
   return (
     <motion.div
       data-producto-id={p.id}
@@ -2459,9 +2484,8 @@ function ProductCard({
         <img
           src={p.image}
           alt={p.name}
-          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${
-            noDisponible ? "grayscale opacity-60" : ""
-          } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""
+            } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         {/* Etiqueta de estado: fondo sólido, arriba a la izquierda con 12 px
             de separación, legible sobre cualquier foto (claras, oscuras o de
@@ -2724,6 +2748,7 @@ function CatalogScreen({
               setPage(1);
             }}
             placeholder="Buscar pizza..."
+            aria-label="Buscar pizza en el menú"
             className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
           />
         </div>
@@ -2735,8 +2760,8 @@ function CatalogScreen({
               setPage(1);
             }}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
-              Todas
-            </button>
+            Todas
+          </button>
           {filtros.map((c) => (
             <button
               key={c.id}
@@ -2745,9 +2770,9 @@ function CatalogScreen({
                 setPage(1);
               }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
-                {c.nombre}
-              </button>
-            ))}
+              {c.nombre}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -2801,11 +2826,10 @@ function CatalogScreen({
                   key={n}
                   onClick={() => irAPagina(n)}
                   aria-current={n === page ? "page" : undefined}
-                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${
-                    n === page
+                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${n === page
                       ? "bg-primary text-white"
                       : "border border-border text-muted-foreground hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   {n}
                 </button>
@@ -3301,9 +3325,9 @@ function CartScreen({
   const sinHorariosHoy = horasDisponibles.length === 0;
   const [horaSel, minutoSel] = horaRecogida
     ? [
-        parseInt(horaRecogida.split(":")[0], 10),
-        parseInt(horaRecogida.split(":")[1] ?? "0", 10),
-      ]
+      parseInt(horaRecogida.split(":")[0], 10),
+      parseInt(horaRecogida.split(":")[1] ?? "0", 10),
+    ]
     : [null, null];
   const seleccionValida =
     horaSel !== null &&
@@ -3415,9 +3439,9 @@ function CartScreen({
     if (!datosValidos) {
       toast.error(
         errDocumento ??
-          errNombre ??
-          errTelefono ??
-          "Revisa los datos de tu pedido",
+        errNombre ??
+        errTelefono ??
+        "Revisa los datos de tu pedido",
       );
       // Muestra todos los errores y lleva el foco al primer campo inválido.
       validacionDatos.enfocarPrimero({
@@ -3646,129 +3670,127 @@ function CartScreen({
                 max === undefined
                   ? ""
                   : mensajeMaximoDe(
-                      item.product.name,
-                      max,
-                      item.size || undefined,
-                      limite.elaborado,
-                    );
+                    item.product.name,
+                    max,
+                    item.size || undefined,
+                    limite.elaborado,
+                  );
               return (
-              <div
-                key={item.id}
-                // Punto 7: una línea pasada del máximo se marca en rojo.
-                className={`bg-card border rounded-2xl p-4 flex gap-4 ${
-                  excedida
-                    ? "border-red-400 dark:border-red-700"
-                    : itemNoDisponible
-                      ? "border-zinc-400 dark:border-zinc-600"
-                      : "border-border"
-                }`}
-              >
-                <img
-                  src={item.product.image}
-                  alt={item.product.name}
-                  className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-foreground">
-                        {item.product.name}
-                      </h3>
-                      {/* Estado del producto HOY en el catálogo: la línea se
+                <div
+                  key={item.id}
+                  // Punto 7: una línea pasada del máximo se marca en rojo.
+                  className={`bg-card border rounded-2xl p-4 flex gap-4 ${excedida
+                      ? "border-red-400 dark:border-red-700"
+                      : itemNoDisponible
+                        ? "border-zinc-400 dark:border-zinc-600"
+                        : "border-border"
+                    }`}
+                >
+                  <img
+                    src={item.product.image}
+                    alt={item.product.name}
+                    className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-foreground">
+                          {item.product.name}
+                        </h3>
+                        {/* Estado del producto HOY en el catálogo: la línea se
                           marca pero no se borra sola. */}
-                      <EstadoMenuBadge
-                        estado={estadoDeProducto(item.product)}
-                        className="mt-1.5"
-                      />
-                      {item.size && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {item.size}
-                        </p>
-                      )}
-                      {item.selectedExtras.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          + {item.selectedExtras.join(", ")}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => remove(item.id)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2 bg-muted rounded-xl p-0.5">
+                        <EstadoMenuBadge
+                          estado={estadoDeProducto(item.product)}
+                          className="mt-1.5"
+                        />
+                        {item.size && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {item.size}
+                          </p>
+                        )}
+                        {item.selectedExtras.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            + {item.selectedExtras.join(", ")}
+                          </p>
+                        )}
+                      </div>
                       <button
-                        onClick={() =>
-                          updateQty(item.id, item.quantity - 1)
-                        }
-                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                        onClick={() => remove(item.id)}
+                        className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                      {/* Bloque 5 (punto 3): campo editable con el teclado;
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2 bg-muted rounded-xl p-0.5">
+                        <button
+                          onClick={() =>
+                            updateQty(item.id, item.quantity - 1)
+                          }
+                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        {/* Bloque 5 (punto 3): campo editable con el teclado;
                           más del máximo se ajusta solo y avisa. */}
-                      <CantidadInput
-                        value={item.quantity}
-                        max={max}
-                        mensajeMaximo={mensajeMax}
-                        onChange={(n) => updateQty(item.id, n)}
-                      />
-                      {/* Punto 4: no disponible o ya en el máximo → no se
+                        <CantidadInput
+                          value={item.quantity}
+                          max={max}
+                          mensajeMaximo={mensajeMax}
+                          onChange={(n) => updateQty(item.id, n)}
+                        />
+                        {/* Punto 4: no disponible o ya en el máximo → no se
                           puede aumentar (el título lleva el mensaje). */}
-                      <button
-                        onClick={() =>
-                          updateQty(item.id, item.quantity + 1)
-                        }
-                        disabled={itemNoDisponible || enTope}
-                        title={
-                          itemNoDisponible
-                            ? "No disponible por ahora"
-                            : enTope
-                              ? mensajeMax
-                              : "Aumentar cantidad"
-                        }
-                        className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-end gap-6">
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Precio unitario</p>
-                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                          {fmt(item.sizePrice + item.extrasPrice)}
-                        </p>
+                        <button
+                          onClick={() =>
+                            updateQty(item.id, item.quantity + 1)
+                          }
+                          disabled={itemNoDisponible || enTope}
+                          title={
+                            itemNoDisponible
+                              ? "No disponible por ahora"
+                              : enTope
+                                ? mensajeMax
+                                : "Aumentar cantidad"
+                          }
+                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Subtotal</p>
-                        <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                          {fmt(cartTotal(item))}
-                        </p>
+                      <div className="flex items-center justify-end gap-6">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Precio unitario</p>
+                          <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                            {fmt(item.sizePrice + item.extrasPrice)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Subtotal</p>
+                          <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
+                            {fmt(cartTotal(item))}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {/* Bloque 5 (puntos 4, 5 y 7): mensaje de máximo —rojo si
+                    {/* Bloque 5 (puntos 4, 5 y 7): mensaje de máximo —rojo si
                       la línea pasa del máximo, ámbar si está en él— y aviso
                       de stock bajo de bebidas, visibles sin el cursor. */}
-                  {enTope && (
-                    <p
-                      className={`mt-2 text-xs font-semibold ${
-                        excedida
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-amber-700 dark:text-amber-400"
-                      }`}
-                    >
-                      {mensajeMax}
-                    </p>
-                  )}
-                  {bajoStock && (
-                    <AvisoStockBajo max={max} className="mt-2 inline-block" />
-                  )}
+                    {enTope && (
+                      <p
+                        className={`mt-2 text-xs font-semibold ${excedida
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-amber-700 dark:text-amber-400"
+                          }`}
+                      >
+                        {mensajeMax}
+                      </p>
+                    )}
+                    {bajoStock && (
+                      <AvisoStockBajo max={max} className="mt-2 inline-block" />
+                    )}
+                  </div>
                 </div>
-              </div>
               );
             })}
           </div>
@@ -3829,273 +3851,270 @@ function CartScreen({
         {checkoutStep === 1 && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3
-                  className="text-lg font-bold text-foreground"
-                  style={{ fontFamily: SERIF }}
-                >
-                  Resumen de tu pedido
-                </h3>
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {/* Body: 2 cols */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
-                {/* LEFT: items */}
-                <div className="px-5 py-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                    Descripción del pedido
-                  </p>
-                  {nombreCliente && (
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Cliente:{" "}
-                      <span className="font-semibold text-foreground">
-                        {nombreCliente}
-                      </span>
-                    </p>
-                  )}
-                  <div className="space-y-3">
-                    {cart.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-3"
-                      >
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-10 h-10 rounded-lg object-cover shrink-0 bg-muted"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {item.product.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.size ? `${item.size} · ` : ""}x
-                            {item.quantity}
-                          </p>
-                          {item.selectedExtras.length > 0 && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              +{item.selectedExtras.join(", ")}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end shrink-0 text-right">
-                          <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
-                            {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
-                          </span>
-                          <span
-                            className="text-sm font-bold text-foreground"
-                            style={{ fontFamily: MONO }}
-                          >
-                            {fmt(cartTotal(item))}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Mismas filas que el panel "Resumen" del carrito, para
-                      que el cliente lea el mismo desglose en las dos vistas.
-                      La divisoria ya viene dentro de ResumenTotales. */}
-                  <ResumenTotales
-                    subtotal={subtotal}
-                    className="mt-4 space-y-2 text-sm"
-                  />
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <h3
+                    className="text-lg font-bold text-foreground"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    Resumen de tu pedido
+                  </h3>
+                  <button
+                    onClick={() => setCheckoutStep(0)}
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                {/* RIGHT: payment method + pickup time */}
-                <div className="px-5 py-5 space-y-5">
-                  <div>
+                {/* Body: 2 cols */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+                  {/* LEFT: items */}
+                  <div className="px-5 py-5">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Método de pago
+                      Descripción del pedido
                     </p>
-                    <div className="space-y-2">
-                      {["Nequi", "Bancolombia"].map((m) => (
-                        <label
-                          key={m}
-                          className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${payment === m ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                    {nombreCliente && (
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Cliente:{" "}
+                        <span className="font-semibold text-foreground">
+                          {nombreCliente}
+                        </span>
+                      </p>
+                    )}
+                    <div className="space-y-3">
+                      {cart.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3"
                         >
-                          <div
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${payment === m ? "border-primary" : "border-muted-foreground"}`}
-                          >
-                            {payment === m && (
-                              <div className="w-2 h-2 rounded-full bg-primary" />
+                          <img
+                            src={item.product.image}
+                            alt={item.product.name}
+                            className="w-10 h-10 rounded-lg object-cover shrink-0 bg-muted"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {item.product.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.size ? `${item.size} · ` : ""}x
+                              {item.quantity}
+                            </p>
+                            {item.selectedExtras.length > 0 && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                +{item.selectedExtras.join(", ")}
+                              </p>
                             )}
                           </div>
-                          <input
-                            type="radio"
-                            name="payment"
-                            className="sr-only"
-                            value={m}
-                            checked={payment === m}
-                            onChange={() => setPayment(m)}
-                          />
-                          <span className="text-sm font-medium text-foreground">
-                            {PAYMENT_INFO[m].icon} {m}
-                          </span>
-                        </label>
+                          <div className="flex flex-col items-end shrink-0 text-right">
+                            <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
+                              {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
+                            </span>
+                            <span
+                              className="text-sm font-bold text-foreground"
+                              style={{ fontFamily: MONO }}
+                            >
+                              {fmt(cartTotal(item))}
+                            </span>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    {/* Mismas filas que el panel "Resumen" del carrito, para
+                      que el cliente lea el mismo desglose en las dos vistas.
+                      La divisoria ya viene dentro de ResumenTotales. */}
+                    <ResumenTotales
+                      subtotal={subtotal}
+                      className="mt-4 space-y-2 text-sm"
+                    />
                   </div>
+                  {/* RIGHT: payment method + pickup time */}
+                  <div className="px-5 py-5 space-y-5">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                        Método de pago
+                      </p>
+                      <div className="space-y-2">
+                        {["Nequi", "Bancolombia"].map((m) => (
+                          <label
+                            key={m}
+                            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${payment === m ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${payment === m ? "border-primary" : "border-muted-foreground"}`}
+                            >
+                              {payment === m && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <input
+                              type="radio"
+                              name="payment"
+                              className="sr-only"
+                              value={m}
+                              checked={payment === m}
+                              onChange={() => setPayment(m)}
+                            />
+                            <span className="text-sm font-medium text-foreground">
+                              {PAYMENT_INFO[m].icon} {m}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
 
-                  {/* Hora de recogida: dos selects (hora y minutos de 15 en
+                    {/* Hora de recogida: dos selects (hora y minutos de 15 en
                       15), siempre en p. m., de 4:00 p. m. a 9:45 p. m., y solo
                       con los horarios que aún no pasaron hoy. */}
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Hora de recogida
-                    </p>
-                    <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
-                      <p>
-                        Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
-                        <strong className="text-foreground">10:00 p. m.</strong>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                        Hora de recogida
                       </p>
-                      <p className="text-xs mt-0.5">
-                        El último horario de recogida es{" "}
-                        <strong className="text-foreground">9:45 p. m.</strong>
-                      </p>
-                    </div>
-                    <div
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${
-                        horaFueraDeRango(horaRecogida)
-                          ? "border-red-400 focus-within:ring-red-300"
-                          : "border-border"
-                      }`}
-                    >
-                      <span className="text-base shrink-0">🕐</span>
-                      <select
-                        value={seleccionValida && horaSel !== null ? horaSel : ""}
-                        disabled={sinHorariosHoy}
-                        aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
-                        onChange={(e) => {
-                          const nuevaHora = Number(e.target.value);
-                          const minutos = minutosDisponiblesDe(nuevaHora);
-                          const minutoActual = minutos.includes(minutoSel ?? -1)
-                            ? (minutoSel as number)
-                            : minutos[0];
-                          setHoraRecogida(
-                            `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
-                          );
-                        }}
-                        className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <option value="" disabled>
-                          --:--
-                        </option>
-                        {horasDisponibles.map((h) => (
-                          <option key={h} value={h}>
-                            {`${h > 12 ? h - 12 : h}:00 p. m.`}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={
-                          seleccionValida && minutoSel !== null ? minutoSel : ""
-                        }
-                        disabled={
-                          sinHorariosHoy ||
-                          horaSel === null ||
-                          !horasDisponibles.includes(horaSel)
-                        }
-                        aria-label="Minutos de la hora de recogida"
-                        onChange={(e) => {
-                          if (horaSel === null) return;
-                          setHoraRecogida(
-                            `${String(horaSel).padStart(2, "0")}:${String(
-                              Number(e.target.value),
-                            ).padStart(2, "0")}`,
-                          );
-                        }}
-                        className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <option value="" disabled>
-                          --
-                        </option>
-                        {(
-                          horaSel !== null ? minutosDisponiblesDe(horaSel) : []
-                        ).map((m) => (
-                          <option key={m} value={m}>
-                            {String(m).padStart(2, "0")}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {sinHorariosHoy ? (
-                      <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
-                        ⚠ Ya no hay horarios disponibles para hoy
-                      </p>
-                    ) : (
-                      horaRecogida && (
-                        <p
-                          className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${
-                            horaYaPaso(horaRecogida)
-                              ? "text-red-500"
-                              : horaFueraDeRango(horaRecogida)
-                                ? "text-red-500"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {horaFueraDeRango(horaRecogida)
-                            ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
-                            : horaYaPaso(horaRecogida)
-                              ? "⚠ Esta hora no está disponible — ya pasó"
-                              : `Recogerás a las ${hora12(horaRecogida)}`}
+                      <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
+                        <p>
+                          Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
+                          <strong className="text-foreground">10:00 p. m.</strong>
                         </p>
-                      )
-                    )}
+                        <p className="text-xs mt-0.5">
+                          El último horario de recogida es{" "}
+                          <strong className="text-foreground">9:45 p. m.</strong>
+                        </p>
+                      </div>
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${horaFueraDeRango(horaRecogida)
+                            ? "border-red-400 focus-within:ring-red-300"
+                            : "border-border"
+                          }`}
+                      >
+                        <span className="text-base shrink-0">🕐</span>
+                        <select
+                          value={seleccionValida && horaSel !== null ? horaSel : ""}
+                          disabled={sinHorariosHoy}
+                          aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
+                          onChange={(e) => {
+                            const nuevaHora = Number(e.target.value);
+                            const minutos = minutosDisponiblesDe(nuevaHora);
+                            const minutoActual = minutos.includes(minutoSel ?? -1)
+                              ? (minutoSel as number)
+                              : minutos[0];
+                            setHoraRecogida(
+                              `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
+                            );
+                          }}
+                          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <option value="" disabled>
+                            --:--
+                          </option>
+                          {horasDisponibles.map((h) => (
+                            <option key={h} value={h}>
+                              {`${h > 12 ? h - 12 : h}:00 p. m.`}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={
+                            seleccionValida && minutoSel !== null ? minutoSel : ""
+                          }
+                          disabled={
+                            sinHorariosHoy ||
+                            horaSel === null ||
+                            !horasDisponibles.includes(horaSel)
+                          }
+                          aria-label="Minutos de la hora de recogida"
+                          onChange={(e) => {
+                            if (horaSel === null) return;
+                            setHoraRecogida(
+                              `${String(horaSel).padStart(2, "0")}:${String(
+                                Number(e.target.value),
+                              ).padStart(2, "0")}`,
+                            );
+                          }}
+                          className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <option value="" disabled>
+                            --
+                          </option>
+                          {(
+                            horaSel !== null ? minutosDisponiblesDe(horaSel) : []
+                          ).map((m) => (
+                            <option key={m} value={m}>
+                              {String(m).padStart(2, "0")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {sinHorariosHoy ? (
+                        <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
+                          ⚠ Ya no hay horarios disponibles para hoy
+                        </p>
+                      ) : (
+                        horaRecogida && (
+                          <p
+                            className={`text-xs mt-1.5 font-medium flex items-center gap-1 ${horaYaPaso(horaRecogida)
+                                ? "text-red-500"
+                                : horaFueraDeRango(horaRecogida)
+                                  ? "text-red-500"
+                                  : "text-muted-foreground"
+                              }`}
+                          >
+                            {horaFueraDeRango(horaRecogida)
+                              ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                              : horaYaPaso(horaRecogida)
+                                ? "⚠ Esta hora no está disponible — ya pasó"
+                                : `Recogerás a las ${hora12(horaRecogida)}`}
+                          </p>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {/* Footer */}
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    if (sinHorariosHoy) {
-                      toast.error("Ya no hay horarios disponibles para hoy");
-                      return;
-                    }
-                    if (!horaRecogida) {
-                      toast.error("Por favor ingresa la hora de recogida");
-                      return;
-                    }
-                    const minutos = minutosDeHora(horaRecogida);
-                    if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-                      toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
-                      return;
-                    }
-                    if (horaYaPaso(horaRecogida)) {
-                      toast.error("Esta hora no está disponible — ya pasó");
-                      return;
-                    }
-                    setCheckoutStep(2);
-                  }}
-                  disabled={sinHorariosHoy}
-                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${
-                    sinHorariosHoy
-                      ? "opacity-50 cursor-not-allowed"
-                      : "cursor-pointer"
-                  }`}
-                >
-                  Continuar <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </motion.div>
+                {/* Footer */}
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button
+                    onClick={() => setCheckoutStep(0)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (sinHorariosHoy) {
+                        toast.error("Ya no hay horarios disponibles para hoy");
+                        return;
+                      }
+                      if (!horaRecogida) {
+                        toast.error("Por favor ingresa la hora de recogida");
+                        return;
+                      }
+                      const minutos = minutosDeHora(horaRecogida);
+                      if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
+                        toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+                        return;
+                      }
+                      if (horaYaPaso(horaRecogida)) {
+                        toast.error("Esta hora no está disponible — ya pasó");
+                        return;
+                      }
+                      setCheckoutStep(2);
+                    }}
+                    disabled={sinHorariosHoy}
+                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${sinHorariosHoy
+                        ? "opacity-50 cursor-not-allowed"
+                        : "cursor-pointer"
+                      }`}
+                  >
+                    Continuar <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
         )}
@@ -4148,15 +4167,13 @@ function CartScreen({
                       inputMode="numeric"
                       ref={validacionDatos.refCampo("documento")}
                       {...validacionDatos.ariaCampo("documento", verErrDoc)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrDoc ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     <p
                       id={verErrDoc ? validacionDatos.idError("documento") : undefined}
-                      className={`text-xs mt-1 ${
-                        verErrDoc ? "text-red-500 dark:text-red-400" : "text-muted-foreground"
-                      }`}
+                      className={`text-xs mt-1 ${verErrDoc ? "text-red-500 dark:text-red-400" : "text-muted-foreground"
+                        }`}
                     >
                       {verErrDoc ?? "Entre 6 y 10 dígitos"}
                     </p>
@@ -4180,9 +4197,8 @@ function CartScreen({
                       placeholder="Ej: Laura Martínez"
                       ref={validacionDatos.refCampo("nombre")}
                       {...validacionDatos.ariaCampo("nombre", verErrNom)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrNom ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     {verErrNom && (
                       <p id={validacionDatos.idError("nombre")} className="text-xs text-red-500 dark:text-red-400 mt-1">
@@ -4210,9 +4226,8 @@ function CartScreen({
                       inputMode="tel"
                       ref={validacionDatos.refCampo("telefono")}
                       {...validacionDatos.ariaCampo("telefono", verErrTel)}
-                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                        verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
-                      }`}
+                      className={`w-full px-4 py-2.5 bg-muted rounded-xl border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${verErrTel ? "border-red-400 bg-red-50/30" : "border-border"
+                        }`}
                     />
                     {verErrTel && (
                       <p id={validacionDatos.idError("telefono")} className="text-xs text-red-500 dark:text-red-400 mt-1">
@@ -4240,81 +4255,81 @@ function CartScreen({
         {checkoutStep === 2 && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <div className="flex items-center gap-2">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCheckoutStep(1)}
+                      className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <h3
+                      className="text-lg font-bold text-foreground"
+                      style={{ fontFamily: SERIF }}
+                    >
+                      Datos de pago · {payment}
+                    </h3>
+                  </div>
                   <button
-                    onClick={() => setCheckoutStep(1)}
+                    onClick={() => setCheckoutStep(0)}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
-                  <h3
-                    className="text-lg font-bold text-foreground"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    Datos de pago · {payment}
-                  </h3>
                 </div>
-                <button
-                  onClick={() => setCheckoutStep(0)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {/* Body: dos columnas — izquierda cuenta + QR, derecha
+                {/* Body: dos columnas — izquierda cuenta + QR, derecha
                   comprobante. El cuerpo del pago es un componente compartido
                   (PasoPagoTransferencia) que también usa el modal
                   "Completar pago" de Mis pedidos. */}
-              <PasoPagoTransferencia
-                payment={payment}
-                subtotal={subtotal}
-                qrDataUrl={qrDataUrl}
-                comprobante={comprobante}
-                onQuitarComprobante={() => {
-                  setComprobante("");
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
-                subiendo={subiendo}
-                fileRef={fileRef}
-                onFileChange={(file) => {
-                  void subir(file, "comprobantes").then((url) => {
-                    if (url) setComprobante(url);
-                  });
-                }}
-              />
-              {/* Footer */}
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
-                <button
-                  onClick={() => setCheckoutStep(1)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Atrás
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {loading
-                    ? "Enviando..."
-                    : "Enviar"}
-                </button>
-              </div>
-            </motion.div>
+                <PasoPagoTransferencia
+                  payment={payment}
+                  subtotal={subtotal}
+                  qrDataUrl={qrDataUrl}
+                  comprobante={comprobante}
+                  onQuitarComprobante={() => {
+                    setComprobante("");
+                    if (fileRef.current) fileRef.current.value = "";
+                  }}
+                  subiendo={subiendo}
+                  fileRef={fileRef}
+                  onFileChange={(file) => {
+                    void subir(file, "comprobantes").then((url) => {
+                      if (url) setComprobante(url);
+                    });
+                  }}
+                />
+                {/* Footer */}
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button
+                    onClick={() => setCheckoutStep(1)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Atrás
+                  </button>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={loading}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    {loading
+                      ? "Enviando..."
+                      : "Enviar"}
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
         )}
@@ -4517,49 +4532,49 @@ function ClientProfileScreen({
             </div>
           )}
         </div>
-         {/* Fields */}
-         <div className="px-6 py-6 space-y-5">
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-             <div>
-               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                 <FileText className="w-3.5 h-3.5" /> Tipo de documento
-               </label>
-               <input
-                 type="text"
-                 value={tipoDocumento}
-                 readOnly
-                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
-               />
-               <p className="text-[11px] text-muted-foreground mt-1">
-                 Este campo no es editable
-               </p>
-             </div>
-             <div>
-               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                 <FileText className="w-3.5 h-3.5" /> Número de documento
-               </label>
-               <input
-                 type="text"
-                 value={loggedInUser?.numeroDocumento ?? "—"}
-                 readOnly
-                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
-               />
-               <p className="text-[11px] text-muted-foreground mt-1">
-                 Este campo no es editable
-               </p>
-             </div>
-           </div>
-           <div>
+        {/* Fields */}
+        <div className="px-6 py-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                <User className="w-3.5 h-3.5" /> Nombre completo
+                <FileText className="w-3.5 h-3.5" /> Tipo de documento
               </label>
-             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
-               {loggedInUser?.nombre ?? "Sebastián"}
-             </div>
-             <p className="text-[11px] text-muted-foreground mt-1">
-               Este campo no es editable
-             </p>
-           </div>
+              <input
+                type="text"
+                value={tipoDocumento}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Este campo no es editable
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+                <FileText className="w-3.5 h-3.5" /> Número de documento
+              </label>
+              <input
+                type="text"
+                value={loggedInUser?.numeroDocumento ?? "—"}
+                readOnly
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Este campo no es editable
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+              <User className="w-3.5 h-3.5" /> Nombre completo
+            </label>
+            <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
+              {loggedInUser?.nombre ?? "Sebastián"}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Este campo no es editable
+            </p>
+          </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
               <Mail className="w-3.5 h-3.5" /> Correo
@@ -4571,9 +4586,9 @@ function ClientProfileScreen({
                   type="email"
                   value={correo}
                   onChange={(e) => {
-                     const value = filtrarCorreo(e.target.value);
-                     setCorreo(value);
-                     setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
+                    const value = filtrarCorreo(e.target.value);
+                    setCorreo(value);
+                    setErrores((p) => ({ ...p, correo: validarCorreo(value) ?? undefined }));
                   }}
                   className={iCls(errores.correo)}
                   autoFocus
@@ -4591,9 +4606,9 @@ function ClientProfileScreen({
             )}
           </div>
           <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
-                <Phone className="w-3.5 h-3.5" /> Número de teléfono
-              </label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
+              <Phone className="w-3.5 h-3.5" /> Número de teléfono
+            </label>
             {editando ? (
               <>
                 <input
@@ -4781,9 +4796,8 @@ function AuthLayout({
           formularios vive dentro de las tarjetas, que si se anuncian. */}
       <div
         aria-hidden="true"
-        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
-          darkMode ? "opacity-0" : "opacity-100"
-        }`}
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${darkMode ? "opacity-0" : "opacity-100"
+          }`}
         style={{ background: RELLENO_CLARO }}
       >
         <div
@@ -4799,9 +4813,8 @@ function AuthLayout({
       </div>
       <div
         aria-hidden="true"
-        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${
-          darkMode ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 z-0 overflow-hidden transition-opacity duration-500 ${darkMode ? "opacity-100" : "opacity-0"
+          }`}
         style={{ background: RELLENO_OSCURO }}
       >
         <div
@@ -4981,11 +4994,11 @@ function LoginScreen({
       );
       const user = usuarioLocal
         ? {
-            ...usuarioLocal,
-            esSuperAdmin: usuarioApi.esSuperAdmin === true,
-            rolCuentaApi: usuarioApi.rol,
-            rolesSesionApi: usuarioApi.roles ?? [],
-          }
+          ...usuarioLocal,
+          esSuperAdmin: usuarioApi.esSuperAdmin === true,
+          rolCuentaApi: usuarioApi.rol,
+          rolesSesionApi: usuarioApi.roles ?? [],
+        }
         : undefined;
 
       if (user && !user.activo) {
@@ -5105,8 +5118,8 @@ function LoginScreen({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-      <div className="text-center mb-6">
-        <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
+        <div className="text-center mb-6">
+          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground dark:text-white"
@@ -5117,7 +5130,7 @@ function LoginScreen({
           <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
             Ingresa tus datos para continuar
           </p>
-      </div>
+        </div>
 
         <form
           onSubmit={(event) => {
@@ -5125,85 +5138,87 @@ function LoginScreen({
             handleLogin();
           }}
         >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-              Correo electrónico
-            </label>
-            <input
-              value={email}
-              onChange={(e) => {
-                 const value = filtrarCorreo(e.target.value);
-                 setEmail(value);
-                 setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
-              }}
-              type="email"
-              placeholder="correo@lasirena.com"
-              ref={validacion.refCampo("email")}
-              onKeyDown={validacion.onKeyDownCampo("email", {
-                errores: errors,
-                validar: () => validarCorreo(email),
-                aplicar: (campo, err) =>
-                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
-              })}
-              className={authInputCls(errors.email, "h-12")}
-              {...validacion.ariaCampo("email", errors.email)}
-            />
-            <MensajeError id={validacion.idError("email")} err={errors.email} />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
+                Correo electrónico
+              </label>
+              <input
+                value={email}
+                onChange={(e) => {
+                  const value = filtrarCorreo(e.target.value);
+                  setEmail(value);
+                  setErrors((p) => ({ ...p, email: validarCorreo(value) ?? undefined }));
+                }}
+                type="email"
+                placeholder="correo@lasirena.com"
+                aria-label="Correo electrónico"
+                ref={validacion.refCampo("email")}
+                onKeyDown={validacion.onKeyDownCampo("email", {
+                  errores: errors,
+                  validar: () => validarCorreo(email),
+                  aplicar: (campo, err) =>
+                    setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+                })}
+                className={authInputCls(errors.email, "h-12")}
+                {...validacion.ariaCampo("email", errors.email)}
+              />
+              <MensajeError id={validacion.idError("email")} err={errors.email} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
+                Contraseña
+              </label>
+              <PasswordField
+                value={password}
+                onChange={(v) => {
+                  setPassword(v);
+                  setErrors((p) => ({
+                    ...p,
+                    password: v ? undefined : "La contraseña es obligatoria",
+                  }));
+                }}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                ariaLabel="Contraseña"
+                inputRef={validacion.refCampo("password")}
+                onKeyDown={validacion.onKeyDownCampo("password", {
+                  errores: errors,
+                  validar: () =>
+                    password ? null : "La contraseña es obligatoria",
+                  aplicar: (campo, err) =>
+                    setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
+                })}
+                ariaInvalid={Boolean(errors.password)}
+                ariaDescribedBy={
+                  errors.password ? validacion.idError("password") : undefined
+                }
+                cls={authInputCls(errors.password, "h-12")}
+              />
+              <MensajeError id={validacion.idError("password")} err={errors.password} />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-              Contraseña
-            </label>
-            <PasswordField
-              value={password}
-               onChange={(v) => {
-                 setPassword(v);
-                 setErrors((p) => ({
-                   ...p,
-                   password: v ? undefined : "La contraseña es obligatoria",
-                 }));
-               }}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              inputRef={validacion.refCampo("password")}
-              onKeyDown={validacion.onKeyDownCampo("password", {
-                errores: errors,
-                validar: () =>
-                  password ? null : "La contraseña es obligatoria",
-                aplicar: (campo, err) =>
-                  setErrors((p) => ({ ...p, [campo]: err ?? undefined })),
-              })}
-              ariaInvalid={Boolean(errors.password)}
-              ariaDescribedBy={
-                errors.password ? validacion.idError("password") : undefined
-              }
-              cls={authInputCls(errors.password, "h-12")}
-            />
-            <MensajeError id={validacion.idError("password")} err={errors.password} />
+          <div className="text-right mt-2">
+            <button
+              type="button"
+              onClick={() => setShowForgot(true)}
+              className="text-sm text-primary font-medium hover:underline cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
           </div>
-        </div>
-        <div className="text-right mt-2">
-          <button
-            type="button"
-            onClick={() => setShowForgot(true)}
-            className="text-sm text-primary font-medium hover:underline cursor-pointer"
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-        </div>
 
-        <PrimaryBtn
-          type="submit"
-          size="md"
-          className="w-full mt-5 h-12"
-          disabled={loading}
-        >
-          {loading ? (
-            <RefreshCw className="w-5 h-5 animate-spin" />
-          ) : null}
-          {loading ? "Ingresando..." : "Iniciar sesión"}
-        </PrimaryBtn>
+          <PrimaryBtn
+            type="submit"
+            size="md"
+            className="w-full mt-5 h-12"
+            disabled={loading}
+          >
+            {loading ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : null}
+            {loading ? "Ingresando..." : "Iniciar sesión"}
+          </PrimaryBtn>
         </form>
 
         {rechazo && (
@@ -5368,12 +5383,12 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-      <div
-        className={AUTH_GLASS_OVERLAY}
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-      >
+    <div
+      className={AUTH_GLASS_OVERLAY}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <motion.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -5414,9 +5429,9 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               <input
                 value={forgotEmail}
                 onChange={(e) => {
-                   const value = filtrarCorreo(e.target.value);
-                   setForgotEmail(value);
-                   setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
+                  const value = filtrarCorreo(e.target.value);
+                  setForgotEmail(value);
+                  setErrores((p) => ({ ...p, forgotEmail: validarCorreo(value) ?? "" }));
                 }}
                 type="email"
                 placeholder="correo@lasirena.com"
@@ -5570,41 +5585,41 @@ function RegisterScreen({
   const [errores, setErrores] = useState<Record<string, string>>({});
   const setVal =
     (k: keyof typeof form) =>
-    (v: string) => {
-      const value = k === "email" ? filtrarCorreo(v) : k === "name" ? filtrarNombre(v) : v;
-      setForm((p) => ({ ...p, [k]: value }));
-      setErrores((prev) => {
-        const next = { ...prev };
-        if (k === "email") next.email = "";
-        if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
-        if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
-        if (k === "password") {
-          next.password = value ? validarContrasena(value) ?? "" : "";
-          // Al escribir la contraseña se recalcula también el confirm: si el
-          // usuario repitió la contraseña antes y luego cambió la primera,
-          // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
-          // un desajuste que acaba de producirse).
-          next.confirm = form.confirm
-            ? value === form.confirm
-              ? ""
-              : "Las contraseñas no coinciden"
-            : "";
-        }
-        if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
-        if (k === "name") next.name = validarNombre(value) ?? "";
-        return next;
-      });
-    };
+      (v: string) => {
+        const value = k === "email" ? filtrarCorreo(v) : k === "name" ? filtrarNombre(v) : v;
+        setForm((p) => ({ ...p, [k]: value }));
+        setErrores((prev) => {
+          const next = { ...prev };
+          if (k === "email") next.email = "";
+          if (k === "phone") next.phone = value ? validarTelefono(value) ?? "" : "";
+          if (k === "docNum") next.docNum = value ? validarDocumento(value, form.docType) ?? "" : "";
+          if (k === "password") {
+            next.password = value ? validarContrasena(value) ?? "" : "";
+            // Al escribir la contraseña se recalcula también el confirm: si el
+            // usuario repitió la contraseña antes y luego cambió la primera,
+            // el mensaje de "no coinciden" no debe quedarse pegado (ni ocultar
+            // un desajuste que acaba de producirse).
+            next.confirm = form.confirm
+              ? value === form.confirm
+                ? ""
+                : "Las contraseñas no coinciden"
+              : "";
+          }
+          if (k === "confirm") next.confirm = value ? value === form.password ? "" : "Las contraseñas no coinciden" : "";
+          if (k === "name") next.name = validarNombre(value) ?? "";
+          return next;
+        });
+      };
   const set =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setVal(k)(e.target.value);
+      (e: React.ChangeEvent<HTMLInputElement>) =>
+        setVal(k)(e.target.value);
   // Igual que `set`, pero dejando solo dígitos: el teléfono nunca debe poder
   // guardar letras ni símbolos aunque se peguen desde el portapapeles.
   const setDigitos =
     (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setVal(k)(soloDigitos(e.target.value));
+      (e: React.ChangeEvent<HTMLInputElement>) =>
+        setVal(k)(soloDigitos(e.target.value));
 
   // El botón "Crear cuenta" queda apagado hasta que todos los campos
   // obligatorios estén llenos, la contraseña cumpla las 5 reglas y el
@@ -5656,15 +5671,15 @@ function RegisterScreen({
    *  igual que antes. Shift+Tab y el clic con el mouse no se tocan. */
   const teclaEnRegistro =
     (campo: string) =>
-    (e: React.KeyboardEvent<HTMLElement>) => {
-      validacion.onKeyDownCampo(campo, {
-        errores,
-        validar: validadorDe(campo),
-        aplicar: (c, err) => setErrores((p) => ({ ...p, [c]: err ?? "" })),
-      })(e);
-      if (e.key === "Enter" && (campo === "password" || campo === "confirm"))
-        register();
-    };
+      (e: React.KeyboardEvent<HTMLElement>) => {
+        validacion.onKeyDownCampo(campo, {
+          errores,
+          validar: validadorDe(campo),
+          aplicar: (c, err) => setErrores((p) => ({ ...p, [c]: err ?? "" })),
+        })(e);
+        if (e.key === "Enter" && (campo === "password" || campo === "confirm"))
+          register();
+      };
 
   const register = async () => {
     const errs: Record<string, string> = {};
@@ -5759,11 +5774,11 @@ function RegisterScreen({
             p.map(u =>
               u.id === usuarioPorDoc.id
                 ? {
-                    ...u,
-                    correo: correoNuevo,
-                    telefono: form.phone.trim(),
-                    contrasena: form.password,
-                  }
+                  ...u,
+                  correo: correoNuevo,
+                  telefono: form.phone.trim(),
+                  contrasena: form.password,
+                }
                 : u,
             ),
           );
@@ -5851,9 +5866,9 @@ function RegisterScreen({
     } finally {
       setLoading(false);
     }
-   };
+  };
 
-   return (
+  return (
     <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12" darkMode={darkMode}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -5899,10 +5914,11 @@ function RegisterScreen({
               <select
                 value={form.docType}
                 ref={validacion.refCampo("docType")}
+                aria-label="Tipo de documento"
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
-                     setErrores((p) => ({ ...p, docNum: form.docNum ? validarDocumento(form.docNum, e.target.value) ?? "" : "" }));
+                    setErrores((p) => ({ ...p, docNum: form.docNum ? validarDocumento(form.docNum, e.target.value) ?? "" : "" }));
                   }
                   if (errores.docType) setErrores((p) => ({ ...p, docType: "" }));
                 }}
@@ -5925,10 +5941,11 @@ function RegisterScreen({
               </label>
               <input
                 value={form.docNum}
-                 onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
+                onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
                 type="text"
-                 inputMode="numeric"
-                 placeholder="Ej: 12345678"
+                inputMode="numeric"
+                placeholder="Ej: 12345678"
+                aria-label="Número de documento"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
                 className={authInputCls(errores.docNum, "h-10")}
@@ -5962,7 +5979,7 @@ function RegisterScreen({
             {
               label: "Contraseña",
               key: "password" as const,
-               placeholder: "Mínimo 8 caracteres",
+              placeholder: "Mínimo 8 caracteres",
               type: "password",
             },
             {
@@ -5984,6 +6001,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
+                  ariaLabel={label}
                   cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
@@ -5997,6 +6015,7 @@ function RegisterScreen({
                   type={type}
                   inputMode={numeric ? "numeric" : undefined}
                   placeholder={placeholder}
+                  aria-label={label}
                   ref={validacion.refCampo(key)}
                   onBlur={key === "name" ? () => setForm(p => ({ ...p, name: normalizarNombrePersona(p.name) })) : undefined}
                   onKeyDown={teclaEnRegistro(key)}
@@ -6032,7 +6051,7 @@ function RegisterScreen({
           onClick={register}
           size="md"
           className="w-full mt-2 h-10 min-h-0!"
-           disabled={loading || !formValido}
+          disabled={loading || !formValido}
         >
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -6374,9 +6393,9 @@ function ManageProductsScreen() {
                       setEditP((p) =>
                         p
                           ? {
-                              ...p,
-                              description: e.target.value,
-                            }
+                            ...p,
+                            description: e.target.value,
+                          }
                           : null,
                       )
                     }
@@ -6397,9 +6416,9 @@ function ManageProductsScreen() {
                       setEditP((p) =>
                         p
                           ? {
-                              ...p,
-                              price: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                            }
+                            ...p,
+                            price: numeroDeInput(limpiarNumeroInput(e.target.value)),
+                          }
                           : null,
                       )
                     }
@@ -7537,7 +7556,7 @@ const mismaConfig = (a: CartItem, b: CartItem) =>
   a.product.id === b.product.id &&
   a.size === b.size &&
   [...a.selectedExtras].sort().join("|") ===
-    [...b.selectedExtras].sort().join("|");
+  [...b.selectedExtras].sort().join("|");
 
 // Al iniciar sesión, el carrito que el cliente ya tenía en pantalla (`base`, el
 // local sin sesión) es el que manda: conserva su id de línea y su precio, o sea
@@ -7688,6 +7707,11 @@ export default function App() {
   // Catálogo público independiente del almacenamiento local de Gestión de Productos.
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
+  // Estado de la carga del catálogo público (landing / Ver Menú). Si la API no
+  // responde, el aviso fijo informa al usuario y ofrece reintentar sin que la
+  // página se rompa ni cambie de diseño en el caso normal.
+  const [catalogoCargando, setCatalogoCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState<string | null>(null);
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido. Desde la fase 2 viven en la API: el estado arranca
@@ -7723,6 +7747,8 @@ export default function App() {
       : null,
   );
   const recargarCatalogo = async () => {
+    setCatalogoCargando(true);
+    setCatalogoError(null);
     try {
       const { productos: filasProductos, categorias: filasCategorias } = await obtenerCatalogo();
       const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
@@ -7746,8 +7772,13 @@ export default function App() {
       if (teniaIdsAntiguos) toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
     } catch (error) {
       console.error("No se pudo cargar el catálogo público:", error);
-      toast.error(error instanceof Error ? error.message : "No se pudo cargar el catálogo público.");
+      const mensaje =
+        error instanceof Error && error.message ? error.message : "No se pudo cargar el catálogo público.";
+      setCatalogoError(mensaje);
+      toast.error(mensaje);
       throw error;
+    } finally {
+      setCatalogoCargando(false);
     }
   };
 
@@ -7932,8 +7963,29 @@ export default function App() {
   }, [productosGestionCargados, productos]);
 
   useEffect(() => {
-    void recargarCatalogo().catch(() => {});
+    void recargarCatalogo().catch(() => { });
   }, []);
+
+  // SEO: título único por pantalla (sin librerías). Se actualiza al cambiar de
+  // vista. Las pantallas públicas tienen título propio; las del panel usan el
+  // de SCREEN_META; si no hay, se mantiene el título general del sistema.
+  useEffect(() => {
+    const titulosPublicos: Partial<Record<Screen, string>> = {
+      landing: "La Sirena Pizza | Pizzas artesanales en Medellín",
+      catalog: "Menú del restaurante | La Sirena Pizza",
+      cart: "Tu carrito | La Sirena Pizza",
+      "product-detail": "Detalle del producto | La Sirena Pizza",
+      "mis-pedidos": "Mis pedidos | La Sirena Pizza",
+      login: "Iniciar sesión | S.I.V.PRO",
+      register: "Crear cuenta | La Sirena Pizza",
+      "client-profile": "Mi perfil | La Sirena Pizza",
+    };
+    const meta =
+      titulosPublicos[screen] ??
+      (SCREEN_META[screen] ? `${SCREEN_META[screen].title} | S.I.V.PRO` : undefined);
+    document.title =
+      meta ?? "S.I.V.PRO | Sistema de Ventas y Producción - La Sirena Pizza";
+  }, [screen]);
 
   const aplicarProductoRespuesta = (producto: Producto, crear = false) => {
     setProductos((prev) => crear
@@ -8249,7 +8301,7 @@ export default function App() {
     const acts = loggedInAccesos[key] ?? [];
     return {
       canCreate: acts.includes("Crear"),
-      canEdit:   acts.includes("Editar"),
+      canEdit: acts.includes("Editar"),
       canDelete: acts.includes("Eliminar"),
       // Aparte del CRUD: sin este permiso no se monta el botón "Descargar
       // Excel", así que el `.xlsx` no se puede generar desde la interfaz.
@@ -8980,12 +9032,12 @@ export default function App() {
           // El tope de la línea fusionada es el `max` (que ya descuenta lo
           // que había en el carrito) más lo que había en ESTA línea.
           ? {
-              ...x,
-              quantity: ajustarCantidad(
-                x.quantity + disponible,
-                max === undefined ? undefined : max + actual,
-              ),
-            }
+            ...x,
+            quantity: ajustarCantidad(
+              x.quantity + disponible,
+              max === undefined ? undefined : max + actual,
+            ),
+          }
           : x,
       );
     });
@@ -9042,13 +9094,13 @@ export default function App() {
       p.map((i) =>
         i.id === id
           ? {
-              ...i,
-              // Bloque 5: máximo el tope de ESTA línea con todo el resto
-              // del carrito (la propia no se cuenta dos veces); si quien
-              // edita se pasa, la cantidad se ajusta sola. El mínimo sigue
-              // siendo 1 y el − en 1 sigue quitando la línea (como siempre).
-              quantity: ajustarCantidad(qty, limiteDeLinea(i, p).max),
-            }
+            ...i,
+            // Bloque 5: máximo el tope de ESTA línea con todo el resto
+            // del carrito (la propia no se cuenta dos veces); si quien
+            // edita se pasa, la cantidad se ajusta sola. El mínimo sigue
+            // siendo 1 y el − en 1 sigue quitando la línea (como siempre).
+            quantity: ajustarCantidad(qty, limiteDeLinea(i, p).max),
+          }
           : i,
       ),
     );
@@ -9196,10 +9248,10 @@ export default function App() {
         prev.map((u) =>
           u.id === id
             ? {
-                ...u,
-                correo: (perfil.correo || datos.correo).trim().toLowerCase(),
-                telefono: perfil.telefono || datos.telefono,
-              }
+              ...u,
+              correo: (perfil.correo || datos.correo).trim().toLowerCase(),
+              telefono: perfil.telefono || datos.telefono,
+            }
             : u,
         ),
       );
@@ -9257,8 +9309,8 @@ export default function App() {
       cancelado = true;
       if (reintento !== undefined) window.clearTimeout(reintento);
     };
-  // La restauración solo debe iniciarse una vez por sesión persistida.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // La restauración solo debe iniciarse una vez por sesión persistida.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sesionActiva?.userId]);
 
   /** Final del cambio de contraseña desde "Mi perfil": aviso, cierre de
@@ -9508,8 +9560,8 @@ export default function App() {
             setTimeout(() => menuButtonRef.current?.focus(), 0);
           }}
           darkMode={darkMode}
-           userRole={userRole}
-           accesos={loggedInAccesos}
+          userRole={userRole}
+          accesos={loggedInAccesos}
           esSuperAdminSesion={esSuperAdminSesion}
           hasDashboardAccess={hasDashboardAccess}
           esMovil={esMovil}
@@ -9582,6 +9634,36 @@ export default function App() {
             isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
+          {/* Aviso fijo del catálogo público: solo aparece si la API no respondió.
+              Va con posición fija para no desplazar ni alterar el layout existente
+              (evita CLS y no cambia el diseño en el caso normal de éxito). */}
+          {catalogoError && (
+            <div
+              role="alert"
+              className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(92vw,26rem)] rounded-2xl border border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-950/80 p-4 shadow-xl backdrop-blur"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    No pudimos cargar el menú
+                  </p>
+                  <p className="mt-1 text-xs text-red-700/90 dark:text-red-200/80">
+                    Revisa tu conexión o inténtalo de nuevo en unos segundos.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void recargarCatalogo().catch(() => { })}
+                    disabled={catalogoCargando}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${catalogoCargando ? "animate-spin" : ""}`} />
+                    {catalogoCargando ? "Reintentando…" : "Reintentar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div
               key={screen}
@@ -9591,673 +9673,681 @@ export default function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
             >
-              <LandingErrorBoundary resetKey={screen}>
-              {screen === "landing" && (
-                <LandingScreen
-                  navigate={navigate}
-                  setProduct={setSelectedProduct}
-                  onCategoryNavigate={(cat) => {
-                    setCatalogCat(cat);
-                    navigate("catalog");
-                  }}
-                  categorias={categoriasCatalogo}
-                  productos={productosCatalogo}
-                  onOpenDetail={(p) => {
-                    setDetalleOrigen("landing");
-                    setSelectedProduct(p);
-                    navigate("product-detail");
-                  }}
-                />
-              )}
-              {screen === "catalog" && (
-                <CatalogScreen
-                  navigate={navigate}
-                  setProduct={setSelectedProduct}
-                  quickAdd={quickAdd}
-                  initialCat={catalogCat}
-                  page={catalogPage}
-                  setPage={setCatalogPage}
-                  search={catalogSearch}
-                  setSearch={setCatalogSearch}
-                  onOpenDetail={(p) => {
-                    setDetalleOrigen("catalog");
-                    setSelectedProduct(p);
-                    navigate("product-detail");
-                  }}
-                  cart={cart}
-                  updateQty={updateQty}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  categorias={categoriasCatalogo}
-                  productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
-                />
-              )}
-              {screen === "product-detail" && (
-                <ProductDetailScreen
-                  product={selectedProduct}
-                  navigate={navigate}
-                  addDetailed={addDetailed}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  onBack={() => {
-                    navigate(detalleOrigen, { restaurar: true });
-                    // Al volver al catálogo, hace scroll a la tarjeta del producto
-                    // que se abrió (data-producto-id en ProductCard). Mismo criterio
-                    // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
-                    // montarse por la transición de salida (AnimatePresence).
-                    if (detalleOrigen === "catalog") {
-                      let intentosCard = 0;
-                      const buscarTarjeta = () => {
-                        intentosCard += 1;
-                        const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
-                        if (!el) {
-                          // Mismo presupuesto amplio que `navigate(restaurar)`:
-                          // la tarjeta tarda en montarse por la transición de
-                          // salida (AnimatePresence) y en aparecer las imágenes.
-                          if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
-                          return;
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Cargando">
+                    <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                  </div>
+                }
+              >
+                <LandingErrorBoundary resetKey={screen}>
+                  {screen === "landing" && (
+                    <LandingScreen
+                      navigate={navigate}
+                      setProduct={setSelectedProduct}
+                      onCategoryNavigate={(cat) => {
+                        setCatalogCat(cat);
+                        navigate("catalog");
+                      }}
+                      categorias={categoriasCatalogo}
+                      productos={productosCatalogo}
+                      onOpenDetail={(p) => {
+                        setDetalleOrigen("landing");
+                        setSelectedProduct(p);
+                        navigate("product-detail");
+                      }}
+                    />
+                  )}
+                  {screen === "catalog" && (
+                    <CatalogScreen
+                      navigate={navigate}
+                      setProduct={setSelectedProduct}
+                      quickAdd={quickAdd}
+                      initialCat={catalogCat}
+                      page={catalogPage}
+                      setPage={setCatalogPage}
+                      search={catalogSearch}
+                      setSearch={setCatalogSearch}
+                      onOpenDetail={(p) => {
+                        setDetalleOrigen("catalog");
+                        setSelectedProduct(p);
+                        navigate("product-detail");
+                      }}
+                      cart={cart}
+                      updateQty={updateQty}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      categorias={categoriasCatalogo}
+                      productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
+                    />
+                  )}
+                  {screen === "product-detail" && (
+                    <ProductDetailScreen
+                      product={selectedProduct}
+                      navigate={navigate}
+                      addDetailed={addDetailed}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      onBack={() => {
+                        navigate(detalleOrigen, { restaurar: true });
+                        // Al volver al catálogo, hace scroll a la tarjeta del producto
+                        // que se abrió (data-producto-id en ProductCard). Mismo criterio
+                        // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
+                        // montarse por la transición de salida (AnimatePresence).
+                        if (detalleOrigen === "catalog") {
+                          let intentosCard = 0;
+                          const buscarTarjeta = () => {
+                            intentosCard += 1;
+                            const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
+                            if (!el) {
+                              // Mismo presupuesto amplio que `navigate(restaurar)`:
+                              // la tarjeta tarda en montarse por la transición de
+                              // salida (AnimatePresence) y en aparecer las imágenes.
+                              if (intentosCard < 40) window.setTimeout(buscarTarjeta, 50);
+                              return;
+                            }
+                            el.scrollIntoView({ block: "center" });
+                          };
+                          requestAnimationFrame(buscarTarjeta);
                         }
-                        el.scrollIntoView({ block: "center" });
-                      };
-                      requestAnimationFrame(buscarTarjeta);
-                    }
-                  }}
-                  backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
-                />
-              )}
-              {screen === "cart" && (
-                <CartScreen
-                  cart={cart}
-                  navigate={navigate}
-                  updateQty={updateQty}
-                  limiteDe={(linea) => limiteDeLinea(linea, cart)}
-                  remove={remove}
-                  clear={() => setCart([])}
-                  onOrder={registrarPedido}
-                  isLoggedIn={isLoggedIn}
-                  onRequireLogin={(order) => {
-                    setPendingOrder(order);
-                    setLoginNotice(true);
-                    openLogin();
-                  }}
-                  confirmationData={orderConfirmation ?? undefined}
-                  onClearConfirmation={() => setOrderConfirmation(null)}
-                  clienteSesion={loggedInUser?.nombre}
-                />
-              )}
-              {screen === "mis-pedidos" && (
-                <MisPedidosScreen
-                  pedidos={ventas}
-                  usuarioNombre={pedidosUsuarioNombre}
-                  onVerMenu={() => navigate("catalog")}
-                />
-              )}
-              {screen === "login" && (
-                  <LoginScreen
-                    navigate={navigate}
-                    usuarios={usuarios}
-                    roles={roles}
-                    onUsuarioNuevo={agregarUsuarioLocal}
-                    darkMode={darkMode}
-                    loginNotice={loginNotice}
-                    initialEmail={loginEmailPre}
-                    mensajeExito={loginMensajeExito}
-                    onLogin={handleLogin}
-                />
-              )}
-              {screen === "register" && (
-                <RegisterScreen
-                  navigate={navigate}
-                  usuarios={usuarios}
-                  setUsuarios={setUsuarios}
-                  empleados={empleados}
-                  clientes={clientes}
-                  setClientes={setClientes}
-                  darkMode={darkMode}
-                  onRegistrado={trasRegistrarse}
-                />
-              )}
-              {screen === "client-profile" && (
-                <ClientProfileScreen
-                  navigate={navigate}
-                  onLogout={logout}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  isStaff={isStaff}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                />
-              )}
-              {sesionRestaurandose && (screen === "dashboard" || screen === "inicio") ? (
-                /* Sesión restaurándose (F5): /auth/me todavía no responde y los
-                   roles de la sesión no están cargados. En vez de parpadear
-                   "sin rol" / "Sin rol asignado" (o "Empleado / Sin módulos
-                   asignados" en el empleado), se muestra un indicador de carga
-                   con el estilo de la app. */
-                <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-                  <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
-                  <p className="text-sm text-muted-foreground">Cargando tu sesión…</p>
-                </div>
-              ) : (
-                ((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
-                  <DashboardScreen
-                    navigate={navigate}
-                    ventas={ventas}
-                    gestiones={gestiones}
-                    ordenes={ordenes}
-                    noConformidades={noConformidades}
-                    productos={productos}
-                    insumos={insumos}
-                    proveedores={proveedores}
-                    ordenesProduccion={ordenesProduccion}
-                    clientes={clientes}
-                    loggedInUser={loggedInUser}
-                    loggedInRoleName={loggedInRoleName}
-                    tieneRolActivo={loggedInRol !== null}
-                    hasDashboardAccess={hasDashboardAccess}
-                    accesos={loggedInAccesos}
-                    periodoInicio={periodoInicio}
-                    onPeriodoInicio={setPeriodoInicio}
-                  />
-                )
-              )}
-              {screen === "manage-products" && (
-                <ManageProductsScreen />
-              )}
-              {screen === "orders" && (
-                <OrdersScreen initialOrders={orders} />
-              )}
-              {screen === "purchases" && <PurchasesScreen />}
-              {screen === "perecederos" && (
-                <ProductosPerecederosScreen
-                  {...getPerms("perecederos")}
-                  ventasSugeridas={ventas.map((v) => ({ id: v.id, usuario: v.usuario }))}
-                  insumos={insumos}
-                  productos={productos}
-                  ordenesProduccion={ordenesProduccion}
-                  noConformidades={noConformidades}
-                  setNoConformidades={setNoConformidades}
-                  cargando={noConformesCargando}
-                  errorCarga={errorNoConformes}
-                  onReintentar={() => void cargarNoConformes()}
-                  // El stock lo mueve el backend (reventa o insumo): se
-                  // recargan productos e insumos tras crear o eliminar.
-                  onInventarioCambiado={() => void recargarInventarioCpn()}
-                />
-              )}
-              {screen === "orden-compra" && (
-                <OrdenCompraScreen
-                  {...getPerms("orden-compra")}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  cargando={ordenesCompraCargando}
-                  errorCarga={errorOrdenesCompra}
-                  onReintentar={() => void cargarOrdenesCompra()}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  // Punto 3.2: el modal que abre este listado necesita el
-                  // catálogo para buscar por tipo "Producto".
-                  productos={productos}
-                  // Punto B7: al anular la OC se devuelve también el stock
-                  // de las líneas de producto de sus facturas.
-                  setProductos={setProductos}
-                  // Bloque 2: el "+ Crear producto" del OrdenModal necesita
-                  // las categorías del panel y el alta en el catálogo.
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  categoriasInsumo={categoriasInsumo}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onAbrirRecepcion={(orden) => {
-                    setOrdenRecepcion(orden);
-                    setScreen("recepcion-compra");
-                  }}
-                  onNuevaOrden={() => {
-                    setOrdenAEditar(null);
-                    navigate("nueva-orden-compra");
-                  }}
-                  onEditarOrden={(orden) => {
-                    setOrdenAEditar(orden);
-                    navigate("nueva-orden-compra");
-                  }}
-                  page={ordenCompraPage}
-                  setPage={setOrdenCompraPage}
-                  onVerDetalle={(orden) => {
-                    setOrdenDetalle(orden);
-                    setScreen("orden-detalle");
-                  }}
-                />
-              )}
-              {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
+                      }}
+                      backLabel={detalleOrigen === "catalog" ? "Volver al menú" : "Volver al inicio"}
+                    />
+                  )}
+                  {screen === "cart" && (
+                    <CartScreen
+                      cart={cart}
+                      navigate={navigate}
+                      updateQty={updateQty}
+                      limiteDe={(linea) => limiteDeLinea(linea, cart)}
+                      remove={remove}
+                      clear={() => setCart([])}
+                      onOrder={registrarPedido}
+                      isLoggedIn={isLoggedIn}
+                      onRequireLogin={(order) => {
+                        setPendingOrder(order);
+                        setLoginNotice(true);
+                        openLogin();
+                      }}
+                      confirmationData={orderConfirmation ?? undefined}
+                      onClearConfirmation={() => setOrderConfirmation(null)}
+                      clienteSesion={loggedInUser?.nombre}
+                    />
+                  )}
+                  {screen === "mis-pedidos" && (
+                    <MisPedidosScreen
+                      pedidos={ventas}
+                      usuarioNombre={pedidosUsuarioNombre}
+                      onVerMenu={() => navigate("catalog")}
+                    />
+                  )}
+                  {screen === "login" && (
+                    <LoginScreen
+                      navigate={navigate}
+                      usuarios={usuarios}
+                      roles={roles}
+                      onUsuarioNuevo={agregarUsuarioLocal}
+                      darkMode={darkMode}
+                      loginNotice={loginNotice}
+                      initialEmail={loginEmailPre}
+                      mensajeExito={loginMensajeExito}
+                      onLogin={handleLogin}
+                    />
+                  )}
+                  {screen === "register" && (
+                    <RegisterScreen
+                      navigate={navigate}
+                      usuarios={usuarios}
+                      setUsuarios={setUsuarios}
+                      empleados={empleados}
+                      clientes={clientes}
+                      setClientes={setClientes}
+                      darkMode={darkMode}
+                      onRegistrado={trasRegistrarse}
+                    />
+                  )}
+                  {screen === "client-profile" && (
+                    <ClientProfileScreen
+                      navigate={navigate}
+                      onLogout={logout}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      isStaff={isStaff}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                    />
+                  )}
+                  {sesionRestaurandose && (screen === "dashboard" || screen === "inicio") ? (
+                    /* Sesión restaurándose (F5): /auth/me todavía no responde y los
+                       roles de la sesión no están cargados. En vez de parpadear
+                       "sin rol" / "Sin rol asignado" (o "Empleado / Sin módulos
+                       asignados" en el empleado), se muestra un indicador de carga
+                       con el estilo de la app. */
+                    <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+                      <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+                      <p className="text-sm text-muted-foreground">Cargando tu sesión…</p>
+                    </div>
+                  ) : (
+                    ((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
+                      <DashboardScreen
+                        navigate={navigate}
+                        ventas={ventas}
+                        gestiones={gestiones}
+                        ordenes={ordenes}
+                        noConformidades={noConformidades}
+                        productos={productos}
+                        insumos={insumos}
+                        proveedores={proveedores}
+                        ordenesProduccion={ordenesProduccion}
+                        clientes={clientes}
+                        loggedInUser={loggedInUser}
+                        loggedInRoleName={loggedInRoleName}
+                        tieneRolActivo={loggedInRol !== null}
+                        hasDashboardAccess={hasDashboardAccess}
+                        accesos={loggedInAccesos}
+                        periodoInicio={periodoInicio}
+                        onPeriodoInicio={setPeriodoInicio}
+                      />
+                    )
+                  )}
+                  {screen === "manage-products" && (
+                    <ManageProductsScreen />
+                  )}
+                  {screen === "orders" && (
+                    <OrdersScreen initialOrders={orders} />
+                  )}
+                  {screen === "purchases" && <PurchasesScreen />}
+                  {screen === "perecederos" && (
+                    <ProductosPerecederosScreen
+                      {...getPerms("perecederos")}
+                      ventasSugeridas={ventas.map((v) => ({ id: v.id, usuario: v.usuario }))}
+                      insumos={insumos}
+                      productos={productos}
+                      ordenesProduccion={ordenesProduccion}
+                      noConformidades={noConformidades}
+                      setNoConformidades={setNoConformidades}
+                      cargando={noConformesCargando}
+                      errorCarga={errorNoConformes}
+                      onReintentar={() => void cargarNoConformes()}
+                      // El stock lo mueve el backend (reventa o insumo): se
+                      // recargan productos e insumos tras crear o eliminar.
+                      onInventarioCambiado={() => void recargarInventarioCpn()}
+                    />
+                  )}
+                  {screen === "orden-compra" && (
+                    <OrdenCompraScreen
+                      {...getPerms("orden-compra")}
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      cargando={ordenesCompraCargando}
+                      errorCarga={errorOrdenesCompra}
+                      onReintentar={() => void cargarOrdenesCompra()}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      // Punto 3.2: el modal que abre este listado necesita el
+                      // catálogo para buscar por tipo "Producto".
+                      productos={productos}
+                      // Punto B7: al anular la OC se devuelve también el stock
+                      // de las líneas de producto de sus facturas.
+                      setProductos={setProductos}
+                      // Bloque 2: el "+ Crear producto" del OrdenModal necesita
+                      // las categorías del panel y el alta en el catálogo.
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onAbrirRecepcion={(orden) => {
+                        setOrdenRecepcion(orden);
+                        setScreen("recepcion-compra");
+                      }}
+                      onNuevaOrden={() => {
+                        setOrdenAEditar(null);
+                        navigate("nueva-orden-compra");
+                      }}
+                      onEditarOrden={(orden) => {
+                        setOrdenAEditar(orden);
+                        navigate("nueva-orden-compra");
+                      }}
+                      page={ordenCompraPage}
+                      setPage={setOrdenCompraPage}
+                      onVerDetalle={(orden) => {
+                        setOrdenDetalle(orden);
+                        setScreen("orden-detalle");
+                      }}
+                    />
+                  )}
+                  {/* Nueva Orden de Compra: PANTALLA COMPLETA dentro del panel
                   (igual que Recepción y Ver detalle), sin modal y sin scroll
                   de página. El listado queda desmontado mientras se crea. */}
-              {screen === "nueva-orden-compra" && (
-                <NuevaOrdenCompraPage
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  productos={productos}
-                  // Bloque 2: "+ Crear producto" con las categorías del panel.
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  categoriasInsumo={categoriasInsumo}
-                  setInsumos={setInsumos}
-                  onBack={() => {
-                    setOrdenAEditar(null);
-                    navigate("orden-compra");
-                  }}
-                  orden={ordenAEditar}
-                />
-              )}
-              {screen === "recepcion-compra" && ordenRecepcion && (
-                <RecepcionCompraScreen
-                  orden={ordenRecepcion}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  // P14: catálogo de productos para el selector de tipo de los
-                  // "no solicitados". Punto B5: con `setProductos` la
-                  // recepción además suma stock y escribe precios de venta.
-                  productos={productos}
-                  setProductos={setProductos}
-                  // Bloque 2: "+ Crear producto" del desplegable de no
-                  // solicitados (categorías del panel y alta en el catálogo).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  categoriasInsumo={categoriasInsumo}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  onGuardar={async (recepcion, estado) => {
-                    setOrdenes((prev) =>
-                      prev.map((o) => {
-                        if (o.id !== ordenRecepcion.id) return o;
-                        const base = { ...o, estado, recepcion };
-                        // Deja fecha y hora del cambio: es la que muestra el
-                        // detalle de la orden al lado del badge de estado.
-                        return estado === o.estado
-                          ? base
-                          : {
-                              ...base,
-                              historialEstados: [
-                                ...(o.historialEstados ?? []),
-                                { estado, fechaHora: new Date().toISOString() },
-                              ],
-                            };
-                      })
-                    );
+                  {screen === "nueva-orden-compra" && (
+                    <NuevaOrdenCompraPage
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      productos={productos}
+                      // Bloque 2: "+ Crear producto" con las categorías del panel.
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      setInsumos={setInsumos}
+                      onBack={() => {
+                        setOrdenAEditar(null);
+                        navigate("orden-compra");
+                      }}
+                      orden={ordenAEditar}
+                    />
+                  )}
+                  {screen === "recepcion-compra" && ordenRecepcion && (
+                    <RecepcionCompraScreen
+                      orden={ordenRecepcion}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      // P14: catálogo de productos para el selector de tipo de los
+                      // "no solicitados". Punto B5: con `setProductos` la
+                      // recepción además suma stock y escribe precios de venta.
+                      productos={productos}
+                      setProductos={setProductos}
+                      // Bloque 2: "+ Crear producto" del desplegable de no
+                      // solicitados (categorías del panel y alta en el catálogo).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      onGuardar={async (recepcion, estado) => {
+                        setOrdenes((prev) =>
+                          prev.map((o) => {
+                            if (o.id !== ordenRecepcion.id) return o;
+                            const base = { ...o, estado, recepcion };
+                            // Deja fecha y hora del cambio: es la que muestra el
+                            // detalle de la orden al lado del badge de estado.
+                            return estado === o.estado
+                              ? base
+                              : {
+                                ...base,
+                                historialEstados: [
+                                  ...(o.historialEstados ?? []),
+                                  { estado, fechaHora: new Date().toISOString() },
+                                ],
+                              };
+                          })
+                        );
 
-                    setOrdenRecepcion(null);
-                    // 5.2: después de la recepción el backend cambió el stock
-                    // y los precios: se recargan la OC, las compras, los
-                    // insumos y los productos.
-                    await Promise.all([
-                      cargarOrdenesCompra(),
-                      cargarCompras(),
-                      cargarInsumosFichas(productos),
-                      cargarProductosGestion(),
-                    ]);
-                  }}
-                  onBack={() => {
-                    setOrdenRecepcion(null);
-                    setScreen("orden-compra");
-                  }}
-                />
-              )}
-              {screen === "orden-detalle" && ordenDetalle && (
-                <OrdenDetallePage
-                  orden={ordenDetalle}
-                  gestiones={gestiones}
-                  onBack={() => {
-                    setOrdenDetalle(null);
-                    setScreen("orden-compra");
-                  }}
-                  onEditar={() => {}}
-                  onAbrirRecepcion={() => {}}
-                />
-              )}
-              {screen === "gestion-compra" && (
-                <GestionCompraScreen
-                  {...getPerms("gestion-compra")}
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  cargando={comprasCargando}
-                  errorCarga={errorCompras}
-                  onReintentar={() => void cargarCompras()}
-                  ordenes={ordenes}
-                  setOrdenes={setOrdenes}
-                  insumos={insumos}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  // Control de inventario: al anular una compra hay que
-                  // devolver al stock lo que ella sumó (productos incluidos).
-                  productos={productos}
-                  setInsumos={setInsumos}
-                  setProductos={setProductos}
-                  // Bloque 2: se pasan a CompraForm (el detalle es de sólo
-                  // lectura, pero ambas pantallas quedan iguales).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  categoriasInsumo={categoriasInsumo}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onNuevaCompra={() => navigate("nueva-compra")}
-                />
-              )}
-              {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
+                        setOrdenRecepcion(null);
+                        // 5.2: después de la recepción el backend cambió el stock
+                        // y los precios: se recargan la OC, las compras, los
+                        // insumos y los productos.
+                        await Promise.all([
+                          cargarOrdenesCompra(),
+                          cargarCompras(),
+                          cargarInsumosFichas(productos),
+                          cargarProductosGestion(),
+                        ]);
+                      }}
+                      onBack={() => {
+                        setOrdenRecepcion(null);
+                        setScreen("orden-compra");
+                      }}
+                    />
+                  )}
+                  {screen === "orden-detalle" && ordenDetalle && (
+                    <OrdenDetallePage
+                      orden={ordenDetalle}
+                      gestiones={gestiones}
+                      onBack={() => {
+                        setOrdenDetalle(null);
+                        setScreen("orden-compra");
+                      }}
+                      onEditar={() => { }}
+                      onAbrirRecepcion={() => { }}
+                    />
+                  )}
+                  {screen === "gestion-compra" && (
+                    <GestionCompraScreen
+                      {...getPerms("gestion-compra")}
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      cargando={comprasCargando}
+                      errorCarga={errorCompras}
+                      onReintentar={() => void cargarCompras()}
+                      ordenes={ordenes}
+                      setOrdenes={setOrdenes}
+                      insumos={insumos}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      // Control de inventario: al anular una compra hay que
+                      // devolver al stock lo que ella sumó (productos incluidos).
+                      productos={productos}
+                      setInsumos={setInsumos}
+                      setProductos={setProductos}
+                      // Bloque 2: se pasan a CompraForm (el detalle es de sólo
+                      // lectura, pero ambas pantallas quedan iguales).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onNuevaCompra={() => navigate("nueva-compra")}
+                    />
+                  )}
+                  {/* Nueva Compra: PANTALLA COMPLETA dentro del panel (igual que
                   Recepción), sin modal y sin scroll de página. */}
-              {screen === "nueva-compra" && (
-                <NuevaCompraPage
-                  gestiones={gestiones}
-                  setGestiones={setGestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                  insumos={insumos}
-                  productos={productos}
-                  // Al guardar, los ítems comprados suman su stock (son
-                  // opcionales: sin ellos la compra se guarda igual).
-                  setInsumos={setInsumos}
-                  setProductos={setProductos}
-                  // Bloque 2: "+ Crear producto" del desplegable de ítems
-                  // (categorías del panel y alta en el catálogo).
-                  categorias={categoriasCatalogo}
-                  onCrearProducto={crearProductoDesdeCompras}
-                  categoriasInsumo={categoriasInsumo}
-                  onRecargarCatalogo={recargarCatalogoTrasCambio}
-                  onBack={() => navigate("gestion-compra")}
-                />
-              )}
-              {screen === "suppliers" && (
-                <SuppliersScreen
-                  {...getPerms("suppliers")}
-                  cargando={proveedoresCargando}
-                  errorCarga={errorProveedores}
-                  onReintentar={() => void cargarProveedores()}
-                  ordenes={ordenes}
-                  gestiones={gestiones}
-                  proveedores={proveedores}
-                  setProveedores={setProveedores}
-                />
-              )}
-              {screen === "ventas-pedidos" && (
-                // La caja solo ofrece productos que hoy están Disponibles: si
-                // el backend marca uno como "No disponible" o "Descontinuado"
-                // desaparece del picker sin tocar VentasScreen.
-                <VentasScreen
-                  {...getPerms("ventas-pedidos")}
-                  pedidos={ventas}
-                  setPedidos={setVentas}
-                  productos={productosCatalogo
-                    .filter((producto) => producto.estado === "Disponible")
-                    .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
-                  onGestionarDevolucion={abrirGestionDevolucion}
-                />
-              )}
-              {screen === "devoluciones" && (
-                <DevolucionesScreen
-                  pedidos={ventas}
-                  setPedidos={setVentas}
-                  productos={productos}
-                  setProductos={setProductos}
-                  ordenes={ordenesProduccion}
-                  setOrdenes={setOrdenesProduccion}
-                  fichasPorProducto={fichasPorProducto}
-                  insumos={insumos}
-                  categorias={categorias}
-                  catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
-                  abrirDevolucionId={devolucionAAbrir}
-                  onAbierta={() => setDevolucionAAbrir(null)}
-                  onRecargarOrdenes={cargarOrdenes}
-                  onRecargarNoConformes={cargarNoConformes}
-                />
-              )}
-              {screen === "gestion-productos" && (
-                <GestionProductosScreen
-                  {...getPerms("gestion-productos")}
-                  productos={productos}
-                  setProductos={setProductos}
-                  insumos={insumos}
-                  fichas={fichasPorProducto}
-                  setFichas={setFichasPorProducto}
-                  categorias={categoriasCatalogo}
-                  cargandoProductos={productosCargando || (isLoggedIn && !productosGestionCargados && !errorCargaProductos)}
-                  errorProductos={errorCargaProductos}
-                  onReintentarCarga={() => void cargarProductosGestion()}
-                  onCrearEnServidor={crearProductoEnServidor}
-                  onEditarEnServidor={editarProductoEnServidor}
-                  onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
-                  onDescontinuarEnServidor={descontinuarProductoEnServidor}
-                />
-              )}
-              {screen === "cat-producto" && (
-                <CategoriaProductoScreen
-                  categorias={categorias}
-                  setCategorias={setCategorias}
-                  {...getPerms("cat-producto")}
-                />
-              )}
-                {screen === "gestion-roles" && (
-                  <GestionConfigScreen
-                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Roles")] ?? []).includes("Ver")}
-                  canCreate={getPerms("gestion-roles").canCreate}
-                  canEdit={getPerms("gestion-roles").canEdit}
-                    canDelete={getPerms("gestion-roles").canDelete}
-                    accesosPropios={loggedInAccesos}
-                    loggedInRolId={loggedInRol?.id ?? null}
-                  />
-                )}
-              {screen === "sales-chart" && (
-                <SalesChartScreen
-                  ventas={ventas}
-                  gestiones={gestiones}
-                  ordenes={ordenes}
-                  onBack={() => navigate(adminHomeScreen)}
-                />
-              )}
-               {screen === "clientes" && (
-                 <GestionClientesScreen
-                   {...getPerms("clientes")}
-                   clientes={clientes}
-                   setClientes={setClientes}
-                   empleados={empleados}
-                   usuarios={usuarios}
-                   roles={roles}
-                   sesionCorreo={correoSesion}
-                   clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
-                   onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
-                 />
-              )}
-                {screen === "users" && (
-                  <GestionUsuariosScreen
-                    canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración","Usuarios")] ?? []).includes("Ver")}
-                   canEdit={getPerms("users").canEdit}
-                   canDelete={getPerms("users").canDelete}
-                   onEditarCliente={u => {
-                     setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                     navigate("clientes");
-                   }}
-                   onEditarEmpleado={u => {
-                     const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
-                     const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
-                     if (!existe) return false;
-                     setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                     navigate("empleados");
-                     return true;
-                   }}
-                 />
-              )}
-                {screen === "empleados" && (
-                  <GestionEmpleadosScreen
-                  roles={roles}
-                  usuarios={usuarios}
-                  empleados={empleados}
-                  setEmpleados={setEmpleados}
-                   setUsuarios={setUsuarios}
-                   clientes={clientes}
-                   empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
-                   onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
-                  />
-              )}
-              {screen === "production-orders" && (
-                <OrdenProduccionScreen
-                  {...getPerms("production-orders")}
-                  productos={productos}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  ventas={ventas}
-                  fichasPorProducto={fichasPorProducto}
-                  ordenes={ordenesProduccion}
-                  setOrdenes={setOrdenesProduccion}
-                  noConformidades={noConformidades}
-                  cargando={ordenesCargando}
-                  errorCarga={errorOrdenes}
-                  onReintentar={() => void cargarOrdenes()}
-                  recargarProduccion={recargarProduccion}
-                  abrirOrdenId={ordenAAbrir}
-                  setOrdenAAbrir={setOrdenAAbrir}
-                  detalleOrdenId={ordenDetalleAAbrir}
-                  setDetalleOrdenAAbrir={setOrdenDetalleAAbrir}
-                />
-              )}
-              {screen === "finished-products" && (
-                <ProductoTerminadoScreen />
-              )}
-              {screen === "store-profile" && (
-                <MiPerfilScreen
-                  userRole={userRole}
-                  navigate={navigate as (s: string) => void}
-                  onLogout={logout}
-                  isStaff={isStaff}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                  contrataciones={loggedInEmpleado?.contrataciones}
-                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
-                  rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
-                  inStore
-                />
-              )}
-              {screen === "profile" && (
-                <MiPerfilScreen
-                  userRole={userRole}
-                  navigate={navigate as (s: string) => void}
-                  onLogout={logout}
-                  isStaff={isStaff}
-                  loggedInUser={loggedInUser ? {
-                    id: loggedInUser.id,
-                    nombre: loggedInUser.nombre,
-                    iniciales: loggedInUser.iniciales,
-                    avatarColor: loggedInUser.avatarColor,
-                    correo: loggedInUser.correo,
-                    telefono: loggedInUser.telefono,
-                    tipoDocumento: loggedInUser.tipoDocumento,
-                    numeroDocumento: loggedInUser.numeroDocumento,
-                  } : null}
-                  loggedInRoleName={loggedInRoleName}
-                  adminHomeScreen={adminHomeScreen}
-                  onGuardarPerfil={guardarPerfilBackend}
-                  onPasswordSaved={trasCambiarContrasena}
-                  perfilCargando={perfilEstado === "cargando"}
-                  perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
-                  onReintentarPerfil={() => void refrescarPerfil()}
-                  contrataciones={loggedInEmpleado?.contrataciones}
-                  rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
-                  rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
-                />
-              )}
-              {screen === "supplies" && (
-                <GestionInsumosScreen
-                  {...getPerms("supplies")}
-                  insumos={insumos}
-                  setInsumos={setInsumos}
-                  categorias={categoriasInsumo}
-                  cargando={insumosCargando}
-                  errorCarga={errorInsumos}
-                  onReintentar={() => void cargarInsumosFichas(productos)}
-                  fichas={fichasPorProducto}
-                  setFichas={setFichasPorProducto}
-                  idsConFicha={[
-                    ...productos.map((p) => p.id),
-                    ...insumos.map((i) => i.id),
-                  ]}
-                  productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
-                  abrirOrdenProduccion={abrirOrdenProduccion}
-                  /* A2: al crear un producto insumo la API crea su orden
-                     automática y el toast ofrece "Ver orden". */
-                  recargarProduccion={recargarProduccion}
-                  verOrdenProduccion={verOrdenProduccion}
-                />
-              )}
-              {isAdmin &&
-                ![
-                  "dashboard",
-                  "inicio",
-                  "manage-products",
-                  "orders",
-                  "purchases",
-                  "suppliers",
-                  "ventas-pedidos",
-                  "gestion-productos",
-                  "cat-producto",
-                   "gestion-roles",
-                  "clientes",
-                  "users",
-                  "empleados",
-                  "production-orders",
-                  "finished-products",
-                  "profile",
-                  "supplies",
-                  "sales-chart",
-                  "perecederos",
-                  "orden-compra",
-                  "nueva-orden-compra",
-                  "recepcion-compra",
-                  "gestion-compra",
-                  "nueva-compra",
-                  // El detalle real se pinta arriba (screen === "orden-detalle");
-                  // sin estar acá, GenericAdmin se sumaba debajo y repetía el
-                  // placeholder "En desarrollo · Volver al inicio".
-                  "orden-detalle",
-                  "devoluciones",
-                ].includes(screen) && (
-                  <GenericAdmin
-                    screen={screen}
-                    navigate={navigate}
-                    homeScreen={adminHomeScreen}
-                  />
-                )}
-              </LandingErrorBoundary>
+                  {screen === "nueva-compra" && (
+                    <NuevaCompraPage
+                      gestiones={gestiones}
+                      setGestiones={setGestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                      insumos={insumos}
+                      productos={productos}
+                      // Al guardar, los ítems comprados suman su stock (son
+                      // opcionales: sin ellos la compra se guarda igual).
+                      setInsumos={setInsumos}
+                      setProductos={setProductos}
+                      // Bloque 2: "+ Crear producto" del desplegable de ítems
+                      // (categorías del panel y alta en el catálogo).
+                      categorias={categoriasCatalogo}
+                      onCrearProducto={crearProductoDesdeCompras}
+                      categoriasInsumo={categoriasInsumo}
+                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onBack={() => navigate("gestion-compra")}
+                    />
+                  )}
+                  {screen === "suppliers" && (
+                    <SuppliersScreen
+                      {...getPerms("suppliers")}
+                      cargando={proveedoresCargando}
+                      errorCarga={errorProveedores}
+                      onReintentar={() => void cargarProveedores()}
+                      ordenes={ordenes}
+                      gestiones={gestiones}
+                      proveedores={proveedores}
+                      setProveedores={setProveedores}
+                    />
+                  )}
+                  {screen === "ventas-pedidos" && (
+                    // La caja solo ofrece productos que hoy están Disponibles: si
+                    // el backend marca uno como "No disponible" o "Descontinuado"
+                    // desaparece del picker sin tocar VentasScreen.
+                    <VentasScreen
+                      {...getPerms("ventas-pedidos")}
+                      pedidos={ventas}
+                      setPedidos={setVentas}
+                      productos={productosCatalogo
+                        .filter((producto) => producto.estado === "Disponible")
+                        .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
+                      onGestionarDevolucion={abrirGestionDevolucion}
+                    />
+                  )}
+                  {screen === "devoluciones" && (
+                    <DevolucionesScreen
+                      pedidos={ventas}
+                      setPedidos={setVentas}
+                      productos={productos}
+                      setProductos={setProductos}
+                      ordenes={ordenesProduccion}
+                      setOrdenes={setOrdenesProduccion}
+                      fichasPorProducto={fichasPorProducto}
+                      insumos={insumos}
+                      categorias={categorias}
+                      catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
+                      abrirDevolucionId={devolucionAAbrir}
+                      onAbierta={() => setDevolucionAAbrir(null)}
+                      onRecargarOrdenes={cargarOrdenes}
+                      onRecargarNoConformes={cargarNoConformes}
+                    />
+                  )}
+                  {screen === "gestion-productos" && (
+                    <GestionProductosScreen
+                      {...getPerms("gestion-productos")}
+                      productos={productos}
+                      setProductos={setProductos}
+                      insumos={insumos}
+                      fichas={fichasPorProducto}
+                      setFichas={setFichasPorProducto}
+                      categorias={categoriasCatalogo}
+                      cargandoProductos={productosCargando || (isLoggedIn && !productosGestionCargados && !errorCargaProductos)}
+                      errorProductos={errorCargaProductos}
+                      onReintentarCarga={() => void cargarProductosGestion()}
+                      onCrearEnServidor={crearProductoEnServidor}
+                      onEditarEnServidor={editarProductoEnServidor}
+                      onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
+                      onDescontinuarEnServidor={descontinuarProductoEnServidor}
+                    />
+                  )}
+                  {screen === "cat-producto" && (
+                    <CategoriaProductoScreen
+                      categorias={categorias}
+                      setCategorias={setCategorias}
+                      {...getPerms("cat-producto")}
+                    />
+                  )}
+                  {screen === "gestion-roles" && (
+                    <GestionConfigScreen
+                      canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Roles")] ?? []).includes("Ver")}
+                      canCreate={getPerms("gestion-roles").canCreate}
+                      canEdit={getPerms("gestion-roles").canEdit}
+                      canDelete={getPerms("gestion-roles").canDelete}
+                      accesosPropios={loggedInAccesos}
+                      loggedInRolId={loggedInRol?.id ?? null}
+                    />
+                  )}
+                  {screen === "sales-chart" && (
+                    <SalesChartScreen
+                      ventas={ventas}
+                      gestiones={gestiones}
+                      ordenes={ordenes}
+                      onBack={() => navigate(adminHomeScreen)}
+                    />
+                  )}
+                  {screen === "clientes" && (
+                    <GestionClientesScreen
+                      {...getPerms("clientes")}
+                      clientes={clientes}
+                      setClientes={setClientes}
+                      empleados={empleados}
+                      usuarios={usuarios}
+                      roles={roles}
+                      sesionCorreo={correoSesion}
+                      clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
+                      onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
+                    />
+                  )}
+                  {screen === "users" && (
+                    <GestionUsuariosScreen
+                      canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Usuarios")] ?? []).includes("Ver")}
+                      canEdit={getPerms("users").canEdit}
+                      canDelete={getPerms("users").canDelete}
+                      onEditarCliente={u => {
+                        setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                        navigate("clientes");
+                      }}
+                      onEditarEmpleado={u => {
+                        const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
+                        const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
+                        if (!existe) return false;
+                        setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
+                        navigate("empleados");
+                        return true;
+                      }}
+                    />
+                  )}
+                  {screen === "empleados" && (
+                    <GestionEmpleadosScreen
+                      roles={roles}
+                      usuarios={usuarios}
+                      empleados={empleados}
+                      setEmpleados={setEmpleados}
+                      setUsuarios={setUsuarios}
+                      clientes={clientes}
+                      empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
+                      onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
+                    />
+                  )}
+                  {screen === "production-orders" && (
+                    <OrdenProduccionScreen
+                      {...getPerms("production-orders")}
+                      productos={productos}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      ventas={ventas}
+                      fichasPorProducto={fichasPorProducto}
+                      ordenes={ordenesProduccion}
+                      setOrdenes={setOrdenesProduccion}
+                      noConformidades={noConformidades}
+                      cargando={ordenesCargando}
+                      errorCarga={errorOrdenes}
+                      onReintentar={() => void cargarOrdenes()}
+                      recargarProduccion={recargarProduccion}
+                      abrirOrdenId={ordenAAbrir}
+                      setOrdenAAbrir={setOrdenAAbrir}
+                      detalleOrdenId={ordenDetalleAAbrir}
+                      setDetalleOrdenAAbrir={setOrdenDetalleAAbrir}
+                    />
+                  )}
+                  {screen === "finished-products" && (
+                    <ProductoTerminadoScreen />
+                  )}
+                  {screen === "store-profile" && (
+                    <MiPerfilScreen
+                      userRole={userRole}
+                      navigate={navigate as (s: string) => void}
+                      onLogout={logout}
+                      isStaff={isStaff}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                      contrataciones={loggedInEmpleado?.contrataciones}
+                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      rolesParaCambiar={rolesParaCambiar}
+                      onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                      inStore
+                    />
+                  )}
+                  {screen === "profile" && (
+                    <MiPerfilScreen
+                      userRole={userRole}
+                      navigate={navigate as (s: string) => void}
+                      onLogout={logout}
+                      isStaff={isStaff}
+                      loggedInUser={loggedInUser ? {
+                        id: loggedInUser.id,
+                        nombre: loggedInUser.nombre,
+                        iniciales: loggedInUser.iniciales,
+                        avatarColor: loggedInUser.avatarColor,
+                        correo: loggedInUser.correo,
+                        telefono: loggedInUser.telefono,
+                        tipoDocumento: loggedInUser.tipoDocumento,
+                        numeroDocumento: loggedInUser.numeroDocumento,
+                      } : null}
+                      loggedInRoleName={loggedInRoleName}
+                      adminHomeScreen={adminHomeScreen}
+                      onGuardarPerfil={guardarPerfilBackend}
+                      onPasswordSaved={trasCambiarContrasena}
+                      perfilCargando={perfilEstado === "cargando"}
+                      perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
+                      onReintentarPerfil={() => void refrescarPerfil()}
+                      contrataciones={loggedInEmpleado?.contrataciones}
+                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      rolesParaCambiar={rolesParaCambiar}
+                      onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                    />
+                  )}
+                  {screen === "supplies" && (
+                    <GestionInsumosScreen
+                      {...getPerms("supplies")}
+                      insumos={insumos}
+                      setInsumos={setInsumos}
+                      categorias={categoriasInsumo}
+                      cargando={insumosCargando}
+                      errorCarga={errorInsumos}
+                      onReintentar={() => void cargarInsumosFichas(productos)}
+                      fichas={fichasPorProducto}
+                      setFichas={setFichasPorProducto}
+                      idsConFicha={[
+                        ...productos.map((p) => p.id),
+                        ...insumos.map((i) => i.id),
+                      ]}
+                      productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
+                      abrirOrdenProduccion={abrirOrdenProduccion}
+                      /* A2: al crear un producto insumo la API crea su orden
+                         automática y el toast ofrece "Ver orden". */
+                      recargarProduccion={recargarProduccion}
+                      verOrdenProduccion={verOrdenProduccion}
+                    />
+                  )}
+                  {isAdmin &&
+                    ![
+                      "dashboard",
+                      "inicio",
+                      "manage-products",
+                      "orders",
+                      "purchases",
+                      "suppliers",
+                      "ventas-pedidos",
+                      "gestion-productos",
+                      "cat-producto",
+                      "gestion-roles",
+                      "clientes",
+                      "users",
+                      "empleados",
+                      "production-orders",
+                      "finished-products",
+                      "profile",
+                      "supplies",
+                      "sales-chart",
+                      "perecederos",
+                      "orden-compra",
+                      "nueva-orden-compra",
+                      "recepcion-compra",
+                      "gestion-compra",
+                      "nueva-compra",
+                      // El detalle real se pinta arriba (screen === "orden-detalle");
+                      // sin estar acá, GenericAdmin se sumaba debajo y repetía el
+                      // placeholder "En desarrollo · Volver al inicio".
+                      "orden-detalle",
+                      "devoluciones",
+                    ].includes(screen) && (
+                      <GenericAdmin
+                        screen={screen}
+                        navigate={navigate}
+                        homeScreen={adminHomeScreen}
+                      />
+                    )}
+                </LandingErrorBoundary>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>
