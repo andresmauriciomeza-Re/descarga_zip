@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 // Bloque 3: el "+ Crear insumo" comparte el mismo catálogo de categorías
 // obligatorias (A5.1) que usa Gestión de Insumos.
 import { CATEGORIAS_INSUMO, type CategoriaInsumo, type Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import { crearInsumo, mensajeErrorInsumos } from "@/features/insumos/services/insumosApi";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 // Bloque 2: "+ Crear producto" con el mismo modal que Nueva Compra y
 // Recepción (reemplaza al NuevoProductoModal local, que se eliminó).
@@ -20,7 +21,8 @@ import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { useProveedorForm, soloLetras, siguienteProveedorId, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
+import { useProveedorForm, soloLetras, datosNuevosProveedor, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
+import { crearProveedor, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
@@ -30,7 +32,14 @@ import {
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { aplicarStockCompra, revertirEntradasCompraApi, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
+import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
+import {
+  actualizarOrdenCompra,
+  cambiarEstadoOrdenCompra,
+  crearOrdenCompra,
+  mensajeErrorOrdenesCompra,
+} from "@/features/orden-compra/services/ordenesCompraApi";
+import { listarCompras } from "@/features/compras/services/comprasApi";
 import {
   contenidoDe,
   empaqueDe,
@@ -595,29 +604,35 @@ export function NuevoProveedorModal({
     },
     existentes,
   );
+  /** "Guardando…" mientras habla la API: bloquea el doble clic. */
+  const [guardando, setGuardando] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     form.setIntentoGuardar(true);
-    if (!form.formValido) return;
-    onGuardar({
-      // Punto 1: el alta pasa por el MISMO generador de id que el módulo
-      // Proveedores, así el objeto que llega a la lista es idéntico en los
-      // tres formularios (sin esto el proveedor entraba sin id y el título
-      // de Detalle/Editar salía vacío y el ícono de eliminar ni abría la
-      // alerta).
-      id: siguienteProveedorId(existentes),
-      nombre: form.values.nombre.trim(),
-      nit: form.values.nit.trim(),
-      telefono: form.values.telefono.trim(),
-      email: form.values.email.trim(),
-      asesorComercial: form.values.asesorComercial.trim(),
-      direccion: form.values.direccion.trim(),
-      estado: form.values.estado,
-      // Punto 3.1: el valor llega del control segmentado (preseleccionado en
-      // "Persona Natural"; sin él `formValido` es false y este `onGuardar`
-      // no se ejecuta).
-      tipoPersona: form.values.tipoPersona,
-    });
+    if (!form.formValido || guardando) return;
+    setGuardando(true);
+    try {
+      const v = form.values;
+      // Bloque 3: el proveedor se da de alta contra la API (con el id real que
+      // devuelve el servidor) y el resto de la app lo recibe ya mapeado.
+      const creado = await crearProveedor({
+        id: "",
+        nombre: form.values.nombre.trim(),
+        nit: v.nit.trim(),
+        telefono: v.telefono.trim(),
+        email: v.email.trim(),
+        asesorComercial: v.asesorComercial.trim(),
+        direccion: v.direccion.trim(),
+        estado: v.estado,
+        tipoPersona: v.tipoPersona,
+        ...datosNuevosProveedor(v),
+      });
+      onGuardar(creado);
+    } catch (error) {
+      toast.error(mensajeErrorProveedores(error, "No se pudo crear el proveedor."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -649,11 +664,11 @@ export function NuevoProveedorModal({
             Cancelar
           </button>
           <button
-            onClick={submit}
-            disabled={!form.formValido}
+            onClick={() => void submit()}
+            disabled={!form.formValido || guardando}
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
-            Crear Proveedor
+            {guardando ? "Guardando…" : "Crear Proveedor"}
           </button>
         </div>
       </motion.div>
@@ -708,6 +723,7 @@ export function OrdenModal({
   mode, orden, proveedores, insumos, productos, categorias, tipo = "orden", fullPage = false, onClose, onGuardar, onNuevoProveedor,
   onCrearInsumo,
   onCrearProducto,
+  categoriasInsumo,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
@@ -728,6 +744,8 @@ export function OrdenModal({
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
   onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
+  /** Bloque 2.2: categorías de insumos desde la API para el modal de alta. */
+  categoriasInsumo?: CategoriaInsumo[];
   /** Crea el producto en el catálogo (tipo "Producto terminado") desde
    *  "+ Crear producto" (bloque 2): recibe el Producto COMPLETO que arma
    *  CrearProductoModal (precio 0, sin imagen, "No disponible"). */
@@ -1720,6 +1738,7 @@ export function OrdenModal({
             nombreInicial={aNombre.trim()}
             insumosExistentes={insumos}
             onGuardar={handleNuevoInsumo}
+            categoriasInsumo={categoriasInsumo}
             onClose={() => setShowNuevoInsumo(false)}
           />
         )}
@@ -1770,6 +1789,8 @@ interface NuevaOrdenCompraPageProps {
    *  callback viene de App y agrega al catálogo del panel). */
   categorias?: CategoriaProducto[];
   onCrearProducto?: (p: Producto) => Promise<Producto>;
+  /** Bloque 2.2: categorías de insumos desde la API para el modal de alta. */
+  categoriasInsumo?: CategoriaInsumo[];
   /** Punto 5: alta de insumos desde "+ Crear insumo" (catálogo, tipo "Insumo"). */
   setInsumos: React.Dispatch<React.SetStateAction<Insumo[]>>;
   onNuevoProveedor?: (p: ProveedorRef) => void;
@@ -1787,6 +1808,7 @@ export function NuevaOrdenCompraPage({
   productos,
   categorias,
   onCrearProducto,
+  categoriasInsumo,
   setInsumos,
   onNuevoProveedor,
   onBack,
@@ -1812,39 +1834,44 @@ export function NuevaOrdenCompraPage({
   const handleCrearInsumo = (ins: NuevoInsumoCreado) =>
     setInsumos(prev => [insumoDeAlta(ins), ...prev]);
 
-  const handleGuardar = (data: OrdenFormData) => {
-    if (isEdit && orden) {
-      // Validación backend: solo se puede editar en estado Borrador
-      if (!esBorrador(orden.estado)) {
-        toast.error("Solo se pueden editar órdenes en estado Borrador");
-        return;
-      }
-      // Si cambia el estado, registrar en historial
-      const nuevoHistorial = orden.estado !== data.estado
-        ? [...(orden.historialEstados ?? []), { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() }]
-        : orden.historialEstados ?? [];
-      setOrdenes(prev => prev.map(o => o.id === orden.id
-        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items, historialEstados: nuevoHistorial }
-        : o));
-      toast.success(`OC ${orden.id} actualizada`);
-    } else {
-      const nueva: OrdenCompra = {
-        id: nextOrdenId(ordenes),
-        proveedor: data.proveedor,
-        fecha: data.fecha,
-        estado: data.estado as EstadoOrden,
-        items: data.items,
-        // El estado inicial se registra desde el nacimiento de la OC: el
-        // historial nunca queda vacío y el listado muestra su fecha/hora real.
-        historialEstados: [
-          { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
-        ],
-      };
-
-      setOrdenes(prev => [nueva, ...prev]);
-      toast.success(`OC ${nueva.id} guardada como ${nueva.estado}`);
+  const handleGuardar = async (data: OrdenFormData) => {
+    const idProveedor = Number(proveedores.find((p) => p.nombre === data.proveedor)?.id ?? 0);
+    if (!idProveedor) {
+      toast.error("Elige un proveedor válido para la orden.");
+      return;
     }
-    onBack();
+    const items = data.items.filter((i) => i.idInsumo && i.cantidad > 0);
+    try {
+      if (isEdit && orden) {
+        // Validación backend: solo se puede editar en estado Borrador
+        if (!esBorrador(orden.estado)) {
+          toast.error("Solo se pueden editar órdenes en estado Borrador");
+          return;
+        }
+        const actualizada = await actualizarOrdenCompra(orden.id, {
+          id_proveedor: idProveedor,
+          items,
+        });
+        // El estado se cambia por su transición (PATCH /estado), no al editar.
+        const trasEstado =
+          data.estado !== actualizada.estado
+            ? await cambiarEstadoOrdenCompra(actualizada.id, data.estado as EstadoOrden)
+            : actualizada;
+        setOrdenes(prev => prev.map(o => o.id === orden.id ? trasEstado : o));
+        toast.success(`OC ${orden.id} actualizada`);
+      } else {
+        const creada = await crearOrdenCompra({
+          id_proveedor: idProveedor,
+          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          items,
+        });
+        setOrdenes(prev => [creada, ...prev]);
+        toast.success(`OC ${creada.id} guardada como ${creada.estado}`);
+      }
+      onBack();
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo guardar la orden."));
+    }
   };
 
   const handleNuevoProveedor = (p: ProveedorRef) => {
@@ -1870,6 +1897,7 @@ export function NuevaOrdenCompraPage({
       productos={productos}
       // Bloque 2: "+ Crear producto" con las categorías del panel.
       categorias={categorias}
+      categoriasInsumo={categoriasInsumo}
       onCrearProducto={onCrearProducto}
       onClose={onBack}
       onGuardar={handleGuardar}
@@ -2340,12 +2368,22 @@ interface Props {
    *  OrdenModal que abre este listado. */
   categorias?: CategoriaProducto[];
   onCrearProducto?: (p: Producto) => Promise<Producto>;
+  /** Bloque 2.2: categorías de insumos desde la API para el modal de alta. */
+  categoriasInsumo?: CategoriaInsumo[];
+  /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos de
+      ejemplo cuando falla. */
+  cargando?: boolean;
+  errorCarga?: string | null;
+  onReintentar?: () => void;
 }
 
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-   insumos, setInsumos, productos, setProductos, onRecargarCatalogo, categorias, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+   insumos, setInsumos, productos, setProductos, onRecargarCatalogo, categorias, categoriasInsumo, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+  cargando = false,
+  errorCarga,
+  onReintentar,
   page, setPage,
   canCreate = true, canEdit = true,
   canExportExcel = true,
@@ -2355,6 +2393,8 @@ export function OrdenCompraScreen({
   const [recepcionOrden, setRecepcionOrden] = useState<OrdenCompra | null>(null);
   const [sendConfirm, setSendConfirm] = useState<OrdenCompra | null>(null);
   const [anularConfirm, setAnularConfirm] = useState<OrdenCompra | null>(null);
+  /** Motivo de la anulación (lo exige el servidor). */
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
@@ -2404,38 +2444,53 @@ export function OrdenCompraScreen({
     return set;
   };
 
-  const handleGuardarOrden = (data: OrdenFormData) => {
-    if (modal?.mode === "create") {
-      const n: OrdenCompra = {
-        id: nextOrdenId(ordenes),
-        proveedor: data.proveedor,
-        fecha: data.fecha,
-        estado: data.estado as EstadoOrden,
-        items: data.items,
-        // Estado inicial registrado en el historial al crear (véase
-        // NuevaOrdenCompraPage.handleGuardar).
-        historialEstados: [
-          { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() },
-        ],
-      };
-      setOrdenes(p => [n, ...p]);
-      toast.success(`OC ${n.id} guardada como ${n.estado}`);
-    } else if (modal?.mode === "edit" && modal.orden) {
-      // Validación de backend: solo se puede editar en estado Borrador
-      if (!esBorrador(modal.orden.estado)) {
-        toast.error("Solo se pueden editar órdenes en estado Borrador");
-        return;
-      }
-      // Si cambia el estado, registrar en historial
-      const nuevoHistorial = modal.orden.estado !== data.estado
-        ? [...(modal.orden.historialEstados ?? []), { estado: data.estado as EstadoOrden, fechaHora: new Date().toISOString() }]
-        : modal.orden.historialEstados ?? [];
-      setOrdenes(p => p.map(o => o.id === modal.orden!.id
-        ? { ...o, proveedor: data.proveedor, fecha: data.fecha, estado: data.estado as EstadoOrden, items: data.items, historialEstados: nuevoHistorial }
-        : o));
-      toast.success(`OC ${modal.orden.id} actualizada`);
+  /** id_proveedor de la API desde el nombre que usa el formulario (el
+      selector de proveedor guarda el nombre, como siempre). */
+  const idProveedorDeNombre = (nombre: string): number => {
+    const p = proveedores.find((x) => x.nombre === nombre);
+    return p ? Number(p.id) || 0 : 0;
+  };
+
+  const handleGuardarOrden = async (data: OrdenFormData) => {
+    const idProveedor = idProveedorDeNombre(data.proveedor);
+    if (!idProveedor) {
+      toast.error("Elige un proveedor válido para la orden.");
+      return;
     }
-    setModal(null);
+    const items = data.items.filter((i) => i.idInsumo && i.cantidad > 0);
+    try {
+      if (modal?.mode === "create") {
+        const creada = await crearOrdenCompra({
+          id_proveedor: idProveedor,
+          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          items,
+        });
+        setOrdenes(p => [creada, ...p]);
+        toast.success(`OC ${creada.id} guardada como ${creada.estado}`);
+      } else if (modal?.mode === "edit" && modal.orden) {
+        // Validación de backend: solo se puede editar en estado Borrador
+        if (!esBorrador(modal.orden.estado)) {
+          toast.error("Solo se pueden editar órdenes en estado Borrador");
+          return;
+        }
+        // El estado no se edita desde el formulario: si la orden queda
+        // "Enviado" se cambia por su transición (PATCH /estado).
+        const actualizada = await actualizarOrdenCompra(modal.orden.id, {
+          id_proveedor: idProveedor,
+          items,
+        });
+        const trasEstado =
+          data.estado !== actualizada.estado
+            ? await cambiarEstadoOrdenCompra(actualizada.id, data.estado as EstadoOrden)
+            : actualizada;
+        setOrdenes(p => p.map(o => o.id === modal.orden!.id ? trasEstado : o));
+        toast.success(`OC ${trasEstado.id} actualizada`);
+      }
+      setModal(null);
+    } catch (error) {
+      // 409/400 del servidor: el mensaje se muestra y no se cambia nada.
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo guardar la orden."));
+    }
   };
 
   const handleNuevoProveedorLocal = (p: ProveedorRef): string => {
@@ -2446,84 +2501,64 @@ export function OrdenCompraScreen({
     return p.nombre;
   };
 
-  const handleEnviarOrden = (o: OrdenCompra) => {
-    setOrdenes(p => p.map(x => x.id === o.id ? conHistorial(x, "Enviado") : x));
-    setSendConfirm(null);
-    toast.success(`OC ${o.id} enviada al proveedor`);
+  const handleEnviarOrden = async (o: OrdenCompra) => {
+    try {
+      const actualizada = await cambiarEstadoOrdenCompra(o.id, "Enviado");
+      setOrdenes(p => p.map(x => x.id === o.id ? actualizada : x));
+      toast.success(`OC ${o.id} enviada al proveedor`);
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo enviar la orden."));
+    } finally {
+      setSendConfirm(null);
+    }
   };
 
   const handleAnularOrden = async (o: OrdenCompra) => {
     if (anulandoOrden) return;
+    const motivo = (motivoAnulacion ?? "").trim();
+    if (!motivo) {
+      toast.error("Debes escribir el motivo de la anulación");
+      return;
+    }
     setAnulandoOrden(true);
-    // Anular la orden anula también sus facturas: la compra queda cerrada y no
-    // vuelve al estado "Recibido". Al pasarlas a "Anulado" se devuelve al
-    // inventario lo que cada una llegó a sumar (mismo camino que anular la
-    // compra desde Gestión de compra).
-    const comprasTras: GestionCompra[] = [];
-    const erroresApi: string[] = [];
-    for (const g of gestiones) {
-      if (g.ordenId !== o.id) {
-        comprasTras.push(g);
-        continue;
-      }
-      const revertir = g.estado !== "Anulado" && !!g.stockAplicado && !g.stockRevertido;
-      let itemsActualizados = g.items ?? [];
-      let errorApi = false;
-      if (revertir) {
-        // Punto B7: también se devuelve el stock de las líneas de PRODUCTO
-        // (los precios de venta no se revierten: el precio ya publicado se
-        // conserva; aquí sólo regresa lo que la factura sumó al inventario).
-        const itemsInsumo = (g.items ?? []).filter((item) =>
-          item.tipoItem === "insumo" || (!item.tipoItem && insumos.some((i) => i.id === item.idInsumo)),
-        );
-        aplicarStockCompra(itemsInsumo, -1, {
-          insumos,
-          setInsumos,
-        });
-        if (productos && setProductos) {
-          const resultado = await revertirEntradasCompraApi(g.items ?? [], productos, setProductos);
-          itemsActualizados = resultado.items as OrdenItem[];
-          errorApi = resultado.errores.length > 0;
-          resultado.errores.forEach((error) => {
-            erroresApi.push(`No se revirtió «${error.nombre}»: ${error.mensaje}`);
-          });
-        }
-      }
-      comprasTras.push({
-        ...g,
-        estado: "Anulado" as EstadoGestion,
-        items: itemsActualizados,
-        // Guard anti doble-reversión, igual que en Gestión de compra.
-        stockRevertido: revertir && !errorApi ? true : g.stockRevertido,
-      });
-    }
-    setOrdenes((prev) => prev.map((x) => x.id === o.id ? conHistorial(x, "Anulado") : x));
-
-    const anuladas = comprasTras.filter((g) => g.ordenId === o.id);
-
-    if (anuladas.length > 0) {
-      setGestiones(() => comprasTras);
-    }
-
-    if (comprasTras.some((g) => g.ordenId === o.id && (g.items ?? []).some((item) => item.stockApiRevertido))) {
+    try {
+      // El backend anula la orden y SUS compras devolviendo el stock que
+      // hubieran sumado (y recalculando la recepción). Un 409 muestra su
+      // mensaje y no se cambia nada.
+      const actualizada = await cambiarEstadoOrdenCompra(o.id, "Anulado", motivo);
+      setOrdenes((prev) => prev.map((x) => (x.id === o.id ? actualizada : x)));
+      // Las compras asociadas quedaron "Anulado" en la base: se recargan.
+      setGestiones(await listarCompras());
       await onRecargarCatalogo?.();
+      toast.success(`OC ${o.id} anulada`);
+      setAnularConfirm(null);
+      setRecepcionOrden(null);
+      setMotivoAnulacion("");
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo anular la orden."));
+    } finally {
+      setAnulandoOrden(false);
     }
-
-    setAnularConfirm(null);
-    setRecepcionOrden(null);
-    erroresApi.forEach((mensaje) => toast.error(mensaje));
-    toast.success(
-      anuladas.length > 0
-        ? `OC ${o.id} y sus compras anuladas`
-        : `OC ${o.id} anulada`
-    );
-    setAnulandoOrden(false);
   };
 
-  const handleCambiarEstado = (id: string, next: EstadoOrden) => {
-    setOrdenes(p => p.map(x => x.id === id ? conHistorial(x, next) : x));
-    setEstadoConfirm(null);
-    toast.success(`Estado cambiado a: ${next}`);
+  const handleCambiarEstado = async (id: string, next: EstadoOrden) => {
+    // "Anulado" siempre pide motivo: se abre su modal en vez de cambiar el
+    // estado a pelo (el servidor exige el motivo).
+    if (next === "Anulado") {
+      setEstadoConfirm(null);
+      setMotivoAnulacion("");
+      setAnularConfirm(ordenes.find((o) => o.id === id) ?? null);
+      return;
+    }
+    try {
+      const actualizada = await cambiarEstadoOrdenCompra(id, next);
+      setOrdenes(p => p.map(x => x.id === id ? actualizada : x));
+      toast.success(`Estado cambiado a: ${next}`);
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo cambiar el estado."));
+    } finally {
+      setEstadoConfirm(null);
+    }
   };
 
   const handleGuardarRecepcion = (o: OrdenCompra, rec: Recepcion) => {
@@ -2740,6 +2775,26 @@ export function OrdenCompraScreen({
           paginador queda pegado debajo. La tabla NO hace scroll vertical: se
           pagina en filas fijas de 5; sólo queda scroll horizontal en tablet y
           scroll vertical en móvil (tarjetas). */}
+      {/* Carga desde la API y su error con "Reintentar": nunca datos de
+          ejemplo cuando falla. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
+          Cargando órdenes de compra…
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
+          <p className="font-semibold text-foreground">{errorCarga}</p>
+          {onReintentar && (
+            <button
+              type="button"
+              onClick={onReintentar}
+              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
         <div className="overflow-x-auto">
           {/* Escritorio/tablet (>=768px): tabla. Las 3 columnas de dinero y la
@@ -3018,6 +3073,7 @@ export function OrdenCompraScreen({
           </div>
         </div>
       </div>
+      )}
 
       {/* Paginador fuera y debajo de la card (unificado). */}
       {filtered.length > 0 && (
@@ -3036,6 +3092,7 @@ export function OrdenCompraScreen({
             productos={productos}
             // Bloque 2: "+ Crear producto" con las categorías del panel.
             categorias={categorias}
+            categoriasInsumo={categoriasInsumo}
             onCrearProducto={onCrearProducto}
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
@@ -3074,6 +3131,9 @@ export function OrdenCompraScreen({
             confirmLabel="Anular"
             loading={anulandoOrden}
             danger={true}
+            showMotivo
+            motivo={motivoAnulacion}
+            onMotivoChange={setMotivoAnulacion}
             icon={
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <Ban className="w-5 h-5 text-red-600" />
@@ -3136,6 +3196,8 @@ export function NuevoInsumoModal({
   const [iva, setIva] = useState(0);
   const [tocado, setTocado] = useState({ nombre: false, categoria: false, unidad: false, precio: false, iva: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
+  /** "Guardando…" mientras habla la API: bloquea el doble clic. */
+  const [guardando, setGuardando] = useState(false);
 
   // Bloque 3: mismas reglas que Gestión de Insumos — nombre único comparando
   // sin tildes ni mayúsculas de más (`mismoNombre`) y categoría obligatoria.
@@ -3154,19 +3216,36 @@ export function NuevoInsumoModal({
   const marcarTocado = (campo: "nombre" | "categoria" | "unidad" | "precio" | "iva") =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
-  const submit = () => {
+  const submit = async () => {
     setIntentoGuardar(true);
-    if (!formValido) return;
-    onGuardar({
-      id: `INS-N-${Date.now()}`,
-      // Bloque 3: misma limpieza que Gestión de Insumos — un solo espacio
-      // entre palabras y primera letra en MAYÚSCULA.
-      nombre: nombreParaGuardar(nombre),
-      unidadMedida: unidad,
-      precioUnitario: precio,
-      iva,
-      categoriaId,
-    });
+    if (!formValido || guardando) return;
+    setGuardando(true);
+    try {
+      // 3.4: el insumo se da de alta contra la API (tipo "Insumo", con el
+      // costo y el IVA del modal) y el payload que sale es el del SERVIDOR:
+      // así el catálogo recibe el id real ("INS-###") y no uno inventado.
+      const creado = await crearInsumo({
+        nombre: nombreParaGuardar(nombre),
+        tipo: "Insumo",
+        id_categoria_insumo: Number(categoriaId),
+        unidad_medida: unidad,
+        costo_unitario: precio,
+        iva,
+      });
+      onGuardar({
+        id: creado.insumo.id,
+        nombre: creado.insumo.nombre,
+        unidadMedida: creado.insumo.unidadMedida,
+        precioUnitario: creado.insumo.costoUnitario,
+        iva: creado.insumo.iva ?? iva,
+        categoriaId: creado.insumo.categoriaId,
+      });
+    } catch (error) {
+      // 409 (nombre repetido) o 400: mensaje del servidor, modal abierto.
+      toast.error(mensajeErrorInsumos(error, "No se pudo crear el insumo."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -3276,11 +3355,11 @@ export function NuevoInsumoModal({
             Cancelar
           </button>
           <button
-            onClick={submit}
-            disabled={!formValido}
+            onClick={() => void submit()}
+            disabled={!formValido || guardando}
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
-            Crear Insumo
+            {guardando ? "Guardando…" : "Crear Insumo"}
           </button>
         </div>
       </motion.div>

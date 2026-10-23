@@ -123,7 +123,7 @@ import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/G
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
+import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
@@ -131,6 +131,13 @@ import {
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos } from "@/features/productos/services/productosApi";
+import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/insumos/services/insumosApi";
+import { mapearFichasApi, obtenerFichasVigentes } from "@/features/productos/services/fichasApi";
+import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/orden-produccion/services/ordenesProduccionApi";
+import { listarProveedores, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
+import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/orden-compra/services/ordenesCompraApi";
+import { listarCompras, mensajeErrorCompras } from "@/features/compras/services/comprasApi";
+import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/configCategoria";
 import { mismoNombre } from "@/shared/utils/nombres";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
@@ -7098,6 +7105,63 @@ const ORDENES_PRODUCCION_STORAGE_KEY = "sivpro.ordenesProduccion.v1";
 const INSUMOS_STORAGE_KEY = "sivpro.insumos.v1";
 const FICHAS_STORAGE_KEY = "sivpro.fichasProductos.v1";
 const NO_CONFORMIDADES_STORAGE_KEY = "sivpro.noConformidades.v1";
+// Respaldo único de la fase 2 (insumos, fichas y órdenes pasan a la API).
+const INSUMOS_RESPALDO_FASE2_KEY = `${INSUMOS_STORAGE_KEY}-respaldo-fase2`;
+const FICHAS_RESPALDO_FASE2_KEY = `${FICHAS_STORAGE_KEY}-respaldo-fase2`;
+const ORDENES_RESPALDO_FASE2_KEY = `${ORDENES_PRODUCCION_STORAGE_KEY}-respaldo-fase2`;
+
+// Respaldo único de la fase 3 (proveedores, órdenes de compra y compras pasan
+// a la API). Estas tres listas nunca se persistieron en el navegador (vivían
+// en semillas en memoria), así que el respaldo copia SOLO si alguna clave
+// legada llegara a existir: nunca borra nada ni sobrescribe un respaldo.
+const PROVEEDORES_RESPALDO_FASE3_KEY = "sivpro.proveedores.v1-respaldo-fase3";
+const ORDENES_COMPRA_RESPALDO_FASE3_KEY = "sivpro.ordenesCompra.v1-respaldo-fase3";
+const COMPRAS_RESPALDO_FASE3_KEY = "sivpro.compras.v1-respaldo-fase3";
+
+const respaldarDatosComprasFase3 = () => {
+  try {
+    const parejas: [string, string[]][] = [
+      [PROVEEDORES_RESPALDO_FASE3_KEY, ["sivpro.proveedores.v1"]],
+      [ORDENES_COMPRA_RESPALDO_FASE3_KEY, ["sivpro.ordenesCompra.v1", "sivpro.ordenCompra.v1"]],
+      [COMPRAS_RESPALDO_FASE3_KEY, ["sivpro.compras.v1", "sivpro.gestiones.v1"]],
+    ];
+    for (const [respaldo, originales] of parejas) {
+      if (localStorage.getItem(respaldo) !== null) continue;
+      for (const original of originales) {
+        const legado = localStorage.getItem(original);
+        if (legado !== null) {
+          localStorage.setItem(respaldo, legado);
+          break;
+        }
+      }
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
+};
+respaldarDatosComprasFase3();
+
+/** Copia los datos locales de insumos, fichas y órdenes antes de que dejen de
+    leerse del navegador. Una sola vez, sin borrar nada y sin sobrescribir un
+    respaldo existente (mismo criterio que `respaldarDatosProductosFase1`). */
+const respaldarDatosProduccionFase2 = () => {
+  try {
+    const parejas: [string, string][] = [
+      [INSUMOS_RESPALDO_FASE2_KEY, INSUMOS_STORAGE_KEY],
+      [FICHAS_RESPALDO_FASE2_KEY, FICHAS_STORAGE_KEY],
+      [ORDENES_RESPALDO_FASE2_KEY, ORDENES_PRODUCCION_STORAGE_KEY],
+    ];
+    for (const [respaldo, original] of parejas) {
+      if (localStorage.getItem(respaldo) === null) {
+        const legado = localStorage.getItem(original);
+        if (legado !== null) localStorage.setItem(respaldo, legado);
+      }
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
+};
+respaldarDatosProduccionFase2();
 
 /** Lectura genérica: si no hay nada guardado, o hay algo corrupto o con otra
     forma, se usa la semilla en vez de romper el arranque. */
@@ -7605,30 +7669,12 @@ export default function App() {
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
-  // cada plato de un pedido.
-  const [fichasPorProducto, setFichasPorProducto] =
-    useState<FichasPorProducto>(() => {
-      // Migración al modelo único + normalización de IDs, UNA sola vez y con
-      // los IDs reales de esta sesión (productos del menú e insumos, porque
-      // los Productos Insumo también guardan ficha). Migrar antes de
-      // normalizar hace que las fichas recién creadas desde el legado ya
-      // entren con número en la serie.
-      const insumosSemilla = mezclarInsumosPersistidos();
-      const fichasLeidas = leerFichasPersistidas();
-      const idsExistentes = [
-        ...leerProductosParaMigracion().map((p) => p.id),
-        ...insumosSemilla.map((i) => i.id),
-        ...Object.keys(fichasLeidas),
-      ];
-      return normalizarIdsFicha(
-        migrarFichasLegacy(fichasLeidas, insumosSemilla),
-        idsExistentes,
-      );
-    });
-  // Órdenes de producción. Antes vivían dentro de OrdenProduccionScreen, así que
-  // se perdían al salir del módulo y no había forma de crear el pedido solo.
-  const [ordenesProduccion, setOrdenesProduccion] =
-    useState<OrdenProduccion[]>(leerOrdenesPersistidas);
+  // cada plato de un pedido. Desde la fase 2 viven en la API: el estado arranca
+  // vacío y lo llena `cargarInsumosFichas` (GET /fichas/vigentes).
+  const [fichasPorProducto, setFichasPorProducto] = useState<FichasPorProducto>({});
+  // Órdenes de producción (API). Antes vivían dentro de OrdenProduccionScreen y
+  // después en localStorage; ahora la lista viene de GET /ordenes-produccion.
+  const [ordenesProduccion, setOrdenesProduccion] = useState<OrdenProduccion[]>([]);
   // No conformidades (módulo Productos no conformes). Subidas a App para que
   // Orden de Producción pueda registrar mermas y sobrevivan al F5.
   const [noConformidades, setNoConformidades] =
@@ -7683,24 +7729,131 @@ export default function App() {
     }
   };
 
-  const cargarProductosGestion = async () => {
+  const cargarProductosGestion = async (): Promise<Producto[]> => {
     setProductosCargando(true);
     setErrorCargaProductos(null);
     try {
       const listado = await listarGestion();
       setProductos(listado);
       setProductosGestionCargados(true);
+      return listado;
     } catch (error) {
       setErrorCargaProductos(mensajeErrorProductos(error, "No se pudieron cargar los productos."));
       setProductosGestionCargados(false);
+      return [];
     } finally {
       setProductosCargando(false);
     }
   };
 
+  /** Configuración de la categoría de un producto (tamaños de su ficha), con
+      el catálogo que se pasa como argumento: las fichas de la API sólo traen
+      las porciones del PRIMER tamaño y el resto se arma desde aquí. */
+  const configDeProducto = (
+    idProducto: string,
+    productosCargados: Producto[],
+  ): ConfigCategoria | null => {
+    const p = productosCargados.find((x) => x.id === idProducto);
+    return p ? configDeCategoria(p.idCategoria, p.categoriaNombre) : null;
+  };
+
+  /** Insumos, categorías de insumos y fichas vigentes (API). `productosCargados`
+      es el catálogo ya leído: hace falta para derivar los tamaños de cada
+      ficha. Si falla NO se vuelve a datos de ejemplo: queda el error con
+      "Reintentar". */
+  const cargarInsumosFichas = async (productosCargados?: Producto[]) => {
+    setInsumosCargando(true);
+    setErrorInsumos(null);
+    try {
+      const [categorias, datosInsumos, fichasVigentes] = await Promise.all([
+        listarCategoriasInsumo(),
+        listarInsumos(),
+        obtenerFichasVigentes(),
+      ]);
+      setCategoriasInsumo(categorias);
+      setInsumos(datosInsumos.insumos);
+      // Las fichas de producto insumo ya vienen dentro de cada insumo; las de
+      // producto (pizzas, lasañas) llegan por su cuenta y aquí se les añaden
+      // sus "Porciones por tamaño".
+      const base = productosCargados ?? productos;
+      const fichasDeProducto = mapearFichasApi(
+        fichasVigentes.filter((f) => f.id_insumo == null || f.id_insumo === ""),
+        (id) => configDeProducto(id, base),
+      );
+      setFichasPorProducto({ ...datosInsumos.fichas, ...fichasDeProducto });
+    } catch (error) {
+      setErrorInsumos(mensajeErrorInsumos(error, "No se pudieron cargar los insumos."));
+    } finally {
+      setInsumosCargando(false);
+    }
+  };
+
+  /** Órdenes de producción (API). */
+  const cargarOrdenes = async () => {
+    setOrdenesCargando(true);
+    setErrorOrdenes(null);
+    try {
+      setOrdenesProduccion(await listarOrdenesProduccion());
+    } catch (error) {
+      setErrorOrdenes(mensajeErrorOrdenes(error, "No se pudieron cargar las órdenes de producción."));
+    } finally {
+      setOrdenesCargando(false);
+    }
+  };
+
+  /** Proveedores (API, fase 3). */
+  const cargarProveedores = async () => {
+    setProveedoresCargando(true);
+    setErrorProveedores(null);
+    try {
+      setProveedores(await listarProveedores());
+    } catch (error) {
+      setErrorProveedores(mensajeErrorProveedores(error, "No se pudieron cargar los proveedores."));
+    } finally {
+      setProveedoresCargando(false);
+    }
+  };
+
+  /** Órdenes de compra (API, fase 3). */
+  const cargarOrdenesCompra = async () => {
+    setOrdenesCompraCargando(true);
+    setErrorOrdenesCompra(null);
+    try {
+      setOrdenes(await listarOrdenesCompra());
+    } catch (error) {
+      setErrorOrdenesCompra(mensajeErrorOrdenesCompra(error, "No se pudieron cargar las órdenes de compra."));
+    } finally {
+      setOrdenesCompraCargando(false);
+    }
+  };
+
+  /** Compras (API, fase 3). */
+  const cargarCompras = async () => {
+    setComprasCargando(true);
+    setErrorCompras(null);
+    try {
+      setGestiones(await listarCompras());
+    } catch (error) {
+      setErrorCompras(mensajeErrorCompras(error, "No se pudieron cargar las compras."));
+    } finally {
+      setComprasCargando(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn || !restauracionSesionLista) return;
-    void cargarProductosGestion();
+    void (async () => {
+      // Primero los productos: las fichas necesitan su categoría para armar
+      // los tamaños de "Porciones por tamaño".
+      const productosCargados = await cargarProductosGestion();
+      await Promise.all([
+        cargarInsumosFichas(productosCargados),
+        cargarOrdenes(),
+        cargarProveedores(),
+        cargarOrdenesCompra(),
+        cargarCompras(),
+      ]);
+    })();
   }, [isLoggedIn, restauracionSesionLista]);
 
   useEffect(() => {
@@ -8153,20 +8306,31 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [orders] = useState<Order[]>(ORDERS);
-  const [ordenes, setOrdenes] = useState<OrdenCompra[]>(
-    // Órdenes 2024 → relativas a hoy: [0, 1, 3, 6, 10] cubre hoy, la semana
-    // y el mes para el filtro del Dashboard.
-    semillaConFechasRelativas(INITIAL_ORDENES, "fecha", [0, 1, 3, 6, 10]),
-  );
-  const [gestiones, setGestiones] = useState<GestionCompra[]>(
-    // Facturas ago/sept 2026 → relativas a hoy: [0, 1, 2, 4, 6].
-    semillaConFechasRelativas(INITIAL_GESTIONES, "fechaFactura", [0, 1, 2, 4, 6]),
-  );
-  const [insumos, setInsumos] =
-    useState<Insumo[]>(() => mezclarInsumosPersistidos());
-  const [proveedores, setProveedores] = useState<ProveedorRef[]>(
-    PROVEEDORES_INIT,
-  );
+  // Órdenes de compra y compras (API, fase 3). Sin semillas: las cargan
+  // `cargarOrdenesCompra`/`cargarCompras`; si falla queda el error con
+  // "Reintentar" y no se vuelve a datos de ejemplo.
+  const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
+  const [ordenesCompraCargando, setOrdenesCompraCargando] = useState(false);
+  const [errorOrdenesCompra, setErrorOrdenesCompra] = useState<string | null>(null);
+  const [gestiones, setGestiones] = useState<GestionCompra[]>([]);
+  const [comprasCargando, setComprasCargando] = useState(false);
+  const [errorCompras, setErrorCompras] = useState<string | null>(null);
+  // Catálogo de insumos (API). Sin semilla local: lo llena
+  // `cargarInsumosFichas`; si falla se muestra el error con "Reintentar" y no
+  // se vuelve a datos de ejemplo.
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [insumosCargando, setInsumosCargando] = useState(false);
+  const [errorInsumos, setErrorInsumos] = useState<string | null>(null);
+  // Categorías de insumos (API). Las usan Gestión de Insumos y el
+  // "+ Crear insumo" de Compras; en los selectores solo entran las activas.
+  const [categoriasInsumo, setCategoriasInsumo] = useState<CategoriaInsumo[]>([]);
+  // Estado de carga de las órdenes de producción (API).
+  const [ordenesCargando, setOrdenesCargando] = useState(false);
+  const [errorOrdenes, setErrorOrdenes] = useState<string | null>(null);
+  // Proveedores (API, fase 3). Sin semilla: los carga `cargarProveedores`.
+  const [proveedores, setProveedores] = useState<ProveedorRef[]>([]);
+  const [proveedoresCargando, setProveedoresCargando] = useState(false);
+  const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -8225,27 +8389,9 @@ export default function App() {
     }
   }, [empleados]);
 
-  // Cada cambio de órdenes, insumos, ventas o fichas se guarda en localStorage
-  // para que el trabajo de cocina sobrevive al F5: en la cocina se entra y sale
-  // del módulo muchas veces por turno, y perder las órdenes en proceso obligaba
-  // a rehacerlas a mano.
-  useEffect(() => {
-    try {
-      localStorage.setItem(ORDENES_PRODUCCION_STORAGE_KEY, JSON.stringify(ordenesProduccion));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
-      // en memoria durante la sesión.
-    }
-  }, [ordenesProduccion]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(insumos));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [insumos]);
-
+  // Las órdenes de producción y los insumos ya NO se guardan en localStorage:
+  // desde la fase 2 viven en la API (el respaldo local quedó en las claves
+  // `-respaldo-fase2`, ver `respaldarDatosProduccionFase2`).
   useEffect(() => {
     try {
       localStorage.setItem(NO_CONFORMIDADES_STORAGE_KEY, JSON.stringify(noConformidades));
@@ -8280,125 +8426,28 @@ export default function App() {
     return () => clearInterval(id);
   }, [screen, puedeVerVentas]);
 
+  // Las fichas técnicas tampoco se guardan en localStorage: se leen y escriben
+  // en la API (`-respaldo-fase2` conserva la copia local de la fase 1).
+
+  // ── Ventas → órdenes de producción (todo lo hace la API) ──
+  // La orden de una venta la crea el backend al aceptarla (tipo "Pedido") y la
+  // cancela al anularla. Los dos efectos locales que replicaban ese flujo
+  // desaparecen; lo único que queda es recargar las órdenes cuando el ESTADO
+  // de alguna venta cambia (aceptar, anular, pasar a devolución…),
+  // comparándolo contra el valor anterior para no llamar en cada render ni en
+  // cada cambio de la lista.
+  const estadoVentasRef = useRef<Record<string, Venta["estado"]> | null>(null);
   useEffect(() => {
-    try {
-      localStorage.setItem(FICHAS_STORAGE_KEY, JSON.stringify(fichasPorProducto));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [fichasPorProducto]);
-
-  // Creación automática de la orden de producción (§3a / P2) — punto C2:
-  // cuando una venta pagada queda Por entregar se le crea una orden local
-  // una orden tipo "Pedido" en Pendiente. Mientras la venta está
-  // las ventas pendientes de verificación no generan la orden. La orden
-  // local se conserva para los flujos de Producción que aún no usan API.
-  //
-  // El filtro es por ESTADO, no por transición, así que cubre los flujos:
-  // Ventas que ya están Por entregar pueden alimentar la vista local de
-  // Producción mientras ese módulo se conecta a su propia API.
-  // `crearOrdenPedido` arma TODOS los ítems de la venta en UNA sola orden
-  // (pizza de cañón + lasaña mixta = una orden con ambas líneas), nunca una
-  // orden por producto.
-  //
-  // Se salta la PRIMERA ejecución (el montaje): en ella ya vienen ventas de
-  // la semilla y de lo que se cargó de localStorage, y no es un cambio de
-  // estado sino el arranque. A partir de ahí, cada venta que aparece
-  // preparada sin orden genera la suya. La clave anti-duplicados es `ventaId`:
-  // una venta = una sola orden, y el updater vuelve a comprobarlo contra el
-  // estado final por si acaso.
-  const vigilaVentasRef = useRef(false);
-  useEffect(() => {
-    if (!vigilaVentasRef.current) {
-      vigilaVentasRef.current = true;
-      return;
-    }
-    const conOrden = new Set(ordenesProduccion.map((o) => o.ventaId).filter(Boolean) as string[]);
-    const preparable = (v: Venta) => v.estado === "Por entregar";
-    const nuevas = ventas.filter((v) => preparable(v) && !conOrden.has(v.id));
-    if (nuevas.length === 0) return;
-
-    const creada: OrdenProduccion[] = [];
-    let id = siguienteOrdenId(ordenesProduccion);
-    for (const v of nuevas) {
-      creada.push(crearOrdenPedido(v, { productos, fichas: fichasPorProducto, insumos }, id));
-      id = `OP-${String(parseInt(id.replace("OP-", ""), 10) + 1).padStart(3, "0")}`;
-    }
-    setOrdenesProduccion((p) => {
-      // Defensa por `ventaId`: si alguna orden del mismo ventaId ya entró en
-      // `p` (carrera rara con el buscador manual), no se vuelve a crear.
-      const yaTiene = new Set(p.map((o) => o.ventaId).filter(Boolean) as string[]);
-      return [...creada.filter((o) => !o.ventaId || !yaTiene.has(o.ventaId)), ...p];
-    });
-    creada.forEach((o) =>
-      toast.success(`Orden de producción ${o.id} creada para la venta ${o.ventaNumero}`),
-    );
-  }, [ventas, ordenesProduccion, productos, fichasPorProducto, insumos]);
-
-  // ── Venta anulada → su orden local de Producción se cancela ──
-  // El backend hace lo mismo en la base (estado 'Cancelada' con
-  // `fecha_cancelada` y devolución de las bebidas al stock); aquí se replica en
-  // el espejo local que lee la pantalla de Producción.
-  //
-  // El MONTAJE sólo limpia órdenes huérfanas de una sesión anterior: la
-  // reposición de stock queda reservada a las anulaciones observadas en vivo,
-  // porque al arrancar el stock vuelve a la semilla y ya no se sabe qué salió
-  // de verdad (mismo criterio que el efecto de "stock fresco" de arriba).
-  // Sólo vuelven las BEBIDAS (Producto terminado): los elaborados salieron al
-  // producirse y no son reventa, igual que en `cancelarOrdenProduccionDeVenta`.
-  const montajeAnulacionesRef = useRef(true);
-  useEffect(() => {
-    const esMontaje = montajeAnulacionesRef.current;
-    montajeAnulacionesRef.current = false;
-    const anuladas = new Set(ventas.filter((v) => v.estado === "Anulado").map((v) => v.id));
-    if (anuladas.size === 0) return;
-    const pendientes = ordenesProduccion.filter(
-      (o) => !!o.ventaId && anuladas.has(o.ventaId) && o.estadoOrden !== "cancelada",
-    );
-    if (pendientes.length === 0) return;
-
-    if (!esMontaje) {
-      const reponer = new Map<string, number>();
-      for (const orden of pendientes) {
-        if (!orden.productosDescontados) continue;
-        for (const linea of orden.lineas) {
-          if (!linea.productoId) continue;
-          const producto = productos.find((p) => p.id === linea.productoId);
-          if (producto?.tipo !== TIPOS_PRODUCTO[1]) continue;
-          reponer.set(producto.id, (reponer.get(producto.id) ?? 0) + (linea.cantidadEstimada || 0));
-        }
-      }
-      if (reponer.size > 0) {
-        setProductos((prev) =>
-          prev.map((p) =>
-            reponer.has(p.id)
-              ? { ...p, stockDisponible: p.stockDisponible + (reponer.get(p.id) ?? 0) }
-              : p,
-          ),
-        );
-      }
-      const ids = pendientes.map((o) => o.id);
-      toast.info(
-        ids.length === 1
-          ? `Orden de producción ${ids[0]} cancelada por la anulación de la venta`
-          : `Órdenes de producción ${ids.join(", ")} canceladas por la anulación de las ventas`,
-      );
-    }
-
-    const cancelar = new Set(pendientes.map((o) => o.id));
-    const ahora = new Date().toISOString();
-    setOrdenesProduccion((prev) =>
-      prev.map((o) =>
-        cancelar.has(o.id) && o.estadoOrden !== "cancelada"
-          ? {
-              ...o,
-              estadoOrden: "cancelada",
-              historial: [...o.historial, { de: o.estadoOrden, a: "cancelada", fechaHora: ahora }],
-            }
-          : o,
-      ),
-    );
-  }, [ventas, ordenesProduccion, productos]);
+    const anterior = estadoVentasRef.current;
+    const actual: Record<string, Venta["estado"]> = {};
+    for (const v of ventas) actual[v.id] = v.estado;
+    estadoVentasRef.current = actual;
+    // La primera ejecución es la carga inicial, no un cambio de estado.
+    if (anterior === null) return;
+    const cambio = ventas.some((v) => anterior[v.id] !== undefined && anterior[v.id] !== v.estado);
+    if (!cambio) return;
+    void cargarOrdenes();
+  }, [ventas]);
 
   // Al abrir el detalle de un producto se guarda dónde estaba el catálogo. Como
   // la navegación es un simple `setScreen`, al volver el grid se rearmaba desde
@@ -8464,18 +8513,11 @@ export default function App() {
     navigate("production-orders");
   };
 
-  /** A2 — Orden "Preparación en lote" del Producto Insumo recién creado en
-      Insumos: nace Pendiente con su ficha v1 y su "Cantidad a hacer", y sin
-      descontar nada. Los datos llegan como ARGUMENTOS (no del estado) porque
-      el producto insumo y su ficha v1 se acaban de crear en ESTE mismo clic y
-      el estado de App todavía no los tiene. Devuelve el id para el toast. */
-  const crearOrdenPreparacionPI = (pi: Insumo, ficha: FichaVersion): string => {
-    const id = siguienteOrdenId(ordenesProduccion);
-    setOrdenesProduccion((p) => [
-      crearOrdenPreparacion(pi, ficha, { fichas: fichasPorProducto }, id),
-      ...p,
-    ]);
-    return id;
+  /** Recarga insumos, fichas y órdenes desde la API tras una acción del módulo
+      de Producción (crear un producto insumo, iniciar o completar una orden…):
+      el stock de los insumos cambió en la base. */
+  const recargarProduccion = async () => {
+    await Promise.all([cargarInsumosFichas(productos), cargarOrdenes()]);
   };
 
   /** "Ver orden" del toast de Insumos: salta a Orden de Producción con el
@@ -9689,6 +9731,9 @@ export default function App() {
                   {...getPerms("orden-compra")}
                   ordenes={ordenes}
                   setOrdenes={setOrdenes}
+                  cargando={ordenesCompraCargando}
+                  errorCarga={errorOrdenesCompra}
+                  onReintentar={() => void cargarOrdenesCompra()}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}
@@ -9705,6 +9750,7 @@ export default function App() {
                   // las categorías del panel y el alta en el catálogo.
                   categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  categoriasInsumo={categoriasInsumo}
                   onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
@@ -9740,6 +9786,7 @@ export default function App() {
                   // Bloque 2: "+ Crear producto" con las categorías del panel.
                   categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  categoriasInsumo={categoriasInsumo}
                   setInsumos={setInsumos}
                   onBack={() => {
                     setOrdenAEditar(null);
@@ -9762,11 +9809,12 @@ export default function App() {
                   // solicitados (categorías del panel y alta en el catálogo).
                   categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  categoriasInsumo={categoriasInsumo}
                   onRecargarCatalogo={recargarCatalogoTrasCambio}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}
-                  onGuardar={(recepcion, estado) => {
+                  onGuardar={async (recepcion, estado) => {
                     setOrdenes((prev) =>
                       prev.map((o) => {
                         if (o.id !== ordenRecepcion.id) return o;
@@ -9786,6 +9834,15 @@ export default function App() {
                     );
 
                     setOrdenRecepcion(null);
+                    // 5.2: después de la recepción el backend cambió el stock
+                    // y los precios: se recargan la OC, las compras, los
+                    // insumos y los productos.
+                    await Promise.all([
+                      cargarOrdenesCompra(),
+                      cargarCompras(),
+                      cargarInsumosFichas(productos),
+                      cargarProductosGestion(),
+                    ]);
                   }}
                   onBack={() => {
                     setOrdenRecepcion(null);
@@ -9810,6 +9867,9 @@ export default function App() {
                   {...getPerms("gestion-compra")}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
+                  cargando={comprasCargando}
+                  errorCarga={errorCompras}
+                  onReintentar={() => void cargarCompras()}
                   ordenes={ordenes}
                   setOrdenes={setOrdenes}
                   insumos={insumos}
@@ -9824,6 +9884,7 @@ export default function App() {
                   // lectura, pero ambas pantallas quedan iguales).
                   categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  categoriasInsumo={categoriasInsumo}
                   onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onNuevaCompra={() => navigate("nueva-compra")}
                 />
@@ -9846,6 +9907,7 @@ export default function App() {
                   // (categorías del panel y alta en el catálogo).
                   categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  categoriasInsumo={categoriasInsumo}
                   onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onBack={() => navigate("gestion-compra")}
                 />
@@ -9853,6 +9915,9 @@ export default function App() {
               {screen === "suppliers" && (
                 <SuppliersScreen
                   {...getPerms("suppliers")}
+                  cargando={proveedoresCargando}
+                  errorCarga={errorProveedores}
+                  onReintentar={() => void cargarProveedores()}
                   ordenes={ordenes}
                   gestiones={gestiones}
                   proveedores={proveedores}
@@ -9988,6 +10053,10 @@ export default function App() {
                   setOrdenes={setOrdenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
+                  cargando={ordenesCargando}
+                  errorCarga={errorOrdenes}
+                  onReintentar={() => void cargarOrdenes()}
+                  recargarProduccion={recargarProduccion}
                   abrirOrdenId={ordenAAbrir}
                   setOrdenAAbrir={setOrdenAAbrir}
                   detalleOrdenId={ordenDetalleAAbrir}
@@ -10061,6 +10130,10 @@ export default function App() {
                   {...getPerms("supplies")}
                   insumos={insumos}
                   setInsumos={setInsumos}
+                  categorias={categoriasInsumo}
+                  cargando={insumosCargando}
+                  errorCarga={errorInsumos}
+                  onReintentar={() => void cargarInsumosFichas(productos)}
                   fichas={fichasPorProducto}
                   setFichas={setFichasPorProducto}
                   idsConFicha={[
@@ -10069,9 +10142,9 @@ export default function App() {
                   ]}
                   productosMenu={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
                   abrirOrdenProduccion={abrirOrdenProduccion}
-                  /* A2: al crear un producto insumo nace su orden automática
-                     y el toast ofrece "Ver orden". */
-                  crearOrdenProduccion={crearOrdenPreparacionPI}
+                  /* A2: al crear un producto insumo la API crea su orden
+                     automática y el toast ofrece "Ver orden". */
+                  recargarProduccion={recargarProduccion}
                   verOrdenProduccion={verOrdenProduccion}
                 />
               )}

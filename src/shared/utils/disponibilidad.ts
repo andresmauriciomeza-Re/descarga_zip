@@ -67,6 +67,9 @@ export interface FaltanteUnidad {
   /** Presente cuando el faltante no es "no alcanza stock" sino otra cosa
       (insumo dado de baja, fuera del catálogo o unidades que no cierran). */
   motivo?: "no-encontrado" | "inactivo" | "unidad-incompatible";
+  /** Motivo en texto libre, cuando viene del servidor (409 de la API de
+      órdenes de producción) en vez de los códigos locales. */
+  motivoTexto?: string;
 }
 
 // ─────────────────────── Unidades de medida ───────────────────────
@@ -223,6 +226,8 @@ export const motivoFaltante = (f: {
   motivo?: FaltanteUnidad["motivo"];
   /** Unidad de la ficha, solo hace falta para "unidad-incompatible". */
   unidad?: string;
+  /** Texto libre del servidor, cuando el motivo no es un código local. */
+  motivoTexto?: string;
 }): string =>
   f.motivo === "no-encontrado"
     ? `${f.nombre}: no está en el catálogo de Insumos`
@@ -230,7 +235,9 @@ export const motivoFaltante = (f: {
       ? `${f.nombre}: el insumo está inactivo`
       : f.motivo === "unidad-incompatible"
         ? `${f.nombre}: no se pueden convertir las unidades (ficha ${f.unidad ?? "de la ficha"})`
-        : "";
+        : f.motivoTexto
+          ? `${f.nombre}: ${f.motivoTexto}`
+          : "";
 
 /** Cuántas unidades prepara ese insumo, solo con su stock. */
 const capacidadDe = (requeridoPorUnidad: number, stockEnUnidadFicha: number): number =>

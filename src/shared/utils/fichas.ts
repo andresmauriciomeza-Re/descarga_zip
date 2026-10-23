@@ -55,6 +55,9 @@ export type DestinoFicha =
 export interface FichaVersion {
   version: number;
   idReceta: string;
+  /** id real de la fila en `tb_ficha_tecnica` (API). Opcional: las fichas
+      guardadas en local antes de conectar la API no lo traen. */
+  idFt?: number;
   destino?: DestinoFicha;
   tiempoPreparacion: number;
   /** Unidades que rinde UNA preparación (solo Producto Insumo). Ausente o 0
@@ -76,6 +79,20 @@ export interface FichaVersion {
     Vive en App: la consume Orden de Producción para saber qué consume cada
     plato de un pedido y cada preparación en lote. */
 export type FichasPorProducto = Record<string, FichaVersion[]>;
+
+// ─────────── Ids de insumo entre el frontend y la API ───────────
+/** Id de un insumo en el frontend: `"INS-" + id_insumo` para TODOS los insumos
+    (también los productos insumo). Así nunca chocan con los id de producto
+    (texto numérico) dentro de `FichasPorProducto`. Al llamar a la API se
+    invierte con `idInsumoApiDesdeFront`. */
+export const idInsumoFront = (idInsumo: number | string): string => `INS-${idInsumo}`;
+
+/** `id_insumo` de la API desde el id del frontend ("INS-12" → 12). */
+export const idInsumoApiDesdeFront = (id: string): number =>
+  Number(String(id).replace(/^INS-/, ""));
+
+/** true si este id de registro es un insumo (y no un producto del menú). */
+export const esIdInsumo = (id: string): boolean => String(id).startsWith("INS-");
 
 /** Sin fichas de ejemplo: los registros de fábrica nacen SIN ficha y la
     primera que se cree recibe el ID 001 (ver `siguienteNumeroFicha`). */
