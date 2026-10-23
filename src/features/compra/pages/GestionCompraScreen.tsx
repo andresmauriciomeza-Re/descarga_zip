@@ -10,6 +10,9 @@ import { calcularLineaIva } from "@/features/compras/services/iva";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { CompactInsumoForm, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
+// Bloque 2: "+ Crear producto" desde el desplegable de ítems de la compra.
+import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
+import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { InsumosSolicitadosTable } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
@@ -668,6 +671,7 @@ function CompraForm({
   setProveedores,
   insumos,
   productos,
+  categorias,
   gestiones,
   mode = "create",
   compra,
@@ -675,6 +679,7 @@ function CompraForm({
   ordenes,
   onClose,
   onGuardar,
+  onCrearProducto,
 }: {
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
@@ -682,6 +687,9 @@ function CompraForm({
   /** P14: catálogo de productos del módulo de Productos: son la otra mitad
    *  del selector "Tipo" de la Nueva compra. */
   productos?: Producto[];
+  /** Bloque 2: categorías del panel para el "+ Crear producto" (sólo las de
+   *  tipo "Producto terminado" se ofrecen). */
+  categorias?: CategoriaProducto[];
   /** Gestiones de compra existentes para validar factura única. */
   gestiones: GestionCompra[];
   mode?: "create" | "view";
@@ -691,6 +699,9 @@ function CompraForm({
   ordenes?: OrdenCompra[];
   onClose: () => void;
   onGuardar: (data: NuevaCompraData) => void;
+  /** Bloque 2: alta de productos desde "+ Crear producto" (callback de App:
+   *  agrega el producto al catálogo del panel; sin él el atajo no se muestra). */
+  onCrearProducto?: (p: Producto) => void;
 }) {
   const isView = mode === "view";
   const isPage = fullPage;
@@ -751,6 +762,8 @@ function CompraForm({
   const [itemId, setItemId] = useState("");
   // P14: qué se está agregando, insumo del catálogo o producto del módulo.
   const [itemTipo, setItemTipo] = useState<TipoItem>("insumo");
+  // Bloque 2: "+ Crear producto" del desplegable de ítems.
+  const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   // Precio de VENTA al público del producto elegido (sólo se captura cuando
   // el tipo es "producto"; con insumos queda en 0 y no se guarda).
   const [itemPrecioVenta, setItemPrecioVenta] = useState(0);
@@ -890,11 +903,13 @@ function CompraForm({
 
     // P14: el buscador mira un catálogo u otro según el tipo de ítem elegido.
     if (itemTipo === "producto") {
-      // Mismo criterio que con los insumos: sólo productos disponibles.
-      // Punto 3.2: además sólo "Producto terminado" (bebidas y reventa); los
-      // "Producto insumo" (Pizzas, Lasañas) se producen, no se compran.
+      // Bloque 2.5: se compran productos aunque estén "No disponible" (los
+      // recién creados con "+ Crear producto" nacen así); sólo se excluyen
+      // los DESCONTINUADOS, que ya no vuelven a comprarse. Punto 3.2: además
+      // sólo "Producto terminado" (bebidas y reventa); los "Producto insumo"
+      // (Pizzas, Lasañas) se producen, no se compran.
       const base = (productos ?? []).filter(
-        (p) => p.estado === "Disponible" && p.tipo === "Producto terminado",
+        (p) => p.estado !== "Descontinuado" && p.tipo === "Producto terminado",
       );
       // El buscador mira también el contenido ("coca 1.5") para distinguir
       // presentaciones del mismo producto.
@@ -1808,6 +1823,12 @@ function CompraForm({
                       setItemSugAbierto(false);
                       setShowNuevoInsumo(true);
                     }}
+                    // Bloque 2: el atajo "+ Crear producto" del desplegable
+                    // (al final y sólo sin coincidencias) abre el modal.
+                    onCrearProducto={() => {
+                      setItemSugAbierto(false);
+                      setShowNuevoProducto(true);
+                    }}
                     compacto={isPage}
                     // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
                     // de una fila existente ocurre en línea, en la tabla.
@@ -1823,6 +1844,9 @@ function CompraForm({
                     medidaSoloLectura={isPage || itemTipo === "producto"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
+                    // Bloque 2: el atajo "+ Crear producto" sólo aplica a
+                    // productos (el insumo se crea con "+ Crear insumo").
+                    ocultarCrearProducto={itemTipo !== "producto"}
                     placeholder={
                       itemTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
                     }
@@ -2063,6 +2087,26 @@ function CompraForm({
         )}
       </AnimatePresence>
 
+      {/* Bloque 2: Modal de nuevo producto ("+ Crear producto"). */}
+      <AnimatePresence>
+        {showNuevoProducto && (
+          <CrearProductoModal
+            nombreInicial={itemNombre.trim()}
+            productos={productos ?? []}
+            categorias={categorias ?? []}
+            onGuardar={(p) => {
+              onCrearProducto?.(p);
+              // Queda seleccionado en la fila para seguir con cantidad,
+              // monto e IVA (mismo camino que elegirlo del desplegable).
+              seleccionarProducto(p);
+              setShowNuevoProducto(false);
+              toast.success(`Producto "${p.nombre}" creado`);
+            }}
+            onClose={() => setShowNuevoProducto(false)}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showGuardarConf && (
           <ConfirmModal
@@ -2093,6 +2137,10 @@ interface NuevaCompraPageProps {
   insumos: Insumo[];
   /** P14: catálogo de productos para poder facturar productos en la compra. */
   productos?: Producto[];
+  /** Bloque 2: categorías y alta de productos desde "+ Crear producto" (el
+   *  callback viene de App y agrega al catálogo del panel). */
+  categorias?: CategoriaProducto[];
+  onCrearProducto?: (p: Producto) => void;
   /** Control de inventario al guardar la compra. Opcionales: sin ellos la
    *  compra se guarda igual y simplemente no se suma el stock (ver
    *  `handleGuardar`). */
@@ -2108,6 +2156,8 @@ export function NuevaCompraPage({
   setProveedores,
   insumos,
   productos,
+  categorias,
+  onCrearProducto,
   setInsumos,
   setProductos,
   onBack,
@@ -2191,6 +2241,9 @@ export function NuevaCompraPage({
       setProveedores={setProveedores}
       insumos={insumos}
       productos={productos}
+      // Bloque 2: "+ Crear producto" del desplegable de ítems.
+      categorias={categorias}
+      onCrearProducto={onCrearProducto}
       gestiones={gestiones}
       onClose={onBack}
       onGuardar={handleGuardar}
@@ -2209,6 +2262,11 @@ interface Props {
   /** Catálogo de productos: necesario para devolver el stock de las líneas
    *  marcadas como "producto" al anular una compra. */
   productos?: Producto[];
+  /** Bloque 2: categorías y alta de productos (se pasan a CompraForm; el
+   *  modal de detalle es de sólo lectura pero se mantienen iguales las
+   *  dos pantallas que renderizan CompraForm). */
+  categorias?: CategoriaProducto[];
+  onCrearProducto?: (p: Producto) => void;
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   /** Control de inventario al anular. Opcionales: sin ellos la anulación
@@ -2224,6 +2282,7 @@ interface Props {
 
 export function GestionCompraScreen({
   gestiones, setGestiones, ordenes, setOrdenes, insumos, productos, proveedores, setProveedores,
+  categorias, onCrearProducto,
   setInsumos, setProductos,
   onNuevaCompra,
   canCreate = true,
@@ -2651,6 +2710,10 @@ export function GestionCompraScreen({
             proveedores={proveedores}
             setProveedores={setProveedores}
             insumos={insumos}
+            // Bloque 2: mismos props que en la página Nueva Compra (en modo
+            // vista el formulario es de sólo lectura).
+            categorias={categorias}
+            onCrearProducto={onCrearProducto}
             gestiones={gestiones}
             ordenes={ordenes}
             onClose={() => setDetail(null)}

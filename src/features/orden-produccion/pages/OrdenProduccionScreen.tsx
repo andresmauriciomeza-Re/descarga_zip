@@ -2,7 +2,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Trash2, X,
-  AlertCircle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
+  AlertCircle, AlertTriangle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
@@ -232,8 +232,10 @@ export const normalizarNombre = (s: string) =>
 
 const normalizar = normalizarNombre;
 
-/** Ficha técnica vigente de un producto: la que sigue sin fecha de fin. */
-function fichaVigente(fichas: FichasPorProducto, productoId: string) {
+/** Ficha técnica vigente de un producto: la que sigue sin fecha de fin.
+    Se exporta porque App la usa para el tope de unidades del carrito
+    (Bloque 5): un producto insumo sin ficha queda SIN límite. */
+export function fichaVigente(fichas: FichasPorProducto, productoId: string) {
   const versiones = fichas?.[productoId];
   if (!versiones || versiones.length === 0) return null;
   return versiones.find((v) => !v.fechaFin) ?? versiones[versiones.length - 1];
@@ -500,6 +502,78 @@ function requeridosDePreparacion(linea: LineaOrden, insumos: Insumo[]): InsumoRe
       : { insumoId: c.id, nombre: c.nombre, cantidad, unidad: c.unidadMedida });
   }
   return [...acc.values()];
+}
+
+/** Líneas de preparación con su `fichaSnapshot` cargado: la que ya lo trae
+    (viene de editar) se conserva; la que no, lo toma de la ficha vigente.
+    Lo usan `guardarOrden` y la validación de insumos al crear/editar (bloque
+    4), para que lo que se AVISA y lo que se GUARDA sea el mismo cálculo. */
+function prepararLineasSnapshot(lineas: LineaOrden[], fichas: FichasPorProducto): LineaOrden[] {
+  return lineas.map((l) => {
+    if (l.fichaSnapshot) return l;
+    const ficha = fichaVigente(fichas, l.idProducto);
+    if (!ficha) return l;
+    return {
+      ...l,
+      fichaSnapshot: {
+        version: ficha.version,
+        rendimiento: ficha.rendimiento ?? 1,
+        insumos: ficha.insumos,
+        tiempoPreparacion: ficha.tiempoPreparacion,
+        pasos: ficha.pasos,
+      },
+    };
+  });
+}
+
+/** Suma de los insumos que piden TODAS las líneas de preparación: del
+    snapshot si existe, si no legacy (`requeridosDePreparacion`). Mismo
+    criterio que pinta cada línea, así lo que se muestra, lo que se guarda y
+    lo que avisa la validación al crear/editar nunca dan distinto. */
+function requeridosDePreparaciones(
+  lineas: LineaOrden[],
+  fichas: FichasPorProducto,
+  insumos: Insumo[],
+): InsumoRequerido[] {
+  const acc = new Map<string, InsumoRequerido>();
+  for (const l of lineas) {
+    const req = l.fichaSnapshot
+      ? requeridosDeLinea(l, fichas)
+      : requeridosDePreparacion(l, insumos);
+    for (const r of req) {
+      const prev = acc.get(r.insumoId);
+      acc.set(r.insumoId, prev
+        ? { ...prev, cantidad: prev.cantidad + r.cantidad }
+        : r);
+    }
+  }
+  return [...acc.values()];
+}
+
+/** Bloque 4 — Aviso de faltantes dentro de los modales Crear/Editar de una
+    Preparación en lote: el mensaje exacto + la lista, igual que al crear un
+    producto insumo en Gestión de Insumos. Mientras este bloque se muestre,
+    el botón Crear/Guardar viene DESHABILITADO: no existe "Guardar igual"
+    para preparaciones (eso es solo para pedidos, que vienen de una venta ya
+    pagada). Con insumo ausente/inactivo/unidad incompatible manda el motivo
+    (`motivoFaltante`), que ya trae el nombre del insumo. */
+function AvisoFaltantes({ faltantes }: { faltantes: Faltante[] }) {
+  if (faltantes.length === 0) return null;
+  return (
+    <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
+      <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
+        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <span>No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.</span>
+      </p>
+      {faltantes.map((f) => (
+        <p key={f.insumoId} className="pl-6 text-xs text-red-700">
+          {f.motivo
+            ? motivoFaltante(f)
+            : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 /** Líneas de una orden "Pedido de cliente", en solo lectura, desde el detalle
@@ -1124,6 +1198,34 @@ export function OrdenProduccionScreen({
   const [faltantesIniciar, setFaltantesIniciar] = useState<
     { ordenId: string; faltantes: Faltante[] } | null
   >(null);
+  // Bloque 4 — Pedido (viene de una venta pagada): NUNCA se bloquea al
+  // guardar. El aviso lista los faltantes de insumos y/o las líneas cuya
+  // receta no se pudo calcular (pizza sin ficha técnica, producto del menú
+  // sin resolver) y se confirma con "Guardar igual": la orden queda Pendiente
+  // con su badge "Faltan insumos" y el bloqueo real sigue en Iniciar.
+  // (La preparación en lote no pasa por aquí: ella bloquea con el botón
+  // Crear/Guardar deshabilitado — ver `faltantesForm` y `AvisoFaltantes`.)
+  const [avisoGuardar, setAvisoGuardar] = useState<
+    { faltantes: Faltante[]; avisos: string[]; onConfirm: () => void } | null
+  >(null);
+
+  /** Bloque 4 — Faltantes EN VIVO de la preparación en lote que se está
+      creando o editando: mientras haya, el botón Crear/Guardar queda
+      deshabilitado y se muestran el mensaje + la lista de faltantes dentro
+      del modal (mismo criterio A1 que al crear un producto insumo en
+      Insumos). Un pedido NUNCA bloquea: `lineas` queda null y da []. */
+  const faltantesForm = useMemo(() => {
+    const lineas = editItem
+      ? (editItem.tipo === "preparacion" ? editItem.lineas : null)
+      : (form.tipo === "preparacion" ? form.lineas : null);
+    if (!lineas) return [] as Faltante[];
+    const requeridos = requeridosDePreparaciones(
+      prepararLineasSnapshot(lineas, fichasPorProducto),
+      fichasPorProducto,
+      insumos,
+    );
+    return faltantesPara(requeridos, 1, insumos);
+  }, [editItem, form.tipo, form.lineas, fichasPorProducto, insumos]);
 
   const [darBajaItem, setDarBajaItem] = useState<OrdenProduccion | null>(null);
   const [darBajaForm, setDarBajaForm] = useState<{
@@ -1200,37 +1302,13 @@ export function OrdenProduccionScreen({
     } else {
       // Forma 1: cada línea es un Producto Insumo. Si ya tiene fichaSnapshot
       // (viene de editar), se conserva; si no, se crea desde la ficha vigente.
-      const acc = new Map<string, InsumoRequerido>();
-      lineas = form.lineas.map((l) => {
-        if (l.fichaSnapshot) return l;
-        const ficha = fichaVigente(fichasPorProducto, l.idProducto);
-        if (!ficha) return l;
-        return {
-          ...l,
-          fichaSnapshot: {
-            version: ficha.version,
-            rendimiento: ficha.rendimiento ?? 1,
-            insumos: ficha.insumos,
-            tiempoPreparacion: ficha.tiempoPreparacion,
-            pasos: ficha.pasos,
-          },
-        };
-      });
+      lineas = prepararLineasSnapshot(form.lineas, fichasPorProducto);
       // Requeridos: SIEMPRE del snapshot si existe, si no, legacy. Sale del
       // mismo cálculo que pinta la línea (`requeridosDeLinea`), así que lo
-      // que se muestra y lo que se guarda nunca pueden dar distinto.
-      for (const l of lineas) {
-        const req = l.fichaSnapshot
-          ? requeridosDeLinea(l, fichasPorProducto)
-          : requeridosDePreparacion(l, insumos);
-        for (const r of req) {
-          const prev = acc.get(r.insumoId);
-          acc.set(r.insumoId, prev
-            ? { ...prev, cantidad: prev.cantidad + r.cantidad }
-            : r);
-        }
-      }
-      insumosRequeridos = [...acc.values()];
+      // que se muestra y lo que se guarda nunca pueden dar distinto. La
+      // validación de insumos al guardar (bloque 4) llama a estas mismas
+      // funciones: avisa exactamente lo que aquí se guarda.
+      insumosRequeridos = requeridosDePreparaciones(lineas, fichasPorProducto, insumos);
       // Tiempo y descripción: del snapshot de la primera línea con ficha.
       const snap = lineas.find((l) => l.fichaSnapshot)?.fichaSnapshot;
       descripcionPreparacion = snap?.pasos.join("\n") || undefined;
@@ -1271,6 +1349,68 @@ export function OrdenProduccionScreen({
     toast.success(editando ? `Orden ${id} actualizada` : `Orden de producción ${id} creada`);
   };
 
+  /** Bloque 4 — Validación de insumos al GUARDAR (crear y editar):
+      • PREPARACIÓN en lote: si faltan insumos NO se guarda. El botón ya
+        viene deshabilitado con el mensaje "No hay la cantidad suficiente de
+        insumos. Por favor, disminuye la cantidad." y su lista dentro del
+        modal (mismo criterio A1 que al crear un producto insumo en Insumos);
+        este toque evita cualquier atajo. No existe "Guardar igual".
+      • PEDIDO (viene de una venta pagada): NUNCA bloquea. Los faltantes y
+        las líneas cuya receta no se pudo calcular (pizza sin ficha técnica,
+        producto del menú sin resolver) abren el aviso con "Guardar igual";
+        la orden queda Pendiente con su badge y el bloqueo real sigue en
+        Iniciar (flujo ya existente). */
+  const guardarConValidacion = (form: OrdenForm) => {
+    const venta = form.tipo === "pedido" && form.ventaId
+      ? ventas.find((v) => v.id === form.ventaId)
+      : undefined;
+    const armado = venta
+      ? lineasDeVenta(venta, productos, fichasPorProducto, insumos)
+      : null;
+    // Requeridos del MISMO modo que los guarda `guardarOrden`: pedidos desde
+    // el detalle de la venta; preparaciones con su snapshot cargado.
+    const requeridos = armado
+      ? armado.insumos
+      : requeridosDePreparaciones(
+          prepararLineasSnapshot(form.lineas, fichasPorProducto),
+          fichasPorProducto,
+          insumos,
+        );
+
+    // Preparación en lote: bloqueo. El mensaje y la lista ya están a la
+    // vista en el formulario (botón deshabilitado), el toast evita atajos.
+    if (form.tipo === "preparacion") {
+      if (faltantesPara(requeridos, 1, insumos).length > 0) {
+        toast.error("No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.");
+        return;
+      }
+      guardarOrden(form);
+      return;
+    }
+
+    // Pedido: avisos de receta no calculable (nunca bloquean)…
+    const avisos: string[] = [];
+    if (armado) {
+      for (const l of armado.lineas) {
+        if (esBebida(l, productos)) continue;
+        if (!productoDeLinea(l, productos)) {
+          avisos.push(`No se encontró «${l.nombre}» en Productos: revisa que el nombre sea igual al del menú`);
+          continue;
+        }
+        const clave = l.productoId ?? l.idProducto;
+        const conFicha = l.fichaSnapshot ?? (clave ? fichaVigente(fichasPorProducto, clave) : null);
+        if (!conFicha) avisos.push(`«${l.nombre}» no tiene ficha técnica`);
+      }
+    }
+    // …y faltantes de insumos: ninguno de los dos corta el guardado.
+    const faltantes = faltantesPara(requeridos, 1, insumos);
+    if (faltantes.length > 0 || avisos.length > 0) {
+      setAvisoGuardar({ faltantes, avisos, onConfirm: () => guardarOrden(form) });
+      return;
+    }
+    guardarOrden(form);
+  };
+
   const handleCreate = () => {
     if (form.tipo === "pedido") {
       if (!form.ventaId) {
@@ -1292,7 +1432,7 @@ export function OrdenProduccionScreen({
       toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
       return;
     }
-    guardarOrden(form);
+    guardarConValidacion(form);
   };
 
   const handleEdit = () => {
@@ -1301,7 +1441,7 @@ export function OrdenProduccionScreen({
       toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
       return;
     }
-    guardarOrden({
+    guardarConValidacion({
       tipo: editItem.tipo,
       lineas: editItem.lineas,
       ventaId: editItem.ventaId ?? null,
@@ -1820,6 +1960,14 @@ export function OrdenProduccionScreen({
                 const puedeBaja = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
+                // Bloque 4: ¿faltan insumos para esta orden según el stock de
+                // hoy? Misma foto que usa Iniciar (`insumosRequeridos` guardado
+                // vs `insumos` actual). Solo en Pendiente: al pasar a En
+                // proceso los insumos ya se descontaron y comparar otra vez
+                // daría faltantes falsos.
+                const faltantesFila = soloPendiente
+                  ? faltantesPara(o.insumosRequeridos, 1, insumos)
+                  : [];
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-2">
@@ -1863,37 +2011,61 @@ export function OrdenProduccionScreen({
                       )}
                     </td>
                     <td className="px-4 py-2">
-                      {/* Pill de estado (diseño de Proveedores). La transición
-                          se aplica igual que antes; sin transiciones (estados
-                          finales) la pill queda sin menú. */}
-                      <EstadoSelect
-                        value={o.estadoOrden}
-                        onChange={next => {
-                          if (next === o.estadoOrden) return;
-                          applyTransition(o.id, next);
-                        }}
-                        options={[
-                          { value: o.estadoOrden, label: ESTADO_LABEL[o.estadoOrden], color: ESTADO_COLOR[o.estadoOrden] },
-                          ...VALID_TRANSITIONS[o.estadoOrden].map(n => ({
-                            value: n, label: ESTADO_LABEL[n], color: ESTADO_COLOR[n],
-                          })),
-                        ]}
-                        disabled={VALID_TRANSITIONS[o.estadoOrden].length === 0}
-                      />
+                      <div className="flex flex-col items-start gap-1.5">
+                        {/* Pill de estado (diseño de Proveedores). La transición
+                            se aplica igual que antes; sin transiciones (estados
+                            finales) la pill queda sin menú. */}
+                        <EstadoSelect
+                          value={o.estadoOrden}
+                          onChange={next => {
+                            if (next === o.estadoOrden) return;
+                            applyTransition(o.id, next);
+                          }}
+                          options={[
+                            { value: o.estadoOrden, label: ESTADO_LABEL[o.estadoOrden], color: ESTADO_COLOR[o.estadoOrden] },
+                            ...VALID_TRANSITIONS[o.estadoOrden].map(n => ({
+                              value: n, label: ESTADO_LABEL[n], color: ESTADO_COLOR[n],
+                            })),
+                          ]}
+                          disabled={VALID_TRANSITIONS[o.estadoOrden].length === 0}
+                        />
+                        {/* Bloque 4: la fila dice enseguida si a la orden aún
+                            no le alcanza el inventario (solo Pendientes).
+                            El título detalla cada faltante al pasar el mouse. */}
+                        {faltantesFila.length > 0 && (
+                          <span
+                            title={faltantesFila
+                              .map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`)
+                              .join("\n")}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap"
+                          >
+                            <AlertTriangle className="w-3 h-3" /> Faltan insumos
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
                       {fmtDT(ultimoCambio(o))}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Bloque 4: un pedido de cliente NO se elimina: su
+                            retiro es "Dar de baja" (el botón de al lado).
+                            Solo las preparaciones conservan Eliminar. */}
                         <ActionIcons
                           onView={() => setDetailItem(o)}
                           onEdit={canEdit ? () => setEditItem({ ...o }) : undefined}
                           editDisabled={!soloPendiente}
                           editTitle={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
-                          onDelete={canDelete ? () => setDeleteId(o.id) : undefined}
+                          onDelete={canDelete && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
                           deleteDisabled={!soloPendiente}
-                          deleteTitle={soloPendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                          deleteTitle={
+                            o.tipo === "pedido"
+                              ? "Los pedidos no se eliminan: usa Dar de baja"
+                              : soloPendiente
+                                ? "Eliminar"
+                                : "Solo se puede eliminar en estado Pendiente"
+                          }
                         />
                         <button onClick={() => puedeBaja && openDarBaja(o)}
                           disabled={!puedeBaja}
@@ -1924,9 +2096,11 @@ export function OrdenProduccionScreen({
           onConfirm: handleCreate,
           label: "Crear Orden",
           ancho: "max-w-2xl",
-          // C6: Guardar bloqueado mientras alguna línea de preparación no
-          // tenga producto o su cantidad sea menor a 1.
-          deshabilitado: form.tipo === "preparacion" && preparacionInvalida(form.lineas),
+          // C6: Crear bloqueado mientras alguna línea no tenga producto o su
+          // cantidad sea menor a 1; Bloque 4: también mientras falten insumos
+          // para la preparación (igual que al crear producto insumo en Insumos).
+          deshabilitado: form.tipo === "preparacion"
+            && (preparacionInvalida(form.lineas) || faltantesForm.length > 0),
           children: (
             <div className="space-y-4">
               <div>
@@ -1971,6 +2145,10 @@ export function OrdenProduccionScreen({
                 />
               )}
 
+              {/* Bloque 4: mientras falten insumos el botón Crear viene
+                  deshabilitado y aquí se ven el mensaje y la lista. */}
+              <AvisoFaltantes faltantes={faltantesForm} />
+
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
                 <textarea value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))}
@@ -1992,8 +2170,10 @@ export function OrdenProduccionScreen({
           onConfirm: handleEdit,
           label: "Guardar",
           ancho: "max-w-2xl",
-          // C6: ídem Crear.
-          deshabilitado: editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas),
+          // C6: ídem Crear; Bloque 4: además deshabilitado mientras falten
+          // insumos para la preparación (sin "Guardar igual": eso es de pedido).
+          deshabilitado: editItem.tipo === "preparacion"
+            && (preparacionInvalida(editItem.lineas) || faltantesForm.length > 0),
           children: (
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/60 rounded-xl border border-border">
@@ -2047,6 +2227,10 @@ export function OrdenProduccionScreen({
                   insumos={insumos}
                 />
               )}
+
+              {/* Bloque 4: ídem Crear — mensaje y lista mientras falten
+                  insumos; el botón Guardar queda deshabilitado. */}
+              <AvisoFaltantes faltantes={faltantesForm} />
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
@@ -2223,6 +2407,68 @@ export function OrdenProduccionScreen({
                 <button onClick={() => setFaltantesIniciar(null)}
                   className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                   Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal: Aviso al GUARDAR un PEDIDO (Bloque 4) ── NUNCA bloquea:
+          lista los faltantes de insumos y/o las líneas cuya receta no se
+          pudo calcular (pizza sin ficha, producto del menú sin resolver) y
+          se confirma con "Guardar igual". La preparación en lote no pasa
+          por aquí: ella bloquea con el botón deshabilitado y el mensaje +
+          lista dentro de su propio modal (`AvisoFaltantes`). */}
+      <AnimatePresence>
+        {avisoGuardar && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
+              <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: SERIF }}>
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  {avisoGuardar.faltantes.length > 0 ? "Faltan insumos" : "Aviso al guardar"}
+                </h3>
+                <button onClick={() => setAvisoGuardar(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Este pedido viene de una venta ya pagada: se puede guardar igual. Queda{" "}
+                  <strong className="text-foreground">Pendiente</strong>, se marcará con el badge{" "}
+                  <strong className="text-foreground">"Faltan insumos"</strong> si le faltan insumos, y al{" "}
+                  <strong className="text-foreground">Iniciarla</strong> vuelve a validarse contra el inventario de ese
+                  momento (ahí ya no se avanza si falta algo).
+                </p>
+                {avisoGuardar.avisos.map((a, i) => (
+                  <div key={i} className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <p className="text-sm font-semibold text-amber-800 flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-1" />
+                      <span>{a}</span>
+                    </p>
+                  </div>
+                ))}
+                {avisoGuardar.faltantes.map((f) => (
+                  <div key={f.insumoId} className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-0.5">
+                    <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
+                      <Minus className="w-3.5 h-3.5 shrink-0 mt-1" />
+                      <span>Faltan {fmtCant(f.falta, f.unidad)} de {f.nombre} (hay {fmtCant(f.stock, f.unidad)})</span>
+                    </p>
+                    {f.motivo && (
+                      <p className="pl-6 text-[11px] text-red-700">{motivoFaltante(f)}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
+                <button onClick={() => setAvisoGuardar(null)}
+                  className="flex-1 py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => { const guardar = avisoGuardar.onConfirm; setAvisoGuardar(null); guardar(); }}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
+                  Guardar igual
                 </button>
               </div>
             </motion.div>

@@ -48,12 +48,19 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+// Bloque 2.3: las reglas de una bebida (nombre único, contenido ml/L y
+// unidades por paca/caja) viven en `erroresBebida`, compartido con el
+// "+ Crear producto" de Compras — una sola copia de la validación.
+import { erroresBebida } from "@/features/productos/components/CrearProductoModal";
 import {
   CONFIG_CATEGORIA,
   configDeCategoria,
   type ConfigCategoria,
 } from "@/shared/utils/configCategoria";
 import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
+// Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
+// ni espacios de más) compartida con Insumos y Compras.
+import { mismoNombre, nombreLimpio } from "@/shared/utils/nombres";
 
 export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
 export type { ConfigCategoria } from "@/shared/utils/configCategoria";
@@ -1355,12 +1362,26 @@ export function GestionProductosScreen({
     ...insumos.filter((i) => i.tipo === "ProductoInsumo").map((i) => i.id),
   ];
 
+  /** Bloque 1.1: ¿ya existe un producto con este nombre? Compara SIN tildes,
+      mayúsculas ni espacios de más (en la base de datos el nombre es único,
+      así que sin esta barrera la API rechazaría el guardado). Al editar se
+      excluye el propio producto para no compararse consigo mismo. */
+  const nombreRepetido = (nombre: string, excluirId?: string): boolean =>
+    nombreLimpio(nombre) !== "" &&
+    productos.some((p) => p.id !== excluirId && mismoNombre(p.nombre, nombre));
+
   const handleCreate = () => {
     // Primero la categoría (es la que define el tipo y los tamaños) y el
     // nombre; la pregunta "¿Tiene ficha técnica?" solo aplica cuando la
     // categoría NO está en CONFIG_CATEGORIA.
     if (!form.nombre || !form.idCategoria) {
       toast.error("Nombre y categoría son obligatorios");
+      return;
+    }
+    // Bloque 1.1: el error ya se pinta en tiempo real bajo el campo Nombre;
+    // acá se bloquea el Crear por si el formulario llega por otro camino.
+    if (nombreRepetido(form.nombre)) {
+      toast.error("Ya existe un producto con ese nombre");
       return;
     }
     const cfg = cfgDe(form.idCategoria);
@@ -1375,27 +1396,22 @@ export function GestionProductosScreen({
     const tipoFinal: TipoProducto =
       cfg ? cfg.tipo : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
     // Bebidas ("Producto terminado"): la presentación es obligatoria (ej. 400
-    // ml, 1.5 L). Sin contenido no se puede guardar la bebida.
+    // ml, 1.5 L). Sin contenido no se puede guardar la bebida. Bloque 2.3:
+    // mismas reglas que el "+ Crear producto" de Compras (helper compartido).
     if (tipoFinal === TIPOS_PRODUCTO[1]) {
-      const contenido = Number(form.contenido);
-      if (!Number.isFinite(contenido) || contenido <= 0) {
-        toast.error("Indica el contenido de la bebida (ej. 400 ml o 1.5 L)");
+      const err = erroresBebida({
+        nombre: form.nombre,
+        contenido: form.contenido ?? 0,
+        contenidoUnidad: form.contenidoUnidad,
+        unidadCompra: form.unidadCompra,
+        unidadesPorEmpaque: form.unidadesPorEmpaque,
+      });
+      // El nombre ya se validó arriba (obligatorio y no repetido): acá solo
+      // interesan los campos de presentación, en su orden de siempre.
+      const primero = err.contenido ?? err.contenidoUnidad ?? err.empaque;
+      if (primero) {
+        toast.error(primero);
         return;
-      }
-      if (form.contenidoUnidad !== "ml" && form.contenidoUnidad !== "L") {
-        toast.error("Selecciona la unidad del contenido (ml o L)");
-        return;
-      }
-      // Presentación de compra (ajuste de bebidas): si se compra en paca o
-      // caja hay que decir cuántas unidades trae (> 1). Con "Unidad" no se
-      // pide nada.
-      const uc = form.unidadCompra === "paca" || form.unidadCompra === "caja" ? form.unidadCompra : "und";
-      if (uc !== "und") {
-        const n = Number(form.unidadesPorEmpaque);
-        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 1) {
-          toast.error(`Indica cuántas unidades trae la ${uc === "paca" ? "paca" : "caja"} (mínimo 2)`);
-          return;
-        }
       }
     }
     // El precio de una bebida solo lo pone Compras (monto de compra + % de
@@ -1463,6 +1479,14 @@ export function GestionProductosScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
+    // Bloque 1.1: mismo control que al crear, sin compararse consigo mismo.
+    // El nombre hoy está bloqueado en el formulario (el menú y el panel se
+    // emparejan por nombre y renombrar solo en el panel rompería el carrito);
+    // la validación queda lista por si se desbloquea al conectar la API.
+    if (nombreRepetido(editItem.nombre, editItem.id)) {
+      toast.error("Ya existe un producto con ese nombre");
+      return;
+    }
     const cfg = cfgDe(editItem.idCategoria);
     // Tipo final: con categoría configurada manda la categoría (y corrige
     // cualquier `tipo` viejo guardado); sin configuración, la respuesta a
@@ -1580,18 +1604,17 @@ export function GestionProductosScreen({
     toast.success("Producto actualizado");
   };
 
-  const handleDelete = (id: string) => {
-    setProductos((p) => p.filter((x) => x.id !== id));
-    // La ficha del producto borrado también se retira: si queda, es una
-    // huérfana que ya no ve nadie pero seguiría ocupando número de ID.
-    setFichas((prev) => {
-      if (!(id in prev)) return prev;
-      const sinFicha = { ...prev };
-      delete sinFicha[id];
-      return sinFicha;
-    });
+  /** Bloque 1.2: "Descontinuar" reemplaza a "Eliminar": el producto sale del
+      menú pero se conservan su historial y su ficha técnica (el profesor pidió
+      que no se borre nada; hoy el basurero borraba producto Y ficha aunque
+      tuviera ventas, órdenes o compras detrás). Se puede volver a "Disponible"
+      o "No disponible" desde la pastilla de estado de la lista. */
+  const handleDescontinuar = (id: string) => {
+    setProductos((p) =>
+      p.map((x) => (x.id === id ? { ...x, estado: "Descontinuado" as EstadoProducto } : x)),
+    );
     setDeleteId(null);
-    toast.success("Producto eliminado");
+    toast.success("Producto descontinuado: salió del menú y su ficha técnica se conserva");
   };
 
   const roCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
@@ -1604,6 +1627,7 @@ export function GestionProductosScreen({
     mostrarEstado = true,
     mostrarTipo = true,
     esCrear = false,
+    errorNombre = "",
     trasCategoria,
   }: {
     values: Omit<Producto, "id">;
@@ -1622,6 +1646,9 @@ export function GestionProductosScreen({
         ("Producto terminado") no se pide aquí, el contenido pasa a ser
         obligatorio y Unidad de venta se muestra únicamente para Bebidas. */
     esCrear?: boolean;
+    /** Texto de error bajo el campo Nombre (bloque 1.1: nombre repetido);
+        lo calcula la pantalla según los productos cargados. */
+    errorNombre?: string;
     /** Bloque que va INMEDIATAMENTE después de Categoría (Editar pasa aquí
         la pregunta "¿Tiene ficha técnica?" de las categorías sin config). */
     trasCategoria?: React.ReactNode;
@@ -1706,8 +1733,17 @@ export function GestionProductosScreen({
                 onChange={(e) => onChange("nombre", e.target.value)}
                 placeholder={esTerminado ? "Ej: Coca-Cola" : "Ej: Margarita Clásica"}
                 readOnly={readOnly || lockNombre}
-                className={readOnly || lockNombre ? roCls : inputCls}
+                className={
+                  readOnly || lockNombre
+                    ? roCls
+                    : `${inputCls}${errorNombre ? " border-red-400 focus:ring-red-300" : ""}`
+                }
               />
+              {/* Bloque 1.1: aviso en TIEMPO REAL si el nombre ya existe
+                  (sin tildes, mayúsculas ni espacios de más). */}
+              {errorNombre && (
+                <p className="text-xs text-red-500 mt-0.5">{errorNombre}</p>
+              )}
             </div>
             {mostrarPrecio && (
               <div className="sm:col-span-2">
@@ -1941,6 +1977,11 @@ export function GestionProductosScreen({
     // Reventa definida (por categoría o por la respuesta): no hay ficha que
     // ocultar/mostrar, así que el botón queda deshabilitado.
     const sinFichaDefinitiva = (cfgCrear?.tipo === TIPOS_PRODUCTO[1]) || formTieneFicha === "no";
+    // Bloque 1.1: error en TIEMPO REAL bajo el campo Nombre; mientras exista,
+    // el botón Crear queda deshabilitado (además del toast de handleCreate).
+    const errorNombreCrear = nombreRepetido(form.nombre)
+      ? "Ya existe un producto con ese nombre"
+      : "";
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -1970,7 +2011,9 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={handleCreate}
-              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+              disabled={errorNombreCrear !== ""}
+              title={errorNombreCrear || undefined}
+              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               Crear
             </button>
           </div>
@@ -2007,6 +2050,8 @@ export function GestionProductosScreen({
                   // esCrear); las imágenes viven en su propia tarjeta.
                   esCrear: true,
                   mostrarEstado: false,
+                  // Bloque 1.1: nombre repetido en tiempo real bajo el campo.
+                  errorNombre: errorNombreCrear,
                   // La pastilla del tipo espera a tener el tipo definido.
                   mostrarTipo: !mostrarPregunta || formTieneFicha !== null,
                   trasCategoria: mostrarPregunta ? (
@@ -2401,6 +2446,13 @@ export function GestionProductosScreen({
     // Pregunta "¿Tiene ficha técnica?" (solo categorías SIN configuración):
     // bloqueada cuando el producto ya tiene versiones guardadas.
     const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
+    // Bloque 1.1: nombre repetido en tiempo real, excluyéndose a sí mismo.
+    // El nombre hoy está bloqueado en el form (lockNombre: el menú y el panel
+    // se emparejan por nombre), así que solo saltaría con duplicados viejos en
+    // los datos; queda listo por si se desbloquea al conectar la API.
+    const errorNombreEdit = nombreRepetido(editItem.nombre, editItem.id)
+      ? "Ya existe un producto con ese nombre"
+      : "";
     // Versión histórica seleccionada (null = borrador editable).
     const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
     return (
@@ -2429,7 +2481,9 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={handleEdit}
-              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+              disabled={errorNombreEdit !== ""}
+              title={errorNombreEdit || undefined}
+              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               Guardar
             </button>
           </div>
@@ -2459,6 +2513,8 @@ export function GestionProductosScreen({
                   },
                   mostrarEstado: true,
                   lockNombre: true,
+                  // Bloque 1.1: nombre repetido en tiempo real bajo el campo.
+                  errorNombre: errorNombreEdit,
                   // "¿Tiene ficha técnica?" — solo para categorías SIN
                   // configuración (si no, el tipo lo da la categoría) y
                   // bloqueada si ya hay versiones guardadas.
@@ -2863,6 +2919,14 @@ export function GestionProductosScreen({
                         }}
                         onEdit={canEdit ? () => openEdit(p) : undefined}
                         onDelete={canDelete ? () => setDeleteId(p.id) : undefined}
+                        // Bloque 1.2: la acción es "Descontinuar", no borrar.
+                        deleteLabel="Descontinuar"
+                        deleteTitle={
+                          p.estado === "Descontinuado"
+                            ? "Ya está descontinuado"
+                            : "Descontinuar"
+                        }
+                        deleteDisabled={p.estado === "Descontinuado"}
                       />
                     </td>
                   </tr>
@@ -2878,13 +2942,23 @@ export function GestionProductosScreen({
       )}
 
 
-      {/* ── Eliminar ── */}
+      {/* ── Descontinuar (bloque 1.2; antes era "Eliminar producto") ── */}
       <AnimatePresence>
         {deleteId && (
           <ConfirmDeleteModal
-            title="Eliminar producto"
-            message={`¿Seguro que deseas eliminar el producto ${productos.find((x) => x.id === deleteId)?.nombre ?? deleteId}? Esta acción no se puede deshacer.`}
-            onConfirm={() => handleDelete(deleteId)}
+            title="Descontinuar producto"
+            message={
+              <>
+                ¿Seguro que deseas descontinuar el producto{" "}
+                <strong className="text-foreground">
+                  {productos.find((x) => x.id === deleteId)?.nombre ?? deleteId}
+                </strong>
+                ? El producto sale del menú pero se conserva su historial y su
+                ficha técnica.
+              </>
+            }
+            confirmLabel="Descontinuar"
+            onConfirm={() => handleDescontinuar(deleteId)}
             onCancel={() => setDeleteId(null)}
           />
         )}

@@ -7,6 +7,9 @@ import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+// Bloque 3: limpieza y comparación de nombres compartidas con Gestión de
+// Productos y el "+ Crear insumo" de Compras (una sola copia de las reglas).
+import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/nombres";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -189,27 +192,12 @@ const formatearId = (id: string): string => {
 };
 
 // ─── Producto Insumo: limpieza de nombres ───────────────────────────────────
-/** Nombre listo para guardar: limpio (sin espacios de más) y con la primera
-    letra en MAYÚSCULA ("masa prueba" → "Masa prueba"). Solo se aplica al
-    CREAR: los insumos que ya existen conservan su nombre tal cual. */
-const nombreParaGuardar = (s: string): string => {
-  const limpio = nombreLimpio(s);
-  return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : "";
-};
-
-/** Nombre listo para guardar y comparar: sin saltos de línea, un solo
-    espacio entre palabras y sin espacios al inicio o al final. */
-const nombreLimpio = (s: string): string =>
-  s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-
-/** Clave de comparación de nombres: el nombre limpio, sin mayúsculas ni
-    tildes, para que "Salsa  de TOMATE" y "salsa de tomate" cuenten como el
-    mismo nombre. */
-const nombreComparable = (s: string): string =>
-  nombreLimpio(s)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+// Bloque 3: `nombreLimpio`, `nombreParaGuardar` (mayúscula inicial, sólo al
+// CREAR: los insumos existentes conservan su nombre tal cual) y las claves de
+// comparación `normalizarTexto` / `mismoNombre` (sin tildes ni mayúsculas,
+// para que "Salsa  de TOMATE" y "salsa de tomate" cuenten como el mismo
+// nombre) ahora viven compartidos en `shared/utils/nombres`, junto al
+// "+ Crear insumo" de Compras. Antes esta pantalla tenía su propia copia.
 
 /**
  * Diálogo de confirmación del módulo. Se extrajo del JSX inline que usaban
@@ -480,10 +468,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       excluye el registro que se está editando. No usa `resolverInsumo` porque
       ese solo hace trim y no detecta "Salsa  de tomate" como duplicado. */
   const nombreDuplicado = (limpio: string): boolean => {
-    const clave = nombreComparable(limpio);
+    const clave = normalizarTexto(limpio);
     if (!clave) return false;
     return insumos.some(
-      i => i.id !== editingId && nombreComparable(i.nombre) === clave,
+      i => i.id !== editingId && normalizarTexto(i.nombre) === clave,
     );
   };
 
@@ -588,7 +576,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
     for (const r of requeridos) {
       if (!(r.cantidad > 0)) continue;
       const ins = insumos.find((i) => i.id === r.insumoId)
-        ?? insumos.find((i) => nombreComparable(i.nombre) === nombreComparable(r.nombre));
+        ?? insumos.find((i) => mismoNombre(i.nombre, r.nombre));
       // Inexistente, inactivo o unidades que no se pueden convertir: la fila
       // pasa tal cual para que `faltantesPara` avise con su motivo claro.
       const cantidadEnCatalogo = ins
@@ -619,7 +607,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       const r = requeridos[idx];
       if (!r) return;
       const ins = insumos.find((i) => i.id === r.insumoId)
-        ?? insumos.find((i) => nombreComparable(i.nombre) === nombreComparable(r.nombre));
+        ?? insumos.find((i) => mismoNombre(i.nombre, r.nombre));
       const clave = ins?.id ?? r.insumoId;
       const f = faltantes.find((x) => x.insumoId === clave && x.motivo)
         ?? faltantes.find((x) => x.insumoId === clave);
@@ -1019,18 +1007,18 @@ export function GestionInsumosScreen({ insumos, setInsumos, fichas, setFichas, i
       de un producto del menú) NO se puede eliminar: se abre el diálogo
       informativo "no-eliminar" con los nombres reales de los que lo usan.
       Una fila de ficha "usa" al registro por insumoId; las fichas viejas sin
-      insumoId comparan por nombre normalizado (mismo criterio que
-      `nombreComparable`). */
+      insumoId comparan por nombre normalizado (`normalizarTexto`, mismo
+      criterio que `mismoNombre`). */
   const intentarEliminar = (id: string) => {
     const reg = insumos.find(i => i.id === id);
     if (!reg) return;
-    const clave = nombreComparable(reg.nombre);
+    const clave = normalizarTexto(reg.nombre);
     const usadosEn: string[] = [];
     for (const [idRegistro, versiones] of Object.entries(fichas)) {
       const vigente = versiones.find(v => v.fechaFin === null);
       if (!vigente) continue;
       const loUsa = vigente.insumos.some(r =>
-        r.insumoId ? r.insumoId === id : nombreComparable(r.nombre) === clave,
+        r.insumoId ? r.insumoId === id : normalizarTexto(r.nombre) === clave,
       );
       if (!loUsa) continue;
       const nombreDueno =

@@ -199,7 +199,8 @@ export function CompactInsumoForm({
 
             {!readOnly && !disabled && showSuggestions && (
               <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-                {/* "+ Crear insumo/producto" es SIEMPRE la primera opción */}
+                {/* "+ Crear insumo" es SIEMPRE la primera opción para que
+                    "+" no esconda el botón de alta de insumo. */}
                 {!ocultarCrearInsumo && onCrearInsumo && (
                   <button
                     type="button"
@@ -210,15 +211,11 @@ export function CompactInsumoForm({
                     Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
                   </button>
                 )}
-                {!ocultarCrearProducto && onCrearProducto && (
-                  <button
-                    type="button"
-                    onMouseDown={() => onCrearProducto()}
-                    className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Crear producto {nombre.trim() && `“${nombre.trim()}”`}
-                  </button>
+                {/* Bloque 2.2: si el texto no coincide con nada se avisa. */}
+                {suggestions.length === 0 && (
+                  <div className="px-3 py-2.5 text-xs text-muted-foreground text-center">
+                    Sin resultados
+                  </div>
                 )}
                 {suggestions.map((ins) => (
                   <button
@@ -238,6 +235,24 @@ export function CompactInsumoForm({
                     </p>
                   </button>
                 ))}
+                {/* Bloque 2.2: "+ Crear producto «texto»" al FINAL de la lista
+                    y SÓLO cuando el texto no coincide con ningún producto —
+                    crear está bien donde se escribe el nombre, pero no debe
+                    tapar a los existentes. `onMouseDown` igual que los otros
+                    atajos: dispara antes de que el blur cierre el desplegable. */}
+                {!ocultarCrearProducto &&
+                  onCrearProducto &&
+                  suggestions.length === 0 &&
+                  nombre.trim() !== "" && (
+                    <button
+                      type="button"
+                      onMouseDown={() => onCrearProducto()}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Crear producto {`“${nombre.trim()}”`}
+                    </button>
+                  )}
               </div>
             )}
           </div>
