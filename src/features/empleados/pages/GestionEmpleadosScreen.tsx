@@ -1,7 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, X, UserPlus } from "lucide-react";
+import { Briefcase, Send, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import {
+  crearEmpleado,
+  listarInvitacionesPendientes,
+  reenviarInvitacion,
+} from "@/shared/services/empleadosService";
+import type { ApiErrorConEstado, CrearEmpleadoResponse } from "@/types/api";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -142,6 +148,20 @@ export function GestionEmpleadosScreen({
     onEmpleadoAbiertoDesdeUsuarios?.();
   }, [empleadoAAbrirDesdeUsuarios, empleados]);
 
+  // Invitaciones pendientes (solo el número de documento): se consultan al
+  // montar para saber a qué empleados se les puede "Reenviar invitación". Si la
+  // consulta falla no se muestra la acción, pero la pantalla no se bloquea.
+  useEffect(() => {
+    let cancelado = false;
+    void listarInvitacionesPendientes()
+      .then(res => {
+        if (cancelado) return;
+        setInvitacionesPendientes(new Set(res.pendientes.map(p => String(p).trim())));
+      })
+      .catch(() => { /* sin datos no hay acciones de reenvío que pintar */ });
+    return () => { cancelado = true; };
+  }, []);
+
   // Modal "Nueva contratación": registra una entrada más en el historial del
   // empleado elegido y, con esos mismos datos, actualiza su contratación vigente.
   const [showContrat,       setShowContrat]      = useState(false);
@@ -162,6 +182,13 @@ export function GestionEmpleadosScreen({
   const [newFechaInicio,  setNewFechaInicio]  = useState("");
   const [newFechaFinal,   setNewFechaFinal]   = useState("");
   const [createErrors,    setCreateErrors]    = useState<Record<string, string | undefined>>({});
+
+  // Invitación por correo: documentos con invitación pendiente (el botón
+  // "Reenviar invitación" solo se pinta para ellos), quién está reenviando y si
+  // el alta está en curso.
+  const [invitacionesPendientes, setInvitacionesPendientes] = useState<Set<string>>(new Set());
+  const [reenviando, setReenviando] = useState<string | null>(null);
+  const [creando, setCreando] = useState(false);
 
   const rolInfo = (rolId: string) => roles.find(r => r.id === rolId) ?? null;
   // Nombre del rol para mostrar. Un empleado sin rol (id vacío o de un rol que
@@ -429,7 +456,7 @@ export function GestionEmpleadosScreen({
     setNewFechaInicio(""); setNewFechaFinal(""); setCreateErrors({});
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const nombreNormalizado = normalizarNombre(newNombre);
     const errs: Record<string, string> = {};
     if (!nombreNormalizado) errs.nombre = "El nombre es obligatorio";
@@ -446,36 +473,55 @@ export function GestionEmpleadosScreen({
     const empBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
     const cliBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
     const rolIdsNuevo = [...new Set([...rolIdsExtras, ...(empBaseId ? [empBaseId] : []), ...(cliBaseId ? [cliBaseId] : [])])];
+    // CARGO = ROL: los cargos elegidos viajan como NOMBRES de rol (los ids
+    // locales no son los de la base; el backend asigna SIEMPRE Empleado y
+    // Cliente, y rechaza Administrador). NUNCA EN SILENCIO: si el formulario
+    // tiene cargos, el payload los lleva todos o el alta se bloquea con error
+    // visible en el campo Cargo (nada de listas a medias).
+    const nombresCargos = rolIdsExtras.map(rolNombre);
+    const cargos = nombresCargos.filter(n => n !== "-");
+    if (nombresCargos.length > 0 && cargos.length === 0) {
+      errs.cargo = "No se pudieron enviar los cargos seleccionados. Vuelve a elegirlos.";
+    } else if (cargos.length !== nombresCargos.length) {
+      errs.cargo = "Uno de los cargos seleccionados ya no existe en el catálogo. Vuelve a elegirlos.";
+    }
     if (!newFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     if (newFechaInicio && newFechaFinal && newFechaFinal < newFechaInicio)
       errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
 
-    const em = newCorreo.trim().toLowerCase();
-    const dm = newDocumento.trim();
-    const clave = `${newTipoDoc}||${dm}`.toLowerCase();
-    const dupeInList =
-      empleados.length > 0 &&
-      (empleados.some(e =>
-        e.correo.trim().toLowerCase() === em || `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave
-      ));
-    const dupeInUsers =
-      usuarios.some(u =>
-        u.correo.trim().toLowerCase() === em || `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave
-      );
-    const dupeInClients =
-      clientes.some(c => c.correo.trim().toLowerCase() === em || `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
-    if (dupeInList || dupeInUsers || dupeInClients) {
-      const hayCorreo = empleados.some(e => e.correo.trim().toLowerCase() === em) ||
-        usuarios.some(u => u.correo.trim().toLowerCase() === em) ||
-        clientes.some(c => c.correo.trim().toLowerCase() === em);
-      const hayDoc = empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
-        usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
-        clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
-      if (hayCorreo) errs.correo = "Este correo ya está registrado";
-      if (hayDoc) errs.documento = "Este documento ya está registrado";
-    }
-
     if (Object.keys(errs).length) { setCreateErrors(errs); return; }
+
+    const em = newCorreo.trim();
+    const dm = newDocumento.trim();
+
+    // El backend decide los duplicados: una persona que ya existe como cliente
+    // NO se bloquea (es el caso especial: se le asigna el rol Empleado y se le
+    // avisa por correo). Solo la cuenta se crea sin contraseña.
+    setCreando(true);
+    let respuesta: CrearEmpleadoResponse;
+    try {
+      respuesta = await crearEmpleado({
+        tipoDocumento: newTipoDoc,
+        numeroDocumento: dm,
+        nombre: nombreNormalizado,
+        correo: em,
+        telefono: newTelefono.trim(),
+        estado: newActivo,
+        cargos,
+        fechaInicio: newFechaInicio,
+        fechaFinal: newFechaFinal,
+      });
+    } catch (error) {
+      const e = error as ApiErrorConEstado;
+      const mensaje = e.message || "No se pudo crear el empleado.";
+      if (e.status === 409 && /correo/i.test(mensaje)) setCreateErrors(p => ({ ...p, correo: mensaje }));
+      else if (e.status === 409) setCreateErrors(p => ({ ...p, documento: mensaje }));
+      else if (/rol/i.test(mensaje)) setCreateErrors(p => ({ ...p, cargo: mensaje }));
+      else toast.error(mensaje);
+      return;
+    } finally {
+      setCreando(false);
+    }
 
     const maxNum = empleados.reduce((max, e) => {
       const n = parseInt(e.id.replace("EMP-", "")) || 0;
@@ -510,9 +556,47 @@ export function GestionEmpleadosScreen({
 
     setEmpleados(prev => [nuevoEmpleado, ...prev]);
     upsertUsuario(nuevoEmpleado);
+    if (!respuesta.cuentaExistente) {
+      // Queda con invitación pendiente hasta que cree su contraseña.
+      setInvitacionesPendientes(prev => new Set(prev).add(dm));
+    }
     setShowCreate(false);
     resetCreate();
-    toast.success(`Empleado ${newNombre.trim()} creado correctamente`);
+    if (respuesta.cuentaExistente) {
+      if (respuesta.correoEnviado) {
+        toast.success(`Empleado creado. ${nombreNormalizado} ya tenía cuenta; le enviamos un correo a ${respuesta.correo} avisándole que ya es parte del equipo.`);
+      } else {
+        toast.error("Empleado creado, pero no se pudo enviar el correo de aviso");
+      }
+    } else if (respuesta.correoEnviado) {
+      toast.success(`Empleado creado. Le enviamos un correo a ${respuesta.correo} para que cree su contraseña.`);
+    } else {
+      toast.error("Empleado creado, pero no se pudo enviar el correo");
+    }
+  };
+
+  // Reenvía la invitación con un token NUEVO (el enlace anterior deja de servir).
+  const reenviarInvitacionDe = async (e: Empleado) => {
+    if (reenviando) return;
+    setReenviando(e.numeroDocumento);
+    try {
+      const res = await reenviarInvitacion(e.numeroDocumento);
+      if (res.correoEnviado) toast.success(`Invitación reenviada a ${res.correo}`);
+      else toast.error("No se pudo enviar el correo. Intenta de nuevo.");
+    } catch (error) {
+      const err = error as ApiErrorConEstado;
+      toast.error(err.message || "No se pudo reenviar la invitación.");
+      if (err.status === 404 || err.status === 409) {
+        // Ya no aplica (cuenta activada o empleado desaparecido): se oculta.
+        setInvitacionesPendientes(prev => {
+          const siguiente = new Set(prev);
+          siguiente.delete(e.numeroDocumento);
+          return siguiente;
+        });
+      }
+    } finally {
+      setReenviando(null);
+    }
   };
 
   const resetContratacion = () => {
@@ -701,10 +785,26 @@ export function GestionEmpleadosScreen({
                       </span>
                     </td>
                     <td className="px-4 py-1.5">
-                      <ActionIcons
-                        onView={() => setDetailItem(e)}
-                        onEdit={() => { setEditItem({ ...e }); setEditPrevCorreo(e.correo); setEditErrors({}); }}
-                      />
+                      <div className="flex items-center gap-1">
+                        {/* Reenviar invitación: solo para quien aún no activa su
+                            cuenta (crea un token nuevo y manda el correo otra vez). */}
+                        {invitacionesPendientes.has(e.numeroDocumento) && (
+                          <button
+                            type="button"
+                            title="Reenviar invitación"
+                            aria-label="Reenviar invitación"
+                            disabled={reenviando === e.numeroDocumento}
+                            onClick={() => void reenviarInvitacionDe(e)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                        <ActionIcons
+                          onView={() => setDetailItem(e)}
+                          onEdit={() => { setEditItem({ ...e }); setEditPrevCorreo(e.correo); setEditErrors({}); }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -982,25 +1082,30 @@ export function GestionEmpleadosScreen({
                       className={fCls(createErrors.nombre)} />
                     {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Correo electrónico <MarcaObligatorio />
-                    </label>
-                    <input type="email" value={newCorreo} autoComplete="off"
-                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
-                      placeholder="correo@ejemplo.com"
-                      className={fCls(createErrors.correo)} />
-                    {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
-                    </label>
-                    <input type="tel" inputMode="numeric" value={newTelefono} autoComplete="off"
-                      onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
-                      placeholder="3001234567"
-                      className={fCls(createErrors.telefono)} />
-                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
+                  {/* Correo / Teléfono con la MISMA proporción que el
+                      formulario de Registro (correo 4/6, teléfono 2/6 en una
+                      grilla de 6). En celular cada campo ocupa todo el ancho. */}
+                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-6 gap-x-3 gap-y-2.5">
+                    <div className="sm:col-span-4">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                         Correo electrónico <MarcaObligatorio />
+                      </label>
+                      <input type="email" value={newCorreo} autoComplete="off"
+                         onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
+                        placeholder="correo@ejemplo.com"
+                        className={fCls(createErrors.correo)} />
+                      {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                        Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
+                      </label>
+                      <input type="tel" inputMode="numeric" value={newTelefono} autoComplete="off"
+                        onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
+                        placeholder="3001234567"
+                        className={fCls(createErrors.telefono)} />
+                      {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
+                    </div>
                   </div>
                   {/* Datos del empleado */}
                   <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
@@ -1057,9 +1162,10 @@ export function GestionEmpleadosScreen({
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
                   </button>
-                  <button onClick={handleCreate}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    Crear empleado
+                  <button onClick={() => void handleCreate()}
+                    disabled={creando}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                    {creando ? "Creando..." : "Crear empleado"}
                   </button>
                 </div>
               </motion.div>
@@ -1082,8 +1188,11 @@ export function GestionEmpleadosScreen({
                   <X className="w-4 h-4"/>
                 </button>
               </div>
-              <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
-                <div className="col-span-2 flex items-center gap-3">
+              {/* Misma proporción que el formulario de Registro: grilla de 6 con
+                  el correo en 4/6 y el teléfono en 2/6; en celular cada campo
+                  ocupa todo el ancho. */}
+              <div className="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-6 gap-x-3 gap-y-3">
+                <div className="sm:col-span-6 flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
                     {editItem.iniciales}
                   </div>
@@ -1092,7 +1201,7 @@ export function GestionEmpleadosScreen({
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                <div className="col-span-2 flex gap-2 items-start">
+                <div className="sm:col-span-6 flex gap-2 items-start">
                   <div className="w-56 shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <select disabled value={editItem.tipoDocumento}
@@ -1114,7 +1223,7 @@ export function GestionEmpleadosScreen({
                   { label: "Correo",          field: "correo" as const, type: "email" },
                   { label: "Teléfono",        field: "telefono" as const, type: "tel", numeric: true },
                 ].map(({ label, field, type, numeric, full }) => (
-                  <div key={field} className={full ? "col-span-2" : ""}>
+                  <div key={field} className={full ? "sm:col-span-6" : field === "correo" ? "sm:col-span-4" : "sm:col-span-2"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
                         onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : undefined })); }}
@@ -1123,7 +1232,7 @@ export function GestionEmpleadosScreen({
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
-                <div className="col-span-2">
+                <div className="sm:col-span-6">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
                      Cargo <MarcaObligatorio />
                   </label>
@@ -1134,7 +1243,7 @@ export function GestionEmpleadosScreen({
                     error={editErrors.cargo}
                   />
                 </div>
-                <div>
+                <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                   {/* P7: el estado de Gloria no se puede cambiar desde el
                       modal de edición tampoco (el resto de sus datos sí se
@@ -1151,14 +1260,14 @@ export function GestionEmpleadosScreen({
                     ]}
                   />
                 </div>
-                <div>
+                <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>
                   <input type="date" value={editItem.fechaInicio}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaInicio: e.target.value })); if (editErrors.fechaInicio) setEditErrors(p => ({ ...p, fechaInicio: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
                 </div>
-                <div>
+                <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
                   <input type="date" value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}

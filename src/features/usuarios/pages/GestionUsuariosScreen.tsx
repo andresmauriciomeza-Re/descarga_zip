@@ -77,26 +77,59 @@ const normalizar = (s: string) => s.trim().toLocaleLowerCase();
 const esAdministrador = (u: UsuarioGestion) =>
   u.esSuperAdmin || normalizar(u.rol || "") === "administrador" || (u.rolesExtra ?? []).some(r => normalizar(r) === "administrador");
 
+/** Nombres visibles de TODOS los roles del usuario, sin repetir: primero los
+ * roles base (Administrador, Empleado, Cliente) y luego los roles extra. */
+const rolesDeUsuario = (u: UsuarioGestion): string[] => {
+  const nombres: string[] = [];
+  const claves = new Set<string>();
+  const agregar = (nombre?: string | null) => {
+    const n = (nombre ?? "").trim();
+    if (!n) return;
+    // "Super Administrador" y "Administrador" cuentan como un solo rol.
+    const clave = normalizar(n).replace(/^super\s+/, "");
+    if (claves.has(clave)) return;
+    claves.add(clave);
+    nombres.push(n);
+  };
+  if (esAdministrador(u)) agregar(u.esSuperAdmin ? "Super Administrador" : "Administrador");
+  if (u.esEmpleado) agregar("Empleado");
+  if (u.esCliente) agregar("Cliente");
+  [u.rol, ...(u.rolesExtra ?? [])].forEach(agregar);
+  return nombres;
+};
+
+const CHIP_CLASE = "px-2.5 py-0.5 rounded-full text-xs font-semibold";
+/** Empleado verde, Administrador rojo; Cliente y roles extra grises (como siempre). */
+const colorChipRol = (rol: string) => {
+  const n = normalizar(rol);
+  if (n.includes("administrador")) return "bg-red-100 text-red-800";
+  if (n === "empleado") return "bg-emerald-100 text-emerald-800";
+  return "bg-gray-100 text-gray-700";
+};
+
 function RolesBadges({ usuario }: { usuario: UsuarioGestion }) {
-  const extra = [...new Set((usuario.rolesExtra ?? []).filter(r => !["cliente", "empleado", "administrador"].includes(normalizar(r))))];
-  const rolesGenerales = [...new Set([usuario.rol, ...(usuario.rolesExtra ?? [])].filter(Boolean))];
-  const admin = esAdministrador(usuario);
-  const etiquetasExtra = rolesGenerales.filter(r => !["cliente", "empleado", "administrador"].includes(normalizar(r)));
+  // Listado: UN solo chip con el rol principal del usuario (Administrador >
+  // Empleado > Cliente > roles extra) y, si tiene otros roles, el contador rojo
+  // "+N" en la esquina superior derecha, sin tapar el texto del chip.
+  const roles = rolesDeUsuario(usuario);
+  const principal = roles[0] ?? "Sin rol";
+  const adicionales = Math.max(0, roles.length - 1);
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {admin && <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">{usuario.esSuperAdmin ? "Super Administrador" : "Administrador"}</span>}
-      {usuario.esEmpleado && <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Empleado</span>}
-      {usuario.esCliente && (
-        <span className="relative px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
-          Cliente
-          {extra.length > 0 && <span title={extra.join(", ")} className="absolute -right-[8px] -top-[6px] inline-flex items-center justify-center h-[17px] min-w-[17px] px-1 rounded-full bg-primary text-white text-[10px] font-bold leading-none whitespace-nowrap">+{extra.length}</span>}
-        </span>
-      )}
-      {!admin && !usuario.esEmpleado && !usuario.esCliente && rolesGenerales.map(r => (
-        <span key={r} className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{r}</span>
-      ))}
-      {!admin && etiquetasExtra.filter(r => normalizar(r) === "administrador").map(r => (
-        <span key={r} className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">Administrador</span>
+      <span title={roles.join(", ")} className={`relative inline-flex ${CHIP_CLASE} ${colorChipRol(principal)}`}>
+        {principal}
+        {adicionales > 0 && <span className="absolute -top-2 -right-3 inline-flex items-center justify-center h-[17px] min-w-[17px] px-1 rounded-full bg-primary text-white text-[10px] font-bold leading-none whitespace-nowrap">+{adicionales}</span>}
+      </span>
+    </div>
+  );
+}
+
+function RolesChipsDetalle({ usuario }: { usuario: UsuarioGestion }) {
+  // Modal "Detalle": TODOS los roles como chips separados y sin contador.
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {rolesDeUsuario(usuario).map(r => (
+        <span key={r} className={`${CHIP_CLASE} ${colorChipRol(r)}`}>{r}</span>
       ))}
     </div>
   );
@@ -220,7 +253,7 @@ export function GestionUsuariosScreen({
 
       <AnimatePresence>{detail && <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"><div className="flex min-h-full items-center justify-center p-4"><motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: .95, opacity: 0 }} className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border"><div><h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detail.nombre}</h3><p className="text-xs font-mono text-muted-foreground">{fmtDoc(detail.tipo_documento, String(detail.id_usuario))}</p></div><button onClick={() => setDetail(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button></div>
-        <div className="p-5 space-y-4"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{ label: "Correo", value: detail.correo }, { label: "Teléfono", value: detail.telefono }, { label: "Estado de cuenta", value: detail.estado ? "Activo" : "Inactivo" }, { label: "Roles", value: "" }].map(item => <div key={item.label}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{item.label}</p>{item.label === "Roles" ? <RolesBadges usuario={detail} /> : <p className="text-sm font-semibold text-foreground break-words">{item.value || "—"}</p>}</div>)}</div>
+        <div className="p-5 space-y-4"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{ label: "Correo", value: detail.correo }, { label: "Teléfono", value: detail.telefono }, { label: "Estado de cuenta", value: detail.estado ? "Activo" : "Inactivo" }, { label: "Roles", value: "" }].map(item => <div key={item.label}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{item.label}</p>{item.label === "Roles" ? <RolesChipsDetalle usuario={detail} /> : <p className="text-sm font-semibold text-foreground break-words">{item.value || "—"}</p>}</div>)}</div>
           {canEdit && <button disabled={Boolean(detail.esSuperAdmin) || actualizando === detail.id} onClick={() => void cambiarEstado(detail, !detail.estado)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted disabled:opacity-50"><RefreshCw className="w-4 h-4" />{detail.estado ? "Desactivar usuario" : "Activar usuario"}</button>}
           {canEdit && <button onClick={() => { const target = detail; setDetail(null); editar(target); }} disabled={Boolean(detail.esSuperAdmin)} className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-red-700 disabled:opacity-50">Editar en Clientes o Empleados</button>}
           <button onClick={() => setDetail(null)} className="w-full py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted">Cerrar</button>

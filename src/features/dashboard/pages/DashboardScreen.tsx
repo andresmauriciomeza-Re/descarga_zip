@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -42,6 +42,7 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
+import { listarClientes } from "@/shared/services/authService";
 import { hora12, minutosDeHora } from "@/shared/utils/hora";
 import {
   agregarDias,
@@ -105,6 +106,50 @@ function SinDatos({ texto = "No hay datos en este periodo" }: { texto?: string }
   );
 }
 
+/**
+ * Tarjeta de indicador: ícono en su cuadrito de color, número grande, nombre
+ * debajo y el subtítulo (el periodo "Hoy"/"Esta semana"/"Este mes" o el texto
+ * fijo que corresponda). La usan IGUAL el Dashboard del admin ("Indicadores
+ * comerciales") y el Inicio del empleado: un solo componente para que los
+ * estilos nunca se desalineen.
+ */
+function TarjetaIndicador({
+  label,
+  value,
+  sub,
+  Icon,
+  bg,
+  ic,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  Icon: typeof Package;
+  bg: string;
+  ic: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left bg-card border border-border rounded-2xl p-5 hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
+          <Icon className={`w-5 h-5 ${ic}`} />
+        </div>
+      </div>
+      <p className="text-2xl font-bold text-foreground mb-0.5" style={{ fontFamily: MONO }}>
+        {value}
+      </p>
+      <p className="text-xs text-muted-foreground font-medium">{label}</p>
+      <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
+    </button>
+  );
+}
+
 export function DashboardScreen({
   navigate,
   ventas,
@@ -119,6 +164,8 @@ export function DashboardScreen({
   tieneRolActivo,
   hasDashboardAccess,
   accesos,
+  periodoInicio,
+  onPeriodoInicio,
 }: {
   navigate: (s: Screen) => void;
   ventas: Venta[];
@@ -132,6 +179,10 @@ export function DashboardScreen({
   tieneRolActivo: boolean;
   hasDashboardAccess: boolean;
   accesos: AccesosMap;
+  /** Periodo del INICIO del empleado (Diario por defecto). Vive en App para
+      conservarse al cambiar de rol con el selector del encabezado. */
+  periodoInicio: Periodo;
+  onPeriodoInicio: (p: Periodo) => void;
   // Inventarios cableados desde App.tsx (se usan en los próximos indicadores).
   productos: Producto[];
   insumos: Insumo[];
@@ -164,6 +215,35 @@ export function DashboardScreen({
 
   // ── Filtro global de los indicadores: Diario · Semanal · Mensual ──
   const [periodo, setPeriodo] = useState<Periodo>("semana");
+
+  // "Clientes activos" del Inicio del empleado sale del API (GET /clientes), no
+  // del estado local (que arranca vacío y por eso mostraba 0). Solo se consulta
+  // si el rol activo tiene el MISMO permiso que exige la tarjeta
+  // (Ventas::Clientes → Ver): un rol sin ese permiso nunca pide la lista.
+  const puedeConsultarClientes = accesos[KEY("Ventas", "Clientes")]?.includes("Ver") ?? false;
+  const [clientesActivos, setClientesActivos] = useState<number | null>(null);
+  useEffect(() => {
+    if (!puedeConsultarClientes) {
+      setClientesActivos(null);
+      return;
+    }
+    let cancelado = false;
+    void listarClientes()
+      .then((filas) => {
+        if (cancelado) return;
+        // Mismo criterio que Gestión de Clientes: activo = ficha activa y
+        // cuenta activa (cliente_estado y usuario_estado).
+        setClientesActivos(filas.filter((c) => c.cliente_estado && c.usuario_estado).length);
+      })
+      .catch(() => {
+        // Sin permiso efectivo o sin conexión: la tarjeta no se muestra en vez
+        // de enseñar un 0 engañoso.
+        if (!cancelado) setClientesActivos(null);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [puedeConsultarClientes]);
 
   /**
    * Regla única de ingresos: SOLO las ventas Completado suman dinero y
@@ -457,37 +537,75 @@ export function DashboardScreen({
 
     const hoy = hoyISO();
     const ventasHoy = ventas.filter((v) => v.fecha === hoy && esVentaIngresante(v));
-    const totalVendidoHoy = ventasHoy.reduce((s, v) => s + v.total, 0);
-    const porVerificar = ventas.filter((v) => v.estado === "Por verificar");
     const devoluciones = ventas.filter((v) => v.devolucionTipo !== undefined);
-    // Devoluciones registradas y aún sin resolver (tb_devolucion.estado =
-    // 'Pendiente'): sin filtro de periodo, porque son las que faltan por
-    // resolver hoy.
-    const devolucionesPendientes = ventas.filter(
-      (v) => v.idDevolucion != null && v.devolucionResuelta === false,
-    );
     const ordenesEnCurso = ordenesProduccion.filter(
       (o) => o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso",
     );
     const insumosBajo = insumos.filter((i) => i.stockActual < i.stockMinimo);
-    const ocPorRecibir = ordenes.filter((o) => o.estado === "Enviado");
-    const clientesActivos = clientes.filter((c) => c.activo);
 
-    // KPIs — máximo 4, en orden de prioridad según permisos del rol.
-    type KpiEmp = { label: string; value: string; sub: string; Icon: typeof Package; bg: string; ic: string };
-    const kpisEmp = [
-      ver("Ventas", "Ventas") && { label: "Ventas de hoy", value: String(ventasHoy.length), sub: fmt(totalVendidoHoy), Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600" },
-      ver("Ventas", "Ventas") && { label: "Pedidos por verificar pago", value: String(porVerificar.length), sub: "Pago sin confirmar", Icon: ClipboardList, bg: "bg-amber-50", ic: "text-amber-600" },
-      ver("Ventas", "Clientes") && { label: "Clientes", value: String(clientesActivos.length), sub: "Registrados en el sistema", Icon: Users, bg: "bg-violet-50", ic: "text-violet-600" },
-      // Devoluciones ya conectadas: las registradas que siguen 'Pendiente' de
-      // resolver (sin importar el periodo).
-      ver("Ventas", "Devoluciones") && { label: "Devoluciones pendientes", value: String(devolucionesPendientes.length), sub: "Por resolver", Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600" },
-      ver("Producción", "Orden de Producción") && { label: "Órdenes en curso", value: String(ordenesEnCurso.length), sub: "Pendientes y en proceso", Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600" },
-      // El módulo de productos no conformes todavía no está conectado.
-      ver("Producción", "Producto No Conforme") && { label: "No conformes pendientes", value: "—", sub: "Sin conectar", Icon: AlertTriangle, bg: "bg-red-50", ic: "text-red-600" },
-      ver("Compras", "Insumos") && { label: "Insumos bajo mínimo", value: String(insumosBajo.length), sub: "Stock por debajo del mínimo", Icon: Package, bg: "bg-emerald-50", ic: "text-emerald-600" },
-      ver("Compras", "Orden de Compra") && { label: "Compras por recibir", value: String(ocPorRecibir.length), sub: "Órdenes enviadas al proveedor", Icon: Truck, bg: "bg-cyan-50", ic: "text-cyan-600" },
-    ].filter(Boolean).slice(0, 4) as KpiEmp[];
+    // ── Tarjetas por MÓDULO + filtro Diario · Semanal · Mensual ────────────
+    // Una tarjeta por cada módulo con permiso "Ver" del rol activo, con sus
+    // mini cifras. Lo que tiene fecha se filtra con el MISMO `enPeriodo` del
+    // Dashboard (referencia `hoyBogota()`: corte en hora de Colombia) y lo que
+    // es un estado o un stock queda sin filtro. REGLA: el empleado NO ve
+    // dinero (ingresos ni totales en pesos), solo cantidades.
+    const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha, periodoInicio));
+    const opsPeriodo = ordenesProduccion.filter((o) => enPeriodo(o.fechaSolicitada, periodoInicio));
+    const comprasPeriodo = gestiones.filter(
+      (g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura) && enPeriodo(g.fechaFactura, periodoInicio),
+    );
+    // Devoluciones registradas en el periodo: MISMO criterio que la tarjeta
+    // "Devoluciones" del Dashboard del admin — cuenta las ventas con idDevolucion
+    // por la FECHA DE LA DEVOLUCIÓN (devolucionFecha; si no viene, la de la
+    // venta), con el mismo `enPeriodo`.
+    const devolucionesPeriodoEmp = ventas.filter(
+      (v) => v.idDevolucion != null && enPeriodo(v.devolucionFecha ?? v.fecha, periodoInicio),
+    );
+    // ── Tarjetas del inicio: UNA cifra por tarjeta, IGUAL que "Indicadores
+    // comerciales" del admin (mismo componente `TarjetaIndicador`). Máximo 3
+    // en una fila, en orden de prioridad y según el permiso "Ver" del rol
+    // activo. Lo que tiene fecha se filtra con el MISMO `enPeriodo` del
+    // Dashboard (referencia `hoyBogota()`: corte en hora de Colombia) y lo que
+    // es un estado o un stock no depende del periodo. REGLA: el empleado NO ve
+    // dinero (ingresos ni totales en pesos), solo cantidades.
+    const etiqueta = etiquetaPeriodo(periodoInicio);
+    type TarjetaEmp = { label: string; value: string; sub: string; Icon: typeof Package; bg: string; ic: string; screen: Screen };
+    const tarjetasEmp: TarjetaEmp[] = [
+      ver("Ventas", "Ventas") && {
+        label: "Pedidos recibidos", value: String(ventasPeriodo.filter((v) => v.estado !== "Anulado").length),
+        sub: etiqueta, Icon: ShoppingBag, bg: "bg-blue-50", ic: "text-blue-600", screen: "ventas-pedidos" as Screen,
+      },
+      ver("Ventas", "Ventas") && {
+        label: "Por verificar", value: String(ventasPeriodo.filter((v) => v.estado === "Por verificar").length),
+        sub: etiqueta, Icon: ClipboardList, bg: "bg-amber-50", ic: "text-amber-600", screen: "ventas-pedidos" as Screen,
+      },
+      ver("Ventas", "Devoluciones") && {
+        label: "Devoluciones", value: String(devolucionesPeriodoEmp.length),
+        sub: etiqueta, Icon: RefreshCw, bg: "bg-orange-50", ic: "text-orange-600", screen: "devoluciones" as Screen,
+      },
+      ver("Producción", "Orden de Producción") && {
+        label: "Órdenes de producción pendientes",
+        value: String(opsPeriodo.filter((o) => o.estadoOrden === "pendiente").length),
+        sub: etiqueta, Icon: Layers, bg: "bg-sky-50", ic: "text-sky-600", screen: "production-orders" as Screen,
+      },
+      ver("Compras", "Compra") && {
+        label: "Compras registradas", value: String(comprasPeriodo.length),
+        sub: etiqueta, Icon: FileText, bg: "bg-teal-50", ic: "text-teal-600", screen: "gestion-compra" as Screen,
+      },
+      ver("Compras", "Insumos") && {
+        label: "Insumos bajo mínimo", value: String(insumosBajo.length),
+        sub: "Stock por debajo del mínimo", Icon: Package, bg: "bg-emerald-50", ic: "text-emerald-600", screen: "supplies" as Screen,
+      },
+      clientesActivos !== null && ver("Ventas", "Clientes") && {
+        label: "Clientes activos", value: String(clientesActivos),
+        sub: "Registrados en el sistema", Icon: Users, bg: "bg-violet-50", ic: "text-violet-600", screen: "clientes" as Screen,
+      },
+    ].filter(Boolean).slice(0, 3) as TarjetaEmp[];
+    // Columnas de la fila de tarjetas según cuántas haya (máx. 3): la fila se
+    // ajusta al ancho completo sin dejar huecos a la derecha. En celular van
+    // siempre una por fila.
+    const colsTarjetas =
+      tarjetasEmp.length >= 3 ? "lg:grid-cols-3" : tarjetasEmp.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-1";
 
     // Accesos rápidos — solo módulos con permiso "Crear".
     type AccesoRapido = { label: string; Icon: typeof Package; screen: Screen };
@@ -613,19 +731,35 @@ export function DashboardScreen({
           </div>
         ) : (
           <>
-            {/* KPIs (máx. 4) */}
-            {kpisEmp.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {kpisEmp.map(({ label, value, sub, Icon, bg, ic }) => (
-                  <div key={label} className="bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-shadow">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${bg}`}>
-                      <Icon className={`w-5 h-5 ${ic}`} />
-                    </div>
-                    <p className="text-2xl font-bold text-foreground mb-0.5" style={{ fontFamily: MONO }}>{value}</p>
-                    <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-                  </div>
-                ))}
+            {/* Tarjetas por MÓDULO (una por cada módulo con permiso "Ver") con
+                sus mini cifras, y el filtro Diario · Semanal · Mensual arriba a
+                la derecha (mismo componente que el Dashboard del admin). */}
+            {tarjetasEmp.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    Resumen de tus módulos
+                  </h2>
+                  <FiltroPeriodo
+                    value={periodoInicio}
+                    onChange={onPeriodoInicio}
+                    ariaLabel="Filtro de las tarjetas del inicio"
+                  />
+                </div>
+                <div className={`grid grid-cols-1 gap-4 ${colsTarjetas}`}>
+                  {tarjetasEmp.map(({ label, value, sub, Icon, bg, ic, screen }) => (
+                    <TarjetaIndicador
+                      key={label}
+                      label={label}
+                      value={value}
+                      sub={sub}
+                      Icon={Icon}
+                      bg={bg}
+                      ic={ic}
+                      onClick={() => navigate(screen)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -648,17 +782,18 @@ export function DashboardScreen({
               </div>
             )}
 
-            {/* Tabla 1: Ventas de hoy */}
+            {/* Tabla 1: Ventas de hoy (el empleado NO ve dinero: se muestra la
+                cantidad de productos en lugar del monto) */}
             {ver("Ventas", "Ventas") && (
               <TablaInicio
                 titulo="Ventas de hoy"
                 destino="ventas-pedidos"
-                cols={["Cliente", "Monto", "Hora", "Estado"]}
+                cols={["Cliente", "Productos", "Hora", "Estado"]}
                 vacio="Aún no hay ventas hoy"
                 filas={ventasHoyTabla.length === 0 ? null : ventasHoyTabla.map((venta) => (
                   <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{fmt(venta.total)}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{venta.cantidad}</td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">{hora12(horaVenta(venta))}</td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_VENTA[venta.estado] ?? venta.estado}</td>
                   </tr>
@@ -671,12 +806,12 @@ export function DashboardScreen({
               <TablaInicio
                 titulo="Devoluciones"
                 destino="devoluciones"
-                cols={["Cliente", "Monto", "Fecha"]}
+                cols={["Cliente", "Productos", "Fecha"]}
                 vacio="No hay devoluciones registradas"
                 filas={devolucionesTabla.length === 0 ? null : devolucionesTabla.map((venta) => (
                   <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{fmt(venta.devolucionMonto ?? venta.total)}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{venta.cantidad}</td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">{venta.fecha}</td>
                   </tr>
                 ))}
@@ -748,23 +883,16 @@ export function DashboardScreen({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tarjetas.map(({ label, value, sub, Icon, bg, ic, screen }) => (
-              <button
+              <TarjetaIndicador
                 key={label}
-                type="button"
+                label={label}
+                value={value}
+                sub={sub ?? etiquetaPeriodoTxt}
+                Icon={Icon}
+                bg={bg}
+                ic={ic}
                 onClick={() => navigate(screen)}
-                className="text-left bg-card border border-border rounded-2xl p-5 hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
-                    <Icon className={`w-5 h-5 ${ic}`} />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-foreground mb-0.5" style={{ fontFamily: MONO }}>
-                  {value}
-                </p>
-                <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                <p className="text-[11px] text-muted-foreground mt-1">{sub ?? etiquetaPeriodoTxt}</p>
-              </button>
+              />
             ))}
           </div>
         </div>

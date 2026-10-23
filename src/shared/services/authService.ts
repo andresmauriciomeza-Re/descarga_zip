@@ -1,5 +1,7 @@
 import api from "./api";
 import type {
+  ActivacionDatos,
+  ActivacionResponse,
   LoginResponse,
   MensajeResponse,
   RegistroRequest,
@@ -280,5 +282,32 @@ export async function registrarCliente(
   datos: RegistroRequest,
 ): Promise<RegistroResponse> {
   const { data } = await api.post<RegistroResponse>("/auth/register", datos);
+  return data;
+}
+
+// ── Activación de cuenta de empleado (rutas públicas, sin sesión) ─────────
+
+/** Valida el enlace ?activar=<token> del correo de invitación y devuelve solo
+ *  el nombre y el correo ENMASCARADO para el saludo del modal. Si el enlace
+ *  venció o ya fue usado, el backend responde 400 con el mensaje que se pinta. */
+export async function obtenerActivacion(
+  token: string,
+): Promise<ActivacionDatos> {
+  const { data } = await api.get<ActivacionDatos>(
+    `/auth/activacion/${encodeURIComponent(token)}`,
+  );
+  return data;
+}
+
+/** Guarda la contraseña creada por el empleado, invalida el enlace y devuelve
+ *  el correo real para precargar el inicio de sesión. */
+export async function activarCuenta(
+  token: string,
+  contrasena: string,
+): Promise<ActivacionResponse> {
+  const { data } = await api.post<ActivacionResponse>("/auth/activacion", {
+    token,
+    contrasena,
+  });
   return data;
 }
