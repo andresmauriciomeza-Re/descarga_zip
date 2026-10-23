@@ -150,6 +150,7 @@ import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario 
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
+import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificacionService";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
@@ -4927,6 +4928,27 @@ function LoginScreen({
   // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
+  // Cuenta pendiente (403 "Tu cuenta aún no está activada"): se ofrece
+  // "Reenviar correo de confirmación", con 60 s de espera entre envíos (el
+  // backend aplica el mismo intervalo).
+  const [cuentaPendiente, setCuentaPendiente] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
+  const [reenvioEnEspera, setReenvioEnEspera] = useState(false);
+
+  const reenviarConfirmacion = async () => {
+    if (reenviando || reenvioEnEspera) return;
+    setReenviando(true);
+    try {
+      const { mensaje } = await reenviarVerificacion(email.trim().toLowerCase());
+      toast.success(mensaje);
+      setReenvioEnEspera(true);
+      window.setTimeout(() => setReenvioEnEspera(false), 60_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo reenviar el correo.");
+    } finally {
+      setReenviando(false);
+    }
+  };
 
   // Trampa de Tab, foco al primer inválido y aria (lógica compartida).
   const validacion = useValidacionFormulario(["email", "password"]);
@@ -4945,6 +4967,7 @@ function LoginScreen({
       return;
     }
     setRechazo(null);
+    setCuentaPendiente(false);
     setLoading(true);
     try {
       const trimmedEmail = email.trim().toLowerCase();
@@ -5014,9 +5037,11 @@ function LoginScreen({
           password: "Verifica tu correo y contraseña",
         });
       } else if (status === 403) {
-        // Cuenta de empleado sin activar: el backend manda el motivo
-        // ("Tu cuenta aún no está activada. Revisa tu correo.").
+        // Cuenta sin activar (empleado invitado o cliente que aún no confirma
+        // su correo): el backend manda el motivo ("Tu cuenta aún no está
+        // activada. Revisa tu correo.") y se ofrece reenviar la confirmación.
         setRechazo(mensaje);
+        setCuentaPendiente(true);
       } else {
         // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
         // extrajo el texto que corresponde.
@@ -5184,6 +5209,19 @@ function LoginScreen({
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
             {rechazo}
           </p>
+        )}
+
+        {cuentaPendiente && (
+          <div className="flex justify-center mb-3">
+            <button
+              type="button"
+              onClick={() => void reenviarConfirmacion()}
+              disabled={reenviando || reenvioEnEspera}
+              className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {reenviando ? "Enviando..." : "Reenviar correo de confirmación"}
+            </button>
+          </div>
         )}
 
         {mensajeExito && (
@@ -5505,6 +5543,7 @@ function RegisterScreen({
   clientes,
   setClientes,
   darkMode,
+  onRegistrado,
 }: {
   navigate: (s: Screen) => void;
   usuarios: Usuario[];
@@ -5513,6 +5552,9 @@ function RegisterScreen({
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   darkMode: boolean;
+  /** Cuenta creada y pendiente de confirmar el correo: App lleva al login con
+   *  el correo escrito y el aviso. `correoEnviado` = salió "Confirma tu correo". */
+  onRegistrado: (correo: string, correoEnviado: boolean) => void;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -5680,7 +5722,7 @@ function RegisterScreen({
 
     setLoading(true);
     try {
-      await registrarCliente({
+      const registro: RegistroConVerificacion = await registrarCliente({
         tipoDocumento: form.docType,
         numeroDocumento: form.docNum.trim(),
         nombre: normalizarNombrePersona(form.name),
@@ -5751,8 +5793,8 @@ function RegisterScreen({
           setUsuarios((p) => [...p, nuevoUsuario]);
         }
       }
-      toast.success("¡Cuenta creada exitosamente! Ya puedes ingresar.");
-      navigate("login");
+      // La cuenta queda pendiente hasta confirmar el correo.
+      onRegistrado(correoNuevo, registro.correoEnviado !== false);
     } catch (e) {
       const mensaje =
         e instanceof Error ? e.message : "No se pudo conectar con el servidor.";
@@ -8548,6 +8590,45 @@ export default function App() {
     navigate("login");
   }, []);
 
+  // ── Verificación de correo del registro (?verificar=<token>) ───────────
+  // Igual que ?activar: se lee UNA vez, la URL se limpia al instante y se
+  // confirma contra la API. Bien → login con el correo escrito y el aviso
+  // verde; mal (vencido, ya usado) → login con el mensaje del backend.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("verificar");
+    if (!token) return;
+    window.history.replaceState(null, "", "/");
+    // Se navega al login cuando responde la API: LoginScreen toma el correo
+    // precargado solo al montarse.
+    void verificarCorreo(token)
+      .then(({ correo }) => {
+        setLoginEmailPre(correo ?? "");
+        setLoginMensajeExito("Correo verificado. Ya puedes iniciar sesión");
+        toast.success("Correo verificado. Ya puedes iniciar sesión");
+      })
+      .catch((error) => {
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "No se pudo verificar el correo.",
+        );
+      })
+      .finally(() => navigate("login"));
+  }, []);
+
+  /** Fin del registro público: la cuenta queda pendiente de confirmar el
+      correo, así que se va al login con el correo escrito y el aviso. */
+  const trasRegistrarse = (correo: string, correoEnviado: boolean) => {
+    const aviso = correoEnviado
+      ? "Te enviamos un correo para confirmar tu cuenta"
+      : "Tu cuenta quedó creada, pero no pudimos enviar el correo. Inicia sesión y usa «Reenviar correo de confirmación»";
+    setLoginEmailPre(correo);
+    setLoginMensajeExito(aviso);
+    if (correoEnviado) toast.success(aviso);
+    else toast.warning(aviso);
+    navigate("login");
+  };
+
   /** Fin de la activación: login con el correo ya escrito y el aviso verde. */
   const trasActivarCuenta = (correo: string) => {
     setActivacionToken(null);
@@ -9636,6 +9717,7 @@ export default function App() {
                   clientes={clientes}
                   setClientes={setClientes}
                   darkMode={darkMode}
+                  onRegistrado={trasRegistrarse}
                 />
               )}
               {screen === "client-profile" && (
