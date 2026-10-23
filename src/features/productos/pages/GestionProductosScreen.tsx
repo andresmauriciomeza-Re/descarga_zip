@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -61,6 +61,7 @@ import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
 // Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
 // ni espacios de más) compartida con Insumos y Compras.
 import { mismoNombre, nombreLimpio } from "@/shared/utils/nombres";
+import { mensajeErrorProductos } from "@/features/productos/services/productosApi";
 
 export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
 export type { ConfigCategoria } from "@/shared/utils/configCategoria";
@@ -153,10 +154,8 @@ export interface Producto {
       de `imagenes` (ver `sincronizarImagenes`), así el resto de la app que
       todavía usa el campo único no se rompe. */
   imagen: string;
-  /** Imágenes múltiples del producto (P13). Opcional a propósito: los
-      productos de semilla y los guardados en localStorage viejos solo traen
-      `imagen`, y `imagenesDe` los convierte en lista sin tocar el dato. El
-      límite es MAX_IMAGENES (4). */
+  /** Lista de compatibilidad de imagen. Los datos antiguos pueden traer varias;
+      la API y el formulario nuevo conservan una sola URL. */
   imagenes?: string[];
   nombre: string;
   idCategoria: string;
@@ -169,8 +168,13 @@ export interface Producto {
   /** Precio de venta al público: lo que paga el cliente. Es el que muestran
       el listado, el Excel, Ver detalle y el menú público (tarjeta, detalle y
       carrito). En Bebidas ("Producto terminado") NO se escribe aquí: el precio
-      se define en Compras (monto de compra + % de ganancia). */
+       se define en Compras. */
   precioUnitario: number;
+  /** Precio especial de la pizza Grande; sin valor usa el recargo configurado. */
+  precioGrande?: number;
+  /** Nombre recibido del backend para que el catálogo local de categorías
+      no pierda la categoría numérica de productos recién sincronizados. */
+  categoriaNombre?: string;
   unidadVenta: string;
   /** Presentación de la bebida (ej. 400 ml, 1.5 L). Opcional en el modelo
       para no romper productos viejos de localStorage; en Crear es
@@ -187,7 +191,7 @@ export interface Producto {
    *  cuando `unidadCompra` es "paca" o "caja"; vacío/1 con "und". */
   unidadesPorEmpaque?: number;
   /** Ajuste: último monto de la paca/caja comprado SIN IVA y el % de IVA de
-   *  esa línea. Los escribe `aplicarPreciosCompra` al guardar la compra, y al
+    *  esa línea. Los escribe `entradaCompra` al guardar la compra, y al
    *  volver a elegir el producto en Nueva compra / Orden de Compra /
    *  Recepción se precarga ese mismo monto (y ese %). Opcional: los productos
    *  sin historial (datos viejos) se precargan como siempre. */
@@ -202,10 +206,8 @@ export interface Producto {
   estado: EstadoProducto;
 }
 
-/** Límite de imágenes por producto (P13): se eligió 4 (se valoraron 3 y 4)
-    porque con cuatro cabe en una cuadrícula de 2×2 en Ver detalle y de 4 en
-    una fila en Crear/Editar, sin alargar el formulario ni la columna. */
-export const MAX_IMAGENES = 4;
+/** La API almacena una URL de imagen por producto. */
+export const MAX_IMAGENES = 1;
 
 /** Imágenes de un producto como ARREGLO siempre: usa `imagenes` si existe;
     si no, la única `imagen` (dato viejo o de semilla). Es lo que pintan el
@@ -517,9 +519,7 @@ function VersionPills({
 }
 
 /**
- * Campo de imágenes múltiples del producto (P13): cuadrícula FIJA de
- * MAX_IMAGENES (4) casillas —la primera es la portada y se marca con su
- * etiqueta y su resalte aunque esté vacía— más el alta de una en una con
+ * Campo de imagen única del producto: una casilla —la portada— más el alta con
  * "Subir archivo" (fila completa) y, debajo, una fila con la URL y "Agregar
  * imagen". Al llegar al límite los controles y las casillas vacías quedan
  * atenuados. Las casillas vacías son decorativas: no cargan ni quitan nada.
@@ -572,8 +572,7 @@ function CampoImagenes({
 
   return (
     <div className={llenarAlto ? "flex flex-col h-full" : ""}>
-      {/* Cuadrícula de 4 casillas: ocupadas muestran la foto (la primera, con
-          su resalte de portada); vacías son decorativas y quedan atenuadas en
+      {/* La casilla muestra la foto (portada); si está vacía es decorativa y queda atenuada en
           solo lectura o al estar el límite alcanzado. */}
       <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 ${llenarAlto ? "flex-1" : ""}`}>
         {casillas.map((idx) => {
@@ -868,6 +867,13 @@ export function GestionProductosScreen({
   fichas: fichasExternas,
   setFichas: setFichasExternas,
   categorias,
+  cargandoProductos = false,
+  errorProductos,
+  onReintentarCarga,
+  onCrearEnServidor,
+  onEditarEnServidor,
+  onCambiarEstadoEnServidor,
+  onDescontinuarEnServidor,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -885,6 +891,13 @@ export function GestionProductosScreen({
       Categoría (sin las Inactivas) y el nombre que se muestra en la lista.
       Si no llega, se usa la lista local de las tres originales. */
   categorias?: CategoriaProducto[];
+  cargandoProductos?: boolean;
+  errorProductos?: string | null;
+  onReintentarCarga?: () => void;
+  onCrearEnServidor?: (producto: Producto) => Promise<Producto>;
+  onEditarEnServidor?: (producto: Producto) => Promise<Producto>;
+  onCambiarEstadoEnServidor?: (id: string, estado: EstadoProducto) => Promise<Producto>;
+  onDescontinuarEnServidor?: (id: string) => Promise<Producto>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -914,6 +927,10 @@ export function GestionProductosScreen({
   const [confirmEstado, setConfirmEstado] = useState<{
     id: string; nombre: string; current: EstadoProducto; next: EstadoProducto;
   } | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
+  const [errorNombreServidor, setErrorNombreServidor] = useState("");
+  const [errorPrecioGrande, setErrorPrecioGrande] = useState("");
 
   const emptyForm = (): Omit<Producto, "id"> => ({
     imagen: "",
@@ -1001,6 +1018,8 @@ export function GestionProductosScreen({
 
   // ── Edit-ficha helpers (todo escribe sobre el borrador) ──────────
   const openEdit = (p: Producto) => {
+    setErrorNombreServidor("");
+    setErrorPrecioGrande("");
     // Materializa la lista de imágenes: los productos viejos solo traen
     // `imagen`, y el editor siempre debe trabajar sobre un arreglo.
     setEditItem({ ...p, imagenes: imagenesDe(p) });
@@ -1024,7 +1043,9 @@ export function GestionProductosScreen({
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
   const catName = (id: string) =>
-    opcionesCategoriaBase.find((c) => c.id === id)?.nombre ?? "Sin categoría";
+    opcionesCategoriaBase.find((c) => c.id === id)?.nombre
+      ?? productos.find((p) => p.idCategoria === id)?.categoriaNombre
+      ?? "Sin categoría";
 
   /** Opciones del selector de Categoría (Crear y Editar): las activas del
       módulo Categoría de Productos. Al editar se añade la actual aunque esté
@@ -1058,6 +1079,10 @@ export function GestionProductosScreen({
   };
   const aplicarCategoriaCrear = (nueva: string) => {
     const cfg = configDeCategoria(nueva, catName(nueva));
+    const esPizza = catName(nueva).toLowerCase().includes("pizza");
+    setErrorPrecioGrande(esPizza && !!form.precioGrande && form.precioGrande <= form.precioUnitario
+      ? "El Precio Grande debe ser mayor que el Precio Mediana"
+      : "");
     setForm((p) => ({
       ...p,
       idCategoria: nueva,
@@ -1093,6 +1118,10 @@ export function GestionProductosScreen({
   };
   const aplicarCategoriaEdit = (nueva: string) => {
     const cfg = configDeCategoria(nueva, catName(nueva));
+    const esPizza = catName(nueva).toLowerCase().includes("pizza");
+    setErrorPrecioGrande(esPizza && !!editItem?.precioGrande && editItem.precioGrande <= (editItem.precioUnitario ?? 0)
+      ? "El Precio Grande debe ser mayor que el Precio Mediana"
+      : "");
     setEditItem((x) => x && ({ ...x, idCategoria: nueva, tipo: cfg ? cfg.tipo : x.tipo }));
     setEditFichaBorrador((v) => ajustarFilasTamano(v, cfg));
     setEditFichaSel("borrador");
@@ -1294,7 +1323,8 @@ export function GestionProductosScreen({
         { header: "Nombre", valor: (p) => p.nombre },
         { header: "Tipo", valor: (p) => tipoDe(p, catName(p.idCategoria)) },
         { header: "Categoría", valor: (p) => catName(p.idCategoria) },
-        { header: "Precio de venta", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
+        { header: "Precio Mediana / venta", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
+        { header: "Precio Grande", valor: (p) => catName(p.idCategoria).toLowerCase().includes("pizza") ? (p.precioGrande ?? p.precioUnitario + 2000) : "", numFmt: '"$"#,##0' },
         {
           header: "Stock",
           // B5: un Producto insumo NO exporta su `stockDisponible` (ese
@@ -1370,7 +1400,8 @@ export function GestionProductosScreen({
     nombreLimpio(nombre) !== "" &&
     productos.some((p) => p.id !== excluirId && mismoNombre(p.nombre, nombre));
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    if (guardandoRef.current) return;
     // Primero la categoría (es la que define el tipo y los tamaños) y el
     // nombre; la pregunta "¿Tiene ficha técnica?" solo aplica cuando la
     // categoría NO está en CONFIG_CATEGORIA.
@@ -1395,6 +1426,15 @@ export function GestionProductosScreen({
     // Producto terminado).
     const tipoFinal: TipoProducto =
       cfg ? cfg.tipo : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
+    const esPizza = catName(form.idCategoria).toLowerCase().includes("pizza");
+    if (!esTerminado(tipoFinal) && (!Number.isFinite(form.precioUnitario) || form.precioUnitario <= 0)) {
+      toast.error("El precio de venta debe ser mayor a 0");
+      return;
+    }
+    if (esPizza && form.precioGrande != null && form.precioGrande !== 0 && form.precioGrande <= form.precioUnitario) {
+      setErrorPrecioGrande("El Precio Grande debe ser mayor que el Precio Mediana");
+      return;
+    }
     // Bebidas ("Producto terminado"): la presentación es obligatoria (ej. 400
     // ml, 1.5 L). Sin contenido no se puede guardar la bebida. Bloque 2.3:
     // mismas reglas que el "+ Crear producto" de Compras (helper compartido).
@@ -1425,14 +1465,6 @@ export function GestionProductosScreen({
         ? form.unidadCompra
         : "und";
     const nFinal = ucFinal === "und" ? undefined : Math.trunc(Number(form.unidadesPorEmpaque));
-    // `length + 1` reutilizaba un id existente si se había borrado un producto del
-    // medio: quedaban dos filas con la misma clave y editar/borrar una afectaba a
-    // la otra. Se toma el mayor sufijo numérico, como en Usuarios.
-    const nextNum = productos.reduce((max, p) => {
-      const n = parseInt(p.id.replace("PROD-", ""), 10) || 0;
-      return Math.max(max, n);
-    }, 0) + 1;
-    const newId = `PROD-${String(nextNum).padStart(3, "0")}`;
     // Un Producto insumo no se guarda sin su ficha: al menos 1 insumo y
     // porciones >= 1 en cada tamaño. Un Producto terminado nunca guarda ficha.
     if (tipoFinal === TIPOS_PRODUCTO[0]) {
@@ -1442,18 +1474,16 @@ export function GestionProductosScreen({
         toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo y porciones de 1 en adelante");
         return;
       }
-      setFichas(prev => ({
-        ...prev,
-        [newId]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, idsConFicha)), destino: { tipo: "producto", productoId: newId }, fechaInicio: new Date().toISOString(), fechaFin: null }],
-      }));
     }
-    // Sincroniza imágenes antes de guardar: `imagenes` queda completa y
-    // `imagen` = primera, para no romper al resto de la app (P13).
-    setProductos((p) => [
-      sincronizarImagenes({
-        id: newId,
+    guardandoRef.current = true;
+    setGuardando(true);
+    setErrorNombreServidor("");
+    try {
+      const creado = await onCrearEnServidor?.(sincronizarImagenes({
+        id: "",
         ...form,
         tipo: tipoFinal,
+        precioGrande: esPizza && form.precioGrande ? form.precioGrande : undefined,
         ...(esTerminadoFinal
           ? {
               precioUnitario: 0,
@@ -1465,24 +1495,42 @@ export function GestionProductosScreen({
               unidadesPorEmpaque: nFinal,
             }
           : { unidadCompra: "und" as const, unidadesPorEmpaque: undefined }),
-      }),
-      ...p,
-    ]);
-    setShowCreate(false);
-    setForm(emptyForm());
-    resetFichaForm();
-    setFormTieneFicha(null);
-    setTieneFichaError("");
-    setConfirmCategoria(null);
-    toast.success("Producto creado correctamente");
+      }));
+      if (!creado) throw new Error("No se pudo guardar el producto en el servidor.");
+      if (tipoFinal === TIPOS_PRODUCTO[0]) {
+        setFichas((prev) => ({
+          ...prev,
+          [creado.id]: [{ ...fichaBorrador, version: 1, idReceta: numeroNuevoFicha(siguienteNumeroFicha(fichas, [...idsConFicha, creado.id])), destino: { tipo: "producto", productoId: creado.id }, fechaInicio: new Date().toISOString(), fechaFin: null }],
+        }));
+      }
+      setShowCreate(false);
+      setForm(emptyForm());
+      resetFichaForm();
+      setFormTieneFicha(null);
+      setTieneFichaError("");
+      setConfirmCategoria(null);
+      toast.success("Producto creado correctamente");
+    } catch (error) {
+      const mensaje = mensajeErrorProductos(error, "No se pudo crear el producto.");
+      if ((error as { status?: number })?.status === 409 || mensaje.toLowerCase().includes("ya existe un producto")) {
+        setErrorNombreServidor(mensaje);
+      } else {
+        toast.error(mensaje);
+      }
+    } finally {
+      guardandoRef.current = false;
+      setGuardando(false);
+    }
   };
 
-  const handleEdit = () => {
+  const esTerminado = (tipo: TipoProducto) => tipo === TIPOS_PRODUCTO[1];
+
+  const handleEdit = async () => {
+    if (guardandoRef.current) return;
     if (!editItem) return;
     // Bloque 1.1: mismo control que al crear, sin compararse consigo mismo.
-    // El nombre hoy está bloqueado en el formulario (el menú y el panel se
-    // emparejan por nombre y renombrar solo en el panel rompería el carrito);
-    // la validación queda lista por si se desbloquea al conectar la API.
+    // Se permite renombrar; las referencias heredadas se resuelven también por
+    // nombre normalizado y el menú se refresca con la respuesta del servidor.
     if (nombreRepetido(editItem.nombre, editItem.id)) {
       toast.error("Ya existe un producto con ese nombre");
       return;
@@ -1493,6 +1541,20 @@ export function GestionProductosScreen({
     // "¿Tiene ficha técnica?" o la derivación de `tipoDe`.
     const tipoFinal: TipoProducto =
       cfg ? cfg.tipo : tipoDe(editItem, catName(editItem.idCategoria));
+    const original = productos.find((x) => x.id === editItem.id);
+    if (original && tipoFinal !== original.tipo) {
+      toast.error("El tipo de producto no se puede cambiar al editar");
+      return;
+    }
+    const esPizza = catName(editItem.idCategoria).toLowerCase().includes("pizza");
+    if (!esTerminado(tipoFinal) && (!Number.isFinite(editItem.precioUnitario) || editItem.precioUnitario <= 0)) {
+      toast.error("El precio de venta debe ser mayor a 0");
+      return;
+    }
+    if (esPizza && editItem.precioGrande != null && editItem.precioGrande !== 0 && editItem.precioGrande <= editItem.precioUnitario) {
+      setErrorPrecioGrande("El Precio Grande debe ser mayor que el Precio Mediana");
+      return;
+    }
     // Bebidas que ya existen sin contenido se pueden guardar igual (el campo
     // solo es obligatorio al CREAR): aquí solo se valida el formato cuando el
     // usuario lo llena.
@@ -1529,7 +1591,6 @@ export function GestionProductosScreen({
     // Un producto con historial de ficha no puede pasar a una categoría sin
     // ficha: perdería su historial. Es el respaldo del bloqueo que ya hace
     // `solicitarCambioCategoriaEdit` al elegir la categoría.
-    const original = productos.find((x) => x.id === editItem.id);
     if (
       original &&
       tipoDe(original, catName(original.idCategoria)) === TIPOS_PRODUCTO[0] &&
@@ -1545,25 +1606,31 @@ export function GestionProductosScreen({
       toast.error("Un producto insumo necesita su ficha técnica con al menos un insumo y porciones de 1 en adelante");
       return;
     }
-    setProductos((p) =>
-      // Mismo sincronismo de imágenes que al crear: portada = primera foto.
-      p.map((x) =>
-        x.id === editItem.id
-          ? sincronizarImagenes({
-              ...editItem,
-              tipo: tipoFinal,
-              ...(tipoFinal === TIPOS_PRODUCTO[1]
-                ? {
-                    // Las bebidas se venden sueltas; el empaque sólo es de compra.
-                    unidadVenta: "und",
-                    unidadCompra: ucEdit,
-                    unidadesPorEmpaque: nEdit,
-                  }
-                : { unidadCompra: "und" as const, unidadesPorEmpaque: undefined }),
-            })
-          : x,
-      ),
-    );
+    guardandoRef.current = true;
+    setGuardando(true);
+    setErrorNombreServidor("");
+    try {
+      const actualizado = await onEditarEnServidor?.(sincronizarImagenes({
+        ...editItem,
+        tipo: tipoFinal,
+        categoriaNombre: catName(editItem.idCategoria),
+        precioGrande: esPizza && editItem.precioGrande ? editItem.precioGrande : undefined,
+        ...(tipoFinal === TIPOS_PRODUCTO[1]
+          ? { unidadVenta: "und", unidadCompra: ucEdit, unidadesPorEmpaque: nEdit }
+          : { unidadCompra: "und" as const, unidadesPorEmpaque: undefined }),
+      }));
+      if (!actualizado) throw new Error("No se pudo actualizar el producto en el servidor.");
+    } catch (error) {
+      const mensaje = mensajeErrorProductos(error, "No se pudo actualizar el producto.");
+      if ((error as { status?: number })?.status === 409 || mensaje.toLowerCase().includes("ya existe un producto")) {
+        setErrorNombreServidor(mensaje);
+      } else {
+        toast.error(mensaje);
+      }
+      guardandoRef.current = false;
+      setGuardando(false);
+      return;
+    }
     // Un solo "Guardar" para producto y ficha: si el borrador cambió frente a
     // la última versión guardada, se cierra esa versión (fechaFin = ahora) y
     // el borrador entra como la versión N+1. Si no cambió, no se crea nada y
@@ -1602,6 +1669,8 @@ export function GestionProductosScreen({
     setEditItem(null);
     setConfirmCategoriaEdit(null);
     toast.success("Producto actualizado");
+    guardandoRef.current = false;
+    setGuardando(false);
   };
 
   /** Bloque 1.2: "Descontinuar" reemplaza a "Eliminar": el producto sale del
@@ -1609,12 +1678,21 @@ export function GestionProductosScreen({
       que no se borre nada; hoy el basurero borraba producto Y ficha aunque
       tuviera ventas, órdenes o compras detrás). Se puede volver a "Disponible"
       o "No disponible" desde la pastilla de estado de la lista. */
-  const handleDescontinuar = (id: string) => {
-    setProductos((p) =>
-      p.map((x) => (x.id === id ? { ...x, estado: "Descontinuado" as EstadoProducto } : x)),
-    );
-    setDeleteId(null);
-    toast.success("Producto descontinuado: salió del menú y su ficha técnica se conserva");
+  const handleDescontinuar = async (id: string) => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
+    try {
+      if (!onDescontinuarEnServidor) throw new Error("No está disponible la conexión con Productos API.");
+      await onDescontinuarEnServidor(id);
+      setDeleteId(null);
+      toast.success("Producto descontinuado: salió del menú y su ficha técnica se conserva");
+    } catch (error) {
+      toast.error(mensajeErrorProductos(error, "No se pudo descontinuar el producto."));
+    } finally {
+      guardandoRef.current = false;
+      setGuardando(false);
+    }
   };
 
   const roCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
@@ -1656,6 +1734,7 @@ export function GestionProductosScreen({
     const tipo = tipoDe(values, catName(values.idCategoria));
     /** Bebida / reventa: el precio de venta se define en Compras, no aquí. */
     const esTerminado = tipo === TIPOS_PRODUCTO[1];
+    const esPizza = catName(values.idCategoria).toLowerCase().includes("pizza");
     /** El campo Precio de venta se pinta salvo al CREAR una bebida. */
     const mostrarPrecio = !(esCrear && esTerminado);
     /** Una bebida nunca se edita a mano: en Editar y Ver detalle queda solo
@@ -1748,7 +1827,7 @@ export function GestionProductosScreen({
             {mostrarPrecio && (
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                  Precio de venta (COP)
+                  {esPizza ? "Precio Mediana (COP)" : "Precio de venta (COP)"}
                 </label>
                 <CampoPrecio
                   valor={values.precioUnitario}
@@ -1756,6 +1835,29 @@ export function GestionProductosScreen({
                   readOnly={precioSoloLectura}
                   cls={precioSoloLectura ? roCls : inputCls}
                 />
+                {esPizza && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+                      Precio Grande (opcional)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={values.precioGrande || ""}
+                      placeholder="$ 0"
+                      onChange={(e) => onChange("precioGrande", e.target.value === "" ? 0 : Number(e.target.value))}
+                      readOnly={precioSoloLectura}
+                      className={precioSoloLectura ? roCls : inputCls}
+                    />
+                    {values.precioGrande != null && values.precioGrande !== 0 && values.precioGrande <= values.precioUnitario ? (
+                      <p className="text-[11px] text-red-500 mt-1">El Precio Grande debe ser mayor que el Precio Mediana</p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Vacío: Mediana + $2.000 = ${((values.precioUnitario || 0) + 2000).toLocaleString("es-CO")}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {esTerminado && (
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Se define en Compras
@@ -1963,6 +2065,30 @@ export function GestionProductosScreen({
     </div>
   );
 
+  if (cargandoProductos || errorProductos) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-6">
+        <div className="max-w-lg w-full rounded-2xl border border-border bg-card p-8 text-center">
+          <h1 className="text-xl font-bold text-foreground">Gestión de Productos</h1>
+          {cargandoProductos ? (
+            <p className="mt-3 text-sm text-muted-foreground">Cargando productos…</p>
+          ) : (
+            <>
+              <p className="mt-3 text-sm text-red-600">{errorProductos}</p>
+              <button
+                type="button"
+                onClick={onReintentarCarga}
+                className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Reintentar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── Pantalla completa Crear Producto ──────────────────────────────
   if (showCreate) {
     const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -1981,7 +2107,7 @@ export function GestionProductosScreen({
     // el botón Crear queda deshabilitado (además del toast de handleCreate).
     const errorNombreCrear = nombreRepetido(form.nombre)
       ? "Ya existe un producto con ese nombre"
-      : "";
+      : errorNombreServidor;
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -2010,11 +2136,11 @@ export function GestionProductosScreen({
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
-            <button onClick={handleCreate}
-              disabled={errorNombreCrear !== ""}
+            <button onClick={() => void handleCreate()}
+              disabled={guardando || errorNombreCrear !== "" || !!errorPrecioGrande}
               title={errorNombreCrear || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-              Crear
+              {guardando ? "Guardando…" : "Crear"}
             </button>
           </div>
         </div>
@@ -2043,7 +2169,13 @@ export function GestionProductosScreen({
                       solicitarCambioCategoriaCrear(String(v));
                       return;
                     }
-                    setForm((p) => ({ ...p, [f]: v }));
+                    setErrorNombreServidor("");
+                    const siguiente = { ...form, [f]: v };
+                    const esPizza = catName(String(siguiente.idCategoria)).toLowerCase().includes("pizza");
+                    setErrorPrecioGrande(esPizza && !!siguiente.precioGrande && siguiente.precioGrande <= siguiente.precioUnitario
+                      ? "El Precio Grande debe ser mayor que el Precio Mediana"
+                      : "");
+                    setForm(siguiente);
                   },
                   // Crear no muestra Estado (nace "Disponible"). Unidad de
                   // venta solo aparece para Bebidas (la decide FormFields con
@@ -2452,7 +2584,7 @@ export function GestionProductosScreen({
     // los datos; queda listo por si se desbloquea al conectar la API.
     const errorNombreEdit = nombreRepetido(editItem.nombre, editItem.id)
       ? "Ya existe un producto con ese nombre"
-      : "";
+      : errorNombreServidor;
     // Versión histórica seleccionada (null = borrador editable).
     const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
     return (
@@ -2480,11 +2612,11 @@ export function GestionProductosScreen({
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
-            <button onClick={handleEdit}
-              disabled={errorNombreEdit !== ""}
+            <button onClick={() => void handleEdit()}
+              disabled={guardando || errorNombreEdit !== "" || !!errorPrecioGrande}
               title={errorNombreEdit || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-              Guardar
+              {guardando ? "Guardando…" : "Guardar"}
             </button>
           </div>
         </div>
@@ -2509,10 +2641,18 @@ export function GestionProductosScreen({
                       solicitarCambioCategoriaEdit(String(v));
                       return;
                     }
-                    setEditItem((x) => x && { ...x, [f]: v });
+                    if (!editItem) return;
+                    const siguiente = { ...editItem, [f]: v };
+                    const esPizza = catName(String(siguiente.idCategoria)).toLowerCase().includes("pizza");
+                    setErrorPrecioGrande(esPizza && !!siguiente.precioGrande && siguiente.precioGrande <= siguiente.precioUnitario
+                      ? "El Precio Grande debe ser mayor que el Precio Mediana"
+                      : "");
+                    setEditItem(siguiente);
+                    setErrorNombreServidor("");
+                    setErrorPrecioGrande("");
                   },
                   mostrarEstado: true,
-                  lockNombre: true,
+                  lockNombre: false,
                   // Bloque 1.1: nombre repetido en tiempo real bajo el campo.
                   errorNombre: errorNombreEdit,
                   // "¿Tiene ficha técnica?" — solo para categorías SIN
@@ -2673,6 +2813,8 @@ export function GestionProductosScreen({
             <button
               onClick={() => {
                 setForm(emptyForm());
+                setErrorNombreServidor("");
+                setErrorPrecioGrande("");
                 resetFichaForm();
                 setFormTieneFicha(null);
                 setTieneFichaError("");
@@ -2907,8 +3049,17 @@ export function GestionProductosScreen({
                           value: e,
                           label: e,
                           color: ESTADO_PRODUCTO_CLASES[e],
+                          disabled: e === "Disponible" && tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0,
+                          help: e === "Disponible" && tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0
+                            ? "Se habilita al registrar una compra con precio de venta"
+                            : undefined,
                         }))}
                       />
+                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0 && (
+                        <p className="mt-1 max-w-40 text-[10px] leading-tight text-muted-foreground">
+                          Se habilita al registrar una compra con precio de venta
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       <ActionIcons
@@ -2958,8 +3109,9 @@ export function GestionProductosScreen({
               </>
             }
             confirmLabel="Descontinuar"
+            loading={guardando}
             onConfirm={() => handleDescontinuar(deleteId)}
-            onCancel={() => setDeleteId(null)}
+            onCancel={() => !guardando && setDeleteId(null)}
           />
         )}
       </AnimatePresence>
@@ -2997,15 +3149,29 @@ export function GestionProductosScreen({
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
-                <button onClick={() => {
-                  setProductos((prev) =>
-                    prev.map((x) => x.id === confirmEstado.id ? { ...x, estado: confirmEstado.next } : x)
-                  );
-                  setConfirmEstado(null);
-                  toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+                <button disabled={guardando} onClick={() => {
+                  if (guardandoRef.current) return;
+                  if (!onCambiarEstadoEnServidor) {
+                    toast.error("No está disponible la conexión con Productos API.");
+                    return;
+                  }
+                  guardandoRef.current = true;
+                  setGuardando(true);
+                  void (async () => {
+                    try {
+                      await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
+                      setConfirmEstado(null);
+                      toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+                    } catch (error) {
+                      toast.error(mensajeErrorProductos(error, "No se pudo cambiar el estado."));
+                    } finally {
+                      guardandoRef.current = false;
+                      setGuardando(false);
+                    }
+                  })();
                 }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  Confirmar
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50">
+                  {guardando ? "Guardando…" : "Confirmar"}
                 </button>
               </div>
             </motion.div>

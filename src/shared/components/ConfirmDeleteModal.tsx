@@ -9,6 +9,7 @@ interface ConfirmDeleteModalProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   confirmLabel?: string;
+  loading?: boolean;
   /** Modo informativo (punto 3, proveedores): icono ámbar y UN solo botón
    *  "Entendido", sin Cancelar ni confirmación. Es opt-in: el resto de
    *  pantallas siguen recibiendo la alerta de confirmación de siempre. */
@@ -21,6 +22,7 @@ export function ConfirmDeleteModal({
   onConfirm,
   onCancel,
   confirmLabel = "Eliminar",
+  loading = false,
   informativo = false,
 }: ConfirmDeleteModalProps) {
   return (
@@ -47,6 +49,7 @@ export function ConfirmDeleteModal({
         {informativo ? (
           <button
             onClick={onCancel}
+            disabled={loading}
             className="w-full py-3 bg-primary text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
           >
             Entendido
@@ -54,16 +57,18 @@ export function ConfirmDeleteModal({
         ) : (
           <div className="flex gap-3">
             <button
-              onClick={onCancel}
+            onClick={onCancel}
+              disabled={loading}
               className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               onClick={onConfirm}
+              disabled={loading}
               className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer active:scale-95"
             >
-              {confirmLabel}
+              {loading ? "Guardando…" : confirmLabel}
             </button>
           </div>
         )}

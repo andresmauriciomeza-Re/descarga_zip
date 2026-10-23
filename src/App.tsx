@@ -130,6 +130,8 @@ import {
 } from "@/features/insumos/pages/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
+import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos } from "@/features/productos/services/productosApi";
+import { mismoNombre } from "@/shared/utils/nombres";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
@@ -7212,6 +7214,9 @@ const leerNoConformidadesPersistidas = () =>
 // semilla, evitando que un "Producto terminado" viejo (con ficha) se lea como
 // el nuevo "Producto terminado" (sin ficha).
 const PRODUCTOS_STORAGE_KEY = "sivpro.productos.v2";
+const PRODUCTOS_RESPALDO_FASE1_KEY = `${PRODUCTOS_STORAGE_KEY}-respaldo-fase1`;
+const FICHAS_RESPALDO_FASE1_KEY = `${FICHAS_STORAGE_KEY}-respaldo-fase1`;
+const MIGRACION_FICHAS_FASE1_KEY = "sivpro.migracion.fichasProductos.fase1";
 
 const esProductoValido = (x: unknown) =>
   esObjeto(x) &&
@@ -7219,9 +7224,10 @@ const esProductoValido = (x: unknown) =>
   typeof x.nombre === "string" &&
   typeof x.stockDisponible === "number";
 
-const leerProductosPersistidos = (): Producto[] => {
+const leerProductosParaMigracion = (): Producto[] => {
   try {
-    const raw = sessionStorage.getItem(PRODUCTOS_STORAGE_KEY);
+    const raw = localStorage.getItem(PRODUCTOS_RESPALDO_FASE1_KEY)
+      ?? sessionStorage.getItem(PRODUCTOS_STORAGE_KEY);
     if (!raw) return INITIAL_PRODUCTOS;
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esProductoValido)) {
@@ -7233,13 +7239,21 @@ const leerProductosPersistidos = (): Producto[] => {
   return INITIAL_PRODUCTOS;
 };
 
-/** ¿Esta sesión arranca con stock de Productos ya guardado? Se consulta en el
-    primer render (antes de que el efecto de escritura rellene el storage). */
-const hayStockDeSesion = (): boolean => {
+/** Copia la información legada antes de inicializar cualquier estado nuevo.
+    Nunca elimina datos del navegador y no sobrescribe un respaldo existente. */
+const respaldarDatosProductosFase1 = () => {
   try {
-    return sessionStorage.getItem(PRODUCTOS_STORAGE_KEY) !== null;
+    if (localStorage.getItem(PRODUCTOS_RESPALDO_FASE1_KEY) === null) {
+      const productosLegados = sessionStorage.getItem(PRODUCTOS_STORAGE_KEY);
+      if (productosLegados !== null) localStorage.setItem(PRODUCTOS_RESPALDO_FASE1_KEY, productosLegados);
+    }
+    if (localStorage.getItem(FICHAS_RESPALDO_FASE1_KEY) === null) {
+      const fichasLegadas = localStorage.getItem(FICHAS_STORAGE_KEY);
+      if (fichasLegadas !== null) localStorage.setItem(FICHAS_RESPALDO_FASE1_KEY, fichasLegadas);
+    }
   } catch {
-    return false;
+    // Si el almacenamiento está bloqueado no se elimina ni sobrescribe nada;
+    // la carga desde API sigue separada y mostrará sus errores normalmente.
   }
 };
 
@@ -7510,6 +7524,7 @@ class LandingErrorBoundary extends Component<
 }
 
 export default function App() {
+  respaldarDatosProductosFase1();
   /** Snapshot de la sesión al cargar la página, leído UNA sola vez.
       Permite que F5 no borre la sesión (se restaura usuario, rol y pantalla)
       y detectar una sesión expirada por inactividad para avisar. */
@@ -7579,20 +7594,15 @@ export default function App() {
   // al cambiar de rol con el selector del encabezado: el componente puede
   // desmontarse al cambiar de pantalla y perdería su estado interno.
   const [periodoInicio, setPeriodoInicio] = useState<Periodo>("dia");
-  // Catálogo de productos. Lo consumen GestionProductosScreen y
-  // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
-  // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
-  // `Producto` quedaron importados y sin usar, y App reventaba con
-  // "ReferenceError: productos is not defined" al renderizar el dashboard.
-  const [productos, setProductos] = useState<Producto[]>(leerProductosPersistidos);
+  // Catálogo de Productos del panel: solo se llena desde /productos/gestion
+  // con sesión activa; un error no se reemplaza por datos de ejemplo.
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productosCargando, setProductosCargando] = useState(false);
+  const [errorCargaProductos, setErrorCargaProductos] = useState<string | null>(null);
+  const [productosGestionCargados, setProductosGestionCargados] = useState(false);
   // Catálogo público independiente del almacenamiento local de Gestión de Productos.
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
-  // Capturado en el primer render: si la sesión arranca SIN stock persistido,
-  // el catálogo volvió a la semilla y las marcas "productosDescontados" de las
-  // órdenes guardadas en localStorage apuntan a descuentos que ya no existen
-  // (el efecto de abajo las limpia para no duplicar movimientos).
-  const arranqueSinStock = useRef(!hayStockDeSesion());
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido.
@@ -7604,12 +7614,14 @@ export default function App() {
       // normalizar hace que las fichas recién creadas desde el legado ya
       // entren con número en la serie.
       const insumosSemilla = mezclarInsumosPersistidos();
+      const fichasLeidas = leerFichasPersistidas();
       const idsExistentes = [
-        ...leerProductosPersistidos().map((p) => p.id),
+        ...leerProductosParaMigracion().map((p) => p.id),
         ...insumosSemilla.map((i) => i.id),
+        ...Object.keys(fichasLeidas),
       ];
       return normalizarIdsFicha(
-        migrarFichasLegacy(leerFichasPersistidas(), insumosSemilla),
+        migrarFichasLegacy(fichasLeidas, insumosSemilla),
         idsExistentes,
       );
     });
@@ -7642,41 +7654,135 @@ export default function App() {
       ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
       : null,
   );
-  useEffect(() => {
-    let activo = true;
-    obtenerCatalogo()
-      .then(({ productos: filasProductos, categorias: filasCategorias }) => {
-        if (!activo) return;
-        const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
-        const productosApi = filasProductos.map(productoApiAProducto);
-        const categoriasApi = filasCategorias.map(categoriaApiACategoria);
-        setProductosCatalogo(productosApi);
-        setCategoriasCatalogo(categoriasApi);
-        const idsValidos = new Set(productosApi.map((p) => Number(p.id)));
-        setCart((actuales) => {
-          const validos = actuales
-            .filter((item) => idsValidos.has(item.product.id))
-            .map((item) => {
-              const actualizado = productosApi.find((p) => Number(p.id) === item.product.id);
-              return actualizado
-                ? { ...item, product: productoACatalogo(actualizado, categoriasApi) }
-                : item;
-            });
-          if (validos.length < actuales.length) {
-            toast.info("Se quitaron del carrito productos que ya no están disponibles en el catálogo.");
-          }
-          return validos;
-        });
-        if (teniaIdsAntiguos) {
-          toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
+  const recargarCatalogo = async () => {
+    try {
+      const { productos: filasProductos, categorias: filasCategorias } = await obtenerCatalogo();
+      const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
+      const productosApi = filasProductos.map(productoApiAProducto);
+      const categoriasApi = filasCategorias.map(categoriaApiACategoria);
+      setProductosCatalogo(productosApi);
+      setCategoriasCatalogo(categoriasApi);
+      const idsValidos = new Set(productosApi.map((p) => Number(p.id)));
+      setCart((actuales) => {
+        const validos = actuales
+          .filter((item) => idsValidos.has(item.product.id))
+          .map((item) => {
+            const actualizado = productosApi.find((p) => Number(p.id) === item.product.id);
+            return actualizado ? { ...item, product: productoACatalogo(actualizado, categoriasApi) } : item;
+          });
+        if (validos.length < actuales.length) {
+          toast.info("Se quitaron del carrito productos que ya no están disponibles en el catálogo.");
         }
-      })
-      .catch((error) => {
-        console.error("No se pudo cargar el catálogo público:", error);
-        if (activo) toast.error("No se pudo cargar el catálogo. Intenta recargar la página.");
+        return validos;
       });
-    return () => { activo = false; };
+      if (teniaIdsAntiguos) toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
+    } catch (error) {
+      console.error("No se pudo cargar el catálogo público:", error);
+      toast.error(error instanceof Error ? error.message : "No se pudo cargar el catálogo público.");
+      throw error;
+    }
+  };
+
+  const cargarProductosGestion = async () => {
+    setProductosCargando(true);
+    setErrorCargaProductos(null);
+    try {
+      const listado = await listarGestion();
+      setProductos(listado);
+      setProductosGestionCargados(true);
+    } catch (error) {
+      setErrorCargaProductos(mensajeErrorProductos(error, "No se pudieron cargar los productos."));
+      setProductosGestionCargados(false);
+    } finally {
+      setProductosCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn || !restauracionSesionLista) return;
+    void cargarProductosGestion();
+  }, [isLoggedIn, restauracionSesionLista]);
+
+  useEffect(() => {
+    if (!productosGestionCargados) return;
+    try {
+      if (localStorage.getItem(MIGRACION_FICHAS_FASE1_KEY) === "hecha") return;
+      const legacy = leerProductosParaMigracion();
+      const porIdLegacy = new Map(legacy.map((p) => [p.id, p.nombre]));
+      const resultado: FichasPorProducto = { ...fichasPorProducto };
+      const avisos: string[] = [];
+      let cambio = false;
+      for (const [idViejo, versiones] of Object.entries(fichasPorProducto)) {
+        if (!/^PROD-/i.test(idViejo)) continue;
+        const nombre = porIdLegacy.get(idViejo) ?? INITIAL_PRODUCTOS.find((p) => p.id === idViejo)?.nombre;
+        const destino = nombre
+          ? productos.find((p) => mismoNombre(p.nombre, nombre))
+          : undefined;
+        if (!destino) {
+          avisos.push(nombre ?? idViejo);
+          continue;
+        }
+        if (resultado[destino.id]) {
+          avisos.push(`${nombre} (ya existe ficha para el ID ${destino.id})`);
+          continue;
+        }
+        resultado[destino.id] = versiones.map((v) => ({
+          ...v,
+          destino: v.destino?.tipo === "producto" ? { ...v.destino, productoId: destino.id } : v.destino,
+        }));
+        delete resultado[idViejo];
+        cambio = true;
+      }
+      if (cambio) setFichasPorProducto(resultado);
+      localStorage.setItem(MIGRACION_FICHAS_FASE1_KEY, "hecha");
+      if (avisos.length) toast.warning(`Fichas conservadas sin migrar: ${[...new Set(avisos)].join(", ")}`);
+    } catch (error) {
+      console.error("No se pudo completar la migración local de fichas:", error);
+      toast.error("No se pudo migrar una parte de las fichas. Los datos originales se conservaron.");
+    }
+  }, [productosGestionCargados, productos]);
+
+  useEffect(() => {
+    void recargarCatalogo().catch(() => {});
   }, []);
+
+  const aplicarProductoRespuesta = (producto: Producto, crear = false) => {
+    setProductos((prev) => crear
+      ? [producto, ...prev.filter((p) => p.id !== producto.id)]
+      : prev.map((p) => p.id === producto.id ? producto : p));
+  };
+
+  const recargarCatalogoTrasCambio = async () => {
+    try {
+      await recargarCatalogo();
+    } catch {
+      // El guardado ya fue confirmado por el backend de Productos; el error
+      // del catálogo público se muestra por recargarCatalogo y no lo revierte.
+    }
+  };
+
+  const crearProductoEnServidor = async (producto: Producto) => {
+    const creado = await crearProducto(productoPanelACreacion(producto));
+    aplicarProductoRespuesta(creado, true);
+    await recargarCatalogoTrasCambio();
+    return creado;
+  };
+
+  const editarProductoEnServidor = async (producto: Producto) => {
+    const actualizado = await editarProducto(producto.id, productoPanelAEdicion(producto));
+    aplicarProductoRespuesta(actualizado);
+    await recargarCatalogoTrasCambio();
+    return actualizado;
+  };
+
+  const cambiarEstadoEnServidor = async (id: string, estado: Producto["estado"]) => {
+    const actualizado = await cambiarEstadoProducto(id, estado);
+    aplicarProductoRespuesta(actualizado);
+    await recargarCatalogoTrasCambio();
+    return actualizado;
+  };
+
+  const descontinuarProductoEnServidor = (id: string) => cambiarEstadoEnServidor(id, "Descontinuado");
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
@@ -8181,34 +8287,6 @@ export default function App() {
       // El almacenamiento puede estar bloqueado o sin cuota.
     }
   }, [fichasPorProducto]);
-
-  // Stock de Productos: se escribe en sessionStorage (ver PRODUCTOS_STORAGE_KEY)
-  // para que un F5 conserve el descuento pero un cierre de pestaña lo reinicie.
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(PRODUCTOS_STORAGE_KEY, JSON.stringify(productos));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota: el stock sigue
-      // en memoria durante la sesión.
-    }
-  }, [productos]);
-
-  // Arranque con stock fresco (sesión nueva): las órdenes de la sesión anterior
-  // quedaron en localStorage con `productosDescontados`, pero el stock de
-  // Productos ya volvió a la semilla. Sin limpiarla, una devolución pendiente
-  // "repondría" unidades que nunca salieron (45 → 50). Solo se toca esta marca:
-  // insumos y el resto del flujo siguen persistidos como hasta ahora.
-  useEffect(() => {
-    if (!arranqueSinStock.current) return;
-    arranqueSinStock.current = false;
-    setOrdenesProduccion((prev) =>
-      prev.some((o) => o.productosDescontados)
-        ? prev.map((o) =>
-            o.productosDescontados ? { ...o, productosDescontados: false } : o,
-          )
-        : prev,
-    );
-  }, []);
 
   // Creación automática de la orden de producción (§3a / P2) — punto C2:
   // cuando una venta pagada queda Por entregar se le crea una orden local
@@ -8800,8 +8878,13 @@ export default function App() {
       Recepción. El producto entra al catálogo del panel por el MISMO setter
       que usa Gestión de Productos, vía callback: al conectar la API este será
       el único punto a cambiar (una sola llamada de creación). */
-  const crearProductoDesdeCompras = (p: Producto) =>
-    setProductos((prev) => [p, ...prev]);
+  const crearProductoDesdeCompras = async (p: Producto) => crearProductoEnServidor({
+    ...p,
+    tipo: TIPOS_PRODUCTO[1],
+    precioUnitario: 0,
+    estado: "No disponible",
+    unidadVenta: "und",
+  });
 
   const registrarPedido = async (
     metodoPago: string,
@@ -9620,8 +9703,9 @@ export default function App() {
                   setProductos={setProductos}
                   // Bloque 2: el "+ Crear producto" del OrdenModal necesita
                   // las categorías del panel y el alta en el catálogo.
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onAbrirRecepcion={(orden) => {
                     setOrdenRecepcion(orden);
                     setScreen("recepcion-compra");
@@ -9654,7 +9738,7 @@ export default function App() {
                   insumos={insumos}
                   productos={productos}
                   // Bloque 2: "+ Crear producto" con las categorías del panel.
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
                   setInsumos={setInsumos}
                   onBack={() => {
@@ -9676,8 +9760,9 @@ export default function App() {
                   setProductos={setProductos}
                   // Bloque 2: "+ Crear producto" del desplegable de no
                   // solicitados (categorías del panel y alta en el catálogo).
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  onRecargarCatalogo={recargarCatalogoTrasCambio}
                   gestiones={gestiones}
                   setGestiones={setGestiones}
                   proveedores={proveedores}
@@ -9737,8 +9822,9 @@ export default function App() {
                   setProductos={setProductos}
                   // Bloque 2: se pasan a CompraForm (el detalle es de sólo
                   // lectura, pero ambas pantallas quedan iguales).
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onNuevaCompra={() => navigate("nueva-compra")}
                 />
               )}
@@ -9758,8 +9844,9 @@ export default function App() {
                   setProductos={setProductos}
                   // Bloque 2: "+ Crear producto" del desplegable de ítems
                   // (categorías del panel y alta en el catálogo).
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
                   onCrearProducto={crearProductoDesdeCompras}
+                  onRecargarCatalogo={recargarCatalogoTrasCambio}
                   onBack={() => navigate("gestion-compra")}
                 />
               )}
@@ -9810,7 +9897,14 @@ export default function App() {
                   insumos={insumos}
                   fichas={fichasPorProducto}
                   setFichas={setFichasPorProducto}
-                  categorias={categorias}
+                  categorias={categoriasCatalogo}
+                  cargandoProductos={productosCargando || (isLoggedIn && !productosGestionCargados && !errorCargaProductos)}
+                  errorProductos={errorCargaProductos}
+                  onReintentarCarga={() => void cargarProductosGestion()}
+                  onCrearEnServidor={crearProductoEnServidor}
+                  onEditarEnServidor={editarProductoEnServidor}
+                  onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
+                  onDescontinuarEnServidor={descontinuarProductoEnServidor}
                 />
               )}
               {screen === "cat-producto" && (
@@ -9886,7 +9980,6 @@ export default function App() {
                 <OrdenProduccionScreen
                   {...getPerms("production-orders")}
                   productos={productos}
-                  setProductos={setProductos}
                   insumos={insumos}
                   setInsumos={setInsumos}
                   ventas={ventas}

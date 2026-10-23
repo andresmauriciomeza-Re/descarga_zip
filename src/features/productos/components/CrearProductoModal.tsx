@@ -5,6 +5,7 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import { configDeCategoria } from "@/shared/utils/configCategoria";
 import { mismoNombre, nombreLimpio } from "@/shared/utils/nombres";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
+import { mensajeErrorProductos } from "@/features/productos/services/productosApi";
 
 const SERIF = "var(--font-titulo)";
 
@@ -84,7 +85,7 @@ export function CrearProductoModal({
   productos: Producto[];
   /** Categorías del panel; se filtran a las de tipo "Producto terminado". */
   categorias: CategoriaProducto[];
-  onGuardar: (p: Producto) => void;
+  onGuardar: (p: Producto) => Promise<Producto>;
   onClose: () => void;
 }) {
   const [nombre, setNombre] = useState(nombreInicial);
@@ -100,6 +101,8 @@ export function CrearProductoModal({
     empaque: false,
   });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorServidor, setErrorServidor] = useState("");
 
   // Sólo categorías de tipo "Producto terminado" (bebidas y reventa): los
   // "Producto insumo" (Pizzas, Lasañas) se producen, no se compran.
@@ -122,7 +125,7 @@ export function CrearProductoModal({
   const marcarTocado = (campo: keyof typeof tocado) =>
     setTocado((t) => ({ ...t, [campo]: true }));
 
-  const submit = () => {
+  const submit = async () => {
     setIntentoGuardar(true);
     if (!formValido) return;
     const ucFinal =
@@ -135,7 +138,10 @@ export function CrearProductoModal({
         const n = parseInt(p.id.replace("PROD-", ""), 10) || 0;
         return Math.max(max, n);
       }, 0) + 1;
-    onGuardar({
+    setGuardando(true);
+    setErrorServidor("");
+    try {
+      await onGuardar({
       id: `PROD-${String(nextNum).padStart(3, "0")}`,
       nombre: nombreLimpio(nombre),
       idCategoria,
@@ -155,7 +161,12 @@ export function CrearProductoModal({
         ucFinal === "und" ? undefined : Math.trunc(Number(unidadesPorEmpaque)),
       stockDisponible: 0,
       estado: "No disponible",
-    });
+      });
+    } catch (error) {
+      setErrorServidor(mensajeErrorProductos(error, "No se pudo crear el producto."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -206,6 +217,7 @@ export function CrearProductoModal({
             {(tocado.nombre || intentoGuardar) && errores.nombre && (
               <p className="text-xs text-red-500 mt-1 ml-0.5">{errores.nombre}</p>
             )}
+            {errorServidor && <p className="text-xs text-red-500 mt-1 ml-0.5">{errorServidor}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
@@ -328,11 +340,11 @@ export function CrearProductoModal({
             Cancelar
           </button>
           <button
-            onClick={submit}
-            disabled={!formValido}
+            onClick={() => void submit()}
+            disabled={!formValido || guardando}
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
-            Crear Producto
+            {guardando ? "Guardando…" : "Crear Producto"}
           </button>
         </div>
       </motion.div>

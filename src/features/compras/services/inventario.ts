@@ -2,6 +2,8 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
+import { entradaCompra, reversaCompra, mensajeErrorProductos, type EntradaCompraApi } from "@/features/productos/services/productosApi";
+import { mismoNombre } from "@/shared/utils/nombres";
 
 /** Estado React de un catálogo del panel (insumos / productos). */
 export type SetCatalogo<T> = Dispatch<SetStateAction<T[]>>;
@@ -22,7 +24,112 @@ export type ItemStock = {
    *  paca/caja; las de unidad suelta y las compras viejas no lo traen y se
    *  leen como 1, así que su stock no cambia. */
   unidadesPorEmpaque?: number;
+  rowId?: string;
+  stockApiAplicado?: boolean;
+  stockApiRevertido?: boolean;
+  stockApiPendiente?: boolean;
+  stockApiPendienteReversa?: boolean;
 };
+
+export interface ErrorLineaProducto {
+  nombre: string;
+  mensaje: string;
+  indice: number;
+}
+
+const productoDeLineaCompra = (linea: ItemStock, productos: Producto[]) =>
+  productos.find((p) => p.id === linea.idInsumo)
+    ?? productos.find((p) => mismoNombre(p.nombre, linea.nombre));
+
+export const esLineaProducto = (linea: ItemStock) =>
+  linea.tipoItem === "producto" || (linea.tipoItem == null && /^PROD-/i.test(linea.idInsumo));
+
+const payloadEntradaDeLinea = (
+  linea: ItemStock & { precioUnitario?: number; precioVenta?: number; iva?: number },
+  ivaIncluido: boolean,
+): EntradaCompraApi => {
+  const factor = unidadesPorLinea(linea);
+  const montoPresentacion = Number(linea.precioUnitario ?? 0);
+  const iva = Number(linea.iva ?? 0);
+  const unidades = Number(linea.cantidad) * factor;
+  if (!Number.isSafeInteger(unidades) || unidades <= 0) {
+    throw new Error("La cantidad de bebidas debe ser un número entero mayor que cero.");
+  }
+  const totalConIva = ivaIncluido ? montoPresentacion : montoPresentacion * (1 + iva / 100);
+  const montoSinIva = ivaIncluido ? montoPresentacion / (1 + iva / 100) : montoPresentacion;
+  return {
+    unidades,
+    costo_unitario: Math.round((totalConIva / factor) * 100) / 100,
+    precio_venta: Number(linea.precioVenta ?? 0),
+    ultimo_monto_sin_iva: Math.round(montoSinIva * 100) / 100,
+    ultimo_iva_compra: iva,
+  };
+};
+
+/** Aplica de forma independiente cada línea producto: las líneas confirmadas
+ *  conservan su marca si otra falla, de modo que el reintento no duplica stock. */
+export async function aplicarEntradasCompraApi(
+  items: ItemStock[],
+  productos: Producto[],
+  setProductos: SetCatalogo<Producto>,
+  ivaIncluido: boolean,
+  soloPendientes = false,
+): Promise<{ items: ItemStock[]; errores: ErrorLineaProducto[] }> {
+  const actualizados = items.map((item) => ({ ...item }));
+  const errores: ErrorLineaProducto[] = [];
+  for (let indice = 0; indice < actualizados.length; indice += 1) {
+    const linea = actualizados[indice];
+    if (!esLineaProducto(linea) || linea.stockApiAplicado || (soloPendientes && !linea.stockApiPendiente)) continue;
+    const producto = productoDeLineaCompra(linea, productos);
+    if (!producto) {
+      actualizados[indice] = { ...linea, stockApiPendiente: true };
+      errores.push({ nombre: linea.nombre, mensaje: "No se encontró el producto en el catálogo.", indice });
+      continue;
+    }
+    try {
+      const respuesta = await entradaCompra(producto.id, payloadEntradaDeLinea(linea, ivaIncluido));
+      setProductos((prev) => prev.map((p) => p.id === respuesta.id ? respuesta : p));
+      actualizados[indice] = { ...linea, idInsumo: producto.id, stockApiAplicado: true, stockApiRevertido: false, stockApiPendiente: false };
+    } catch (error) {
+      actualizados[indice] = { ...linea, stockApiPendiente: true };
+      errores.push({ nombre: linea.nombre, mensaje: mensajeErrorProductos(error, "No se pudo aplicar la compra."), indice });
+    }
+  }
+  return { items: actualizados, errores };
+}
+
+/** Revierte solo las líneas que se aplicaron y aún no se revirtieron. */
+export async function revertirEntradasCompraApi(
+  items: ItemStock[],
+  productos: Producto[],
+  setProductos: SetCatalogo<Producto>,
+): Promise<{ items: ItemStock[]; errores: ErrorLineaProducto[] }> {
+  const actualizados = items.map((item) => ({ ...item }));
+  const errores: ErrorLineaProducto[] = [];
+  for (let indice = 0; indice < actualizados.length; indice += 1) {
+    const linea = actualizados[indice];
+    if (!esLineaProducto(linea) || !linea.stockApiAplicado || linea.stockApiRevertido) continue;
+    const producto = productoDeLineaCompra(linea, productos);
+    if (!producto) {
+      actualizados[indice] = { ...linea, stockApiPendienteReversa: true };
+      errores.push({ nombre: linea.nombre, mensaje: "No se encontró el producto para revertir la compra.", indice });
+      continue;
+    }
+    try {
+      const unidades = Number(linea.cantidad) * unidadesPorLinea(linea);
+      if (!Number.isSafeInteger(unidades) || unidades <= 0) {
+        throw new Error("La cantidad de bebidas debe ser un número entero mayor que cero.");
+      }
+      const respuesta = await reversaCompra(producto.id, unidades);
+      if (respuesta) setProductos((prev) => prev.map((p) => p.id === respuesta.id ? respuesta : p));
+      actualizados[indice] = { ...linea, idInsumo: producto.id, stockApiRevertido: true, stockApiPendienteReversa: false };
+    } catch (error) {
+      actualizados[indice] = { ...linea, stockApiPendienteReversa: true };
+      errores.push({ nombre: linea.nombre, mensaje: mensajeErrorProductos(error, "No se pudo revertir la compra."), indice });
+    }
+  }
+  return { items: actualizados, errores };
+}
 
 /**
  * Unidades por presentación de compra de la línea: `unidadesPorEmpaque` (> 1

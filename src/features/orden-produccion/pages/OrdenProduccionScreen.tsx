@@ -1084,7 +1084,6 @@ function LineaPreparacion({
 // ─────────────────────────── Pantalla ───────────────────────────
 export function OrdenProduccionScreen({
   productos,
-  setProductos,
   insumos,
   setInsumos,
   ventas,
@@ -1103,10 +1102,6 @@ export function OrdenProduccionScreen({
   setDetalleOrdenAAbrir,
 }: {
   productos: Producto[];
-  /** Stock de Productos terminados: al iniciar una orden tipo "Pedido" se
-      descuenta lo que esa orden va a entregar (el producto solo se calienta,
-      no se genera desde cero). */
-  setProductos: Dispatch<SetStateAction<Producto[]>>;
   insumos: Insumo[];
   setInsumos: Dispatch<SetStateAction<Insumo[]>>;
   ventas: Venta[];
@@ -1494,64 +1489,6 @@ export function OrdenProduccionScreen({
     }));
   };
 
-  /** Descuento del stock de Productos terminados al COMPLETAR una orden
-      "Pedido de cliente": baja exactamente una vez, mientras
-      `productosDescontados` siga apagado. Solo lo hacen las líneas de BEBIDA
-      (C3): la pizza y la lasaña no se entregan desde stock, se preparan con
-      sus insumos, y su disponibilidad se mira en Gestión de Productos. Las
-      órdenes "Preparación en lote" no tocan este stock: sus líneas son
-      Productos Insumo. Si una línea de bebida ya no resuelve ningún producto
-      se avisa con un toast (la orden se completa igual). Devuelve el resumen
-      para el toast. */
-  const descontarProductos = (orden: OrdenProduccion): string[] => {
-    if (orden.tipo !== "pedido" || orden.productosDescontados) return [];
-    const req = new Map<string, number>();
-    // Bebidas cuyo producto YA NO existe en Productos (nombre cambiado o borrado):
-    // en vez de saltarlas en silencio se avisa UNA vez por nombre y la orden se
-    // completa igual — no hay stock que descontar, pero el operador se entera.
-    const noEncontrados = new Set<string>();
-    for (const l of orden.lineas) {
-      if (!esBebida(l, productos)) continue;
-      const cantidad = l.cantidadEstimada || 0;
-      if (cantidad <= 0) continue;
-      // Mismo criterio que `lineasDeVenta`: por id y, si la línea es vieja, por
-      // nombre normalizado (el detalle trae el tamaño pegado con " — ").
-      const porId = l.productoId ? productos.find((p) => p.id === l.productoId) : undefined;
-      const base = l.nombre.split(" — ")[0].trim();
-      const porNombre = productos.find((p) => normalizar(p.nombre) === normalizar(base));
-      const producto = porId ?? porNombre;
-      if (!producto) {
-        noEncontrados.add(l.nombre);
-        continue;
-      }
-      req.set(producto.id, (req.get(producto.id) ?? 0) + cantidad);
-    }
-    // El aviso sale ANTES del `return` de abajo: una orden con todas las bebidas
-    // sin resolver también tiene que contarlo (el resto del flujo no cambia).
-    for (const nombre of noEncontrados) {
-      toast.warning(`No se encontró «${nombre}» en Productos: su stock no se descontó`);
-    }
-    if (req.size === 0) return [];
-    // El resumen se calcula FUERA del updater para no duplicarlo si React lo
-    // invoca dos veces (modo estricto); el descuento en sí es idempotente
-    // porque vive en la marca `productosDescontados`.
-    const resumen: string[] = [];
-    for (const [pid, cant] of req) {
-      const p = productos.find((x) => x.id === pid);
-      if (!p) continue;
-      const despues = Math.max(0, Math.round((p.stockDisponible - cant) * 1000) / 1000);
-      resumen.push(`${p.nombre} ${despues - p.stockDisponible}`);
-    }
-    setProductos((prev) => prev.map((p) => {
-      const cant = req.get(p.id);
-      if (!cant) return p;
-      // Nunca por debajo de 0, igual que insumos y mermas.
-      const despues = Math.max(0, Math.round((p.stockDisponible - cant) * 1000) / 1000);
-      return { ...p, stockDisponible: despues };
-    }));
-    return resumen;
-  };
-
   const tiempoTotalOrden = (o: OrdenProduccion) => {
     if (o.tipo === "preparacion") {
       // Tiempo del snapshot de cada línea (si existe), si no, legacy.
@@ -1687,7 +1624,6 @@ export function OrdenProduccionScreen({
     // encendida, ese movimiento ocurrió antes (orden que descontó al Iniciar,
     // o una orden que se completa dos veces) y NO se repite.
     const aplicarInsumos = !orden.insumosDescontados;
-    const aplicarProductos = orden.tipo === "pedido" && !orden.productosDescontados;
     const aplicarStock = orden.tipo === "preparacion" && !orden.stockAplicado;
 
     // 1) Unidades incompatibles: solo frenan cuando AHORA se va a descontar
@@ -1738,7 +1674,6 @@ export function OrdenProduccionScreen({
       estadoOrden: "completada",
       historial: [...orden.historial, { de: orden.estadoOrden, a: "completada", fechaHora: now }],
       insumosDescontados: orden.insumosDescontados || aplicarInsumos,
-      productosDescontados: orden.productosDescontados || aplicarProductos,
       stockAplicado: orden.stockAplicado || aplicarStock,
       // `notasFaltantes` ya no se escribe: el camino "completar igual" se
       // eliminó (C5). Las notas que guardaron órdenes viejas siguen a la vista
@@ -1748,9 +1683,6 @@ export function OrdenProduccionScreen({
 
     // ── a) Insumos y Productos Insumo consumidos ──
     if (aplicarInsumos) descontarInsumos(orden.insumosRequeridos);
-
-    // ── b) Productos terminados del menú (solo pedidos de cliente) ──
-    const bajaron = aplicarProductos ? descontarProductos(orden) : [];
 
     // ── c) Stock del Producto Insumo producido (solo preparación en lote) ──
     // Al stock del Producto Insumo SUBE solo la cantidad real (la merma no
@@ -1773,7 +1705,7 @@ export function OrdenProduccionScreen({
           .join(" · ")}`,
       );
     } else {
-      toast.success(`${orden.id} completada${bajaron.length ? ` — productos: ${bajaron.join(", ")}` : ""}`);
+      toast.success(`${orden.id} completada`);
     }
     // Merma como no conformidad: solo órdenes "Preparación en lote" (las de
     // "Pedido de cliente" entregan platos, no Productos Insumo). El dedupe
@@ -2261,9 +2193,14 @@ export function OrdenProduccionScreen({
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 <p className="text-xs text-muted-foreground">
                   {completarEsPedido
-                    ? "Solo lectura: revisa las líneas del pedido y confirma. Al completar solo baja su stock lo que se entrega directo (bebidas); la pizza y la lasaña se preparan con sus insumos."
+                    ? "Solo lectura: revisa las líneas del pedido y confirma. Las pizzas y las lasañas se preparan con sus insumos."
                     : "Al completar, al stock del Producto Insumo sube solo la cantidad real; la merma no existe como producto. «Cantidad que salió» es obligatoria."}
                 </p>
+                {completarEsPedido && completarItem.lineas.some((linea) => esBebida(linea, productos)) && (
+                  <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+                    El stock de las bebidas se descontó al aceptar la venta.
+                  </p>
+                )}
                 {completarItem.lineas.map((l, i) => completarEsPedido ? (
                   // ── C3: pedido en solo lectura (producto, tamaño, cantidad)
                   <div key={i} className="p-4 border border-border rounded-2xl bg-card">
