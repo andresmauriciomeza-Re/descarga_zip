@@ -29,7 +29,7 @@ import {
   unidadesCompatibles,
   type FaltanteUnidad,
 } from "@/shared/utils/disponibilidad";
-import { nextNoConformidadId, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import type { NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
 import {
   actualizarOrdenProduccion,
   completarOrdenProduccion,
@@ -1062,7 +1062,6 @@ export function OrdenProduccionScreen({
   ordenes,
   setOrdenes,
   noConformidades,
-  setNoConformidades,
   cargando = false,
   errorCarga,
   onReintentar,
@@ -1084,8 +1083,8 @@ export function OrdenProduccionScreen({
   fichasPorProducto: FichasPorProducto;
   ordenes: OrdenProduccion[];
   setOrdenes: Dispatch<SetStateAction<OrdenProduccion[]>>;
+  /** Productos no conformes (API): el detalle muestra la merma de la orden. */
   noConformidades: NoConformidad[];
-  setNoConformidades: Dispatch<SetStateAction<NoConformidad[]>>;
   /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos
       de ejemplo. */
   cargando?: boolean;
@@ -1561,10 +1560,9 @@ export function OrdenProduccionScreen({
 
   /** Completa la orden contra la API (`POST /completar`): la producción real
       por línea (solo Preparación) y todo el inventario lo aplica el servidor
-      (insumos, bebidas y stock del Producto Insumo producido). La merma ya la
-      guarda el backend en la base; como la pantalla de CPN todavía es local,
-      además se agrega el registro local —solo si el servidor respondió OK—
-      para que CPN la siga mostrando. */
+      (insumos, bebidas y stock del Producto Insumo producido). La merma la
+      registra el backend en Productos no conformes en la misma transacción;
+      aquí solo se avisa y se recarga (recargarProduccion incluye CPN). */
   const confirmarCompletar = async () => {
     if (!completarItem) return;
     const orden = ordenes.find((o) => o.id === completarItem.id);
@@ -1595,46 +1593,12 @@ export function OrdenProduccionScreen({
       setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizada : o)));
       toast.success(`${orden.id} completada`);
 
-      // Merma como no conformidad: solo órdenes "Preparación en lote" (las de
-      // "Pedido de cliente" entregan platos, no Productos Insumo). El dedupe
-      // vive dentro del updater funcional para que ni un doble clic ni el doble
-      // render de React la dupliquen. Esa cantidad NO se descuenta del stock:
-      // nunca entró al inventario (solo entró la cantidad real).
+      // Merma: solo "Preparación en lote". El registro ya lo creó el backend;
+      // aquí solo se avisa por línea (esa cantidad nunca entró al stock).
       if (orden.tipo === "preparacion") {
-        setNoConformidades((prev) => {
-          const nuevas: NoConformidad[] = [];
-          orden.lineas.forEach((l, i) => {
-            const real = Number(reales[i]);
-            if (!Number.isFinite(real)) return;
-            const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
-            if (merma <= 0) return;
-            const yaExiste = prev.some(
-              (n) => n.ordenRef === orden.id && n.nombre === l.nombre && n.tipoNoConformidad === "Merma de cocina",
-            );
-            if (yaExiste) return;
-            nuevas.push({
-              id: nextNoConformidadId([...prev, ...nuevas]),
-              tipo: "Producto insumo",
-              nombre: l.nombre,
-              categoria: "Producto insumo",
-              fechaRegistro: new Date().toLocaleDateString("en-CA"),
-              cantidadAfectada: merma,
-              unidadMedida: l.unidad,
-              tipoNoConformidad: "Merma de cocina",
-              descripcionProblema: `Se planificaron ${l.cantidadEstimada} ${l.unidad} y se obtuvieron ${real} ${l.unidad}.`,
-              causa: "",
-              areaProceso: "Producción",
-              responsable: "",
-              estado: "Pendiente",
-              tipoSolucion: "",
-              solucion: "",
-              ordenRef: orden.id,
-            });
-          });
-          nuevas.forEach((n) =>
-            toast.success(`Se registró la merma de ${n.nombre} en Productos no conformes`),
-          );
-          return nuevas.length > 0 ? [...nuevas, ...prev] : prev;
+        orden.lineas.forEach((l, i) => {
+          const merma = Math.max(0, Math.round((l.cantidadEstimada - Number(reales[i])) * 1000) / 1000);
+          if (merma > 0) toast.success(`Se registró la merma de ${l.nombre} en Productos no conformes`);
         });
       }
       setCompletarItem(null);
@@ -1675,8 +1639,8 @@ export function OrdenProduccionScreen({
       return;
     }
     try {
-      // El motivo y la descripción van al backend (que además registra la
-      // no conformidad que corresponda).
+      // El motivo y la descripción van al backend, que los guarda en el
+      // historial de la orden (dar de baja no crea un producto no conforme).
       const actualizada = await darBajaOrdenProduccion(
         darBajaItem.id,
         darBajaForm.motivo,

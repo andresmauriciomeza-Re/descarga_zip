@@ -178,7 +178,8 @@ import {
   normalizarNombre,
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
-import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import { ProductosPerecederosScreen, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
+import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/cpn/services/noConformesApi";
 import { ProductoTerminadoScreen } from "@/features/productos/pages/ProductoTerminadoScreen";
 import {
   PurchasesScreen
@@ -7269,44 +7270,22 @@ const mezclarInsumosPersistidos = (): Insumo[] => {
   }
 };
 
-/**
- * Semillas con fechas relativas a hoy. Las pantallas de Semilla traían fechas
- * fijas (2024 / septiembre 2026): con los filtros Diario · Semanal · Mensual
- * del Dashboard eso dejaba las gráficas vacías casi siempre. Aquí solo se
- * recoloca la fecha de cada ítem de la semilla hacia atrás desde hoy; si el
- * usuario ya guardó datos en `localStorage`, esos no se tocan (la semilla solo
- * se usa cuando no hay nada guardado o está corrupto).
- *
- * `diasAtras` reparte los ítems por índice para cubrir hoy, la semana y el mes
- * completos (p. ej. ventas: [0, 0, 1, 2, 3, 4, 6, 9, 0] deja tres ventas de
- * hoy a distintas horas y el resto esparcidas por la semana/mes).
- */
-const semillaConFechasRelativas = <T,>(
-  semilla: T[],
-  campo: keyof T,
-  diasAtras: number[],
-): T[] => {
-  const hoy = new Date();
-  return semilla.map((item, i) => ({
-    ...item,
-    [campo]: fechaISO(agregarDias(hoy, -(diasAtras[i % diasAtras.length] ?? 0))),
-  })) as T[];
+// Productos no conformes: desde la conexión a la API ya no se leen ni se
+// escriben en el navegador. Los registros locales eran de prueba y NO se suben
+// a la base: se copian UNA vez a `-respaldo-cpn` (mismo patrón que la fase 2)
+// y la clave original deja de usarse.
+const NO_CONFORMIDADES_RESPALDO_KEY = `${NO_CONFORMIDADES_STORAGE_KEY}-respaldo-cpn`;
+const respaldarNoConformidadesLocales = () => {
+  try {
+    if (localStorage.getItem(NO_CONFORMIDADES_RESPALDO_KEY) === null) {
+      const legado = localStorage.getItem(NO_CONFORMIDADES_STORAGE_KEY);
+      if (legado !== null) localStorage.setItem(NO_CONFORMIDADES_RESPALDO_KEY, legado);
+    }
+  } catch {
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
+  }
 };
-
-const esNoConformidadValida = (x: unknown) =>
-  esObjeto(x) &&
-  typeof x.id === "string" &&
-  typeof x.tipo === "string" &&
-  typeof x.estado === "string" &&
-  typeof x.fechaRegistro === "string";
-
-const leerNoConformidadesPersistidas = () =>
-  leerListaPersistida<NoConformidad>(
-    NO_CONFORMIDADES_STORAGE_KEY,
-    // [0, 1, 2, 4, 6, 9]: una hoy y el resto repartida por la semana/mes.
-    semillaConFechasRelativas(INITIAL_NO_CONFORMIDADES, "fechaRegistro", [0, 1, 2, 4, 6, 9]),
-    esNoConformidadValida,
-  );
+respaldarNoConformidadesLocales();
 
 // ── Persistencia del stock de Productos (por SESIÓN) ──────────────────
 // A diferencia del resto, este va en `sessionStorage`: el descuento de stock
@@ -7717,10 +7696,11 @@ export default function App() {
   // Órdenes de producción (API). Antes vivían dentro de OrdenProduccionScreen y
   // después en localStorage; ahora la lista viene de GET /ordenes-produccion.
   const [ordenesProduccion, setOrdenesProduccion] = useState<OrdenProduccion[]>([]);
-  // No conformidades (módulo Productos no conformes). Subidas a App para que
-  // Orden de Producción pueda registrar mermas y sobrevivan al F5.
-  const [noConformidades, setNoConformidades] =
-    useState<NoConformidad[]>(leerNoConformidadesPersistidas);
+  // Productos no conformes (API, GET /productos-no-conformes). Viven en App
+  // porque los leen CPN, el detalle de Orden de Producción y el Dashboard.
+  const [noConformidades, setNoConformidades] = useState<NoConformidad[]>([]);
+  const [noConformesCargando, setNoConformesCargando] = useState(false);
+  const [errorNoConformes, setErrorNoConformes] = useState<string | null>(null);
   // Categorías de producto. Las consume el módulo de Categoría Producto (que
   // las crea, edita y borra) y el landing público, que pinta una tarjeta por
   // cada categoría nueva. Ver `leerCategoriasPersistidas`.
@@ -7843,6 +7823,19 @@ export default function App() {
     }
   };
 
+  /** Productos no conformes (API). */
+  const cargarNoConformes = async () => {
+    setNoConformesCargando(true);
+    setErrorNoConformes(null);
+    try {
+      setNoConformidades(await listarNoConformidades());
+    } catch (error) {
+      setErrorNoConformes(mensajeErrorNoConformes(error, "No se pudieron cargar los productos no conformes."));
+    } finally {
+      setNoConformesCargando(false);
+    }
+  };
+
   /** Proveedores (API, fase 3). */
   const cargarProveedores = async () => {
     setProveedoresCargando(true);
@@ -7891,6 +7884,7 @@ export default function App() {
       await Promise.all([
         cargarInsumosFichas(productosCargados),
         cargarOrdenes(),
+        cargarNoConformes(),
         cargarProveedores(),
         cargarOrdenesCompra(),
         cargarCompras(),
@@ -8431,16 +8425,9 @@ export default function App() {
     }
   }, [empleados]);
 
-  // Las órdenes de producción y los insumos ya NO se guardan en localStorage:
-  // desde la fase 2 viven en la API (el respaldo local quedó en las claves
-  // `-respaldo-fase2`, ver `respaldarDatosProduccionFase2`).
-  useEffect(() => {
-    try {
-      localStorage.setItem(NO_CONFORMIDADES_STORAGE_KEY, JSON.stringify(noConformidades));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota.
-    }
-  }, [noConformidades]);
+  // Las órdenes de producción, los insumos y los productos no conformes ya NO
+  // se guardan en localStorage: viven en la API (respaldos locales en las
+  // claves `-respaldo-fase2` y `-respaldo-cpn`).
 
   // Las ventas se cargan al entrar a Ventas, al Dashboard y al Inicio: así el
   // Dashboard no queda en $0 después de un F5. El backend exige el permiso
@@ -8559,7 +8546,15 @@ export default function App() {
       de Producción (crear un producto insumo, iniciar o completar una orden…):
       el stock de los insumos cambió en la base. */
   const recargarProduccion = async () => {
-    await Promise.all([cargarInsumosFichas(productos), cargarOrdenes()]);
+    // CPN también: completar una preparación con merma crea su registro.
+    await Promise.all([cargarInsumosFichas(productos), cargarOrdenes(), cargarNoConformes()]);
+  };
+
+  /** Crear o eliminar un producto no conforme manual mueve stock en la base
+      (producto de reventa o insumo): se recargan productos e insumos. */
+  const recargarInventarioCpn = async () => {
+    const productosCargados = await cargarProductosGestion();
+    await cargarInsumosFichas(productosCargados);
   };
 
   /** "Ver orden" del toast de Insumos: salta a Orden de Producción con el
@@ -9787,25 +9782,18 @@ export default function App() {
               {screen === "perecederos" && (
                 <ProductosPerecederosScreen
                   {...getPerms("perecederos")}
-                  ventasPerdidas={ventas
-                    .filter((v) => v.estado === "Devolucion")
-                    .map((v) => ({
-                      id: v.id,
-                      usuario: v.usuario,
-                      fecha: v.fecha,
-                      productos: v.productos,
-                      cantidad: v.cantidad,
-                      total: v.total,
-                    }))}
+                  ventasSugeridas={ventas.map((v) => ({ id: v.id, usuario: v.usuario }))}
                   insumos={insumos}
                   productos={productos}
                   ordenesProduccion={ordenesProduccion}
                   noConformidades={noConformidades}
                   setNoConformidades={setNoConformidades}
-                  // P17b: el descuento de stock al registrar un producto no
-                  // conforme necesita poder escribir en el inventario de
-                  // productos (sin esto el descuento es no-op).
-                  setProductos={setProductos}
+                  cargando={noConformesCargando}
+                  errorCarga={errorNoConformes}
+                  onReintentar={() => void cargarNoConformes()}
+                  // El stock lo mueve el backend (reventa o insumo): se
+                  // recargan productos e insumos tras crear o eliminar.
+                  onInventarioCambiado={() => void recargarInventarioCpn()}
                 />
               )}
               {screen === "orden-compra" && (
@@ -10035,6 +10023,7 @@ export default function App() {
                   abrirDevolucionId={devolucionAAbrir}
                   onAbierta={() => setDevolucionAAbrir(null)}
                   onRecargarOrdenes={cargarOrdenes}
+                  onRecargarNoConformes={cargarNoConformes}
                 />
               )}
               {screen === "gestion-productos" && (
@@ -10135,7 +10124,6 @@ export default function App() {
                   ordenes={ordenesProduccion}
                   setOrdenes={setOrdenesProduccion}
                   noConformidades={noConformidades}
-                  setNoConformidades={setNoConformidades}
                   cargando={ordenesCargando}
                   errorCarga={errorOrdenes}
                   onReintentar={() => void cargarOrdenes()}

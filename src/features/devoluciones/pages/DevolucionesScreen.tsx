@@ -95,6 +95,7 @@ export function DevolucionesScreen({
   abrirDevolucionId,
   onAbierta,
   onRecargarOrdenes,
+  onRecargarNoConformes,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
@@ -121,6 +122,9 @@ export function DevolucionesScreen({
   /** Recarga las órdenes de producción desde la API (la del canje la crea
       el backend al resolver la devolución). */
   onRecargarOrdenes?: () => Promise<void>;
+  /** Recarga Productos no conformes desde la API (las líneas «Producto malo»
+      las registra el backend al resolver la devolución). */
+  onRecargarNoConformes?: () => Promise<void>;
 }) {
   const devoluciones = pedidos.filter((p) => p.estado === "Devolucion");
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
@@ -604,6 +608,11 @@ export function DevolucionesScreen({
     // canje (todo en dinero), no hay orden nueva que traer.
     if (activa.compensacion.length > 0) {
       void onRecargarOrdenes?.();
+    }
+    // Las líneas «Producto malo» quedan como producto no conforme (tipo
+    // Venta): las inserta el backend en la misma transacción; aquí se recarga.
+    if (lineasDev.some(({ motivo }) => motivo === "Producto malo")) {
+      void onRecargarNoConformes?.();
     }
 
     setResumen({
