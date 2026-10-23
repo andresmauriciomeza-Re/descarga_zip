@@ -5,7 +5,9 @@ import { toast } from "sonner";
 
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
-import { type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
+import { SearchInput } from "@/shared/components/SearchInput";
+import { normalizarTexto } from "@/shared/utils/nombres";
+import { productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
@@ -21,6 +23,17 @@ const fmtCOPDev = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 const nowHoraDev = () =>
   new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+
+/** Etiqueta del estado que se ve en la fila — y con la que también busca el
+    buscador: "Pendiente" o "Resuelta · <tipo de la devolución>". */
+const etiquetaEstadoDev = (dev: Venta): string =>
+  !dev.devolucionResuelta
+    ? "Pendiente"
+    : dev.devolucionTipo === "dinero"
+      ? "Resuelta · Dinero"
+      : dev.devolucionTipo === "producto"
+        ? "Resuelta · Canje"
+        : "Resuelta · Mixta";
 
 // Producto del menú elegido como canje de la devolución. `tamaño` forma parte de
 // la identidad: la misma pizza puede canjearse en Mediana o en Grande, y cada
@@ -125,6 +138,33 @@ export function DevolucionesScreen({
   // Categoría activa en el selector de canje. Filtrar por categoría es lo que
   // permite ver todos los productos a la vez, sin barra de desplazamiento.
   const [catCanje, setCatCanje] = useState("Todas");
+  // Buscador del catálogo de canje (mismo SearchInput del panel): filtra en
+  // tiempo real por nombre de producto, sin distinguir mayúsculas ni tildes.
+  const [buscaCanje, setBuscaCanje] = useState("");
+
+  // Buscador del listado (mismo SearchInput que Ventas, Proveedores, etc.).
+  // Filtra en tiempo real sobre los campos que se ven en la fila (número de
+  // venta, cliente, fecha, productos, pago y estado), sin distinguir mayúsculas
+  // ni tildes. El contador del header sigue contando el total, no el filtrado.
+  const [search, setSearch] = useState("");
+  const busqueda = normalizarTexto(search);
+  const visibles = (() => {
+    const ordenadas = [...pendientes, ...resueltas];
+    if (!busqueda) return ordenadas;
+    return ordenadas.filter((dev) =>
+      normalizarTexto(
+        [
+          `#${dev.id}`,
+          dev.id,
+          dev.usuario,
+          dev.fecha,
+          dev.productos,
+          dev.metodoPago ?? "",
+          etiquetaEstadoDev(dev),
+        ].join(" "),
+      ).includes(busqueda),
+    );
+  })();
 
   // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
   // devolución indicada: el modal de gestión si sigue pendiente, o la vista de
@@ -255,7 +295,12 @@ export function DevolucionesScreen({
   // resolver la devolución. El catálogo local ("PROD-001"…) trae ids que no
   // existen en la base y la revientan con canje.
   const canjeCatalogo: Product[] = useMemo(
-    () => catalogoCanje.filter((p) => p.status === "disponible"),
+    // Sólo productos que hoy se pueden pedir. Se usa la vía oficial del
+    // catálogo (`productoDisponible`, que resuelve `estado` con caída al
+    // `status` legacy) en vez de comparar `p.status` a mano: el backend NO
+    // envía `status`, sólo `estado` ('Disponible' | 'No disponible' |
+    // 'Descontinuado'), y `status` lo fabrica `productoACatalogo` al mapear.
+    () => catalogoCanje.filter((p) => productoDisponible(p)),
     [catalogoCanje],
   );
   const categoriasCanje = (() => {
@@ -271,7 +316,11 @@ export function DevolucionesScreen({
   const porCategoria = disponiblesCanje.filter((p) => catCanje === "Todas" || p.category === catCanje);
   // Si la categoría elegida no tiene nada disponible se muestran todos, para no
   // dejar el panel de canje en blanco.
-  const productosCanje = porCategoria.length > 0 ? porCategoria : disponiblesCanje;
+  const baseCanje = porCategoria.length > 0 ? porCategoria : disponiblesCanje;
+  const terminoCanje = normalizarTexto(buscaCanje);
+  const productosCanje = terminoCanje
+    ? baseCanje.filter((p) => normalizarTexto(p.name).includes(terminoCanje))
+    : baseCanje;
   // Cantidad ya canjeada de un producto en un tamaño concreto.
   const cantCanje = (prod: Product, tam: string) =>
     activa?.compensacion.find((c) => c.id === prod.id && (c.tamaño ?? "") === tam)?.cantidad ?? 0;
@@ -636,9 +685,17 @@ export function DevolucionesScreen({
         </div>
       )}
 
-      {/* Listado de devoluciones */}
+      {/* Buscador + listado de devoluciones */}
       {devoluciones.length > 0 && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <>
+          {/* Search */}
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por venta, cliente, producto o estado…"
+          />
+
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px]">
               <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -660,7 +717,15 @@ export function DevolucionesScreen({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {[...pendientes, ...resueltas].map((dev) => {
+                {visibles.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
+                      <p className="text-4xl mb-3">🔄</p>
+                      <p>No se encontraron devoluciones</p>
+                    </td>
+                  </tr>
+                ) : (
+                  visibles.map((dev) => {
                   const totalDev =
                     dev.total ||
                     dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
@@ -668,13 +733,7 @@ export function DevolucionesScreen({
                   const pendiente = !dev.devolucionResuelta;
                   // Estado derivado: solo se resuelve con el flujo de
                   // "Gestionar devolución", por eso la pill va sin menú.
-                  const estadoDevLabel = pendiente
-                    ? "Pendiente"
-                    : dev.devolucionTipo === "dinero"
-                      ? "Resuelta · Dinero"
-                      : dev.devolucionTipo === "producto"
-                        ? "Resuelta · Canje"
-                        : "Resuelta · Mixta";
+                  const estadoDevLabel = etiquetaEstadoDev(dev);
                   const estadoDevColor = pendiente
                     ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
                     : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200";
@@ -740,11 +799,13 @@ export function DevolucionesScreen({
                       </td>
                     </tr>
                   );
-                })}
+                })
+                )}
               </tbody>
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* Gestión de la devolución: ventana completa en vez de modal. La
@@ -930,7 +991,7 @@ export function DevolucionesScreen({
                     <div
                       className={`rounded-2xl border-2 transition-all ${
                         activa.paso === "producto"
-                          ? "flex-1 min-h-0 flex flex-col"
+                          ? "flex-1 min-h-0 flex flex-col overflow-hidden"
                           : "shrink-0"
                       } ${
                         totalComp > 0
@@ -942,7 +1003,7 @@ export function DevolucionesScreen({
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: p.paso === "producto" ? null : "producto" } : p))
                         }
-                        className="w-full flex items-center gap-3 p-3.5 text-left cursor-pointer"
+                        className="w-full shrink-0 flex items-center gap-3 p-3.5 text-left cursor-pointer"
                       >
                         <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center shrink-0">
                           <PackageCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1013,14 +1074,25 @@ export function DevolucionesScreen({
                             ))}
                           </div>
 
+                          {/* Buscador del catálogo de canje (mismo componente
+                              que los listados del panel), por si hay muchos
+                              productos y no caben a simple vista. */}
+                          <SearchInput
+                            value={buscaCanje}
+                            onChange={setBuscaCanje}
+                            placeholder="Buscar producto…"
+                            wrapperClassName="w-full shrink-0"
+                          />
+
                           {/* Cada producto es una tarjeta; si tiene tamaños, cada
                               tamaño es una celda con su propio precio y su propio
                               contador, porque el canje es por unidad y tamaño. */}
-                          {/* Solo la rejilla scrollea. Al ser el único elemento
-                              flexible del panel, se encoge para dejarle sitio
-                              siempre a la tarjeta de "Dinero" de abajo. */}
-                          <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
-                            <div className="grid grid-cols-3 gap-2">
+                          {/* Solo la rejilla scrollea: tiene un alto mínimo para
+                              no aplastarse a cero cuando el modal es corto, y
+                              así la tarjeta de "Dinero" y los botones de abajo
+                              (Cancelar/Confirmar) nunca se tapan. */}
+                          <div className="flex-1 min-h-[220px] overflow-y-auto pr-0.5">
+                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
                             {productosCanje.map((prod) => {
                               const variantes =
                                 prod.sizes.length > 0
@@ -1103,6 +1175,11 @@ export function DevolucionesScreen({
                               );
                             })}
                             </div>
+                            {productosCanje.length === 0 && (
+                              <p className="text-xs text-muted-foreground text-center py-6">
+                                No se encontraron productos
+                              </p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1113,8 +1190,36 @@ export function DevolucionesScreen({
                         marcarla a mano solo dejaba Lugar a olvidos. El botón
                         sigue siendo clicable para abrir la nota, pero ya no
                         alterna el estado. `shrink-0` la mantiene siempre
-                        visible, con el catálogo de canje abierto. */}
-                    <div className="shrink-0 rounded-2xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15 transition-all">
+                        visible, con el catálogo de canje abierto. Cuando lo
+                        activo es el cambio de producto la tarjeta se COLAPSA a
+                        una sola línea con el saldo (y a favor de quién) y el
+                        catálogo se queda con todo el resto del alto del modal;
+                        al volver a elegir "Dinero" se expande otra vez. */}
+                    <div className="shrink-0 rounded-2xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15 transition-all overflow-hidden">
+                      {activa.paso === "producto" ? (
+                        <button
+                          onClick={() =>
+                            setActiva((p) => (p ? { ...p, paso: "dinero" } : p))
+                          }
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left cursor-pointer"
+                        >
+                          <Banknote className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span
+                            className={`text-xs font-semibold truncate ${
+                              saldo < 0
+                                ? "text-orange-700 dark:text-orange-300"
+                                : "text-emerald-800 dark:text-emerald-200"
+                            }`}
+                          >
+                            {saldo === 0
+                              ? "Sin diferencia de dinero"
+                              : saldo > 0
+                                ? `Dinero a favor del cliente: ${fmtCOPDev(dineroADar)}`
+                                : `El cliente paga: ${fmtCOPDev(dineroARecibir)}`}
+                          </span>
+                        </button>
+                      ) : (
+                        <>
                       <button
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: p.paso === "dinero" ? null : "dinero" } : p))
@@ -1193,6 +1298,8 @@ export function DevolucionesScreen({
                           />
                         )}
                       </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

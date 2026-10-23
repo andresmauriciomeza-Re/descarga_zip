@@ -9,7 +9,6 @@ import {
   Check,
   Clock,
   AlertCircle,
-  RefreshCw,
   ShieldCheck,
   ShieldX,
   Printer,
@@ -1584,9 +1583,18 @@ export function VentasScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
+  // El listado de Ventas NO incluye las ventas en "Devolucion": una vez la
+  // venta pasa a devolución vive solo en el módulo Devoluciones. La venta NUEVA
+  // que nace de un canje (venta de reemplazo) sí sigue aquí, porque su estado
+  // es "Por entregar" (o el que le toque), nunca "Devolucion".
+  const ventasListado = useMemo(
+    () => pedidos.filter((p) => p.estado !== "Devolucion"),
+    [pedidos],
+  );
+
   const exportExcel = () => {
     exportToExcel(
-      pedidos.map((p) => ({
+      ventasListado.map((p) => ({
         id: p.id,
         cliente: p.usuario,
         documento: p.documento ?? "",
@@ -1622,7 +1630,7 @@ export function VentasScreen({
 
   const filtered = useMemo(
     () =>
-      pedidos.filter((p) => p.estado !== "Devolucion").filter(
+      ventasListado.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.usuario
@@ -1632,7 +1640,7 @@ export function VentasScreen({
             .toLowerCase()
             .includes(search.toLowerCase()),
       ),
-    [pedidos, search],
+    [ventasListado, search],
   );
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -1661,7 +1669,7 @@ export function VentasScreen({
             Gestión Ventas
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {pedidos.filter((venta) => venta.estado !== "Devolucion").length} ventas registradas
+            {ventasListado.length} ventas registradas
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1863,27 +1871,6 @@ export function VentasScreen({
                             className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <Printer className="w-4 h-4" />
-                          </button>
-                        )}
-                        {/* Ya en "Devolución" no tiene sentido volver a registrarla:
-                            en su lugar se ofrece gestionar la que ya existe, que es
-                            donde se decide el canje o la devolución del dinero.
-                            Solo el icono, como las demás acciones de la fila. */}
-                        {p.estado === "Devolucion" && (
-                          <button
-                            onClick={() => onGestionarDevolucion(p.id)}
-                            title={
-                              p.devolucionResuelta
-                                ? "Ver la devolución resuelta"
-                                : "Gestionar devolución"
-                            }
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              p.devolucionResuelta
-                                ? "text-muted-foreground hover:bg-muted"
-                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                            }`}
-                          >
-                            <RefreshCw className="w-4 h-4" />
                           </button>
                         )}
                       </div>
