@@ -1,8 +1,8 @@
-﻿import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Trash2, X,
-  AlertCircle, AlertTriangle, Clock, PackageX, ChefHat, ShoppingBag, Minus, Layers,
+  AlertCircle, AlertTriangle, Clock, PackageX, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
@@ -871,57 +871,6 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
 
 // ─────────────────────────── Piezas de UI ───────────────────────────
 
-/** Las dos tarjetas con las que arranca "Crear Orden de Producción". */
-function TarjetasTipo({
-  value,
-  onChange,
-}: {
-  value: TipoOrden;
-  onChange: (t: TipoOrden) => void;
-}) {
-  const opc: { tipo: TipoOrden; icono: React.ReactNode; titulo: string; texto: string }[] = [
-    {
-      tipo: "preparacion",
-      icono: <ChefHat className="w-5 h-5" />,
-      titulo: "Preparación en lote",
-      texto: "Preparar un Producto Insumo (masa, guacamole, guisos) para surtir inventario de la cocina.",
-    },
-    {
-      tipo: "pedido",
-      icono: <ShoppingBag className="w-5 h-5" />,
-      titulo: "Pedido de cliente",
-      texto: "Preparar los platos de una venta ya pagada: se calienta y se arma con lo precocido.",
-    },
-  ];
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {opc.map((o) => {
-        const activo = value === o.tipo;
-        return (
-          <button
-            key={o.tipo}
-            type="button"
-            onClick={() => onChange(o.tipo)}
-            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
-              activo
-                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30"
-                : "border-border bg-card hover:border-primary/50"
-            }`}
-          >
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${activo ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-                {o.icono}
-              </span>
-              <span className="text-sm font-bold text-foreground">{o.titulo}</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{o.texto}</p>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Tabla de solo lectura con los insumos que se van a consumir y el stock de
     hoy de cada uno. Lo que no alcanza sale en rojo. */
 function TablaInsumosRequeridos({
@@ -1697,22 +1646,12 @@ export function OrdenProduccionScreen({
     }
   };
 
-  /** Cambio de estado desde el listado. "Completado" pasa por el modal de
-      producción real; "Cancelada" solo llega por el flujo de Dar de baja. */
+  /** Cambio de estado desde el listado: solo las transiciones del backend.
+      "En proceso" llama a Iniciar y "Completada" abre el modal de producción
+      real; "Cancelada" solo llega por el flujo de Dar de baja. */
   const applyTransition = (id: string, next: EstadoOrden) => {
-    const orden = ordenes.find((o) => o.id === id);
-    if (!orden) return;
     if (next === "en-proceso") return iniciar(id);
     if (next === "completada") return abrirCompletar(id);
-    const now = nowISO();
-    setOrdenes((p) => p.map((o) => o.id === id
-      ? {
-          ...o,
-          estadoOrden: next,
-          historial: [...o.historial, { de: o.estadoOrden, a: next, fechaHora: now }],
-        }
-      : o));
-    toast.success(`Estado cambiado a: ${ESTADO_LABEL[next]}`);
   };
 
   // ── Dar de baja (no se toca el flujo) ──────────────────────────────
@@ -2006,47 +1945,27 @@ export function OrdenProduccionScreen({
             && (preparacionInvalida(form.lineas) || faltantesForm.length > 0),
           children: (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-2">¿Qué se va a preparar?</label>
-                <TarjetasTipo
-                  value={form.tipo}
-                  onChange={(t) => setForm(p => ({ ...emptyForm(t), observacion: p.observacion }))}
-                />
+              {/* Solo se crean Preparaciones en lote: los pedidos los crea el
+                  backend al aceptar una venta. */}
+              <p className="text-xs font-semibold text-muted-foreground">Preparación en lote (Producto Insumo)</p>
+              <div className="space-y-3">
+                {form.lineas.map((l, idx) => (
+                  <LineaPreparacion
+                    key={idx}
+                    linea={l}
+                    insumos={insumos}
+                    fichas={fichasPorProducto}
+                    puedeQuitar={form.lineas.length > 1}
+                    onChange={(nl) => setForm(p => ({ ...p, lineas: p.lineas.map((x, i) => i === idx ? nl : x) }))}
+                    onRemove={() => setForm(p => ({ ...p, lineas: p.lineas.filter((_, i) => i !== idx) }))}
+                  />
+                ))}
               </div>
-
-              {form.tipo === "preparacion" ? (
-                <>
-                  <div className="space-y-3">
-                    {form.lineas.map((l, idx) => (
-                      <LineaPreparacion
-                        key={idx}
-                        linea={l}
-                        insumos={insumos}
-                        fichas={fichasPorProducto}
-                        puedeQuitar={form.lineas.length > 1}
-                        onChange={(nl) => setForm(p => ({ ...p, lineas: p.lineas.map((x, i) => i === idx ? nl : x) }))}
-                        onRemove={() => setForm(p => ({ ...p, lineas: p.lineas.filter((_, i) => i !== idx) }))}
-                      />
-                    ))}
-                  </div>
-                  <button type="button"
-                    onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
-                  </button>
-                </>
-              ) : (
-                <CamposPedido
-                  form={form}
-                  set={setForm}
-                  ventas={ventas}
-                  ventasSinOrden={ventasSinOrden}
-                  ordenes={ordenes}
-                  productos={productos}
-                  fichas={fichasPorProducto}
-                  insumos={insumos}
-                />
-              )}
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
+                className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+                <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
+              </button>
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}

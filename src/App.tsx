@@ -9952,6 +9952,7 @@ export default function App() {
                   catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                   abrirDevolucionId={devolucionAAbrir}
                   onAbierta={() => setDevolucionAAbrir(null)}
+                  onRecargarOrdenes={cargarOrdenes}
                 />
               )}
               {screen === "gestion-productos" && (

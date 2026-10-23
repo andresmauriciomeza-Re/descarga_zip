@@ -1900,6 +1900,14 @@ export function RecepcionCompraScreen({
                 </div>
               </div>
 
+              {/* Compras aún no está conectada a la API: el stock de insumos
+                  se suma solo en local. */}
+              {[...items, ...itemsExtra].some((i) => (i.tipoItem ?? "insumo") === "insumo") && (
+                <p className="text-[11px] text-muted-foreground">
+                  El stock de insumos se guardará en la base cuando se conecte Compras
+                </p>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={onBack}

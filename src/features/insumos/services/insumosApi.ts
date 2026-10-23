@@ -147,11 +147,19 @@ export const crearInsumo = async (payload: {
   };
 };
 
-/** Edición: el formulario solo cambia el stock mínimo (el resto de campos se
-    conservan tal como están en el servidor), igual que antes de conectar. */
+/** Edición (PUT /insumos/:id): nombre, categoría, stock mínimo y descripción;
+    `costo_unitario` e `iva` solo en los de tipo Insumo (el backend los
+    rechaza en un Producto insumo). */
 export const actualizarInsumo = async (
   id: string,
-  payload: { stock_minimo: number },
+  payload: {
+    nombre: string;
+    id_categoria_insumo: number;
+    stock_minimo: number;
+    descripcion: string | null;
+    costo_unitario?: number;
+    iva?: number;
+  },
 ): Promise<Insumo> => {
   const idInsumo = Number(String(id).replace(/^INS-/, ""));
   const { data } = await api.put<InsumoApi>(`/insumos/${idInsumo}`, payload);

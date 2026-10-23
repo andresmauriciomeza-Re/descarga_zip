@@ -399,9 +399,15 @@ export function FichaTecnicaEditor({
   // que el borrador trae conservan sus porciones y las que falten se
   // completan con 1 (los valores por defecto los precarga el padre al elegir
   // la categoría). Sin `tamanoFijo` sigue el modo libre de antes (fallback
-  // para datos viejos).
+  // para datos viejos). La Grande de pizza va fija en 8 y en solo lectura:
+  // la base solo guarda las porciones del primer tamaño.
+  const porcionesFijas = (idx: number, tamano: string) =>
+    !!tamanoFijo && idx > 0 && tamano === "Grande";
   const filas: PorcionesTamano[] = tamanoFijo
-    ? tamanoFijo.map((t) => ficha.porcionesPorTamano?.find((f) => f.tamano === t) ?? { tamano: t, porciones: 1 })
+    ? tamanoFijo.map((t, idx) =>
+        porcionesFijas(idx, t)
+          ? { tamano: t, porciones: 8 }
+          : ficha.porcionesPorTamano?.find((f) => f.tamano === t) ?? { tamano: t, porciones: 1 })
     : (ficha.porcionesPorTamano ?? [{ tamano: TAMANOS_FICHA[2], porciones: ficha.porciones }]);
   const setFilas = (nuevas: PorcionesTamano[]) =>
     onChange({ ...ficha, porcionesPorTamano: nuevas, porciones: nuevas[0].porciones });
@@ -566,8 +572,15 @@ export function FichaTecnicaEditor({
                     <span className="min-w-0 truncate text-sm font-medium text-foreground">{fila.tamano}</span>
                     <input type="number" min={1} step={1} value={fila.porciones}
                       aria-label={`Porciones de ${fila.tamano}`}
-                      onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
-                      className="w-12 shrink-0 bg-transparent text-right text-sm font-bold text-foreground focus:outline-none" />
+                      readOnly={porcionesFijas(idx, fila.tamano)}
+                      title={porcionesFijas(idx, fila.tamano) ? "La Grande va fija en 8 porciones" : undefined}
+                      onChange={e => {
+                        if (porcionesFijas(idx, fila.tamano)) return;
+                        updatePorcionesTamano(idx, Number(e.target.value));
+                      }}
+                      className={`w-12 shrink-0 bg-transparent text-right text-sm font-bold focus:outline-none ${
+                        porcionesFijas(idx, fila.tamano) ? "text-muted-foreground cursor-not-allowed" : "text-foreground"
+                      }`} />
                   </div>
                 ))}
               </div>

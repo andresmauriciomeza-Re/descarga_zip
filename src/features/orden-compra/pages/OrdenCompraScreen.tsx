@@ -3293,7 +3293,8 @@ export function NuevoInsumoModal({
               className={`${iCls} transition-colors ${(tocado.categoria || intentoGuardar) && errorCategoria ? "border-red-400 focus:ring-red-300" : ""}`}
             >
               <option value="">Seleccionar</option>
-              {categoriasInsumo.map(c => (
+              {/* Solo categorías activas (las de la API traen `estado`). */}
+              {categoriasInsumo.filter(c => c.estado !== false).map(c => (
                 <option key={c.id} value={c.id}>{c.nombre}</option>
               ))}
             </select>

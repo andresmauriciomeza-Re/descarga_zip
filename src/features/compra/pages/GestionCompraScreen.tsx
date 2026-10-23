@@ -1947,6 +1947,13 @@ function CompraForm({
                     )}
                   </div>
                 )}
+                {/* Compras aún no está conectada a la API: el stock de
+                    insumos se suma solo en local. */}
+                {!isView && nInsumos > 0 && (
+                  <p className="shrink-0 text-[11px] text-muted-foreground">
+                    El stock de insumos se guardará en la base cuando se conecte Compras
+                  </p>
+                )}
 
               {isView ? (
                 <div className="flex flex-col gap-4">

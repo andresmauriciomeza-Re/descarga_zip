@@ -797,16 +797,23 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         return;
       }
 
-      // En edición solo se actualiza el stock mínimo: el stock actual lo
-      // mueven Compras (suma) y Producción (resta), nunca este formulario.
-      // El costoUnitario y los demás campos conservan su valor original
-      // aunque el formulario los envíe modificados (no se confía solo en el
-      // disabled del HTML).
+      // PUT con nombre, categoría, stock mínimo y descripción (+ costo e IVA
+      // si es Insumo). El stock actual lo mueven Compras (suma) y Producción
+      // (resta), nunca este formulario. Descripción e IVA no tienen campo en
+      // el modal: viajan con su valor actual.
       const original = insumos.find(i => i.id === editingId);
       if (!original) return;
       setGuardando(true);
       try {
-        const actualizado = await actualizarInsumo(editingId, { stock_minimo: stockMinimo });
+        const actualizado = await actualizarInsumo(editingId, {
+          nombre: nombreParaGuardar(nombre),
+          id_categoria_insumo: Number(categoriaId),
+          stock_minimo: stockMinimo,
+          descripcion: original.descripcion ?? null,
+          ...(original.tipo === "Insumo"
+            ? { costo_unitario: costoUnitario, iva: original.iva ?? 0 }
+            : {}),
+        });
         setInsumos(prev => prev.map(i => (i.id === editingId ? actualizado : i)));
         if (estadoStock(actualizado) !== "ok") {
           toast.warning(`Alerta: el stock de ${actualizado.nombre} está bajo (${actualizado.stockActual} ${actualizado.unidadMedida}, mínimo ${actualizado.stockMinimo} ${actualizado.unidadMedida})`, { duration: 2000 });
