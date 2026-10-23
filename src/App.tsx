@@ -53,7 +53,7 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
@@ -79,18 +79,6 @@ import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
 import imgPremio from "@/assets/img/Premio.webp";
 import imgQuatro from "@/assets/img/Quatro.webp";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
@@ -119,7 +107,7 @@ import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
-import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
+import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
@@ -140,12 +128,10 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
-import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
-import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
   GestionCompra,
   OrdenCompra,
@@ -171,20 +157,22 @@ import {
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
-import { ProductoTerminadoScreen } from "@/features/productos/pages/ProductoTerminadoScreen";
-import {
-  PurchasesScreen
-} from "@/features/compras/pages/PurchasesScreen";
-import { RecepcionCompraScreen } from "@/features/orden-compra/pages/RecepcionCompraScreen";
-import {
-  SalesChartScreen,
-} from "@/features/dashboard/pages/SalesChartScreen";
-import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
-import {
-  SuppliersScreen
-} from "@/features/proveedores/pages/SuppliersScreen";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
-import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
+
+// ─── Code splitting (React.lazy) ───
+// Estas pantallas se importan SOLO como componente (no comparten constants ni
+// funciones con App), así que se cargan bajo demanda para reducir el bundle
+// inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
+const ProductoTerminadoScreen = lazy(() => import("@/features/productos/pages/ProductoTerminadoScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
+const PurchasesScreen = lazy(() => import("@/features/compras/pages/PurchasesScreen").then((m) => ({ default: m.PurchasesScreen })));
+const RecepcionCompraScreen = lazy(() => import("@/features/orden-compra/pages/RecepcionCompraScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
+const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
+const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardScreen").then((m) => ({ default: m.DashboardScreen })));
+const SuppliersScreen = lazy(() => import("@/features/proveedores/pages/SuppliersScreen").then((m) => ({ default: m.SuppliersScreen })));
+const DevolucionesScreen = lazy(() => import("@/features/devoluciones/pages/DevolucionesScreen").then((m) => ({ default: m.DevolucionesScreen })));
+const MisPedidosScreen = lazy(() => import("@/features/ventas/pages/MisPedidosScreen").then((m) => ({ default: m.MisPedidosScreen })));
+const MiPerfilScreen = lazy(() => import("@/features/usuarios/pages/MiPerfilScreen").then((m) => ({ default: m.MiPerfilScreen })));
+const GestionClientesScreen = lazy(() => import("@/features/clientes/pages/GestionClientesScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
 // ─────────────────────────── TYPES ───────────────────────────
 
@@ -9522,6 +9510,13 @@ export default function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
             >
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Cargando">
+                    <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                  </div>
+                }
+              >
               <LandingErrorBoundary resetKey={screen}>
               {screen === "landing" && (
                 <LandingScreen
@@ -10163,6 +10158,7 @@ export default function App() {
                   />
                 )}
               </LandingErrorBoundary>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>
