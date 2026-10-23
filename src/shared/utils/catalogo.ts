@@ -52,16 +52,16 @@ export const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + 
 /** Tamaños del menú público para un producto del panel: se derivan SIEMPRE del
     precio de venta (`precioUnitario`), para que crear o editar el precio en
     Gestión de Productos se refleje en el detalle público y en el carrito:
-    - Pizza (CAT-001): Mediana = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
-    - Lasaña (CAT-002): Normal = precio de venta.
+    - Pizza (id 1): Mediana = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
+    - Lasaña (id 2): Normal = precio de venta.
     - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
 export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes"] =>
-  (p.idCategoria === "CAT-001" || categoria?.toLowerCase().includes("pizza"))
+  (p.idCategoria === "1" || p.idCategoria === "CAT-001" || categoria?.toLowerCase().includes("pizza"))
     ? [
         { label: "Mediana", price: p.precioUnitario },
         { label: "Grande", price: p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE },
       ]
-    : (p.idCategoria === "CAT-002" || categoria?.toLowerCase().includes("lasaña") || categoria?.toLowerCase().includes("lasana"))
+    : (p.idCategoria === "2" || p.idCategoria === "CAT-002" || categoria?.toLowerCase().includes("lasaña") || categoria?.toLowerCase().includes("lasana"))
       ? [{ label: "Normal", price: p.precioUnitario }]
       : [];
 
@@ -69,7 +69,8 @@ export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes
 // recorte se come la tapa o la base. Para ellas se usa object-contain, que hace
 // caber la imagen completa respetando su proporción (queda espacio a los lados).
 // Pizzas y Lasañas conservan object-cover, que es su diseño original.
-export const verImagenCompleta = (p: Product) => p.idCategoria === "CAT-003";
+// Bebidas es la categoría 3 ("CAT-003" en datos locales antiguos).
+export const verImagenCompleta = (p: Product) => p.idCategoria === "3" || p.idCategoria === "CAT-003";
 
 // Secciones del grid cuando el filtro es "Todas", en el orden en que se
 // muestran. El título va aparte del nombre de la categoría porque no siempre

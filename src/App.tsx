@@ -104,7 +104,7 @@ import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
-import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
+import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
@@ -166,6 +166,7 @@ import {
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { ProductosPerecederosScreen, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
 import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/cpn/services/noConformesApi";
+import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/categoria-productos/services/categoriasApi";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
 
 // ─── Code splitting (React.lazy) ───
@@ -7110,47 +7111,25 @@ const leerEmpleadosPersistidos = (): Empleado[] => {
   return INITIAL_EMPLEADOS;
 };
 
-// ── Persistencia de categorías (TEMPORAL) ──────────────────────────────
-// Mismo criterio que la de roles, usuarios y empleados: las categorías vivían
-// solo en el `useState` de la pantalla de Categoría Producto, así que el alta se
-// perdía al salir del módulo y el landing no tenía forma de leerlas. Ahora la
-// lista vive en App y se guarda en localStorage, que es la única fuente que el
-// landing público (mismo origen, sin sesión) puede leer sin backend.
-//
-// AVISO DE ALCANCE: es una persistencia por navegador, no compartida entre
-// equipos. Al guardar el array entero también sobreviven al F5 las ediciones y
-// los borrados. Para volver a la semilla:
-// localStorage.removeItem(CATEGORIAS_STORAGE_KEY).
+// ── Categorías de producto (API) ─────────────────────────────────────────
+// Desde la conexión a la API, la pantalla de Categoría Producto lee y escribe
+// en tb_categoria_productos (GET /categorias-productos/gestion). La lista que
+// vivía en localStorage (`sivpro.categorias.v1`, ids "CAT-00x") NO se sube a
+// la base: se copia UNA vez a `-respaldo-categorias` (mismo patrón que
+// `-respaldo-cpn`) y la clave original deja de usarse.
 const CATEGORIAS_STORAGE_KEY = "sivpro.categorias.v1";
-
-const esCategoriaValida = (c: unknown): c is CategoriaProducto => {
-  if (!c || typeof c !== "object") return false;
-  const cat = c as CategoriaProducto;
-  // `icono` y `estado` se aceptan ausentes: las tres categorías originales no
-  // lo llevan (el suyo está escrito en el landing) y el dato guardado antes de
-  // que existiera el estado tampoco. Con estado inválido NO se acepta la lista:
-  // volvería a la semilla y se perderían todas las categorías guardadas.
-  return (
-    typeof cat.id === "string" &&
-    typeof cat.nombre === "string" &&
-    (cat.icono === undefined || typeof cat.icono === "string") &&
-    (cat.estado === undefined || cat.estado === "Activo" || cat.estado === "Inactivo")
-  );
-};
-
-const leerCategoriasPersistidas = (): CategoriaProducto[] => {
+const CATEGORIAS_RESPALDO_KEY = `${CATEGORIAS_STORAGE_KEY}-respaldo-categorias`;
+const respaldarCategoriasLocales = () => {
   try {
-    const raw = localStorage.getItem(CATEGORIAS_STORAGE_KEY);
-    if (!raw) return INITIAL_CATEGORIAS;
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esCategoriaValida)) {
-      return parsed as CategoriaProducto[];
+    if (localStorage.getItem(CATEGORIAS_RESPALDO_KEY) === null) {
+      const legado = localStorage.getItem(CATEGORIAS_STORAGE_KEY);
+      if (legado !== null) localStorage.setItem(CATEGORIAS_RESPALDO_KEY, legado);
     }
   } catch {
-    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
   }
-  return INITIAL_CATEGORIAS;
 };
+respaldarCategoriasLocales();
 
 // ── Persistencia de producción (cocina) ─────────────────────────────────
 // Las órdenes de producción, los insumos, las ventas y las fichas técnicas
@@ -7725,17 +7704,19 @@ export default function App() {
   const [noConformidades, setNoConformidades] = useState<NoConformidad[]>([]);
   const [noConformesCargando, setNoConformesCargando] = useState(false);
   const [errorNoConformes, setErrorNoConformes] = useState<string | null>(null);
-  // Categorías de producto. Las consume el módulo de Categoría Producto (que
-  // las crea, edita y borra) y el landing público, que pinta una tarjeta por
-  // cada categoría nueva. Ver `leerCategoriasPersistidas`.
-  const [categorias, setCategorias] = useState<CategoriaProducto[]>(leerCategoriasPersistidas);
+  // Categorías de producto de la gestión (API, GET /categorias-productos/gestion):
+  // activas e inactivas, con sus productos asociados. Solo las usa la pantalla
+  // de Categoría Producto; el resto de la app usa `categoriasCatalogo`.
+  const [categorias, setCategorias] = useState<CategoriaProducto[]>([]);
+  const [categoriasCargando, setCategoriasCargando] = useState(false);
+  const [errorCategorias, setErrorCategorias] = useState<string | null>(null);
   // Catálogo del picker de pedidos (VentasScreen) y del canje de devoluciones,
   // armado con el estado `productos` en vez del mock `PRODUCTS`: los nombres
   // ("Pizza Jamon") son los del panel, así el detalle de la venta resuelve el
   // Producto real (id y stock) al crear la orden de producción.
   const productosMenu = useMemo(
-    () => productos.map((p) => productoACatalogo(p, categorias)),
-    [productos, categorias],
+    () => productos.map((p) => productoACatalogo(p, categoriasCatalogo)),
+    [productos, categoriasCatalogo],
   );
   const [userRole, setUserRole] = useState("Administrador");
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
@@ -7867,6 +7848,19 @@ export default function App() {
     }
   };
 
+  /** Categorías de producto de la gestión (API). */
+  const cargarCategoriasGestion = async () => {
+    setCategoriasCargando(true);
+    setErrorCategorias(null);
+    try {
+      setCategorias(await listarCategoriasGestion());
+    } catch (error) {
+      setErrorCategorias(mensajeErrorCategorias(error, "No se pudieron cargar las categorías."));
+    } finally {
+      setCategoriasCargando(false);
+    }
+  };
+
   /** Proveedores (API, fase 3). */
   const cargarProveedores = async () => {
     setProveedoresCargando(true);
@@ -7922,6 +7916,14 @@ export default function App() {
       ]);
     })();
   }, [isLoggedIn, restauracionSesionLista]);
+
+  // Las categorías de la gestión se cargan al entrar a su pantalla: el backend
+  // exige el permiso "Ver" de Categoría de Producto y así nadie sin él recibe
+  // un 403 de fondo.
+  useEffect(() => {
+    if (!isLoggedIn || !restauracionSesionLista || screen !== "cat-producto") return;
+    void cargarCategoriasGestion();
+  }, [isLoggedIn, restauracionSesionLista, screen]);
 
   useEffect(() => {
     if (!productosGestionCargados) return;
@@ -8021,6 +8023,42 @@ export default function App() {
     aplicarProductoRespuesta(actualizado);
     await recargarCatalogoTrasCambio();
     return actualizado;
+  };
+
+  // Categorías de producto: cada cambio confirmado por el backend actualiza la
+  // lista de la gestión y refresca el catálogo público, para que landing,
+  // Productos y Ventas lo vean sin F5.
+  const aplicarCategoriaRespuesta = (categoria: CategoriaProducto) => {
+    setCategorias((prev) => prev.some((c) => c.id === categoria.id)
+      ? prev.map((c) => c.id === categoria.id ? categoria : c)
+      : [...prev, categoria]);
+  };
+
+  const crearCategoriaEnServidor = async (datos: CategoriaGuardar) => {
+    const creada = await crearCategoria(datos);
+    aplicarCategoriaRespuesta(creada);
+    await recargarCatalogoTrasCambio();
+    return creada;
+  };
+
+  const editarCategoriaEnServidor = async (id: string, datos: CategoriaGuardar) => {
+    const actualizada = await editarCategoria(id, datos);
+    aplicarCategoriaRespuesta(actualizada);
+    await recargarCatalogoTrasCambio();
+    return actualizada;
+  };
+
+  const cambiarEstadoCategoriaEnServidor = async (id: string, estado: EstadoCategoria) => {
+    const actualizada = await cambiarEstadoCategoria(id, estado === "Activo");
+    aplicarCategoriaRespuesta(actualizada);
+    await recargarCatalogoTrasCambio();
+    return actualizada;
+  };
+
+  const eliminarCategoriaEnServidor = async (id: string) => {
+    await eliminarCategoria(id);
+    setCategorias((prev) => prev.filter((c) => c.id !== id));
+    await recargarCatalogoTrasCambio();
   };
 
   const descontinuarProductoEnServidor = (id: string) => cambiarEstadoEnServidor(id, "Descontinuado");
@@ -8440,18 +8478,6 @@ export default function App() {
     escribirCarritoGuardado(cart);
   }, [cart, loggedInUserId]);
 
-  // Cada alta, edición o borrado de categoría se guarda en localStorage: es lo
-  // que permite que la tarjeta nueva del landing siga ahí después del F5. En la
-  // primera carga se escribe la semilla, que es la misma que trae el módulo.
-  useEffect(() => {
-    try {
-      localStorage.setItem(CATEGORIAS_STORAGE_KEY, JSON.stringify(categorias));
-    } catch {
-      // El almacenamiento puede estar bloqueado o sin cuota: la lista sigue
-      // en memoria durante la sesión.
-    }
-  }, [categorias]);
-
   // Mitad que faltaba del par leer/escribir de los roles: `leerRolesPersistidos`
   // lee `sivpro.roles.v1`, pero nada la escribía, así que cualquier rol creado
   // en "Gestión de Usuarios" desaparecía con el F5 (y el permiso que alguien
@@ -8836,7 +8862,7 @@ export default function App() {
         normalizarNombre(x.nombre) === normalizarNombre(linea.product.name),
     );
     if (!p) return [];
-    const enCategoria = categorias.find((c) => c.id === p.idCategoria)?.nombre;
+    const enCategoria = categoriasCatalogo.find((c) => c.id === p.idCategoria)?.nombre;
     if (tipoDe(p, enCategoria) !== "Producto insumo") return [];
     const ficha = fichaVigente(fichasPorProducto, p.id);
     if (!ficha) return [];
@@ -8872,7 +8898,7 @@ export default function App() {
       normalizarNombre(n ?? "") === normalizarNombre(nombre);
     const enPanel = productos.find((p) => mismoNombre(p.nombre));
     if (!enPanel) return { max: undefined, elaborado: false };
-    const enCategoria = categorias.find(
+    const enCategoria = categoriasCatalogo.find(
       (c) => c.id === enPanel.idCategoria,
     )?.nombre;
     const elaborado = tipoDe(enPanel, enCategoria) === "Producto insumo";
@@ -10107,7 +10133,7 @@ export default function App() {
                       setOrdenes={setOrdenesProduccion}
                       fichasPorProducto={fichasPorProducto}
                       insumos={insumos}
-                      categorias={categorias}
+                      categorias={categoriasCatalogo}
                       catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                       abrirDevolucionId={devolucionAAbrir}
                       onAbierta={() => setDevolucionAAbrir(null)}
@@ -10136,7 +10162,13 @@ export default function App() {
                   {screen === "cat-producto" && (
                     <CategoriaProductoScreen
                       categorias={categorias}
-                      setCategorias={setCategorias}
+                      cargando={categoriasCargando}
+                      errorCarga={errorCategorias}
+                      onReintentar={() => void cargarCategoriasGestion()}
+                      onCrear={crearCategoriaEnServidor}
+                      onEditar={editarCategoriaEnServidor}
+                      onCambiarEstado={cambiarEstadoCategoriaEnServidor}
+                      onEliminar={eliminarCategoriaEnServidor}
                       {...getPerms("cat-producto")}
                     />
                   )}
