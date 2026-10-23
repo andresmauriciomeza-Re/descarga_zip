@@ -64,6 +64,7 @@ export function PasswordField({
   inputRef,
   ariaInvalid,
   ariaDescribedBy,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -89,6 +90,8 @@ export function PasswordField({
   ariaInvalid?: boolean;
   /** Id del mensaje de error asociado (`aria-describedby`). */
   ariaDescribedBy?: string;
+  /** Nombre accesible del campo (`aria-label`), para lectores de pantalla. */
+  ariaLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -103,6 +106,7 @@ export function PasswordField({
         ref={inputRef}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
+        aria-label={ariaLabel}
         className={`${cls} ${pad}`}
       />
       <button

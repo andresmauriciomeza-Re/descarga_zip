@@ -53,44 +53,32 @@ import {
   X
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
-import imgCocaCola from "@/assets/img/Coca-Cola.png";
+import imgCocaCola from "@/assets/img/Coca-Cola.webp";
 import fondoBienvenidoDark from "@/assets/img/bienvenido-la-sirena-dark.webp";
 import fondoBienvenidoLight from "@/assets/img/bienvenido-la-sirena-light.webp";
-import pizzaHero from "@/assets/img/image-23.png";
-import imagenLocal from "@/assets/img/imagen_local.png";
-import lasanaCarne from "@/assets/img/lasaña_carne.png";
-import lasanaMixta from "@/assets/img/lasaña_mixta.png";
-import lasanaPollo from "@/assets/img/lasaña_pollo.png";
-import logoBlanco from "@/assets/img/logo-blanco.png";
-import logoClaro from "@/assets/img/logoclaro2.png";
-import imgPepsi from "@/assets/img/Pepsi.png";
-import pizzaCarnes from "@/assets/img/pizza_carnes.png";
-import pizzaCañon from "@/assets/img/pizza_cañon.png";
-import pizzaHawaii from "@/assets/img/pizza_hawaii.png";
-import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.png";
-import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
-import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
-import pizzaPollo from "@/assets/img/pizza_pollo.png";
-import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
-import imgPremio from "@/assets/img/Premio.png";
-import imgQuatro from "@/assets/img/Quatro.png";
+import pizzaHero from "@/assets/img/image-23.webp";
+import imagenLocal from "@/assets/img/imagen_local.webp";
+import lasanaCarne from "@/assets/img/lasaña_carne.webp";
+import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
+import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
+import logoBlanco from "@/assets/img/logo-blanco.webp";
+import logoClaro from "@/assets/img/logoclaro2.webp";
+import imgPepsi from "@/assets/img/Pepsi.webp";
+import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
+import pizzaCañon from "@/assets/img/pizza_cañon.webp";
+import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
+import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.webp";
+import pizzaMaicitos from "@/assets/img/pizza_maicitos.webp";
+import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
+import pizzaPollo from "@/assets/img/pizza_pollo.webp";
+import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
+import imgPremio from "@/assets/img/Premio.webp";
+import imgQuatro from "@/assets/img/Quatro.webp";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
@@ -119,7 +107,7 @@ import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, INITIAL_CATEGORIAS, estadoDe, type CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
 import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
-import { GestionClientesScreen, type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
+import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
@@ -140,12 +128,10 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
-import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
-import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
 import type {
   GestionCompra,
   OrdenCompra,
@@ -171,20 +157,22 @@ import {
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { ProductosPerecederosScreen, INITIAL_NO_CONFORMIDADES, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
-import { ProductoTerminadoScreen } from "@/features/productos/pages/ProductoTerminadoScreen";
-import {
-  PurchasesScreen
-} from "@/features/compras/pages/PurchasesScreen";
-import { RecepcionCompraScreen } from "@/features/orden-compra/pages/RecepcionCompraScreen";
-import {
-  SalesChartScreen,
-} from "@/features/dashboard/pages/SalesChartScreen";
-import { DashboardScreen } from "@/features/dashboard/pages/DashboardScreen";
-import {
-  SuppliersScreen
-} from "@/features/proveedores/pages/SuppliersScreen";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/ventas/pages/VentasScreen";
-import { DevolucionesScreen } from "@/features/devoluciones/pages/DevolucionesScreen";
+
+// ─── Code splitting (React.lazy) ───
+// Estas pantallas se importan SOLO como componente (no comparten constants ni
+// funciones con App), así que se cargan bajo demanda para reducir el bundle
+// inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
+const ProductoTerminadoScreen = lazy(() => import("@/features/productos/pages/ProductoTerminadoScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
+const PurchasesScreen = lazy(() => import("@/features/compras/pages/PurchasesScreen").then((m) => ({ default: m.PurchasesScreen })));
+const RecepcionCompraScreen = lazy(() => import("@/features/orden-compra/pages/RecepcionCompraScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
+const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
+const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardScreen").then((m) => ({ default: m.DashboardScreen })));
+const SuppliersScreen = lazy(() => import("@/features/proveedores/pages/SuppliersScreen").then((m) => ({ default: m.SuppliersScreen })));
+const DevolucionesScreen = lazy(() => import("@/features/devoluciones/pages/DevolucionesScreen").then((m) => ({ default: m.DevolucionesScreen })));
+const MisPedidosScreen = lazy(() => import("@/features/ventas/pages/MisPedidosScreen").then((m) => ({ default: m.MisPedidosScreen })));
+const MiPerfilScreen = lazy(() => import("@/features/usuarios/pages/MiPerfilScreen").then((m) => ({ default: m.MiPerfilScreen })));
+const GestionClientesScreen = lazy(() => import("@/features/clientes/pages/GestionClientesScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
 // ─────────────────────────── TYPES ───────────────────────────
 
@@ -381,7 +369,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Carne",
     description: "Lasaña de carne con salsa boloñesa, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_carne.png",
+    image: lasanaCarne,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -396,7 +384,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Pollo",
     description: "Lasaña de pollo con salsa blanca, bechamel y queso gratinado.",
     price: 20000,
-    image: "/src/assets/img/lasaña_pollo.png",
+    image: lasanaPollo,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -411,7 +399,7 @@ const PRODUCTS: Product[] = [
     name: "Lasaña Mixta",
     description: "Lasaña mixta con carne y pollo, salsa boloñesa y queso gratinado.",
     price: 22000,
-    image: "/src/assets/img/lasaña_mixta.png",
+    image: lasanaMixta,
     idCategoria: "CAT-002",
     category: "Lasaña",
     sizes: SIZES_LASANA,
@@ -427,7 +415,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Cuatro",
     description: "Botella de 2.5 L. Sabor cítrico y refrescante.",
     price: 3000,
-    image: "/src/assets/img/Quatro.png",
+    image: imgQuatro,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -442,7 +430,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Premium",
     description: "Botella de 2.5 L. Sabor frutal y refrescante.",
     price: 3500,
-    image: "/src/assets/img/Premio.png",
+    image: imgPremio,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -457,7 +445,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Coca-Cola",
     description: "Botella de 2.5 L. El sabor clásico de siempre.",
     price: 2500,
-    image: "/src/assets/img/Coca-Cola.png",
+    image: imgCocaCola,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -472,7 +460,7 @@ const PRODUCTS: Product[] = [
     name: "Gaseosa Pepsi",
     description: "Botella de 2.5 L. Sabor cola y refrescante.",
     price: 2500,
-    image: "/src/assets/img/Pepsi.png",
+    image: imgPepsi,
     idCategoria: "CAT-003",
     category: "Bebidas",
     sizes: [],
@@ -1451,6 +1439,7 @@ function PublicNav({
           <button
             onClick={() => navigate("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
+            aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
@@ -1496,6 +1485,7 @@ function PublicNav({
             onClick={() => setDarkMode(!darkMode)}
             className="w-10 h-10 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
             title="Cambiar tema"
+            aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
             {darkMode ? (
               <Sun className="w-4 h-4" />
@@ -1610,6 +1600,8 @@ function AdminTopBar({
         <button
           onClick={() => navigate("landing")}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
+          title="Ir a la tienda"
+          aria-label="Ir a la tienda"
         >
           <Store className="w-5 h-5" />
         </button>
@@ -1617,6 +1609,7 @@ function AdminTopBar({
           onClick={() => setDarkMode(!darkMode)}
           className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
           title={darkMode ? "Modo claro" : "Modo oscuro"}
+          aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
         >
           {darkMode ? (
             <Sun className="w-5 h-5" />
@@ -1627,6 +1620,15 @@ function AdminTopBar({
         <div
           className="ml-3 flex items-center gap-2 cursor-pointer"
           onClick={() => navigate("profile")}
+          role="button"
+          tabIndex={0}
+          aria-label="Ir a mi perfil"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("profile");
+            }
+          }}
         >
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
             {userName.charAt(0).toUpperCase()}
@@ -1738,11 +1740,24 @@ function LandingScreen({
     <div>
       {/* Hero – full width con imagen de fondo */}
       <section className="relative w-full min-h-screen overflow-hidden">
-        {/* Imagen de fondo full-bleed */}
+        {/* Imagen de fondo full-bleed. Es el LCP de la página: por eso lleva
+            fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy. */}
         <img
           src={pizzaHero}
           alt="Pizza pepperoni artesanal La Sirena recién horneada"
+          width={1536}
+          height={1024}
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+
+        {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
+            garantizar el contraste del texto blanco sobre la foto, sin tocar
+            los colores de marca. El lado derecho queda limpio para ver la pizza. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] bg-gradient-to-r from-black/65 via-black/30 to-transparent"
         />
 
         {/* Contenido sobre la zona oscura izquierda */}
@@ -1967,6 +1982,15 @@ function LandingScreen({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08, duration: 0.45 }}
                     onClick={() => onOpenDetail(favorita)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalles de ${favorita.name}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onOpenDetail(favorita);
+                      }
+                    }}
                     className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-200 ease-out cursor-pointer flex flex-col motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
                   >
                     {/* Image */}
@@ -1974,6 +1998,8 @@ function LandingScreen({
                       <img
                         src={favorita.image}
                         alt={favorita.name}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
                       />
                       {/* Estado del producto (arriba a la izquierda, 12 px)
@@ -2030,6 +2056,8 @@ function LandingScreen({
                 <img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -2715,6 +2743,7 @@ function CatalogScreen({
               setPage(1);
             }}
             placeholder="Buscar pizza..."
+            aria-label="Buscar pizza en el menú"
             className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 text-foreground"
           />
         </div>
@@ -5106,6 +5135,7 @@ function LoginScreen({
               }}
               type="email"
               placeholder="correo@lasirena.com"
+              aria-label="Correo electrónico"
               ref={validacion.refCampo("email")}
               onKeyDown={validacion.onKeyDownCampo("email", {
                 errores: errors,
@@ -5133,6 +5163,7 @@ function LoginScreen({
                }}
               placeholder="••••••••"
               autoComplete="current-password"
+              ariaLabel="Contraseña"
               inputRef={validacion.refCampo("password")}
               onKeyDown={validacion.onKeyDownCampo("password", {
                 errores: errors,
@@ -5849,6 +5880,7 @@ function RegisterScreen({
               <select
                 value={form.docType}
                 ref={validacion.refCampo("docType")}
+                aria-label="Tipo de documento"
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
@@ -5879,6 +5911,7 @@ function RegisterScreen({
                 type="text"
                  inputMode="numeric"
                  placeholder="Ej: 12345678"
+                aria-label="Número de documento"
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
                 className={authInputCls(errores.docNum, "h-10")}
@@ -5934,6 +5967,7 @@ function RegisterScreen({
                   onKeyDown={teclaEnRegistro(key)}
                   placeholder={placeholder}
                   autoComplete="new-password"
+                  ariaLabel={label}
                   cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
@@ -5947,6 +5981,7 @@ function RegisterScreen({
                   type={type}
                   inputMode={numeric ? "numeric" : undefined}
                   placeholder={placeholder}
+                  aria-label={label}
                   ref={validacion.refCampo(key)}
                   onBlur={key === "name" ? () => setForm(p => ({ ...p, name: normalizarNombrePersona(p.name) })) : undefined}
                   onKeyDown={teclaEnRegistro(key)}
@@ -7603,6 +7638,11 @@ export default function App() {
   // Catálogo público independiente del almacenamiento local de Gestión de Productos.
   const [productosCatalogo, setProductosCatalogo] = useState<Producto[]>([]);
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
+  // Estado de la carga del catálogo público (landing / Ver Menú). Si la API no
+  // responde, el aviso fijo informa al usuario y ofrece reintentar sin que la
+  // página se rompa ni cambie de diseño en el caso normal.
+  const [catalogoCargando, setCatalogoCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState<string | null>(null);
   // Fichas técnicas por producto. Las crea Gestión de Productos y las lee
   // Orden de Producción para saber qué insumos (y Productos Insumo) consume
   // cada plato de un pedido.
@@ -7655,6 +7695,8 @@ export default function App() {
       : null,
   );
   const recargarCatalogo = async () => {
+    setCatalogoCargando(true);
+    setCatalogoError(null);
     try {
       const { productos: filasProductos, categorias: filasCategorias } = await obtenerCatalogo();
       const teniaIdsAntiguos = hayIdsProductoLegacyEnCarritos();
@@ -7678,8 +7720,13 @@ export default function App() {
       if (teniaIdsAntiguos) toast.info("Se quitaron del carrito productos antiguos que ya no existen en el catálogo.");
     } catch (error) {
       console.error("No se pudo cargar el catálogo público:", error);
-      toast.error(error instanceof Error ? error.message : "No se pudo cargar el catálogo público.");
+      const mensaje =
+        error instanceof Error && error.message ? error.message : "No se pudo cargar el catálogo público.";
+      setCatalogoError(mensaje);
+      toast.error(mensaje);
       throw error;
+    } finally {
+      setCatalogoCargando(false);
     }
   };
 
@@ -7745,6 +7792,27 @@ export default function App() {
   useEffect(() => {
     void recargarCatalogo().catch(() => {});
   }, []);
+
+  // SEO: título único por pantalla (sin librerías). Se actualiza al cambiar de
+  // vista. Las pantallas públicas tienen título propio; las del panel usan el
+  // de SCREEN_META; si no hay, se mantiene el título general del sistema.
+  useEffect(() => {
+    const titulosPublicos: Partial<Record<Screen, string>> = {
+      landing: "La Sirena Pizza | Pizzas artesanales en Medellín",
+      catalog: "Menú del restaurante | La Sirena Pizza",
+      cart: "Tu carrito | La Sirena Pizza",
+      "product-detail": "Detalle del producto | La Sirena Pizza",
+      "mis-pedidos": "Mis pedidos | La Sirena Pizza",
+      login: "Iniciar sesión | S.I.V.PRO",
+      register: "Crear cuenta | La Sirena Pizza",
+      "client-profile": "Mi perfil | La Sirena Pizza",
+    };
+    const meta =
+      titulosPublicos[screen] ??
+      (SCREEN_META[screen] ? `${SCREEN_META[screen].title} | S.I.V.PRO` : undefined);
+    document.title =
+      meta ?? "S.I.V.PRO | Sistema de Ventas y Producción - La Sirena Pizza";
+  }, [screen]);
 
   const aplicarProductoRespuesta = (producto: Producto, crear = false) => {
     setProductos((prev) => crear
@@ -9464,6 +9532,36 @@ export default function App() {
             isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
+          {/* Aviso fijo del catálogo público: solo aparece si la API no respondió.
+              Va con posición fija para no desplazar ni alterar el layout existente
+              (evita CLS y no cambia el diseño en el caso normal de éxito). */}
+          {catalogoError && (
+            <div
+              role="alert"
+              className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(92vw,26rem)] rounded-2xl border border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-950/80 p-4 shadow-xl backdrop-blur"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-300 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    No pudimos cargar el menú
+                  </p>
+                  <p className="mt-1 text-xs text-red-700/90 dark:text-red-200/80">
+                    Revisa tu conexión o inténtalo de nuevo en unos segundos.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void recargarCatalogo().catch(() => {})}
+                    disabled={catalogoCargando}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${catalogoCargando ? "animate-spin" : ""}`} />
+                    {catalogoCargando ? "Reintentando…" : "Reintentar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div
               key={screen}
@@ -9473,6 +9571,13 @@ export default function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
             >
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Cargando">
+                    <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                  </div>
+                }
+              >
               <LandingErrorBoundary resetKey={screen}>
               {screen === "landing" && (
                 <LandingScreen
@@ -10114,6 +10219,7 @@ export default function App() {
                   />
                 )}
               </LandingErrorBoundary>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

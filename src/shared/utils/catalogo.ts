@@ -3,14 +3,14 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
 import { mapearProductoApi, type ProductoApi } from "@/features/productos/services/productosApi";
 
-import pizzaCarnes from "@/assets/img/pizza_carnes.png";
-import pizzaCañon from "@/assets/img/pizza_cañon.png";
-import pizzaHawaii from "@/assets/img/pizza_hawaii.png";
-import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.png";
-import pizzaMaicitos from "@/assets/img/pizza_maicitos.png";
-import pizzaPeperoni from "@/assets/img/pizza_peperoni.png";
-import pizzaPollo from "@/assets/img/pizza_pollo.png";
-import pizzaTocineta from "@/assets/img/pizza_tocineta.png";
+import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
+import pizzaCañon from "@/assets/img/pizza_cañon.webp";
+import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
+import pizzaJamonQueso from "@/assets/img/pizza_jamon_queso.webp";
+import pizzaMaicitos from "@/assets/img/pizza_maicitos.webp";
+import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
+import pizzaPollo from "@/assets/img/pizza_pollo.webp";
+import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
 
 const assetsImagen = import.meta.glob<string>("@/assets/img/*", {
   eager: true,

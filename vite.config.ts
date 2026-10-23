@@ -107,6 +107,22 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Separa los vendors pesados en chunks propios para mejorar la
+        // caché y la descarga en paralelo. Conservador y sin catch-all
+        // genérico para evitar chunks circulares (p. ej. recharts↔vendor).
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return;
+          const n = id.replace(/\\/g, '/');
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(n)) return 'vendor-react';
+          if (/node_modules\/(xlsx|exceljs|cfb|ssf|codepage)\//.test(n)) return 'vendor-excel';
+          if (/node_modules\/(recharts|victory-vendor|d3-)/.test(n)) return 'vendor-charts';
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
