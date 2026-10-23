@@ -16,7 +16,27 @@ export const fechaISO = (d: Date): FechaISO => {
   return `${anio}-${mes}-${dia}`;
 };
 
-export const hoyISO = (): FechaISO => fechaISO(new Date());
+/**
+ * "Hoy" con el calendario de Bogotá (America/Bogotá), sea cual sea la zona del
+ * navegador. Devuelve una Date LOCAL cuyo día calendario es el día que corre en
+ * Colombia, así que `fechaISO(hoyBogota())` da la fecha de Bogotá y todo el
+ * corte de día/semana/mes (`rangoDePeriodo`/`enPeriodo`) queda en hora de
+ * Colombia. Es la referencia por defecto del filtro Diario · Semanal · Mensual.
+ */
+export const hoyBogota = (): Date => {
+  const iso = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [anio, mes, dia] = iso.split("-").map(Number);
+  return new Date(anio, mes - 1, dia);
+};
+
+/** "YYYY-MM-DD" de HOY en Bogotá (misma referencia que el filtro de periodos:
+    el "hoy" de la app es el de Colombia, no el del navegador). */
+export const hoyISO = (): FechaISO => fechaISO(hoyBogota());
 
 export const esFechaISO = (f: string | undefined | null): f is FechaISO =>
   typeof f === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f);
@@ -52,10 +72,12 @@ export const finDeMes = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(
 export type Periodo = "dia" | "semana" | "mes";
 
 /** Rango ISO [desde, hasta] de un periodo. "dia" = hoy, "semana" = lunes a
-    domingo de la semana actual, "mes" = mes actual. */
+    domingo de la semana actual, "mes" = mes actual. Por defecto el "hoy" es el
+    de Bogotá (ver `hoyBogota`): el corte de día/semana/mes se calcula en hora de
+    Colombia aunque el navegador esté en otra zona. */
 export const rangoDePeriodo = (
   periodo: Periodo,
-  ref: Date = new Date(),
+  ref: Date = hoyBogota(),
 ): { desde: FechaISO; hasta: FechaISO } => {
   if (periodo === "dia") {
     const hoy = fechaISO(ref);
@@ -72,7 +94,7 @@ export const rangoDePeriodo = (
 export const enPeriodo = (
   fecha: string | undefined | null,
   periodo: Periodo,
-  ref: Date = new Date(),
+  ref: Date = hoyBogota(),
 ): boolean => {
   if (!esFechaISO(fecha)) return false;
   const rango = rangoDePeriodo(periodo, ref);

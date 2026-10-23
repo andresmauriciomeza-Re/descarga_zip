@@ -20,12 +20,18 @@ import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario"
 export function PasoNuevaContrasena({
   onGuardar,
   labelConfirmar = "Confirmar contraseña",
+  labelBoton = "Cambiar contraseña",
+  labelBotonCargando = "Cambiando...",
 }: {
   /** Aplica la contraseña nueva (con el código ya verificado). Si lanza,
    *  el mensaje se pinta bajo el campo de la nueva contraseña. */
   onGuardar: (nueva: string) => Promise<void>;
   /** Los dos flujos comparten el paso; solo cambia el texto del label. */
   labelConfirmar?: string;
+  /** Texto del botón y del botón cargando (el alta de empleado dice
+   *  "Crear contraseña" en vez de "Cambiar contraseña"). */
+  labelBoton?: string;
+  labelBotonCargando?: string;
 }) {
   const [nueva, setNueva] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -151,7 +157,7 @@ export function PasoNuevaContrasena({
         className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
       >
         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-        {loading ? "Cambiando..." : "Cambiar contraseña"}
+        {loading ? labelBotonCargando : labelBoton}
       </button>
       {/* Un botón deshabilitado nunca queda sin explicación. */}
       {!todoValido && (

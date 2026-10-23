@@ -104,7 +104,7 @@ import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
-import { agregarDias, fechaISO } from "@/shared/utils/fechas";
+import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
@@ -139,6 +139,7 @@ import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { MiPerfilScreen } from "@/features/usuarios/pages/MiPerfilScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
+import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
 import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
 import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 import { MisPedidosScreen } from "@/features/ventas/pages/MisPedidosScreen";
@@ -4565,6 +4566,7 @@ function LoginScreen({
   darkMode,
   loginNotice,
   initialEmail,
+  mensajeExito,
 }: {
   navigate: (s: Screen) => void;
   // Devuelve { ok, mensaje }: ok=false es la señal para que esta pantalla muestre
@@ -4581,6 +4583,9 @@ function LoginScreen({
   /** Correo que queda escrito al llegar desde el cambio de contraseña:
    *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
   initialEmail?: string;
+  /** Aviso verde bajo el formulario (p. ej. "Contraseña creada. Ya puedes
+   *  iniciar sesión." al llegar de la invitación de empleado). */
+  mensajeExito?: string;
 }) {
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
@@ -4679,6 +4684,10 @@ function LoginScreen({
           email: "Credenciales incorrectas",
           password: "Verifica tu correo y contraseña",
         });
+      } else if (status === 403) {
+        // Cuenta de empleado sin activar: el backend manda el motivo
+        // ("Tu cuenta aún no está activada. Revisa tu correo.").
+        setRechazo(mensaje);
       } else {
         // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
         // extrajo el texto que corresponde.
@@ -4845,6 +4854,12 @@ function LoginScreen({
         {rechazo && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
             {rechazo}
+          </p>
+        )}
+
+        {mensajeExito && (
+          <p className="text-center text-sm font-semibold text-emerald-600 mb-3">
+            {mensajeExito}
           </p>
         )}
 
@@ -7216,6 +7231,14 @@ export default function App() {
   // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
   // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
   const [restauracionSesionLista, setRestauracionSesionLista] = useState(!sesionActiva);
+  // Sesión restaurándose (F5): hay sesión guardada y GET /auth/me todavía no
+  // terminó, así que los roles de la sesión aún no llegan. Mientras dure NO se
+  // pinta el inicio/dashboard (ni el chip "sin rol" ni el bloque "Sin rol
+  // asignado"/"Sin módulos asignados"): solo un indicador de carga. La sesión
+  // NO se cierra por recargar; si /auth/me responde 401 el flujo de restauración
+  // la cierra como siempre.
+  const sesionRestaurandose =
+    isLoggedIn && sesionActiva !== null && !restauracionSesionLista;
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
@@ -7225,6 +7248,17 @@ export default function App() {
   // tiene que escribir la clave nueva. Vive aquí (y no dentro de LoginScreen)
   // porque quien lo conoce es el flujo que cierra la sesión.
   const [loginEmailPre, setLoginEmailPre] = useState("");
+  // Mensaje verde que se pinta en "Iniciar sesión" (p. ej. "Contraseña creada.
+  // Ya puedes iniciar sesión." al llegar desde la invitación de empleado).
+  const [loginMensajeExito, setLoginMensajeExito] = useState("");
+  // Token de la invitación de empleado (?activar=<token>). Al leerlo se limpia
+  // la URL de inmediato, aunque el enlace resulte inválido.
+  const [activacionToken, setActivacionToken] = useState<string | null>(null);
+  // Periodo del INICIO del empleado (Diario por defecto; el Dashboard del admin
+  // sigue en Semanal). Vive aquí y no en DashboardScreen para que se conserve
+  // al cambiar de rol con el selector del encabezado: el componente puede
+  // desmontarse al cambiar de pantalla y perdería su estado interno.
+  const [periodoInicio, setPeriodoInicio] = useState<Periodo>("dia");
   // Catálogo de productos. Lo consumen GestionProductosScreen y
   // OrdenProduccionScreen (`productos` / `setProductos`). El merge de develop
   // trajó las dos pantallas pero no este estado: `INITIAL_PRODUCTOS` y el tipo
@@ -8056,7 +8090,37 @@ export default function App() {
   const openLogin = () => {
     setLoginNotice(false);
     setLoginEmailPre("");
+    setLoginMensajeExito("");
     navigate("login");
+  };
+
+  // ── Invitación de empleado (?activar=<token>) ──────────────────────────
+  // El enlace del correo abre la app con el token en la URL. Se lee UNA vez al
+  // cargar y la URL se limpia al instante (history.replaceState), aunque el
+  // enlace resulte vencido o ya usado: el token ya está en memoria. Detrás del
+  // modal queda el INICIO DE SESIÓN (no la landing), que es a donde va el
+  // empleado en cuanto termine de crear su contraseña.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("activar");
+    if (!token) return;
+    window.history.replaceState(null, "", "/");
+    setActivacionToken(token);
+    navigate("login");
+  }, []);
+
+  /** Fin de la activación: login con el correo ya escrito y el aviso verde. */
+  const trasActivarCuenta = (correo: string) => {
+    setActivacionToken(null);
+    setLoginEmailPre(correo);
+    setLoginMensajeExito("Contraseña creada. Ya puedes iniciar sesión");
+    toast.success("Contraseña creada. Ya puedes iniciar sesión");
+    navigate("login");
+  };
+
+  /** El enlace no sirve (vencido, ya usado o mal formado): salida al login. */
+  const irALoginDesdeActivacion = () => {
+    setActivacionToken(null);
+    openLogin();
   };
 
   /** Puente API → estado local: la ficha que arma el login cuando el correo
@@ -8157,9 +8221,18 @@ export default function App() {
     const rolAdministrador = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "administrador");
     const rolEmpleado = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "empleado");
     const rolCliente = rolesActivos.find(r => normalizarNombreRol(r.nombre) === "cliente");
+    // Rol activo por defecto: el primer cargo CON permisos. Un cargo sin
+    // permisos (o "Empleado", que no tiene ninguno) dejaría la pantalla sin
+    // módulos, así que "Empleado" es solo el ÚLTIMO recurso. La decisión toma
+    // únicamente los roles que trae el API: no depende de la ficha local del
+    // navegador (que en el equipo del empleado ni siquiera existe).
+    const primerCargoConPermisos =
+      rolesTrabajo.find(r => Object.keys(r.accesos ?? {}).length > 0) ?? null;
     const rolInicial = rolAdministrador
       ?? (esClientePublico ? rolCliente : null)
-      ?? (empleado ? rolesTrabajo[0] ?? rolEmpleado : rolesActivos[0])
+      ?? primerCargoConPermisos
+      ?? rolesTrabajo[0]
+      ?? rolEmpleado
       ?? rolesActivos[0]
       ?? null;
     const inicialId = rolInicial?.id ?? null;
@@ -8702,6 +8775,17 @@ export default function App() {
         }}
       />
 
+      {/* Invitación de empleado: el modal "Crea tu contraseña" se abre sobre
+          cualquier pantalla mientras el token de ?activar siga en memoria. */}
+      {activacionToken && (
+        <ActivarCuentaModal
+          token={activacionToken}
+          onActivada={trasActivarCuenta}
+          onCerrar={() => setActivacionToken(null)}
+          onIrALogin={irALoginDesdeActivacion}
+        />
+      )}
+
       {/* Sidebar */}
       {isAdmin && (
         <Sidebar
@@ -8768,11 +8852,11 @@ export default function App() {
             navigate={navigate}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
-            userName={loggedInUserName}
-            roleName={loggedInRoleName}
+            userName={sesionRestaurandose ? "" : loggedInUserName}
+            roleName={sesionRestaurandose ? "" : loggedInRoleName}
             homeScreen={adminHomeScreen}
             rolesParaCambiar={rolesParaCambiar}
-            onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+            onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
           />
         )}
 
@@ -8901,6 +8985,7 @@ export default function App() {
                     darkMode={darkMode}
                     loginNotice={loginNotice}
                     initialEmail={loginEmailPre}
+                    mensajeExito={loginMensajeExito}
                     onLogin={handleLogin}
                 />
               )}
@@ -8939,24 +9024,38 @@ export default function App() {
                   onReintentarPerfil={() => void refrescarPerfil()}
                 />
               )}
-              {((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
-                <DashboardScreen
-                  navigate={navigate}
-                  ventas={ventas}
-                  gestiones={gestiones}
-                  ordenes={ordenes}
-                  noConformidades={noConformidades}
-                  productos={productos}
-                  insumos={insumos}
-                  proveedores={proveedores}
-                  ordenesProduccion={ordenesProduccion}
-                  clientes={clientes}
-                  loggedInUser={loggedInUser}
-                  loggedInRoleName={loggedInRoleName}
-                  tieneRolActivo={loggedInRol !== null}
-                  hasDashboardAccess={hasDashboardAccess}
-                  accesos={loggedInAccesos}
-                />
+              {sesionRestaurandose && (screen === "dashboard" || screen === "inicio") ? (
+                /* Sesión restaurándose (F5): /auth/me todavía no responde y los
+                   roles de la sesión no están cargados. En vez de parpadear
+                   "sin rol" / "Sin rol asignado" (o "Empleado / Sin módulos
+                   asignados" en el empleado), se muestra un indicador de carga
+                   con el estilo de la app. */
+                <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+                  <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+                  <p className="text-sm text-muted-foreground">Cargando tu sesión…</p>
+                </div>
+              ) : (
+                ((screen === "dashboard" && hasDashboardAccess) || (screen === "inicio" && !hasDashboardAccess)) && (
+                  <DashboardScreen
+                    navigate={navigate}
+                    ventas={ventas}
+                    gestiones={gestiones}
+                    ordenes={ordenes}
+                    noConformidades={noConformidades}
+                    productos={productos}
+                    insumos={insumos}
+                    proveedores={proveedores}
+                    ordenesProduccion={ordenesProduccion}
+                    clientes={clientes}
+                    loggedInUser={loggedInUser}
+                    loggedInRoleName={loggedInRoleName}
+                    tieneRolActivo={loggedInRol !== null}
+                    hasDashboardAccess={hasDashboardAccess}
+                    accesos={loggedInAccesos}
+                    periodoInicio={periodoInicio}
+                    onPeriodoInicio={setPeriodoInicio}
+                  />
+                )
               )}
               {screen === "manage-products" && (
                 <ManageProductsScreen />
@@ -9299,7 +9398,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                   inStore
                 />
               )}
@@ -9329,7 +9428,7 @@ export default function App() {
                   contrataciones={loggedInEmpleado?.contrataciones}
                   rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
                   rolesParaCambiar={rolesParaCambiar}
-                  onCambiarRol={loggedInEmpleado && rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+                  onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                 />
               )}
               {screen === "supplies" && (
