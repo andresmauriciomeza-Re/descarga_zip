@@ -1211,9 +1211,10 @@ export function GestionProductosScreen({
   };
 
   /** Palabra con que se muestra el stock ("2 pizzas", "1 lasaña", "24 und"). */
-  const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
-    if (p.idCategoria === "CAT-001") return n === 1 ? "pizza" : "pizzas";
-    if (p.idCategoria === "CAT-002") return n === 1 ? "lasaña" : "lasañas";
+  const palabraStock = (p: { idCategoria: string; unidadVenta: string; categoriaNombre?: string }, n: number): string => {
+    const nombreCat = (p.categoriaNombre ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (p.idCategoria === "1" || p.idCategoria === "CAT-001" || nombreCat.includes("pizza")) return n === 1 ? "pizza" : "pizzas";
+    if (p.idCategoria === "2" || p.idCategoria === "CAT-002" || nombreCat.includes("lasana")) return n === 1 ? "lasaña" : "lasañas";
     return p.unidadVenta || "und";
   };
 
