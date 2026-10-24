@@ -109,6 +109,90 @@ export interface InvitacionesPendientesResponse {
   pendientes: string[];
 }
 
+/** Cargo (rol) de una contratación. `idRol` es el id_rol numérico de la base. */
+export interface RolContratacionApi {
+  idRol: number;
+  nombre: string;
+}
+
+/** Contratación de un empleado. Fechas 'YYYY-MM-DD' ("" = sin fecha final).
+ *  `vigente`: ya empezó y no terminó. `abierta`: vigente o por empezar (la
+ *  única editable; las cerradas son historial). */
+export interface ContratacionApi {
+  idContrato: number;
+  idEmpleado: number;
+  fechaInicio: string;
+  fechaFinal: string;
+  vigente: boolean;
+  abierta: boolean;
+  roles: RolContratacionApi[];
+}
+
+/** GET /empleados: `idEmpleado` es el id_empleado (entero), NO el documento. */
+export interface EmpleadoApi {
+  idEmpleado: number;
+  tipoDocumento: string;
+  numeroDocumento: string;
+  nombre: string;
+  correo: string;
+  telefono: string;
+  estado: boolean;
+  cuentaActivada: boolean;
+  invitacionPendiente: boolean;
+  esSuperAdmin: boolean;
+  contratacionVigente: ContratacionApi | null;
+  contrataciones: ContratacionApi[];
+}
+
+export interface ListarEmpleadosResponse {
+  empleados: EmpleadoApi[];
+}
+
+/** GET /empleados/cargos: roles activos asignables como cargo. */
+export interface CargoApi {
+  idRol: number;
+  nombre: string;
+}
+
+export interface ListarCargosResponse {
+  cargos: CargoApi[];
+}
+
+/** GET /empleados/mi-contratacion */
+export interface MiContratacionResponse {
+  contrataciones: ContratacionApi[];
+}
+
+/** PUT /empleados/:idEmpleado. Los cargos viajan como NOMBRES de rol. `cargos`,
+ *  `fechaInicio` y `fechaFinal` se aplican a la contratación abierta: si no se
+ *  envían, solo se editan los datos de la persona. El documento no se edita. */
+export interface EditarEmpleadoRequest {
+  nombre: string;
+  correo: string;
+  telefono: string;
+  cargos?: string[];
+  fechaInicio?: string;
+  fechaFinal?: string;
+}
+
+export interface EditarEmpleadoResponse {
+  mensaje: string;
+  /** null = no hubo invitación nueva; boolean = resultado del envío al correo nuevo. */
+  correoEnviado: boolean | null;
+}
+
+export interface MensajeEmpleadoResponse {
+  mensaje: string;
+}
+
+/** POST /empleados/:idEmpleado/contrataciones */
+export interface NuevaContratacionRequest {
+  fechaInicio: string;
+  fechaFinal: string;
+  cargos: string[];
+  estado: boolean;
+}
+
 /** GET /auth/activacion/:token: solo lo que necesita el saludo del modal. */
 export interface ActivacionDatos {
   nombre: string;

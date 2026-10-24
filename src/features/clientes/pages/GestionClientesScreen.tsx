@@ -13,7 +13,6 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { DOC_TIPOS, fmtDoc } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
@@ -51,11 +50,10 @@ export interface Cliente {
   activo: boolean;
 }
 
-export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, empleados, usuarios, roles = [], sesionCorreo = "", clienteAAbrirDesdeUsuarios = null, onClienteAbiertoDesdeUsuarios }: {
+export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, usuarios, roles = [], sesionCorreo = "", clienteAAbrirDesdeUsuarios = null, onClienteAbiertoDesdeUsuarios }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
-  empleados: Empleado[];
   usuarios: Usuario[];
   /** Roles del sistema: con ellos se dice quién es Administrador. */
   roles?: Rol[];
@@ -199,7 +197,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
         // no vacío por la validación de arriba).
         const duplicado =
           clientes.some(c => c.id !== editItem.id && otro(c.correo) && c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em) ||
-          empleados.some(e => otro(e.correo) && e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
           usuarios.some(u => otro(u.correo) && u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em);
         if (duplicado) errs.correo = "Este correo ya está registrado";
       }
@@ -246,7 +243,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     if (!em) return false;
     return (
       clientes.some(c => c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em) ||
-      empleados.some(e => e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
       usuarios.some(u => u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em)
     );
   };
@@ -254,7 +250,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     const clave = `${tipo}||${numero}`.toLowerCase();
     return (
       clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave) ||
-      empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave) ||
       usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave)
     );
   };

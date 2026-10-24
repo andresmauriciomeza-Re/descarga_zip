@@ -110,7 +110,8 @@ import { ImagenCategoria } from "@/features/categoria-productos/components/Image
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { GestionEmpleadosScreen, INITIAL_EMPLEADOS, type Contratacion, type Empleado } from "@/features/empleados/pages/GestionEmpleadosScreen";
+import { GestionEmpleadosScreen, type Contratacion } from "@/features/empleados/pages/GestionEmpleadosScreen";
+import { obtenerMiContratacion } from "@/shared/services/empleadosService";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import {
   GestionInsumosScreen,
@@ -724,6 +725,22 @@ const esRolAdministrador = (rol: Rol | null | undefined) =>
   !!rol && normalizarNombreRol(rol.nombre) === "administrador";
 const esRolCliente = (rol: Rol | null | undefined) =>
   !!rol && normalizarNombreRol(rol.nombre) === "cliente";
+
+// Roles de la sesión a partir de lo que manda la API (`usuario.roles`). El
+// catálogo local solo aporta la presentación (id y descripción); si el rol no
+// está en la copia local —p. ej. se creó en otro PC— entra igual, con el id de
+// la base y los permisos de la API.
+const armarRolesSesion = (rolesApi: Usuario["rolesSesionApi"], catalogo: Rol[]): Rol[] =>
+  (rolesApi ?? []).map(rolApi => {
+    const accesos: AccesosMap = {};
+    for (const permiso of rolApi.permisos ?? []) {
+      accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
+    }
+    const rolCatalogo = catalogo.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
+    return rolCatalogo
+      ? { ...rolCatalogo, accesos, activo: true }
+      : { id: String(rolApi.id), nombre: rolApi.nombre, descripcion: "", accesos, activo: true };
+  });
 
 // Clave de persona para el cruce Usuario ↔ Empleado: tipo y número de
 // documento, que el usuario NO puede editar (a diferencia del correo). Si el
@@ -5556,7 +5573,6 @@ function RegisterScreen({
   navigate,
   usuarios,
   setUsuarios,
-  empleados,
   clientes,
   setClientes,
   darkMode,
@@ -5565,7 +5581,6 @@ function RegisterScreen({
   navigate: (s: Screen) => void;
   usuarios: Usuario[];
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
-  empleados: Empleado[];
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
   darkMode: boolean;
@@ -5707,7 +5722,6 @@ function RegisterScreen({
       // como documento registrado.
       const docDuplicado =
         usuarios.some(u => `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave && u.correo.trim() !== "") ||
-        empleados.some(e => `${e.tipoDocumento}||${e.numeroDocumento}`.toLowerCase() === clave && e.correo.trim() !== "") ||
         clientes.some(c => `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave && c.correo.trim() !== "");
       if (docDuplicado) errs.docNum = "Este documento ya está registrado";
     }
@@ -5718,7 +5732,6 @@ function RegisterScreen({
       // registros sin correo serían "la misma persona".
       const correoDuplicado =
         usuarios.some(u => u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em) ||
-        empleados.some(e => e.correo.trim() !== "" && e.correo.trim().toLowerCase() === em) ||
         clientes.some(c => c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em);
       if (correoDuplicado) errs.email = "Este correo ya está registrado";
     }
@@ -6957,159 +6970,25 @@ const leerRolesPersistidos = (): Rol[] => {
 
 // Usuarios y clientes se cargan desde el backend en sus respectivas pantallas.
 
-// ── Persistencia de empleados (TEMPORAL) ─────────────────────────────
-// Necesita una clave propia porque el historial de contrataciones vive DENTRO
-// de cada empleado (`Empleado.contrataciones`), no en un array aparte: para que
-// sobreviva al F5 hay que persistir el empleado completo.
-//
-// AVISO DE ALCANCE: al guardar el array entero también pasan a sobrevivir al F5
-// las ediciones, los interruptores Activo/Inactivo y los BORRADOS de empleado,
-// no solo las contrataciones. Para volver a la semilla:
-// localStorage.removeItem(EMPLEADOS_STORAGE_KEY).
-//
-// Las fichas de empleados no contienen ni persisten credenciales.
+// ── Empleados (API) ──────────────────────────────────────────────────────
+// Los empleados, sus cargos y su historial de contrataciones viven en la base
+// (Producción > Empleados). Los datos de prueba que quedaron en el navegador NO
+// se suben: se copian UNA vez a `-respaldo-empleados` (mismo patrón que
+// `-respaldo-cpn`) y la clave original deja de usarse. No se borra ni se
+// sobrescribe nada.
 const EMPLEADOS_STORAGE_KEY = "sivpro.empleados.v1";
-const DOCS_SEMILLA_PURGAR: ReadonlySet<string> = new Set([
-  "cc||11223344", "cc||22334455", "cc||33445566", "cc||44556677",
-  "cc||55667788", "cc||66778899", "cc||77889900", "cc||99001122",
-  "cc||10111213",
-]);
-
-const esEmpleadoValido = (e: unknown): e is Empleado => {
-  if (!e || typeof e !== "object") return false;
-  const emp = e as unknown as {
-    id?: unknown; nombre?: unknown; correo?: unknown; telefono?: unknown;
-    tipoDocumento?: unknown; numeroDocumento?: unknown; activo?: unknown;
-    fechaInicio?: unknown; fechaFinal?: unknown;
-    rolIds?: unknown; rolId?: unknown; cargo?: unknown;
-  };
-  // `rolIds` es el campo nuevo; los registros viejos traían `rolId` + `cargo`
-  // (texto libre), así que se acepta cualquiera de las dos formas para que una
-  // base guardada antes de esta feature no se descarte entera (y con ella el
-  // historial de contrataciones).
-  const tieneCargos =
-    (Array.isArray(emp.rolIds) && emp.rolIds.length > 0) ||
-    typeof emp.rolId === "string" ||
-    typeof emp.cargo === "string";
-  return (
-    typeof emp.id === "string" &&
-    typeof emp.nombre === "string" &&
-    typeof emp.correo === "string" &&
-    typeof emp.telefono === "string" &&
-    typeof emp.tipoDocumento === "string" &&
-    typeof emp.numeroDocumento === "string" &&
-    typeof emp.activo === "boolean" &&
-    typeof emp.fechaInicio === "string" &&
-    typeof emp.fechaFinal === "string" &&
-    tieneCargos
-  );
-};
-
-// CARGO = ROL. Migra un registro viejo (`cargo` texto + `rolId`) al modelo de
-// multi-rol: si el texto del cargo coincide con el NOMBRE de un rol guardado,
-// ese rol es su cargo; si no, se conserva el `rolId` que traía (p. ej. la
-// Administradora, cuyo cargo legado "Administración" no es un rol).
-const migrarCargos = (rolIds: unknown, rolId: unknown, cargo: unknown, roles: Rol[]): string[] => {
-  if (Array.isArray(rolIds)) {
-    const limpio = rolIds.filter((x): x is string => typeof x === "string" && x.trim() !== "");
-    if (limpio.length > 0) return limpio;
-  }
-  if (typeof cargo === "string" && cargo.trim() !== "") {
-    const porNombre = roles.find(r => r.nombre.trim().toLowerCase() === cargo.trim().toLowerCase());
-    if (porNombre) return [porNombre.id];
-    // El cargo legado "Administración" no es un rol: se cambia por el rol
-    // "Auxiliar administrativo". EXCEPCIÓN: si el empleado traía el rol
-    // Administrador (la cuenta de Gloria), se conserva tal cual — "Administración"
-    // era su etiqueta antigua, nunca el cargo de apoyo.
-    const esAdmin = typeof rolId === "string" &&
-      roles.find(r => r.id === rolId)?.nombre.trim().toLowerCase() === "administrador";
-    if (cargo.trim().toLowerCase() === "administración" && !esAdmin) {
-      const auxiliar = roles.find(r => r.nombre.trim().toLowerCase() === "auxiliar administrativo");
-      if (auxiliar) return [auxiliar.id];
-    }
-    // Seeds heredadas con cargos eliminados: se reasignan a Cajero/Mesero (que
-    // sustituyen esos cargos en la nueva semilla).
-    const remap = new Map<string, string>([
-      ["domiciliario", "cajero"], ["auxiliar administrativo", "cajero"],
-      ["cocinero", "mesero"], ["auxiliar de cocina", "mesero"], ["operador de producción", "mesero"],
-    ]);
-    const destino = remap.get(cargo.trim().toLowerCase());
-    if (destino) {
-      const r = roles.find(x => x.nombre.trim().toLowerCase() === destino);
-      if (r) return [r.id];
-    }
-  }
-  return typeof rolId === "string" && rolId.trim() !== "" ? [rolId] : [];
-};
-
-// `contrataciones` se normaliza en vez de exigirla: si un array quedó guardado
-// por una build anterior a esta feature, descartar el registro entero perdería
-// también sus datos de contacto. Un histórico ausente se trata como vacío, y
-// cada entrada vieja (`cargo` + `rolId`) se migra a `rolIds` con la misma regla
-// de arriba.
-const normalizarEmpleado = (e: Empleado, roles: Rol[]): Empleado => {
-  const crudo = e as unknown as {
-    cargo?: unknown; rolId?: unknown; rolIds?: unknown; contrataciones?: unknown; contrasena?: unknown;
-  };
-  // Se quitan los campos viejos (`cargo` texto y su `rolId` espejo) para que no
-  // sobrevivan en la memoria ni se re-serialicen al guardar.
-  const { cargo, rolId, rolIds: _legacy, contrasena: _legacyPassword, ...resto } = crudo;
-  // Todo empleado tiene SIEMPRE los roles base "Empleado" y "Cliente". La cuenta
-  // de super administrador (Gloria) queda tal cual: no recibe roles de empleado.
-  const esSuperAdmin = e.esSuperAdmin === true;
-  const peso = (lista: string[]) => {
-    const vivos = lista.filter(id => roles.some(r => r.id === id));
-    // Ids perdidos por la purge de seed (ROL-006…010) se remap a Cajero/Mesero.
-    const mapId = new Map<string, string>([
-      ["ROL-006", "Cajero"], ["ROL-010", "Cajero"],
-      ["ROL-007", "Mesero"], ["ROL-008", "Mesero"], ["ROL-009", "Mesero"],
-    ]);
-    lista.forEach(id => {
-      const n = mapId.get(id);
-      if (n) {
-        const r = roles.find(x => x.nombre.trim().toLowerCase() === n.toLowerCase());
-        if (r) vivos.push(r.id);
-      }
-    });
-    return esSuperAdmin ? [...new Set(vivos)] : [...new Set([
-      ...vivos,
-      roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id ?? "",
-      roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id ?? "",
-    ].filter(x => x))];
-  };
-  return {
-    ...(resto as unknown as Empleado),
-    rolIds: peso(migrarCargos(crudo.rolIds, rolId, cargo, roles)),
-    contrataciones: (Array.isArray(crudo.contrataciones) ? crudo.contrataciones : []).map(c => {
-      const vieja = c as unknown as { id?: unknown; fechaInicio?: unknown; fechaFinal?: unknown; cargo?: unknown; rolId?: unknown; rolIds?: unknown };
-      return {
-        id: typeof vieja.id === "string" ? vieja.id : `${crudo as unknown as Empleado["id"]}-C01`,
-        fechaInicio: typeof vieja.fechaInicio === "string" ? vieja.fechaInicio : "",
-        fechaFinal: typeof vieja.fechaFinal === "string" ? vieja.fechaFinal : "",
-        rolIds: peso(migrarCargos(vieja.rolIds, vieja.rolId, vieja.cargo, roles)),
-      };
-    }),
-  };
-};
-
-const leerEmpleadosPersistidos = (): Empleado[] => {
-  // Los roles se leen aparte porque la migración de `cargo` (texto) a `rolIds`
-  // necesita los NOMBRES guardados para empatarlos.
-  const roles = leerRolesPersistidos();
+const EMPLEADOS_RESPALDO_KEY = `${EMPLEADOS_STORAGE_KEY}-respaldo-empleados`;
+const respaldarEmpleadosLocales = () => {
   try {
-    const raw = localStorage.getItem(EMPLEADOS_STORAGE_KEY);
-    if (!raw) return INITIAL_EMPLEADOS;
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(esEmpleadoValido)) {
-      return (parsed as Empleado[])
-        .filter(e => !DOCS_SEMILLA_PURGAR.has(`${(e.tipoDocumento ?? "").trim().toLowerCase()}||${(e.numeroDocumento ?? "").trim()}`))
-        .map(e => normalizarEmpleado(e, roles));
+    if (localStorage.getItem(EMPLEADOS_RESPALDO_KEY) === null) {
+      const legado = localStorage.getItem(EMPLEADOS_STORAGE_KEY);
+      if (legado !== null) localStorage.setItem(EMPLEADOS_RESPALDO_KEY, legado);
     }
   } catch {
-    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
+    // Almacenamiento bloqueado: no se borra ni se sobrescribe nada.
   }
-  return INITIAL_EMPLEADOS;
 };
+respaldarEmpleadosLocales();
 
 // ── Categorías de producto (API) ─────────────────────────────────────────
 // Desde la conexión a la API, la pantalla de Categoría Producto lee y escribe
@@ -8064,7 +7943,6 @@ export default function App() {
   const descontinuarProductoEnServidor = (id: string) => cambiarEstadoEnServidor(id, "Descontinuado");
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [empleados, setEmpleados] = useState<Empleado[]>(leerEmpleadosPersistidos);
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
   // Mantiene el listado general como la unión de las cuentas de empleados y
@@ -8085,49 +7963,11 @@ export default function App() {
         return `USR-${String(max + 1).padStart(3, "0")}`;
       };
 
-      empleados.forEach(empleado => {
-        const clave = clavePersona(empleado.tipoDocumento, empleado.numeroDocumento, empleado.correo);
-        const base = {
-          nombre: empleado.nombre,
-          iniciales: empleado.iniciales,
-          avatarColor: empleado.avatarColor,
-          correo: empleado.correo,
-          telefono: empleado.telefono,
-          tipoDocumento: empleado.tipoDocumento,
-          numeroDocumento: empleado.numeroDocumento,
-          rolIds: [...empleado.rolIds],
-          rolId: empleado.rolIds[0] ?? "",
-          activo: empleado.activo,
-        };
-        const existente = porClave.get(clave);
-        if (existente) {
-          const actualizado = { ...existente, ...base };
-          if (JSON.stringify(actualizado) !== JSON.stringify(existente)) {
-            const indice = next.findIndex(usuario => usuario.id === existente.id);
-            next[indice] = actualizado;
-            porClave.set(clave, actualizado);
-            changed = true;
-          }
-        } else {
-          // Solo al CREAR: el usuario nuevo nace con la contraseña de su ficha
-          // de empleado para poder entrar con ella. `base` no lleva
-          // `contrasena` a propósito, así que la rama de arriba (actualizar)
-          // jamás pisa la contraseña que el usuario cambió en "Mi perfil" o en
-          // "Restablecer contraseña".
-          const nuevo = { id: siguienteId(), ...base };
-          next.push(nuevo);
-          porClave.set(clave, nuevo);
-          changed = true;
-        }
-      });
-
-      const clavesEmpleado = new Set(empleados.map(e =>
-        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo),
-      ));
       clientes.forEach(cliente => {
         const clave = clavePersona(cliente.tipoDocumento, cliente.numeroDocumento, cliente.correo);
-        if (clavesEmpleado.has(clave)) return;
         const existente = porClave.get(clave);
+        // Personal del panel (rol distinto de Cliente) no se pisa con su perfil de cliente.
+        if (existente && existente.rolId && existente.rolId !== idRolCliente(roles)) return;
         const base = {
           nombre: cliente.nombre,
           iniciales: cliente.iniciales,
@@ -8158,7 +7998,7 @@ export default function App() {
 
       return changed ? next : prev;
     });
-  }, [empleados, clientes, roles]);
+  }, [clientes, roles]);
 
   // Fuente de lectura del listado general: combina cualquier cuenta existente
   // con los perfiles de Clientes y Empleados, sin repetir personas (por
@@ -8176,42 +8016,10 @@ export default function App() {
       return `USR-${String(max + 1).padStart(3, "0")}`;
     };
 
-    empleados.forEach(empleado => {
-      const clave = clavePersona(empleado.tipoDocumento, empleado.numeroDocumento, empleado.correo);
-      const base = {
-        nombre: empleado.nombre,
-        iniciales: empleado.iniciales,
-        avatarColor: empleado.avatarColor,
-        correo: empleado.correo,
-        telefono: empleado.telefono,
-        tipoDocumento: empleado.tipoDocumento,
-        numeroDocumento: empleado.numeroDocumento,
-        rolIds: [...empleado.rolIds],
-        rolId: empleado.rolIds[0] ?? "",
-        activo: empleado.activo,
-      };
-      const existente = porClave.get(clave);
-      if (existente) {
-        const actualizado = { ...existente, ...base };
-        const indice = next.findIndex(usuario => usuario.id === existente.id);
-        next[indice] = actualizado;
-        porClave.set(clave, actualizado);
-      } else {
-        // Misma regla que en el efecto de arriba: la contraseña se copia SOLO
-        // al crear, nunca al actualizar (el listado unificado no debe pisarla).
-        const nuevo = { id: siguienteId(), ...base };
-        next.push(nuevo);
-        porClave.set(clave, nuevo);
-      }
-    });
-
-    const clavesEmpleado = new Set(empleados.map(e =>
-      clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo),
-    ));
     clientes.forEach(cliente => {
       const clave = clavePersona(cliente.tipoDocumento, cliente.numeroDocumento, cliente.correo);
       const existente = porClave.get(clave);
-      if (clavesEmpleado.has(clave)) return;
+      if (existente && existente.rolId && existente.rolId !== idRolCliente(roles)) return;
       const base = {
         nombre: cliente.nombre,
         iniciales: cliente.iniciales,
@@ -8237,7 +8045,7 @@ export default function App() {
     });
 
     return next;
-  }, [usuarios, empleados, clientes, roles]);
+  }, [usuarios, clientes, roles]);
 
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
@@ -8249,25 +8057,12 @@ export default function App() {
   // ── Sesión multi-rol ───────────────────────────────────────────────
   // La ficha de empleado de la cuenta de sesión, por DOCUMENTO (el correo es
   // editable; el documento no). `null` si la persona no tiene ficha.
-  const claveCuentaSesion = loggedInUser
-    ? clavePersona(loggedInUser.tipoDocumento, loggedInUser.numeroDocumento, loggedInUser.correo)
-    : "";
   const correoSesion = loggedInUser?.correo.trim().toLowerCase() ?? "";
-  const loggedInEmpleado = loggedInUser
-    ? empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuentaSesion) ?? null
-    : null;
 
   // La autorización proviene de usuario.roles del backend. El catálogo local
-  // solo aporta presentación; no se consulta de nuevo al cambiar de rol.
-  const rolesSesion: Rol[] = (loggedInUser?.rolesSesionApi ?? []).flatMap(rolApi => {
-    const rolCatalogo = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
-    if (!rolCatalogo) return [];
-    const accesos: AccesosMap = {};
-    for (const permiso of rolApi.permisos ?? []) {
-      accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
-    }
-    return [{ ...rolCatalogo, accesos, activo: true }];
-  });
+  // solo aporta presentación; un rol que la API manda y la copia local no tiene
+  // (p. ej. creado en otro PC) entra igual con sus permisos.
+  const rolesSesion: Rol[] = armarRolesSesion(loggedInUser?.rolesSesionApi, roles);
   const esRolBaseSesion = (rol: Rol) => ["administrador", "cliente", "empleado"].includes(normalizarNombreRol(rol.nombre));
   const rolesDeTrabajo = rolesSesion.filter(rol => !esRolBaseSesion(rol));
 
@@ -8297,12 +8092,42 @@ export default function App() {
     esSuperAdminSesion || (loggedInAccesos[DASHBOARD_PERM_KEY]?.includes("Ver") ?? false);
   const adminHomeScreen: Screen = hasDashboardAccess ? "dashboard" : "inicio";
 
-  // Cliente público = solo el rol "Cliente" y sin ficha de empleado. El
-  // "Cliente/Empleado" (persona con ficha) ya NO es cliente público: va al
-  // panel y ofrece el cambio de rol.
+  // Cliente público = solo el rol "Cliente". Un empleado activo con contratación
+  // vigente también trae Empleado y sus cargos, así que va al panel y ofrece el
+  // cambio de rol; si está inactivo o sin contratación vigente, la API solo le
+  // manda Cliente y entra como cliente.
   const esClientePublicoSesion =
-    rolesSesion.length > 0 && rolesSesion.every(esRolCliente) && loggedInEmpleado === null;
+    rolesSesion.length > 0 && rolesSesion.every(esRolCliente);
   const isStaff = isLoggedIn && loggedInUser !== null && !esClientePublicoSesion;
+
+  // Historial de contrataciones de la sesión (Mi perfil). Sale de la API, no de
+  // una lista local: `undefined` mientras carga o si la persona no es empleada.
+  const [contratacionesSesion, setContratacionesSesion] = useState<Contratacion[] | undefined>(undefined);
+  const [nombresRolesContratacion, setNombresRolesContratacion] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!isLoggedIn || !restauracionSesionLista || !loggedInUserId || esClientePublicoSesion) {
+      setContratacionesSesion(undefined);
+      return;
+    }
+    let cancelado = false;
+    void obtenerMiContratacion()
+      .then(({ contrataciones }) => {
+        if (cancelado) return;
+        const nombres = new Map<string, string>();
+        for (const c of contrataciones) for (const r of c.roles) nombres.set(String(r.idRol), r.nombre);
+        setNombresRolesContratacion(nombres);
+        setContratacionesSesion(contrataciones.length === 0 ? undefined : contrataciones.map(c => ({
+          id: String(c.idContrato),
+          rolIds: c.roles.map(r => String(r.idRol)),
+          fechaInicio: c.fechaInicio,
+          fechaFinal: c.fechaFinal ?? "",
+        })));
+      })
+      .catch(() => { if (!cancelado) setContratacionesSesion(undefined); });
+    return () => { cancelado = true; };
+  }, [isLoggedIn, restauracionSesionLista, loggedInUserId, esClientePublicoSesion]);
+  const rolNombreDeContrato = (rolId: string) =>
+    nombresRolesContratacion.get(rolId) ?? roles.find(r => r.id === rolId)?.nombre ?? rolId;
 
   // El selector refleja exactamente los otros roles asignados y activos que
   // llegaron en la respuesta de autenticación/perfil.
@@ -8490,18 +8315,6 @@ export default function App() {
       // Almacenamiento bloqueado o sin cuota: los roles siguen en memoria.
     }
   }, [roles]);
-
-  // Igual para empleados: sin esta escritura, el alta de un empleado y su
-  // historial de contrataciones se perdían en cada F5.
-  //
-  // No se serializan credenciales en las fichas de empleados.
-  useEffect(() => {
-    try {
-      localStorage.setItem(EMPLEADOS_STORAGE_KEY, JSON.stringify(empleados));
-    } catch {
-      // Almacenamiento bloqueado o sin cuota: los empleados siguen en memoria.
-    }
-  }, [empleados]);
 
   // Las órdenes de producción, los insumos y los productos no conformes ya NO
   // se guardan en localStorage: viven en la API (respaldos locales en las
@@ -8736,28 +8549,18 @@ export default function App() {
   };
 
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
-    const claveSesion = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
-    setEmpleados(prev => prev.map(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveSesion
-      ? { ...e, esSuperAdmin: user.esSuperAdmin === true }
-      : e));
     setUsuarios(prev => prev.map(u => u.id === user.id ? {
       ...u,
       esSuperAdmin: user.esSuperAdmin === true,
       rolesSesionApi: user.rolesSesionApi ?? [],
     } : u));
-    // Cruce canónico Usuario ↔ Empleado: documento.
-    const claveCuenta = clavePersona(user.tipoDocumento, user.numeroDocumento, user.correo);
-    const empleado = empleados.find(e => clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === claveCuenta) ?? null;
-    const rolesActivos: Rol[] = (user.rolesSesionApi ?? []).flatMap(rolApi => {
-      const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
-      if (!local) return [];
-      const accesos: AccesosMap = {};
-      for (const permiso of rolApi.permisos ?? []) accesos[KEY(permiso.modulo, permiso.nombre)] = permiso.privilegios as Accion[];
-      return [{ ...local, accesos, activo: true }];
-    });
-    // Cliente público: solo el rol Cliente y sin ficha de empleado → landing
-    // (portal público, nunca el panel).
-    const esClientePublico = rolesActivos.length > 0 && rolesActivos.every(esRolCliente) && empleado === null;
+    // Los roles de la sesión salen de lo que manda la API, aunque el rol no
+    // exista en la copia local del catálogo.
+    const rolesActivos: Rol[] = armarRolesSesion(user.rolesSesionApi, roles);
+    // Cliente público: solo el rol Cliente → landing (portal público, nunca el
+    // panel). Un empleado inactivo o sin contratación vigente llega aquí porque
+    // el backend ya solo le devuelve el rol Cliente: entra y compra como cliente.
+    const esClientePublico = rolesActivos.length > 0 && rolesActivos.every(esRolCliente);
 
     if (!esClientePublico) {
       if (rolesActivos.length === 0) {
@@ -8765,12 +8568,8 @@ export default function App() {
       }
       // El bloqueo "sin pantallas" ya NO aplica: Inicio siempre está disponible
       // para cualquiera con cuenta válida. El bloqueo restante es por cuenta
-      // inactiva o rol base Empleado inactivo.
-      const empleadoInactivo = !!empleado ? !empleado.activo : !user.activo;
-      const rolEmpleadoInactivo = roles.some(
-        r => normalizarNombreRol(r.nombre) === "empleado" && !r.activo,
-      );
-      if (empleadoInactivo || rolEmpleadoInactivo) {
+      // inactiva.
+      if (!user.activo) {
         return { ok: false, mensaje: "Tu cuenta no tiene roles activos. Contacta al administrador." };
       }
     }
@@ -9242,11 +9041,6 @@ export default function App() {
           ? prev.map(u => u.id === existente.id ? base : u)
           : [...prev, base];
       });
-      setEmpleados(prev => prev.map(e =>
-        clavePersona(e.tipoDocumento, e.numeroDocumento, e.correo) === clavePerfil
-          ? { ...e, esSuperAdmin: perfil.esSuperAdmin === true }
-          : e,
-      ));
       setPerfilEstado("idle");
       setPerfilErrorMsg(null);
       return true;
@@ -9823,7 +9617,6 @@ export default function App() {
                       navigate={navigate}
                       usuarios={usuarios}
                       setUsuarios={setUsuarios}
-                      empleados={empleados}
                       clientes={clientes}
                       setClientes={setClientes}
                       darkMode={darkMode}
@@ -10195,7 +9988,6 @@ export default function App() {
                       {...getPerms("clientes")}
                       clientes={clientes}
                       setClientes={setClientes}
-                      empleados={empleados}
                       usuarios={usuarios}
                       roles={roles}
                       sesionCorreo={correoSesion}
@@ -10213,9 +10005,8 @@ export default function App() {
                         navigate("clientes");
                       }}
                       onEditarEmpleado={u => {
-                        const clave = claveDoc(u.tipo_documento ?? "", String(u.id_usuario));
-                        const existe = empleados.some(e => claveDoc(e.tipoDocumento, e.numeroDocumento) === clave);
-                        if (!existe) return false;
+                        // La ficha vive en la base: la pantalla de Empleados la
+                        // busca por documento cuando termina de cargar.
                         setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
                         navigate("empleados");
                         return true;
@@ -10224,11 +10015,6 @@ export default function App() {
                   )}
                   {screen === "empleados" && (
                     <GestionEmpleadosScreen
-                      roles={roles}
-                      usuarios={usuarios}
-                      empleados={empleados}
-                      setEmpleados={setEmpleados}
-                      setUsuarios={setUsuarios}
                       clientes={clientes}
                       empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
                       onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
@@ -10281,8 +10067,8 @@ export default function App() {
                       perfilCargando={perfilEstado === "cargando"}
                       perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
                       onReintentarPerfil={() => void refrescarPerfil()}
-                      contrataciones={loggedInEmpleado?.contrataciones}
-                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      contrataciones={contratacionesSesion}
+                      rolNombreDe={rolNombreDeContrato}
                       rolesParaCambiar={rolesParaCambiar}
                       onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                       inStore
@@ -10311,8 +10097,8 @@ export default function App() {
                       perfilCargando={perfilEstado === "cargando"}
                       perfilError={perfilEstado === "error" ? perfilErrorMsg : null}
                       onReintentarPerfil={() => void refrescarPerfil()}
-                      contrataciones={loggedInEmpleado?.contrataciones}
-                      rolNombreDe={(rolId) => roles.find(r => r.id === rolId)?.nombre ?? rolId}
+                      contrataciones={contratacionesSesion}
+                      rolNombreDe={rolNombreDeContrato}
                       rolesParaCambiar={rolesParaCambiar}
                       onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
                     />

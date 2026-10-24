@@ -44,7 +44,7 @@ interface Props {
   onReintentarPerfil?: () => void;
   inStore?: boolean;
   // Historial de contrataciones del empleado de la sesión, en solo lectura.
-  // Lo resuelve App.tsx cruzando el correo de `loggedInUser` contra `empleados`.
+  // Lo resuelve App.tsx con GET /empleados/mi-contratacion (la base, no una lista local).
   contrataciones?: Contratacion[];
   // Nombre del rol asociado a cada contratación (mismo criterio que el detalle
   // en la pantalla de Empleados). Sin esto el id crudo se vería en pantalla.
