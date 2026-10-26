@@ -1,13 +1,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, Send, X, UserPlus } from "lucide-react";
+import { Briefcase, RefreshCw, Send, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import {
+  cambiarEstadoEmpleado,
+  crearContratacion,
   crearEmpleado,
-  listarInvitacionesPendientes,
+  editarEmpleado,
+  listarCargos,
+  listarEmpleados,
   reenviarInvitacion,
 } from "@/shared/services/empleadosService";
-import type { ApiErrorConEstado, CrearEmpleadoResponse } from "@/types/api";
+import type { ApiErrorConEstado, ContratacionApi, CrearEmpleadoResponse, EmpleadoApi } from "@/types/api";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -20,7 +24,7 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { type Usuario, DOC_TIPOS, fmtDoc, claveDoc, docValida } from "@/features/usuarios/pages/GestionUsuariosScreen";
+import { DOC_TIPOS, fmtDoc } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 
 const SERIF = "var(--font-titulo)";
@@ -32,19 +36,20 @@ const AVATAR_COLORS = [
 ];
 
 // Una contratación del empleado. `Empleado.rolIds/fechaInicio/fechaFinal`
-// guarda SOLO la contratación vigente (lo que ve la tabla); aquí va el
+// guarda SOLO la contratación actual (lo que ve la tabla); aquí va el
 // historial completo, para no perder los cambios de cargo ni los reingresos.
 // CARGO = ROL: no existe un texto de cargo aparte, cada entrada guarda los
-// roles (cargos) que el empleado tenía en ese período.
+// roles (cargos) que el empleado tenía en ese período. Todos los ids vienen de
+// la base (id_contrato / id_rol) y viajan como texto.
 export interface Contratacion {
-  id: string;           // "EMP-001-C01", "EMP-001-C02" (C## con 2 dígitos)
-  rolIds: string[];     // cargos/roles de esa contratación (mínimo 1)
+  id: string;           // id_contrato ("7")
+  rolIds: string[];     // String(id_rol) de los cargos de esa contratación
   fechaInicio: string;  // YYYY-MM-DD
-  fechaFinal: string;   // "" si la contratación sigue vigente
+  fechaFinal: string;   // "" si no tiene fecha final
 }
 
 export interface Empleado {
-  id: string;              // EMP-00X
+  id: string;              // id_empleado de la base ("12"), NO el documento
   nombre: string;
   iniciales: string;
   avatarColor: string;
@@ -52,53 +57,65 @@ export interface Empleado {
   telefono: string;
   tipoDocumento: string;
   numeroDocumento: string;
-  rolIds: string[];        // cargos/roles vigentes (fuente de verdad)
+  rolIds: string[];        // cargos/roles de la contratación actual
   activo: boolean;         // Tb_Empleado.Estado
   esSuperAdmin?: boolean;
-  fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (vigente)
-  fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si sigue activo)
-  contrataciones: Contratacion[]; // historial, de la más antigua a la más reciente
+  fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (actual)
+  fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si no tiene)
+  /** La contratación actual sigue abierta (vigente o por empezar): solo esa se edita. */
+  contratoAbierto?: boolean;
+  /** La cuenta aún no se activó: se le puede reenviar la invitación. */
+  invitacionPendiente?: boolean;
+  contrataciones: Contratacion[]; // historial
 }
-
-// Semilla cruda: los empleados sin historial. `INITIAL_EMPLEADOS` le deriva una
-// única contratación inicial a partir de sus propios campos, para que el dato no
-// quede escrito dos veces y ambas copias no puedan desincronizarse.
-// ROL-004 Cajero · ROL-005 Mesero · ROL-006 Domiciliario · ROL-007 Cocinero ·
-// ROL-008 Auxiliar de cocina · ROL-009 Operador de producción.
-const EMPLEADOS_SEMILLA: Omit<Empleado, "contrataciones">[] = [
-  { id:"EMP-001", nombre:"Gloria Inés Vargas",  iniciales:"GV", avatarColor:"bg-red-500",     correo:"gloria@lasirena.com",          telefono:"604 321 0001", tipoDocumento:"CC", numeroDocumento:"12345678", rolIds:["ROL-001"],             activo:true,  fechaInicio:"2024-01-15", fechaFinal:"" },
-  { id:"EMP-002", nombre:"Sebastián Gómez",     iniciales:"SG", avatarColor:"bg-blue-500",    correo:"sebastian.gomez@lasirena.com", telefono:"310 456 7890", tipoDocumento:"CC", numeroDocumento:"87654321", rolIds:["ROL-004","ROL-005","ROL-003","ROL-002"],   activo:true,  fechaInicio:"2024-02-01", fechaFinal:"" },
-];
-
-// Cada empleado de la semilla arranca con una contratación inicial (C01) que es
-// una proyección de sus propios campos de contrato, no una copia escrita a mano.
-export const INITIAL_EMPLEADOS: Empleado[] = EMPLEADOS_SEMILLA.map(e => ({
-  ...e,
-  contrataciones: [{
-    id: `${e.id}-C01`,
-    rolIds: [...e.rolIds],
-    fechaInicio: e.fechaInicio,
-    fechaFinal: e.fechaFinal,
-  }],
-}));
-
-// Siguiente id de contratación para un empleado. Se apoya en el sufijo numérico
-// en vez de en `length` para no repetir un id si alguna vez se editara o quitara
-// una contratación del historial. El cero a la izquierda mantiene el orden
-// lexicético correcto (C02 < C10).
-export const nuevoContratacionId = (empleadoId: string, existentes: Contratacion[]) => {
-  const max = existentes.reduce((m, c) => {
-    const n = parseInt(c.id.split("-C")[1] ?? "", 10) || 0;
-    return Math.max(m, n);
-  }, 0);
-  return `${empleadoId}-C${String(max + 1).padStart(2, "0")}`;
-};
 
 // De la más reciente a la más antigua. Primero por fecha de inicio y, si empatan
 // (dos contrataciones el mismo día), por id, que ya refleja el orden en que se
 // fueron registrando.
 export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
-  [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || b.id.localeCompare(a.id));
+  [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
+
+const mapearContratacionApi = (c: ContratacionApi): Contratacion => ({
+  id: String(c.idContrato),
+  rolIds: c.roles.map(r => String(r.idRol)),
+  fechaInicio: c.fechaInicio,
+  fechaFinal: c.fechaFinal ?? "",
+});
+
+/** Respuesta de la API → ficha de la pantalla. La contratación "actual" es la
+ *  vigente; si no hay, la abierta más reciente (por empezar) y, si tampoco, la
+ *  última del historial. */
+export const mapearEmpleadoApi = (e: EmpleadoApi): Empleado => {
+  const actual = e.contratacionVigente
+    ?? e.contrataciones.find(c => c.abierta)
+    ?? e.contrataciones[0]
+    ?? null;
+  return {
+    id: String(e.idEmpleado),
+    nombre: e.nombre,
+    iniciales: e.nombre.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(),
+    avatarColor: AVATAR_COLORS[e.idEmpleado % AVATAR_COLORS.length],
+    correo: e.correo,
+    telefono: e.telefono,
+    tipoDocumento: e.tipoDocumento,
+    numeroDocumento: e.numeroDocumento,
+    rolIds: actual ? actual.roles.map(r => String(r.idRol)) : [],
+    activo: e.estado,
+    esSuperAdmin: e.esSuperAdmin,
+    fechaInicio: actual?.fechaInicio ?? "",
+    fechaFinal: actual?.fechaFinal ?? "",
+    contratoAbierto: actual?.abierta ?? false,
+    invitacionPendiente: e.invitacionPendiente,
+    contrataciones: e.contrataciones.map(mapearContratacionApi),
+  };
+};
+
+/** Mensaje para el usuario a partir de un error de la API (403 y 409 con texto claro). */
+const mensajeError = (error: unknown, porDefecto: string): string => {
+  const e = error as ApiErrorConEstado;
+  if (e?.status === 403) return e.message || "No tienes permiso para realizar esta acción.";
+  return e?.message || porDefecto;
+};
 
 // ── Cuenta de super administrador (Gloria) ─────────────────────────────────
 // La marca proviene del usuario autenticado/del API, no de la semilla local.
@@ -106,20 +123,10 @@ const esSuperAdmin = (e: Pick<Empleado, "esSuperAdmin">): boolean => e.esSuperAd
 const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
 export function GestionEmpleadosScreen({
-  roles,
-  usuarios,
-  empleados,
-  setEmpleados,
-  setUsuarios,
   clientes,
   empleadoAAbrirDesdeUsuarios = null,
   onEmpleadoAbiertoDesdeUsuarios,
 }: {
-  roles: Rol[];
-  usuarios: Usuario[];
-  empleados: Empleado[];
-  setEmpleados: React.Dispatch<React.SetStateAction<Empleado[]>>;
-  setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   clientes: Cliente[];
   empleadoAAbrirDesdeUsuarios?: { tipoDocumento: string; numeroDocumento: string } | null;
   onEmpleadoAbiertoDesdeUsuarios?: () => void;
@@ -131,36 +138,78 @@ export function GestionEmpleadosScreen({
   const [page,        setPage]      = useState(1);
   const [detailItem,  setDetailItem] = useState<Empleado | null>(null);
   const [editItem,    setEditItem]  = useState<Empleado | null>(null);
-  const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
   const [showCreate,  setShowCreate] = useState(false);
 
+  // Fuente de verdad = la base (API). Nada de esto se guarda en localStorage.
+  const [empleados,   setEmpleados] = useState<Empleado[]>([]);
+  const [cargosApi,   setCargosApi] = useState<{ id: string; nombre: string }[]>([]);
+  const [nombresRoles, setNombresRoles] = useState<Map<string, string>>(new Map());
+  const [cargando,    setCargando]  = useState(true);
+  const [errorCarga,  setErrorCarga] = useState<string | null>(null);
+  const [guardando,   setGuardando] = useState(false);
+  const [guardandoCtr, setGuardandoCtr] = useState(false);
+
+  // `mostrarCarga`: la primera carga y "Reintentar" reemplazan la tabla por el
+  // estado de carga/error; las recargas posteriores a un cambio son silenciosas
+  // (la lista se queda y, si fallan, avisan con un toast).
+  const cargarEmpleados = async (mostrarCarga = true) => {
+    if (mostrarCarga) { setCargando(true); setErrorCarga(null); }
+    try {
+      const [lista, cargos] = await Promise.all([listarEmpleados(), listarCargos()]);
+      const nombres = new Map<string, string>();
+      for (const emp of lista.empleados) {
+        for (const c of emp.contrataciones) for (const r of c.roles) nombres.set(String(r.idRol), r.nombre);
+      }
+      setNombresRoles(nombres);
+      setCargosApi(cargos.cargos.map(c => ({ id: String(c.idRol), nombre: c.nombre })));
+      setEmpleados(lista.empleados.map(mapearEmpleadoApi));
+    } catch (error) {
+      const mensaje = mensajeError(error, "No se pudieron cargar los empleados.");
+      if (mostrarCarga) setErrorCarga(mensaje); else toast.error(mensaje);
+    } finally {
+      if (mostrarCarga) setCargando(false);
+    }
+  };
+
+  useEffect(() => { void cargarEmpleados(); }, []);
+
+  // Catálogo para el selector y para pintar nombres: los cargos asignables vienen
+  // de GET /empleados/cargos (no depende del permiso de Roles); los demás roles
+  // que aparecen en las contrataciones (Cliente, un cargo ya desactivado…) solo
+  // sirven para mostrar su nombre y quedan como no asignables.
+  const roles: Rol[] = useMemo(() => {
+    const asignables = new Set(cargosApi.map(c => c.id));
+    const todos = new Map(nombresRoles);
+    cargosApi.forEach(c => todos.set(c.id, c.nombre));
+    return [...todos].map(([id, nombre]) => ({
+      id, nombre, descripcion: "", accesos: {}, activo: asignables.has(id),
+    }));
+  }, [cargosApi, nombresRoles]);
+
+  // Documentos con invitación pendiente: salen del mismo listado (el botón
+  // "Reenviar invitación" solo se pinta para ellos).
+  const invitacionesPendientes = useMemo(
+    () => new Set(empleados.filter(e => e.invitacionPendiente).map(e => e.numeroDocumento)),
+    [empleados],
+  );
+
+  // El detalle abierto se refresca solo cuando la lista se recarga.
   useEffect(() => {
-    if (!empleadoAAbrirDesdeUsuarios) return;
+    setDetailItem(d => (d ? empleados.find(x => x.id === d.id) ?? d : d));
+  }, [empleados]);
+
+  useEffect(() => {
+    if (!empleadoAAbrirDesdeUsuarios || cargando) return;
     const empleado = empleados.find(e =>
       e.numeroDocumento === empleadoAAbrirDesdeUsuarios.numeroDocumento &&
       e.tipoDocumento === empleadoAAbrirDesdeUsuarios.tipoDocumento
     );
     if (empleado) {
       setEditItem({ ...empleado });
-      setEditPrevCorreo(empleado.correo);
       setEditErrors({});
     }
     onEmpleadoAbiertoDesdeUsuarios?.();
-  }, [empleadoAAbrirDesdeUsuarios, empleados]);
-
-  // Invitaciones pendientes (solo el número de documento): se consultan al
-  // montar para saber a qué empleados se les puede "Reenviar invitación". Si la
-  // consulta falla no se muestra la acción, pero la pantalla no se bloquea.
-  useEffect(() => {
-    let cancelado = false;
-    void listarInvitacionesPendientes()
-      .then(res => {
-        if (cancelado) return;
-        setInvitacionesPendientes(new Set(res.pendientes.map(p => String(p).trim())));
-      })
-      .catch(() => { /* sin datos no hay acciones de reenvío que pintar */ });
-    return () => { cancelado = true; };
-  }, []);
+  }, [empleadoAAbrirDesdeUsuarios, empleados, cargando]);
 
   // Modal "Nueva contratación": registra una entrada más en el historial del
   // empleado elegido y, con esos mismos datos, actualiza su contratación vigente.
@@ -183,10 +232,7 @@ export function GestionEmpleadosScreen({
   const [newFechaFinal,   setNewFechaFinal]   = useState("");
   const [createErrors,    setCreateErrors]    = useState<Record<string, string | undefined>>({});
 
-  // Invitación por correo: documentos con invitación pendiente (el botón
-  // "Reenviar invitación" solo se pinta para ellos), quién está reenviando y si
-  // el alta está en curso.
-  const [invitacionesPendientes, setInvitacionesPendientes] = useState<Set<string>>(new Set());
+  // Quién está reenviando una invitación y si el alta está en curso.
   const [reenviando, setReenviando] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
 
@@ -244,72 +290,6 @@ export function GestionEmpleadosScreen({
     [detailItem],
   );
 
-  // Fuente de verdad del rol/identidad = lista `usuarios` (la que consulta el login).
-  // Cada operación sobre un empleado actualiza (o crea) su registro Usuario vinculado por correo.
-  const upsertUsuario = (emp: Empleado, prevCorreo?: string) => {
-    setUsuarios(prev => {
-      // Cruce canónico por tipo y número de documento (que no se editan); el
-      // correo es editable y solo se usa como último recurso para datos viejos.
-      const kDoc = claveDoc(emp.tipoDocumento, emp.numeroDocumento);
-      const kPrevCorreo = prevCorreo?.trim().toLowerCase();
-      const kNewCorreo = emp.correo.trim().toLowerCase();
-      const targetPorCorreo = (kPrevCorreo || kNewCorreo)
-        ? prev.find(u => u.correo.trim().toLowerCase() === kPrevCorreo || u.correo.trim().toLowerCase() === kNewCorreo)
-        : undefined;
-      const target =
-        (docValida(kDoc) && prev.find(u => claveDoc(u.tipoDocumento, u.numeroDocumento) === kDoc)) ??
-        targetPorCorreo ??
-        null;
-      const base: Pick<Usuario,
-        "nombre" | "iniciales" | "avatarColor" | "correo" | "telefono" |
-        "tipoDocumento" | "numeroDocumento" | "rolId" | "rolIds" | "activo"
-      > = {
-        nombre: emp.nombre.trim(),
-        iniciales: emp.iniciales,
-        avatarColor: emp.avatarColor,
-        correo: emp.correo.trim(),
-        telefono: emp.telefono.trim(),
-        tipoDocumento: emp.tipoDocumento,
-        numeroDocumento: emp.numeroDocumento.trim(),
-        // `Usuario.rolId` queda como ESPEJO del primer cargo: el multi-rol
-        // vive en `Usuario.rolIds` (que es lo que lee el selector de Usuarios).
-        rolId: emp.rolIds[0] ?? "",
-        rolIds: [...emp.rolIds],
-        activo: emp.activo,
-      };
-      if (target) {
-        return prev.map(u => u.id === target.id ? { ...u, ...base } : u);
-      }
-      const maxNum = prev.reduce((max, u) => {
-        const n = parseInt(u.id.replace("USR-", ""), 10) || 0;
-        return Math.max(max, n);
-      }, 0);
-      return [
-        ...prev,
-        {
-          id: `USR-${String(maxNum + 1).padStart(3, "0")}`,
-          ...base,
-        },
-      ];
-    });
-  };
-
-  const total   = empleados.length;
-  const activos = empleados.filter(e => e.activo).length;
-  const inact   = empleados.filter(e => !e.activo).length;
-
-  // Garantía de fondo: si una guardada vieja dejó a Gloria con `activo:false`,
-  // la ficha se corrige sola apenas cambia la lista (si no hay nada que
-  // corregir se devuelve la MISMA referencia, así React no re-renderiza en
-  // bucle). Sin esto, con la pill deshabilitada no habría forma de reactivarla
-  // desde la tabla y la cuenta de login quedaría muerta.
-  useEffect(() => {
-    setEmpleados(prev =>
-      prev.some(e => esSuperAdmin(e) && !e.activo)
-        ? prev.map(e => (esSuperAdmin(e) ? { ...e, activo: true } : e))
-        : prev,
-    );
-  }, [empleados, setEmpleados]);
 
   const filtered = useMemo(() => {
     let r = empleados.filter(e => {
@@ -352,32 +332,30 @@ export function GestionEmpleadosScreen({
   const pageActual = Math.min(page, totalPages);
   const paged      = filtered.slice((pageActual-1)*PER_PAGE, pageActual*PER_PAGE);
 
-  const toggleEstado = (id: string) => {
+  const toggleEstado = async (id: string) => {
     const cur = empleados.find(e => e.id === id);
-    // Gloria jamás se puede desactivar: el guard va ANTES de tocar
-    // `setEmpleados` o `upsertUsuario`, que son justamente los dos caminos por
-    // los que esta pantalla la apagaría (y con ella su cuenta de login en
-    // GestionUsuariosScreen). Si los datos viejos la trajeran inactiva, en vez
-    // de alternar se fuerza a activa: nunca puede quedar apagada.
-    if (cur && esSuperAdmin(cur)) {
-      if (cur.activo) {
-        toast.error("La cuenta del super administrador no se puede desactivar");
-        return;
-      }
-      // Caso heredado (`activo:false` en datos guardados antes de esta regla):
-      // se corrige a activa en lugar de permitir el alternar.
-      setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: true } : e));
-      upsertUsuario({ ...cur, activo: true }, cur.correo);
-      toast.success("Estado del empleado actualizado");
+    if (!cur) return;
+    // El super administrador no se desactiva (el backend también lo rechaza); si
+    // por datos viejos estuviera inactivo, sí se puede reactivar.
+    if (esSuperAdmin(cur) && cur.activo) {
+      toast.error("La cuenta del super administrador no se puede desactivar");
       return;
     }
-    setEmpleados(p => p.map(e => e.id === id ? { ...e, activo: !e.activo } : e));
-    if (cur) upsertUsuario({ ...cur, activo: !cur.activo }, cur.correo);
-    toast.success("Estado del empleado actualizado");
+    try {
+      await cambiarEstadoEmpleado(Number(cur.id), !cur.activo);
+      toast.success("Estado del empleado actualizado");
+    } catch (error) {
+      toast.error(mensajeError(error, "No se pudo cambiar el estado del empleado."));
+    }
+    await cargarEmpleados(false);
   };
 
-  const handleEdit = () => {
-    if (!editItem) return;
+  // Nombres de los cargos extra (sin Empleado, Cliente ni Administrador), que es
+  // como los recibe el backend.
+  const cargosParaApi = (rolIds: string[]) => extrasDe(rolIds);
+
+  const handleEdit = async () => {
+    if (!editItem || guardando) return;
     const e = { ...editItem, nombre: normalizarNombre(editItem.nombre) };
     const errs: Record<string, string> = {};
     if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
@@ -390,62 +368,50 @@ export function GestionEmpleadosScreen({
       const et = validarTelefono(e.telefono);
       if (et) errs.telefono = et;
     }
-    if (!e.tipoDocumento.trim()) errs.tipoDocumento = "El tipo de documento es obligatorio";
-    if (!e.numeroDocumento.trim()) errs.numeroDocumento = "El número de documento es obligatorio";
-    else { const v = validarDocumento(e.numeroDocumento, e.tipoDocumento); if (v) errs.numeroDocumento = v; }
-    if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
-    if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
-      errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
-    // Siempre base para empleados (salvo super-admin): la regla es estructural,
-    // no se valida como condición de cargo.
-    const rolIdsEditBase = (() => {
-      const eIds = (e.rolIds ?? []).filter(Boolean);
-      if (esSuperAdmin(e)) return eIds;
-      const emp = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
-      const cli = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
-      return [...new Set([...eIds, ...(emp ? [emp] : []), ...(cli ? [cli] : [])])];
-    })();
+    // Las fechas solo se validan si hay una contratación abierta que editar.
+    if (e.contratoAbierto) {
+      if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
+      if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
+        errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
+    }
 
     if (Object.values(errs).some(Boolean)) { setEditErrors(errs); return; }
 
-    const em = e.correo.trim().toLowerCase();
-    const dm = e.numeroDocumento.trim();
-    const clave = `${e.tipoDocumento}||${dm}`.toLowerCase();
-    const ancla = editPrevCorreo?.trim().toLowerCase();
-    const otro = (correo: string) => correo.trim().toLowerCase() !== ancla;
-    const correoDup =
-      empleados.some(x => x.id !== e.id && otro(x.correo) && x.correo.trim().toLowerCase() === em) ||
-      usuarios.some(u => otro(u.correo) && u.correo.trim().toLowerCase() === em) ||
-      clientes.some(c => otro(c.correo) && c.correo.trim().toLowerCase() === em);
-    const docDup =
-      empleados.some(x => x.id !== e.id && otro(x.correo) && `${x.tipoDocumento}||${x.numeroDocumento}`.toLowerCase() === clave) ||
-      usuarios.some(u => otro(u.correo) && `${u.tipoDocumento}||${u.numeroDocumento}`.toLowerCase() === clave) ||
-      clientes.some(c => otro(c.correo) && `${c.tipoDocumento}||${c.numeroDocumento}`.toLowerCase() === clave);
-    if (correoDup) errs.correo = "Este correo ya está registrado";
-    if (docDup) errs.numeroDocumento = "Este documento ya está registrado";
-    if (Object.keys(errs).length) { setEditErrors(errs); return; }
-
-    const nuevasIniciales = e.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
-    // Guard defensivo del submit: aunque el select de estado venga
-    // deshabilitado, nada debe poder guardar a Gloria con `activo:false`
-    // (p. ej. si su ficha vieja ya venía inactiva). Se fuerza a activa aquí,
-    // antes de tocar `empleados` y su Usuario vinculado.
-    const activoFinal = esSuperAdmin(e) ? true : e.activo;
-    // Los cargos también se reflejan en la contratación VIGENTE del historial
-    // (fechaFinal vacía): si no, el detalle mostraría cargos viejos justo
-    // debajo de los que acaba de guardar. Las contrataciones cerradas no se
-    // tocan: son historia.
-    const contratacionesEdit = (e.contrataciones ?? []).map(c =>
-      c.fechaFinal === "" ? { ...c, rolIds: [...rolIdsEditBase] } : c,
-    );
-    setEmpleados(p => p.map(x => x.id === e.id
-      ? { ...e, rolIds: rolIdsEditBase, contrataciones: contratacionesEdit, activo: activoFinal, iniciales: nuevasIniciales }
-      : x));
-    upsertUsuario({ ...e, rolIds: rolIdsEditBase, activo: activoFinal, iniciales: nuevasIniciales }, editPrevCorreo ?? undefined);
-    setEditItem(null);
-    setEditPrevCorreo(null);
-    setEditErrors({});
-    toast.success("Empleado actualizado correctamente");
+    const original = empleados.find(x => x.id === e.id);
+    setGuardando(true);
+    try {
+      // Cargos y fechas solo viajan si hay contratación abierta; el documento no
+      // se edita. El backend decide los duplicados de correo (409).
+      const res = await editarEmpleado(Number(e.id), {
+        nombre: e.nombre,
+        correo: e.correo.trim(),
+        telefono: e.telefono.trim(),
+        ...(e.contratoAbierto
+          ? { cargos: cargosParaApi(e.rolIds), fechaInicio: e.fechaInicio, fechaFinal: e.fechaFinal }
+          : {}),
+      });
+      // El estado es otra ruta: solo se llama si cambió (y nunca para el super admin).
+      if (original && !esSuperAdmin(e) && original.activo !== e.activo) {
+        await cambiarEstadoEmpleado(Number(e.id), e.activo);
+      }
+      setEditItem(null);
+      setEditErrors({});
+      if (res.correoEnviado === false) toast.error("Empleado actualizado, pero no se pudo enviar la invitación al correo nuevo");
+      else if (res.correoEnviado === true) toast.success("Empleado actualizado. Enviamos la invitación al correo nuevo");
+      else toast.success("Empleado actualizado correctamente");
+    } catch (error) {
+      const err = error as ApiErrorConEstado;
+      const mensaje = mensajeError(error, "No se pudo actualizar el empleado.");
+      if (err.status === 409 && /correo/i.test(mensaje)) setEditErrors(p => ({ ...p, correo: mensaje }));
+      else if (err.status === 400 && /fecha/i.test(mensaje)) {
+        setEditErrors(p => ({ ...p, [/fecha final no puede/i.test(mensaje) ? "fechaFinal" : "fechaInicio"]: mensaje }));
+      }
+      else if (err.status === 400 && /rol|cargo/i.test(mensaje)) setEditErrors(p => ({ ...p, cargo: mensaje }));
+      else toast.error(mensaje);
+    } finally {
+      setGuardando(false);
+      await cargarEmpleados(false);
+    }
   };
 
   const resetCreate = () => {
@@ -470,9 +436,6 @@ export function GestionEmpleadosScreen({
     else { const v = validarDocumento(newDocumento, newTipoDoc); if (v) errs.documento = v; }
     // Cargo: no hay mínimo de extras, porque "Empleado" siempre acompaña.
     const rolIdsExtras = newRolIds.filter(Boolean);
-    const empBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
-    const cliBaseId = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
-    const rolIdsNuevo = [...new Set([...rolIdsExtras, ...(empBaseId ? [empBaseId] : []), ...(cliBaseId ? [cliBaseId] : [])])];
     // CARGO = ROL: los cargos elegidos viajan como NOMBRES de rol (los ids
     // locales no son los de la base; el backend asigna SIEMPRE Empleado y
     // Cliente, y rechaza Administrador). NUNCA EN SILENCIO: si el formulario
@@ -523,43 +486,7 @@ export function GestionEmpleadosScreen({
       setCreando(false);
     }
 
-    const maxNum = empleados.reduce((max, e) => {
-      const n = parseInt(e.id.replace("EMP-", "")) || 0;
-      return Math.max(max, n);
-    }, 0);
-    const newId = `EMP-${String(maxNum + 1).padStart(3, "0")}`;
-    const iniciales = newNombre.trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-    const avatarColor = AVATAR_COLORS[empleados.length % AVATAR_COLORS.length];
-
-    const nuevoEmpleado: Empleado = {
-      id: newId,
-      nombre: nombreNormalizado,
-      iniciales,
-      avatarColor,
-      correo: newCorreo.trim(),
-      telefono: newTelefono.trim(),
-      tipoDocumento: newTipoDoc,
-      numeroDocumento: dm,
-      rolIds: rolIdsNuevo,
-      activo: newActivo,
-      fechaInicio: newFechaInicio,
-      fechaFinal: newFechaFinal,
-      // El alta es en sí misma la primera contratación: se guarda como registro
-      // del historial para que quede desde el mismo momento, no solo implícita.
-      contrataciones: [{
-        id: nuevoContratacionId(newId, []),
-        rolIds: [...rolIdsNuevo],
-        fechaInicio: newFechaInicio,
-        fechaFinal: newFechaFinal,
-      }],
-    };
-
-    setEmpleados(prev => [nuevoEmpleado, ...prev]);
-    upsertUsuario(nuevoEmpleado);
-    if (!respuesta.cuentaExistente) {
-      // Queda con invitación pendiente hasta que cree su contraseña.
-      setInvitacionesPendientes(prev => new Set(prev).add(dm));
-    }
+    void cargarEmpleados(false);
     setShowCreate(false);
     resetCreate();
     if (respuesta.cuentaExistente) {
@@ -588,11 +515,7 @@ export function GestionEmpleadosScreen({
       toast.error(err.message || "No se pudo reenviar la invitación.");
       if (err.status === 404 || err.status === 409) {
         // Ya no aplica (cuenta activada o empleado desaparecido): se oculta.
-        setInvitacionesPendientes(prev => {
-          const siguiente = new Set(prev);
-          siguiente.delete(e.numeroDocumento);
-          return siguiente;
-        });
+        void cargarEmpleados(false);
       }
     } finally {
       setReenviando(null);
@@ -610,17 +533,14 @@ export function GestionEmpleadosScreen({
   // anteriores y, a la vez, deja los campos de contrato del empleado reflejando
   // esta última contratación, que es lo que muestra la tabla.
   // El cargo ya no es texto libre: es el multi-select de cargos (CARGO = ROL).
-  const handleNuevaContratacion = () => {
+  const handleNuevaContratacion = async () => {
+    if (guardandoCtr) return;
     const errs: Record<string, string> = {};
     const emp = empleados.find(e => e.id === ctrEmpleadoId);
 
     if (!ctrEmpleadoId) errs.empleado = "Selecciona un empleado";
     else if (!emp) errs.empleado = "El empleado seleccionado no existe";
 
-    const rolIdsCtr = ctrRolIds.filter(Boolean);
-    const empBaseIdCtr = roles.find(r => r.nombre.trim().toLowerCase() === "empleado")?.id;
-    const cliBaseIdCtr = roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id;
-    const rolIdsCtrFull = [...new Set([...rolIdsCtr, ...(empBaseIdCtr ? [empBaseIdCtr] : []), ...(cliBaseIdCtr ? [cliBaseIdCtr] : [])])];
     if (!ctrFechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
     // Solo tiene sentido si la contratación ya empezó: comparar como texto ISO
     // (YYYY-MM-DD) es equivalente a comparar fechas.
@@ -630,35 +550,30 @@ export function GestionEmpleadosScreen({
 
     if (Object.keys(errs).length) { setCtrErrors(errs); return; }
 
-    const contrato: Contratacion = {
-      id: nuevoContratacionId(emp!.id, emp!.contrataciones ?? []),
-      rolIds: [...rolIdsCtrFull],
-      fechaInicio: ctrFechaInicio,
-      fechaFinal: ctrFechaFinal,
-    };
-
-    const actualizado: Empleado = {
-      ...emp!,
-      rolIds: [...contrato.rolIds],
-      fechaInicio: contrato.fechaInicio,
-      fechaFinal: contrato.fechaFinal,
-      // P7: este modal también escribe `activo` (y luego lo sube a su Usuario
-      // con upsertUsuario), así que acá Gloria tampoco puede quedar inactiva,
-      // aunque el selector venga deshabilitado.
-      activo: esSuperAdmin(emp!) ? true : ctrActivo,
-      contrataciones: [...(emp!.contrataciones ?? []), contrato],
-    };
-
-    setEmpleados(prev => prev.map(e => (e.id === actualizado.id ? actualizado : e)));
-    // El rol y el estado del empleado son también los del Usuario que usa el
-    // login, así que hay que reflejarlos o la etiqueta de rol de la pantalla
-    // de Usuarios quedaría mostrando el valor anterior.
-    upsertUsuario(actualizado);
-    if (detailItem?.id === actualizado.id) setDetailItem(actualizado);
-
-    setShowContrat(false);
-    resetContratacion();
-    toast.success(`Contratación registrada para ${actualizado.nombre}`);
+    // El backend cierra solo la contratación abierta (fecha final = inicio nuevo
+    // − 1 día) y asigna siempre Empleado y Cliente; aquí solo van los cargos.
+    setGuardandoCtr(true);
+    try {
+      await crearContratacion(Number(emp!.id), {
+        fechaInicio: ctrFechaInicio,
+        fechaFinal: ctrFechaFinal,
+        cargos: cargosParaApi(ctrRolIds),
+        estado: esSuperAdmin(emp!) ? true : ctrActivo,
+      });
+      setShowContrat(false);
+      resetContratacion();
+      toast.success(`Contratación registrada para ${emp!.nombre}`);
+    } catch (error) {
+      const err = error as ApiErrorConEstado;
+      const mensaje = mensajeError(error, "No se pudo registrar la contratación.");
+      if (err.status === 400 && /fecha final/i.test(mensaje)) setCtrErrors(p => ({ ...p, fechaFinal: mensaje }));
+      else if (err.status === 400 && /fecha/i.test(mensaje)) setCtrErrors(p => ({ ...p, fechaInicio: mensaje }));
+      else if (err.status === 400 && /rol|cargo/i.test(mensaje)) setCtrErrors(p => ({ ...p, cargo: mensaje }));
+      else toast.error(mensaje);
+    } finally {
+      setGuardandoCtr(false);
+      await cargarEmpleados(false);
+    }
   };
 
   const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
@@ -723,6 +638,17 @@ export function GestionEmpleadosScreen({
           el número de filas por página se calcula arriba para que siempre quepan
           enteras y la navegación sea solo por el paginador. Sin `flex-1 min-h-0`
           (punto 2.5): la card mide su contenido y el paginador queda debajo. */}
+      {cargando ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-2 shrink-0">
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
+          <p className="text-sm">Cargando empleados…</p>
+        </div>
+      ) : errorCarga ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-2 shrink-0">
+          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
+          <button onClick={() => void cargarEmpleados()} className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reintentar</button>
+        </div>
+      ) : (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
@@ -802,7 +728,7 @@ export function GestionEmpleadosScreen({
                         )}
                         <ActionIcons
                           onView={() => setDetailItem(e)}
-                          onEdit={() => { setEditItem({ ...e }); setEditPrevCorreo(e.correo); setEditErrors({}); }}
+                          onEdit={() => { setEditItem({ ...e }); setEditErrors({}); }}
                         />
                       </div>
                     </td>
@@ -813,6 +739,7 @@ export function GestionEmpleadosScreen({
           </table>
         </div>
       </div>
+      )}
 
       {/* Paginación (unificada, fuera de la card) */}
       {filtered.length > 0 && (
@@ -922,9 +849,9 @@ export function GestionEmpleadosScreen({
                     className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
                   </button>
-                  <button onClick={handleNuevaContratacion}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    Registrar
+                  <button onClick={() => void handleNuevaContratacion()} disabled={guardandoCtr}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                    {guardandoCtr ? "Registrando..." : "Registrar"}
                   </button>
                 </div>
               </motion.div>
@@ -1239,6 +1166,7 @@ export function GestionEmpleadosScreen({
                   <SelectorRoles
                     roles={roles}
                     value={editItem.rolIds ?? []}
+                    disabled={!editItem.contratoAbierto}
                     onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
                     error={editErrors.cargo}
                   />
@@ -1262,14 +1190,14 @@ export function GestionEmpleadosScreen({
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>
-                  <input type="date" value={editItem.fechaInicio}
+                  <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaInicio}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaInicio: e.target.value })); if (editErrors.fechaInicio) setEditErrors(p => ({ ...p, fechaInicio: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
-                  <input type="date" value={editItem.fechaFinal}
+                  <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
                     className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
@@ -1280,9 +1208,9 @@ export function GestionEmpleadosScreen({
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
-                <button onClick={handleEdit}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  Guardar cambios
+                <button onClick={() => void handleEdit()} disabled={guardando}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                  {guardando ? "Guardando..." : "Guardar cambios"}
                 </button>
               </div>
             </motion.div>
