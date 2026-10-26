@@ -445,11 +445,11 @@ export type MetodoPago = (typeof METODO_PAGO_ADMIN)[number] | "";
 
 const METODO_PAGO_ESTILO: Record<
   Exclude<MetodoPago, "">,
-  { pill: string; btn: string; icono: string }
+  { pill: string; btn: string }
 > = {
-  Nequi:       { pill: "bg-purple-100 text-purple-800", btn: "bg-purple-600 border-purple-600", icono: "💜" },
-  Bancolombia: { pill: "bg-yellow-100 text-yellow-800",  btn: "bg-yellow-500 border-yellow-500",  icono: "🏦" },
-  Efectivo:    { pill: "bg-emerald-100 text-emerald-800", btn: "bg-emerald-600 border-emerald-600", icono: "💵" },
+  Nequi:       { pill: "bg-purple-100 text-purple-800", btn: "bg-purple-600 border-purple-600" },
+  Bancolombia: { pill: "bg-yellow-100 text-yellow-800",  btn: "bg-yellow-500 border-yellow-500" },
+  Efectivo:    { pill: "bg-emerald-100 text-emerald-800", btn: "bg-emerald-600 border-emerald-600" },
 };
 
 const nowHora = () =>
@@ -457,7 +457,7 @@ const nowHora = () =>
 
 /** Etiqueta del método de pago con su color. "Efectivo" es exclusivo de los
     pedidos que crea el administrador. Se exporta para que Devoluciones muestre
-    el mismo icono y color sin duplicar la tabla de métodos. */
+    el mismo color sin duplicar la tabla de métodos. */
 export function PagoPill({ metodo }: { metodo?: string }) {
   const est = METODO_PAGO_ESTILO[metodo as Exclude<MetodoPago, "">];
   if (!est) {
@@ -467,9 +467,9 @@ export function PagoPill({ metodo }: { metodo?: string }) {
   }
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${est.pill}`}
+      className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full ${est.pill}`}
     >
-      {est.icono} {metodo}
+      {metodo}
     </span>
   );
 }
@@ -1061,7 +1061,6 @@ const hoyFecha = () => {
                         : "bg-muted border-border text-muted-foreground hover:border-primary/40"
                     }`}
                   >
-                    <span>{METODO_PAGO_ESTILO[m].icono}</span>
                     {m}
                   </button>
                 ))}
