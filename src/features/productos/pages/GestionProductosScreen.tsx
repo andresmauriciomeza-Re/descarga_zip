@@ -62,6 +62,7 @@ import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
 // ni espacios de más) compartida con Insumos y Compras.
 import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/nombres";
 import { mensajeErrorProductos } from "@/features/productos/services/productosApi";
+import { crearOrdenPreparacionApi } from "@/features/orden-produccion/services/ordenesProduccionApi";
 // Bloque 4: las fichas de producto se guardan contra la API (POST /fichas) y
 // las guardadas en local (respaldo fase 1) se suben con "Subir ficha guardada".
 import {
@@ -213,6 +214,11 @@ export interface Producto {
       `productoApiAProducto` / `limiteStockDe`). No confundir con
       `stockDisponible`, que es el stock del panel (siempre un número). */
   stockApi?: number;
+  /** SOLO al CREAR un Producto insumo (pizza/lasaña): cantidad inicial que se
+      manda a Orden de Producción para hacer esas unidades (pre-hechas). No se
+      guarda en el producto; `handleCreate` la usa para crear una orden y luego
+      se descarta. Vacío/0 = no se crea orden. */
+  cantidadInicialProduccion?: number;
   estado: EstadoProducto;
 }
 
@@ -940,7 +946,6 @@ export function GestionProductosScreen({
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
   const [errorNombreServidor, setErrorNombreServidor] = useState("");
-  const [errorPrecioGrande, setErrorPrecioGrande] = useState("");
 
   // ── Bloque 4: fichas guardadas en local (respaldo de la fase 1) ──
   // NO se suben solas: solo habilitan el botón "Subir ficha guardada" en la
@@ -1101,7 +1106,6 @@ export function GestionProductosScreen({
   // ── Edit-ficha helpers (todo escribe sobre el borrador) ──────────
   const openEdit = (p: Producto) => {
     setErrorNombreServidor("");
-    setErrorPrecioGrande("");
     // Materializa la lista de imágenes: los productos viejos solo traen
     // `imagen`, y el editor siempre debe trabajar sobre un arreglo.
     setEditItem({ ...p, imagenes: imagenesDe(p) });
@@ -1161,10 +1165,6 @@ export function GestionProductosScreen({
   };
   const aplicarCategoriaCrear = (nueva: string) => {
     const cfg = configDeCategoria(nueva, catName(nueva));
-    const esPizza = catName(nueva).toLowerCase().includes("pizza");
-    setErrorPrecioGrande(esPizza && !!form.precioGrande && form.precioGrande <= form.precioUnitario
-      ? "El Precio Grande debe ser mayor que el Precio Mediana"
-      : "");
     setForm((p) => ({
       ...p,
       idCategoria: nueva,
@@ -1200,10 +1200,6 @@ export function GestionProductosScreen({
   };
   const aplicarCategoriaEdit = (nueva: string) => {
     const cfg = configDeCategoria(nueva, catName(nueva));
-    const esPizza = catName(nueva).toLowerCase().includes("pizza");
-    setErrorPrecioGrande(esPizza && !!editItem?.precioGrande && editItem.precioGrande <= (editItem.precioUnitario ?? 0)
-      ? "El Precio Grande debe ser mayor que el Precio Mediana"
-      : "");
     setEditItem((x) => x && ({ ...x, idCategoria: nueva, tipo: cfg ? cfg.tipo : x.tipo }));
     setEditFichaBorrador((v) => ajustarFilasTamano(v, cfg));
     setEditFichaSel("borrador");
@@ -1211,10 +1207,15 @@ export function GestionProductosScreen({
   };
 
   /** Palabra con que se muestra el stock ("2 pizzas", "1 lasaña", "24 und"). */
-  const palabraStock = (p: { idCategoria: string; unidadVenta: string; categoriaNombre?: string }, n: number): string => {
-    const nombreCat = (p.categoriaNombre ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    if (p.idCategoria === "1" || p.idCategoria === "CAT-001" || nombreCat.includes("pizza")) return n === 1 ? "pizza" : "pizzas";
-    if (p.idCategoria === "2" || p.idCategoria === "CAT-002" || nombreCat.includes("lasana")) return n === 1 ? "lasaña" : "lasañas";
+    const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
+    // Se resuelve por NOMBRE de categoría (no por id): así funciona igual con
+    // los ids locales "CAT-00x" y con los ids numéricos que trae la API.
+    const nombre = catName(p.idCategoria)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (nombre.includes("pizza")) return n === 1 ? "pizza" : "pizzas";
+    if (nombre.includes("lasana")) return n === 1 ? "lasaña" : "lasañas";
     return p.unidadVenta || "und";
   };
 
@@ -1338,57 +1339,6 @@ export function GestionProductosScreen({
     </>
   );
 
-  /** Texto completo que queda en el tooltip de la celda y del detalle: las
-      cifras y, detrás, el insumo limitante con su detalle ("hay 2 kg en
-      Insumos"), en rojo solo si hay algún tamaño agotado. */
-  const textoPreparar = (p: Producto, prep: { cifras: CifraPrep[] }): string => {
-    const cifras = `Se pueden preparar: ${prep.cifras
-      .map((c) => `${c.cantidad}${c.tamano ? ` ${c.tamano}` : ` ${palabraStock(p, c.cantidad)}`}`)
-      .join(" · ")}`;
-    const agotada = prep.cifras.find((c) => c.agotado && c.limitante);
-    const tope = agotada ?? prep.cifras.find((c) => c.limitante);
-    if (!tope) return cifras;
-    return `${cifras} — ${agotada ? "No alcanza" : "Limita"} ${tope.tamano ? `${tope.tamano}: ` : ""}${tope.limitante}`;
-  };
-
-  /** Contenido de la celda Stock del listado para un Producto insumo (B1/B2
-      y el ajuste de "Limita"/"No alcanza"). TRES líneas de 10–11 px: etiqueta,
-      cifras y el insumo que limita — gris cuando todo alcanza (informativo),
-      rojo y solo "No alcanza" cuando algún tamaño se queda en 0—. Suman 40 px
-      + 20 px de padding = 60 px, dentro de la altura fija de 61 px de la
-      fila. El texto completo queda en el tooltip. */
-  const celdaPreparar = (p: Producto): React.ReactNode => {
-    const prep = prepararDe(p);
-    if (!prep) {
-      return (
-        <span
-          className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap"
-          title={ayudaStock(p)}
-        >
-          Sin ficha técnica
-        </span>
-      );
-    }
-    const limite = textoLimite(prep.cifras);
-    return (
-      <span className="block" title={textoPreparar(p, prep)}>
-        <span className="block text-[10px] leading-3 text-muted-foreground truncate">
-          Se pueden preparar:
-        </span>
-        <span className="block text-[11px] leading-4 font-bold truncate">
-          {pintarCifras(p, prep.cifras)}
-        </span>
-        {limite.texto && (
-          <span
-            className={`block text-[10px] leading-3 truncate ${limite.rojo ? "text-red-600 font-semibold" : "text-muted-foreground"}`}
-          >
-            {limite.texto}
-          </span>
-        )}
-      </span>
-    );
-  };
-
   const exportExcel = async () => {
     const fecha = new Date();
     const archivo = await exportarExcelEstilizado({
@@ -1509,13 +1459,8 @@ export function GestionProductosScreen({
     // Producto terminado).
     const tipoFinal: TipoProducto =
       cfg ? cfg.tipo : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
-    const esPizza = catName(form.idCategoria).toLowerCase().includes("pizza");
     if (!esTerminado(tipoFinal) && (!Number.isFinite(form.precioUnitario) || form.precioUnitario <= 0)) {
       toast.error("El precio de venta debe ser mayor a 0");
-      return;
-    }
-    if (esPizza && form.precioGrande != null && form.precioGrande !== 0 && form.precioGrande <= form.precioUnitario) {
-      setErrorPrecioGrande("El Precio Grande debe ser mayor que el Precio Mediana");
       return;
     }
     // Bebidas ("Producto terminado"): la presentación es obligatoria (ej. 400
@@ -1566,7 +1511,6 @@ export function GestionProductosScreen({
         id: "",
         ...form,
         tipo: tipoFinal,
-        precioGrande: esPizza && form.precioGrande ? form.precioGrande : undefined,
         ...(esTerminadoFinal
           ? {
               precioUnitario: 0,
@@ -1598,6 +1542,25 @@ export function GestionProductosScreen({
           }));
         } catch (error) {
           toast.error(mensajeErrorProductos(error, "El producto se creó pero su ficha técnica no se pudo guardar."));
+        }
+      }
+      // Cantidad inicial a producir (solo Producto insumo): si se pidió, se
+      // manda a Orden de Producción como "Preparación en lote" para hacer esas
+      // unidades (pre-hechas). Al completarse la orden, el backend suma la
+      // cantidad real al stock del producto. Un fallo aquí NO revierte el
+      // producto ya creado; solo se avisa.
+      const cantidadInicial = Number(form.cantidadInicialProduccion ?? 0);
+      if (tipoFinal === TIPOS_PRODUCTO[0] && Number.isFinite(cantidadInicial) && cantidadInicial > 0) {
+        try {
+          const hoy = new Date().toISOString().slice(0, 10);
+          await crearOrdenPreparacionApi({
+            fecha_solicitada: hoy,
+            observacion: `Producción inicial de ${creado.nombre}`,
+            lineas: [{ id: creado.id, cantidad: Math.round(cantidadInicial) }],
+          });
+          toast.success(`Cantidad enviada a Orden de Producción: ${Math.round(cantidadInicial)} ${creado.nombre}`);
+        } catch (error) {
+          toast.error(mensajeErrorProductos(error, "El producto se creó pero la orden de producción no se pudo crear."));
         }
       }
       setShowCreate(false);
@@ -1643,13 +1606,8 @@ export function GestionProductosScreen({
       toast.error("El tipo de producto no se puede cambiar al editar");
       return;
     }
-    const esPizza = catName(editItem.idCategoria).toLowerCase().includes("pizza");
     if (!esTerminado(tipoFinal) && (!Number.isFinite(editItem.precioUnitario) || editItem.precioUnitario <= 0)) {
       toast.error("El precio de venta debe ser mayor a 0");
-      return;
-    }
-    if (esPizza && editItem.precioGrande != null && editItem.precioGrande !== 0 && editItem.precioGrande <= editItem.precioUnitario) {
-      setErrorPrecioGrande("El Precio Grande debe ser mayor que el Precio Mediana");
       return;
     }
     // Bebidas que ya existen sin contenido se pueden guardar igual (el campo
@@ -1711,7 +1669,6 @@ export function GestionProductosScreen({
         ...editItem,
         tipo: tipoFinal,
         categoriaNombre: catName(editItem.idCategoria),
-        precioGrande: esPizza && editItem.precioGrande ? editItem.precioGrande : undefined,
         ...(tipoFinal === TIPOS_PRODUCTO[1]
           ? { unidadVenta: "und", unidadCompra: ucEdit, unidadesPorEmpaque: nEdit }
           : { unidadCompra: "und" as const, unidadesPorEmpaque: undefined }),
@@ -1817,7 +1774,6 @@ export function GestionProductosScreen({
     const tipo = tipoDe(values, catName(values.idCategoria));
     /** Bebida / reventa: el precio de venta se define en Compras, no aquí. */
     const esTerminado = tipo === TIPOS_PRODUCTO[1];
-    const esPizza = catName(values.idCategoria).toLowerCase().includes("pizza");
     /** El campo Precio de venta se pinta salvo al CREAR una bebida. */
     const mostrarPrecio = !(esCrear && esTerminado);
     /** Una bebida nunca se edita a mano: en Editar y Ver detalle queda solo
@@ -1910,7 +1866,7 @@ export function GestionProductosScreen({
             {mostrarPrecio && (
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                  {esPizza ? "Precio Mediana (COP)" : "Precio de venta (COP)"}
+                  Precio de venta (COP)
                 </label>
                 <CampoPrecio
                   valor={values.precioUnitario}
@@ -1918,29 +1874,6 @@ export function GestionProductosScreen({
                   readOnly={precioSoloLectura}
                   cls={precioSoloLectura ? roCls : inputCls}
                 />
-                {esPizza && (
-                  <div className="mt-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                      Precio Grande (opcional)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={values.precioGrande || ""}
-                      placeholder="$ 0"
-                      onChange={(e) => onChange("precioGrande", e.target.value === "" ? 0 : Number(e.target.value))}
-                      readOnly={precioSoloLectura}
-                      className={precioSoloLectura ? roCls : inputCls}
-                    />
-                    {values.precioGrande != null && values.precioGrande !== 0 && values.precioGrande <= values.precioUnitario ? (
-                      <p className="text-[11px] text-red-500 mt-1">El Precio Grande debe ser mayor que el Precio Mediana</p>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Vacío: Mediana + $2.000 = ${((values.precioUnitario || 0) + 2000).toLocaleString("es-CO")}
-                      </p>
-                    )}
-                  </div>
-                )}
                 {esTerminado && (
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Se define en Compras
@@ -1950,6 +1883,35 @@ export function GestionProductosScreen({
             )}
           </div>
         </div>
+        {/* Cantidad inicial a producir (solo Crear, solo Producto insumo:
+            pizza/lasaña). Esas unidades se mandan a Orden de Producción para
+            hacerlas (pre-hechas); al completarse la orden suben al stock del
+            producto. Vacío = no se crea orden. */}
+        {esCrear && !esTerminado && (
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+              Cantidad inicial a producir (opcional)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={values.cantidadInicialProduccion ?? ""}
+              placeholder="Ej: 10"
+              onChange={(e) =>
+                onChange(
+                  "cantidadInicialProduccion",
+                  e.target.value === "" ? 0 : Number(e.target.value),
+                )
+              }
+              disabled={readOnly}
+              className={readOnly ? roCls : inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Si la llenas, se envía a Orden de Producción para preparar esa cantidad.
+            </p>
+          </div>
+        )}
         {/* Contenido de la bebida (ej. 400 ml, 1.5 L). Obligatorio en Crear;
             en Editar/Ver detalle se muestra y se puede ajustar. Las pizzas y
             lasañas no lo llevan. */}
@@ -2220,7 +2182,7 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={() => void handleCreate()}
-              disabled={guardando || errorNombreCrear !== "" || !!errorPrecioGrande}
+              disabled={guardando || errorNombreCrear !== ""}
               title={errorNombreCrear || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Crear"}
@@ -2254,10 +2216,6 @@ export function GestionProductosScreen({
                     }
                     setErrorNombreServidor("");
                     const siguiente = { ...form, [f]: v };
-                    const esPizza = catName(String(siguiente.idCategoria)).toLowerCase().includes("pizza");
-                    setErrorPrecioGrande(esPizza && !!siguiente.precioGrande && siguiente.precioGrande <= siguiente.precioUnitario
-                      ? "El Precio Grande debe ser mayor que el Precio Mediana"
-                      : "");
                     setForm(siguiente);
                   },
                   // Crear no muestra Estado (nace "Disponible"). Unidad de
@@ -2696,7 +2654,7 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={() => void handleEdit()}
-              disabled={guardando || errorNombreEdit !== "" || !!errorPrecioGrande}
+              disabled={guardando || errorNombreEdit !== ""}
               title={errorNombreEdit || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Guardar"}
@@ -2726,13 +2684,8 @@ export function GestionProductosScreen({
                     }
                     if (!editItem) return;
                     const siguiente = { ...editItem, [f]: v };
-                    const esPizza = catName(String(siguiente.idCategoria)).toLowerCase().includes("pizza");
-                    setErrorPrecioGrande(esPizza && !!siguiente.precioGrande && siguiente.precioGrande <= siguiente.precioUnitario
-                      ? "El Precio Grande debe ser mayor que el Precio Mediana"
-                      : "");
                     setEditItem(siguiente);
                     setErrorNombreServidor("");
-                    setErrorPrecioGrande("");
                   },
                   mostrarEstado: true,
                   lockNombre: false,
@@ -2897,7 +2850,6 @@ export function GestionProductosScreen({
               onClick={() => {
                 setForm(emptyForm());
                 setErrorNombreServidor("");
-                setErrorPrecioGrande("");
                 resetFichaForm();
                 setFormTieneFicha(null);
                 setTieneFichaError("");
@@ -3093,17 +3045,26 @@ export function GestionProductosScreen({
                     >
                       {fmtCOP(p.precioUnitario)}
                     </td>
-                    <td className="pl-10 pr-4 py-2.5 align-middle" title={ayudaStock(p)}>
-                      {/* B1/B2/B6: un Producto insumo NO pinta su
-                          `stockDisponible` (sigue guardado en el producto,
-                          solo deja de mostrarse) ni las "porciones" que
-                          salían de ese número: muestra cuántas unidades
-                          admite preparar HOY su ficha vigente con el stock
-                          real de Insumos, o el badge cuando aún no hay
-                          ficha. Las bebidas quedan igual que siempre.
-                          El texto completo queda en el tooltip interno. */}
+                    <td
+                      className="pl-10 pr-4 py-2.5 align-middle"
+                      title={
+                        tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
+                          ? `${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}`
+                          : textoStockBebida(p)
+                      }
+                    >
+                      {/* Producto insumo (pizzas/lasañas): solo la cantidad
+                          real de stock (`stockDisponible`), tal cual se veía
+                          antes: ej. "50". Con los umbrales viejos de color:
+                          ≤5 rojo, ≤15 amarillo, más de 15 verde. Las bebidas
+                          quedan EXACTAMENTE como estaban. "Ver detalle" y el
+                          Excel siguen usando el cálculo "Se pueden preparar". */}
                       {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
-                        celdaPreparar(p)
+                        <span
+                          className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600 dark:text-red-400" : p.stockDisponible <= 15 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                        >
+                          {p.stockDisponible}
+                        </span>
                       ) : (
                         <span
                           className="block"

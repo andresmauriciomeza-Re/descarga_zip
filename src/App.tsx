@@ -98,7 +98,6 @@ import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVent
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
-import { requeridosPorUnidad, faltantesPara, type RequeridoUnidad } from "@/shared/utils/disponibilidad";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
@@ -161,7 +160,6 @@ import {
   crearOrdenPreparacion,
   crearOrdenReemplazo,
   siguienteOrdenId,
-  fichaVigente,
   normalizarNombre,
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
@@ -2357,9 +2355,9 @@ type LineaLimiteRef = {
     es un producto insumo, para elegir el mensaje de máximo. */
 type LimiteLinea = { max: number | undefined; elaborado: boolean };
 
-/** Mensaje exacto al llegar al máximo (Bloque 5, punto 4): bebidas con el
-    stock disponible y productos insumo con lo que alcanza a preparar su
-    ficha técnica. */
+/** Mensaje exacto al llegar al máximo (Bloque 5, punto 4): tanto pizzas/
+    lasañas (pre-hechas) como bebidas se limitan por su STOCK FÍSICO, así que
+    ambos hablan de unidades disponibles. */
 const mensajeMaximoDe = (
   nombre: string,
   max: number,
@@ -2367,7 +2365,7 @@ const mensajeMaximoDe = (
   elaborado: boolean,
 ): string =>
   elaborado
-    ? `Solo se pueden preparar ${max} ${nombre}${tamano ? ` ${tamano}` : ""} con lo que hay`
+    ? `Solo quedan ${max} ${nombre}${tamano ? ` ${tamano}` : ""} disponibles`
     : `Máximo disponible: ${max}. No hay más unidades de ${nombre}`;
 
 /** Cantidad ajustada al rango permitido: nunca baja de 1 y nunca pasa del
@@ -8681,39 +8679,15 @@ export default function App() {
     return { ok: true };
   };
 
-  /** Bloque 5 — Requeridos ABSOLUTOS que una línea del carrito ya consume
-      de Insumos: solo los productos insumo con ficha técnica; las bebidas y
-      las líneas sin ficha no consumen insumos calculables y por eso no
-      limitan a las demás. */
-  const requeridosAbsolutosDe = (linea: CartItem): RequeridoUnidad[] => {
-    const p = productos.find(
-      (x) =>
-        normalizarNombre(x.nombre) === normalizarNombre(linea.product.name),
-    );
-    if (!p) return [];
-    const enCategoria = categoriasCatalogo.find((c) => c.id === p.idCategoria)?.nombre;
-    if (tipoDe(p, enCategoria) !== "Producto insumo") return [];
-    const ficha = fichaVigente(fichasPorProducto, p.id);
-    if (!ficha) return [];
-    return requeridosPorUnidad(ficha, linea.size).map((r) => ({
-      ...r,
-      cantidad: r.cantidad * (linea.quantity || 0),
-    }));
-  };
-
   /** Bloque 5 — Tope de UNA línea del carrito considerando TODO lo que ya
       hay en el carrito (punto 2):
       · Producto que NO está en el panel (ningún nombre casa con él, está
         borrado o renombrado): sin límite, `max` undefined.
-      · Producto insumo (pizza/lasaña): el mayor N para ESTA línea tal que
-        los requeridos del resto del carrito —cada línea con su tamaño y su
-        cantidad, vía `requeridosPorUnidad`— más N de esta línea no tengan
-        faltantes (`faltantesPara`); sin ficha técnica: sin límite (como
-        hasta ahora).
-      · Producto terminado (bebida): `stockApi` si la API lo envió, si no
-        el `stockDisponible` del producto del panel emparejado por nombre
-        (el catálogo público no trae stock), menos las unidades de esa
-        bebida que ya hay en OTRAS líneas.
+      · Producto insumo (pizza/lasaña — PRE-HECHAS) y producto terminado
+        (bebida): el STOCK FÍSICO del producto (`stockApi` si la API lo envió,
+        si no el `stockDisponible` del producto del panel emparejado por
+        nombre), menos las unidades del MISMO producto que ya hay en OTRAS
+        líneas. Ya no se limita por insumos: se vende solo lo que hay hecho.
       `max` es el TOTAL que la línea puede tener: la propia línea se excluye
       de los consumos ajenos por id; sin id —tarjeta y detalle— todo el
       carrito cuenta. El mínimo sigue siendo 1 (lo aplican los puntos que
@@ -8734,59 +8708,22 @@ export default function App() {
     // Lo que ya consumen las OTRAS líneas (la propia no se cuenta dos veces).
     const otras = carrito.filter((l) => l.id !== linea.id);
 
-    if (elaborado) {
-      const ficha = fichaVigente(fichasPorProducto, enPanel.id);
-      if (!ficha) return { max: undefined, elaborado };
-      const porUnidad = requeridosPorUnidad(ficha, linea.size);
-      // Ficha sin filas: nada que restrinja (se maneja como sin límite).
-      if (porUnidad.length === 0) return { max: undefined, elaborado };
-      const ajenos = otras.flatMap(requeridosAbsolutosDe);
-      // ¿Cabe esta línea con N unidades? Todo va en cantidades absolutas
-      // (`veces = 1`): los ajenos ya salen multiplicados por su cantidad y
-      // `porUnidad` se multiplica por N a mano.
-      const cabe = (n: number) =>
-        faltantesPara(
-          [
-            ...ajenos,
-            ...porUnidad.map((r) => ({ ...r, cantidad: r.cantidad * n })),
-          ],
-          1,
-          insumos,
-        ).length === 0;
-      // Ni el carrito de hoy cabe: esta línea no puede tener nada.
-      if (!cabe(0)) return { max: 0, elaborado };
-      // Búsqueda exponencial + binaria (`cabe` es monótona en n). Si no se
-      // acota dentro del techo, la respuesta es "sin límite".
-      const CAP = 100000;
-      let lo = 0;
-      let hi = 1;
-      while (hi < CAP && cabe(hi)) {
-        lo = hi;
-        hi = Math.min(hi * 2, CAP);
-      }
-      if (hi === CAP && cabe(hi)) return { max: undefined, elaborado };
-      while (lo + 1 < hi) {
-        const mid = Math.floor((lo + hi) / 2);
-        if (cabe(mid)) lo = mid;
-        else hi = mid;
-      }
-      return { max: lo, elaborado };
-    }
-
-    // Terminado (bebida): el stock del backend manda si la API lo envió; si
-    // no, el del panel. Lo que ya está en otras líneas de ESTA bebida
-    // descuenta (puntos 1 y 2).
+    // Pizzas/lasañas (PRE-HECHAS) y bebidas: el tope es el STOCK FÍSICO del
+    // producto (`stock` del backend), NO el cálculo de insumos por ficha. Ya
+    // no se limita por "cuántas se pueden preparar": se vende solo lo que hay
+    // hecho. Las unidades de OTRAS líneas del mismo producto en el carrito
+    // descuentan (puntos 1 y 2). `elaborado` queda solo para elegir el mensaje.
     const stock =
       limiteStockDe(
         productosCatalogo.find((p) => mismoNombre(p.nombre)),
       ) ?? enPanel.stockDisponible;
     if (stock === undefined || !Number.isFinite(stock)) {
-      return { max: undefined, elaborado: false };
+      return { max: undefined, elaborado };
     }
     const enOtras = otras
       .filter((l) => mismoNombre(l.product.name))
       .reduce((s, l) => s + (l.quantity || 0), 0);
-    return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado: false };
+    return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado };
   };
 
   /** Bloque 5 — Agregar 1 unidad desde la tarjeta. Devuelve si algo se
