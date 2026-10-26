@@ -747,7 +747,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                                 : "border-border text-foreground hover:bg-muted/40"
                             }`}
                           >
-                            <span className="text-xl">{PAYMENT_INFO[m].icon}</span> {m}
+                            {m}
                           </button>
                         ))}
                       </div>
