@@ -1207,10 +1207,13 @@ export function GestionProductosScreen({
   };
 
   /** Palabra con que se muestra el stock ("2 pizzas", "1 lasaña", "24 und"). */
-  const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
+    const palabraStock = (p: { idCategoria: string; unidadVenta: string }, n: number): string => {
     // Se resuelve por NOMBRE de categoría (no por id): así funciona igual con
     // los ids locales "CAT-00x" y con los ids numéricos que trae la API.
-    const nombre = catName(p.idCategoria).toLowerCase();
+    const nombre = catName(p.idCategoria)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
     if (nombre.includes("pizza")) return n === 1 ? "pizza" : "pizzas";
     if (nombre.includes("lasana")) return n === 1 ? "lasaña" : "lasañas";
     return p.unidadVenta || "und";

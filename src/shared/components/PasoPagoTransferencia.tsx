@@ -11,10 +11,9 @@ const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
     del QR para pagar escaneando. */
 export const PAYMENT_INFO: Record<
   string,
-  { icon: string; lines: string[]; llave: string; qr: string }
+  { lines: string[]; llave: string; qr: string }
 > = {
   Nequi: {
-    icon: "💜",
     lines: [
       "Número Nequi: 310 555 1234",
       "Titular: La Sirena Pizza",
@@ -23,7 +22,6 @@ export const PAYMENT_INFO: Record<
     qr: "nequi://pay/3105551234?name=La%20Sirena%20Pizza",
   },
   Bancolombia: {
-    icon: "🏦",
     lines: [
       "Cuenta de Ahorros: 690-1234567-89",
       "Titular: La Sirena Pizza SAS",
@@ -134,10 +132,7 @@ export function PasoPagoTransferencia({
       {/* LEFT: datos de la cuenta + QR */}
       <div className="space-y-4">
         <div className="bg-muted/50 rounded-2xl p-4 border border-border">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-3xl">{info?.icon}</span>
-            <p className="font-bold text-foreground text-base">{payment}</p>
-          </div>
+          <p className="font-bold text-foreground text-base mb-3">{payment}</p>
           <div className="space-y-1.5">
             {info?.lines.map((line, i) => (
               <p key={i} className="text-sm text-foreground font-medium">
