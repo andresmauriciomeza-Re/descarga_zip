@@ -12,6 +12,10 @@ export interface ProductoApi {
   costo_unitario?: number | string | null;
   unidad_venta: string;
   imagen?: string | null;
+  /** `imagen_data IS NOT NULL`: ¿la BD tiene los bytes de la imagen? El
+      binario no viaja en el JSON; con true el menú pide
+      `GET /productos/:id/imagen`. */
+  tiene_imagen?: boolean | null;
   estado: string;
   stock?: number | string | null;
   contenido?: number | string | null;
@@ -106,6 +110,7 @@ export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCrea
 export const mapearProductoApi = (p: ProductoApi): Producto => ({
   id: String(p.id_producto),
   imagen: p.imagen ?? "",
+  tieneImagen: p.tiene_imagen ?? false,
   nombre: p.nombre,
   idCategoria: String(p.id_categoria),
   categoriaNombre: p.categoria_nombre ?? undefined,

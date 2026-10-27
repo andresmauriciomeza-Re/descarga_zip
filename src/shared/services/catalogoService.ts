@@ -10,6 +10,9 @@ export interface ProductoApi {
   unidad_venta: string;
   stock?: number;
   imagen: string | null;
+  /** `imagen_data IS NOT NULL`: el binario NO viaja en el JSON; con true el
+      menú pide la imagen a `GET /productos/:id/imagen`. */
+  tiene_imagen?: boolean;
   estado: string;
   categoria_nombre: string;
   categoria_descripcion: string | null;
