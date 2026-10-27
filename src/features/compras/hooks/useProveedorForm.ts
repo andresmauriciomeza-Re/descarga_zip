@@ -23,6 +23,9 @@ export const TIPOS_SOCIEDAD: TipoSociedad[] = ["S.A.S.", "S.A.", "Ltda.", "Funda
 
 const NIT_LENGTH = 10;
 const TELEFONO_LENGTH = 10;
+/** Mínimo del teléfono FIJO (opcional): la regla del celular sigue siendo
+ *  exactamente `TELEFONO_LENGTH` dígitos, como ya era. */
+const TELEFONO_MIN = 7;
 /** Número de documento: entre 5 y 10 dígitos (cubren cédulas y CE antiguas sin
  *  aceptar cadenas cortas de relleno). El tope de 10 lo aplica el filtro al
  *  escribir; el mínimo solo lo revisa la validación. */
@@ -57,15 +60,24 @@ export interface ProveedorFormValues {
   // formularios dejarían de compilar. La validación de abajo se encarga de
   // exigirlos cuando el tipo de persona los pide.
 
-  /** Persona Natural. */
+  /** Persona Natural.
+   *  `nombreCompleto` es el ÚNICO campo que pinta el formulario (la spec pide
+   *  un solo campo "Nombre completo"): al escribirlo se rellenan `nombres`
+   *  con el texto y `apellidos` vacío, de modo que el payload sigue armando
+   *  `nombre = nombres + " " + apellidos` igual que siempre. Al editar se
+   *  siembra uniendo los dos (ver `conCamposNuevos`). */
   nombres?: string;
   apellidos?: string;
+  nombreCompleto?: string;
   tipoDocumento?: TipoDocumento | "";
   numeroDocumento?: string;
-  /** DV (dígito de verificación): opcional en Natural, obligatorio en Jurídica. */
+  /** DV (dígito de verificación): solo aplica a Persona Jurídica. */
   dv?: string;
   /** Persona Jurídica. En el modelo NO existe como campo: se guarda en `nombre`. */
   razonSocial?: string;
+  /** Persona Jurídica (bloque Razón social). Hoy NO tiene columna en la BD:
+   *  se pinta y se valida pero no se persiste (aviso en la fase 4). */
+  nombreComercial?: string;
   tipoSociedad?: TipoSociedad | "";
   /** Adjunto PDF/imagen de la Cámara de Comercio: nombre + contenido en dataURL. */
   camaraComercioNombre?: string;
@@ -76,12 +88,21 @@ export interface ProveedorFormValues {
    *  compras y órdenes de compra. */
   contactoNombre?: string;
   contactoTelefono?: string;
+  /** Teléfono fijo del contacto comercial (bloque Contacto comercial). Hoy NO
+   *  tiene columna en la BD: se pinta y se valida pero no se persiste. */
+  contactoTelefonoFijo?: string;
   contactoEmail?: string;
-  /** Representante legal (solo Persona Jurídica). */
+  /** Representante legal (solo Persona Jurídica). Igual que en Natural,
+   *  `repLegalNombreCompleto` es el único campo pintado y alimenta
+   *  `repLegalNombres`/`repLegalApellidos` (el payload los vuelve a unir). */
   repLegalNombres?: string;
   repLegalApellidos?: string;
+  repLegalNombreCompleto?: string;
   repLegalTipoDocumento?: TipoDocumento | "";
   repLegalNumeroDocumento?: string;
+  /** Teléfono y email del representante legal: sin columna en la BD hoy. */
+  repLegalTelefono?: string;
+  repLegalEmail?: string;
 }
 
 export type ProveedorFormErrors = Partial<Record<keyof ProveedorFormValues, string>>;
@@ -218,34 +239,53 @@ export function datosNuevosProveedor(v: ProveedorFormValues) {
     numeroDocumento: v.numeroDocumento ?? "",
     dv: v.dv ?? "",
     tipoSociedad: v.tipoSociedad ?? "",
+    nombreComercial: v.nombreComercial ?? "",
     camaraComercioNombre: v.camaraComercioNombre ?? "",
     camaraComercioArchivo: v.camaraComercioArchivo ?? "",
     fechaExpedicionCamara: v.fechaExpedicionCamara ?? "",
     contactoNombre: v.contactoNombre ?? "",
     contactoTelefono: v.contactoTelefono ?? "",
+    contactoTelefonoFijo: v.contactoTelefonoFijo ?? "",
     contactoEmail: v.contactoEmail ?? "",
     repLegalNombres: v.repLegalNombres ?? "",
     repLegalApellidos: v.repLegalApellidos ?? "",
     repLegalTipoDocumento: v.repLegalTipoDocumento ?? "",
     repLegalNumeroDocumento: v.repLegalNumeroDocumento ?? "",
+    repLegalTelefono: v.repLegalTelefono ?? "",
+    repLegalEmail: v.repLegalEmail ?? "",
   };
 }
 
 /**
- * Completar el contacto comercial de Persona Jurídica en los campos VIEJOS que
- * siguen leyendo el resto de la app (compras, órdenes y listados muestran
- * asesor/teléfono/email del proveedor). En Persona Natural no hay contacto
- * comercial en el formulario, así que se quedan los valores que ya traía.
+ * Rellena los campos VIEJOS que siguen leyendo el resto de la app (compras,
+ * órdenes y listados muestran asesor/teléfono/email del proveedor) y que el
+ * backend exige obligatorios:
+ *  · Persona Jurídica → del bloque Contacto comercial.
+ *  · Persona Natural  → de SUS propios Teléfono/Email, y como asesor va el
+ *    Nombre completo (decisión: la persona natural es su propio contacto).
+ * Si un registro viejo no trae dato, se conserva el anterior (`previo`).
  */
 export function contactoGuardado(
   v: ProveedorFormValues,
   previo: { asesorComercial?: string; telefono?: string; email?: string } = {},
 ) {
   const esJuridica = v.tipoPersona === "Persona Jurídica";
+  if (esJuridica) {
+    return {
+      asesorComercial: (v.contactoNombre ?? "").trim(),
+      telefono: (v.contactoTelefono ?? "").trim(),
+      email: (v.contactoEmail ?? "").trim(),
+    };
+  }
+  const asesor =
+    (v.nombreCompleto ?? "").trim() ||
+    [v.nombres ?? "", v.apellidos ?? ""].map(x => x.trim()).filter(Boolean).join(" ") ||
+    (v.nombre ?? "").trim() ||
+    (previo.asesorComercial ?? "");
   return {
-    asesorComercial: esJuridica ? (v.contactoNombre ?? "").trim() : (previo.asesorComercial ?? ""),
-    telefono: esJuridica ? (v.contactoTelefono ?? "").trim() : (previo.telefono ?? ""),
-    email: esJuridica ? (v.contactoEmail ?? "").trim() : (previo.email ?? ""),
+    asesorComercial: asesor,
+    telefono: (v.telefono ?? "").trim() || (previo.telefono ?? ""),
+    email: (v.email ?? "").trim() || (previo.email ?? ""),
   };
 }
 
@@ -253,25 +293,44 @@ export function contactoGuardado(
  *  formulario montado desde Orden de Compra/Compra (que solo siembra los campos
  *  viejos) dejaría los inputs sin controlar y React perdería el valor. */
 function conCamposNuevos(v: ProveedorFormValues): ProveedorFormValues {
+  /** Une dos palabras en blanco ("Ana" + "María" → "Ana María"); vacío si no
+   *  hay con qué (registros antiguos o alta nueva). */
+  const unir = (a?: string, b?: string) =>
+    [a ?? "", b ?? ""].map(x => x.trim()).filter(Boolean).join(" ");
+  // Semilla del campo "Nombre completo": primero los dos campos del modelo
+  // (así al editar un proveedor viejo no se pierde el apellido) y, si no hay,
+  // el `nombre` que trae el alta desde el buscador de Orden de Compra/Compra
+  // (el hook monta con tipoPersona = Natural y esos formularios solo siembran
+  // `nombre`: sin esto el campo se vería vacío con un nombre ya escrito).
+  const semillaNombre = unir(v.nombres, v.apellidos) ||
+    (v.tipoPersona === "Persona Jurídica" ? "" : (v.nombre ?? "").trim());
   return {
     ...v,
     nombres: v.nombres ?? "",
     apellidos: v.apellidos ?? "",
+    // El formulario pinta UN solo campo: se siembra desde los dos campos del
+    // modelo para que al editar un proveedor viejo no se pierda el apellido.
+    nombreCompleto: v.nombreCompleto ?? semillaNombre,
     tipoDocumento: v.tipoDocumento ?? "",
     numeroDocumento: v.numeroDocumento ?? "",
     dv: v.dv ?? "",
     razonSocial: v.razonSocial ?? "",
+    nombreComercial: v.nombreComercial ?? "",
     tipoSociedad: v.tipoSociedad ?? "",
     camaraComercioNombre: v.camaraComercioNombre ?? "",
     camaraComercioArchivo: v.camaraComercioArchivo ?? "",
     fechaExpedicionCamara: v.fechaExpedicionCamara ?? "",
     contactoNombre: v.contactoNombre ?? "",
     contactoTelefono: v.contactoTelefono ?? "",
+    contactoTelefonoFijo: v.contactoTelefonoFijo ?? "",
     contactoEmail: v.contactoEmail ?? "",
     repLegalNombres: v.repLegalNombres ?? "",
     repLegalApellidos: v.repLegalApellidos ?? "",
+    repLegalNombreCompleto: v.repLegalNombreCompleto ?? unir(v.repLegalNombres, v.repLegalApellidos),
     repLegalTipoDocumento: v.repLegalTipoDocumento ?? "",
     repLegalNumeroDocumento: v.repLegalNumeroDocumento ?? "",
+    repLegalTelefono: v.repLegalTelefono ?? "",
+    repLegalEmail: v.repLegalEmail ?? "",
   };
 }
 
@@ -302,6 +361,47 @@ function validarTipoDocumento(e: ProveedorFormErrors, campo: keyof ProveedorForm
   if (!v) e[campo] = "Selecciona el tipo de documento.";
   else if (!TIPOS_DOCUMENTO.includes(v as TipoDocumento)) e[campo] = "Selecciona un tipo de documento válido.";
 }
+
+/**
+ * Teléfono (celular / fijo del proveedor): solo dígitos y, si es obligatorio,
+ * exactamente `TELEFONO_LENGTH` — la MISMA regla que ya usaba el contacto
+ * comercial de Persona Jurídica (se aplica también a Persona Natural).
+ */
+function validarTelefonoCampo(
+  e: ProveedorFormErrors,
+  campo: keyof ProveedorFormValues,
+  valor: string | undefined,
+  obligatorio: boolean,
+  etiqueta = "El teléfono",
+) {
+  const t = (valor ?? "").replace(/\s/g, "");
+  if (!t) {
+    if (obligatorio) e[campo] = `${etiqueta} es obligatorio.`;
+    return;
+  }
+  if (!/^\d+$/.test(t)) e[campo] = `${etiqueta} solo puede contener números.`;
+  else if (t.length !== TELEFONO_LENGTH) e[campo] = `${etiqueta} debe tener exactamente ${TELEFONO_LENGTH} dígitos.`;
+}
+
+/**
+ * Campos que PINTA y VALIDA cada tipo de persona. Sirve para limpiar, al
+ * alternar con los botones, lo que quedó tocado del tipo que se dejó (regla de
+ * exclusión): así un error viejo del otro tipo no reaparece al volver.
+ */
+const CAMPOS_POR_TIPO: Record<TipoPersona, (keyof ProveedorFormValues)[]> = {
+  "Persona Natural": [
+    "tipoPersona", "tipoDocumento", "numeroDocumento", "nombreCompleto",
+    "nombres", "apellidos", "nombre", "telefono", "email", "direccion", "estado",
+  ],
+  "Persona Jurídica": [
+    "tipoPersona", "razonSocial", "nombreComercial", "nit", "tipoSociedad",
+    "nombre", "estado", "contactoNombre", "contactoTelefono", "contactoTelefonoFijo",
+    "contactoEmail", "direccion", "camaraComercioArchivo", "camaraComercioNombre",
+    "repLegalTipoDocumento", "repLegalNumeroDocumento",
+    "repLegalNombreCompleto", "repLegalNombres", "repLegalApellidos",
+    "repLegalTelefono", "repLegalEmail",
+  ],
+};
 
 /**
  * Hook reutilizable para formularios de proveedor.
@@ -337,6 +437,25 @@ export function useProveedorForm(
       delete next[campo];
       return next;
     });
+
+    // Regla de exclusión al alternar Persona Natural ↔ Persona Jurídica: se
+    // borran TODOS los errores del servidor (el 409 de NIT/correo dejo de
+    // aplicar) y lo que quedó tocado de los campos del tipo que se dejó. Así
+    // no queda ningún error invisible apagando el botón de guardar.
+    if (campo === "tipoPersona") {
+      setErroresServidor({});
+      const aplicables = new Set<keyof ProveedorFormValues>([
+        "tipoPersona",
+        ...(CAMPOS_POR_TIPO[valor as TipoPersona] ?? []),
+      ]);
+      setTocado(prev => {
+        const next: Partial<Record<keyof ProveedorFormValues, boolean>> = {};
+        (Object.keys(prev) as (keyof ProveedorFormValues)[]).forEach(k => {
+          if (aplicables.has(k)) next[k] = true;
+        });
+        return next;
+      });
+    }
     setValues(prev => {
       const next: ProveedorFormValues = { ...prev, [campo]: valor };
 
@@ -351,10 +470,29 @@ export function useProveedorForm(
             const partes = actual.split(/\s+/);
             next.nombres = partes[0] ?? "";
             next.apellidos = partes.slice(1).join(" ");
+            // El formulario Natural pinta UN solo campo: se rellena con el
+            // nombre completo para que el prellenado del buscador no se pierda.
+            next.nombreCompleto = actual;
           } else if (valor === "Persona Jurídica" && !(next.razonSocial ?? "").trim()) {
             next.razonSocial = actual;
           }
         }
+      }
+
+      // "Nombre completo" (Persona Natural) y "Nombre completo" del
+      // representante legal: en pantalla es UN campo y aquí se desdobla en los
+      // dos llavados del modelo, de modo que el payload sigue armando
+      // `nombre` / `rep_legal_nombre` con "nombres + apellidos" como siempre.
+      if (campo === "nombreCompleto") {
+        const texto = String(valor ?? "");
+        next.nombres = texto;
+        next.apellidos = "";
+        if (texto.trim()) next.nombre = texto.trim();
+      }
+      if (campo === "repLegalNombreCompleto") {
+        const texto = String(valor ?? "");
+        next.repLegalNombres = texto;
+        next.repLegalApellidos = "";
       }
 
       // Recalcular el nombre derivado SOLO cuando el tipo ya permite derivarlo
@@ -397,63 +535,85 @@ export function useProveedorForm(
     // cosa, pero el chequeo cubre el alta con el campo sin tocar ("" inicial).
     if (sinTipo) e.tipoPersona = "Selecciona el tipo de persona.";
 
-    // ── NIT: obligatorio en Jurídica (y en los flujos heredados sin tipo),
-    // OPCIONAL en Persona Natural; en todos los casos, si se llena tiene que
-    // ser válido y no puede estar repetido. ──
-    const nit = (values.nit ?? "").trim();
-    if (!nit) {
-      if (esJuridica || sinTipo) e.nit = "El NIT es obligatorio.";
-    } else if (nit.length !== NIT_LENGTH) {
-      e.nit = `El NIT debe tener exactamente ${NIT_LENGTH} dígitos.`;
-    } else if (existentes.some(x => filtrarNit(x.nit) === nit)) {
-      // Se compara solo dígitos: las semillas guardan el NIT con formato
-      // ("830.115.220-1") y el campo siempre trae 10 dígitos ("8301152201"),
-      // por lo que la comparación literal nunca detectaba el duplicado.
-      e.nit = "Ya existe un proveedor con este NIT.";
+    // ────────────────────────────────────────────────────────────────────────
+    // REGLA DE EXCLUSIÓN (crítica): lo que sigue solo se revisa cuando el tipo
+    // de persona lo pide. Persona Natural NO valida ni pide nada de Jurídica y
+    // viceversa; al alternar con los botones, `setCampo("tipoPersona")` limpia
+    // lo tocado y los errores del servidor del tipo que se dejó.
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── Persona Natural: los 7 campos del formulario. SIN NIT y SIN DV: ni se
+    // piden ni se validan (aunque un registro viejo traiga valor guardado). ──
+    if (esNatural) {
+      validarTipoDocumento(e, "tipoDocumento", values.tipoDocumento);
+      validarNumeroDocumento(e, "numeroDocumento", values.numeroDocumento, true);
+      exigirLetras(
+        e, "nombreCompleto", values.nombreCompleto,
+        "El nombre completo es obligatorio.",
+        "El nombre completo solo puede contener letras y espacios.",
+      );
+      validarTelefonoCampo(e, "telefono", values.telefono, true, "El teléfono");
+      const correoNatural = validarCorreo(values.email ?? "");
+      if (correoNatural) e.email = correoNatural;
+      const dirNatural = validarDireccion(values.direccion ?? "");
+      if (dirNatural) e.direccion = dirNatural;
     }
 
-    // ── DV (dígito de verificación): UN dígito (el de la DIAN). Obligatorio
-    // solo en Persona Jurídica.
-    // Persona Jurídica; en Natural es un dato opcional. ──
-    const dv = (values.dv ?? "").trim();
-    if (!dv) {
-      if (esJuridica) e.dv = "El DV es obligatorio.";
-    } else if (!/^\d{1}$/.test(dv)) {
-      e.dv = "El DV debe tener 1 dígito.";
+    // ── Persona Jurídica: NIT y DV obligatorios y válidos SOLO aquí. ──
+    if (esJuridica) {
+      const nit = (values.nit ?? "").trim();
+      if (!nit) {
+        e.nit = "El NIT es obligatorio.";
+      } else if (nit.length !== NIT_LENGTH) {
+        e.nit = `El NIT debe tener exactamente ${NIT_LENGTH} dígitos.`;
+      } else if (existentes.some(x => filtrarNit(x.nit) === nit)) {
+        // Se compara solo dígitos: las semillas guardan el NIT con formato
+        // ("830.115.220-1") y el campo siempre trae 10 dígitos ("8301152201"),
+        // por lo que la comparación literal nunca detectaba el duplicado.
+        e.nit = "Ya existe un proveedor con este NIT.";
+      }
+      // DV: FUERA del diseño y de la validación del cliente (decisión). Su
+      // valor sigue en el estado y se envía en el payload, sin exigirse aquí.
     }
 
     // ── Nombre (derivado de la identificación): sigue obligatorio porque es
     // lo que muestran listados, compras y órdenes. En Jurídica usa la regla
-    // de la razón social, que admite puntos ("Quesos del Norte S.A.S."). ──
-    const nombre = (values.nombre ?? "").trim();
-    if (!nombre) {
-      e.nombre = "El nombre es obligatorio.";
-    } else if (esJuridica) {
-      if (!RE_RAZON_SOCIAL.test(nombre)) e.nombre = "La razón social contiene caracteres no permitidos.";
-      else if (nombre.length > 120) e.nombre = "La razón social no puede tener más de 120 caracteres.";
-    } else if (!RE_SOLO_LETRAS.test(nombre)) {
-      e.nombre = "El nombre solo puede contener letras y espacios.";
+    // de la razón social, que admite puntos ("Quesos del Norte S.A.S."); en
+    // Natural es el mismo texto del campo "Nombre completo" (solo letras).
+    // Sin tipo todavía no se valida: el único error pintable es el de tipo. ──
+    if (!sinTipo) {
+      const nombre = (values.nombre ?? "").trim();
+      if (!nombre) {
+        e.nombre = "El nombre es obligatorio.";
+      } else if (esJuridica) {
+        if (!RE_RAZON_SOCIAL.test(nombre)) e.nombre = "La razón social contiene caracteres no permitidos.";
+        else if (nombre.length > 120) e.nombre = "La razón social no puede tener más de 120 caracteres.";
+      } else if (!RE_SOLO_LETRAS.test(nombre)) {
+        e.nombre = "El nombre solo puede contener letras y espacios.";
+      }
     }
 
-    // ── Persona Natural: exactamente los 6 campos del formulario. ──
-    if (esNatural) {
-      exigirLetras(e, "nombres", values.nombres, "Los nombres son obligatorios.", "Los nombres solo pueden contener letras y espacios.");
-      exigirLetras(e, "apellidos", values.apellidos, "Los apellidos son obligatorios.", "Los apellidos solo pueden contener letras y espacios.");
-      validarTipoDocumento(e, "tipoDocumento", values.tipoDocumento);
-      validarNumeroDocumento(e, "numeroDocumento", values.numeroDocumento, true);
-      // NIT y DV opcionales: la rama de arriba ya exige validez si se llenan.
-    }
-
-    // ── Persona Jurídica: exactamente los campos del formulario. ──
+    // ── Persona Jurídica: los campos de los tres bloques. ──
     if (esJuridica) {
       const razon = (values.razonSocial ?? "").trim();
       if (!razon) e.razonSocial = "La razón social es obligatoria.";
       else if (!RE_RAZON_SOCIAL.test(razon)) e.razonSocial = "La razón social solo puede contener letras, números y los caracteres . , & ( ) / - #.";
       else if (razon.length > 120) e.razonSocial = "La razón social no puede tener más de 120 caracteres.";
 
+      // Nombre comercial (opcional): mismo repertorio que la razón social.
+      const comercial = (values.nombreComercial ?? "").trim();
+      if (comercial) {
+        if (!RE_RAZON_SOCIAL.test(comercial)) e.nombreComercial = "El nombre comercial solo puede contener letras, números y los caracteres . , & ( ) / - #.";
+        else if (comercial.length > 100) e.nombreComercial = "El nombre comercial no puede tener más de 100 caracteres.";
+      }
+
       const sociedad = (values.tipoSociedad ?? "").trim();
       if (!sociedad) e.tipoSociedad = "Selecciona el tipo de sociedad.";
       else if (!TIPOS_SOCIEDAD.includes(sociedad as TipoSociedad)) e.tipoSociedad = "Selecciona un tipo de sociedad válido.";
+
+      // Dirección comercial (bloque Contacto comercial).
+      const dirJur = validarDireccion(values.direccion ?? "");
+      if (dirJur) e.direccion = dirJur.replace("La dirección es", "La dirección comercial es");
 
       // Adjunto de Cámara de Comercio: opcional. Si existe, tiene que ser un
       // PDF o una imagen y haberse podido cargar completo.
@@ -467,34 +627,47 @@ export function useProveedorForm(
           e.camaraComercioArchivo = "El archivo no puede superar los 5 MB.";
         }
       }
-      // Decisión: la fecha de expedición es obligatoria SOLO cuando se adjuntó
-      // la Cámara de Comercio. Sin archivo no hay de qué fecha hablar y hacerla
-      // obligatoria dejaría bloqueado el formulario (sobre todo al editar
-      // registros antiguos que nunca tuvieron el documento).
-      if (archivo && !(values.fechaExpedicionCamara ?? "").trim()) {
-        e.fechaExpedicionCamara = "La fecha de expedición es obligatoria.";
+      // Fecha de expedición: FUERA del diseño y de la validación del cliente
+      // (decisión). El valor existente se conserva en el estado sin pintarse.
+
+      // ── Contacto comercial: email, celular, fijo (opcional), dirección y
+      // el nombre, que se conserva por ser obligatorio en el backend. ──
+      const correoContacto = validarCorreo(values.contactoEmail ?? "");
+      if (correoContacto) e.contactoEmail = correoContacto;
+      validarTelefonoCampo(e, "contactoTelefono", values.contactoTelefono, true, "El teléfono celular");
+      // Fijo: opcional; si se llena aplica la misma regla de dígitos.
+      const fijo = (values.contactoTelefonoFijo ?? "").replace(/\s/g, "");
+      if (fijo) {
+        if (!/^\d+$/.test(fijo)) e.contactoTelefonoFijo = "El teléfono fijo solo puede contener números.";
+        else if (fijo.length < TELEFONO_MIN || fijo.length > TELEFONO_LENGTH) {
+          e.contactoTelefonoFijo = `El teléfono fijo debe tener entre ${TELEFONO_MIN} y ${TELEFONO_LENGTH} dígitos.`;
+        }
       }
-
-      // Persona de contacto comercial.
       exigirLetras(e, "contactoNombre", values.contactoNombre, "El nombre de contacto es obligatorio.", "El nombre de contacto solo puede contener letras y espacios.");
-      const tel = (values.contactoTelefono ?? "").replace(/\s/g, "");
-      if (!tel) e.contactoTelefono = "El teléfono es obligatorio.";
-      else if (!/^\d+$/.test(tel)) e.contactoTelefono = "El teléfono solo puede contener números.";
-      else if (tel.length !== TELEFONO_LENGTH) e.contactoTelefono = `El teléfono debe tener exactamente ${TELEFONO_LENGTH} dígitos.`;
-      const correoErr = validarCorreo(values.contactoEmail ?? "");
-      if (correoErr) e.contactoEmail = correoErr;
 
-      // Representante legal.
-      exigirLetras(e, "repLegalNombres", values.repLegalNombres, "Los nombres del representante legal son obligatorios.", "Los nombres solo pueden contener letras y espacios.");
-      exigirLetras(e, "repLegalApellidos", values.repLegalApellidos, "Los apellidos del representante legal son obligatorios.", "Los apellidos solo pueden contener letras y espacios.");
+      // ── Representante legal: un solo campo de nombre completo + sus docs. ──
       validarTipoDocumento(e, "repLegalTipoDocumento", values.repLegalTipoDocumento);
       validarNumeroDocumento(e, "repLegalNumeroDocumento", values.repLegalNumeroDocumento, true);
+      exigirLetras(
+        e, "repLegalNombreCompleto", values.repLegalNombreCompleto,
+        "El nombre completo del representante legal es obligatorio.",
+        "El nombre completo solo puede contener letras y espacios.",
+      );
+      validarTelefonoCampo(e, "repLegalTelefono", values.repLegalTelefono, true, "El teléfono del representante legal");
+      const repEmail = (values.repLegalEmail ?? "").trim();
+      if (!repEmail) e.repLegalEmail = "El email del representante legal es obligatorio.";
+      else {
+        const repErr = validarCorreo(repEmail);
+        if (repErr) e.repLegalEmail = repErr;
+      }
     }
 
-    // NOTA: los campos viejos (teléfono, email, asesor comercial y dirección)
-    // ya NO se validan en ninguna rama: el formulario no los pide (los cubre
-    // el contacto comercial en Jurídica y no existen en Natural), y exigirlos
-    // aquí dejaría sin guardar cualquier registro antiguo que no los traiga.
+    // NOTA: los campos viejos (teléfono, email y asesor comercial de la
+    // persona JURÍDICA) no se validan: los pinta el contacto comercial
+    // (contactoTelefono/contactoEmail/contactoNombre) y exigirlos aquí
+    // dejaría sin guardar cualquier registro antiguo que no los traiga.
+    // En Persona Natural SÍ se validan `telefono` y `email` porque el
+    // formulario los pide y el backend los exige.
 
     return e;
   }, [values, existentes]);
@@ -512,6 +685,43 @@ export function useProveedorForm(
     const err = obtenerError(campo);
     return err ? "border-red-400 focus:ring-red-300" : "";
   };
+
+  /**
+   * FASE 2: el botón NO envía con errores y enfoca el PRIMER campo inválido.
+   * Marca el formulario como intentado (para que se pinten todos los mensajes
+   * que falten) y recorre los campos PINTADOS en orden visual (`data-prov-campo`
+   * es el atributo que pinta `ProveedorFormCampos`), así el foco cae en lo que
+   * el usuario ve primero, no en el orden interno de las validaciones.
+   *
+   * Devuelve `true` si había errores: quien llama NO debe enviar el formulario.
+   * `excluir` son llaves que el formulario no pinta como editables (el NIT y
+   * el nombre heredado al editar del módulo Proveedores).
+   */
+  const enfocarPrimeroInvalido = useCallback(
+    (excluir: (keyof ProveedorFormValues)[] = []): boolean => {
+      setIntentoGuardar(true);
+      const err: ProveedorFormErrors = { ...errors, ...erroresServidor };
+      const pendientes = (Object.keys(err) as (keyof ProveedorFormValues)[])
+        .filter(c => !excluir.includes(c));
+      if (pendientes.length === 0) return false;
+
+      const nodos = document.querySelectorAll<HTMLElement>("[data-prov-campo]");
+      for (const nodo of nodos) {
+        const campo = (nodo.getAttribute("data-prov-campo") ?? "") as keyof ProveedorFormValues;
+        if (!campo || !pendientes.includes(campo)) continue;
+        const foco = nodo.matches("input, select, textarea, button")
+          ? nodo
+          : nodo.querySelector<HTMLElement>("input, select, textarea, button");
+        foco?.focus({ preventScroll: true });
+        nodo.scrollIntoView({ block: "center", behavior: "smooth" });
+        return true;
+      }
+      // Hay errores pero el campo no está pintado (p. ej. solo el NIT): se
+      // bloquea igual el envío y el caller muestra su aviso.
+      return true;
+    },
+    [errors, erroresServidor],
+  );
 
   const reset = useCallback(() => {
     setValues(conCamposNuevos(inicial));
@@ -534,6 +744,7 @@ export function useProveedorForm(
     formValido,
     obtenerError,
     campoCls,
+    enfocarPrimeroInvalido,
     reset,
     setErrorServidor,
     setIntentoGuardar,

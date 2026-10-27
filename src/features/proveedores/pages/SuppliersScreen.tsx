@@ -87,6 +87,9 @@ export interface Supplier {
   /** Persona Jurídica: forma societaria. La razón social NO se guarda aquí,
    *  vive en `nombre` (es su valor derivado). */
   tipoSociedad?: TipoSociedad | "";
+  /** Persona Jurídica → bloque Razón social. Hoy SIN columna en la BD: vive
+   *  en el estado local y NO se envía al servidor (se muestra en detalle). */
+  nombreComercial?: string;
   /** Adjunto de la Cámara de Comercio: nombre del archivo + dataURL. */
   camaraComercioNombre?: string;
   camaraComercioArchivo?: string;
@@ -95,12 +98,17 @@ export interface Supplier {
    *  guardar se copia a asesor/telefono/email para el resto de la app. */
   contactoNombre?: string;
   contactoTelefono?: string;
+  /** Teléfono FIJO del contacto: sin columna en la BD hoy (solo local). */
+  contactoTelefonoFijo?: string;
   contactoEmail?: string;
   /** Representante legal (solo Persona Jurídica). */
   repLegalNombres?: string;
   repLegalApellidos?: string;
   repLegalTipoDocumento?: TipoDocumento | "";
   repLegalNumeroDocumento?: string;
+  /** Teléfono y email del representante legal: sin columna en la BD hoy. */
+  repLegalTelefono?: string;
+  repLegalEmail?: string;
 }
 
 export const INITIAL_SUPPLIERS: Supplier[] = [
@@ -170,24 +178,31 @@ const emptySupplier = (): ProveedorFormValues => ({
   dv: "",
   // Persona Jurídica.
   razonSocial: "",
+  nombreComercial: "",
   tipoSociedad: "",
   camaraComercioNombre: "",
   camaraComercioArchivo: "",
   fechaExpedicionCamara: "",
   contactoNombre: "",
   contactoTelefono: "",
+  contactoTelefonoFijo: "",
   contactoEmail: "",
   repLegalNombres: "",
   repLegalApellidos: "",
   repLegalTipoDocumento: "",
   repLegalNumeroDocumento: "",
+  repLegalTelefono: "",
+  repLegalEmail: "",
 });
 
 /**
- * Cuerpo de "Ver detalle": pinta los datos según el tipo de persona, con los
- * mismos campos que pide cada formulario (así lo que se guardó es lo que se
- * ve). Los proveedores antiguos sin tipo siguen mostrando el bloque de
- * contacto viejo (asesor/teléfono/email/dirección).
+ * Cuerpo de "Ver detalle": pinta EXACTAMENTE los campos que pide cada tipo de
+ * persona (misma sección y mismo orden que el formulario, decisión 6.1), así
+ * lo que se guardó es lo que se ve. Los campos sin columna en la BD (teléfono
+ * y email del representante, nombre comercial y teléfono fijo) hoy salen "—".
+ * Los proveedores antiguos sin tipo siguen mostrando el bloque de contacto
+ * viejo (asesor/teléfono/email/dirección). El Estado vive en la sección
+ * "Configuración" del propio modal, así que no se repite aquí.
  */
 function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
   const esNatural = s.tipoPersona === "Persona Natural";
@@ -207,92 +222,110 @@ function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
     </div>
   );
 
+  /** El formulario guarda UN solo campo "Nombre completo": aquí se une lo que
+      el modelo trae partido (nombres + apellidos) y, si no hay, el `nombre`. */
+  const nombreCompleto = [s.nombres ?? "", s.apellidos ?? ""]
+    .map(x => x.trim())
+    .filter(Boolean)
+    .join(" ") || (s.nombre ?? "");
+
   return (
     <>
-      <div>
-        {seccion("Identificación del proveedor")}
-        <div className="grid grid-cols-2 gap-3">
-          {/* En Jurídica el nombre guardado ES la razón social. */}
-          {celda(esJuridica ? "Razón social" : "Nombre", s.nombre)}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Tipo de persona</p>
-            <div className={cls}>{s.tipoPersona || "—"}</div>
+      {/* ── Persona Natural: los 7 campos del formulario, SIN NIT y SIN DV ── */}
+      {esNatural && (
+        <div>
+          {seccion("Datos del proveedor")}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {celda("Tipo de persona", s.tipoPersona)}
+            {celda("Tipo de documento", s.tipoDocumento)}
+            {celda("Número de documento", s.numeroDocumento)}
+            {celda("Nombre completo", nombreCompleto)}
+            {celda("Teléfono", s.telefono)}
+            {celda("Email", s.email)}
+            {celda("Dirección", s.direccion)}
           </div>
-          {esNatural && (
-            <>
-              {celda("Nombres", s.nombres)}
-              {celda("Apellidos", s.apellidos)}
-              {celda("Tipo de documento", s.tipoDocumento)}
-              {celda("Número de documento", s.numeroDocumento)}
-              {celda("NIT (opcional)", formatoNit(s.nit))}
-              {celda("DV", s.dv)}
-            </>
-          )}
-          {!esNatural && (
-            <>
+        </div>
+      )}
+
+      {/* ── Persona Jurídica: los tres bloques del formulario ─────────────── */}
+      {esJuridica && (
+        <>
+          <div>
+            {seccion("Representante legal")}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {celda("Tipo de documento", s.repLegalTipoDocumento)}
+              {celda("Número de documento", s.repLegalNumeroDocumento)}
+              {celda(
+                "Nombre completo",
+                [s.repLegalNombres ?? "", s.repLegalApellidos ?? ""]
+                  .map(x => x.trim())
+                  .filter(Boolean)
+                  .join(" "),
+              )}
+              {celda("Teléfono", s.repLegalTelefono)}
+              {celda("Email", s.repLegalEmail)}
+            </div>
+          </div>
+
+          <div>
+            {seccion("Razón social")}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {celda("Tipo de persona", s.tipoPersona)}
+              {/* En Jurídica el nombre guardado ES la razón social. */}
+              {celda("Nombre o razón social", s.nombre)}
+              {celda("Nombre comercial", s.nombreComercial)}
               {celda("NIT", formatoNit(s.nit))}
               {celda("DV", s.dv)}
-              {esJuridica && celda("Tipo de sociedad", s.tipoSociedad)}
-            </>
-          )}
-        </div>
-      </div>
-
-      {esJuridica && (
-        <div>
-          {seccion("Cámara de Comercio")}
-          <div className="grid grid-cols-2 gap-3">
-            {celda(
-              "Documento",
-              s.camaraComercioNombre,
-              // Si quedó el dataURL se puede abrir en otra pestaña; si no,
-              // solo se muestra el nombre del archivo.
-              s.camaraComercioArchivo
-                ? (
-                  <a
-                    href={s.camaraComercioArchivo}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline break-all hover:text-red-700"
-                    title={s.camaraComercioNombre}
-                  >
-                    {s.camaraComercioNombre}
-                  </a>
-                )
-                : undefined,
-            )}
-            {celda("Fecha de expedición", s.fechaExpedicionCamara)}
+              {celda("Tipo de sociedad", s.tipoSociedad)}
+            </div>
           </div>
-        </div>
+
+          <div>
+            {seccion("Contacto comercial")}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {celda("Email", s.contactoEmail)}
+              {celda("Teléfono celular", s.contactoTelefono)}
+              {celda("Teléfono fijo", s.contactoTelefonoFijo)}
+              {celda("Dirección comercial", s.direccion)}
+              {celda("Nombre del contacto", s.contactoNombre)}
+            </div>
+          </div>
+
+          <div>
+            {seccion("Cámara de Comercio")}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {celda(
+                "Documento",
+                s.camaraComercioNombre,
+                // Si quedó el dataURL se puede abrir en otra pestaña; si no,
+                // solo se muestra el nombre del archivo.
+                s.camaraComercioArchivo
+                  ? (
+                    <a
+                      href={s.camaraComercioArchivo}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline break-all hover:text-red-700"
+                      title={s.camaraComercioNombre}
+                    >
+                      {s.camaraComercioNombre}
+                    </a>
+                  )
+                  : undefined,
+              )}
+              {celda("Fecha de expedición", s.fechaExpedicionCamara)}
+            </div>
+          </div>
+        </>
       )}
 
-      {esJuridica && (
-        <div>
-          {seccion("Contacto comercial")}
-          <div className="grid grid-cols-2 gap-3">
-            {celda("Nombre", s.contactoNombre)}
-            {celda("Teléfono", s.contactoTelefono)}
-            {celda("Correo", s.contactoEmail)}
-          </div>
-        </div>
-      )}
-
-      {esJuridica && (
-        <div>
-          {seccion("Representante legal")}
-          <div className="grid grid-cols-2 gap-3">
-            {celda("Nombres", s.repLegalNombres)}
-            {celda("Apellidos", s.repLegalApellidos)}
-            {celda("Tipo de documento", s.repLegalTipoDocumento)}
-            {celda("Número de documento", s.repLegalNumeroDocumento)}
-          </div>
-        </div>
-      )}
-
+      {/* Proveedor antiguo sin tipo de persona registrado. */}
       {!esNatural && !esJuridica && (
         <div>
           {seccion("Contacto")}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {celda("Tipo de persona", s.tipoPersona)}
+            {celda("Nombre", s.nombre)}
             {celda("Asesor Comercial", s.asesorComercial)}
             {celda("Teléfono", s.telefono)}
             {celda("Email", s.email)}
@@ -342,8 +375,18 @@ async function mostrarErrorProveedor(
   fallback: string,
 ) {
   const mensaje = mensajeErrorProveedores(error, fallback);
-  if (/nit/i.test(mensaje)) setErrorServidor("nit", mensaje);
-  else if (/correo|email/i.test(mensaje)) setErrorServidor("email", mensaje);
+  // Solo se pinta BAJO su campo si ese campo está pintado HOY: el formulario
+  // cambia con el tipo de persona (el NIT ya no existe en Persona Natural y
+  // el correo vive en `contactoEmail` en Jurídica). Dejar el error en un campo
+  // oculto bloquearía el guardado sin que el usuario vea nada.
+  const visible = (campo: string) => !!document.querySelector(`[data-prov-campo="${campo}"]`);
+  let campo: keyof ProveedorFormValues | null = null;
+  if (/nit/i.test(mensaje) && visible("nit")) campo = "nit";
+  else if (/correo|email/i.test(mensaje)) {
+    if (visible("contactoEmail")) campo = "contactoEmail";
+    else if (visible("email")) campo = "email";
+  }
+  if (campo) setErrorServidor(campo, mensaje);
   else toast.error(mensaje);
 }
 
@@ -439,9 +482,12 @@ export function SuppliersScreen({
   );
 
   const handleCreate = async () => {
-    proveedorForm.setIntentoGuardar(true);
-    if (!proveedorForm.formValido || guardando) {
-      if (!proveedorForm.formValido) toast.error("Revisa los campos del formulario");
+    if (guardando) return;
+    // Fase 2: el botón YA NO se apaga solo. Al pulsarlo se pintan todos los
+    // errores que falten y el foco va al primer campo inválido; si hay error,
+    // el formulario NO se envía.
+    if (proveedorForm.enfocarPrimeroInvalido()) {
+      toast.error("Revisa los campos del formulario");
       return;
     }
     const v = proveedorForm.values;
@@ -477,15 +523,13 @@ export function SuppliersScreen({
 
   const handleEdit = async () => {
     if (!editItem || guardando) return;
-    editForm.setIntentoGuardar(true);
-    // Se revisan TODOS los campos con error MENOS los dos que este formulario
-    // no gestiona como dato editable: el NIT (queda congelado arriba) y el
-    // nombre (se deriva de la identificación al guardar). Sin esta lista el
-    // modal no se podría guardar mientras haya un proveedor antiguo cuyo NIT
-    // venga con formato ("900.123.456-1") o un nombre heredado.
-    const camposConError = (Object.keys(editForm.errors) as (keyof ProveedorFormValues)[])
-      .filter(c => c !== "nit" && c !== "nombre");
-    if (camposConError.length > 0) {
+    // Se ignoran DOS llaves que este formulario no gestiona como dato
+    // editable: el NIT (queda congelado) y el nombre (se deriva de la
+    // identificación al guardar). Sin esta lista el modal no se podría
+    // guardar mientras haya un proveedor antiguo cuyo NIT venga con formato
+    // ("900.123.456-1") o un nombre heredado. El resto de los errores pinta
+    // su mensaje y mueve el foco al primer campo inválido (Fase 2).
+    if (editForm.enfocarPrimeroInvalido(["nit", "nombre"])) {
       toast.error("Revisa los campos del formulario");
       return;
     }
@@ -604,6 +648,12 @@ export function SuppliersScreen({
       numeroDocumento: editItem?.numeroDocumento ?? "",
       dv: editItem?.dv ?? "",
       tipoSociedad: editItem?.tipoSociedad ?? "",
+      // Campos nuevos: los proveedores antiguos no los traen (y el backend
+      // aún no los guarda), así que arrancan en "".
+      nombreComercial: editItem?.nombreComercial ?? "",
+      contactoTelefonoFijo: editItem?.contactoTelefonoFijo ?? "",
+      repLegalTelefono: editItem?.repLegalTelefono ?? "",
+      repLegalEmail: editItem?.repLegalEmail ?? "",
       camaraComercioNombre: editItem?.camaraComercioNombre ?? "",
       camaraComercioArchivo: editItem?.camaraComercioArchivo ?? "",
       fechaExpedicionCamara: editItem?.fechaExpedicionCamara ?? "",
@@ -708,10 +758,10 @@ export function SuppliersScreen({
           </button>
           <button
             onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
-            // El alta ya venía deshabilitada hasta completar el formulario; la
-            // edición valida al guardar (como hasta ahora) para no bloquear
-            // registros antiguos con datos heredados.
-            disabled={guardando || (enAlta ? !proveedorForm.formValido : false)}
+            // Fase 2: el botón queda SIEMPRE habilitado (solo se apaga con
+            // "Guardando…"). Si hay errores, `handleCreate` los pinta y enfoca
+            // el primero; el formulario no se envía.
+            disabled={guardando}
             className={`${clsBase} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
           >
             {guardando ? "Guardando…" : enAlta ? "Crear" : "Guardar"}
@@ -925,7 +975,7 @@ export function SuppliersScreen({
             <div className="flex min-h-full items-center justify-center p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
+                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl my-4">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
                   <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
