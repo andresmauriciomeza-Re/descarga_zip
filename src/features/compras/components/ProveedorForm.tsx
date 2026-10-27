@@ -5,15 +5,14 @@ import * as RadixSelect from "@radix-ui/react-select";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { MensajeError } from "@/shared/components/campo";
-import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   filtrarNit,
   filtrarNumeroDocumento,
-  filtrarDv,
   soloLetras,
   soloDigitos,
+  soloDireccion,
   formatoNit,
   TIPOS_DOCUMENTO,
   TIPOS_SOCIEDAD,
@@ -28,10 +27,18 @@ import {
 // mientras se escribe, mensaje debajo del input con borde rojo mientras hay
 // error y label con asterisco en los campos obligatorios.
 //
-// El formulario es CONDICIONAL por tipo de persona (punto 12): Persona Natural
-// pide sus 6 datos de identificación y Persona Jurídica pide los suyos
-// (razón social, sociedad, cámara de comercio, contacto y representante legal).
+// El formulario es CONDICIONAL por tipo de persona (punto 12) y respeta el
+// orden exacto de la especificación:
+//   · Persona Natural → Tipo de documento, Número de documento, Nombre
+//     completo, Teléfono, Email, Dirección y Estado. SIN NIT y SIN DV.
+//   · Persona Jurídica → secciones APILADAS una debajo de la otra (Representante
+//     legal, Razón social, Contacto comercial y Cámara de Comercio), cada una
+//     con DOS inputs por fila.
 // Como los tres módulos renderizan ESTE componente, el cambio se propaga solo.
+//
+// Estilo: títulos Montserrat (los de pantalla), textos/labels e inputs Poppins
+// 14px (`labelCls` + `text-sm`), fondo claro por tokens y SIN cards con borde:
+// las secciones se separan con una línea divisoria (`seccionCls`), no con caja.
 
 const inputCls =
   "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
@@ -41,6 +48,16 @@ const lecturaCls =
 
 const seccionCls =
   "text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border";
+
+/** Label de cada campo: 14px (Poppins heredado del body). */
+const labelCls = "block text-sm font-semibold text-muted-foreground mb-1.5";
+
+/** Texto de ayuda bajo un campo (solo lectura, placeholders secundarios). */
+const ayudaCls = "text-[11px] text-muted-foreground mt-1";
+
+/** Aviso general (sin caja con borde: solo una línea lateral, como pide el
+    estilo de "sin cards con borde"). */
+const avisoCls = "text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 py-1";
 
 const req = <span className="text-red-500">*</span>;
 
@@ -71,10 +88,34 @@ function Campo({
   className?: string;
 }) {
   return (
-    <div className={className}>
-      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+    // `data-prov-campo` es el ancla que usa `enfocarPrimeroInvalido` del hook
+    // para poner el foco en el PRIMER campo con error en orden visual.
+    <div className={className} data-prov-campo={campo}>
+      <label className={labelCls}>{label}</label>
       {children}
       <MensajeError err={form.obtenerError(campo)} />
+    </div>
+  );
+}
+
+/**
+ * Sección del formulario: título en versalitas con una LÍNEA divisoria debajo
+ * (el estilo pedido es "sin cards con borde, solo líneas divisorias").
+ * Vive fuera del componente para que React no remonte los inputs en cada render.
+ */
+function Bloque({
+  titulo,
+  children,
+  className = "",
+}: {
+  titulo: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className={seccionCls}>{titulo}</p>
+      {children}
     </div>
   );
 }
@@ -201,8 +242,6 @@ export function ProveedorFormCampos({
 
   const alTocar = (campo: CampoTexto) => () => form.marcarTocado(campo);
 
-  // CalendarDropdown reemplaza el input nativo de fecha
-
   /**
    * Cámara de Comercio (adjunto). El archivo se sube al backend y la URL
    * resultante se guarda en `camaraComercioArchivo`; el nombre del archivo
@@ -235,8 +274,9 @@ export function ProveedorFormCampos({
     });
   };
 
-  /** Quitar el adjunto. La fecha se limpia con él: deja de tener sentido
-   *  documentar la expedencia de un documento que ya no está. */
+  /** Quitar el adjunto. La fecha de expedición (que ya no se pinta) se limpia
+   *  con él: deja de tener sentido documentar la expedencia de un documento
+   *  que ya no está. */
   const quitarAdjunto = () => {
     form.marcarTocado("camaraComercioArchivo");
     form.setCampo("camaraComercioNombre", "");
@@ -255,352 +295,377 @@ export function ProveedorFormCampos({
   const pideNit = nitLectura === undefined;
 
   return (
-    // Dos columnas en pantallas anchas: la identificación a la izquierda y la
-    // documentación, el contacto y el representante a la derecha. Así el
-    // formulario entra en el alto del modal y el cuerpo no necesita scroll en
-    // escritorio (en móvil vuelve a una columna).
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-6 items-start">
-      <div>
-        <p className={seccionCls}>
-          Identificación del proveedor
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Modo edición: el NIT queda congelado (regla del módulo), por eso
-              no se vuelve a pintar como input más abajo. Si el proveedor se
-              creó SIN NIT (Persona Natural puede llevarlo vacío) no hay nada
-              que congelar y el input sigue disponible para agregarlo. */}
-          {nitLectura !== undefined && nitLectura.trim() !== "" && (
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">NIT</label>
-              <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                El NIT no se puede modificar después de creado el proveedor
-              </p>
-            </div>
-          )}
-
-          {/* Punto 12: Tipo de persona (obligatorio). Ocupa las dos columnas
-              para no despegar la identificación de la rejilla de 2 que comparten
-              los tres formularios. De aquí cuelgan los dos bloques de campos.
-              Punto 3.1: dos opciones → control segmentado con aria-pressed. */}
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-              Tipo de persona {req}
-            </label>
-            <SegmentadoButtons
-              valor={v.tipoPersona}
-              onChange={(valor) => {
-                form.marcarTocado("tipoPersona");
-                form.setCampo("tipoPersona", valor as ProveedorFormValues["tipoPersona"]);
-              }}
-              opciones={[
-                { valor: "Persona Natural", etiqueta: "Persona Natural" },
-                { valor: "Persona Jurídica", etiqueta: "Persona Jurídica" },
-              ]}
-            />
-            <MensajeError err={form.obtenerError("tipoPersona")} />
-          </div>
-
-          {!hayTipo && (
-            <p className="sm:col-span-2 text-xs text-muted-foreground bg-muted/60 border border-border rounded-xl px-3 py-2.5">
-              Selecciona el tipo de persona para ver los datos que se piden.
-            </p>
-          )}
-
-          {/* ── Persona Natural ───────────────────────────────────────────── */}
-          {esNatural && (
-            <>
-              <Campo form={form} label={<>Nombres {req}</>} campo="nombres">
-                <input
-                  value={v.nombres ?? ""}
-                  onChange={alEscribir("nombres", soloLetras)}
-                  onBlur={alTocar("nombres")}
-                  placeholder="Nombres"
-                  autoFocus={autoFocusNombre}
-                  className={`${inputCls} transition-colors ${form.campoCls("nombres")}`}
-                />
-              </Campo>
-              <Campo form={form} label={<>Apellidos {req}</>} campo="apellidos">
-                <input
-                  value={v.apellidos ?? ""}
-                  onChange={alEscribir("apellidos", soloLetras)}
-                  onBlur={alTocar("apellidos")}
-                  placeholder="Apellidos"
-                  className={`${inputCls} transition-colors ${form.campoCls("apellidos")}`}
-                />
-              </Campo>
-              {/* Punto 3.1: CC/CE/Pasaporte pasan a `<select>` como ya lo
-                  estaba "Tipo de sociedad": 3 botones en línea se rompían en la
-                  columna izquierda. Se pinta la etiqueta completa y se GUARDA
-                  el mismo código de siempre. */}
-              <SelectCampo
-                form={form}
-                label={<>Tipo de documento {req}</>}
-                campo="tipoDocumento"
-                valor={v.tipoDocumento ?? ""}
-                opciones={TIPOS_DOCUMENTO}
-                etiquetas={etiquetaTipoDocumento}
-                vacio="Elegir documento"
-                ariaLabel="Tipo de documento"
-              />
-              <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
-                <input
-                  value={v.numeroDocumento ?? ""}
-                  onChange={alEscribir("numeroDocumento", filtrarNumeroDocumento)}
-                  onBlur={alTocar("numeroDocumento")}
-                  placeholder="Sin puntos ni espacios"
-                  inputMode="numeric"
-                  maxLength={10}
-                  className={`${inputCls} transition-colors ${form.campoCls("numeroDocumento")}`}
-                />
-              </Campo>
-              {/* NIT opcional en Persona Natural: si se llena, la validación
-                  exige 10 dígitos y que no esté repetido. */}
-              {pideNit && (
-                <Campo
-                  form={form}
-                  label={<>NIT <span className="font-normal">(opcional)</span></>}
-                  campo="nit"
-                >
-                  <input
-                    value={v.nit}
-                    onChange={alEscribir("nit", filtrarNit)}
-                    onBlur={alTocar("nit")}
-                    placeholder="Solo números"
-                    inputMode="numeric"
-                    className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
-                  />
-                </Campo>
-              )}
-              <Campo
-                form={form}
-                label={<>DV <span className="font-normal">(dígito de verificación, opcional)</span></>}
-                campo="dv"
-              >
-                <input
-                  value={v.dv ?? ""}
-                  onChange={alEscribir("dv", filtrarDv)}
-                  onBlur={alTocar("dv")}
-                  placeholder="1 a 2 dígitos"
-                  inputMode="numeric"
-                  maxLength={2}
-                  className={`${inputCls} transition-colors ${form.campoCls("dv")}`}
-                />
-              </Campo>
-            </>
-          )}
-
-          {/* ── Persona Jurídica ──────────────────────────────────────────── */}
-          {esJuridica && (
-            <>
-              <Campo form={form} label={<>Razón social {req}</>} campo="razonSocial" className="sm:col-span-2">
-                <input
-                  value={v.razonSocial ?? ""}
-                  onChange={alEscribir("razonSocial", (x) => x)}
-                  onBlur={alTocar("razonSocial")}
-                  placeholder="Ej: Quesos del Norte S.A.S."
-                  autoFocus={autoFocusNombre}
-                  className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
-                />
-              </Campo>
-              {pideNit && (
-                <Campo form={form} label={<>NIT {req}</>} campo="nit">
-                  <input
-                    value={v.nit}
-                    onChange={alEscribir("nit", filtrarNit)}
-                    onBlur={alTocar("nit")}
-                    placeholder="9001234561"
-                    inputMode="numeric"
-                    // Sin maxLength: truncaría un NIT pegado con formato
-                    // ("900.123.456-1" → "900.123.45") ANTES de poder quitarle
-                    // los signos. El tope de 10 dígitos lo aplica filtrarNit.
-                    className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
-                  />
-                </Campo>
-              )}
-              <Campo form={form} label={<>DV {req}</>} campo="dv">
-                <input
-                  value={v.dv ?? ""}
-                  onChange={alEscribir("dv", filtrarDv)}
-                  onBlur={alTocar("dv")}
-                  placeholder="1 a 2 dígitos"
-                  inputMode="numeric"
-                  maxLength={2}
-                  className={`${inputCls} transition-colors ${form.campoCls("dv")}`}
-                />
-              </Campo>
-              <SelectCampo
-                form={form}
-                label={<>Tipo de sociedad {req}</>}
-                campo="tipoSociedad"
-                valor={v.tipoSociedad ?? ""}
-                opciones={TIPOS_SOCIEDAD}
-                vacio="Selecciona el tipo de sociedad"
-                ariaLabel="Tipo de sociedad"
-              />
-            </>
-          )}
+    // CONTENEDOR CENTRADO (max-w-3xl = 768px, mx-auto): el formulario ya no se
+    // pega a la izquierda ni se estira al ancho completo del modal, y los
+    // botones de Tipo de persona quedan al MISMO ancho del contenedor (viven
+    // dentro de él). En móvil el ancho es el de la pantalla y las rejillas pasan
+    // a 1 columna. Las secciones se apilan en una sola columna para que todo se
+    // recorra con el scroll INTERNO del modal (sin scroll de página).
+    <div className="space-y-5 mx-auto max-w-3xl">
+      {/* Modo edición + Persona Natural (o tipo sin elegir): el NIT queda
+          congelado (regla del módulo: no se modifica después de creado). Solo
+          se MUESTRA, ya no hay input de NIT ni de DV en Persona Natural. En
+          Persona Jurídica el NIT congelado se pinta dentro de su bloque. */}
+      {!esJuridica && nitLectura !== undefined && nitLectura.trim() !== "" && (
+        <div className="sm:max-w-md">
+          <label className={labelCls}>NIT</label>
+          <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
+          <p className={ayudaCls}>
+            El NIT no se puede modificar después de creado el proveedor
+          </p>
         </div>
-      </div>
-
-      {/* Columna DERECHA: lo que va después de la identificación. En Persona
-          Natural solo queda la configuración; la rejilla alinea las dos
-          columnas por arriba, así que el hueco no desordena el formulario. */}
-      <div className="space-y-6">
-      {/* ── Persona Jurídica: documentación, contacto y representante ─────── */}
-      {esJuridica && (
-        <>
-          <div>
-            <p className={seccionCls}>Cámara de Comercio</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Campo
-                form={form}
-                label={<>Cámara de Comercio <span className="font-normal">(adjunto, opcional)</span></>}
-                campo="camaraComercioArchivo"
-              >
-                <input
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                  onChange={alAdjuntar}
-                  disabled={subiendo}
-                  className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
-                />
-                <div className="flex items-center justify-between gap-2 mt-1.5">
-                  <span className="text-[10px] text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
-                    {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG, WEBP) hasta 5 MB")}
-                  </span>
-                  {v.camaraComercioNombre && (
-                    <button
-                      type="button"
-                      onClick={quitarAdjunto}
-                      className="text-[10px] font-semibold text-red-500 hover:text-red-600 cursor-pointer shrink-0"
-                    >
-                      Quitar
-                    </button>
-                  )}
-                </div>
-              </Campo>
-              {/* Decisión: la fecha solo es obligatoria si hay adjunto (ver
-                  validación en useProveedorForm); sin archivo queda opcional
-                  para no bloquear registros antiguos. */}
-              <Campo
-                form={form}
-                label={
-                  <>Fecha de expedición {v.camaraComercioNombre ? req : <span className="font-normal">(opcional)</span>}</>
-                }
-                campo="fechaExpedicionCamara"
-              >
-                <CalendarDropdown
-                  value={v.fechaExpedicionCamara ?? ""}
-                  onChange={(val) => {
-                    form.marcarTocado("fechaExpedicionCamara");
-                    form.setCampo("fechaExpedicionCamara", val);
-                  }}
-                  error={!!form.obtenerError("fechaExpedicionCamara")}
-                  onBlur={alTocar("fechaExpedicionCamara")}
-                />
-              </Campo>
-            </div>
-          </div>
-
-          <div>
-            <p className={seccionCls}>Contacto comercial</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Campo form={form} label={<>Nombre {req}</>} campo="contactoNombre">
-                <input
-                  value={v.contactoNombre ?? ""}
-                  onChange={alEscribir("contactoNombre", soloLetras)}
-                  onBlur={alTocar("contactoNombre")}
-                  placeholder="Persona de contacto"
-                  className={`${inputCls} transition-colors ${form.campoCls("contactoNombre")}`}
-                />
-              </Campo>
-              <Campo form={form} label={<>Teléfono {req}</>} campo="contactoTelefono">
-                <input
-                  type="tel"
-                  value={v.contactoTelefono ?? ""}
-                  onChange={alEscribir("contactoTelefono", soloDigitos)}
-                  onBlur={alTocar("contactoTelefono")}
-                  placeholder="6043210001"
-                  inputMode="numeric"
-                  maxLength={10}
-                  className={`${inputCls} transition-colors ${form.campoCls("contactoTelefono")}`}
-                />
-              </Campo>
-              <Campo form={form} label={<>Correo {req}</>} campo="contactoEmail">
-                <input
-                  type="email"
-                  value={v.contactoEmail ?? ""}
-                  onChange={alEscribir("contactoEmail", (x) => x)}
-                  onBlur={alTocar("contactoEmail")}
-                  placeholder="ventas@proveedor.co"
-                  className={`${inputCls} transition-colors ${form.campoCls("contactoEmail")}`}
-                />
-              </Campo>
-            </div>
-          </div>
-
-          <div>
-            <p className={seccionCls}>Representante legal</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Campo form={form} label={<>Nombres {req}</>} campo="repLegalNombres">
-                <input
-                  value={v.repLegalNombres ?? ""}
-                  onChange={alEscribir("repLegalNombres", soloLetras)}
-                  onBlur={alTocar("repLegalNombres")}
-                  placeholder="Nombres"
-                  className={`${inputCls} transition-colors ${form.campoCls("repLegalNombres")}`}
-                />
-              </Campo>
-              <Campo form={form} label={<>Apellidos {req}</>} campo="repLegalApellidos">
-                <input
-                  value={v.repLegalApellidos ?? ""}
-                  onChange={alEscribir("repLegalApellidos", soloLetras)}
-                  onBlur={alTocar("repLegalApellidos")}
-                  placeholder="Apellidos"
-                  className={`${inputCls} transition-colors ${form.campoCls("repLegalApellidos")}`}
-                />
-              </Campo>
-              {/* Punto 3.1: mismo control que el tipo de documento de Persona
-                  Natural (lista vertical con la etiqueta completa). */}
-              <SelectCampo
-                form={form}
-                label={<>Tipo de documento {req}</>}
-                campo="repLegalTipoDocumento"
-                valor={v.repLegalTipoDocumento ?? ""}
-                opciones={TIPOS_DOCUMENTO}
-                etiquetas={etiquetaTipoDocumento}
-                vacio="Elegir documento"
-                ariaLabel="Tipo de documento del representante legal"
-              />
-              <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">
-                <input
-                  value={v.repLegalNumeroDocumento ?? ""}
-                  onChange={alEscribir("repLegalNumeroDocumento", filtrarNumeroDocumento)}
-                  onBlur={alTocar("repLegalNumeroDocumento")}
-                  placeholder="Sin puntos ni espacios"
-                  inputMode="numeric"
-                  maxLength={10}
-                  className={`${inputCls} transition-colors ${form.campoCls("repLegalNumeroDocumento")}`}
-                />
-              </Campo>
-            </div>
-          </div>
-        </>
       )}
 
-      <div>
-        <p className={seccionCls}>Configuración</p>
-        <div className="w-full sm:w-1/2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Estado</label>
-          <EstadoSelect
-            value={v.estado}
-            onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
-            options={OPCIONES_ESTADO}
-          />
-        </div>
+      {/* Tipo de persona (obligatorio): sigue eligiéndose con BOTONES, no con
+          select. De aquí cuelgan los dos conjuntos de campos. */}
+      <div data-prov-campo="tipoPersona">
+        <label className={labelCls}>Tipo de persona {req}</label>
+        <SegmentadoButtons
+          fullWidth
+          valor={v.tipoPersona}
+          onChange={(valor) => {
+            form.marcarTocado("tipoPersona");
+            form.setCampo("tipoPersona", valor as ProveedorFormValues["tipoPersona"]);
+          }}
+          opciones={[
+            { valor: "Persona Natural", etiqueta: "Persona Natural" },
+            { valor: "Persona Jurídica", etiqueta: "Persona Jurídica" },
+          ]}
+        />
+        <MensajeError err={form.obtenerError("tipoPersona")} />
       </div>
-      </div>
+
+      {!hayTipo && (
+        <p className={avisoCls}>
+          Selecciona el tipo de persona para ver los datos que se piden.
+        </p>
+      )}
+
+          {/* ── Persona Natural ── 7 campos en el orden de la spec, SIN NIT y
+              SIN DV. DOS por fila (`sm:grid-cols-2`); en móvil, 1 columna. El
+              octavo campo (Estado) queda solo en su fila, a la izquierda, con
+              el mismo ancho que los demás (así lo pinta el grid). ─────────── */}
+          {esNatural && (
+            <Bloque titulo="Datos del proveedor">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Tipo de documento */}
+                <SelectCampo
+                  form={form}
+                  label={<>Tipo de documento {req}</>}
+                  campo="tipoDocumento"
+                  valor={v.tipoDocumento ?? ""}
+                  opciones={TIPOS_DOCUMENTO}
+                  etiquetas={etiquetaTipoDocumento}
+                  vacio="Elegir documento"
+                  ariaLabel="Tipo de documento"
+                />
+                {/* 2. Número de documento */}
+                <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
+                  <input
+                    value={v.numeroDocumento ?? ""}
+                    onChange={alEscribir("numeroDocumento", filtrarNumeroDocumento)}
+                    onBlur={alTocar("numeroDocumento")}
+                    placeholder="Sin puntos ni espacios"
+                    inputMode="numeric"
+                    maxLength={10}
+                    className={`${inputCls} transition-colors ${form.campoCls("numeroDocumento")}`}
+                  />
+                </Campo>
+                {/* 3. Nombre completo: UN solo campo (al escribirlo alimenta
+                    `nombres` + `apellidos` en el hook, ver setCampo). */}
+                <Campo form={form} label={<>Nombre completo {req}</>} campo="nombreCompleto">
+                  <input
+                    value={v.nombreCompleto ?? ""}
+                    onChange={alEscribir("nombreCompleto", soloLetras)}
+                    onBlur={alTocar("nombreCompleto")}
+                    placeholder="Nombre y apellidos"
+                    autoFocus={autoFocusNombre}
+                    className={`${inputCls} transition-colors ${form.campoCls("nombreCompleto")}`}
+                  />
+                </Campo>
+                {/* 4. Teléfono */}
+                <Campo form={form} label={<>Teléfono {req}</>} campo="telefono">
+                  <input
+                    type="tel"
+                    value={v.telefono ?? ""}
+                    onChange={alEscribir("telefono", soloDigitos)}
+                    onBlur={alTocar("telefono")}
+                    placeholder="10 dígitos sin espacios"
+                    inputMode="numeric"
+                    maxLength={10}
+                    className={`${inputCls} transition-colors ${form.campoCls("telefono")}`}
+                  />
+                </Campo>
+                {/* 5. Email */}
+                <Campo form={form} label={<>Email {req}</>} campo="email">
+                  <input
+                    type="email"
+                    value={v.email ?? ""}
+                    onChange={alEscribir("email", (x) => x)}
+                    onBlur={alTocar("email")}
+                    placeholder="nombre@proveedor.co"
+                    className={`${inputCls} transition-colors ${form.campoCls("email")}`}
+                  />
+                </Campo>
+                {/* 6. Dirección */}
+                <Campo form={form} label={<>Dirección {req}</>} campo="direccion">
+                  <input
+                    value={v.direccion ?? ""}
+                    onChange={alEscribir("direccion", soloDireccion)}
+                    onBlur={alTocar("direccion")}
+                    placeholder="Cra 50 #30-10"
+                    className={`${inputCls} transition-colors ${form.campoCls("direccion")}`}
+                  />
+                </Campo>
+                {/* 7. Estado (píldora, mismo control del listado). */}
+                <div>
+                  <label className={labelCls}>Estado</label>
+                  <EstadoSelect
+                    value={v.estado}
+                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
+                    options={OPCIONES_ESTADO}
+                  />
+                </div>
+              </div>
+            </Bloque>
+          )}
+
+          {/* ── Persona Jurídica: secciones APILADAS (Representante legal,
+              Razón social, Contacto comercial) + Cámara de Comercio. Cada
+              sección pinta DOS inputs por fila (`sm:grid-cols-2`); en móvil
+              pasan a 1 columna. ─────────────────────────────────────────── */}
+          {esJuridica && (
+            <>
+                {/* Bloque 1 — Representante legal (1-5 de la spec) */}
+                <Bloque titulo="Representante legal">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <SelectCampo
+                      form={form}
+                      label={<>Tipo de documento {req}</>}
+                      campo="repLegalTipoDocumento"
+                      valor={v.repLegalTipoDocumento ?? ""}
+                      opciones={TIPOS_DOCUMENTO}
+                      etiquetas={etiquetaTipoDocumento}
+                      vacio="Elegir documento"
+                      ariaLabel="Tipo de documento del representante legal"
+                    />
+                    <Campo form={form} label={<>Número de documento {req}</>} campo="repLegalNumeroDocumento">
+                      <input
+                        value={v.repLegalNumeroDocumento ?? ""}
+                        onChange={alEscribir("repLegalNumeroDocumento", filtrarNumeroDocumento)}
+                        onBlur={alTocar("repLegalNumeroDocumento")}
+                        placeholder="Sin puntos ni espacios"
+                        inputMode="numeric"
+                        maxLength={10}
+                        className={`${inputCls} transition-colors ${form.campoCls("repLegalNumeroDocumento")}`}
+                      />
+                    </Campo>
+                    {/* UN solo campo "Nombre completo" (alimenta
+                        repLegalNombres + repLegalApellidos en el hook). */}
+                    <Campo form={form} label={<>Nombre completo {req}</>} campo="repLegalNombreCompleto">
+                      <input
+                        value={v.repLegalNombreCompleto ?? ""}
+                        onChange={alEscribir("repLegalNombreCompleto", soloLetras)}
+                        onBlur={alTocar("repLegalNombreCompleto")}
+                        placeholder="Nombre y apellidos"
+                        className={`${inputCls} transition-colors ${form.campoCls("repLegalNombreCompleto")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Teléfono {req}</>} campo="repLegalTelefono">
+                      <input
+                        type="tel"
+                        value={v.repLegalTelefono ?? ""}
+                        onChange={alEscribir("repLegalTelefono", soloDigitos)}
+                        onBlur={alTocar("repLegalTelefono")}
+                        placeholder="10 dígitos sin espacios"
+                        inputMode="numeric"
+                        maxLength={10}
+                        className={`${inputCls} transition-colors ${form.campoCls("repLegalTelefono")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Email {req}</>} campo="repLegalEmail">
+                      <input
+                        type="email"
+                        value={v.repLegalEmail ?? ""}
+                        onChange={alEscribir("repLegalEmail", (x) => x)}
+                        onBlur={alTocar("repLegalEmail")}
+                        placeholder="representante@proveedor.co"
+                        className={`${inputCls} transition-colors ${form.campoCls("repLegalEmail")}`}
+                      />
+                    </Campo>
+                  </div>
+                </Bloque>
+
+                {/* Bloque 2 — Razón social (6-10 de la spec). El DV se quitó
+                    del diseño y de la validación del cliente (decisión). */}
+                <Bloque titulo="Razón social">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
+                      <input
+                        value={v.razonSocial ?? ""}
+                        onChange={alEscribir("razonSocial", (x) => x)}
+                        onBlur={alTocar("razonSocial")}
+                        placeholder="Ej: Quesos del Norte S.A.S."
+                        autoFocus={autoFocusNombre}
+                        className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Nombre comercial <span className="font-normal">(opcional)</span></>} campo="nombreComercial">
+                      <input
+                        value={v.nombreComercial ?? ""}
+                        onChange={alEscribir("nombreComercial", (x) => x)}
+                        onBlur={alTocar("nombreComercial")}
+                        placeholder="Nombre con el que te conocen"
+                        className={`${inputCls} transition-colors ${form.campoCls("nombreComercial")}`}
+                      />
+                    </Campo>
+                    {/* Alta: input de NIT. Edición: NIT congelado (el módulo no
+                        lo permite modificar después de creado). */}
+                    {pideNit ? (
+                      <Campo form={form} label={<>NIT {req}</>} campo="nit">
+                        <input
+                          value={v.nit}
+                          onChange={alEscribir("nit", filtrarNit)}
+                          onBlur={alTocar("nit")}
+                          placeholder="9001234561"
+                          inputMode="numeric"
+                          // Sin maxLength: truncaría un NIT pegado con formato
+                          // ("900.123.456-1" → "900.123.45") ANTES de poder
+                          // quitarle los signos. El tope de 10 lo aplica filtrarNit.
+                          className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
+                        />
+                      </Campo>
+                    ) : (
+                      nitLectura !== undefined && nitLectura.trim() !== "" && (
+                        <div>
+                          <label className={labelCls}>NIT</label>
+                          <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
+                          <p className={ayudaCls}>
+                            El NIT no se puede modificar después de creado el proveedor
+                          </p>
+                        </div>
+                      )
+                    )}
+                    {/* DV: fuera del diseño (decisión). Su valor sigue viajando
+                        en el payload desde el estado, sin pintarse ni validarse. */}
+                    <SelectCampo
+                      form={form}
+                      label={<>Tipo de sociedad {req}</>}
+                      campo="tipoSociedad"
+                      valor={v.tipoSociedad ?? ""}
+                      opciones={TIPOS_SOCIEDAD}
+                      vacio="Selecciona el tipo de sociedad"
+                      ariaLabel="Tipo de sociedad"
+                    />
+                    <div>
+                      <label className={labelCls}>Estado</label>
+                      <EstadoSelect
+                        value={v.estado}
+                        onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
+                        options={OPCIONES_ESTADO}
+                      />
+                    </div>
+                  </div>
+                </Bloque>
+
+                {/* Bloque 3 — Contacto comercial (11-14 de la spec). El campo
+                    "Nombre" se conserva al FINAL por ser obligatorio en el
+                    backend (asesor_comercial) y en el listado. */}
+                <Bloque titulo="Contacto comercial">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Campo form={form} label={<>Email {req}</>} campo="contactoEmail">
+                      <input
+                        type="email"
+                        value={v.contactoEmail ?? ""}
+                        onChange={alEscribir("contactoEmail", (x) => x)}
+                        onBlur={alTocar("contactoEmail")}
+                        placeholder="ventas@proveedor.co"
+                        className={`${inputCls} transition-colors ${form.campoCls("contactoEmail")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Teléfono celular {req}</>} campo="contactoTelefono">
+                      <input
+                        type="tel"
+                        value={v.contactoTelefono ?? ""}
+                        onChange={alEscribir("contactoTelefono", soloDigitos)}
+                        onBlur={alTocar("contactoTelefono")}
+                        placeholder="10 dígitos sin espacios"
+                        inputMode="numeric"
+                        maxLength={10}
+                        className={`${inputCls} transition-colors ${form.campoCls("contactoTelefono")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Teléfono fijo <span className="font-normal">(opcional)</span></>} campo="contactoTelefonoFijo">
+                      <input
+                        type="tel"
+                        value={v.contactoTelefonoFijo ?? ""}
+                        onChange={alEscribir("contactoTelefonoFijo", soloDigitos)}
+                        onBlur={alTocar("contactoTelefonoFijo")}
+                        placeholder="6043210000"
+                        inputMode="numeric"
+                        maxLength={10}
+                        className={`${inputCls} transition-colors ${form.campoCls("contactoTelefonoFijo")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Dirección comercial {req}</>} campo="direccion">
+                      <input
+                        value={v.direccion ?? ""}
+                        onChange={alEscribir("direccion", soloDireccion)}
+                        onBlur={alTocar("direccion")}
+                        placeholder="Cra 50 #30-10"
+                        className={`${inputCls} transition-colors ${form.campoCls("direccion")}`}
+                      />
+                    </Campo>
+                    <Campo form={form} label={<>Nombre del contacto {req}</>} campo="contactoNombre">
+                      <input
+                        value={v.contactoNombre ?? ""}
+                        onChange={alEscribir("contactoNombre", soloLetras)}
+                        onBlur={alTocar("contactoNombre")}
+                        placeholder="Persona de contacto"
+                        className={`${inputCls} transition-colors ${form.campoCls("contactoNombre")}`}
+                      />
+                    </Campo>
+                  </div>
+                </Bloque>
+
+              {/* Bloque EXTRA conservado fuera de los 3 de la spec (decisión).
+                  Su grid sigue de 2 columnas: el adjunto queda solo en la
+                  primera fila, a la izquierda, con el mismo ancho que el resto. */}
+              <Bloque titulo="Cámara de Comercio">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Campo
+                    form={form}
+                    label={<>Cámara de Comercio <span className="font-normal">(adjunto, opcional)</span></>}
+                    campo="camaraComercioArchivo"
+                  >
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      onChange={alAdjuntar}
+                      disabled={subiendo}
+                      className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
+                    />
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                      <span className="text-[10px] text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
+                        {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG, WEBP) hasta 5 MB")}
+                      </span>
+                      {v.camaraComercioNombre && (
+                        <button
+                          type="button"
+                          onClick={quitarAdjunto}
+                          className="text-[10px] font-semibold text-red-500 hover:text-red-600 cursor-pointer shrink-0"
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </Campo>
+                  {/* Fecha de expedición: fuera del diseño (decisión). Su valor
+                      sigue en el estado (no se pinta ni se valida). */}
+                </div>
+              </Bloque>
+            </>
+          )}
     </div>
   );
 }

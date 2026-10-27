@@ -21,7 +21,7 @@ import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { useProveedorForm, soloLetras, datosNuevosProveedor, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
+import { useProveedorForm, soloLetras, datosNuevosProveedor, contactoGuardado, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
 import { crearProveedor, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
 import {
@@ -608,20 +608,27 @@ export function NuevoProveedorModal({
   const [guardando, setGuardando] = useState(false);
 
   const submit = async () => {
-    form.setIntentoGuardar(true);
-    if (!form.formValido || guardando) return;
+    if (guardando) return;
+    // Fase 2: el botón NO envía con errores. Se pintan todos los mensajes que
+    // falten y el foco va al primer campo inválido (el DOM se recorre en orden
+    // visual gracias a `data-prov-campo`).
+    if (form.enfocarPrimeroInvalido()) {
+      toast.error("Revisa los campos del formulario");
+      return;
+    }
     setGuardando(true);
     try {
       const v = form.values;
       // Bloque 3: el proveedor se da de alta contra la API (con el id real que
       // devuelve el servidor) y el resto de la app lo recibe ya mapeado.
+      // `contactoGuardado` es el MISMO mapeo del módulo Proveedores: en
+      // Jurídica toma el Contacto comercial y en Natural llena asesor/teléfono/
+      // email con los datos del propio proveedor (el backend los exige).
       const creado = await crearProveedor({
         id: "",
         nombre: form.values.nombre.trim(),
         nit: v.nit.trim(),
-        telefono: v.telefono.trim(),
-        email: v.email.trim(),
-        asesorComercial: v.asesorComercial.trim(),
+        ...contactoGuardado(v),
         direccion: v.direccion.trim(),
         estado: v.estado,
         tipoPersona: v.tipoPersona,
@@ -642,7 +649,9 @@ export function NuevoProveedorModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl border border-border my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
+        // Sin borde exterior (estilo "sin cards con borde"): la separación la
+        // dan las líneas divisorias del encabezado y del pie.
+        className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
@@ -665,7 +674,9 @@ export function NuevoProveedorModal({
           </button>
           <button
             onClick={() => void submit()}
-            disabled={!form.formValido || guardando}
+            // Fase 2: habilitado siempre; si hay errores, `submit` los pinta y
+            // enfoca el primero en lugar de guardar.
+            disabled={guardando}
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Proveedor"}
