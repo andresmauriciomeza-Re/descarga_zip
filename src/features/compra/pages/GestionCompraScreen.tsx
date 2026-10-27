@@ -994,9 +994,7 @@ function CompraForm({
   const crearProveedor = (p: ProveedorRef) => {
     // Actualizar el estado global de proveedores en App.tsx para que el
     // listado de Proveedores lo vea inmediatamente.
-    if (!proveedores.some((x) => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
-      setProveedores((prev) => [...prev, p]);
-    }
+    setProveedores((prev) => [p, ...prev.filter((x) => x.id !== p.id && x.nombre.toLowerCase() !== p.nombre.toLowerCase())]);
     setProvQuery(p.nombre);
     setProvId(p.id);
     setMostrarNuevoProveedor(false);

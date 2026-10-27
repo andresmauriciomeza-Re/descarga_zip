@@ -324,29 +324,54 @@ export function ProveedorFormCampos({
           {esNatural && (
             <Bloque titulo="Datos del proveedor" icono={<User className="w-4 h-4" />}>
               <div className={gridCls}>
-                {/* 1. Tipo de documento */}
-                <SelectCampo
-                  form={form}
-                  label={<>Tipo de documento {req}</>}
-                  campo="tipoDocumento"
-                  valor={v.tipoDocumento ?? ""}
-                  opciones={TIPOS_DOCUMENTO}
-                  etiquetas={etiquetaTipoDocumento}
-                  vacio="Elegir documento"
-                  ariaLabel="Tipo de documento"
-                />
-                {/* 2. Número de documento */}
-                <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
-                  <input
-                    value={v.numeroDocumento ?? ""}
-                    onChange={alEscribir("numeroDocumento", filtrarNumeroDocumento)}
-                    onBlur={alTocar("numeroDocumento")}
-                    placeholder="Sin puntos ni espacios"
-                    inputMode="numeric"
-                    maxLength={10}
-                    className={`${inputCls} transition-colors ${form.campoCls("numeroDocumento")}`}
-                  />
-                </Campo>
+                {pideNit ? (
+                  <>
+                    {/* 1. Tipo de documento */}
+                    <SelectCampo
+                      form={form}
+                      label={<>Tipo de documento {req}</>}
+                      campo="tipoDocumento"
+                      valor={v.tipoDocumento ?? ""}
+                      opciones={TIPOS_DOCUMENTO}
+                      etiquetas={etiquetaTipoDocumento}
+                      vacio="Elegir documento"
+                      ariaLabel="Tipo de documento"
+                    />
+                    {/* 2. Número de documento */}
+                    <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
+                      <input
+                        value={v.numeroDocumento ?? ""}
+                        onChange={alEscribir("numeroDocumento", filtrarNumeroDocumento)}
+                        onBlur={alTocar("numeroDocumento")}
+                        placeholder="Sin puntos ni espacios"
+                        inputMode="numeric"
+                        maxLength={10}
+                        className={`${inputCls} transition-colors ${form.campoCls("numeroDocumento")}`}
+                      />
+                    </Campo>
+                  </>
+                ) : (
+                  <>
+                    {/* 1. Tipo de documento (solo lectura en edición) */}
+                    <div>
+                      <label className={labelCls}>Tipo de documento</label>
+                      <div className={lecturaCls}>
+                        {v.tipoDocumento ? (etiquetaTipoDocumento[v.tipoDocumento] ?? v.tipoDocumento) : "—"}
+                      </div>
+                      <p className={ayudaCls}>
+                        El documento no se puede modificar después de creado el proveedor
+                      </p>
+                    </div>
+                    {/* 2. Número de documento (solo lectura en edición) */}
+                    <div>
+                      <label className={labelCls}>Número de documento</label>
+                      <div className={lecturaCls}>{(v.numeroDocumento ?? "").trim() || "—"}</div>
+                      <p className={ayudaCls}>
+                        El documento no se puede modificar después de creado el proveedor
+                      </p>
+                    </div>
+                  </>
+                )}
                 {/* 3. Nombre completo: UN solo campo (al escribirlo alimenta
                     `nombres` + `apellidos` en el hook, ver setCampo). */}
                 <Campo form={form} label={<>Nombre completo {req}</>} campo="nombreCompleto">

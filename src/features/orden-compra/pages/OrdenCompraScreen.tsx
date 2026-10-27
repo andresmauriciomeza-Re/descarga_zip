@@ -21,7 +21,7 @@ import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { useProveedorForm, soloLetras, datosNuevosProveedor, contactoGuardado, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
+import { useProveedorForm, soloLetras, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type ProveedorFormValues } from "@/features/compras/hooks/useProveedorForm";
 import { crearProveedor, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
 import { TipoPersonaSelector } from "@/features/compras/components/TipoPersonaSelector";
@@ -184,17 +184,7 @@ export interface ProveedorRef {
   tipoPersona?: TipoPersona | "";
 }
 
-export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { id: "1", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "2", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "3", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "4", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "5", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo", tipoPersona: "Persona Natural" },
-  { id: "6", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "7", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "8", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "9", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Natural" },
-];
+export const PROVEEDORES_INIT: ProveedorRef[] = [];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Borrador: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
@@ -589,9 +579,12 @@ export function NuevoProveedorModal({
   // Punto 1: mismas validaciones que el formulario del módulo Proveedores
   // (useProveedorForm). El nombre llega del buscador y se filtra con las
   // reglas del formulario para no arrancar con un valor inválido.
+  const nombreSemilla = soloLetras(nombreInicial);
   const form = useProveedorForm(
     {
-      nombre: soloLetras(nombreInicial),
+      nombre: nombreSemilla,
+      nombres: nombreSemilla,
+      razonSocial: nombreInicial.trim(),
       nit: "",
       telefono: "",
       email: "",
@@ -627,7 +620,7 @@ export function NuevoProveedorModal({
       // email con los datos del propio proveedor (el backend los exige).
       const creado = await crearProveedor({
         id: "",
-        nombre: form.values.nombre.trim(),
+        nombre: nombreGuardado(v),
         nit: v.nit.trim(),
         ...contactoGuardado(v),
         direccion: v.direccion.trim(),
@@ -637,7 +630,23 @@ export function NuevoProveedorModal({
       });
       onGuardar(creado);
     } catch (error) {
-      toast.error(mensajeErrorProveedores(error, "No se pudo crear el proveedor."));
+      const mensaje = mensajeErrorProveedores(error, "No se pudo crear el proveedor.");
+      const visible = (campo: string) => !!document.querySelector(`[data-prov-campo="${campo}"]`);
+      let campo: keyof ProveedorFormValues | null = null;
+      if (/nit/i.test(mensaje) && visible("nit")) campo = "nit";
+      else if (/documento/i.test(mensaje) && visible("numeroDocumento")) campo = "numeroDocumento";
+      else if (/correo|email/i.test(mensaje)) {
+        if (visible("contactoEmail")) campo = "contactoEmail";
+        else if (visible("email")) campo = "email";
+      }
+      if (campo) {
+        form.setErrorServidor(campo, mensaje);
+        const el = document.querySelector<HTMLElement>(`[data-prov-campo="${campo}"]`);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.focus();
+      } else {
+        toast.error(mensaje);
+      }
     } finally {
       setGuardando(false);
     }
@@ -1899,9 +1908,7 @@ export function NuevaOrdenCompraPage({
   const handleNuevoProveedor = (p: ProveedorRef) => {
     // Actualizar el estado global de proveedores en App.tsx para que el
     // listado de Proveedores lo vea inmediatamente.
-    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
-      setProveedores(prev => [...prev, p]);
-    }
+    setProveedores(prev => [p, ...prev.filter(x => x.id !== p.id && x.nombre.toLowerCase() !== p.nombre.toLowerCase())]);
     onNuevoProveedor?.(p);
     return p.nombre;
   };
@@ -2516,9 +2523,7 @@ export function OrdenCompraScreen({
   };
 
   const handleNuevoProveedorLocal = (p: ProveedorRef): string => {
-    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
-      setProveedores(prev => [...prev, p]);
-    }
+    setProveedores(prev => [p, ...prev.filter(x => x.id !== p.id && x.nombre.toLowerCase() !== p.nombre.toLowerCase())]);
     onNuevoProveedor?.(p);
     return p.nombre;
   };

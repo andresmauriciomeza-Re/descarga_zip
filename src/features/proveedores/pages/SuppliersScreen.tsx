@@ -515,7 +515,7 @@ export function SuppliersScreen({
     // guardar mientras haya un proveedor antiguo cuyo NIT venga con formato
     // ("900.123.456-1") o un nombre heredado. El resto de los errores pinta
     // su mensaje y mueve el foco al primer campo inválido (Fase 2).
-    if (editForm.enfocarPrimeroInvalido(["nit", "nombre"])) {
+    if (editForm.enfocarPrimeroInvalido(["nit", "nombre", "tipoDocumento", "numeroDocumento"])) {
       toast.error("Revisa los campos del formulario");
       return;
     }
