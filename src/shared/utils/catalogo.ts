@@ -3,6 +3,8 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
 import { mapearProductoApi, type ProductoApi } from "@/features/productos/services/productosApi";
 
+import { getImageUrl, IMAGEN_DEFAULT, imagenEnApi } from "@/shared/utils/getImageUrl";
+
 import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
 import pizzaCañon from "@/assets/img/pizza_cañon.webp";
 import pizzaHawaii from "@/assets/img/pizza_hawaii.webp";
@@ -12,18 +14,16 @@ import pizzaPeperoni from "@/assets/img/pizza_peperoni.webp";
 import pizzaPollo from "@/assets/img/pizza_pollo.webp";
 import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
 
-const assetsImagen = import.meta.glob<string>("@/assets/img/*", {
-  eager: true,
-  query: "?url",
-  import: "default",
-});
-
+/** Traduce lo que guardó la BD en `tb_productos.imagen` (solo el nombre del
+    archivo, p. ej. "pizza_pollo.webp") a la URL de `src/assets/img` que el
+    navegador puede cargar. Delega en `getImageUrl` (normalización NFC +
+    minúsculas, http/data/blob tal cual, imagen por defecto y `console.warn`
+    si el nombre no existe), conservando su contrato original: vacío → `""`,
+    para que los `|| IMAGENES_PIZZA[...]` de las llamadas sigan funcionando. */
 export const resolverImagenCatalogo = (imagen?: string | null): string => {
   const valor = imagen?.trim() ?? "";
-  if (/^https?:\/\//i.test(valor)) return valor;
-  const nombre = valor.split(/[\\/]/).pop() ?? "";
-  const asset = Object.entries(assetsImagen).find(([ruta]) => ruta.endsWith(`/${nombre}`));
-  return asset?.[1] ?? "";
+  if (!valor) return "";
+  return getImageUrl(valor);
 };
 
 export interface Product {
@@ -154,6 +154,26 @@ export const estadoDeProducto = (p: Product): EstadoProducto =>
 export const productoDisponible = (p: Product): boolean =>
   estadoDeProducto(p) === "Disponible";
 
+/** Imagen que el menú público pinta para un producto, en orden:
+    1. Si la BD tiene los BYTES (`tieneImagen`), se pide al backend:
+       `GET /productos/:id/imagen` (la sirve Postgres, sin autenticación).
+    2. Si no, se resuelve el nombre de archivo contra `src/assets/img`
+       (`getImageUrl`, con NFC + minúsculas) y, si el nombre no existe o el
+       producto no trae imagen, la foto curada por nombre (`IMAGENES_PIZZA`).
+    3. Último recurso: la imagen por defecto LOCAL (antes una URL de Unsplash,
+       que no cargaba sin internet).
+    El `id` llega como "6" (API) o "PROD-001" (semilla local): solo se pide
+    al backend cuando es numérico, para no armar una URL inválida. */
+export const imagenDeProductoMenu = (p: Producto): string => {
+  const id = Number(String(p.id).replace(/^PROD-/, "")) || 0;
+  if (p.tieneImagen && id > 0) return imagenEnApi(id);
+  const resuelta = p.imagen?.trim() ? getImageUrl(p.imagen) : "";
+  return (
+    (resuelta && resuelta !== IMAGEN_DEFAULT ? resuelta : IMAGENES_PIZZA[p.nombre]) ||
+    IMAGEN_DEFAULT
+  );
+};
+
 export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]): Product => {
   const categoria = nombreCategoria(p.idCategoria, categorias);
   const categoriaVisible = categoria === "Otros" && p.categoriaNombre ? p.categoriaNombre : categoria;
@@ -162,7 +182,7 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
     name: p.nombre,
     description: DESCRIPCIONES[p.nombre] ?? "",
     price: p.precioUnitario,
-    image: p.imagen || IMAGENES_PIZZA[p.nombre] || "https://images.unsplash.com/photo-1564936281403-5cc7543df8e2?w=600&h=600&fit=crop",
+    image: imagenDeProductoMenu(p),
     idCategoria: p.idCategoria,
     category: categoriaVisible,
     sizes: sizesDeProducto(p, categoriaVisible),
