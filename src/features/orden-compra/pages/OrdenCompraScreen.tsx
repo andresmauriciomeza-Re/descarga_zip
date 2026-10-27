@@ -24,6 +24,7 @@ import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { useProveedorForm, soloLetras, datosNuevosProveedor, contactoGuardado, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
 import { crearProveedor, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
+import { TipoPersonaSelector } from "@/features/compras/components/TipoPersonaSelector";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
@@ -643,7 +644,7 @@ export function NuevoProveedorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -651,25 +652,36 @@ export function NuevoProveedorModal({
         transition={{ duration: 0.15 }}
         // Sin borde exterior (estilo "sin cards con borde"): la separación la
         // dan las líneas divisorias del encabezado y del pie.
-        className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
+        className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <div>
+        {/* Encabezado FIJO: título + subtítulo y, en la misma fila a la
+            derecha (o abajo en móvil), el selector Persona Natural / Persona Jurídica. */}
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b border-border shrink-0">
+          <div className="min-w-[180px] flex-1">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <TipoPersonaSelector
+              valor={form.values.tipoPersona}
+              onChange={(tipo) => {
+                form.marcarTocado("tipoPersona");
+                form.setCampo("tipoPersona", tipo);
+              }}
+              error={form.obtenerError("tipoPersona")}
+            />
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        {/* Cuerpo con scroll propio SIEMPRE (nunca `lg:overflow-hidden`): el
-            formulario va en dos columnas y, si no cabe, se desplaza aquí. */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
+        {/* Único contenedor con scroll dentro del modal (prohibido scroll doble). */}
+        <div className="px-4 sm:px-6 py-5 overflow-y-auto flex-1 min-h-0">
           {/* Punto 1: mismo formulario de proveedor que el módulo Proveedores. */}
           <ProveedorFormCampos form={form} />
         </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+        <div className="flex justify-end gap-3 px-4 sm:px-6 py-3 border-t border-border shrink-0">
+          <button onClick={onClose} className="px-5 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
           <button
@@ -677,7 +689,7 @@ export function NuevoProveedorModal({
             // Fase 2: habilitado siempre; si hay errores, `submit` los pinta y
             // enfoca el primero en lugar de guardar.
             disabled={guardando}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+            className="px-5 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Proveedor"}
           </button>

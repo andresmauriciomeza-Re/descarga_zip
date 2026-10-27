@@ -1,9 +1,7 @@
 import type { ChangeEvent, ReactNode } from "react";
-import { useRef } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Building2, Check, ChevronDown, FileText, Phone, User } from "lucide-react";
 import * as RadixSelect from "@radix-ui/react-select";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { MensajeError } from "@/shared/components/campo";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -40,17 +38,23 @@ import {
 // 14px (`labelCls` + `text-sm`), fondo claro por tokens y SIN cards con borde:
 // las secciones se separan con una línea divisoria (`seccionCls`), no con caja.
 
+// Layout compacto (tarea "sin scroll"): inputs de ~36px (py-2), labels con
+// menos margen y rejillas de 2 columnas iguales desde 768px (`md:`).
 const inputCls =
-  "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 const lecturaCls =
-  "w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
+  "w-full px-3 py-2 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
 const seccionCls =
-  "text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border";
+  "flex items-center gap-2 text-sm font-bold text-foreground mb-3 pb-2 border-b border-border";
+
+/** Rejilla de cada bloque: 2 columnas del mismo ancho en >= 768px y 1 en
+    móvil. Con cantidad impar, el último campo queda solo a la izquierda. */
+const gridCls = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2.5";
 
 /** Label de cada campo: 14px (Poppins heredado del body). */
-const labelCls = "block text-sm font-semibold text-muted-foreground mb-1.5";
+const labelCls = "block text-sm font-semibold text-muted-foreground mb-1";
 
 /** Texto de ayuda bajo un campo (solo lectura, placeholders secundarios). */
 const ayudaCls = "text-[11px] text-muted-foreground mt-1";
@@ -105,16 +109,21 @@ function Campo({
  */
 function Bloque({
   titulo,
+  icono,
   children,
   className = "",
 }: {
   titulo: ReactNode;
+  icono?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <p className={seccionCls}>{titulo}</p>
+      <div className={seccionCls}>
+        {icono && <span className="text-primary shrink-0">{icono}</span>}
+        <span>{titulo}</span>
+      </div>
       {children}
     </div>
   );
@@ -290,64 +299,31 @@ export function ProveedorFormCampos({
   const esNatural = v.tipoPersona === "Persona Natural";
   const esJuridica = v.tipoPersona === "Persona Jurídica";
   const hayTipo = esNatural || esJuridica;
-  // En edición no hay input de NIT (queda congelado arriba): el módulo no
-  // permite modificarlo después de creado el proveedor.
+  // En edición no hay input de NIT (queda congelado): el módulo no permite
+  // modificarlo después de creado el proveedor.
   const pideNit = nitLectura === undefined;
 
   return (
-    // CONTENEDOR CENTRADO (max-w-3xl = 768px, mx-auto): el formulario ya no se
-    // pega a la izquierda ni se estira al ancho completo del modal, y los
-    // botones de Tipo de persona quedan al MISMO ancho del contenedor (viven
-    // dentro de él). En móvil el ancho es el de la pantalla y las rejillas pasan
-    // a 1 columna. Las secciones se apilan en una sola columna para que todo se
-    // recorra con el scroll INTERNO del modal (sin scroll de página).
-    <div className="space-y-5 mx-auto max-w-3xl">
-      {/* Modo edición + Persona Natural (o tipo sin elegir): el NIT queda
-          congelado (regla del módulo: no se modifica después de creado). Solo
-          se MUESTRA, ya no hay input de NIT ni de DV en Persona Natural. En
-          Persona Jurídica el NIT congelado se pinta dentro de su bloque. */}
-      {!esJuridica && nitLectura !== undefined && nitLectura.trim() !== "" && (
-        <div className="sm:max-w-md">
-          <label className={labelCls}>NIT</label>
-          <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
-          <p className={ayudaCls}>
-            El NIT no se puede modificar después de creado el proveedor
-          </p>
-        </div>
-      )}
-
-      {/* Tipo de persona (obligatorio): sigue eligiéndose con BOTONES, no con
-          select. De aquí cuelgan los dos conjuntos de campos. */}
-      <div data-prov-campo="tipoPersona">
-        <label className={labelCls}>Tipo de persona {req}</label>
-        <SegmentadoButtons
-          fullWidth
-          valor={v.tipoPersona}
-          onChange={(valor) => {
-            form.marcarTocado("tipoPersona");
-            form.setCampo("tipoPersona", valor as ProveedorFormValues["tipoPersona"]);
-          }}
-          opciones={[
-            { valor: "Persona Natural", etiqueta: "Persona Natural" },
-            { valor: "Persona Jurídica", etiqueta: "Persona Jurídica" },
-          ]}
-        />
-        <MensajeError err={form.obtenerError("tipoPersona")} />
-      </div>
-
+    // CONTENEDOR CENTRADO (max-w-4xl, mx-auto): secciones apiladas con barra de
+    // título (ícono + nombre) y rejilla de 2 columnas iguales desde 768px
+    // (`md:grid-cols-2`); en móvil, 1 columna.
+    //
+    // El selector "Tipo de persona" vive en el ENCABEZADO de cada pantalla/modal
+    // con `TipoPersonaSelector` (misma fila del título).
+    <div className="space-y-6 mx-auto max-w-4xl">
       {!hayTipo && (
         <p className={avisoCls}>
-          Selecciona el tipo de persona para ver los datos que se piden.
+          Selecciona el tipo de persona (arriba a la derecha) para ver los datos que se piden.
         </p>
       )}
 
           {/* ── Persona Natural ── 7 campos en el orden de la spec, SIN NIT y
-              SIN DV. DOS por fila (`sm:grid-cols-2`); en móvil, 1 columna. El
+              SIN DV. DOS por fila (`md:grid-cols-2`); en móvil, 1 columna. El
               octavo campo (Estado) queda solo en su fila, a la izquierda, con
               el mismo ancho que los demás (así lo pinta el grid). ─────────── */}
           {esNatural && (
-            <Bloque titulo="Datos del proveedor">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Bloque titulo="Datos del proveedor" icono={<User className="w-4 h-4" />}>
+              <div className={gridCls}>
                 {/* 1. Tipo de documento */}
                 <SelectCampo
                   form={form}
@@ -432,13 +408,13 @@ export function ProveedorFormCampos({
 
           {/* ── Persona Jurídica: secciones APILADAS (Representante legal,
               Razón social, Contacto comercial) + Cámara de Comercio. Cada
-              sección pinta DOS inputs por fila (`sm:grid-cols-2`); en móvil
+              sección pinta DOS inputs por fila (`md:grid-cols-2`); en móvil
               pasan a 1 columna. ─────────────────────────────────────────── */}
           {esJuridica && (
             <>
-                {/* Bloque 1 — Representante legal (1-5 de la spec) */}
-                <Bloque titulo="Representante legal">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Sección 1 — Representante legal */}
+                <Bloque titulo="Representante legal" icono={<User className="w-4 h-4" />}>
+                  <div className={gridCls}>
                     <SelectCampo
                       form={form}
                       label={<>Tipo de documento {req}</>}
@@ -468,6 +444,7 @@ export function ProveedorFormCampos({
                         onChange={alEscribir("repLegalNombreCompleto", soloLetras)}
                         onBlur={alTocar("repLegalNombreCompleto")}
                         placeholder="Nombre y apellidos"
+                        autoFocus={autoFocusNombre}
                         className={`${inputCls} transition-colors ${form.campoCls("repLegalNombreCompleto")}`}
                       />
                     </Campo>
@@ -496,17 +473,15 @@ export function ProveedorFormCampos({
                   </div>
                 </Bloque>
 
-                {/* Bloque 2 — Razón social (6-10 de la spec). El DV se quitó
-                    del diseño y de la validación del cliente (decisión). */}
-                <Bloque titulo="Razón social">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Sección 2 — Razón social */}
+                <Bloque titulo="Razón social" icono={<Building2 className="w-4 h-4" />}>
+                  <div className={gridCls}>
                     <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
                       <input
                         value={v.razonSocial ?? ""}
                         onChange={alEscribir("razonSocial", (x) => x)}
                         onBlur={alTocar("razonSocial")}
                         placeholder="Ej: Quesos del Norte S.A.S."
-                        autoFocus={autoFocusNombre}
                         className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
                       />
                     </Campo>
@@ -557,22 +532,12 @@ export function ProveedorFormCampos({
                       vacio="Selecciona el tipo de sociedad"
                       ariaLabel="Tipo de sociedad"
                     />
-                    <div>
-                      <label className={labelCls}>Estado</label>
-                      <EstadoSelect
-                        value={v.estado}
-                        onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
-                        options={OPCIONES_ESTADO}
-                      />
-                    </div>
                   </div>
                 </Bloque>
 
-                {/* Bloque 3 — Contacto comercial (11-14 de la spec). El campo
-                    "Nombre" se conserva al FINAL por ser obligatorio en el
-                    backend (asesor_comercial) y en el listado. */}
-                <Bloque titulo="Contacto comercial">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Sección 3 — Contacto comercial */}
+                <Bloque titulo="Contacto comercial" icono={<Phone className="w-4 h-4" />}>
+                  <div className={gridCls}>
                     <Campo form={form} label={<>Email {req}</>} campo="contactoEmail">
                       <input
                         type="email"
@@ -628,11 +593,9 @@ export function ProveedorFormCampos({
                   </div>
                 </Bloque>
 
-              {/* Bloque EXTRA conservado fuera de los 3 de la spec (decisión).
-                  Su grid sigue de 2 columnas: el adjunto queda solo en la
-                  primera fila, a la izquierda, con el mismo ancho que el resto. */}
-              <Bloque titulo="Cámara de Comercio">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Sección 4 — Cámara de Comercio */}
+              <Bloque titulo="Cámara de Comercio" icono={<FileText className="w-4 h-4" />}>
+                <div className={gridCls}>
                   <Campo
                     form={form}
                     label={<>Cámara de Comercio <span className="font-normal">(adjunto, opcional)</span></>}
@@ -660,10 +623,20 @@ export function ProveedorFormCampos({
                       )}
                     </div>
                   </Campo>
-                  {/* Fecha de expedición: fuera del diseño (decisión). Su valor
-                      sigue en el estado (no se pinta ni se valida). */}
                 </div>
               </Bloque>
+
+              {/* Estado: último elemento del formulario en fila propia sin barra de título */}
+              <div className={gridCls}>
+                <div>
+                  <label className={labelCls}>Estado</label>
+                  <EstadoSelect
+                    value={v.estado}
+                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
+                    options={OPCIONES_ESTADO}
+                  />
+                </div>
+              </div>
             </>
           )}
     </div>

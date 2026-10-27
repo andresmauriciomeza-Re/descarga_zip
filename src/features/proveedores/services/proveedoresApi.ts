@@ -14,6 +14,7 @@ export interface ProveedorApi {
   nit: string;
   dv: string | null;
   nombre: string;
+  nombre_comercial?: string | null;
   tipo_documento: string | null;
   numero_documento: string | null;
   tipo_sociedad: string | null;
@@ -22,8 +23,11 @@ export interface ProveedorApi {
   rep_legal_nombre: string | null;
   rep_legal_tipo_doc: string | null;
   rep_legal_num_doc: string | null;
+  rep_legal_telefono?: string | null;
+  rep_legal_email?: string | null;
   asesor_comercial: string | null;
   telefono: string | null;
+  contacto_telefono_fijo?: string | null;
   email: string | null;
   direccion: string | null;
   estado: boolean;
@@ -70,10 +74,20 @@ export const mapearProveedorApi = (row: ProveedorApi): ProveedorCompleto => {
     ? { nombres: row.nombre ?? "", apellidos: "" }
     : separarNombre(row.nombre ?? "");
   const repLegal = separarNombre(row.rep_legal_nombre ?? "");
+  const nitRaw = (row.nit ?? "").trim();
+  const nitDigitos = nitRaw.replace(/\D/g, "");
+  const dvDigito = (row.dv ?? "").replace(/\D/g, "").slice(0, 1);
+  const nitMapeado = esJuridica
+    ? nitDigitos.length === 9 && dvDigito
+      ? `${nitDigitos}${dvDigito}`
+      : nitDigitos || nitRaw
+    : row.numero_documento || nitRaw.replace(/^(CC|CE|PA)-/i, "");
+
   return {
     id: String(row.id_proveedor),
-    nit: row.nit ?? "",
+    nit: nitMapeado,
     nombre: row.nombre ?? "",
+    nombreComercial: row.nombre_comercial ?? "",
     telefono: row.telefono ?? "",
     email: row.email ?? "",
     direccion: row.direccion ?? "",
@@ -84,18 +98,21 @@ export const mapearProveedorApi = (row: ProveedorApi): ProveedorCompleto => {
     apellidos: identidad.apellidos,
     tipoDocumento: (row.tipo_documento as TipoDocumento) || "",
     numeroDocumento: row.numero_documento ?? "",
-    dv: row.dv ?? "",
+    dv: row.dv ?? (esJuridica && nitMapeado.length === 10 ? nitMapeado[9] : ""),
     tipoSociedad: (row.tipo_sociedad as TipoSociedad) || "",
     camaraComercioNombre: nombreDeUrl(row.camara_comercio),
     camaraComercioArchivo: row.camara_comercio ?? "",
     fechaExpedicionCamara: row.fecha_exp_camara ? String(row.fecha_exp_camara).slice(0, 10) : "",
     contactoNombre: row.asesor_comercial ?? "",
     contactoTelefono: row.telefono ?? "",
+    contactoTelefonoFijo: row.contacto_telefono_fijo ?? "",
     contactoEmail: row.email ?? "",
     repLegalNombres: repLegal.nombres,
     repLegalApellidos: repLegal.apellidos,
     repLegalTipoDocumento: (row.rep_legal_tipo_doc as TipoDocumento) || "",
     repLegalNumeroDocumento: row.rep_legal_num_doc ?? "",
+    repLegalTelefono: row.rep_legal_telefono ?? "",
+    repLegalEmail: row.rep_legal_email ?? "",
   };
 };
 
@@ -107,44 +124,68 @@ export const payloadProveedor = (
   nit: string;
   dv: string | null;
   nombre: string;
+  nombre_comercial?: string | null;
   tipo_documento?: string | null;
   numero_documento?: string | null;
   tipo_sociedad?: string | null;
+  contacto_telefono_fijo?: string | null;
   rep_legal_nombre?: string | null;
   rep_legal_tipo_doc?: string | null;
   rep_legal_num_doc?: string | null;
+  rep_legal_telefono?: string | null;
+  rep_legal_email?: string | null;
   camara_comercio: string | null;
   fecha_exp_camara: string | null;
   asesor_comercial: string;
   telefono: string;
   email: string;
   direccion: string;
+  estado: boolean;
 } => {
   const esJuridica = s.tipoPersona === "Persona Jurídica";
   const nombre = esJuridica
     ? (s.nombre ?? "").trim()
-    : `${(s.nombres ?? "").trim()} ${(s.apellidos ?? "").trim()}`.trim();
+    : `${(s.nombres ?? "").trim()} ${(s.apellidos ?? "").trim()}`.trim() || (s.nombre ?? "").trim();
+  const nitDigitos = (s.nit ?? "").replace(/\D/g, "");
+  const dvCalculado = esJuridica
+    ? (s.dv ?? "").replace(/\D/g, "").slice(0, 1) || (nitDigitos.length === 10 ? nitDigitos[9] : null)
+    : null;
+  const telefonoPrincipal = esJuridica
+    ? s.contactoTelefono || s.telefono || ""
+    : s.telefono || "";
+  const emailPrincipal = esJuridica
+    ? s.contactoEmail || s.email || ""
+    : s.email || "";
+  const asesorComercial = esJuridica
+    ? (s.contactoNombre || s.asesorComercial || "").trim()
+    : (s.asesorComercial || "").trim() || nombre.slice(0, 50);
+
   return {
     tipo_persona: tipoPersonaAApi(s.tipoPersona || "Persona Natural"),
-    nit: (s.nit ?? "").replace(/\D/g, ""),
-    dv: (s.dv ?? "").trim() || null,
+    nit: esJuridica ? nitDigitos : "",
+    dv: esJuridica ? dvCalculado : null,
     nombre,
+    estado: s.estado ? s.estado === "activo" : true,
     ...(esJuridica
       ? {
+          nombre_comercial: (s.nombreComercial ?? "").trim() || null,
           tipo_sociedad: s.tipoSociedad || null,
+          contacto_telefono_fijo: (s.contactoTelefonoFijo ?? "").replace(/\D/g, "") || null,
           rep_legal_nombre: `${(s.repLegalNombres ?? "").trim()} ${(s.repLegalApellidos ?? "").trim()}`.trim(),
           rep_legal_tipo_doc: s.repLegalTipoDocumento || null,
-          rep_legal_num_doc: s.repLegalNumeroDocumento || null,
+          rep_legal_num_doc: (s.repLegalNumeroDocumento ?? "").replace(/\D/g, "") || null,
+          rep_legal_telefono: (s.repLegalTelefono ?? "").replace(/\D/g, "") || null,
+          rep_legal_email: (s.repLegalEmail ?? "").trim() || null,
         }
       : {
           tipo_documento: s.tipoDocumento || null,
-          numero_documento: s.numeroDocumento || null,
+          numero_documento: (s.numeroDocumento ?? "").replace(/\D/g, "") || null,
         }),
-    camara_comercio: s.camaraComercioArchivo || null,
-    fecha_exp_camara: s.fechaExpedicionCamara || null,
-    asesor_comercial: (s.asesorComercial ?? "").trim(),
-    telefono: (s.telefono ?? "").trim(),
-    email: (s.email ?? "").trim(),
+    camara_comercio: esJuridica ? (s.camaraComercioArchivo ?? "").trim() || null : null,
+    fecha_exp_camara: esJuridica ? (s.fechaExpedicionCamara ?? "").trim() || null : null,
+    asesor_comercial: asesorComercial,
+    telefono: telefonoPrincipal.replace(/\D/g, ""),
+    email: emailPrincipal.trim(),
     direccion: (s.direccion ?? "").trim(),
   };
 };
@@ -171,7 +212,7 @@ export const actualizarProveedor = async (s: Supplier): Promise<ProveedorComplet
 };
 
 export const cambiarEstadoProveedor = async (id: string, estado: boolean): Promise<ProveedorCompleto> => {
-  const { data } = await api.patch<ProveedorApi>(`/proveedores/${Number(id)}`, { estado });
+  const { data } = await api.patch<ProveedorApi>(`/proveedores/${Number(id)}/estado`, { estado });
   return mapearProveedorApi(data);
 };
 
