@@ -13,6 +13,7 @@ export interface ApiErrorBody {
   error: {
     message: string;
     statusCode: number;
+    code?: string;
   };
 }
 
@@ -209,4 +210,5 @@ export interface ActivacionResponse {
     el status HTTP para que la UI distinga 401 / 429 / fallo de conexión. */
 export interface ApiErrorConEstado extends Error {
   status?: number;
+  code?: string;
 }

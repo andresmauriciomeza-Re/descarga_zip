@@ -48,14 +48,20 @@ export function CambiarContrasenaModal({
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [errorCodigo, setErrorCodigo] = useState<string | undefined>();
   const [enviando, setEnviando] = useState(false);
+  const bloquearCierreExterno = paso !== "confirmar" || enviando;
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (bloquearCierreExterno) {
+        event.preventDefault();
+        return;
+      }
+      onClose();
     };
     document.addEventListener("keydown", closeWithEscape);
     return () => document.removeEventListener("keydown", closeWithEscape);
-  }, [onClose]);
+  }, [bloquearCierreExterno, onClose]);
 
   const [local, domain] = correo.split("@");
   const correoEnmascarado = `${local[0] ?? ""}•••${domain ? `@${domain}` : ""}`;
@@ -143,7 +149,12 @@ export function CambiarContrasenaModal({
     <div
       className={AUTH_GLASS_OVERLAY}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (
+          event.target === event.currentTarget &&
+          !bloquearCierreExterno
+        ) {
+          onClose();
+        }
       }}
     >
       <motion.div
