@@ -46,7 +46,7 @@ import {
   crearCompra,
   mensajeErrorCompras,
 } from "@/features/compras/services/comprasApi";
-import { cambiarEstadoOrdenCompra as cambiarEstadoOrdenCompraApi } from "@/features/orden-compra/services/ordenesCompraApi";
+import { obtenerOrdenCompra } from "@/features/orden-compra/services/ordenesCompraApi";
 import {
   contenidoDe,
   empaqueDe,
@@ -2366,25 +2366,25 @@ export function GestionCompraScreen({
         // El stock cambió en la base: se recargan insumos y productos.
         await onRecargarCatalogo?.();
 
-        // Caso 2 — Orden de Compra con SOLO una Compra asociada: al anular esa
-        // única Compra, la Orden de Compra asociada también pasa a Anulado (el
-        // backend solo toca sus compras "Recibido", así que no se revierte dos
-        // veces nada).
+        // El backend anula la Orden de Compra cuando ésta tenía una sola
+        // compra asociada: aquí solo se refleja su estado (con recarga).
         const ordenId = compra?.ordenId ?? "";
-        if (ordenId) {
-          const comprasAsociadas = gestiones.filter((g) => g.ordenId === ordenId);
-          if (comprasAsociadas.length === 1) {
-            try {
-              const orden = await cambiarEstadoOrdenCompraApi(ordenId, "Anulado", (motivo ?? "").trim());
-              setOrdenes((prev) => prev.map((o) => (o.id === ordenId ? orden : o)));
-              toast.success(`Compra ${id} y orden ${ordenId} anuladas`);
-              return;
-            } catch {
-              // Sin transición válida la compra queda anulada igual.
-            }
+        if (!ordenId) {
+          toast.success(`Compra ${id} anulada`);
+        } else {
+          try {
+            const orden = await obtenerOrdenCompra(ordenId);
+            setOrdenes((prev) => prev.map((o) => (o.id === ordenId ? orden : o)));
+            toast.success(
+              orden.estado === "Anulado"
+                ? `Compra ${id} y orden ${ordenId} anuladas`
+                : `Compra ${id} anulada`,
+            );
+          } catch {
+            // La compra ya quedó anulada: se informa solo eso.
+            toast.success(`Compra ${id} anulada`);
           }
         }
-        toast.success(`Compra ${id} anulada`);
       } catch (error) {
         toast.error(mensajeErrorCompras(error, "No se pudo anular la compra."));
       } finally {
