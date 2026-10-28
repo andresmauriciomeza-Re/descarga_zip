@@ -97,6 +97,10 @@ function registradosEnOrden(gestiones: GestionCompra[], ordenId: string) {
 
   for (const g of gestiones) {
     if (g.ordenId !== ordenId) continue;
+    // Una factura anulada ya no cuenta como registrada: sus insumos vuelven a
+    // estar disponibles para otra factura de la misma OC (misma regla que
+    // `registradosEnOrden` del listado de Orden de Compra).
+    if (g.estado === "Anulado") continue;
 
     for (const it of g.items ?? []) set.add(it.idInsumo);
   }
@@ -162,6 +166,9 @@ export function RecepcionCompraScreen({
 
     for (const g of gestiones) {
       if (g.ordenId !== orden.id) continue;
+      // Mismo criterio que `registradosEnOrden`: lo que llegó en una factura
+      // ANULADA vuelve a poder ofrecerse (también por nombre).
+      if (g.estado === "Anulado") continue;
 
       for (const it of g.items ?? []) set.add(it.nombre.toLowerCase().trim());
     }
@@ -177,14 +184,16 @@ export function RecepcionCompraScreen({
     [orden]
   );
 
-  // Si todos los insumos ya están registrados, redirigir al listado
+  // Si todos los insumos ya están registrados (facturado según el BACKEND o
+  // presente en una factura NO anulada), redirigir al listado. Con una factura
+  // anulada sus insumos quedan pendientes otra vez y NO se saca al usuario.
   useEffect(() => {
     const todosRegistrados = orden.items.every(item => Boolean(item.facturado) || registrados.has(item.idInsumo));
     if (todosRegistrados) {
       toast.info(`La OC ${orden.id} ya tiene todos sus insumos registrados`);
       onBack();
     }
-  }, [orden.id, registrados, onBack]);
+  }, [orden, registrados, onBack]);
 
   // Solo se ofrecen los insumos que aún no se han facturado en esta OC.
   const [items, setItems] = useState<ItemRecibido[]>(() => {
@@ -316,8 +325,11 @@ export function RecepcionCompraScreen({
   // Factura única: normalización y validación de duplicados
   const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
   const facturaActualNormalizada = normalizarFactura(numeroFactura);
+  // Una compra ANULADA no bloquea su número: se puede registrar otra factura
+  // con el mismo (el backend no tiene UNIQUE sobre n_factura).
   const facturaDuplicada = gestiones.some(
     (g) =>
+      g.estado !== "Anulado" &&
       g.numeroFactura &&
       g.numeroFactura.trim().toUpperCase().replace(/\s+/g, "") === facturaActualNormalizada,
   );
@@ -788,8 +800,11 @@ export function RecepcionCompraScreen({
     // "fac-123456" y "FAC-123456" son la misma factura).
     const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
     const facturaActualNormalizada = normalizarFactura(numeroFactura);
+    // Mismo backstop que el campo en vivo: las compras ANULADAS no cuentan
+    // como duplicado (ver `facturaDuplicada` arriba).
     const facturaDuplicada = gestiones.some(
       (g) =>
+        g.estado !== "Anulado" &&
         g.numeroFactura &&
         normalizarFactura(g.numeroFactura) === facturaActualNormalizada,
     );

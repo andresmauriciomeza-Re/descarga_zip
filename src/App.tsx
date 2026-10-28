@@ -9742,6 +9742,9 @@ export default function App() {
                       onCrearProducto={crearProductoDesdeCompras}
                       categoriasInsumo={categoriasInsumo}
                       onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      // Cambios de estado (p. ej. marcar Completado a mano):
+                      // la lista completa se resincroniza con el backend.
+                      onRecargarOrdenes={() => void cargarOrdenesCompra()}
                       onAbrirRecepcion={(orden) => {
                         setOrdenRecepcion(orden);
                         setScreen("recepcion-compra");
@@ -9876,6 +9879,10 @@ export default function App() {
                       onCrearProducto={crearProductoDesdeCompras}
                       categoriasInsumo={categoriasInsumo}
                       onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      // Tras anular una compra asociada a una OC se recarga
+                      // la lista COMPLETA de órdenes: el badge (Completado ↔
+                      // Enviado) y el botón "OC" salen del backend.
+                      onRecargarOrdenes={() => void cargarOrdenesCompra()}
                       onNuevaCompra={() => navigate("nueva-compra")}
                     />
                   )}

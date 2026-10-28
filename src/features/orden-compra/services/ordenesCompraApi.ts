@@ -286,16 +286,6 @@ export const actualizarOrdenCompra = async (
   return mapearOrdenCompraApi(data);
 };
 
-/** Eliminación física: solo permitida en estado Borrador (DELETE /api/ordenes-compra/:id). */
-export const eliminarOrdenCompra = async (
-  id: string,
-): Promise<{ message: string; id_ocompra: number }> => {
-  const { data } = await api.delete<{ message: string; id_ocompra: number }>(
-    `/ordenes-compra/${Number(id)}`,
-  );
-  return data;
-};
-
 /** Cambio de estado (las transiciones del frontend). Anulado exige `motivo`. */
 export const cambiarEstadoOrdenCompra = async (
   id: string,
