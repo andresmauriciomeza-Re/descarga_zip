@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Plus,
-  Check,
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
@@ -19,12 +18,7 @@ import {
   ESTADO_INACTIVO_COLOR,
   type EstadoOption,
 } from "@/shared/components/EstadoSelect";
-import {
-  claveImagenDe,
-  IMAGENES_CATEGORIA,
-  esImagenContenida,
-} from "@/features/categoria-productos/services/imagenesCategoria";
-import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
+import { GRUPOS_ICONOS } from "@/features/categoria-productos/services/iconosCategoria";
 
 const SERIF = "var(--font-titulo)";
 
@@ -89,11 +83,9 @@ export interface CategoriaProducto {
   id: string;
   nombre: string;
   /**
-   * Clave "img:…" de `IMAGENES_CATEGORIA` con la que la categoría aparece en
-   * el landing, en la tabla y en el detalle (§5). Viaja en la columna `emoji`
-   * de tb_categoria_productos. Las tres originales (ids 1, 2 y 3) conservan
-   * ahí su emoji viejo, pero su imagen fija se resuelve por id en
-   * `IMAGEN_FIJA_CATEGORIA`.
+   * Emoji que representa a la categoría en el landing, en la tabla y en el
+   * detalle. Viaja en la columna `emoji` de tb_categoria_productos (también
+   * en las tres originales, ids 1, 2 y 3, que conservan su emoji de siempre).
    */
   icono?: string;
   /**
@@ -167,67 +159,6 @@ const claveNombre = (valor: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-/** Nombre legible de cada clave del catálogo, SOLO para mostrar en la
-    galería agrupada del modal Crear. No toca los datos ni el orden. */
-const NOMBRES_IMAGEN: Record<string, string> = {
-  "img:pizza": "Pizza",
-  "img:pizza-carnes": "Carnes",
-  "img:pizza-canon": "Cañón",
-  "img:pizza-hawaii": "Hawaii",
-  "img:pizza-jamon": "Jamón",
-  "img:pizza-maicitos": "Maicitos",
-  "img:pizza-peperoni": "Peperoni",
-  "img:pizza-pollo": "Pollo",
-  "img:pizza-tocineta": "Tocineta",
-  "img:lasana-carne": "Carne",
-  "img:lasana-mixta": "Mixta",
-  "img:lasana-pollo": "Pollo",
-  "img:coca-cola": "Coca-Cola",
-  "img:pepsi": "Pepsi",
-  "img:premio": "Premio",
-  "img:quatro": "Quatro",
-};
-
-const nombreImagen = (clave: string): string =>
-  NOMBRES_IMAGEN[clave] ?? clave.replace(/^img:/, "");
-
-const BEBIDAS_IMAGEN = [
-  "img:coca-cola",
-  "img:pepsi",
-  "img:premio",
-  "img:quatro",
-];
-
-/** Grupos de la galería del Crear: los filtros sobre Object.keys conservan
-    el orden del catálogo; "OTRAS" solo se pinta si tiene elementos. */
-const GRUPOS_IMAGEN: { titulo: string; claves: string[] }[] = [
-  {
-    titulo: "PIZZAS",
-    claves: Object.keys(IMAGENES_CATEGORIA).filter((k) =>
-      k.startsWith("img:pizza"),
-    ),
-  },
-  {
-    titulo: "LASAÑAS",
-    claves: Object.keys(IMAGENES_CATEGORIA).filter((k) =>
-      k.startsWith("img:lasana"),
-    ),
-  },
-  {
-    titulo: "BEBIDAS",
-    claves: BEBIDAS_IMAGEN.filter((k) => k in IMAGENES_CATEGORIA),
-  },
-  {
-    titulo: "OTRAS",
-    claves: Object.keys(IMAGENES_CATEGORIA).filter(
-      (k) =>
-        !k.startsWith("img:pizza") &&
-        !k.startsWith("img:lasana") &&
-        !BEBIDAS_IMAGEN.includes(k),
-    ),
-  },
-];
-
 function SmModal({
   title,
   onClose,
@@ -299,52 +230,7 @@ function SmModal({
   );
 }
 
-/** Miniatura de la galería del modal Crear: 64×64 con su nombre debajo. El
-    check de la seleccionada sobresale de la esquina (el contenedor no recorta). */
-function MiniaturaImagen({
-  clave,
-  seleccionada,
-  onSelect,
-}: {
-  clave: string;
-  seleccionada: boolean;
-  onSelect: (clave: string) => void;
-}) {
-  const url = IMAGENES_CATEGORIA[clave];
-  return (
-    <div className="relative w-16">
-      <button
-        type="button"
-        title={clave}
-        aria-label={clave}
-        aria-pressed={seleccionada}
-        onClick={() => onSelect(clave)}
-        className={`block w-16 h-16 rounded-xl border-2 overflow-hidden transition-colors cursor-pointer ${
-          seleccionada
-            ? "border-primary bg-primary/10"
-            : "border-border bg-muted hover:bg-border"
-        }`}
-      >
-        <img
-          src={url}
-          alt={clave}
-          loading="lazy"
-          className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
-        />
-      </button>
-      {seleccionada && (
-        <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center pointer-events-none">
-          <Check className="w-3 h-3 text-white" />
-        </span>
-      )}
-      <span className="block mt-1 text-[11px] leading-tight text-muted-foreground text-center truncate">
-        {nombreImagen(clave)}
-      </span>
-    </div>
-  );
-}
-
-/** Datos que la pantalla envía al guardar (el `emoji` es la clave "img:…"). */
+/** Datos que la pantalla envía al guardar (`emoji` lleva el emoji elegido). */
 export interface CategoriaGuardar {
   nombre?: string;
   emoji?: string;
@@ -382,8 +268,13 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
     useState<CategoriaProducto | null>(null);
   const [deleteItem, setDeleteItem] = useState<CategoriaProducto | null>(null);
   const [formNombre, setFormNombre] = useState("");
-  // Clave "img:…" de la imagen elegida en el modal Crear (§5).
+  // Emoji elegido en el modal Crear (se envía en el campo `emoji`).
   const [formIcono, setFormIcono] = useState("");
+  const [grupoIconoSeleccionado, setGrupoIconoSeleccionado] = useState(0);
+  // Grupo activo del selector de ícono del modal Editar. Es propio y
+  // no reutiliza `grupoIconoSeleccionado` del Crear, para que los
+  // dos modales no se pisen entre sí.
+  const [grupoIconoEdicion, setGrupoIconoEdicion] = useState(0);
   // Descripción del Crear (P17a): opcional y sin validación, así que vive en
   // su propio estado y se guarda tal cual (sin más reglas que trim()).
   const [formDescripcion, setFormDescripcion] = useState("");
@@ -408,30 +299,6 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
     "w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
     (err ? "border-red-400 bg-red-50/30" : "bg-muted border-border");
 
-  const [grupoPizzas, grupoLasanas, grupoBebidas, grupoOtras] = GRUPOS_IMAGEN;
-
-  const tituloGrupo = (titulo: string, total: number) => (
-    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-      {titulo} · {total}
-    </p>
-  );
-
-  const filaMiniaturas = (claves: string[]) => (
-    <div className="flex flex-wrap gap-2">
-      {claves.map((clave) => (
-        <MiniaturaImagen
-          key={clave}
-          clave={clave}
-          seleccionada={formIcono === clave}
-          onSelect={(k) => {
-            setFormIcono(k);
-            setCreateErrors((p) => ({ ...p, icono: "" }));
-          }}
-        />
-      ))}
-    </div>
-  );
-
   /** Valida nombre e imagen contra el resto de categorías. `ignorarId` deja
       fuera al propio registro para que al editar no se detecte a sí mismo. */
   const validarCategoria = (
@@ -450,7 +317,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
       )
     )
       errs.nombre = "Ese nombre ya está registrado";
-    if (!icono) errs.icono = "Selecciona una imagen";
+    if (!icono) errs.icono = "Selecciona un ícono";
     return errs;
   };
 
@@ -506,6 +373,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
       setShowCreate(false);
       setFormNombre("");
       setFormIcono("");
+      setGrupoIconoSeleccionado(0);
       setFormDescripcion("");
       setFormEstado("Activo");
       toast.success("Categoría creada correctamente");
@@ -522,9 +390,8 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
   const handleEdit = async () => {
     if (!editItem || guardando) return;
     const esFija = CATEGORIAS_FIJAS.has(editItem.id);
-    // Las originales conservan nombre e imagen (la suya es fija por id, en
-    // IMAGEN_FIJA_CATEGORIA), así que no se valida lo que no se puede tocar:
-    // solo cambian su descripción y su estado.
+    // Las originales conservan nombre e ícono, así que no se valida lo que no
+    // se puede tocar: solo cambian su descripción y su estado.
     const errs: Record<string, string> = esFija
       ? {}
       : validarCategoria(editItem.nombre, editItem.icono ?? "", editItem.id);
@@ -623,6 +490,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
             onClick={() => {
               setFormNombre("");
               setFormIcono("");
+              setGrupoIconoSeleccionado(0);
               setFormDescripcion("");
               setFormEstado("Activo");
               setCreateErrors({});
@@ -712,12 +580,16 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                     </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground">
                       <span className="inline-flex items-center gap-2">
-                        {/* Imagen 32×32 (§5): la fila sigue midiendo 61 px. */}
-                        <ImagenCategoria
-                          clave={claveImagenDe(c)}
-                          className="w-8 h-8 shrink-0"
-                          alt={c.nombre}
-                        />
+                        {/* Emoji (columna emoji): text-3xl ≈ los 32 px del
+                            ícono anterior; la fila sigue midiendo 61 px. */}
+                        {c.icono && (
+                          <span
+                            aria-hidden="true"
+                            className="text-3xl leading-none shrink-0"
+                          >
+                            {c.icono}
+                          </span>
+                        )}
                         {c.nombre}
                       </span>
                     </td>
@@ -764,6 +636,18 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                             ? () => {
                                 setEditErrors({});
                                 setEditItem({ ...c });
+                                // Grupo del selector donde vive el emoji
+                                // actual, para que al abrir Editar el grupo
+                                // activo sea el del ícono de la categoría
+                                // (índice 0 si no se encuentra).
+                                setGrupoIconoEdicion(
+                                  Math.max(
+                                    0,
+                                    GRUPOS_ICONOS.findIndex((g) =>
+                                      g.iconos.includes(c.icono ?? ""),
+                                    ),
+                                  ),
+                                );
                               }
                             : undefined
                         }
@@ -867,16 +751,10 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                   </p>
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-full bg-card overflow-hidden shrink-0 flex items-center justify-center">
-                      {formIcono && IMAGENES_CATEGORIA[formIcono] ? (
-                        <img
-                          src={IMAGENES_CATEGORIA[formIcono]}
-                          alt={formIcono}
-                          className={`w-full h-full ${
-                            esImagenContenida(formIcono)
-                              ? "object-contain p-0.5"
-                              : "object-cover"
-                          }`}
-                        />
+                      {formIcono ? (
+                        <span className="text-3xl leading-none">
+                          {formIcono}
+                        </span>
                       ) : (
                         <span className="w-full h-full rounded-full border-2 border-dashed border-border" />
                       )}
@@ -911,24 +789,18 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                   </div>
                   <div
                     className={`mt-3 w-full h-[130px] rounded-xl flex items-center justify-center ${
-                      formIcono && IMAGENES_CATEGORIA[formIcono]
+                      formIcono
                         ? "bg-card border border-border p-2"
                         : "border-2 border-dashed border-border"
                     }`}
                   >
-                    {formIcono && IMAGENES_CATEGORIA[formIcono] ? (
-                      <img
-                        src={IMAGENES_CATEGORIA[formIcono]}
-                        alt={formIcono}
-                        className={`w-[110px] h-[110px] ${
-                          esImagenContenida(formIcono)
-                            ? "object-contain"
-                            : "object-cover"
-                        }`}
-                      />
+                    {formIcono ? (
+                      <span className="text-[80px] leading-none">
+                        {formIcono}
+                      </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        Elige una imagen
+                        Elige un ícono
                       </span>
                     )}
                   </div>
@@ -937,55 +809,55 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                   </p>
                 </div>
               </div>
-              {/* Zona inferior: la galería agrupada por tipo (§5), con las
-                  mismas claves, orden y lógica de imagen que antes. */}
+              {/* Zona inferior: el selector de ícono por grupos (chips de
+                  grupo y, debajo, la fila del grupo elegido). */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold text-muted-foreground">
-                    Imagen *
+                    Ícono *
                   </label>
                   <span className="text-xs text-muted-foreground">
-                    Elige una de las {Object.keys(IMAGENES_CATEGORIA).length}
+                    Elige un emoji para representar la categoría
                   </span>
                 </div>
-                {grupoPizzas.claves.length > 0 && (
-                  <div>
-                    {tituloGrupo(
-                      grupoPizzas.titulo,
-                      grupoPizzas.claves.length,
-                    )}
-                    {filaMiniaturas(grupoPizzas.claves)}
-                  </div>
-                )}
-                {(grupoLasanas.claves.length > 0 ||
-                  grupoBebidas.claves.length > 0) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {grupoLasanas.claves.length > 0 && (
-                      <div>
-                        {tituloGrupo(
-                          grupoLasanas.titulo,
-                          grupoLasanas.claves.length,
-                        )}
-                        {filaMiniaturas(grupoLasanas.claves)}
-                      </div>
-                    )}
-                    {grupoBebidas.claves.length > 0 && (
-                      <div>
-                        {tituloGrupo(
-                          grupoBebidas.titulo,
-                          grupoBebidas.claves.length,
-                        )}
-                        {filaMiniaturas(grupoBebidas.claves)}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {grupoOtras.claves.length > 0 && (
-                  <div>
-                    {tituloGrupo(grupoOtras.titulo, grupoOtras.claves.length)}
-                    {filaMiniaturas(grupoOtras.claves)}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {GRUPOS_ICONOS.map((grupo, idx) => (
+                    <button
+                      key={grupo.nombre}
+                      type="button"
+                      onClick={() => setGrupoIconoSeleccionado(idx)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                        grupoIconoSeleccionado === idx
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-border"
+                      }`}
+                    >
+                      {grupo.nombre}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
+                  {GRUPOS_ICONOS[grupoIconoSeleccionado].iconos.map((icono) => (
+                    <button
+                      key={icono}
+                      type="button"
+                      title={icono}
+                      aria-label={icono}
+                      aria-pressed={formIcono === icono}
+                      onClick={() => {
+                        setFormIcono(icono);
+                        setCreateErrors((p) => ({ ...p, icono: "" }));
+                      }}
+                      className={`shrink-0 w-11 h-11 rounded-full border text-xl leading-none flex items-center justify-center transition-colors cursor-pointer ${
+                        formIcono === icono
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-muted hover:bg-border"
+                      }`}
+                    >
+                      {icono}
+                    </button>
+                  ))}
+                </div>
                 <MensajeError err={createErrors.icono} />
               </div>
             </div>
@@ -1080,35 +952,46 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
               {!CATEGORIAS_FIJAS.has(editItem.id) && (
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Imagen *
+                    Ícono *
                   </label>
-                  {/* Misma galería que el Crear, con la imagen actual ya
-                      marcada (§5). Las categorías originales no la muestran:
-                      su imagen es fija. */}
-                  <div className="grid grid-cols-6 gap-2 mb-2">
-                    {Object.entries(IMAGENES_CATEGORIA).map(([clave, url]) => (
+                  {/* Selector por grupos, con el grupo y el emoji actuales
+                      marcados. Las categorías originales no lo muestran: su
+                      ícono es fijo. */}
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {GRUPOS_ICONOS.map((grupo, idx) => (
                       <button
-                        key={clave}
+                        key={grupo.nombre}
                         type="button"
-                        title={clave}
-                        aria-label={clave}
-                        aria-pressed={editItem.icono === clave}
+                        onClick={() => setGrupoIconoEdicion(idx)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                          grupoIconoEdicion === idx
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:bg-border"
+                        }`}
+                      >
+                        {grupo.nombre}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
+                    {GRUPOS_ICONOS[grupoIconoEdicion].iconos.map((icono) => (
+                      <button
+                        key={icono}
+                        type="button"
+                        title={icono}
+                        aria-label={icono}
+                        aria-pressed={editItem.icono === icono}
                         onClick={() => {
-                          setEditItem((x) => (x ? { ...x, icono: clave } : x));
+                          setEditItem((x) => (x ? { ...x, icono } : x));
                           setEditErrors((p) => ({ ...p, icono: "" }));
                         }}
-                        className={`shrink-0 w-14 h-14 rounded-xl border overflow-hidden transition-colors cursor-pointer ${
-                          editItem.icono === clave
+                        className={`shrink-0 w-11 h-11 rounded-full border text-xl leading-none flex items-center justify-center transition-colors cursor-pointer ${
+                          editItem.icono === icono
                             ? "border-primary bg-primary/10"
                             : "border-border bg-muted hover:bg-border"
                         }`}
                       >
-                        <img
-                          src={url}
-                          alt={clave}
-                          loading="lazy"
-                          className={`w-full h-full ${esImagenContenida(clave) ? "object-contain p-1" : "object-cover"}`}
-                        />
+                        {icono}
                       </button>
                     ))}
                   </div>
@@ -1173,16 +1056,15 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                     ),
                   },
                   {
-                    label: "Imagen",
-                    // Imagen 48×48 (§5): presente en toda categoría, incluidas
-                    // las originales, cuya imagen se resuelve por id.
-                    value: (
-                      <ImagenCategoria
-                        clave={claveImagenDe(detailItem)}
-                        className="w-12 h-12"
-                        alt={detailItem.nombre}
-                        emojiClassName="text-3xl"
-                      />
+                    label: "Ícono",
+                    // Emoji (columna emoji): texto text-3xl, presente en toda
+                    // categoría, incluidas las originales.
+                    value: detailItem.icono ? (
+                      <span aria-hidden="true" className="text-3xl leading-none">
+                        {detailItem.icono}
+                      </span>
+                    ) : (
+                      "—"
                     ),
                   },
                 ].map(({ label, value }) => (

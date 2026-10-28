@@ -12,7 +12,7 @@ export interface CategoriaGestionApi extends CategoriaApi {
   productos_menu: number | string;
 }
 
-/** Lo que envían Crear y Editar. `emoji` guarda la clave "img:…". */
+/** Lo que envían Crear y Editar. `emoji` lleva el emoji elegido. */
 export interface CategoriaPayload {
   nombre?: string;
   emoji?: string;
