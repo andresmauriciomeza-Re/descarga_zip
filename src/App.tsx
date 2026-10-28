@@ -127,7 +127,7 @@ import { listarCompras, mensajeErrorCompras } from "@/features/compras/services/
 import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/configCategoria";
 import { mismoNombre } from "@/shared/utils/nombres";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { EstadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
+import { EstadoMenuBadge, AgotadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -2067,9 +2067,7 @@ function LandingScreen({
                           <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
                         )}
                         {etiqueta === "agotado" && (
-                          <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
-                            Agotado
-                          </span>
+                          <AgotadoMenuBadge />
                         )}
                         <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
                           <Star className="w-3 h-3 fill-white text-white" />
@@ -2560,18 +2558,19 @@ function ProductCard({
         {/* Etiqueta de estado: fondo sólido, arriba a la izquierda con 12 px
             de separación, legible sobre cualquier foto (claras, oscuras o de
             cuadritos) y en ambos modos. Una sola a la vez: si está agotado se
-            oculta el verde y manda el "Agotado" de la derecha. */}
+            oculta el verde y el "Agotado" ocupa esta misma esquina. */}
         {etiqueta !== "agotado" && (
           <EstadoMenuBadge
             estado={estado}
             className="absolute top-3 left-3 z-10"
           />
         )}
-        {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto). */}
+        {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto).
+            Ocupa la MISMA esquina superior izquierda y el mismo estilo de
+            píldora que el badge de estado; `etiquetaEstadoMenu` garantiza que
+            solo se pinta uno de los dos. */}
         {etiqueta === "agotado" && (
-          <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
-            Agotado
-          </span>
+          <AgotadoMenuBadge className="absolute top-3 left-3 z-10" />
         )}
         {etiqueta === "no_disponible" && (
           <NoDisponibleOverlay className="absolute inset-0 z-10" />
@@ -3064,11 +3063,11 @@ function ProductDetailScreen({
               className="absolute top-3 left-3 z-10"
             />
           )}
-          {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). */}
+          {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). Ocupa la
+              MISMA esquina superior izquierda y el mismo estilo de píldora que
+              el badge de estado. */}
           {etiqueta === "agotado" && (
-            <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
-              Agotado
-            </span>
+            <AgotadoMenuBadge className="absolute top-3 left-3 z-10" />
           )}
           {etiqueta === "no_disponible" && (
             <NoDisponibleOverlay className="absolute inset-0 z-10" />

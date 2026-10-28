@@ -23,6 +23,15 @@ const FONDO_ESTADO: Record<EstadoProducto, string> = {
   Descontinuado: "bg-zinc-800",
 };
 
+/** Estilo base compartido por las píldoras del menú público (`EstadoMenuBadge`
+    y `AgotadoMenuBadge`): fondo sólido, texto blanco en negrita de 12 px,
+    forma de píldora, sombra suave (shadow-md) y anillo blanco semitransparente
+    (ring). El COLOR de fondo lo pone cada componente. */
+const BASE_PILDONA =
+  "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-bold whitespace-nowrap shadow-md ring-1 ring-white/40";
+/** Puntito circular blanco a la izquierda del texto (lenguaje visual del panel). */
+const PUNTITO = "w-2 h-2 rounded-full bg-white shrink-0";
+
 export function EstadoMenuBadge({
   estado,
   stock,
@@ -41,10 +50,24 @@ export function EstadoMenuBadge({
   const texto = agotado ? "Agotado" : estado;
   return (
     <span
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-bold whitespace-nowrap shadow-md ring-1 ring-white/40 ${fondo} ${className}`}
+      className={`${BASE_PILDONA} ${fondo} ${className}`}
     >
-      <span className="w-2 h-2 rounded-full bg-white shrink-0" aria-hidden="true" />
+      <span className={PUNTITO} aria-hidden="true" />
       {texto}
+    </span>
+  );
+}
+
+/** Píldora roja "Agotado" del menú público: MISMO tamaño, forma y estilo que
+    `EstadoMenuBadge` (comparten `BASE_PILDONA` y `PUNTITO`); solo el fondo es
+    rojo. Se pinta en la MISMA esquina superior izquierda que el badge de
+    estado, y `etiquetaEstadoMenu` (App) garantiza que nunca salen los dos a la
+    vez, así que no se superponen. */
+export function AgotadoMenuBadge({ className = "" }: { className?: string }) {
+  return (
+    <span className={`${BASE_PILDONA} bg-red-600 ${className}`}>
+      <span className={PUNTITO} aria-hidden="true" />
+      Agotado
     </span>
   );
 }
