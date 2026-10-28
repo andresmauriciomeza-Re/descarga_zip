@@ -12,7 +12,11 @@ import type { EstadoProducto } from "./EstadoProducto";
       que es el que mantiene contraste sobre fondo oscuro).
     - No disponible: gris zinc-700 (legible en ambos modos).
     - Descontinuado: no se llega a pintar en el menú (esos productos se
-      filtran), pero queda mapeado por si otra pantalla lo usa. */
+      filtran), pero queda mapeado por si otra pantalla lo usa.
+    - Agotado: rojo, SOLO cuando el estado es "Disponible" y el stock REAL del
+      catálogo público es 0 (`stock`), sin descontar lo que ya hay en el
+      carrito. Con `stock` undefined (dato no enviado) se pinta el estado tal
+      cual, y con "No disponible" nunca cambia. */
 const FONDO_ESTADO: Record<EstadoProducto, string> = {
   Disponible: "bg-emerald-600 dark:bg-emerald-500",
   "No disponible": "bg-zinc-700",
@@ -21,18 +25,26 @@ const FONDO_ESTADO: Record<EstadoProducto, string> = {
 
 export function EstadoMenuBadge({
   estado,
+  stock,
   className = "",
 }: {
   estado: EstadoProducto;
+  /** Stock REAL del catálogo (sin descontar el carrito). Con `estado`
+      "Disponible" y `stock === 0` se pinta "Agotado" en rojo; `undefined` =
+      sin dato, el estado se pinta tal cual. */
+  stock?: number;
   /** Posicionamiento externo (p. ej. "absolute top-3 left-3 z-10"). */
   className?: string;
 }) {
+  const agotado = estado === "Disponible" && stock === 0;
+  const fondo = agotado ? "bg-red-600 dark:bg-red-500" : FONDO_ESTADO[estado];
+  const texto = agotado ? "Agotado" : estado;
   return (
     <span
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-bold whitespace-nowrap shadow-md ring-1 ring-white/40 ${FONDO_ESTADO[estado]} ${className}`}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-bold whitespace-nowrap shadow-md ring-1 ring-white/40 ${fondo} ${className}`}
     >
       <span className="w-2 h-2 rounded-full bg-white shrink-0" aria-hidden="true" />
-      {estado}
+      {texto}
     </span>
   );
 }
