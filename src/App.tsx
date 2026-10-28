@@ -105,8 +105,6 @@ import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario"
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
-import { claveImagenDe } from "@/features/categoria-productos/services/imagenesCategoria";
-import { ImagenCategoria } from "@/features/categoria-productos/components/ImagenCategoria";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/compra/pages/GestionCompraScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
@@ -1946,15 +1944,16 @@ function LandingScreen({
                   onClick={() => onCategoryNavigate(c.nombre)}
                   className="group min-h-[220px] md:min-h-[260px] bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-3 px-4 py-6"
                 >
-                  {/* Imagen de la categoría 140×140 (§5): resuelve la imagen
-                      fija de las originales, la que se eligió al crearla y,
-                      en datos viejos, el emoji como texto. */}
-                  <ImagenCategoria
-                    clave={claveImagenDe(c)}
-                    className="w-[140px] h-[140px]"
-                    alt={c.nombre}
-                    emojiClassName="text-[96px] leading-none"
-                  />
+                  {/* Emoji de la categoría (columna emoji), también en las
+                      originales: texto grande, el mismo tamaño de siempre. */}
+                  {c.icono && (
+                    <span
+                      aria-hidden="true"
+                      className="text-[96px] leading-none"
+                    >
+                      {c.icono}
+                    </span>
+                  )}
                   <p
                     className="text-xl font-bold text-foreground text-center leading-snug"
                     style={{ fontFamily: SERIF }}
@@ -2375,9 +2374,13 @@ type LineaLimiteRef = {
 };
 
 /** Tope de UNA línea del carrito (Bloque 5): `max` es el TOTAL de unidades
-    que esa línea puede tener (undefined = sin límite) y `elaborado` dice si
-    es un producto insumo, para elegir el mensaje de máximo. */
-type LimiteLinea = { max: number | undefined; elaborado: boolean };
+    que esa línea puede tener (undefined = sin límite), `elaborado` dice si
+    es un producto insumo (para elegir el mensaje de máximo) y `stock` es el
+    STOCK REAL del catálogo público SIN descontar el carrito (undefined = la
+    API no lo envió). `stock` es lo que el menú pinta como "Agotado":
+    `max === 0` también ocurre con stock > 0 cuando el carrito ya se llevó
+    todas las unidades, y eso NO es agotado. */
+type LimiteLinea = { max: number | undefined; elaborado: boolean; stock?: number };
 
 /** Mensaje exacto al llegar al máximo (Bloque 5, punto 4): tanto pizzas/
     lasañas (pre-hechas) como bebidas se limitan por su STOCK FÍSICO, así que
@@ -8723,17 +8726,21 @@ export default function App() {
 
   /** Bloque 5 — Tope de UNA línea del carrito considerando TODO lo que ya
       hay en el carrito (punto 2):
-      · Producto que NO está en el panel (ningún nombre casa con él, está
-        borrado o renombrado): sin límite, `max` undefined.
+      · Producto que NO está en el catálogo público (ningún nombre casa, está
+        borrado/renombrado o el catálogo aún no cargó): sin límite.
       · Producto insumo (pizza/lasaña — PRE-HECHAS) y producto terminado
         (bebida): el STOCK FÍSICO del producto (`stockApi` si la API lo envió,
-        si no el `stockDisponible` del producto del panel emparejado por
-        nombre), menos las unidades del MISMO producto que ya hay en OTRAS
-        líneas. Ya no se limita por insumos: se vende solo lo que hay hecho.
+        si no `max` undefined = sin límite), menos las unidades del MISMO
+        producto que ya hay en OTRAS líneas. Ya no se limita por insumos: se
+        vende solo lo que hay hecho.
       `max` es el TOTAL que la línea puede tener: la propia línea se excluye
       de los consumos ajenos por id; sin id —tarjeta y detalle— todo el
       carrito cuenta. El mínimo sigue siendo 1 (lo aplican los puntos que
-      usan este tope). */
+      usan este tope).
+      NO lee `productos` (Gestión de Productos): esa lista solo se carga con
+      sesión, así que sin login el tope salía siempre `undefined` y las
+      pizzas/lasañas con stock 0 se podían agregar. Stock y tipo salen del
+      CATÁLOGO PÚBLICO, cargado igual para todos los roles. */
   const limiteDeLinea = (
     linea: LineaLimiteRef,
     carrito: CartItem[],
@@ -8741,12 +8748,12 @@ export default function App() {
     const nombre = linea.product.name;
     const mismoNombre = (n?: string) =>
       normalizarNombre(n ?? "") === normalizarNombre(nombre);
-    const enPanel = productos.find((p) => mismoNombre(p.nombre));
-    if (!enPanel) return { max: undefined, elaborado: false };
+    const enCatalogo = productosCatalogo.find((p) => mismoNombre(p.nombre));
+    if (!enCatalogo) return { max: undefined, elaborado: false };
     const enCategoria = categoriasCatalogo.find(
-      (c) => c.id === enPanel.idCategoria,
+      (c) => c.id === enCatalogo.idCategoria,
     )?.nombre;
-    const elaborado = tipoDe(enPanel, enCategoria) === "Producto insumo";
+    const elaborado = tipoDe(enCatalogo, enCategoria) === "Producto insumo";
     // Lo que ya consumen las OTRAS líneas (la propia no se cuenta dos veces).
     const otras = carrito.filter((l) => l.id !== linea.id);
 
@@ -8755,17 +8762,14 @@ export default function App() {
     // no se limita por "cuántas se pueden preparar": se vende solo lo que hay
     // hecho. Las unidades de OTRAS líneas del mismo producto en el carrito
     // descuentan (puntos 1 y 2). `elaborado` queda solo para elegir el mensaje.
-    const stock =
-      limiteStockDe(
-        productosCatalogo.find((p) => mismoNombre(p.nombre)),
-      ) ?? enPanel.stockDisponible;
+    const stock = limiteStockDe(enCatalogo);
     if (stock === undefined || !Number.isFinite(stock)) {
       return { max: undefined, elaborado };
     }
     const enOtras = otras
       .filter((l) => mismoNombre(l.product.name))
       .reduce((s, l) => s + (l.quantity || 0), 0);
-    return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado };
+    return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado, stock };
   };
 
   /** Bloque 5 — Agregar 1 unidad desde la tarjeta. Devuelve si algo se
