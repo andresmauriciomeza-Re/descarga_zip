@@ -122,6 +122,29 @@ export function filtrarDv(valor: string): string {
   return valor.replace(/\D/g, "").slice(0, 1);
 }
 
+/** Pesos oficiales de la DIAN para el dígito de verificación, aplicados del
+ *  dígito MENOS significativo (derecha) al más significativo (izquierda). */
+const PESOS_DV_DIAN = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
+
+/**
+ * Dígito de verificación (DV) de un NIT con el algoritmo de la DIAN (módulo 11).
+ * Recibe el NIT SIN el DV (se ignoran puntos, guiones y espacios). Devuelve ""
+ * si no hay dígitos o si el NIT supera los 15 dígitos que cubre la tabla.
+ *   suma = Σ dígito_i × peso_i (desde la derecha) ; r = suma mod 11
+ *   DV   = r si r ∈ {0, 1}; si no, 11 − r
+ * Ej.: 899999068 → 1 · 890903938 → 8 · 800197268 → 4.
+ */
+export function calcularDvNit(nitSinDv: string): string {
+  const digitos = (nitSinDv ?? "").replace(/\D/g, "");
+  if (!digitos || digitos.length > PESOS_DV_DIAN.length) return "";
+  let suma = 0;
+  for (let i = 0; i < digitos.length; i++) {
+    suma += Number(digitos[digitos.length - 1 - i]) * PESOS_DV_DIAN[i];
+  }
+  const r = suma % 11;
+  return String(r > 1 ? 11 - r : r);
+}
+
 /**
  * NIT para mostrar, SIEMPRE con el mismo formato para todos los proveedores
  * (987.654.321-1). Es idempotente: un NIT que ya viene formateado en la
@@ -232,12 +255,23 @@ export function nombreGuardado(v: ProveedorFormValues, previo = ""): string {
  * `razonSocial` no aparece porque en el modelo vive dentro de `nombre`.
  */
 export function datosNuevosProveedor(v: ProveedorFormValues) {
+  // DV en Persona Jurídica: se calcula automáticamente con los primeros 9
+  // dígitos del NIT (algoritmo de la DIAN). Si el registro ya traía un DV y el
+  // NIT tiene otro largo (registros antiguos), se conserva el DV previo o el
+  // último dígito del NIT. En Persona Natural el DV va vacío.
+  const nitDigitos = (v.nit ?? "").replace(/\D/g, "");
+  const dvCalculado =
+    v.tipoPersona === "Persona Jurídica"
+      ? (v.dv ?? "").trim() ||
+        (nitDigitos.length >= 9 ? calcularDvNit(nitDigitos.slice(0, 9)) : "")
+      : "";
+
   return {
     nombres: v.nombres ?? "",
     apellidos: v.apellidos ?? "",
     tipoDocumento: v.tipoDocumento ?? "",
     numeroDocumento: v.numeroDocumento ?? "",
-    dv: v.dv ?? "",
+    dv: dvCalculado,
     tipoSociedad: v.tipoSociedad ?? "",
     nombreComercial: v.nombreComercial ?? "",
     camaraComercioNombre: v.camaraComercioNombre ?? "",
@@ -394,12 +428,14 @@ const CAMPOS_POR_TIPO: Record<TipoPersona, (keyof ProveedorFormValues)[]> = {
     "nombres", "apellidos", "nombre", "telefono", "email", "direccion", "estado",
   ],
   "Persona Jurídica": [
-    "tipoPersona", "razonSocial", "nombreComercial", "nit", "tipoSociedad",
-    "nombre", "estado", "contactoNombre", "contactoTelefono", "contactoTelefonoFijo",
-    "contactoEmail", "direccion", "camaraComercioArchivo", "camaraComercioNombre",
+    "tipoPersona",
     "repLegalTipoDocumento", "repLegalNumeroDocumento",
     "repLegalNombreCompleto", "repLegalNombres", "repLegalApellidos",
     "repLegalTelefono", "repLegalEmail",
+    "razonSocial", "nombre", "nombreComercial", "nit", "tipoSociedad",
+    "contactoEmail", "contactoTelefono", "contactoTelefonoFijo", "direccion", "contactoNombre",
+    "camaraComercioArchivo", "camaraComercioNombre",
+    "estado",
   ],
 };
 
@@ -503,6 +539,13 @@ export function useProveedorForm(
         if (derivado) next.nombre = derivado;
       }
 
+      // NIT en Persona Jurídica (10 dígitos = 9 de NIT + 1 de DV): sincroniza
+      // `dv` automáticamente con el dígito calculado por el algoritmo DIAN.
+      if (campo === "nit") {
+        const dig = String(valor ?? "").replace(/\D/g, "");
+        next.dv = dig.length >= 9 ? calcularDvNit(dig.slice(0, 9)) : "";
+      }
+
       // Persona Jurídica: el contacto comercial alimenta los campos viejos.
       if (
         next.tipoPersona === "Persona Jurídica" &&
@@ -559,21 +602,28 @@ export function useProveedorForm(
       if (dirNatural) e.direccion = dirNatural;
     }
 
-    // ── Persona Jurídica: NIT y DV obligatorios y válidos SOLO aquí. ──
+    // ── Persona Jurídica: NIT (9 dígitos + 1 de DV) obligatorio y válido SOLO aquí. ──
     if (esJuridica) {
       const nit = (values.nit ?? "").trim();
       if (!nit) {
         e.nit = "El NIT es obligatorio.";
       } else if (nit.length !== NIT_LENGTH) {
         e.nit = `El NIT debe tener exactamente ${NIT_LENGTH} dígitos.`;
+      } else if (!opciones.bloquearNit) {
+        // Opción 1 (solo al crear): los primeros 9 dígitos son el NIT y el
+        // décimo es el DV; se comprueba con el algoritmo de la DIAN.
+        const dvEsperado = calcularDvNit(nit.slice(0, 9));
+        if (dvEsperado && nit[9] !== dvEsperado) {
+          e.nit = `El dígito de verificación no corresponde al NIT (debería terminar en ${dvEsperado}).`;
+        } else if (existentes.some(x => filtrarNit(x.nit) === nit)) {
+          // Se compara solo dígitos: las semillas guardan el NIT con formato
+          // ("830.115.220-1") y el campo siempre trae 10 dígitos ("8301152201"),
+          // por lo que la comparación literal nunca detectaba el duplicado.
+          e.nit = "Ya existe un proveedor con este NIT.";
+        }
       } else if (existentes.some(x => filtrarNit(x.nit) === nit)) {
-        // Se compara solo dígitos: las semillas guardan el NIT con formato
-        // ("830.115.220-1") y el campo siempre trae 10 dígitos ("8301152201"),
-        // por lo que la comparación literal nunca detectaba el duplicado.
         e.nit = "Ya existe un proveedor con este NIT.";
       }
-      // DV: FUERA del diseño y de la validación del cliente (decisión). Su
-      // valor sigue en el estado y se envía en el payload, sin exigirse aquí.
     }
 
     // ── Nombre (derivado de la identificación): sigue obligatorio porque es

@@ -21,9 +21,10 @@ import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 import { EstadoHistorialTooltip } from "@/features/compras/components/EstadoHistorialTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { useProveedorForm, soloLetras, datosNuevosProveedor, contactoGuardado, type TipoPersona } from "@/features/compras/hooks/useProveedorForm";
+import { useProveedorForm, soloLetras, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type ProveedorFormValues } from "@/features/compras/hooks/useProveedorForm";
 import { crearProveedor, mensajeErrorProveedores } from "@/features/proveedores/services/proveedoresApi";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
+import { TipoPersonaSelector } from "@/features/compras/components/TipoPersonaSelector";
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
@@ -37,7 +38,9 @@ import {
   actualizarOrdenCompra,
   cambiarEstadoOrdenCompra,
   crearOrdenCompra,
+  eliminarOrdenCompra,
   mensajeErrorOrdenesCompra,
+  obtenerOrdenCompra,
 } from "@/features/orden-compra/services/ordenesCompraApi";
 import { listarCompras } from "@/features/compras/services/comprasApi";
 import {
@@ -95,6 +98,12 @@ export interface OrdenItem {
   stockApiRevertido?: boolean;
   stockApiPendiente?: boolean;
   stockApiPendienteReversa?: boolean;
+  subtotal?: number;
+  cantidadRecibida?: number;
+  cantidadPendiente?: number;
+  facturado?: boolean;
+  idCategoriaInsumo?: number;
+  esNuevoInsumo?: boolean;
 }
 
 export interface ItemRecibido {
@@ -102,6 +111,10 @@ export interface ItemRecibido {
   idInsumo: string;
   nombre: string;
   cantidadSolicitada: number;
+  pendiente?: number;
+  facturado?: boolean;
+  idCategoriaInsumo?: number;
+  esNuevoInsumo?: boolean;
   cantidadRecibida: number;
   unidad: string;
   precioReferencia: number;
@@ -135,7 +148,14 @@ export interface OrdenCompra {
   estado: EstadoOrden;
   items: OrdenItem[];
   recepcion?: Recepcion;
-  historialEstados?: { estado: EstadoOrden; fechaHora: string }[];
+  proveedorNit?: string;
+  total?: number;
+  facturado?: number;
+  porFacturar?: number;
+  totalFacturas?: number;
+  facturas?: string[];
+  motivoAnulacion?: string;
+  historialEstados?: { estado: EstadoOrden; fechaHora: string; motivo?: string | null }[];
 }
 
 export interface GestionCompra {
@@ -183,17 +203,7 @@ export interface ProveedorRef {
   tipoPersona?: TipoPersona | "";
 }
 
-export const PROVEEDORES_INIT: ProveedorRef[] = [
-  { id: "1", nombre: "Molinos del Valle", nit: "830.115.220-1", asesorComercial: "Carlos Mejía", telefono: "604 444 1001", email: "compras@molinosvalle.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "2", nombre: "Lácteos La Esperanza", nit: "900.456.789-2", asesorComercial: "Ana Restrepo", telefono: "604 444 1002", email: "ventas@lacteosesperanza.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "3", nombre: "Distribuidora Sur", nit: "811.033.445-3", asesorComercial: "Jorge Ríos", telefono: "604 444 1003", email: "contacto@distribuidorasur.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "4", nombre: "Carnes Premium", nit: "901.552.118-4", asesorComercial: "Luisa Palacio", telefono: "604 444 1004", email: "ventas@carnespremium.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "5", nombre: "Verduras Express", nit: "103.245.667-5", asesorComercial: "Mariana Ospina", telefono: "604 444 1005", email: "pedidos@verdurasexpress.co", direccion: "Cll 10 #37-50, Medellín", estado: "activo", tipoPersona: "Persona Natural" },
-  { id: "6", nombre: "Distribuidora La Cosecha", nit: "900.123.456-1", asesorComercial: "Carlos Mejía", telefono: "604 321 0001", email: "cosecha@proveedores.co", direccion: "Cra 50 #30-10, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "7", nombre: "Quesos del Norte S.A.S.", nit: "800.654.321-2", asesorComercial: "Ana Restrepo", telefono: "604 321 0002", email: "quesos@norte.co", direccion: "Cll 80 #45-20, Bello", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "8", nombre: "Carnes Premium Ltda.", nit: "700.111.222-3", asesorComercial: "Jorge Ríos", telefono: "604 321 0003", email: "ventas@carnespremium.co", direccion: "Av. 33 #76-60, Medellín", estado: "activo", tipoPersona: "Persona Jurídica" },
-  { id: "9", nombre: "Bebidas y Más", nit: "901.777.888-4", asesorComercial: "Luisa Palacio", telefono: "604 321 0004", email: "pedidos@bebidasmas.co", direccion: "Cra 65 #12-40, Itagüí", estado: "activo", tipoPersona: "Persona Natural" },
-];
+export const PROVEEDORES_INIT: ProveedorRef[] = [];
 
 const ESTADO_CONFIG: Record<EstadoOrden, string> = {
   Borrador: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
@@ -231,8 +241,8 @@ const SLOT_EDITAR = "block shrink-0 p-1.5 w-7 h-7";
  * selector deshabilitado.
  */
 const ESTADOS_ADELANTE: Record<EstadoOrden, EstadoOrden[]> = {
-  Borrador: ["Borrador", "Enviado", "Completado", "Anulado"],
-  Enviado: ["Enviado", "Completado", "Anulado"],
+  Borrador: ["Borrador", "Enviado", "Anulado"],
+  Enviado: ["Enviado", "Anulado"],
   Completado: ["Completado"],
   Anulado: ["Anulado"],
 };
@@ -261,7 +271,8 @@ const seccionCls =
 
 // ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
-export const INITIAL_ORDENES: OrdenCompra[] = [
+export const INITIAL_ORDENES: OrdenCompra[] = [];
+const _INITIAL_ORDENES_SEED_REMOVED: OrdenCompra[] = [
   {
     id: "001",
     proveedor: "Molinos del Valle",
@@ -437,17 +448,19 @@ function formatearFechaHora(fechaHora: string): string {
     // "2026-10-01" (solo fecha) se parsea como UTC y en Colombia (UTC-5)
     // caería al día anterior a las 7 p. m.: se lee como hora local.
     const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaHora.trim());
-    const d = esSoloFecha ? new Date(`${fechaHora.trim()}T00:00:00`) : new Date(fechaHora);
+    const d = esSoloFecha ? new Date(`${fechaHora.trim()}T00:00:00-05:00`) : new Date(fechaHora);
     if (isNaN(d.getTime())) return fechaHora;
     const fecha = d.toLocaleDateString("es-CO", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "America/Bogota",
     });
     const hora = d.toLocaleTimeString("es-CO", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "America/Bogota",
     });
     return `${fecha} ${hora}`;
   } catch {
@@ -588,9 +601,12 @@ export function NuevoProveedorModal({
   // Punto 1: mismas validaciones que el formulario del módulo Proveedores
   // (useProveedorForm). El nombre llega del buscador y se filtra con las
   // reglas del formulario para no arrancar con un valor inválido.
+  const nombreSemilla = soloLetras(nombreInicial);
   const form = useProveedorForm(
     {
-      nombre: soloLetras(nombreInicial),
+      nombre: nombreSemilla,
+      nombres: nombreSemilla,
+      razonSocial: nombreInicial.trim(),
       nit: "",
       telefono: "",
       email: "",
@@ -626,7 +642,7 @@ export function NuevoProveedorModal({
       // email con los datos del propio proveedor (el backend los exige).
       const creado = await crearProveedor({
         id: "",
-        nombre: form.values.nombre.trim(),
+        nombre: nombreGuardado(v),
         nit: v.nit.trim(),
         ...contactoGuardado(v),
         direccion: v.direccion.trim(),
@@ -636,14 +652,30 @@ export function NuevoProveedorModal({
       });
       onGuardar(creado);
     } catch (error) {
-      toast.error(mensajeErrorProveedores(error, "No se pudo crear el proveedor."));
+      const mensaje = mensajeErrorProveedores(error, "No se pudo crear el proveedor.");
+      const visible = (campo: string) => !!document.querySelector(`[data-prov-campo="${campo}"]`);
+      let campo: keyof ProveedorFormValues | null = null;
+      if (/nit/i.test(mensaje) && visible("nit")) campo = "nit";
+      else if (/documento/i.test(mensaje) && visible("numeroDocumento")) campo = "numeroDocumento";
+      else if (/correo|email/i.test(mensaje)) {
+        if (visible("contactoEmail")) campo = "contactoEmail";
+        else if (visible("email")) campo = "email";
+      }
+      if (campo) {
+        form.setErrorServidor(campo, mensaje);
+        const el = document.querySelector<HTMLElement>(`[data-prov-campo="${campo}"]`);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.focus();
+      } else {
+        toast.error(mensaje);
+      }
     } finally {
       setGuardando(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -651,25 +683,36 @@ export function NuevoProveedorModal({
         transition={{ duration: 0.15 }}
         // Sin borde exterior (estilo "sin cards con borde"): la separación la
         // dan las líneas divisorias del encabezado y del pie.
-        className="bg-card rounded-2xl w-full max-w-6xl shadow-2xl my-4 flex flex-col max-h-[calc(100dvh-2rem)]"
+        className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <div>
+        {/* Encabezado FIJO: título + subtítulo y, en la misma fila a la
+            derecha (o abajo en móvil), el selector Persona Natural / Persona Jurídica. */}
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b border-border shrink-0">
+          <div className="min-w-[180px] flex-1">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <TipoPersonaSelector
+              valor={form.values.tipoPersona}
+              onChange={(tipo) => {
+                form.marcarTocado("tipoPersona");
+                form.setCampo("tipoPersona", tipo);
+              }}
+              error={form.obtenerError("tipoPersona")}
+            />
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        {/* Cuerpo con scroll propio SIEMPRE (nunca `lg:overflow-hidden`): el
-            formulario va en dos columnas y, si no cabe, se desplaza aquí. */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
+        {/* Único contenedor con scroll dentro del modal (prohibido scroll doble). */}
+        <div className="px-4 sm:px-6 py-5 overflow-y-auto flex-1 min-h-0">
           {/* Punto 1: mismo formulario de proveedor que el módulo Proveedores. */}
           <ProveedorFormCampos form={form} />
         </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+        <div className="flex justify-end gap-3 px-4 sm:px-6 py-3 border-t border-border shrink-0">
+          <button onClick={onClose} className="px-5 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
           <button
@@ -677,7 +720,7 @@ export function NuevoProveedorModal({
             // Fase 2: habilitado siempre; si hay errores, `submit` los pinta y
             // enfoca el primero en lugar de guardar.
             disabled={guardando}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+            className="px-5 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Proveedor"}
           </button>
@@ -751,7 +794,7 @@ export function OrdenModal({
   /** Renderiza el formulario como una página independiente en vez de modal. */
   fullPage?: boolean;
   onClose: () => void;
-  onGuardar: (d: OrdenFormData) => void;
+  onGuardar: (d: OrdenFormData) => void | Promise<void>;
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
   onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
@@ -767,7 +810,7 @@ export function OrdenModal({
   const isPage = fullPage;
   // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
   // daba el día siguiente, y `today` es el `max` del date-picker de vencimiento.
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
   const [form, setForm] = useState<OrdenFormData>({
     proveedor: orden?.proveedor ?? "",
@@ -784,6 +827,9 @@ export function OrdenModal({
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  /** Hay una fila de la tabla en edición sin confirmar (✓): su borrador cuenta en el total en pantalla pero aún no está en `form.items`. */
+  const [filaEnEdicion, setFilaEnEdicion] = useState(false);
 
   // Historial de cambios de estado
   const [estadoHistorial, setEstadoHistorial] = useState<{ estado: EstadoOrden; fecha: string }[]>(() => {
@@ -1133,14 +1179,24 @@ export function OrdenModal({
     toast.success(`Proveedor "${nombre}" creado`);
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
+    if (guardando) return;
     setIntentoGuardar(true);
 
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un ítem."); return; }
-    onGuardar(form);
+    if (filaEnEdicion) {
+      toast.error("Confirma (✓) o cancela la edición de la fila antes de guardar: el total mostrado aún no incluye ese cambio.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await onGuardar(form);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   /** Subtítulo de la cabecera (solo cuando aporta algo). */
@@ -1364,8 +1420,8 @@ export function OrdenModal({
                         )}
                         {/* Fecha con hora en gris pequeño debajo del input */}
                         <p className="text-[11px] text-muted-foreground mt-1">
-                          {new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                          {new Date().toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true })}
+                          {/* Fecha y hora real en zona America/Bogota */}
+                          {formatearFechaHora(orden?.historialEstados?.[0]?.fechaHora ?? orden?.fecha ?? new Date().toISOString())}
                         </p>
                       </div>
 
@@ -1379,6 +1435,7 @@ export function OrdenModal({
                             pf({ estado: nuevoEstado });
                           }}
                           options={opcionesEstado(form.estado as EstadoOrden)}
+                          disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
                           <p className="text-[11px] text-muted-foreground mt-1">
@@ -1419,6 +1476,7 @@ export function OrdenModal({
                             pf({ estado: nuevoEstado });
                           }}
                           options={opcionesEstado(form.estado as EstadoOrden)}
+                          disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
                           <p className="text-[11px] text-muted-foreground mt-1">
@@ -1669,6 +1727,7 @@ export function OrdenModal({
                     showActions
                     onRemove={rowId => pf({ items: form.items.filter(i => i.rowId !== rowId) })}
                     onUpdate={actualizarItem}
+                    onEditingChange={setFilaEnEdicion}
                     totalLabel="Total estimado"
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
@@ -1693,11 +1752,11 @@ export function OrdenModal({
                       </button>
                       <button
                         onClick={handleGuardar}
-                        disabled={!formValido}
+                        disabled={!formValido || guardando}
                         className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                       >
                         <Check className="w-4 h-4" />
-                        {mode === "edit" ? "Guardar cambios" : "Guardar"}
+                        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
                       </button>
                     </div>
                   )}
@@ -1718,11 +1777,11 @@ export function OrdenModal({
                 </button>
                 <button
                   onClick={handleGuardar}
-                  disabled={!formValido}
+                  disabled={!formValido || guardando}
                   className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
-                  {mode === "edit" ? "Guardar cambios" : "Guardar"}
+                  {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
                 </button>
               </div>
             )}
@@ -1872,7 +1931,7 @@ export function NuevaOrdenCompraPage({
       } else {
         const creada = await crearOrdenCompra({
           id_proveedor: idProveedor,
-          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          estado_inicial: "Borrador",
           items,
         });
         setOrdenes(prev => [creada, ...prev]);
@@ -1887,9 +1946,7 @@ export function NuevaOrdenCompraPage({
   const handleNuevoProveedor = (p: ProveedorRef) => {
     // Actualizar el estado global de proveedores en App.tsx para que el
     // listado de Proveedores lo vea inmediatamente.
-    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
-      setProveedores(prev => [...prev, p]);
-    }
+    setProveedores(prev => [p, ...prev.filter(x => x.id !== p.id && x.nombre.toLowerCase() !== p.nombre.toLowerCase())]);
     onNuevoProveedor?.(p);
     return p.nombre;
   };
@@ -1929,7 +1986,7 @@ function RecepcionModal({
   onClose: () => void;
 }) {
   // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
   type ItemRow = ItemRecibido & { malEstado: boolean };
 
@@ -2395,7 +2452,7 @@ export function OrdenCompraScreen({
   errorCarga,
   onReintentar,
   page, setPage,
-  canCreate = true, canEdit = true,
+  canCreate = true, canEdit = true, canDelete = true,
   canExportExcel = true,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -2406,6 +2463,8 @@ export function OrdenCompraScreen({
   /** Motivo de la anulación (lo exige el servidor). */
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
+  const [eliminarConfirm, setEliminarConfirm] = useState<OrdenCompra | null>(null);
+  const [eliminandoOrden, setEliminandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
@@ -2415,10 +2474,10 @@ export function OrdenCompraScreen({
       const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
-      const facturasTexto = facturas.map(f => f.numeroFactura ?? "").join(" ");
+      const facturasTexto = [...(o.facturas ?? []), ...facturas.map(f => f.numeroFactura ?? "")].join(" ");
       // Find provider NIT
       const prov = proveedores.find(p => p.nombre === o.proveedor);
-      const nit = prov?.nit ?? "";
+      const nit = o.proveedorNit || prov?.nit || "";
       return (o.proveedor ?? "").toLowerCase().includes(q)
         || (o.id ?? "").toLowerCase().includes(q)
         || nit.toLowerCase().includes(q)
@@ -2472,7 +2531,7 @@ export function OrdenCompraScreen({
       if (modal?.mode === "create") {
         const creada = await crearOrdenCompra({
           id_proveedor: idProveedor,
-          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          estado_inicial: "Borrador",
           items,
         });
         setOrdenes(p => [creada, ...p]);
@@ -2504,9 +2563,7 @@ export function OrdenCompraScreen({
   };
 
   const handleNuevoProveedorLocal = (p: ProveedorRef): string => {
-    if (!proveedores.some(x => x.nombre.toLowerCase() === p.nombre.toLowerCase())) {
-      setProveedores(prev => [...prev, p]);
-    }
+    setProveedores(prev => [p, ...prev.filter(x => x.id !== p.id && x.nombre.toLowerCase() !== p.nombre.toLowerCase())]);
     onNuevoProveedor?.(p);
     return p.nombre;
   };
@@ -2523,6 +2580,21 @@ export function OrdenCompraScreen({
     }
   };
 
+  const handleEliminarOrden = async (o: OrdenCompra) => {
+    if (eliminandoOrden) return;
+    setEliminandoOrden(true);
+    try {
+      await eliminarOrdenCompra(o.id);
+      setOrdenes((prev) => prev.filter((x) => x.id !== o.id));
+      toast.success(`OC ${o.id} eliminada`);
+      setEliminarConfirm(null);
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo eliminar la orden."));
+    } finally {
+      setEliminandoOrden(false);
+    }
+  };
+
   const handleAnularOrden = async (o: OrdenCompra) => {
     if (anulandoOrden) return;
     const motivo = (motivoAnulacion ?? "").trim();
@@ -2535,11 +2607,13 @@ export function OrdenCompraScreen({
       // El backend anula la orden y SUS compras devolviendo el stock que
       // hubieran sumado (y recalculando la recepción). Un 409 muestra su
       // mensaje y no se cambia nada.
+      // Decisión D1: se anula la orden con su motivo; las compras Recibido y el stock no se tocan.
       const actualizada = await cambiarEstadoOrdenCompra(o.id, "Anulado", motivo);
       setOrdenes((prev) => prev.map((x) => (x.id === o.id ? actualizada : x)));
+      setOrdenes((prev) => prev.map((x) => (x.id === o.id ? actualizada : x)));
       // Las compras asociadas quedaron "Anulado" en la base: se recargan.
-      setGestiones(await listarCompras());
-      await onRecargarCatalogo?.();
+      // Las compras asociadas conservan su estado (Decisión D1).
+      // El stock del catálogo no cambia al anular la orden.
       toast.success(`OC ${o.id} anulada`);
       setAnularConfirm(null);
       setRecepcionOrden(null);
@@ -2672,7 +2746,7 @@ export function OrdenCompraScreen({
       import("jspdf-autotable").then(() => {
         const doc = new jsPDF();
         const prov = proveedores.find(p => p.nombre === orden.proveedor);
-        const nit = prov?.nit ?? "";
+        const nit = orden.proveedorNit || prov?.nit || "";
         const asesor = prov?.asesorComercial ?? "";
         const telefono = prov?.telefono ?? "";
         const email = prov?.email ?? "";
@@ -2834,12 +2908,12 @@ export function OrdenCompraScreen({
                 )
                 : paged.map(o => {
                   const facturas = getFacturas(o.id);
-                  const totalOrden = calcTotal(o.items);
-                  const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
-                  const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                  const totalOrden = o.total ?? calcTotal(o.items);
+                  const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
+                  const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
                     // Find provider NIT
                     const prov = proveedores.find(p => p.nombre === o.proveedor);
-                    const nit = prov?.nit ?? "";
+                    const nit = o.proveedorNit || prov?.nit || "";
                     return (
                       <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
                         <td className="px-3 py-2.5 sticky left-0 z-10 bg-card group-hover:bg-muted/20">
@@ -2861,7 +2935,17 @@ export function OrdenCompraScreen({
                              ))}
                            </>
                          ) : (
-                           <span className="text-muted-foreground">—</span>
+                           (o.facturas ?? []).length > 0 ? (
+                             <>
+                               {(o.facturas ?? []).map((nf) => (
+                                 <span key={nf} className="block font-mono font-semibold text-emerald-700 truncate" title={nf}>
+                                   {nf}
+                                 </span>
+                               ))}
+                             </>
+                           ) : (
+                             <span className="text-muted-foreground">—</span>
+                           )
                          )}
                        </td>
                        <td className="px-3 py-2.5">
@@ -2938,7 +3022,16 @@ export function OrdenCompraScreen({
                           ) : (
                             <span aria-hidden className={SLOT_EDITAR} />
                           )}
-                          {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
+                          {esBorrador(o.estado) && canDelete && (
+                            <button
+                              onClick={() => setEliminarConfirm(o)}
+                              title="Eliminar orden"
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
                               title="Registrar recepción"
@@ -2969,11 +3062,11 @@ export function OrdenCompraScreen({
               )
               : paged.map(o => {
                 const facturas = getFacturas(o.id);
-                const totalOrden = calcTotal(o.items);
-                const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
-                const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                const totalOrden = o.total ?? calcTotal(o.items);
+                const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
+                const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
                 const prov = proveedores.find(p => p.nombre === o.proveedor);
-                const nit = prov?.nit ?? "";
+                const nit = o.proveedorNit || prov?.nit || "";
                 return (
                   <div key={o.id} className="p-4">
                     {/* N° de orden y estado arriba */}
@@ -3054,7 +3147,16 @@ export function OrdenCompraScreen({
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
-                      {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
+                      {esBorrador(o.estado) && canDelete && (
+                        <button
+                          onClick={() => setEliminarConfirm(o)}
+                          title="Eliminar orden"
+                          className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                         <button
                           onClick={() => onAbrirRecepcion?.(o)}
                           title="Registrar recepción"
@@ -3133,7 +3235,7 @@ export function OrdenCompraScreen({
             body={`-+Deseas anular la OC ${anularConfirm.id}?`}
             detail={
               facturasDeOrden(anularConfirm.id).length > 0
-                ? `También se anularán sus ${facturasDeOrden(anularConfirm.id).length} factura(s) registradas en Gestión de Compras.`
+                ? "Las facturas ya recibidas en Gestión de Compras conservarán su estado y stock. Esta acción no puede revertirse."
                 : "Esta acción no puede revertirse."
             }
             confirmLabel="Anular"
@@ -3149,6 +3251,23 @@ export function OrdenCompraScreen({
             }
             onConfirm={() => void handleAnularOrden(anularConfirm)}
             onCancel={() => !anulandoOrden && setAnularConfirm(null)}
+          />
+        )}
+        {eliminarConfirm && (
+          <ConfirmModal
+            title="Eliminar Orden de Compra"
+            body={`¿Deseas eliminar la OC ${eliminarConfirm.id} de ${eliminarConfirm.proveedor}?`}
+            detail="Solo se pueden eliminar órdenes en estado Borrador. Esta acción no puede revertirse."
+            confirmLabel="Eliminar"
+            loading={eliminandoOrden}
+            danger={true}
+            icon={
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+            }
+            onConfirm={() => void handleEliminarOrden(eliminarConfirm)}
+            onCancel={() => !eliminandoOrden && setEliminarConfirm(null)}
           />
         )}
         {estadoConfirm && (
@@ -3187,11 +3306,13 @@ export function OrdenCompraScreen({
 export function NuevoInsumoModal({
   onGuardar, onClose, nombreInicial = "", insumosExistentes = [],
   categoriasInsumo = CATEGORIAS_INSUMO,
+  persistirEnApi = true,
 }: {
   onGuardar: (ins: NuevoInsumoCreado) => void;
   onClose: () => void;
   nombreInicial?: string;
   insumosExistentes?: { nombre: string }[];
+  persistirEnApi?: boolean;
   /** Bloque 3: categorías de insumos (A5.1: la categoría es OBLIGATORIA,
    *  igual que en Crear Insumo de Gestión de Insumos). Por defecto el mismo
    *  catálogo `CATEGORIAS_INSUMO`; cada pantalla puede pasar el suyo. */
@@ -3227,6 +3348,17 @@ export function NuevoInsumoModal({
   const submit = async () => {
     setIntentoGuardar(true);
     if (!formValido || guardando) return;
+    if (!persistirEnApi) {
+      onGuardar({
+        id: `INS-NUEVO-${Date.now()}`,
+        nombre: nombreParaGuardar(nombre),
+        unidadMedida: unidad,
+        precioUnitario: precio,
+        iva,
+        categoriaId,
+      });
+      return;
+    }
     setGuardando(true);
     try {
       // 3.4: el insumo se da de alta contra la API (tipo "Insumo", con el
@@ -3392,6 +3524,33 @@ export function OrdenDetallePage({
   onBack,
   onVerFactura,
 }: OrdenDetallePageProps & { onVerFactura?: (gestion: GestionCompra) => void }) {
+  const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra>(orden);
+  useEffect(() => {
+    setOrdenDetalle(orden);
+    let cancelado = false;
+    obtenerOrdenCompra(orden.id)
+      .then((fresca) => {
+        if (!cancelado) setOrdenDetalle(fresca);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [orden]);
+  return <OrdenDetallePageContenido orden={ordenDetalle} gestiones={gestiones} onBack={onBack} onVerFactura={onVerFactura} />;
+}
+
+function OrdenDetallePageContenido({
+  orden,
+  gestiones,
+  onBack,
+  onVerFactura,
+}: {
+  orden: OrdenCompra;
+  gestiones: GestionCompra[];
+  onBack: () => void;
+  onVerFactura?: (gestion: GestionCompra) => void;
+}) {
   const facturas = gestiones.filter(g => g.ordenId === orden.id && (g.numeroFactura ?? "") !== "");
   const insumosFacturados = new Set(facturas.flatMap(g => (g.items ?? []).map(i => i.idInsumo)));
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<string | null>(facturas[0]?.id ?? null);
@@ -3481,6 +3640,13 @@ export function OrdenDetallePage({
                 <EstadoBadge e={orden.estado} />
                 <span className="text-[11px] text-muted-foreground">{fechaEstado}</span>
               </div>
+              {orden.estado === "Anulado" && orden.motivoAnulacion && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-words">
+                  Motivo de anulación: {orden.motivoAnulacion}
+                </p>
+              )}
+              <div className="hidden">
+              </div>
             </div>
           </div>
 
@@ -3503,7 +3669,7 @@ export function OrdenDetallePage({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {orden.items.map(item => {
-                    const facturado = insumosFacturados.has(item.idInsumo);
+                    const facturado = item.facturado ?? insumosFacturados.has(item.idInsumo);
                     return (
                       <tr key={item.rowId} className="hover:bg-muted/20">
                         <td className="px-4 py-3 font-medium text-foreground">
@@ -3519,7 +3685,7 @@ export function OrdenDetallePage({
                         <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
                         <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
-                        <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
+                        <td className="px-4 py-3 font-semibold">{fmtCOP(item.subtotal ?? item.cantidad * item.precioUnitario)}</td>
                       </tr>
                     );
                   })}
@@ -3532,7 +3698,7 @@ export function OrdenDetallePage({
           <div className="mt-4 pt-4 border-t border-border shrink-0">
             <div className="flex justify-between items-center">
               <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total</span>
-              <span className="text-lg font-bold text-foreground">{fmtCOP(calcTotal(orden.items))}</span>
+              <span className="text-lg font-bold text-foreground">{fmtCOP(orden.total ?? calcTotal(orden.items))}</span>
             </div>
           </div>
         </div>

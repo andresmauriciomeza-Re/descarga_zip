@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 export interface HistorialEntry {
   estado: string;
   fechaHora: string; // ISO string
+  motivo?: string | null;
 }
 
 interface EstadoHistorialTooltipProps {
@@ -18,17 +19,20 @@ const ANCHO_PANEL = 288; // w-72
 
 function formatearFechaHora(iso: string): string {
   try {
-    const d = new Date(iso);
+    const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim());
+    const d = esSoloFecha ? new Date(`${iso.trim()}T00:00:00-05:00`) : new Date(iso);
     if (isNaN(d.getTime())) return iso;
     const fecha = d.toLocaleDateString("es-CO", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "America/Bogota",
     });
     const hora = d.toLocaleTimeString("es-CO", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "America/Bogota",
     });
     return `${fecha} ${hora}`;
   } catch {
@@ -178,6 +182,11 @@ export function EstadoHistorialTooltip({
                       <p className="text-xs font-semibold text-foreground">{entry.estado}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {formatearFechaHora(entry.fechaHora)}
+                        {entry.motivo && (
+                          <span className="block text-[11px] text-red-600 dark:text-red-400 mt-0.5 break-words">
+                            Motivo: {entry.motivo}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>

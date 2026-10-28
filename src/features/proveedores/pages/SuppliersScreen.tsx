@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft, User, Building2, Phone, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
 import { useProveedorForm, formatoNit, siguienteProveedorId, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type TipoDocumento, type TipoSociedad, type ProveedorFormValues } from "@/features/compras/hooks/useProveedorForm";
 import { ProveedorFormCampos } from "@/features/compras/components/ProveedorForm";
+import { TipoPersonaSelector } from "@/features/compras/components/TipoPersonaSelector";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -87,10 +88,9 @@ export interface Supplier {
   /** Persona Jurídica: forma societaria. La razón social NO se guarda aquí,
    *  vive en `nombre` (es su valor derivado). */
   tipoSociedad?: TipoSociedad | "";
-  /** Persona Jurídica → bloque Razón social. Hoy SIN columna en la BD: vive
-   *  en el estado local y NO se envía al servidor (se muestra en detalle). */
+  /** Persona Jurídica → bloque Razón social (`nombre_comercial` en la BD). */
   nombreComercial?: string;
-  /** Adjunto de la Cámara de Comercio: nombre del archivo + dataURL. */
+  /** Adjunto de la Cámara de Comercio: nombre del archivo + dataURL/URL. */
   camaraComercioNombre?: string;
   camaraComercioArchivo?: string;
   fechaExpedicionCamara?: string;
@@ -98,7 +98,7 @@ export interface Supplier {
    *  guardar se copia a asesor/telefono/email para el resto de la app. */
   contactoNombre?: string;
   contactoTelefono?: string;
-  /** Teléfono FIJO del contacto: sin columna en la BD hoy (solo local). */
+  /** Teléfono FIJO del contacto (`contacto_telefono_fijo` en la BD). */
   contactoTelefonoFijo?: string;
   contactoEmail?: string;
   /** Representante legal (solo Persona Jurídica). */
@@ -106,49 +106,12 @@ export interface Supplier {
   repLegalApellidos?: string;
   repLegalTipoDocumento?: TipoDocumento | "";
   repLegalNumeroDocumento?: string;
-  /** Teléfono y email del representante legal: sin columna en la BD hoy. */
+  /** Teléfono y email del representante legal (`rep_legal_telefono` y `rep_legal_email` en la BD). */
   repLegalTelefono?: string;
   repLegalEmail?: string;
 }
 
-export const INITIAL_SUPPLIERS: Supplier[] = [
-  {
-    id: "1", nit: "900.123.456-1",
-    nombre: "Distribuidora La Cosecha",
-    telefono: "604 321 0001", email: "cosecha@proveedores.co",
-    direccion: "Cra 50 #30-10, Medellín",
-    asesorComercial: "Carlos Mejía",
-    estado: "activo",
-    tipoPersona: "Persona Jurídica",
-  },
-  {
-    id: "2", nit: "800.654.321-2",
-    nombre: "Quesos del Norte S.A.S.",
-    telefono: "604 321 0002", email: "quesos@norte.co",
-    direccion: "Cll 80 #45-20, Bello",
-    asesorComercial: "Ana Restrepo",
-    estado: "activo",
-    tipoPersona: "Persona Jurídica",
-  },
-  {
-    id: "3", nit: "700.111.222-3",
-    nombre: "Carnes Premium Ltda.",
-    telefono: "604 321 0003", email: "ventas@carnespremium.co",
-    direccion: "Av. 33 #76-60, Medellín",
-    asesorComercial: "Jorge Ríos",
-    estado: "inactivo",
-    tipoPersona: "Persona Jurídica",
-  },
-  {
-    id: "4", nit: "901.777.888-4",
-    nombre: "Bebidas y Más",
-    telefono: "604 321 0004", email: "pedidos@bebidasmas.co",
-    direccion: "Cra 65 #12-40, Itagüí",
-    asesorComercial: "Luisa Palacio",
-    estado: "activo",
-    tipoPersona: "Persona Natural",
-  },
-];
+export const INITIAL_SUPPLIERS: Supplier[] = [];
 
 const SUPPLIER_STATUS_COLOR: Record<SupplierStatus, string> = {
   activo:   "bg-emerald-100 text-emerald-800",
@@ -207,18 +170,34 @@ const emptySupplier = (): ProveedorFormValues => ({
 function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
   const esNatural = s.tipoPersona === "Persona Natural";
   const esJuridica = s.tipoPersona === "Persona Jurídica";
+  const gridDetalleCls = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2.5";
 
-  const seccion = (titulo: string) => (
-    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-      {titulo}
-    </p>
+  const seccion = (titulo: string, icono: React.ReactNode) => (
+    <div className="flex items-center gap-2 text-sm font-bold text-foreground mb-3 pb-2 border-b border-border">
+      <span className="text-primary shrink-0">{icono}</span>
+      <span>{titulo}</span>
+    </div>
   );
 
   /** Celda de la rejilla: valor vacío o sin registrar → "—". */
   const celda = (label: string, valor?: string, contenido?: React.ReactNode) => (
     <div>
-      <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
+      <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
       <div className={cls}>{contenido ?? ((valor ?? "").trim() || "—")}</div>
+    </div>
+  );
+
+  const celdaEstado = () => (
+    <div>
+      <p className="text-sm font-semibold text-muted-foreground mb-1">Estado</p>
+      <EstadoSelect
+        value={s.estado}
+        options={[
+          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+        ]}
+        disabled
+      />
     </div>
   );
 
@@ -230,29 +209,29 @@ function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
     .join(" ") || (s.nombre ?? "");
 
   return (
-    <>
+    <div className="space-y-6 mx-auto max-w-4xl">
       {/* ── Persona Natural: los 7 campos del formulario, SIN NIT y SIN DV ── */}
       {esNatural && (
         <div>
-          {seccion("Datos del proveedor")}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {celda("Tipo de persona", s.tipoPersona)}
+          {seccion("Datos del proveedor", <User className="w-4 h-4" />)}
+          <div className={gridDetalleCls}>
             {celda("Tipo de documento", s.tipoDocumento)}
             {celda("Número de documento", s.numeroDocumento)}
             {celda("Nombre completo", nombreCompleto)}
             {celda("Teléfono", s.telefono)}
             {celda("Email", s.email)}
             {celda("Dirección", s.direccion)}
+            {celdaEstado()}
           </div>
         </div>
       )}
 
-      {/* ── Persona Jurídica: los tres bloques del formulario ─────────────── */}
+      {/* ── Persona Jurídica: las 4 secciones apiladas del formulario ─────── */}
       {esJuridica && (
         <>
           <div>
-            {seccion("Representante legal")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {seccion("Representante legal", <User className="w-4 h-4" />)}
+            <div className={gridDetalleCls}>
               {celda("Tipo de documento", s.repLegalTipoDocumento)}
               {celda("Número de documento", s.repLegalNumeroDocumento)}
               {celda(
@@ -268,37 +247,33 @@ function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
           </div>
 
           <div>
-            {seccion("Razón social")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {celda("Tipo de persona", s.tipoPersona)}
+            {seccion("Razón social", <Building2 className="w-4 h-4" />)}
+            <div className={gridDetalleCls}>
               {/* En Jurídica el nombre guardado ES la razón social. */}
               {celda("Nombre o razón social", s.nombre)}
               {celda("Nombre comercial", s.nombreComercial)}
               {celda("NIT", formatoNit(s.nit))}
-              {celda("DV", s.dv)}
               {celda("Tipo de sociedad", s.tipoSociedad)}
             </div>
           </div>
 
           <div>
-            {seccion("Contacto comercial")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {celda("Email", s.contactoEmail)}
-              {celda("Teléfono celular", s.contactoTelefono)}
+            {seccion("Contacto comercial", <Phone className="w-4 h-4" />)}
+            <div className={gridDetalleCls}>
+              {celda("Email", s.contactoEmail || s.email)}
+              {celda("Teléfono celular", s.contactoTelefono || s.telefono)}
               {celda("Teléfono fijo", s.contactoTelefonoFijo)}
               {celda("Dirección comercial", s.direccion)}
-              {celda("Nombre del contacto", s.contactoNombre)}
+              {celda("Nombre del contacto", s.contactoNombre || s.asesorComercial)}
             </div>
           </div>
 
           <div>
-            {seccion("Cámara de Comercio")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {seccion("Cámara de Comercio", <FileText className="w-4 h-4" />)}
+            <div className={gridDetalleCls}>
               {celda(
-                "Documento",
+                "Cámara de Comercio",
                 s.camaraComercioNombre,
-                // Si quedó el dataURL se puede abrir en otra pestaña; si no,
-                // solo se muestra el nombre del archivo.
                 s.camaraComercioArchivo
                   ? (
                     <a
@@ -313,8 +288,12 @@ function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
                   )
                   : undefined,
               )}
-              {celda("Fecha de expedición", s.fechaExpedicionCamara)}
             </div>
+          </div>
+
+          {/* Estado: último elemento en fila propia sin barra de título */}
+          <div className={gridDetalleCls}>
+            {celdaEstado()}
           </div>
         </>
       )}
@@ -322,18 +301,18 @@ function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
       {/* Proveedor antiguo sin tipo de persona registrado. */}
       {!esNatural && !esJuridica && (
         <div>
-          {seccion("Contacto")}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {celda("Tipo de persona", s.tipoPersona)}
+          {seccion("Datos del proveedor", <User className="w-4 h-4" />)}
+          <div className={gridDetalleCls}>
             {celda("Nombre", s.nombre)}
             {celda("Asesor Comercial", s.asesorComercial)}
             {celda("Teléfono", s.telefono)}
             {celda("Email", s.email)}
             {celda("Dirección", s.direccion)}
+            {celdaEstado()}
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -367,8 +346,8 @@ function Modal({
 
 import type { OrdenCompra, GestionCompra } from "@/features/orden-compra/pages/OrdenCompraScreen";
 
-/** 409/400 del servidor: NIT y correo repetidos se pintan bajo su campo; el
-    resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
+/** 409/400 del servidor: NIT, documento y correo repetidos se pintan bajo su
+    campo; el resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
 async function mostrarErrorProveedor(
   error: unknown,
   setErrorServidor: (campo: keyof ProveedorFormValues, mensaje: string) => void,
@@ -382,12 +361,19 @@ async function mostrarErrorProveedor(
   const visible = (campo: string) => !!document.querySelector(`[data-prov-campo="${campo}"]`);
   let campo: keyof ProveedorFormValues | null = null;
   if (/nit/i.test(mensaje) && visible("nit")) campo = "nit";
+  else if (/documento/i.test(mensaje) && visible("numeroDocumento")) campo = "numeroDocumento";
   else if (/correo|email/i.test(mensaje)) {
     if (visible("contactoEmail")) campo = "contactoEmail";
     else if (visible("email")) campo = "email";
   }
-  if (campo) setErrorServidor(campo, mensaje);
-  else toast.error(mensaje);
+  if (campo) {
+    setErrorServidor(campo, mensaje);
+    const el = document.querySelector<HTMLElement>(`[data-prov-campo="${campo}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    el?.focus();
+  } else {
+    toast.error(mensaje);
+  }
 }
 
 interface SuppliersScreenProps {
@@ -529,7 +515,7 @@ export function SuppliersScreen({
     // guardar mientras haya un proveedor antiguo cuyo NIT venga con formato
     // ("900.123.456-1") o un nombre heredado. El resto de los errores pinta
     // su mensaje y mueve el foco al primer campo inválido (Fase 2).
-    if (editForm.enfocarPrimeroInvalido(["nit", "nombre"])) {
+    if (editForm.enfocarPrimeroInvalido(["nit", "nombre", "tipoDocumento", "numeroDocumento", "nombreCompleto", "razonSocial"])) {
       toast.error("Revisa los campos del formulario");
       return;
     }
@@ -557,6 +543,7 @@ export function SuppliersScreen({
       // Persona Jurídica: el contacto comercial pisa asesor/teléfono/email;
       // en Persona Natural se conservan los valores anteriores.
       ...contactoGuardado(v, editItem),
+      direccion: (v.direccion ?? "").trim() || (editItem.direccion ?? ""),
       estado: v.estado,
       tipoPersona: v.tipoPersona,
       ...datosNuevosProveedor(v),
@@ -565,6 +552,7 @@ export function SuppliersScreen({
     try {
       const actualizado = await actualizarProveedor(editado);
       setSuppliers(p => p.map(s => s.id === editItem.id ? actualizado : s));
+      if (detailItem?.id === editItem.id) setDetailItem(actualizado);
       setEditItem(null);
       toast.success("Proveedor editado exitosamente");
     } catch (error) {
@@ -712,9 +700,17 @@ export function SuppliersScreen({
 
   if (enPantalla) {
     const clsBase = "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
+    // Formulario activo (alta o edición): el selector del encabezado lee y
+    // escribe su tipo de persona.
+    const formActivo = enAlta || !editItem ? proveedorForm : editForm;
+    const btnCls = "px-5 h-10 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
     return (
-      <div className="w-full max-w-[1200px] mx-auto px-4 py-3 h-full min-h-0 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-3 py-1.5 border-b border-border shrink-0">
+      // Contenedor centrado (max-w-4xl, mx-auto) y SIN scroll interno: usa el
+      // scroll único de `<main>` en App.tsx (prohibido el scroll doble).
+      <div className="w-full max-w-4xl mx-auto px-4 py-4">
+        {/* Encabezado: ← + título + subtítulo y, a la derecha, el selector
+            Persona Natural / Persona Jurídica. */}
+        <div className="flex flex-wrap items-center gap-3 pb-3 border-b border-border">
           <button
             onClick={salirDePantalla}
             title="Volver"
@@ -722,7 +718,7 @@ export function SuppliersScreen({
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
               {enAlta ? "Crear Proveedor" : `Editar — ${editItem?.nombre ?? ""}`}
             </h3>
@@ -732,11 +728,19 @@ export function SuppliersScreen({
                 : "Actualiza los datos del proveedor. El NIT no se modifica."}
             </p>
           </div>
+          <TipoPersonaSelector
+            className="ml-auto shrink-0"
+            valor={formActivo.values.tipoPersona}
+            disabled={!enAlta}
+            onChange={(tipo) => {
+              formActivo.marcarTocado("tipoPersona");
+              formActivo.setCampo("tipoPersona", tipo);
+            }}
+            error={formActivo.obtenerError("tipoPersona")}
+          />
         </div>
 
-        {/* Única zona con scroll: la raíz del módulo es `h-full` con
-            `overflow-hidden`, así que sin esto el pie quedaría tapando campos. */}
-        <div className="flex-1 min-h-0 overflow-y-auto py-4">
+        <div className="py-5">
           {enAlta || !editItem ? (
             <ProveedorFormCampos form={proveedorForm} />
           ) : (
@@ -749,20 +753,18 @@ export function SuppliersScreen({
           )}
         </div>
 
-        <div className="flex gap-3 pt-3 border-t border-border shrink-0">
+        {/* Botones Cancelar / Guardar alineados a la derecha al final del formulario. */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <button
             onClick={salirDePantalla}
-            className={`${clsBase} border border-border text-foreground hover:bg-muted cursor-pointer`}
+            className={`${btnCls} border border-border text-foreground hover:bg-muted cursor-pointer`}
           >
             Cancelar
           </button>
           <button
             onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
-            // Fase 2: el botón queda SIEMPRE habilitado (solo se apaga con
-            // "Guardando…"). Si hay errores, `handleCreate` los pinta y enfoca
-            // el primero; el formulario no se envía.
             disabled={guardando}
-            className={`${clsBase} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
+            className={`${btnCls} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
           >
             {guardando ? "Guardando…" : enAlta ? "Crear" : "Guardar"}
           </button>
@@ -971,47 +973,42 @@ export function SuppliersScreen({
       {/* ── Modal: Ver detalle ── */}
       <AnimatePresence>
         {detailItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl my-4">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
-                  <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-                </div>
-                <div className="px-6 py-5 space-y-6">
-                  {/* Punto 12 + formulario por tipo de persona: el detalle
-                      muestra exactamente los campos que pide cada tipo. */}
-                  <DetalleContenido s={detailItem} cls={disabledCls} />
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1.5 border-b border-border">
-                      Configuración
-                    </p>
-                    <div className="w-1/2 pr-1.5">
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">Estado</p>
-                      {/* Punto 2: badge de color igual al del listado y en modo
-                          solo lectura (antes el estado iba dentro de un div con
-                          aspecto de input deshabilitado). */}
-                      <EstadoSelect
-                        value={detailItem.estado}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                        disabled
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-border">
-                  <button onClick={() => setDetailItem(null)}
-                    className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                    Cerrar
-                  </button>
-                </div>
-              </motion.div>
-            </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
+            >
+              <div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-border shrink-0">
+                <h3 className="text-lg font-bold text-foreground min-w-0 flex-1 truncate" style={{ fontFamily: SERIF }}>
+                  Detalle — {detailItem.nombre}
+                </h3>
+                <TipoPersonaSelector
+                  comoEtiqueta
+                  valor={detailItem.tipoPersona ?? ""}
+                  className="ml-auto shrink-0"
+                />
+                <button
+                  onClick={() => setDetailItem(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
+                <DetalleContenido s={detailItem} cls={disabledCls} />
+              </div>
+              <div className="flex justify-end px-6 py-4 border-t border-border shrink-0">
+                <button
+                  onClick={() => setDetailItem(null)}
+                  className="px-5 h-10 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
