@@ -98,6 +98,7 @@ import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVent
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
+import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
@@ -2038,8 +2039,9 @@ function LandingScreen({
                     {/* Image */}
                     <div className="relative h-52 bg-muted overflow-hidden">
                       <img
-                        src={favorita.image}
+                        src={getImageUrl(favorita.image)}
                         alt={favorita.name}
+                        onError={onErrorImagen}
                         loading="lazy"
                         decoding="async"
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
@@ -2518,8 +2520,9 @@ function ProductCard({
         onClick={() => onOpen(p)}
       >
         <img
-          src={p.image}
+          src={getImageUrl(p.image)}
           alt={p.name}
+          onError={onErrorImagen}
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""
             } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
@@ -3011,8 +3014,9 @@ function ProductDetailScreen({
         {/* Image */}
         <div className={`relative rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
           <img
-            src={product.image}
+            src={getImageUrl(product.image)}
             alt={product.name}
+            onError={onErrorImagen}
             className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${noDisponible ? "grayscale opacity-60" : ""}`}
           />
           {/* Mismo estado que en la tarjeta del catálogo: fondo sólido,
@@ -3733,8 +3737,9 @@ function CartScreen({
                     }`}
                 >
                   <img
-                    src={item.product.image}
+                    src={getImageUrl(item.product.image)}
                     alt={item.product.name}
+                    onError={onErrorImagen}
                     className={`w-20 h-20 rounded-xl object-cover shrink-0 bg-muted ${itemNoDisponible ? "grayscale opacity-60" : ""}`}
                   />
                   <div className="flex-1 min-w-0">
@@ -3941,8 +3946,9 @@ function CartScreen({
                           className="flex items-center gap-3"
                         >
                           <img
-                            src={item.product.image}
+                            src={getImageUrl(item.product.image)}
                             alt={item.product.name}
+                            onError={onErrorImagen}
                             className="w-10 h-10 rounded-lg object-cover shrink-0 bg-muted"
                           />
                           <div className="flex-1 min-w-0">

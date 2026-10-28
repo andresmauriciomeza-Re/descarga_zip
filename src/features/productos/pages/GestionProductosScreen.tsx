@@ -209,6 +209,12 @@ export interface Producto {
   ultimoMontoSinIva?: number;
   ultimoIvaCompra?: number;
   stockDisponible: number;
+  /** ¿La BD tiene los BYTES de la imagen (`tb_productos.imagen_data`)?
+      Lo informa `GET /productos` y `GET /productos/gestion` como
+      `imagen_data IS NOT NULL AS tiene_imagen` (el binario NUNCA viaja en el
+      JSON). Si es true, el menú pide la imagen al backend con
+      `imagenEnApi(id)` en vez de resolver el nombre de archivo local. */
+  tieneImagen?: boolean;
   /** Stock que trajo el backend (`GET /productos`). `undefined` = la API no
       lo envió: el menú público y el carrito no limitan la cantidad (ver
       `productoApiAProducto` / `limiteStockDe`). No confundir con
@@ -255,9 +261,12 @@ const CATEGORIAS_PRODUCTO = [
 
 export const INITIAL_PRODUCTOS: Producto[] = [
   // ── Pizzas (CAT-001): $14.000 pequeña, $16.000 grande ──
+  // Las `imagen` apuntan a archivos EXISTENTES de src/assets/img (los .webp
+  // del menú); antes usaban .png que ya no existen (o capturas de pantalla),
+  // así la semilla local mostraba imágenes rotas.
   {
     id: "PROD-001",
-    imagen: "/src/assets/img/pizzaDefinitiva.png",
+    imagen: "/src/assets/img/pizza_peperoni.webp",
     nombre: "Pizza Peperoni",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -268,7 +277,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-002",
-    imagen: "/src/assets/img/pizzaDefinitivaCompleta.png",
+    imagen: "/src/assets/img/pizza_jamon_queso.webp",
     nombre: "Pizza Jamon",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -279,7 +288,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-003",
-    imagen: "/src/assets/img/pizzafondo-removebg-preview.png",
+    imagen: "/src/assets/img/pizza_hawaii.webp",
     nombre: "Pizza Hawaiana",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -290,7 +299,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-004",
-    imagen: "/src/assets/img/image-1.png",
+    imagen: "/src/assets/img/pizza_pollo.webp",
     nombre: "Pizza Pollo",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -301,7 +310,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-005",
-    imagen: "/src/assets/img/image-2.png",
+    imagen: "/src/assets/img/pizza_cañon.webp",
     nombre: "Pizza Cañon",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -312,7 +321,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-006",
-    imagen: "/src/assets/img/image-3.png",
+    imagen: "/src/assets/img/pizza_maicitos.webp",
     nombre: "Pizza Maicitos",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -323,7 +332,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-007",
-    imagen: "/src/assets/img/image-4.png",
+    imagen: "/src/assets/img/pizza_carnes.webp",
     nombre: "Pizza Paisa",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -334,7 +343,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-008",
-    imagen: "/src/assets/img/image-5.png",
+    imagen: "/src/assets/img/pizza_tocineta.webp",
     nombre: "Pizza Tocineta",
     idCategoria: "CAT-001",
     tipo: TIPOS_PRODUCTO[0],
@@ -346,7 +355,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   // ── Lasañas (CAT-002) ──
   {
     id: "PROD-009",
-    imagen: "/src/assets/img/lasaña_carne.png",
+    imagen: "/src/assets/img/lasaña_carne.webp",
     nombre: "Lasaña Carne",
     idCategoria: "CAT-002",
     tipo: TIPOS_PRODUCTO[0],
@@ -357,7 +366,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-010",
-    imagen: "/src/assets/img/lasaña_pollo.png",
+    imagen: "/src/assets/img/lasaña_pollo.webp",
     nombre: "Lasaña Pollo",
     idCategoria: "CAT-002",
     tipo: TIPOS_PRODUCTO[0],
@@ -368,7 +377,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-011",
-    imagen: "/src/assets/img/lasaña_mixta.png",
+    imagen: "/src/assets/img/lasaña_mixta.webp",
     nombre: "Lasaña Mixta",
     idCategoria: "CAT-002",
     tipo: TIPOS_PRODUCTO[0],
@@ -380,7 +389,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   // ── Bebidas (CAT-003) ──
   {
     id: "PROD-012",
-    imagen: "/src/assets/img/Quatro.png",
+    imagen: "/src/assets/img/Quatro.webp",
     nombre: "Gaseosa Cuatro",
     idCategoria: "CAT-003",
     tipo: TIPOS_PRODUCTO[1],
@@ -391,7 +400,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-013",
-    imagen: "/src/assets/img/Premio.png",
+    imagen: "/src/assets/img/Premio.webp",
     nombre: "Gaseosa Premium",
     idCategoria: "CAT-003",
     tipo: TIPOS_PRODUCTO[1],
@@ -402,7 +411,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-014",
-    imagen: "/src/assets/img/Coca-Cola.png",
+    imagen: "/src/assets/img/Coca-Cola.webp",
     nombre: "Gaseosa Coca-Cola",
     idCategoria: "CAT-003",
     tipo: TIPOS_PRODUCTO[1],
@@ -413,7 +422,7 @@ export const INITIAL_PRODUCTOS: Producto[] = [
   },
   {
     id: "PROD-015",
-    imagen: "/src/assets/img/Pepsi.png",
+    imagen: "/src/assets/img/Pepsi.webp",
     nombre: "Gaseosa Pepsi",
     idCategoria: "CAT-003",
     tipo: TIPOS_PRODUCTO[1],
