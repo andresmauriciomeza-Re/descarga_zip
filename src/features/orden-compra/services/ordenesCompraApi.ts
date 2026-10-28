@@ -25,6 +25,9 @@ export interface ItemCompraApi {
   monto_iva?: number | string;
   es_no_solicitado?: boolean | null;
   precio_venta?: number | string | null;
+  cantidad_recibida?: number | string;
+  cantidad_pendiente?: number | string;
+  facturado?: boolean;
 }
 
 /** Orden de compra tal como la devuelve el backend. */
@@ -32,12 +35,18 @@ export interface OrdenCompraApi {
   id_ocompra: number | string;
   id_proveedor: number | string;
   proveedor_nombre: string | null;
+  proveedor_nit?: string | null;
   fecha: string;
   total: number | string;
+  facturado?: number | string;
+  por_facturar?: number | string;
+  total_facturas?: number | string;
+  facturas?: string[];
   /** 'Borrador' | 'Enviado' | 'Completado' | 'Anulado' */
   estado: string;
   fecha_estado?: string | null;
-  historial_estados: { estado: string; fecha_estado: string }[];
+  motivo_anulacion?: string | null;
+  historial_estados: { estado: string; fecha_estado: string; motivo?: string | null }[];
   items: ItemCompraApi[];
   recepcion: RecepcionResumenApi | null;
   compras: { id_compra: number | string; n_factura: string; estado: string; total: number | string }[];
@@ -52,11 +61,21 @@ export interface RecepcionResumenApi {
     solicitada: number | string;
     recibida: number | string;
     pendiente: number | string;
+    facturado?: boolean;
     unidad: string;
   }[];
   extras?: (ItemCompraApi & { recibida?: number | string })[];
   compras?: (number | string)[];
   actualizado?: string;
+}
+
+/** Respuesta paginada de órdenes de compra cuando se envían `page` o `limit`. */
+export interface OrdenesCompraPaginadas {
+  data: OrdenCompra[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 /** Helper de error (los 409 conservan su mensaje del servidor). */
@@ -78,26 +97,45 @@ export const mapearItemCompraApi = (row: ItemCompraApi): OrdenItem => {
     costoUnitario: Number(row.precio_unitario),
     precioUnitario: Number(row.precio_unitario),
     iva: Number(row.iva ?? 0),
+    ...(row.subtotal == null ? {} : { subtotal: Number(row.subtotal) }),
     ...(row.base_sin_iva == null ? {} : { baseSinIva: Number(row.base_sin_iva) }),
     ...(row.monto_iva == null ? {} : { montoIva: Number(row.monto_iva) }),
     ...(row.es_no_solicitado ? { esNoSolicitado: true } : {}),
+    ...(row.cantidad_recibida == null ? {} : { cantidadRecibida: Number(row.cantidad_recibida) }),
+    ...(row.cantidad_pendiente == null ? {} : { cantidadPendiente: Number(row.cantidad_pendiente) }),
+    ...(row.facturado == null ? {} : { facturado: Boolean(row.facturado) }),
     tipoItem: esProducto ? "producto" : "insumo",
     ...(row.precio_venta == null ? {} : { precioVenta: Number(row.precio_venta) }),
   };
 };
 
-/** Ítem del panel → cuerpo de la API. */
+/** Ítem del panel → cuerpo de la API. Soporta insumos nuevos no solicitados (Regla 9). */
 export const payloadItemCompra = (
   i: OrdenItem,
 ): {
   id_insumo?: number;
   id_producto?: number;
+  nombre?: string;
+  id_categoria_insumo?: number;
   cantidad: number;
   medida: string;
   precio_unitario: number;
   iva: number;
   precio_venta?: number;
 } => {
+  const esNuevoInsumo =
+    Boolean(i.esNuevoInsumo) ||
+    (i.idCategoriaInsumo != null && String(i.idInsumo).startsWith("INS-NUEVO-"));
+  if (esNuevoInsumo && i.idCategoriaInsumo != null) {
+    return {
+      nombre: i.nombre,
+      id_categoria_insumo: Number(i.idCategoriaInsumo),
+      cantidad: i.cantidad,
+      medida: i.unidad,
+      precio_unitario: i.precioUnitario ?? i.costoUnitario,
+      iva: i.iva ?? 0,
+    };
+  }
   const esProducto = i.tipoItem === "producto";
   return {
     ...(esProducto
@@ -119,6 +157,8 @@ export const mapearRecepcion = (r: RecepcionResumenApi | null | undefined): Rece
     nombre: string;
     solicitada?: number | string;
     recibida?: number | string;
+    pendiente?: number | string;
+    facturado?: boolean;
     unidad?: string;
     cantidad?: number | string;
     medida?: string;
@@ -128,6 +168,8 @@ export const mapearRecepcion = (r: RecepcionResumenApi | null | undefined): Rece
     nombre: x.nombre,
     cantidadSolicitada: Number(x.solicitada ?? x.cantidad ?? 0),
     cantidadRecibida: Number(x.recibida ?? 0),
+    ...(x.pendiente == null ? {} : { pendiente: Number(x.pendiente) }),
+    ...(x.facturado == null ? {} : { facturado: Boolean(x.facturado) }),
     unidad: x.unidad ?? x.medida ?? "und",
     precioReferencia: 0,
     costoUnitario: 0,
@@ -145,25 +187,73 @@ export const mapearRecepcion = (r: RecepcionResumenApi | null | undefined): Rece
 export const mapearOrdenCompraApi = (row: OrdenCompraApi): OrdenCompra => ({
   id: String(row.id_ocompra),
   proveedor: row.proveedor_nombre ?? "",
+  ...(row.proveedor_nit ? { proveedorNit: row.proveedor_nit } : {}),
   fecha: String(row.fecha ?? "").slice(0, 10),
   estado: row.estado as EstadoOrden,
+  total: Number(row.total ?? 0),
+  facturado: Number(row.facturado ?? 0),
+  porFacturar: row.por_facturar == null ? Number(row.total ?? 0) : Number(row.por_facturar),
+  totalFacturas: Number(row.total_facturas ?? 0),
+  facturas: row.facturas ?? [],
+  ...(row.motivo_anulacion ? { motivoAnulacion: row.motivo_anulacion } : {}),
   items: (row.items ?? []).map(mapearItemCompraApi),
   recepcion: mapearRecepcion(row.recepcion),
   historialEstados: (row.historial_estados ?? []).map((h) => ({
     estado: h.estado as EstadoOrden,
     fechaHora: h.fecha_estado,
+    ...(h.motivo ? { motivo: h.motivo } : {}),
   })),
 });
 
 export const listarOrdenesCompra = async (filtros?: {
   estado?: string;
   id_proveedor?: number;
+  desde?: string;
+  hasta?: string;
+  q?: string;
 }): Promise<OrdenCompra[]> => {
   const params: Record<string, string> = {};
   if (filtros?.estado) params.estado = filtros.estado;
   if (filtros?.id_proveedor) params.id_proveedor = String(filtros.id_proveedor);
+  if (filtros?.desde) params.desde = filtros.desde;
+  if (filtros?.hasta) params.hasta = filtros.hasta;
+  if (filtros?.q) params.q = filtros.q;
   const { data } = await api.get<OrdenCompraApi[]>("/ordenes-compra", { params });
   return data.map(mapearOrdenCompraApi);
+};
+
+export const listarOrdenesCompraPaginado = async (filtros?: {
+  page?: number;
+  limit?: number;
+  estado?: string;
+  id_proveedor?: number;
+  desde?: string;
+  hasta?: string;
+  q?: string;
+}): Promise<OrdenesCompraPaginadas> => {
+  const params: Record<string, string> = {
+    page: String(filtros?.page ?? 1),
+    limit: String(filtros?.limit ?? 20),
+  };
+  if (filtros?.estado) params.estado = filtros.estado;
+  if (filtros?.id_proveedor) params.id_proveedor = String(filtros.id_proveedor);
+  if (filtros?.desde) params.desde = filtros.desde;
+  if (filtros?.hasta) params.hasta = filtros.hasta;
+  if (filtros?.q) params.q = filtros.q;
+  const { data } = await api.get<{
+    data: OrdenCompraApi[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>("/ordenes-compra", { params });
+  return {
+    data: (data.data ?? []).map(mapearOrdenCompraApi),
+    total: Number(data.total ?? 0),
+    page: Number(data.page ?? 1),
+    limit: Number(data.limit ?? 20),
+    totalPages: Number(data.totalPages ?? 1),
+  };
 };
 
 export const obtenerOrdenCompra = async (id: string): Promise<OrdenCompra> => {
@@ -178,7 +268,7 @@ export const crearOrdenCompra = async (payload: {
 }): Promise<OrdenCompra> => {
   const { data } = await api.post<OrdenCompraApi>("/ordenes-compra", {
     id_proveedor: payload.id_proveedor,
-    estado_inicial: payload.estado_inicial ?? "Borrador",
+    estado_inicial: "Borrador",
     items: payload.items.map(payloadItemCompra),
   });
   return mapearOrdenCompraApi(data);
@@ -194,6 +284,16 @@ export const actualizarOrdenCompra = async (
     items: payload.items.map(payloadItemCompra),
   });
   return mapearOrdenCompraApi(data);
+};
+
+/** Eliminación física: solo permitida en estado Borrador (DELETE /api/ordenes-compra/:id). */
+export const eliminarOrdenCompra = async (
+  id: string,
+): Promise<{ message: string; id_ocompra: number }> => {
+  const { data } = await api.delete<{ message: string; id_ocompra: number }>(
+    `/ordenes-compra/${Number(id)}`,
+  );
+  return data;
 };
 
 /** Cambio de estado (las transiciones del frontend). Anulado exige `motivo`. */

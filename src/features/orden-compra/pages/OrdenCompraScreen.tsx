@@ -38,7 +38,9 @@ import {
   actualizarOrdenCompra,
   cambiarEstadoOrdenCompra,
   crearOrdenCompra,
+  eliminarOrdenCompra,
   mensajeErrorOrdenesCompra,
+  obtenerOrdenCompra,
 } from "@/features/orden-compra/services/ordenesCompraApi";
 import { listarCompras } from "@/features/compras/services/comprasApi";
 import {
@@ -96,6 +98,12 @@ export interface OrdenItem {
   stockApiRevertido?: boolean;
   stockApiPendiente?: boolean;
   stockApiPendienteReversa?: boolean;
+  subtotal?: number;
+  cantidadRecibida?: number;
+  cantidadPendiente?: number;
+  facturado?: boolean;
+  idCategoriaInsumo?: number;
+  esNuevoInsumo?: boolean;
 }
 
 export interface ItemRecibido {
@@ -103,6 +111,10 @@ export interface ItemRecibido {
   idInsumo: string;
   nombre: string;
   cantidadSolicitada: number;
+  pendiente?: number;
+  facturado?: boolean;
+  idCategoriaInsumo?: number;
+  esNuevoInsumo?: boolean;
   cantidadRecibida: number;
   unidad: string;
   precioReferencia: number;
@@ -136,7 +148,14 @@ export interface OrdenCompra {
   estado: EstadoOrden;
   items: OrdenItem[];
   recepcion?: Recepcion;
-  historialEstados?: { estado: EstadoOrden; fechaHora: string }[];
+  proveedorNit?: string;
+  total?: number;
+  facturado?: number;
+  porFacturar?: number;
+  totalFacturas?: number;
+  facturas?: string[];
+  motivoAnulacion?: string;
+  historialEstados?: { estado: EstadoOrden; fechaHora: string; motivo?: string | null }[];
 }
 
 export interface GestionCompra {
@@ -222,8 +241,8 @@ const SLOT_EDITAR = "block shrink-0 p-1.5 w-7 h-7";
  * selector deshabilitado.
  */
 const ESTADOS_ADELANTE: Record<EstadoOrden, EstadoOrden[]> = {
-  Borrador: ["Borrador", "Enviado", "Completado", "Anulado"],
-  Enviado: ["Enviado", "Completado", "Anulado"],
+  Borrador: ["Borrador", "Enviado", "Anulado"],
+  Enviado: ["Enviado", "Anulado"],
   Completado: ["Completado"],
   Anulado: ["Anulado"],
 };
@@ -252,7 +271,8 @@ const seccionCls =
 
 // ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
-export const INITIAL_ORDENES: OrdenCompra[] = [
+export const INITIAL_ORDENES: OrdenCompra[] = [];
+const _INITIAL_ORDENES_SEED_REMOVED: OrdenCompra[] = [
   {
     id: "001",
     proveedor: "Molinos del Valle",
@@ -428,17 +448,19 @@ function formatearFechaHora(fechaHora: string): string {
     // "2026-10-01" (solo fecha) se parsea como UTC y en Colombia (UTC-5)
     // caería al día anterior a las 7 p. m.: se lee como hora local.
     const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaHora.trim());
-    const d = esSoloFecha ? new Date(`${fechaHora.trim()}T00:00:00`) : new Date(fechaHora);
+    const d = esSoloFecha ? new Date(`${fechaHora.trim()}T00:00:00-05:00`) : new Date(fechaHora);
     if (isNaN(d.getTime())) return fechaHora;
     const fecha = d.toLocaleDateString("es-CO", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "America/Bogota",
     });
     const hora = d.toLocaleTimeString("es-CO", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "America/Bogota",
     });
     return `${fecha} ${hora}`;
   } catch {
@@ -772,7 +794,7 @@ export function OrdenModal({
   /** Renderiza el formulario como una página independiente en vez de modal. */
   fullPage?: boolean;
   onClose: () => void;
-  onGuardar: (d: OrdenFormData) => void;
+  onGuardar: (d: OrdenFormData) => void | Promise<void>;
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
   onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
@@ -788,7 +810,7 @@ export function OrdenModal({
   const isPage = fullPage;
   // Fecha local, no UTC: `toISOString()` en Colombia (UTC-5) después de las 19:00
   // daba el día siguiente, y `today` es el `max` del date-picker de vencimiento.
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
   const [form, setForm] = useState<OrdenFormData>({
     proveedor: orden?.proveedor ?? "",
@@ -805,6 +827,9 @@ export function OrdenModal({
   const [showNuevoInsumo, setShowNuevoInsumo] = useState(false);
   const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  /** Hay una fila de la tabla en edición sin confirmar (✓): su borrador cuenta en el total en pantalla pero aún no está en `form.items`. */
+  const [filaEnEdicion, setFilaEnEdicion] = useState(false);
 
   // Historial de cambios de estado
   const [estadoHistorial, setEstadoHistorial] = useState<{ estado: EstadoOrden; fecha: string }[]>(() => {
@@ -1154,14 +1179,24 @@ export function OrdenModal({
     toast.success(`Proveedor "${nombre}" creado`);
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
+    if (guardando) return;
     setIntentoGuardar(true);
 
     if (!form.proveedor.trim()) { toast.error("Selecciona o crea un proveedor."); return; }
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un ítem."); return; }
-    onGuardar(form);
+    if (filaEnEdicion) {
+      toast.error("Confirma (✓) o cancela la edición de la fila antes de guardar: el total mostrado aún no incluye ese cambio.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await onGuardar(form);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   /** Subtítulo de la cabecera (solo cuando aporta algo). */
@@ -1385,8 +1420,8 @@ export function OrdenModal({
                         )}
                         {/* Fecha con hora en gris pequeño debajo del input */}
                         <p className="text-[11px] text-muted-foreground mt-1">
-                          {new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                          {new Date().toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true })}
+                          {/* Fecha y hora real en zona America/Bogota */}
+                          {formatearFechaHora(orden?.historialEstados?.[0]?.fechaHora ?? orden?.fecha ?? new Date().toISOString())}
                         </p>
                       </div>
 
@@ -1400,6 +1435,7 @@ export function OrdenModal({
                             pf({ estado: nuevoEstado });
                           }}
                           options={opcionesEstado(form.estado as EstadoOrden)}
+                          disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
                           <p className="text-[11px] text-muted-foreground mt-1">
@@ -1440,6 +1476,7 @@ export function OrdenModal({
                             pf({ estado: nuevoEstado });
                           }}
                           options={opcionesEstado(form.estado as EstadoOrden)}
+                          disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
                           <p className="text-[11px] text-muted-foreground mt-1">
@@ -1690,6 +1727,7 @@ export function OrdenModal({
                     showActions
                     onRemove={rowId => pf({ items: form.items.filter(i => i.rowId !== rowId) })}
                     onUpdate={actualizarItem}
+                    onEditingChange={setFilaEnEdicion}
                     totalLabel="Total estimado"
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
@@ -1714,11 +1752,11 @@ export function OrdenModal({
                       </button>
                       <button
                         onClick={handleGuardar}
-                        disabled={!formValido}
+                        disabled={!formValido || guardando}
                         className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                       >
                         <Check className="w-4 h-4" />
-                        {mode === "edit" ? "Guardar cambios" : "Guardar"}
+                        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
                       </button>
                     </div>
                   )}
@@ -1739,11 +1777,11 @@ export function OrdenModal({
                 </button>
                 <button
                   onClick={handleGuardar}
-                  disabled={!formValido}
+                  disabled={!formValido || guardando}
                   className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
-                  {mode === "edit" ? "Guardar cambios" : "Guardar"}
+                  {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
                 </button>
               </div>
             )}
@@ -1893,7 +1931,7 @@ export function NuevaOrdenCompraPage({
       } else {
         const creada = await crearOrdenCompra({
           id_proveedor: idProveedor,
-          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          estado_inicial: "Borrador",
           items,
         });
         setOrdenes(prev => [creada, ...prev]);
@@ -1948,7 +1986,7 @@ function RecepcionModal({
   onClose: () => void;
 }) {
   // Fecha local, no UTC (en Colombia tras las 19:00 `toISOString()` daba mañana).
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
   type ItemRow = ItemRecibido & { malEstado: boolean };
 
@@ -2414,7 +2452,7 @@ export function OrdenCompraScreen({
   errorCarga,
   onReintentar,
   page, setPage,
-  canCreate = true, canEdit = true,
+  canCreate = true, canEdit = true, canDelete = true,
   canExportExcel = true,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -2425,6 +2463,8 @@ export function OrdenCompraScreen({
   /** Motivo de la anulación (lo exige el servidor). */
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
+  const [eliminarConfirm, setEliminarConfirm] = useState<OrdenCompra | null>(null);
+  const [eliminandoOrden, setEliminandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
@@ -2434,10 +2474,10 @@ export function OrdenCompraScreen({
       const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
-      const facturasTexto = facturas.map(f => f.numeroFactura ?? "").join(" ");
+      const facturasTexto = [...(o.facturas ?? []), ...facturas.map(f => f.numeroFactura ?? "")].join(" ");
       // Find provider NIT
       const prov = proveedores.find(p => p.nombre === o.proveedor);
-      const nit = prov?.nit ?? "";
+      const nit = o.proveedorNit || prov?.nit || "";
       return (o.proveedor ?? "").toLowerCase().includes(q)
         || (o.id ?? "").toLowerCase().includes(q)
         || nit.toLowerCase().includes(q)
@@ -2491,7 +2531,7 @@ export function OrdenCompraScreen({
       if (modal?.mode === "create") {
         const creada = await crearOrdenCompra({
           id_proveedor: idProveedor,
-          estado_inicial: data.estado === "Enviado" ? "Enviado" : "Borrador",
+          estado_inicial: "Borrador",
           items,
         });
         setOrdenes(p => [creada, ...p]);
@@ -2540,6 +2580,21 @@ export function OrdenCompraScreen({
     }
   };
 
+  const handleEliminarOrden = async (o: OrdenCompra) => {
+    if (eliminandoOrden) return;
+    setEliminandoOrden(true);
+    try {
+      await eliminarOrdenCompra(o.id);
+      setOrdenes((prev) => prev.filter((x) => x.id !== o.id));
+      toast.success(`OC ${o.id} eliminada`);
+      setEliminarConfirm(null);
+    } catch (error) {
+      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo eliminar la orden."));
+    } finally {
+      setEliminandoOrden(false);
+    }
+  };
+
   const handleAnularOrden = async (o: OrdenCompra) => {
     if (anulandoOrden) return;
     const motivo = (motivoAnulacion ?? "").trim();
@@ -2552,11 +2607,13 @@ export function OrdenCompraScreen({
       // El backend anula la orden y SUS compras devolviendo el stock que
       // hubieran sumado (y recalculando la recepción). Un 409 muestra su
       // mensaje y no se cambia nada.
+      // Decisión D1: se anula la orden con su motivo; las compras Recibido y el stock no se tocan.
       const actualizada = await cambiarEstadoOrdenCompra(o.id, "Anulado", motivo);
       setOrdenes((prev) => prev.map((x) => (x.id === o.id ? actualizada : x)));
+      setOrdenes((prev) => prev.map((x) => (x.id === o.id ? actualizada : x)));
       // Las compras asociadas quedaron "Anulado" en la base: se recargan.
-      setGestiones(await listarCompras());
-      await onRecargarCatalogo?.();
+      // Las compras asociadas conservan su estado (Decisión D1).
+      // El stock del catálogo no cambia al anular la orden.
       toast.success(`OC ${o.id} anulada`);
       setAnularConfirm(null);
       setRecepcionOrden(null);
@@ -2689,7 +2746,7 @@ export function OrdenCompraScreen({
       import("jspdf-autotable").then(() => {
         const doc = new jsPDF();
         const prov = proveedores.find(p => p.nombre === orden.proveedor);
-        const nit = prov?.nit ?? "";
+        const nit = orden.proveedorNit || prov?.nit || "";
         const asesor = prov?.asesorComercial ?? "";
         const telefono = prov?.telefono ?? "";
         const email = prov?.email ?? "";
@@ -2851,12 +2908,12 @@ export function OrdenCompraScreen({
                 )
                 : paged.map(o => {
                   const facturas = getFacturas(o.id);
-                  const totalOrden = calcTotal(o.items);
-                  const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
-                  const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                  const totalOrden = o.total ?? calcTotal(o.items);
+                  const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
+                  const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
                     // Find provider NIT
                     const prov = proveedores.find(p => p.nombre === o.proveedor);
-                    const nit = prov?.nit ?? "";
+                    const nit = o.proveedorNit || prov?.nit || "";
                     return (
                       <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
                         <td className="px-3 py-2.5 sticky left-0 z-10 bg-card group-hover:bg-muted/20">
@@ -2878,7 +2935,17 @@ export function OrdenCompraScreen({
                              ))}
                            </>
                          ) : (
-                           <span className="text-muted-foreground">—</span>
+                           (o.facturas ?? []).length > 0 ? (
+                             <>
+                               {(o.facturas ?? []).map((nf) => (
+                                 <span key={nf} className="block font-mono font-semibold text-emerald-700 truncate" title={nf}>
+                                   {nf}
+                                 </span>
+                               ))}
+                             </>
+                           ) : (
+                             <span className="text-muted-foreground">—</span>
+                           )
                          )}
                        </td>
                        <td className="px-3 py-2.5">
@@ -2955,7 +3022,16 @@ export function OrdenCompraScreen({
                           ) : (
                             <span aria-hidden className={SLOT_EDITAR} />
                           )}
-                          {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
+                          {esBorrador(o.estado) && canDelete && (
+                            <button
+                              onClick={() => setEliminarConfirm(o)}
+                              title="Eliminar orden"
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
                               title="Registrar recepción"
@@ -2986,11 +3062,11 @@ export function OrdenCompraScreen({
               )
               : paged.map(o => {
                 const facturas = getFacturas(o.id);
-                const totalOrden = calcTotal(o.items);
-                const totalFacturado = facturas.reduce((s, f) => s + f.valorTotal, 0);
-                const porFacturar = Math.max(0, totalOrden - totalFacturado);
+                const totalOrden = o.total ?? calcTotal(o.items);
+                const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
+                const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
                 const prov = proveedores.find(p => p.nombre === o.proveedor);
-                const nit = prov?.nit ?? "";
+                const nit = o.proveedorNit || prov?.nit || "";
                 return (
                   <div key={o.id} className="p-4">
                     {/* N° de orden y estado arriba */}
@@ -3071,7 +3147,16 @@ export function OrdenCompraScreen({
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
-                      {o.estado === "Enviado" && o.items.some(item => !registradosEnOrden(o.id).has(item.idInsumo)) && (
+                      {esBorrador(o.estado) && canDelete && (
+                        <button
+                          onClick={() => setEliminarConfirm(o)}
+                          title="Eliminar orden"
+                          className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                         <button
                           onClick={() => onAbrirRecepcion?.(o)}
                           title="Registrar recepción"
@@ -3150,7 +3235,7 @@ export function OrdenCompraScreen({
             body={`-+Deseas anular la OC ${anularConfirm.id}?`}
             detail={
               facturasDeOrden(anularConfirm.id).length > 0
-                ? `También se anularán sus ${facturasDeOrden(anularConfirm.id).length} factura(s) registradas en Gestión de Compras.`
+                ? "Las facturas ya recibidas en Gestión de Compras conservarán su estado y stock. Esta acción no puede revertirse."
                 : "Esta acción no puede revertirse."
             }
             confirmLabel="Anular"
@@ -3166,6 +3251,23 @@ export function OrdenCompraScreen({
             }
             onConfirm={() => void handleAnularOrden(anularConfirm)}
             onCancel={() => !anulandoOrden && setAnularConfirm(null)}
+          />
+        )}
+        {eliminarConfirm && (
+          <ConfirmModal
+            title="Eliminar Orden de Compra"
+            body={`¿Deseas eliminar la OC ${eliminarConfirm.id} de ${eliminarConfirm.proveedor}?`}
+            detail="Solo se pueden eliminar órdenes en estado Borrador. Esta acción no puede revertirse."
+            confirmLabel="Eliminar"
+            loading={eliminandoOrden}
+            danger={true}
+            icon={
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+            }
+            onConfirm={() => void handleEliminarOrden(eliminarConfirm)}
+            onCancel={() => !eliminandoOrden && setEliminarConfirm(null)}
           />
         )}
         {estadoConfirm && (
@@ -3204,11 +3306,13 @@ export function OrdenCompraScreen({
 export function NuevoInsumoModal({
   onGuardar, onClose, nombreInicial = "", insumosExistentes = [],
   categoriasInsumo = CATEGORIAS_INSUMO,
+  persistirEnApi = true,
 }: {
   onGuardar: (ins: NuevoInsumoCreado) => void;
   onClose: () => void;
   nombreInicial?: string;
   insumosExistentes?: { nombre: string }[];
+  persistirEnApi?: boolean;
   /** Bloque 3: categorías de insumos (A5.1: la categoría es OBLIGATORIA,
    *  igual que en Crear Insumo de Gestión de Insumos). Por defecto el mismo
    *  catálogo `CATEGORIAS_INSUMO`; cada pantalla puede pasar el suyo. */
@@ -3244,6 +3348,17 @@ export function NuevoInsumoModal({
   const submit = async () => {
     setIntentoGuardar(true);
     if (!formValido || guardando) return;
+    if (!persistirEnApi) {
+      onGuardar({
+        id: `INS-NUEVO-${Date.now()}`,
+        nombre: nombreParaGuardar(nombre),
+        unidadMedida: unidad,
+        precioUnitario: precio,
+        iva,
+        categoriaId,
+      });
+      return;
+    }
     setGuardando(true);
     try {
       // 3.4: el insumo se da de alta contra la API (tipo "Insumo", con el
@@ -3409,6 +3524,33 @@ export function OrdenDetallePage({
   onBack,
   onVerFactura,
 }: OrdenDetallePageProps & { onVerFactura?: (gestion: GestionCompra) => void }) {
+  const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra>(orden);
+  useEffect(() => {
+    setOrdenDetalle(orden);
+    let cancelado = false;
+    obtenerOrdenCompra(orden.id)
+      .then((fresca) => {
+        if (!cancelado) setOrdenDetalle(fresca);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [orden]);
+  return <OrdenDetallePageContenido orden={ordenDetalle} gestiones={gestiones} onBack={onBack} onVerFactura={onVerFactura} />;
+}
+
+function OrdenDetallePageContenido({
+  orden,
+  gestiones,
+  onBack,
+  onVerFactura,
+}: {
+  orden: OrdenCompra;
+  gestiones: GestionCompra[];
+  onBack: () => void;
+  onVerFactura?: (gestion: GestionCompra) => void;
+}) {
   const facturas = gestiones.filter(g => g.ordenId === orden.id && (g.numeroFactura ?? "") !== "");
   const insumosFacturados = new Set(facturas.flatMap(g => (g.items ?? []).map(i => i.idInsumo)));
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<string | null>(facturas[0]?.id ?? null);
@@ -3498,6 +3640,13 @@ export function OrdenDetallePage({
                 <EstadoBadge e={orden.estado} />
                 <span className="text-[11px] text-muted-foreground">{fechaEstado}</span>
               </div>
+              {orden.estado === "Anulado" && orden.motivoAnulacion && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-words">
+                  Motivo de anulación: {orden.motivoAnulacion}
+                </p>
+              )}
+              <div className="hidden">
+              </div>
             </div>
           </div>
 
@@ -3520,7 +3669,7 @@ export function OrdenDetallePage({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {orden.items.map(item => {
-                    const facturado = insumosFacturados.has(item.idInsumo);
+                    const facturado = item.facturado ?? insumosFacturados.has(item.idInsumo);
                     return (
                       <tr key={item.rowId} className="hover:bg-muted/20">
                         <td className="px-4 py-3 font-medium text-foreground">
@@ -3536,7 +3685,7 @@ export function OrdenDetallePage({
                         <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
                         <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
-                        <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.precioUnitario)}</td>
+                        <td className="px-4 py-3 font-semibold">{fmtCOP(item.subtotal ?? item.cantidad * item.precioUnitario)}</td>
                       </tr>
                     );
                   })}
@@ -3549,7 +3698,7 @@ export function OrdenDetallePage({
           <div className="mt-4 pt-4 border-t border-border shrink-0">
             <div className="flex justify-between items-center">
               <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total</span>
-              <span className="text-lg font-bold text-foreground">{fmtCOP(calcTotal(orden.items))}</span>
+              <span className="text-lg font-bold text-foreground">{fmtCOP(orden.total ?? calcTotal(orden.items))}</span>
             </div>
           </div>
         </div>

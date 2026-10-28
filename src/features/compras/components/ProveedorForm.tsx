@@ -374,16 +374,26 @@ export function ProveedorFormCampos({
                 )}
                 {/* 3. Nombre completo: UN solo campo (al escribirlo alimenta
                     `nombres` + `apellidos` en el hook, ver setCampo). */}
-                <Campo form={form} label={<>Nombre completo {req}</>} campo="nombreCompleto">
-                  <input
-                    value={v.nombreCompleto ?? ""}
-                    onChange={alEscribir("nombreCompleto", soloLetras)}
-                    onBlur={alTocar("nombreCompleto")}
-                    placeholder="Nombre y apellidos"
-                    autoFocus={autoFocusNombre}
-                    className={`${inputCls} transition-colors ${form.campoCls("nombreCompleto")}`}
-                  />
-                </Campo>
+                {pideNit ? (
+                  <Campo form={form} label={<>Nombre completo {req}</>} campo="nombreCompleto">
+                    <input
+                      value={v.nombreCompleto ?? ""}
+                      onChange={alEscribir("nombreCompleto", soloLetras)}
+                      onBlur={alTocar("nombreCompleto")}
+                      placeholder="Nombre y apellidos"
+                      autoFocus={autoFocusNombre}
+                      className={`${inputCls} transition-colors ${form.campoCls("nombreCompleto")}`}
+                    />
+                  </Campo>
+                ) : (
+                  <div>
+                    <label className={labelCls}>Nombre completo</label>
+                    <div className={lecturaCls}>{(v.nombreCompleto ?? v.nombre ?? "").trim() || "—"}</div>
+                    <p className={ayudaCls}>
+                      El nombre no se puede modificar después de creado el proveedor
+                    </p>
+                  </div>
+                )}
                 {/* 4. Teléfono */}
                 <Campo form={form} label={<>Teléfono {req}</>} campo="telefono">
                   <input
@@ -501,15 +511,25 @@ export function ProveedorFormCampos({
                 {/* Sección 2 — Razón social */}
                 <Bloque titulo="Razón social" icono={<Building2 className="w-4 h-4" />}>
                   <div className={gridCls}>
-                    <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
-                      <input
-                        value={v.razonSocial ?? ""}
-                        onChange={alEscribir("razonSocial", (x) => x)}
-                        onBlur={alTocar("razonSocial")}
-                        placeholder="Ej: Quesos del Norte S.A.S."
-                        className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
-                      />
-                    </Campo>
+                    {pideNit ? (
+                      <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
+                        <input
+                          value={v.razonSocial ?? ""}
+                          onChange={alEscribir("razonSocial", (x) => x)}
+                          onBlur={alTocar("razonSocial")}
+                          placeholder="Ej: Quesos del Norte S.A.S."
+                          className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
+                        />
+                      </Campo>
+                    ) : (
+                      <div>
+                        <label className={labelCls}>Nombre o razón social</label>
+                        <div className={lecturaCls}>{(v.razonSocial || v.nombre || "").trim() || "—"}</div>
+                        <p className={ayudaCls}>
+                          La razón social no se puede modificar después de creado el proveedor
+                        </p>
+                      </div>
+                    )}
                     <Campo form={form} label={<>Nombre comercial <span className="font-normal">(opcional)</span></>} campo="nombreComercial">
                       <input
                         value={v.nombreComercial ?? ""}

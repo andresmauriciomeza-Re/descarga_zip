@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Check, Package, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { calcularLineaIva } from "@/features/compras/services/iva";
@@ -73,6 +73,7 @@ export function InsumosSolicitadosTable({
   items,
   onRemove,
   onUpdate,
+  onEditingChange,
   showActions = true,
   titulo = "Insumos solicitados",
   tono = "normal",
@@ -90,6 +91,9 @@ export function InsumosSolicitadosTable({
   items: InsumoSolicitadoRow[];
   onRemove?: (rowId: string) => void;
   onUpdate?: (rowId: string, patch: DraftRow) => void;
+  /** Avisa si hay una fila en edición sin confirmar (✓): el borrador cuenta en
+   *  el total en pantalla pero NO está en `items` hasta confirmarlo. */
+  onEditingChange?: (editando: boolean) => void;
   showActions?: boolean;
   titulo?: string;
   tono?: "normal" | "amber";
@@ -111,6 +115,10 @@ export function InsumosSolicitadosTable({
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftRow | null>(null);
   const esAmber = tono === "amber";
+
+  useEffect(() => {
+    onEditingChange?.(editId !== null);
+  }, [editId]);
 
   const startEdit = (item: InsumoSolicitadoRow) => {
     setEditId(item.rowId);

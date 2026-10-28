@@ -1554,7 +1554,7 @@ function AdminTopBar({
   userName,
   roleName,
   homeScreen,
-  rolesParaCambiar = [],
+  rolesParaCambiar = [], ordenAEditar,
   onCambiarRol,
 }: {
   current: Screen;
@@ -1571,7 +1571,7 @@ function AdminTopBar({
   homeScreen: Screen;
   /** Roles distintos al activo que SÍ tienen pantallas: los que ofrece el
    *  menú "Cambiar de rol" (los vacíos no se ofrecen). */
-  rolesParaCambiar?: Rol[];
+  rolesParaCambiar?: Rol[]; ordenAEditar?: unknown;
   onCambiarRol?: (rolId: string) => void;
 }) {
   const labels: Partial<Record<Screen, string>> = {
@@ -1589,7 +1589,7 @@ function AdminTopBar({
     purchases: "Gestión de compras",
     perecederos: "CPN",
     "orden-compra": "Órdenes de Compra",
-    "nueva-orden-compra": "Nueva Orden de Compra",
+    "nueva-orden-compra": ordenAEditar ? "Editar Orden de Compra" : "Nueva Orden de Compra",
     "gestion-compra": "Gestión de Compras",
     "nueva-compra": "Nueva Compra",
     supplies: "Gestión de insumos",
@@ -9398,7 +9398,7 @@ export default function App() {
               }
             }}
             menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
-            menuButtonRef={menuButtonRef}
+            menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
             navigate={navigate}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
