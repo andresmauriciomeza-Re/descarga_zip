@@ -266,7 +266,7 @@ export function RecepcionCompraScreen({
   // - IVA = Subtotal × IVA% / 100 (se SUMA aparte)
   // - Total pagado = Subtotal + IVA
   // Al guardar, la compra se registra como "precios sin IVA" (ivaIncluido: false).
-  const [ivaIncluido, setIvaIncluido] = useState<boolean>(true);
+  const ivaIncluido = false;
   const [exCategoriaInsumoId, setExCategoriaInsumoId] = useState<number | undefined>(undefined);
   const [nuevosInsumosPendientes, setNuevosInsumosPendientes] = useState<
     { id: string; nombre: string; unidadMedida: string; costoUnitario: number; iva: number; categoriaId: string }[]
@@ -1193,75 +1193,6 @@ export function RecepcionCompraScreen({
                       {errorProveedor}
                     </p>
                   )}
-                </div>
-              </div>
-
-              {/* Selector IVA incluido / Sin IVA (igual que en compra directa) */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    ¿Cómo vienen los precios en la factura?{" "}
-                    <span className="text-red-500">*</span>
-                  </span>
-                </div>
-                <div
-                  role="radiogroup"
-                  aria-label="Cómo vienen los precios en la factura"
-                  className="flex gap-2"
-                >
-                  {([
-                    {
-                      valor: true,
-                      titulo: "Con IVA incluido",
-                      tag: "Más común",
-                      desc: "El IVA ya está en el precio",
-                    },
-                    {
-                      valor: false,
-                      titulo: "Sin IVA",
-                      tag: "",
-                      desc: "El IVA se suma al final",
-                    },
-                  ] as const).map(({ valor, titulo, tag, desc }) => {
-                    const elegida = ivaIncluido === valor;
-                    return (
-                      <button
-                        key={String(valor)}
-                        type="button"
-                        role="radio"
-                        aria-checked={elegida}
-                        onClick={() => setIvaIncluido(valor)}
-                        className={`flex-1 flex items-start gap-2 px-2.5 py-2 rounded-xl border text-left transition-colors cursor-pointer hover:border-primary/40 ${
-                          elegida
-                            ? "border-primary bg-primary/5"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center ${
-                            elegida ? "border-primary" : "border-muted-foreground/40"
-                          }`}
-                        >
-                          {elegida && <span className="w-2 h-2 rounded-full bg-primary" />}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-[12px] font-semibold text-foreground">
-                              {titulo}
-                            </span>
-                            {tag && (
-                              <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                                {tag}
-                              </span>
-                            )}
-                          </span>
-                          <span className="block text-[11px] leading-snug text-muted-foreground mt-0.5">
-                            {desc}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
 
