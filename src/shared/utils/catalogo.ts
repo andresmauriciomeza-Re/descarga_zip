@@ -154,6 +154,21 @@ export const estadoDeProducto = (p: Product): EstadoProducto =>
 export const productoDisponible = (p: Product): boolean =>
   estadoDeProducto(p) === "Disponible";
 
+/** UNA SOLA etiqueta de estado a la vez en el menú público:
+    1. "No disponible"/"Descontinuado" manda sobre todo (badge gris + overlay
+       + foto atenuada); nunca se pinta "Agotado" encima.
+    2. "Disponible" pero sin stock (agotado) → solo el badge rojo "Agotado",
+       sin el badge verde "Disponible".
+    3. "Disponible" y con stock → solo el badge verde "Disponible".
+    Reutilizada por las tarjetas del catálogo, las favoritas de la landing y
+    el detalle, para que jamás salgan "Disponible" y "Agotado" a la vez. */
+export type EtiquetaEstadoMenu = "no_disponible" | "agotado" | "disponible";
+export const etiquetaEstadoMenu = (
+  estado: EstadoProducto,
+  agotado: boolean,
+): EtiquetaEstadoMenu =>
+  estado !== "Disponible" ? "no_disponible" : agotado ? "agotado" : "disponible";
+
 /** Imagen que el menú público pinta para un producto, en orden:
     1. Si la BD tiene los BYTES (`tieneImagen`), se pide al backend:
        `GET /productos/:id/imagen` (la sirve Postgres, sin autenticación).
