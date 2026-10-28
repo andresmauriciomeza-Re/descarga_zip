@@ -97,7 +97,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalogo";
+import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -2016,7 +2016,20 @@ function LandingScreen({
                 // Un producto descontinuado no se muestra en ningún lugar del
                 // menú público, tampoco acá.
                 if (estadoDeProducto(favorita) === "Descontinuado") return null;
-                const noDisponible = !productoDisponible(favorita);
+                // Stock FÍSICO total del producto (mismo criterio que
+                // `limiteDeLinea`: sin tamaños); `undefined` = sin límite, no
+                // se marca agotado. Una sola etiqueta de estado a la vez.
+                const stock = limiteStockDe(producto) ?? producto.stockDisponible;
+                const agotado = stock <= 0;
+                const etiqueta = etiquetaEstadoMenu(
+                  estadoDeProducto(favorita),
+                  agotado,
+                );
+                const noDisponible = etiqueta === "no_disponible";
+                // Precio atenuado cuando el cliente no puede pedirlo: estado
+                // no disponible o sin stock ("Agotado"). La FOTO se atenúa solo
+                // con "No disponible" (se ve inline en su className).
+                const atenuada = etiqueta !== "disponible";
                 return (
                   <motion.div
                     key={producto.id}
@@ -2043,12 +2056,21 @@ function LandingScreen({
                         onError={onErrorImagen}
                         loading="lazy"
                         decoding="async"
-                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""}`}
+                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
                       />
                       {/* Estado del producto (arriba a la izquierda, 12 px)
-                          y, debajo, la insignia "Favorita" de siempre. */}
+                          y, debajo, la insignia "Favorita" de siempre. Una
+                          sola etiqueta a la vez: si está agotado se oculta el
+                          verde y se pinta el "Agotado" rojo en su lugar. */}
                       <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
-                        <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
+                        {etiqueta !== "agotado" && (
+                          <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
+                        )}
+                        {etiqueta === "agotado" && (
+                          <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
+                            Agotado
+                          </span>
+                        )}
                         <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
                           <Star className="w-3 h-3 fill-white text-white" />
                           Favorita
@@ -2074,7 +2096,7 @@ function LandingScreen({
                       {/* Price + Rating */}
                       <div className="flex items-center justify-between mt-auto">
                         <span
-                          className={`text-[#DC2626] text-lg font-semibold ${noDisponible ? "opacity-60" : ""}`}
+                          className={`text-[#DC2626] text-lg font-semibold ${atenuada ? "opacity-60" : ""}`}
                           style={{ fontFamily: MONO }}
                         >
                           $ {favorita.price.toLocaleString("es-CO")}
@@ -2499,6 +2521,12 @@ function ProductCard({
   // Punto 6: no queda nada por agregar = "Agotado" (sin cambiar el estado
   // del producto; la etiqueta de estado sigue pintándose igual).
   const agotado = adicional !== undefined && adicional <= 0;
+  // Una sola etiqueta de estado a la vez (ver `etiquetaEstadoMenu`).
+  const etiqueta = etiquetaEstadoMenu(estado, agotado);
+  // Precio atenuado cuando el cliente no puede pedirlo: estado no disponible
+  // o sin stock ("Agotado"). La FOTO se atenúa solo con "No disponible" (se
+  // ve inline en su className).
+  const atenuada = etiqueta !== "disponible";
   const mensajeMax =
     max === undefined
       ? ""
@@ -2526,23 +2554,26 @@ function ProductCard({
           src={getImageUrl(p.image)}
           alt={p.name}
           onError={onErrorImagen}
-          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${noDisponible ? "grayscale opacity-60" : ""
+          className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""
             } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
         {/* Etiqueta de estado: fondo sólido, arriba a la izquierda con 12 px
             de separación, legible sobre cualquier foto (claras, oscuras o de
-            cuadritos) y en ambos modos. */}
-        <EstadoMenuBadge
-          estado={estado}
-          className="absolute top-3 left-3 z-10"
-        />
+            cuadritos) y en ambos modos. Una sola a la vez: si está agotado se
+            oculta el verde y manda el "Agotado" de la derecha. */}
+        {etiqueta !== "agotado" && (
+          <EstadoMenuBadge
+            estado={estado}
+            className="absolute top-3 left-3 z-10"
+          />
+        )}
         {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto). */}
-        {agotado && (
+        {etiqueta === "agotado" && (
           <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
             Agotado
           </span>
         )}
-        {noDisponible && (
+        {etiqueta === "no_disponible" && (
           <NoDisponibleOverlay className="absolute inset-0 z-10" />
         )}
       </button>
@@ -2560,7 +2591,7 @@ function ProductCard({
         </p>
         <div className="flex items-center justify-between">
           <span
-            className={`font-bold text-lg ${noDisponible ? "text-muted-foreground opacity-60" : "text-foreground"}`}
+            className={`font-bold text-lg ${atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}`}
             style={{ fontFamily: MONO }}
           >
             {fmt(p.price)}
@@ -2949,6 +2980,8 @@ function ProductDetailScreen({
   }, [tope]);
   // Punto 6: máximo 0 = Agotado (sin cambiar el estado del producto).
   const agotado = max === 0;
+  // Una sola etiqueta de estado a la vez (ver `etiquetaEstadoMenu`).
+  const etiqueta = etiquetaEstadoMenu(estado, agotado);
   // Punto 4: al llegar al máximo el + queda deshabilitado y sale el mensaje.
   const enTope = max !== undefined && qty >= max;
   const mensajeMax =
@@ -3020,21 +3053,24 @@ function ProductDetailScreen({
             src={getImageUrl(product.image)}
             alt={product.name}
             onError={onErrorImagen}
-            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${noDisponible ? "grayscale opacity-60" : ""}`}
+            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
           />
           {/* Mismo estado que en la tarjeta del catálogo: fondo sólido,
-              arriba a la izquierda con 12 px de separación. */}
-          <EstadoMenuBadge
-            estado={estado}
-            className="absolute top-3 left-3 z-10"
-          />
+              arriba a la izquierda con 12 px de separación. Una sola etiqueta
+              a la vez: si está agotado se oculta el verde. */}
+          {etiqueta !== "agotado" && (
+            <EstadoMenuBadge
+              estado={estado}
+              className="absolute top-3 left-3 z-10"
+            />
+          )}
           {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). */}
-          {agotado && (
+          {etiqueta === "agotado" && (
             <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full shadow">
               Agotado
             </span>
           )}
-          {noDisponible && (
+          {etiqueta === "no_disponible" && (
             <NoDisponibleOverlay className="absolute inset-0 z-10" />
           )}
         </div>
