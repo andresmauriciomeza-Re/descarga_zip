@@ -38,7 +38,6 @@ import {
   actualizarOrdenCompra,
   cambiarEstadoOrdenCompra,
   crearOrdenCompra,
-  eliminarOrdenCompra,
   mensajeErrorOrdenesCompra,
   obtenerOrdenCompra,
 } from "@/features/orden-compra/services/ordenesCompraApi";
@@ -242,7 +241,9 @@ const SLOT_EDITAR = "block shrink-0 p-1.5 w-7 h-7";
  */
 const ESTADOS_ADELANTE: Record<EstadoOrden, EstadoOrden[]> = {
   Borrador: ["Borrador", "Enviado", "Anulado"],
-  Enviado: ["Enviado", "Anulado"],
+  // Enviado puede pasar a Completado A MANO (con confirmación); el cambio
+  // automático por recepción completa se mantiene igual.
+  Enviado: ["Enviado", "Completado", "Anulado"],
   Completado: ["Completado"],
   Anulado: ["Anulado"],
 };
@@ -429,11 +430,6 @@ function nextOrdenId(items: OrdenCompra[]) {
   return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0");
 }
 
-function nextGestionId(items: GestionCompra[]) {
-  const nums = items.map(i => parseInt(i.id, 10)).filter(x => !isNaN(x));
-  return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0");
-}
-
 function addDays(d: string, days: number) {
   const dt = new Date(d);
   dt.setDate(dt.getDate() + days);
@@ -466,22 +462,6 @@ function formatearFechaHora(fechaHora: string): string {
   } catch {
     return fechaHora;
   }
-}
-
-/**
- * Cambia el estado de una orden dejando en el historial la marca de tiempo del
- * cambio: es la fecha/hora que muestra el detalle de la orden junto al badge.
- */
-function conHistorial(o: OrdenCompra, estado: EstadoOrden): OrdenCompra {
-  if (o.estado === estado) return o;
-  return {
-    ...o,
-    estado,
-    historialEstados: [
-      ...(o.historialEstados ?? []),
-      { estado, fechaHora: new Date().toISOString() },
-    ],
-  };
 }
 
 /**
@@ -2422,7 +2402,6 @@ interface Props {
   setPage: React.Dispatch<React.SetStateAction<number>>;
   canCreate?: boolean;
   canEdit?: boolean;
-  canDelete?: boolean;
   canExportExcel?: boolean;
   /** Punto 3.2: catálogo de Productos para el buscador "Producto" del modal
    *  que se abre desde este listado (antes llegaba `undefined` y salía vacío). */
@@ -2431,6 +2410,9 @@ interface Props {
    *  productos de sus facturas (ver `handleAnularOrden`). */
   setProductos?: SetCatalogo<Producto>;
   onRecargarCatalogo?: () => Promise<void>;
+  /** Recarga el listado COMPLETO de órdenes tras un cambio de estado (p. ej.
+   *  marcar Completado a mano): el badge y el botón "OC" salen del backend. */
+  onRecargarOrdenes?: () => Promise<void>;
   /** Bloque 2: categorías y alta de productos desde "+ Crear producto" del
    *  OrdenModal que abre este listado. */
   categorias?: CategoriaProducto[];
@@ -2447,12 +2429,12 @@ interface Props {
 export function OrdenCompraScreen({
   ordenes, setOrdenes, gestiones, setGestiones,
   proveedores, setProveedores,
-   insumos, setInsumos, productos, setProductos, onRecargarCatalogo, categorias, categoriasInsumo, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
+   insumos, setInsumos, productos, setProductos, onRecargarCatalogo, onRecargarOrdenes, categorias, categoriasInsumo, onCrearProducto, onNuevoProveedor, onAbrirRecepcion, onVerDetalle, onNuevaOrden, onEditarOrden,
   cargando = false,
   errorCarga,
   onReintentar,
   page, setPage,
-  canCreate = true, canEdit = true, canDelete = true,
+  canCreate = true, canEdit = true,
   canExportExcel = true,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -2463,8 +2445,6 @@ export function OrdenCompraScreen({
   /** Motivo de la anulación (lo exige el servidor). */
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
-  const [eliminarConfirm, setEliminarConfirm] = useState<OrdenCompra | null>(null);
-  const [eliminandoOrden, setEliminandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
 
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
@@ -2580,21 +2560,6 @@ export function OrdenCompraScreen({
     }
   };
 
-  const handleEliminarOrden = async (o: OrdenCompra) => {
-    if (eliminandoOrden) return;
-    setEliminandoOrden(true);
-    try {
-      await eliminarOrdenCompra(o.id);
-      setOrdenes((prev) => prev.filter((x) => x.id !== o.id));
-      toast.success(`OC ${o.id} eliminada`);
-      setEliminarConfirm(null);
-    } catch (error) {
-      toast.error(mensajeErrorOrdenesCompra(error, "No se pudo eliminar la orden."));
-    } finally {
-      setEliminandoOrden(false);
-    }
-  };
-
   const handleAnularOrden = async (o: OrdenCompra) => {
     if (anulandoOrden) return;
     const motivo = (motivoAnulacion ?? "").trim();
@@ -2637,56 +2602,16 @@ export function OrdenCompraScreen({
     try {
       const actualizada = await cambiarEstadoOrdenCompra(id, next);
       setOrdenes(p => p.map(x => x.id === id ? actualizada : x));
+      // La lista completa se resincroniza con GET /ordenes-compra: así el
+      // badge (p. ej. Completado a mano) y el botón "OC" quedan tal cual los
+      // calcula el backend, sin recargar la página.
+      await onRecargarOrdenes?.();
       toast.success(`Estado cambiado a: ${next}`);
     } catch (error) {
       toast.error(mensajeErrorOrdenesCompra(error, "No se pudo cambiar el estado."));
     } finally {
       setEstadoConfirm(null);
     }
-  };
-
-  const handleGuardarRecepcion = (o: OrdenCompra, rec: Recepcion) => {
-    // Usar la misma lógica que registradosEnOrden pero inline
-    const registradosAhora = new Set<string>();
-    for (const g of gestiones) {
-      if (g.ordenId !== o.id) continue;
-      if (g.estado === "Anulado") continue;
-      for (const it of g.items ?? []) registradosAhora.add(it.idInsumo);
-    }
-    [...rec.items, ...rec.itemsExtra].forEach(item => {
-      if (item.cantidadRecibida > 0) registradosAhora.add(item.idInsumo);
-    });
-    const pendientes = o.items.filter(item => !registradosAhora.has(item.idInsumo));
-    const estadoFinal = pendientes.length === 0 ? "Completado" as EstadoOrden : o.estado;
-
-    setOrdenes(p => p.map(x => x.id === o.id
-      ? conHistorial({ ...x, recepcion: rec }, estadoFinal)
-      : x));
-    
-    const gc: GestionCompra = {
-      id: nextGestionId(gestiones),
-      ordenId: o.id,
-      numeroFactura: "",
-      fechaFactura: "",
-      valorTotal: 0,
-      estado: "Recibido",
-    };
-    setGestiones(p => [...p, gc]);
-    if (setInsumos) {
-      setInsumos(prev => {
-        const next = [...prev];
-        [...rec.items, ...rec.itemsExtra].forEach(item => {
-          if (item.cantidadRecibida <= 0) return;
-          const idx = next.findIndex(i => i.nombre.toLowerCase() === item.nombre.toLowerCase());
-          if (idx >= 0) {
-            next[idx] = { ...next[idx], stockActual: next[idx].stockActual + item.cantidadRecibida };
-          }
-        });
-        return next;
-      });
-    }
-    setRecepcionOrden(null);
-    toast.success(`OC ${o.id} ${estadoFinal === "Completado" ? "completada" : "actualizada"} · Registra la factura en Gestión de Compras`);
   };
 
   const handleDownload = async () => {
@@ -3022,15 +2947,6 @@ export function OrdenCompraScreen({
                           ) : (
                             <span aria-hidden className={SLOT_EDITAR} />
                           )}
-                          {esBorrador(o.estado) && canDelete && (
-                            <button
-                              onClick={() => setEliminarConfirm(o)}
-                              title="Eliminar orden"
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
                           {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                             <button
                               onClick={() => onAbrirRecepcion?.(o)}
@@ -3147,15 +3063,6 @@ export function OrdenCompraScreen({
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
-                      {esBorrador(o.estado) && canDelete && (
-                        <button
-                          onClick={() => setEliminarConfirm(o)}
-                          title="Eliminar orden"
-                          className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
                       {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                         <button
                           onClick={() => onAbrirRecepcion?.(o)}
@@ -3253,31 +3160,20 @@ export function OrdenCompraScreen({
             onCancel={() => !anulandoOrden && setAnularConfirm(null)}
           />
         )}
-        {eliminarConfirm && (
-          <ConfirmModal
-            title="Eliminar Orden de Compra"
-            body={`¿Deseas eliminar la OC ${eliminarConfirm.id} de ${eliminarConfirm.proveedor}?`}
-            detail="Solo se pueden eliminar órdenes en estado Borrador. Esta acción no puede revertirse."
-            confirmLabel="Eliminar"
-            loading={eliminandoOrden}
-            danger={true}
-            icon={
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Trash2 className="w-5 h-5 text-red-600" />
-              </div>
-            }
-            onConfirm={() => void handleEliminarOrden(eliminarConfirm)}
-            onCancel={() => !eliminandoOrden && setEliminarConfirm(null)}
-          />
-        )}
         {estadoConfirm && (
           <ConfirmModal
-            title={`-+Cambiar el estado a ${estadoConfirm.next}?`}
+            title={
+              estadoConfirm.next === "Completado"
+                ? "¿Marcar la orden como Completada?"
+                : `-+Cambiar el estado a ${estadoConfirm.next}?`
+            }
             body={`La orden ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
             detail={
               estadoConfirm.next === "Anulado"
                 ? "Una orden anulada no puede volver a un estado anterior."
-                : "La orden avanzará en el flujo de estados."
+                : estadoConfirm.next === "Completado"
+                  ? "Ya no se podrán registrar más facturas en esta orden."
+                  : "La orden avanzará en el flujo de estados."
             }
             confirmLabel={estadoConfirm.next === "Anulado" ? "Anular" : `Cambiar a ${estadoConfirm.next}`}
             danger={estadoConfirm.next === "Anulado"}
@@ -3552,7 +3448,12 @@ function OrdenDetallePageContenido({
   onVerFactura?: (gestion: GestionCompra) => void;
 }) {
   const facturas = gestiones.filter(g => g.ordenId === orden.id && (g.numeroFactura ?? "") !== "");
-  const insumosFacturados = new Set(facturas.flatMap(g => (g.items ?? []).map(i => i.idInsumo)));
+  // Sólo las compras NO anuladas dejan un insumo "Facturado": una factura
+  // anulada devuelve sus insumos a pendientes (respaldo cuando la línea no
+  // trae `facturado` del backend).
+  const insumosFacturados = new Set(
+    facturas.filter(g => g.estado !== "Anulado").flatMap(g => (g.items ?? []).map(i => i.idInsumo))
+  );
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<string | null>(facturas[0]?.id ?? null);
 
   const facturaActual = facturas.find(f => f.id === facturaSeleccionada) ?? facturas[0];

@@ -795,8 +795,11 @@ function CompraForm({
   // Factura única: normalización y validación de duplicados
   const normalizarFactura = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
   const facturaActualNormalizada = normalizarFactura(numeroFactura);
+  // Una compra ANULADA no bloquea su número: se puede registrar otra factura
+  // con el mismo número (misma regla que en la Recepción de una OC).
   const facturaDuplicada = gestiones.some(
     (g) =>
+      g.estado !== "Anulado" &&
       g.numeroFactura &&
       normalizarFactura(g.numeroFactura) === facturaActualNormalizada &&
       g.id !== (compra?.id ?? ""),
@@ -2263,6 +2266,10 @@ interface Props {
   setInsumos?: SetCatalogo<Insumo>;
   setProductos?: SetCatalogo<Producto>;
   onRecargarCatalogo?: () => Promise<void>;
+  /** Recarga el listado COMPLETO de órdenes de compra (badge de estado y
+   *  botón "OC") después de anular una compra asociada a una OC: el estado
+   *  de la orden lo decide el backend, no el puntero local. */
+  onRecargarOrdenes?: () => Promise<void>;
   onNuevaCompra: () => void;
   /** Carga de la lista desde la API y su error ("Reintentar"): nunca datos de
       ejemplo cuando falla. */
@@ -2280,6 +2287,7 @@ export function GestionCompraScreen({
   categorias, categoriasInsumo, onCrearProducto,
   setInsumos, setProductos,
   onRecargarCatalogo,
+  onRecargarOrdenes,
   onNuevaCompra,
   cargando = false,
   errorCarga,
@@ -2373,8 +2381,10 @@ export function GestionCompraScreen({
           toast.success(`Compra ${id} anulada`);
         } else {
           try {
+            // La orden puntual sólo decide el TEXTO del toast (¿la anulación
+            // arrastró la OC?): el estado del listado y el botón "OC" salen
+            // de la recarga COMPLETA de GET /ordenes-compra de abajo.
             const orden = await obtenerOrdenCompra(ordenId);
-            setOrdenes((prev) => prev.map((o) => (o.id === ordenId ? orden : o)));
             toast.success(
               orden.estado === "Anulado"
                 ? `Compra ${id} y orden ${ordenId} anuladas`
@@ -2384,6 +2394,10 @@ export function GestionCompraScreen({
             // La compra ya quedó anulada: se informa solo eso.
             toast.success(`Compra ${id} anulada`);
           }
+          // La OC vuelve de Completado a Enviado (o se anula): se recarga la
+          // lista completa de órdenes para que el badge y el botón "OC" se
+          // actualicen sin recargar la página.
+          await onRecargarOrdenes?.();
         }
       } catch (error) {
         toast.error(mensajeErrorCompras(error, "No se pudo anular la compra."));
