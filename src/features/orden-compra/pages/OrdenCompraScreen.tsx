@@ -808,8 +808,6 @@ export function OrdenModal({
   const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   const [showSendConf, setShowSendConf] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  /** Hay una fila de la tabla en edición sin confirmar (✓): su borrador cuenta en el total en pantalla pero aún no está en `form.items`. */
-  const [filaEnEdicion, setFilaEnEdicion] = useState(false);
 
   // Historial de cambios de estado
   const [estadoHistorial, setEstadoHistorial] = useState<{ estado: EstadoOrden; fecha: string }[]>(() => {
@@ -989,9 +987,11 @@ export function OrdenModal({
     // Ajuste: con historial de compra se precarga el último monto SIN IVA y
     // su % (la OC no suma IVA); sin historial (productos viejos) manda el
     // costo del catálogo por presentación, como siempre.
+    // Punto C2: si existe `montoDigitado` (el monto TAL CUAL digitado, sin
+    // convertir) manda ÉL; `montoSinIva` queda como fallback.
     const hist = historialCompraDe(p);
     setAPrecio(
-      hist ? hist.montoSinIva : Number(p.costoUnitario || 0) * factor
+      hist ? (hist.montoDigitado ?? hist.montoSinIva) : Number(p.costoUnitario || 0) * factor
     );
     setAIva(hist ? hist.iva : 0);
     setAInsumoId(p.id);
@@ -1108,8 +1108,10 @@ export function OrdenModal({
     nombreRef.current?.focus();
   };
 
-  /** Lápiz de la tabla: carga la fila en el formulario de la izquierda (con
-   *  su tipo y su empaque de paca/caja, para poder actualizarlos). */
+  /** Lápiz de la tabla: carga el ítem en el formulario "Agregar ítem" de la
+   *  izquierda (con su tipo y su empaque de paca/caja, para poder
+   *  actualizarlos). El botón pasa a "Guardar cambios" y la fila queda
+   *  resaltada en la tabla hasta guardar o cancelar. */
   const editarItem = (row: InsumoSolicitadoRow) => {
     setEditando(row.rowId);
     setATipoItem(row.tipoItem ?? "insumo");
@@ -1124,11 +1126,8 @@ export function OrdenModal({
     nombreRef.current?.focus();
   };
 
-  /** Patch de la edición en línea de la tabla (✓): conserva TODOS los datos de
-   *  la fila (id, nombre, idInsumo, costo...) y sólo pisa los campos
-   *  editables. Antes se reemplazaba la fila con los estados del formulario de
-   *  arriba (`aNombre=""`, `aPrecio=0`, `aIva=0`), que el lápiz de la tabla
-   *  nunca carga, y la fila quedaba vacía con $ 0. */
+  /** Patch de la línea en edición: conserva TODOS los datos de la fila (id,
+   *  nombre, idInsumo, costo...) y sólo pisa los campos del formulario. */
   const actualizarItem = (rowId: string, patch: Partial<OrdenItem>) => {
     pf({
       items: form.items.map((i) =>
@@ -1167,10 +1166,6 @@ export function OrdenModal({
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un ítem."); return; }
-    if (filaEnEdicion) {
-      toast.error("Confirma (✓) o cancela la edición de la fila antes de guardar: el total mostrado aún no incluye ese cambio.");
-      return;
-    }
     setGuardando(true);
     try {
       await onGuardar(form);
@@ -1569,7 +1564,8 @@ export function OrdenModal({
                       setShowNuevoProducto(true);
                     }}
                     compacto={isPage}
-                    buttonLabel={editando ? "Actualizar" : "Agregar"}
+                    buttonLabel={editando ? "Guardar cambios" : "Agregar"}
+                    onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Punto 3.3: el atajo "+ Crear insumo/producto" según tipo.
                     ocultarCrearInsumo={aTipoItem === "producto"}
@@ -1705,9 +1701,13 @@ export function OrdenModal({
                   <InsumosSolicitadosTable
                     items={form.items}
                     showActions
-                    onRemove={rowId => pf({ items: form.items.filter(i => i.rowId !== rowId) })}
-                    onUpdate={actualizarItem}
-                    onEditingChange={setFilaEnEdicion}
+                    onRemove={(rowId) => {
+                      if (editando === rowId) limpiarFilaInsumo();
+                      pf({ items: form.items.filter((i) => i.rowId !== rowId) });
+                    }}
+                    onEdit={editarItem}
+                    rowEditando={editando}
+                    sinScrollX
                     totalLabel="Total estimado"
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
@@ -3768,4 +3768,3 @@ function OrdenDetallePageContenido({
     </div>
   );
 }
-

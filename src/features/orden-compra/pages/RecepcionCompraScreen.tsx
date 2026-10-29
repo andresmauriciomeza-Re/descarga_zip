@@ -312,13 +312,6 @@ export function RecepcionCompraScreen({
 
   // ������ Edición en línea de insumos adicionales ������������������������������������������������������������������������������������������������
   const [editExtraId, setEditExtraId] = useState<string | null>(null);
-  const [editExtraDraft, setEditExtraDraft] = useState<{
-    cantidad: number;
-    unidad: string;
-    costoUnitario: number;
-    precioUnitario: number;
-    iva: number;
-  } | null>(null);
 
   const exRef = useRef<HTMLDivElement>(null);
 
@@ -479,9 +472,11 @@ export function RecepcionCompraScreen({
     unidadesPorEmpaque?: number;
     /** Historial de compra: último monto SIN IVA de la presentación y su %
      *  (los escribe `aplicarPreciosCompra`); sin él la precarga es la de
-     *  siempre. */
+     *  siempre. Punto C2: `ultimoMontoDigitado` es el monto TAL CUAL digitado
+     *  (si existe, manda sobre `ultimoMontoSinIva`). */
     ultimoMontoSinIva?: number;
     ultimoIvaCompra?: number;
+    ultimoMontoDigitado?: number;
   };
 
   const exSugs = useMemo<SugEx[]>(() => {
@@ -528,8 +523,10 @@ export function RecepcionCompraScreen({
             // unidad suelta; el costo es `costoUnitario` también por unidad).
             precioVenta: Number(p.precioUnitario || 0),
             // Ajuste: historial de compra para precargar monto e IVA.
+            // Punto C2: también el monto digitado TAL CUAL (si existe, manda).
             ultimoMontoSinIva: p.ultimoMontoSinIva,
             ultimoIvaCompra: p.ultimoIvaCompra,
+            ultimoMontoDigitado: p.ultimoMontoDigitado,
           };
         });
     }
@@ -621,6 +618,23 @@ export function RecepcionCompraScreen({
     );
   };
 
+  const limpiarFormularioExtra = (
+    tipo: "insumo" | "producto" = exTipo,
+    cancelarEdicion = true
+  ) => {
+    setExNombre("");
+    setExId("");
+    setExCategoriaInsumoId(undefined);
+    setExCant(1);
+    setExUnidad(tipo === "producto" ? "" : UNIDADES[0]);
+    setExEmpaque(undefined);
+    setExPrecio(0);
+    setExIva(0);
+    setExPrecioVenta(0);
+    setExShowSug(false);
+    if (cancelarEdicion) setEditExtraId(null);
+  };
+
   const addExtra = () => {
     if (!exNombre.trim()) {
       toast.error(
@@ -660,15 +674,14 @@ export function RecepcionCompraScreen({
     );
     const catIdNuevo = exCategoriaInsumoId ?? (nuevoPendiente ? Number(nuevoPendiente.categoriaId) : undefined);
 
-    setItemsExtra((prev) => [
-      ...prev,
-      {
-        rowId: `ex-${Date.now()}`,
+    const lineaExtra: ItemRecibido = {
+        rowId: editExtraId ?? `ex-${Date.now()}`,
         // Punto B6: con id elegido del catálogo la línea se asimila a ese
         // ítem (y el stock se aplica sobre él); sin selección se guarda con
         // id sintético para no fusionar líneas distintas.
         idInsumo: exId || `INS-EX-${Date.now()}`,
-        ...(catIdNuevo ? { idCategoriaInsumo: catIdNuevo, esNuevoInsumo: true } : {}),
+        idCategoriaInsumo: catIdNuevo,
+        esNuevoInsumo: catIdNuevo ? true : undefined,
         nombre: exNombre.trim(),
         cantidadSolicitada: 0,
         cantidadRecibida: exCant,
@@ -680,67 +693,47 @@ export function RecepcionCompraScreen({
         // P14: de qué catálogo salió la línea y, si es producto, su precio
         // de venta al público (ya validado arriba: siempre > 0 y > costo).
         tipoItem: exTipo,
-        ...(exTipo === "producto"
-          ? {
-              precioVenta: exPrecioVenta,
-              // Ajuste de bebidas: sólo producto en paca/caja guarda el
-              // empaque (unidad suelta ⇒ sin el dato, se lee como 1).
-              ...(exEmpaque && exEmpaque > 1
-                ? { unidadesPorEmpaque: exEmpaque }
-                : {}),
-            }
-          : {}),
-      },
-    ]);
+        precioVenta: exTipo === "producto" ? exPrecioVenta : undefined,
+        unidadesPorEmpaque:
+          exTipo === "producto" && exEmpaque && exEmpaque > 1
+            ? exEmpaque
+            : undefined,
+      };
 
-    setExNombre("");
-    setExId("");
-    setExCategoriaInsumoId(undefined);
-    setExCant(1);
-    setExPrecio(0);
-    setExIva(0);
-    setExPrecioVenta(0);
-    setExEmpaque(undefined);
-    setExShowSug(false);
+    setItemsExtra((prev) =>
+      editExtraId
+        ? prev.map((item) =>
+            item.rowId === editExtraId
+              ? { ...item, ...lineaExtra, rowId: item.rowId }
+              : item
+          )
+        : [...prev, lineaExtra]
+    );
+    limpiarFormularioExtra();
 
     toast.success(
-      exTipo === "producto" ? "Producto adicional agregado." : "Insumo adicional agregado."
+      editExtraId
+        ? "Ítem adicional actualizado."
+        : exTipo === "producto"
+          ? "Producto adicional agregado."
+          : "Insumo adicional agregado."
     );
   };
 
   const startEditExtra = (item: ItemRecibido) => {
     setEditExtraId(item.rowId);
-    setEditExtraDraft({
-      cantidad: item.cantidadRecibida,
-      unidad: item.unidad,
-      costoUnitario: item.costoUnitario, precioUnitario: item.costoUnitario,
-      iva: item.iva ?? 0
-    });
-  };
-
-  const cancelEditExtra = () => {
-    setEditExtraId(null);
-    setEditExtraDraft(null);
-  };
-
-  const commitEditExtra = () => {
-    if (editExtraId && editExtraDraft) {
-      setItemsExtra((prev) =>
-        prev.map((item) =>
-          item.rowId === editExtraId
-            ? {
-                ...item,
-                cantidadRecibida: Math.max(0, editExtraDraft.cantidad),
-                unidad: editExtraDraft.unidad,
-                costoUnitario: Math.max(0, editExtraDraft.costoUnitario),
-                precioUnitario: Math.max(0, editExtraDraft.costoUnitario),
-                iva: Math.min(100, Math.max(0, editExtraDraft.iva)),
-              }
-            : item
-        )
-      );
-    }
-    cancelEditExtra();
+    setExTipo(item.tipoItem ?? "insumo");
+    setExNombre(item.nombre);
+    setExId(item.idInsumo);
+    setExCategoriaInsumoId(item.idCategoriaInsumo);
+    setExCant(item.cantidadRecibida);
+    setExUnidad(item.unidad);
+    setExEmpaque(item.unidadesPorEmpaque);
+    setExPrecio(item.costoUnitario);
+    setExIva(item.iva ?? 0);
+    setExPrecioVenta(item.precioVenta ?? 0);
+    setExShowSug(false);
+    exRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
 
   const totalPedido = orden.total ?? orden.items.reduce(
@@ -1445,44 +1438,66 @@ export function RecepcionCompraScreen({
 
                 {itemsExtra.length > 0 && (
                   <div className="border border-border rounded-xl overflow-hidden mb-3">
-                    <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[560px]">
+                    <div className="overflow-x-hidden">
+                    <table className="table-fixed w-full text-sm">
+                      <colgroup>
+                        <col />
+                        <col style={{ width: 58 }} />
+                        <col style={{ width: 58 }} />
+                        <col style={{ width: 76 }} />
+                        <col style={{ width: 46 }} />
+                        <col style={{ width: 76 }} />
+                        <col style={{ width: 68 }} />
+                      </colgroup>
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs">
+                          <th className="px-1.5 py-2 text-left text-xs">
                             Nombre
                           </th>
 
-                          <th className="px-3 py-2 text-left text-xs">
+                          <th className="px-1 py-2 text-right text-xs">
                             Cantidad
                           </th>
 
-                          <th className="px-3 py-2 text-left text-xs">
-                            Unidad
+                          <th className="px-1 py-2 text-left text-xs">
+                            Medida
                           </th>
 
-                          <th className="px-3 py-2 text-left text-xs">
+                          <th className="px-1 py-2 text-right text-xs">
                             Monto unitario
                           </th>
 
-                          <th className="px-3 py-2 text-left text-xs">
+                          <th className="px-1 py-2 text-right text-xs">
+                            IVA
+                          </th>
+
+                          <th className="px-1 py-2 text-right text-xs">
                             Subtotal
                           </th>
 
-                          <th />
+                          <th className="px-1 py-2" />
                         </tr>
                       </thead>
 
                       <tbody className="divide-y divide-border">
                         {itemsExtra.map((item) => {
-                          const isEditing = editExtraId === item.rowId;
-                          const draft = isEditing ? editExtraDraft : null;
-
+                          const linea = calcularLineaIva({
+                            cantidad: item.cantidadRecibida,
+                            montoUnitario: item.costoUnitario,
+                            porcentajeIva: item.iva ?? 0,
+                            ivaIncluido,
+                          });
                           return (
-                            <tr key={item.rowId}>
-                              {/* Nombre */}
-                              <td className="px-3 py-2 font-semibold">
-                                {item.nombre}
+                            <tr
+                              key={item.rowId}
+                              className={`hover:bg-muted/20 transition-colors ${
+                                editExtraId === item.rowId ? "bg-primary/5" : ""
+                              }`}
+                            >
+                              <td className="min-w-0 px-1.5 py-2 font-semibold">
+                                <div className="truncate" title={item.nombre}>
+                                  {item.nombre}
+                                </div>
                                 {/* P14: si la línea salió del catálogo de
                                     productos se deja ver su precio de venta
                                     al público (dato informativo; la factura
@@ -1497,114 +1512,33 @@ export function RecepcionCompraScreen({
                                 )}
                               </td>
 
-                              {/* Cantidad */}
-                              <td className="px-3 py-2">
-                                {draft ? (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={draft.cantidad === 0 ? "" : draft.cantidad}
-                                    placeholder="0"
-                                    onChange={(e) =>
-                                      setEditExtraDraft({
-                                        ...draft,
-                                        cantidad: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                                      })
-                                    }
-                                    className="w-14 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                  />
-                                ) : (
-                                  item.cantidadRecibida
-                                )}
+                              <td className="px-1 py-2 text-right">{item.cantidadRecibida}</td>
+                              <td className="truncate px-1 py-2 text-xs text-muted-foreground" title={item.unidad}>
+                                {item.unidad}
                               </td>
-
-                              {/* Unidad — en productos la presentación de
-                                  compra ("Paca x12") es sólo lectura: no
-                                  está en la lista de unidades y cambiarla
-                                  rompería el empaque de la línea. */}
-                              <td className="px-3 py-2">
-                                {draft && (item.tipoItem ?? "insumo") !== "producto" ? (
-                                  <UnidadSelect
-                                    value={draft.unidad}
-                                    onChange={(unidad) =>
-                                      setEditExtraDraft({
-                                        ...draft,
-                                        unidad,
-                                      })
-                                    }
-                                    ariaLabel="Unidad"
-                                    fieldClassName="bg-background border border-border text-foreground h-8 rounded-lg text-xs"
-                                  />
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    {draft ? draft.unidad : item.unidad}
-                                  </span>
-                                )}
+                              <td className="px-1 py-2 text-right text-xs whitespace-nowrap">
+                                {fmtCOP(item.costoUnitario)}
                               </td>
-
-                              {/* P. Unitario */}
-                              <td className="px-3 py-2">
-                                {draft ? (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={draft.costoUnitario === 0 ? "" : draft.costoUnitario}
-                                    placeholder="0"
-                                    onChange={(e) =>
-                                      setEditExtraDraft({
-                                        ...draft,
-                                        costoUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                                        precioUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                                        iva: 0,
-                                      })
-                                    }
-                                    className="w-20 px-1.5 py-1 bg-background border border-border rounded-lg text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                  />
-                                ) : (
-                                  fmtCOP(item.costoUnitario)
-                                )}
+                              <td className="px-1 py-2 text-right text-xs">
+                                <span>{item.iva ?? 0}%</span>
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                  {fmtCOP(linea.montoIva)}
+                                </p>
                               </td>
-
-                              {/* Subtotal */}
-                              <td className="px-3 py-2 font-semibold">
-                                {fmtCOP(
-                                  (draft ? draft.cantidad : item.cantidadRecibida) *
-                                    (draft ? draft.costoUnitario : item.costoUnitario)
-                                )}
+                              <td className="px-1 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                                {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
                               </td>
-
-                              {/* Acciones */}
-                              <td className="px-3 py-2">
-                                {draft ? (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={commitEditExtra}
-                                      title="Guardar cambios"
-                                      className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={cancelEditExtra}
-                                      title="Cancelar"
-                                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <ActionIcons
-                                    onEdit={() => startEditExtra(item)}
-                                    editTitle="Editar insumo"
-                                    onDelete={() =>
-                                      setItemsExtra((prev) =>
-                                        prev.filter(
-                                          (x) => x.rowId !== item.rowId
-                                        )
-                                      )
-                                    }
-                                  />
-                                )}
+                              <td className="px-1 py-2 whitespace-nowrap">
+                                <ActionIcons
+                                  onEdit={() => startEditExtra(item)}
+                                  editTitle="Editar insumo"
+                                  onDelete={() => {
+                                    if (editExtraId === item.rowId) limpiarFormularioExtra();
+                                    setItemsExtra((prev) =>
+                                      prev.filter((x) => x.rowId !== item.rowId)
+                                    );
+                                  }}
+                                />
                               </td>
                             </tr>
                           );
@@ -1635,19 +1569,7 @@ export function RecepcionCompraScreen({
                           const nuevo = valor as "insumo" | "producto";
                           if (nuevo === exTipo) return;
                           setExTipo(nuevo);
-                          // Al cambiar de catálogo lo cargado ya no sirve:
-                          // se limpia la fila para buscar en la otra lista
-                          // (la Medida queda vacía en producto y el empaque
-                          // de paca/caja se borra).
-                          setExNombre("");
-                          setExId("");
-    setExCategoriaInsumoId(undefined);
-                          setExUnidad(nuevo === "producto" ? "" : UNIDADES[0]);
-                          setExEmpaque(undefined);
-                          setExPrecio(0);
-                          setExIva(0);
-                          setExPrecioVenta(0);
-                          setExShowSug(false);
+                          limpiarFormularioExtra(nuevo, false);
                         }}
                         opciones={[
                           { valor: "insumo", etiqueta: "Insumo" },
@@ -1745,9 +1667,11 @@ export function RecepcionCompraScreen({
                                 // Recepción guarda montos sin IVA); sin
                                 // historial manda el costo del catálogo por
                                 // presentación, como siempre.
+                                // Punto C2: si existe `montoDigitado` (monto
+                                // TAL CUAL digitado, sin convertir) manda ÉL.
                                 const hist = historialCompraDe(ins);
                                 const montoSel = hist
-                                  ? hist.montoSinIva
+                                  ? hist.montoDigitado ?? hist.montoSinIva
                                   : ins.costoUnitario;
                                 const ivaSel = hist
                                   ? hist.iva
@@ -1906,18 +1830,28 @@ export function RecepcionCompraScreen({
                       </div>
                     )}
 
-                    <button
-                      onClick={addExtra}
-                      disabled={!!errorExPrecioVenta}
-                      className={`flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-                        errorExPrecioVenta
-                          ? "opacity-50 cursor-not-allowed"
-                          : "hover:bg-red-700 cursor-pointer"
-                      }`}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Agregar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={addExtra}
+                        disabled={!!errorExPrecioVenta}
+                        className={`flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
+                          errorExPrecioVenta
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-red-700 cursor-pointer"
+                        }`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        {editExtraId ? "Guardar cambios" : "Agregar"}
+                      </button>
+                      {editExtraId && (
+                        <button
+                          onClick={() => limpiarFormularioExtra()}
+                          className="flex-none h-11 px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Punto 3 + ajuste: el costo de referencia CON IVA POR
@@ -1939,14 +1873,6 @@ export function RecepcionCompraScreen({
                   )}
                 </div>
               </div>
-
-              {/* Compras aún no está conectada a la API: el stock de insumos
-                  se suma solo en local. */}
-              {false && [...items, ...itemsExtra].some((i) => (i.tipoItem ?? "insumo") === "insumo") && (
-                <p className="text-[11px] text-muted-foreground">
-                  El stock de insumos se guardará en la base cuando se conecte Compras
-                </p>
-              )}
 
               <div className="flex gap-3 pt-2">
                 <button
