@@ -216,17 +216,14 @@ export interface NuevaCompraData {
  * Monto unitario | IVA | Acciones (editar/eliminar) — con el resumen
  * Subtotal / IVA / Total debajo.
  *
- * Es LOCAL y no reutiliza `InsumosSolicitadosTable`: la edición es EN LÍNEA
- * en la propia fila (borrador con ✓ / ✗, punto B3), mientras que el
- * formulario de la izquierda siempre queda en modo "Agregar". Los cálculos
- * son los mismos: `calcularLineaIva` con la opción de precios elegida, de
- * modo que la suma incluye por igual insumos y productos.
+ * Es LOCAL y no reutiliza `InsumosSolicitadosTable`: la edición se carga en el
+ * formulario de la izquierda y conserva la fila original. Los cálculos son
+ * los mismos: `calcularLineaIva` con la opción de precios elegida, de modo que
+ * la suma incluye por igual insumos y productos.
  */
 function TablaItemsFactura({
   items,
   onEdit,
-  onCommit,
-  onCancelarEdicion,
   onRemove,
   modoIva = false,
   ivaIncluido = true,
@@ -235,97 +232,17 @@ function TablaItemsFactura({
   className = "",
 }: {
   items: ItemFactura[];
-  /** Lápiz: abre la edición en línea de la fila y avisa al formulario. */
+  /** Lápiz: carga la fila en el formulario de la izquierda. */
   onEdit: (row: ItemFactura) => void;
-  /** ✓: aplica el borrador de la fila (con las mismas validaciones que al agregar). */
-  onCommit: (rowId: string, patch: Partial<ItemFactura>) => void;
-  /** ✗: descarta el borrador y sale de la edición de esa fila. */
-  onCancelarEdicion: () => void;
   onRemove: (rowId: string) => void;
   modoIva?: boolean;
   ivaIncluido?: boolean;
   /** Misma estructura que la tabla compartida: sin card ni título. */
   enPagina?: boolean;
-  /** Fila en edición en línea (se resalta y muestra ✓ / ✗). */
+  /** Fila cargada en el formulario (se resalta suavemente). */
   rowEditando?: string | null;
   className?: string;
 }) {
-  /** Borrador de la fila en edición (punto B3): cantidad, monto, IVA y — en
-   *  líneas de producto — precio de venta; nombre y medida son texto porque
-   *  los define el ítem del catálogo. */
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<
-    Pick<ItemFactura, "cantidad" | "precioUnitario" | "iva"> & {
-      precioVenta?: number;
-    }
-  | null>(null);
-
-  // Si el padre cancela la edición desde afuera (p. ej. al agregar otra fila,
-  // que deja el formulario en "Agregar"), el borrador se descarta con él.
-  useEffect(() => {
-    if (rowEditando === null) {
-      setDraftId(null);
-      setDraft(null);
-    }
-  }, [rowEditando]);
-
-  const startEdit = (row: ItemFactura) => {
-    setDraftId(row.rowId);
-    setDraft({
-      cantidad: row.cantidad,
-      precioUnitario: row.precioUnitario,
-      iva: row.iva,
-      precioVenta: row.precioVenta,
-    });
-    onEdit(row);
-  };
-
-  const cancelEdit = () => {
-    setDraftId(null);
-    setDraft(null);
-    onCancelarEdicion();
-  };
-
-  const commitEdit = (rowId: string) => {
-    if (!draft) return;
-    // Mismas validaciones que al agregar una fila nueva.
-    if (draft.cantidad <= 0) {
-      toast.error("La cantidad debe ser mayor que cero.");
-      return;
-    }
-    if (draft.precioUnitario < 0) {
-      toast.error("El precio unitario no puede ser negativo.");
-      return;
-    }
-    if (draft.iva < 0 || draft.iva > 100) {
-      toast.error("El IVA debe estar entre 0 % y 100 %.");
-      return;
-    }
-    // Punto B2 + punto 3 + ajuste: en edición en línea el precio de venta de
-    // un producto sigue siendo obligatorio (> 0 y > costo POR UNIDAD con
-    // IVA), igual que al agregarlo. El costo con IVA usa el modo de precios
-    // de la factura y, con paca/caja, se divide en las unidades de la fila.
-    const fila = items.find((r) => r.rowId === rowId);
-    if (fila && (fila.tipoItem ?? "insumo") === "producto") {
-      const pv = draft.precioVenta ?? 0;
-      const costo =
-        (modoIva && ivaIncluido
-          ? draft.precioUnitario
-          : draft.precioUnitario * (1 + draft.iva / 100)) / unidadesPorLinea(fila);
-      if (pv <= 0) {
-        toast.error("El precio de venta del producto debe ser mayor que cero.");
-        return;
-      }
-      if (pv <= costo) {
-        toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
-        return;
-      }
-    }
-    onCommit(rowId, draft);
-    setDraftId(null);
-    setDraft(null);
-  };
-
   const linea = (row: ItemFactura) =>
     modoIva
       ? calcularLineaIva({
@@ -340,13 +257,7 @@ function TablaItemsFactura({
           return { baseSinIva: base, montoIva: monto, subtotalConIva: base + monto };
         })();
 
-  // Los totales incluyen el borrador de la fila en edición, así el pie se
-  // mueve al escribir y no hace que "no cuadre" hasta pulsar ✓.
-  const filasVisibles = items.map((row) =>
-    row.rowId === draftId && draft ? { ...row, ...draft } : row
-  );
-
-  const totales = filasVisibles.reduce(
+  const totales = items.reduce(
     (acc, row) => {
       const l = linea(row);
       acc.baseSinIva += l.baseSinIva;
@@ -357,28 +268,20 @@ function TablaItemsFactura({
     { baseSinIva: 0, montoIva: 0, total: 0 }
   );
 
-  // Input numérico de las celdas en edición: mismo estilo de celda que
-  // `InsumosSolicitadosTable`, sin spinners (el ancho de la columna es fijo).
-  const inputCelda =
-    "w-full h-8 px-1.5 bg-muted border border-border rounded-xl text-sm text-foreground text-right focus:outline-none focus:ring-2 focus:ring-primary/30 " +
-    "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
-
-  // Punto 3.3: columnas LITERALES del plan. La suma de anchos fijos (248 px +
-  // acciones) deja ~250 px de sobra para "Nombre" a 1366×768, así que la tabla
-  // NO muestra scroll horizontal; la Medida va en su propia columna.
+  // Punto 3.3: columnas del plan con Nombre flexible y sin scroll horizontal.
   // Punto 2.8c: se agrega "Subtotal" a la lista (antes sólo se veía en el pie)
   // y las columnas de dinero se alinean a la derecha.
   const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario", "IVA", "Subtotal"];
   const ANCHOS: Record<string, number> = {
-    Cantidad: 64,
-    Medida: 56,
-    "Monto unitario": 68,
-    IVA: 60,
-    Subtotal: 88,
+    Cantidad: 44,
+    Medida: 44,
+    "Monto unitario": 60,
+    IVA: 38,
+    Subtotal: 64,
   };
-  const ANCHO_ACCIONES = 64;
+  const ANCHO_ACCIONES = 76;
   const columnCount = headers.length + 1;
-  const td = "align-middle px-1.5 " + (enPagina ? "py-1.5" : "py-2.5");
+  const td = "align-middle px-1 " + (enPagina ? "py-1.5" : "py-2.5");
   /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
       como columnas de datos (punto 2.8c). */
   const NUMERICA = new Set(["Cantidad", "Monto unitario", "IVA", "Subtotal"]);
@@ -406,13 +309,13 @@ function TablaItemsFactura({
           // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
           // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
           // pegado a la cabecera.
-          "flex-1 min-h-0 overflow-auto"
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
         }
       >
         {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
             `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
-          className={"table-fixed w-full min-w-[500px] text-sm "}
+          className="table-fixed w-full text-sm"
         >
           <colgroup>
             {headers.map((h) => (
@@ -433,7 +336,7 @@ function TablaItemsFactura({
                 <th
                   key={h}
                   className={
-                    "px-1.5 font-semibold " +
+                    "px-1 font-semibold " +
                     (NUMERICA.has(h) ? "text-right " : "text-left ") +
                     (enPagina ? "py-1.5 bg-muted" : "py-2.5")
                   }
@@ -441,7 +344,7 @@ function TablaItemsFactura({
                   {h}
                 </th>
               ))}
-              <th className={"px-1.5 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />
+              <th className={"px-1 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />
             </tr>
           </thead>
 
@@ -456,9 +359,9 @@ function TablaItemsFactura({
                 </td>
               </tr>
             ) : (
-              filasVisibles.map((row) => {
+              items.map((row) => {
                 const l = linea(row);
-                const editandoFila = rowEditando === row.rowId && draft !== null;
+                const editandoFila = rowEditando === row.rowId;
                 return (
                   <tr
                     key={row.rowId}
@@ -466,172 +369,50 @@ function TablaItemsFactura({
                       editandoFila ? "bg-primary/5" : ""
                     }`}
                   >
-                    <td className={td + " text-sm font-medium text-foreground"}>
-                      {/* El nombre NO se edita en línea: lo define el ítem
-                          agregado (punto B3). */}
-                      <div className="line-clamp-2 break-words" title={row.nombre}>
+                    <td className={td + " min-w-0 text-sm font-medium text-foreground"}>
+                      <div className="truncate" title={row.nombre}>
                         {row.nombre}
                       </div>
-                      {/* P14: si la línea salió del catálogo de productos se
-                          deja ver el precio de venta al público. En EDICIÓN
-                          en línea ese precio se edita aquí mismo (punto B3):
-                          es obligatorio y debe superar al monto unitario. */}
                       {(row.tipoItem ?? "insumo") === "producto" && (
                         <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
                           Producto
-                          {editandoFila && draft ? (
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span>Venta</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={draft.precioVenta || ""}
-                                placeholder="0"
-                                onChange={(e) =>
-                                  setDraft({
-                                    ...draft,
-                                    precioVenta: numeroDeInput(
-                                      limpiarNumeroInput(e.target.value)
-                                    ),
-                                  })
-                                }
-                                className={inputCelda + " w-[110px] h-7"}
-                              />
-                            </div>
-                          ) : (
-                            row.precioVenta != null && row.precioVenta > 0 && (
-                              <>· Venta: {fmtCOP(row.precioVenta)}</>
-                            )
-                          )}
                         </div>
                       )}
                     </td>
-                    {/* Punto 2.8c: columnas numéricas alineadas a la derecha.
-                        Punto B3: en edición el 0 se muestra vacío (placeholder
-                        "0") y los ceros a la izquierda se limpian al teclear. */}
-                    <td className={td + " text-sm text-right"}>
-                      {editandoFila && draft ? (
-                        <input
-                          type="number"
-                          min={0}
-                          autoFocus
-                          value={draft.cantidad === 0 ? "" : draft.cantidad}
-                          placeholder="0"
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              cantidad: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                            })
-                          }
-                          className={inputCelda}
-                        />
-                      ) : (
-                        row.cantidad
-                      )}
-                    </td>
+                    <td className={td + " text-sm text-right"}>{row.cantidad}</td>
                     {/* Punto 3.3: Medida en su propia columna (solo lectura;
                         la define el ítem del catálogo). */}
                     <td className={td + " text-xs text-muted-foreground"}>{row.unidad}</td>
                     <td className={td + " text-sm text-right whitespace-nowrap"}>
-                      {editandoFila && draft ? (
-                        <input
-                          type="number"
-                          min={0}
-                          value={draft.precioUnitario === 0 ? "" : draft.precioUnitario}
-                          placeholder="0"
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              precioUnitario: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                            })
-                          }
-                          className={inputCelda}
-                        />
-                      ) : (
-                        fmtCOP(row.precioUnitario)
-                      )}
+                      {fmtCOP(row.precioUnitario)}
                     </td>
-                    <td className={td + " text-xs text-muted-foreground text-right"}>
-                      {editandoFila && draft ? (
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            // Vacío = 0 % (punto B1): el 0 es un valor válido y
-                            // los subtotales de la fila nunca quedan en NaN.
-                            value={draft.iva === 0 ? "" : draft.iva}
-                            placeholder="0"
-                            onChange={(e) =>
-                              setDraft({
-                                ...draft,
-                                iva: numeroDeInput(limpiarNumeroInput(e.target.value)),
-                              })
-                            }
-                            className={inputCelda + " pr-4"}
-                          />
-                          <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[11px] text-muted-foreground">
-                            %
-                          </span>
-                        </div>
-                      ) : (
-                        <>
-                          <span className="text-[13px] text-foreground/80">{row.iva}%</span>
-                          {/* Mientras se edita no se pinta el monto: quedaba
-                              "$ 0" debajo del input y agrandaba la fila. */}
-                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                            {fmtCOP(l.montoIva)}
-                          </p>
-                        </>
-                      )}
+                    <td className={td + " text-xs text-right"}>
+                      <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                        {fmtCOP(l.montoIva)}
+                      </p>
                     </td>
-                    {/* Punto 2.8c: el subtotal de la línea se veía sólo en el
-                        pie; ahora tiene su columna, junto a IVA. En edición
-                        sigue el borrador para que reaccione al escribir. */}
                     <td className={td + " text-sm font-semibold text-foreground text-right whitespace-nowrap"}>
                       {fmtCOP(l.subtotalConIva)}
                     </td>
                     <td className={td + " whitespace-nowrap"}>
                       <div className="flex items-center gap-1">
-                        {editandoFila ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => commitEdit(row.rowId)}
-                              title="Confirmar cambios"
-                              className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelEdit}
-                              title="Cancelar edición"
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => startEdit(row)}
-                              title="Editar ítem"
-                              className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRemove(row.rowId)}
-                              title="Eliminar ítem"
-                              className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => onEdit(row)}
+                          title="Editar ítem"
+                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(row.rowId)}
+                          title="Eliminar ítem"
+                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -649,8 +430,7 @@ function TablaItemsFactura({
         {items.length > 0 && (
           <div
             className={
-              "flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 px-3 py-2 border-t border-border" +
-              (enPagina ? " min-w-[500px]" : "")
+              "flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 px-3 py-2 border-t border-border"
             }
           >
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -787,9 +567,7 @@ function CompraForm({
   /** Fecha de factura: `abrirPicker` la abre con clic/foco (Chrome ya no
       despliega el calendario sólo con enfocar el campo — punto 2.8b). */
   const fechaFacturaRef = useRef<HTMLInputElement>(null);
-  /** Fila en edición EN LÍNEA (punto B3): el lápiz de la tabla abre el
-   *  borrador en la propia fila; el formulario de la izquierda siempre
-   *  queda en modo "Agregar". */
+  /** Fila cargada en el formulario de la izquierda para editarla. */
   const [editando, setEditando] = useState<string | null>(null);
 
   // Factura única: normalización y validación de duplicados
@@ -1040,11 +818,15 @@ function CompraForm({
     // su %) según el modo elegido: "Sin IVA" va tal cual y "Con IVA incluido"
     // trae el IVA sumado al monto. Sin historial (productos viejos) manda el
     // costo del catálogo por presentación, como siempre.
+    // Punto C2: si existe `montoDigitado` (último monto TAL CUAL lo digitó el
+    // usuario, ej. 4000) manda ÉL, sin convertirlo por IVA en NINGÚN modo.
     const hist = historialCompraDe(p);
     const monto = hist
-      ? ivaIncluido === false
-        ? hist.montoSinIva
-        : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
+      ? hist.montoDigitado != null
+        ? hist.montoDigitado
+        : ivaIncluido === false
+          ? hist.montoSinIva
+          : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
       : costoUnit * factor;
     setItemPrecio(monto);
     setItemIva(hist ? hist.iva : 0);
@@ -1120,9 +902,6 @@ function CompraForm({
       return;
     }
 
-    // Edición en línea (punto B3): el lápiz ya no carga la fila en el
-    // formulario, así que aquí SIEMPRE se agrega una fila nueva y se
-    // descarta cualquier borrador abierto en la tabla.
     if (!itemNombre.trim()) {
       toast.error("Ingresa el nombre del ítem.");
       return;
@@ -1152,6 +931,7 @@ function CompraForm({
     if (
       items.some(
         (item) =>
+          item.rowId !== editando &&
           (item.tipoItem ?? "insumo") === itemTipo &&
           item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()
       )
@@ -1160,34 +940,32 @@ function CompraForm({
       return;
     }
 
-    setItems((prev) => [
-      ...prev,
-      {
-        rowId: `fact-${Date.now()}`,
-        idInsumo: itemId || `INS-FAC-${Date.now()}`,
-        nombre: itemNombre.trim(),
-        // P11: unidad del insumo/producto seleccionado, o "und".
-        unidad: unidadElegida(),
-        cantidad: itemCantidad,
-        costoUnitario: itemPrecio,
-        precioUnitario: itemPrecio,
-        iva: itemIva,
-        // P14: se guarda el tipo para poder mostrarlo en el detalle.
-        tipoItem: itemTipo,
-        // Precio de venta al público, sólo para líneas de producto (ya
-        // validado arriba: siempre > 0 y > costo por unidad con IVA). El
-        // empaque (paca/caja) sólo lo guardan las líneas de producto con
-        // presentación; unidad suelta ⇒ sin el dato (se lee como 1).
-        ...(itemTipo === "producto"
-          ? {
-              precioVenta: itemPrecioVenta,
-              ...(itemEmpaque && itemEmpaque > 1
-                ? { unidadesPorEmpaque: itemEmpaque }
-                : {}),
-            }
-          : {}),
-      },
-    ]);
+    const lineaActualizada: ItemFactura = {
+      rowId: editando ?? `fact-${Date.now()}`,
+      idInsumo: itemId || `INS-FAC-${Date.now()}`,
+      nombre: itemNombre.trim(),
+      unidad: unidadElegida(),
+      cantidad: itemCantidad,
+      costoUnitario: itemPrecio,
+      precioUnitario: itemPrecio,
+      iva: itemIva,
+      tipoItem: itemTipo,
+      precioVenta: itemTipo === "producto" ? itemPrecioVenta : undefined,
+      unidadesPorEmpaque:
+        itemTipo === "producto" && itemEmpaque && itemEmpaque > 1
+          ? itemEmpaque
+          : undefined,
+    };
+
+    setItems((prev) =>
+      editando
+        ? prev.map((item) =>
+            item.rowId === editando
+              ? { ...item, ...lineaActualizada, rowId: item.rowId }
+              : item
+          )
+        : [...prev, lineaActualizada]
+    );
 
     limpiarFilaInsumo();
   };
@@ -1200,7 +978,7 @@ function CompraForm({
    *  varios productos seguidos sin volver a elegirlo, salvo que el que
    *  llama pase el tipo nuevo (cambio de Insumo/Producto: se le pasa
    *  EXPLÍCITO porque por closure llegaría el valor viejo del estado). */
-  const limpiarFilaInsumo = (tipo: TipoItem = itemTipo) => {
+  const limpiarFilaInsumo = (tipo: TipoItem = itemTipo, cancelarEdicion = true) => {
     setItemNombre("");
     setItemCantidad(1);
     setItemUnidad(tipo === "producto" ? "" : "und");
@@ -1210,44 +988,33 @@ function CompraForm({
     setItemId("");
     setItemPrecioVenta(0);
     setItemSugAbierto(false);
-    setEditando(null);
+    if (cancelarEdicion) setEditando(null);
     nombreRef.current?.focus();
   };
 
-  /** Lápiz de la tabla (punto B3): abre la edición EN LÍNEA en la fila; el
-   *  formulario de la izquierda se deja limpio para seguir agregando ítems.
-   *  P14: también el tipo, para que el buscador siga mirando el catálogo
-   *  correcto mientras se edita (y la Medida se limpia según ESE tipo). */
+  /** Lápiz de la tabla: carga la fila completa en el formulario izquierdo. */
   const editarItem = (row: ItemFactura) => {
-    limpiarFilaInsumo(row.tipoItem ?? "insumo");
     setItemTipo(row.tipoItem ?? "insumo");
+    setItemNombre(row.nombre);
+    setItemCantidad(row.cantidad);
+    setItemUnidad(row.unidad);
+    setItemEmpaque(
+      row.unidadesPorEmpaque && row.unidadesPorEmpaque > 1
+        ? row.unidadesPorEmpaque
+        : undefined
+    );
+    setItemPrecio(row.precioUnitario);
+    setItemIva(row.iva);
+    setItemId(row.idInsumo);
+    setItemPrecioVenta(row.precioVenta ?? 0);
+    setItemSugAbierto(false);
     setEditando(row.rowId);
+    nombreRef.current?.focus();
   };
 
   const eliminarItem = (rowId: string) => {
-    // Si se borra la fila que estaba en edición, el borrador se cierra con ella.
-    if (editando === rowId) setEditando(null);
+    if (editando === rowId) limpiarFilaInsumo();
     setItems((prev) => prev.filter((item) => item.rowId !== rowId));
-  };
-
-  const actualizarItem = (
-    rowId: string,
-    patch: Partial<ItemFactura>
-  ) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.rowId === rowId
-          ? {
-              ...item,
-              ...patch,
-              // `costoUnitario` es el precio que consumen el listado, el PDF y
-              // la persistencia de la compra: si cambia el monto unitario hay
-              // que moverlo también o los totales quedan con el precio viejo.
-              costoUnitario: patch.precioUnitario ?? item.costoUnitario,
-            }
-          : item
-      )
-    );
   };
 
   const guardar = () => {
@@ -1778,7 +1545,7 @@ function CompraForm({
                             // sirve: se limpia la fila (la Medida según el
                             // tipo NUEVO) y el buscador empieza a mirar la
                             // otra lista.
-                            limpiarFilaInsumo(nuevo);
+                            limpiarFilaInsumo(nuevo, editando === null);
                           }}
                           disabled={ivaIncluido === null}
                           opciones={[
@@ -1853,7 +1620,8 @@ function CompraForm({
                     compacto={isPage}
                     // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
                     // de una fila existente ocurre en línea, en la tabla.
-                    buttonLabel="Agregar"
+                    buttonLabel={editando ? "Guardar cambios" : "Agregar"}
+                    onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // P11 + punto 2.6 + ajuste: en el modal la Medida sigue
                     // oculta para INSUMOS (la unidad la define el insumo);
@@ -1890,7 +1658,7 @@ function CompraForm({
                             // sirve: se limpia la fila (la Medida según el
                             // tipo NUEVO) y el buscador empieza a mirar la
                             // otra lista.
-                            limpiarFilaInsumo(nuevo);
+                            limpiarFilaInsumo(nuevo, editando === null);
                           }}
                           disabled={ivaIncluido === null}
                           opciones={[
@@ -1941,19 +1709,7 @@ function CompraForm({
                           }`}
                       </span>
                     </div>
-                    {ivaIncluido !== null && (
-                      <p className="text-[11px] text-muted-foreground mt-1.5">
-                        {ivaIncluido ? "Precios con IVA incluido" : "Precios sin IVA"}
-                      </p>
-                    )}
                   </div>
-                )}
-                {/* Compras aún no está conectada a la API: el stock de
-                    insumos se suma solo en local. */}
-                {!isView && nInsumos > 0 && (
-                  <p className="shrink-0 text-[11px] text-muted-foreground">
-                    El stock de insumos se guardará en la base cuando se conecte Compras
-                  </p>
                 )}
 
               {isView ? (
@@ -2024,11 +1780,6 @@ function CompraForm({
                 <TablaItemsFactura
                   items={items}
                   onEdit={editarItem}
-                  onCommit={(rowId, patch) => {
-                    actualizarItem(rowId, patch);
-                    setEditando(null);
-                  }}
-                  onCancelarEdicion={() => setEditando(null)}
                   onRemove={eliminarItem}
                   modoIva
                   ivaIncluido={ivaIncluido ?? true}

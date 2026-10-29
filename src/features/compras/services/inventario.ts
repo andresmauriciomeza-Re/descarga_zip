@@ -63,6 +63,9 @@ const payloadEntradaDeLinea = (
     precio_venta: Number(linea.precioVenta ?? 0),
     ultimo_monto_sin_iva: Math.round(montoSinIva * 100) / 100,
     ultimo_iva_compra: iva,
+    // Punto C2: el monto digitado TAL CUAL (por presentación, sin dividir por
+    // IVA) para precargarlo la próxima vez que se elija el producto.
+    ultimo_monto_digitado: montoPresentacion,
   };
 };
 
@@ -300,16 +303,31 @@ export interface ResumenPrecios {
  * modo "Sin IVA" va tal cual y en "Con IVA incluido" se le suma el %. Los
  * productos sin historial (datos viejos) devuelven `null` y el llamador
  * precarga como siempre (costo del catálogo por presentación).
+ *
+ * Punto C2: `montoDigitado` es el último monto unitario TAL CUAL lo digitó el
+ * usuario (sin convertir por IVA, ej. 4000). Si existe, las tres pantallas lo
+ * precargan en "Monto unitario"; si no (productos viejos), sigue mandando el
+ * comportamiento anterior (`montoSinIva` según el modo de IVA).
  */
 export const historialCompraDe = (
-  p: Pick<Producto, "ultimoMontoSinIva" | "ultimoIvaCompra">
-): { montoSinIva: number; iva: number } | null =>
-  typeof p.ultimoMontoSinIva === "number" &&
-  Number.isFinite(p.ultimoMontoSinIva) &&
-  typeof p.ultimoIvaCompra === "number" &&
-  Number.isFinite(p.ultimoIvaCompra)
-    ? { montoSinIva: p.ultimoMontoSinIva, iva: p.ultimoIvaCompra }
-    : null;
+  p: Pick<Producto, "ultimoMontoSinIva" | "ultimoIvaCompra" | "ultimoMontoDigitado">
+): { montoSinIva: number; iva: number; montoDigitado?: number } | null => {
+  if (
+    typeof p.ultimoMontoSinIva !== "number" ||
+    !Number.isFinite(p.ultimoMontoSinIva) ||
+    typeof p.ultimoIvaCompra !== "number" ||
+    !Number.isFinite(p.ultimoIvaCompra)
+  ) {
+    return null;
+  }
+  const base = { montoSinIva: p.ultimoMontoSinIva, iva: p.ultimoIvaCompra };
+  // Sólo se expone como "digitado" un número válido y > 0.
+  return typeof p.ultimoMontoDigitado === "number" &&
+    Number.isFinite(p.ultimoMontoDigitado) &&
+    p.ultimoMontoDigitado > 0
+    ? { ...base, montoDigitado: p.ultimoMontoDigitado }
+    : base;
+};
 
 /**
  * Escribe en el catálogo de productos el precio de venta y el costo que se
@@ -363,7 +381,7 @@ export function aplicarPreciosCompra(
   // id, igual que el stock; las líneas con precio ≤ costo se descartan.
   const datosPorId = new Map<
     string,
-    { pv: number; costo: number; montoSinIva: number; iva: number }
+    { pv: number; costo: number; montoSinIva: number; iva: number; montoDigitado: number }
   >();
   for (const item of items) {
     // Precio de VENTA de la línea (no el monto de compra: `precioUnitario` es
@@ -385,7 +403,15 @@ export function aplicarPreciosCompra(
     const montoSinIva = ivaIncluido
       ? Math.round((montoLinea / (1 + ivaLinea / 100)) * 100) / 100
       : montoLinea;
-    datosPorId.set(item.idInsumo, { pv, costo, montoSinIva, iva: ivaLinea });
+    // Punto C2: además del monto SIN IVA se conserva el monto TAL CUAL
+    // digitado en la línea (es lo que se precarga la próxima vez).
+    datosPorId.set(item.idInsumo, {
+      pv,
+      costo,
+      montoSinIva,
+      iva: ivaLinea,
+      montoDigitado: montoLinea,
+    });
   }
   if (datosPorId.size === 0) return { nombres: [], disponibles: 0 };
 
@@ -416,6 +442,9 @@ export function aplicarPreciosCompra(
         // IVA de la línea) para precargarlo la próxima vez que se elija.
         ultimoMontoSinIva: d.montoSinIva,
         ultimoIvaCompra: d.iva,
+        // Punto C2: el monto digitado TAL CUAL (sin convertir IVA): es el que
+        // se precarga en "Monto unitario" en Nueva compra / OC / Recepción.
+        ultimoMontoDigitado: d.montoDigitado,
         ...(pasaDisponible ? { estado: "Disponible" as EstadoProducto } : {}),
       };
     })

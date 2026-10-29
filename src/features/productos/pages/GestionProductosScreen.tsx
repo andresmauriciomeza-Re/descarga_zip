@@ -208,6 +208,13 @@ export interface Producto {
    *  sin historial (datos viejos) se precargan como siempre. */
   ultimoMontoSinIva?: number;
   ultimoIvaCompra?: number;
+  /** Punto C1: último monto unitario digitado por el usuario en la compra de
+    *  este producto, TAL CUAL (sin dividir por IVA; ej. 4000). Lo escribe la
+    *  entrada de compra en la BD y, al volver a elegir el producto en Nueva
+    *  Compra / Orden de Compra / Recepción, es lo que se precarga en
+    *  "Monto unitario" (si existe, manda él sobre `ultimoMontoSinIva`).
+    *  Opcional: los productos sin historial se precargan como siempre. */
+  ultimoMontoDigitado?: number;
   stockDisponible: number;
   /** ¿La BD tiene los BYTES de la imagen (`tb_productos.imagen_data`)?
       Lo informa `GET /productos` y `GET /productos/gestion` como

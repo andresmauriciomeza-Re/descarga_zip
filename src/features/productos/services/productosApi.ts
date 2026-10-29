@@ -24,6 +24,8 @@ export interface ProductoApi {
   unidades_por_empaque?: number | string | null;
   ultimo_monto_sin_iva?: number | string | null;
   ultimo_iva_compra?: number | string | null;
+  /** Punto C1: último monto digitado (tal cual, sin convertir IVA). */
+  ultimo_monto_digitado?: number | string | null;
 }
 
 export interface ProductoApiCreacion {
@@ -46,6 +48,10 @@ export interface EntradaCompraApi {
   precio_venta: number;
   ultimo_monto_sin_iva: number;
   ultimo_iva_compra: number;
+  /** Punto C1: monto unitario tal cual se digitó en la línea (sin convertir
+   *  por IVA). Opcional en el tipo por compatibilidad; la API lo acepta como
+   *  nullable. */
+  ultimo_monto_digitado?: number;
 }
 
 const idCategoriaNumero = (id: string): number => {
@@ -125,6 +131,8 @@ export const mapearProductoApi = (p: ProductoApi): Producto => ({
   unidadesPorEmpaque: p.unidades_por_empaque == null ? undefined : Number(p.unidades_por_empaque),
   ultimoMontoSinIva: p.ultimo_monto_sin_iva == null ? undefined : Number(p.ultimo_monto_sin_iva),
   ultimoIvaCompra: p.ultimo_iva_compra == null ? undefined : Number(p.ultimo_iva_compra),
+  ultimoMontoDigitado:
+    p.ultimo_monto_digitado == null ? undefined : Number(p.ultimo_monto_digitado),
   stockDisponible: Number(p.stock ?? 0),
   stockApi: p.stock == null ? undefined : Number(p.stock),
   estado: p.estado as Producto["estado"],

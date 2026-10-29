@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { Check, Package, Pencil, Trash2, X } from "lucide-react";
-import { toast } from "sonner";
+import React from "react";
+import { Package, Pencil, Trash2 } from "lucide-react";
 import { calcularLineaIva } from "@/features/compras/services/iva";
-import { limpiarNumeroInput } from "@/shared/utils/numeroInput";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
 import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -34,46 +32,12 @@ function fmtCOP(n: number) {
   }).format(n);
 }
 
-/**
- * Número seguro para los inputs en modo edición: vacío o basura → 0, y nunca
- * NaN (Number("") es 0, pero Number("abc") es NaN y arruina todos los cálculos
- * de la fila: quedaría "$ NaN" y totales NaN).
- */
-function toNum(v: string | number) {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// Altura fija de TODOS los controles de edición (32 px) para que las 4 celdas
-// queden idénticas y la fila no cambie de alto al entrar o salir de edición.
-const cellInputCls =
-  "w-full h-8 px-1.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 " +
-  // Los spinners del input numérico se comen ~18px de una celda fija angosta;
-  // sin ellos el valor (ej. "12500") entra completo y se sigue escribiendo con
-  // el teclado.
-  "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
-
-// Símbolo "%" a la derecha DENTRO del input de IVA (el valor va a la izquierda,
-// así no se pisa con el símbolo en valores de 1 a 3 dígitos).
-const sufijoIva = (
-  <span className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-[11px] text-muted-foreground">
-    %
-  </span>
-);
-
-// Punto 3.3: la medida NO es editable (la define el ítem del catálogo), así
-// que el borrador de edición solo trae cantidad, monto e IVA.
-type DraftRow = Pick<InsumoSolicitadoRow, "cantidad" | "precioUnitario" | "iva">;
-
-function mergeRow(item: InsumoSolicitadoRow, draft: DraftRow): InsumoSolicitadoRow {
-  return { ...item, ...draft };
-}
-
 export function InsumosSolicitadosTable({
   items,
   onRemove,
-  onUpdate,
-  onEditingChange,
+  onEdit,
+  rowEditando = null,
+  sinScrollX = false,
   showActions = true,
   titulo = "Insumos solicitados",
   tono = "normal",
@@ -90,10 +54,16 @@ export function InsumosSolicitadosTable({
 }: {
   items: InsumoSolicitadoRow[];
   onRemove?: (rowId: string) => void;
-  onUpdate?: (rowId: string, patch: DraftRow) => void;
-  /** Avisa si hay una fila en edición sin confirmar (✓): el borrador cuenta en
-   *  el total en pantalla pero NO está en `items` hasta confirmarlo. */
-  onEditingChange?: (editando: boolean) => void;
+  /** Lápiz de la fila: en vez de editar EN LÍNEA (se eliminó), carga el ítem
+   *  en el formulario de la izquierda de la pantalla llamante. */
+  onEdit?: (item: InsumoSolicitadoRow) => void;
+  /** rowId del ítem cargado en el formulario: su fila se resalta suavemente
+   *  mientras se edita. */
+  rowEditando?: string | null;
+  /** Queda fijo al ancho del panel (sin `min-width` ni scroll horizontal):
+   *  sólo lo usa la tabla editable de la Orden de Compra. Los demás usos
+   *  conservan el ancho mínimo y el scroll de siempre. */
+  sinScrollX?: boolean;
   showActions?: boolean;
   titulo?: string;
   tono?: "normal" | "amber";
@@ -112,59 +82,7 @@ export function InsumosSolicitadosTable({
   textoVacioPagina?: string;
   className?: string;
 }) {
-  const [editId, setEditId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<DraftRow | null>(null);
   const esAmber = tono === "amber";
-
-  useEffect(() => {
-    onEditingChange?.(editId !== null);
-  }, [editId]);
-
-  const startEdit = (item: InsumoSolicitadoRow) => {
-    setEditId(item.rowId);
-    setDraft({
-      cantidad: item.cantidad,
-      precioUnitario: item.precioUnitario,
-      iva: item.iva,
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditId(null);
-    setDraft(null);
-  };
-
-  const commitEdit = () => {
-    if (editId && draft) {
-      // Nunca se reemplaza la fila: sólo entran estos 3 campos editables, así
-      // que id, nombre y medida se conservan siempre (mergeRow hace lo mismo
-      // para el borrador en pantalla).
-      const cantidad = toNum(draft.cantidad);
-      const precioUnitario = toNum(draft.precioUnitario);
-      const iva = toNum(draft.iva);
-
-      if (cantidad <= 0) {
-        toast.error("La cantidad debe ser mayor a 0.");
-        return; // se queda en modo edición, no se pierde lo escrito
-      }
-      if (precioUnitario <= 0) {
-        toast.error("El monto unitario debe ser mayor a 0.");
-        return;
-      }
-      if (iva < 0 || iva > 100) {
-        toast.error("El IVA debe estar entre 0 y 100.");
-        return;
-      }
-
-      onUpdate?.(editId, {
-        cantidad,
-        precioUnitario,
-        iva,
-      });
-    }
-
-    cancelEdit();
-  };
 
   const calcularLinea = (row: InsumoSolicitadoRow) =>
     modoIva
@@ -185,9 +103,7 @@ export function InsumosSolicitadosTable({
 
   const totales = items.reduce(
     (acc, item) => {
-      const d = editId === item.rowId ? draft : null;
-      const row = d ? mergeRow(item, d) : item;
-      const l = calcularLinea(row);
+      const l = calcularLinea(item);
       acc.baseSinIva += l.baseSinIva;
       acc.montoIva += l.montoIva;
       acc.total += l.subtotalConIva;
@@ -197,16 +113,10 @@ export function InsumosSolicitadosTable({
   );
 
   const subtotalGeneral = modoIva ? totales.baseSinIva : items.reduce((sum, item) => {
-    const d = editId === item.rowId ? draft : null;
-    const cantidad = d ? d.cantidad : item.cantidad;
-    const precio = d ? d.precioUnitario : item.precioUnitario;
-    return sum + cantidad * precio;
+    return sum + item.cantidad * item.precioUnitario;
   }, 0);
   const ivaGeneral = modoIva ? totales.montoIva : items.reduce((sum, item) => {
-    const d = editId === item.rowId ? draft : null;
-    const cantidad = d ? d.cantidad : item.cantidad;
-    const precio = d ? d.precioUnitario : item.precioUnitario;
-    const subtotal = cantidad * precio;
+    const subtotal = item.cantidad * item.precioUnitario;
     return sum + subtotal * (item.iva / 100);
   }, 0);
   const total = modoIva ? totales.total : subtotalGeneral + ivaGeneral;
@@ -230,10 +140,12 @@ export function InsumosSolicitadosTable({
       ? calcularLinea(row).montoIva
       : row.cantidad * row.precioUnitario * (row.iva / 100);
 
-  // align-middle: en modo edición los inputs son cajas inline y, con el valor
-  // por defecto (baseline), quedaban desplazados respecto a las celdas de
-  // texto; así los 4 controles quedan centrados verticalmente en la fila.
-  const tdBase = "align-middle px-1.5 " + (enPagina ? "py-2" : "py-2.5");
+  // align-middle: las celdas con dos líneas (nombre + etiqueta, IVA + monto)
+  // quedan centradas verticalmente respecto a las de una sola línea.
+  const tdBase =
+    "align-middle " +
+    (sinScrollX ? "px-1 " : "px-1.5 ") +
+    (enPagina ? "py-2" : "py-2.5");
 
   /**
    * Anchos fijos de columna para `table-layout: fixed`. Sólo "Nombre" queda
@@ -242,19 +154,20 @@ export function InsumosSolicitadosTable({
    * la columna derecha a 1366×768 SIN scroll horizontal y con la columna de
    * Acciones (lápiz + basurero) siempre visible. Si la pantalla es más
    * angosta, `min-w` conserva el ancho mínimo y el scroll queda dentro del
-   * contenedor de la tabla.
+   * contenedor de la tabla (salvo con `sinScrollX`, que lo desactiva).
    */
   const ANCHOS: Record<string, number | undefined> = {
-    Cantidad: 68,
-    Medida: 56,
-    "Monto unitario": 68,
-    IVA: 60,
-    "IVA (%)": 60,
-    "Monto IVA": 73,
-    Subtotal: 83,
-    "Subtotal (con IVA)": 126,
+    Cantidad: sinScrollX ? 54 : 68,
+    Medida: sinScrollX ? 48 : 56,
+    "Monto unitario": sinScrollX ? 66 : 68,
+    IVA: sinScrollX ? 48 : 60,
+    "IVA (%)": sinScrollX ? 48 : 60,
+    "Monto IVA": sinScrollX ? 58 : 73,
+    Subtotal: sinScrollX ? 68 : 83,
+    "Subtotal (con IVA)": sinScrollX ? 88 : 126,
   };
-  const ANCHO_ACCIONES = 66;
+  const ANCHO_ACCIONES = sinScrollX ? 76 : 66;
+  const ANCHO_MINIMO = 500;
   const colgroup = (
     <colgroup>
       {headers.map((h) => (
@@ -284,14 +197,18 @@ export function InsumosSolicitadosTable({
         </tr>
       ) : (
         items.map((item) => {
-          const draftRow = editId === item.rowId ? draft : null;
-          const row = draftRow ? mergeRow(item, draftRow) : item;
+          // Fila cargada en el formulario de la izquierda: se resalta
+          // suavemente mientras se edita (la edición NO ocurre en la fila).
+          const enEdicion = rowEditando === item.rowId;
 
           return (
-            <tr key={item.rowId} className="hover:bg-muted/20">
-              <td className={tdBase + " text-sm font-medium text-foreground"}>
+            <tr
+              key={item.rowId}
+              className={`hover:bg-muted/20 transition-colors ${enEdicion ? "bg-primary/5" : ""}`}
+            >
+              <td className={tdBase + " text-sm font-medium text-foreground min-w-0"}>
                 <div
-                  className="line-clamp-2 break-words"
+                  className={sinScrollX ? "truncate" : "line-clamp-2 break-words"}
                   title={item.nombre}
                 >
                   {item.nombre}
@@ -303,7 +220,7 @@ export function InsumosSolicitadosTable({
                 {(item.tipoItem ?? "insumo") === "producto" && (
                   <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
                     Producto
-                    {item.precioVenta != null && item.precioVenta > 0 && (
+                    {!sinScrollX && item.precioVenta != null && item.precioVenta > 0 && (
                       <> · Venta: {fmtCOP(item.precioVenta)}</>
                     )}
                   </div>
@@ -311,177 +228,76 @@ export function InsumosSolicitadosTable({
               </td>
 
               <td className={tdBase + " text-sm"}>
-                {draftRow ? (
-                  <input
-                    type="number"
-                    min={0}
-                    // 0 = vacío con placeholder "0" (punto B1); al guardar
-                    // vuelve a contar como 0 vía toNum.
-                    value={draftRow.cantidad === 0 ? "" : draftRow.cantidad}
-                    placeholder="0"
-                    onChange={(e) =>
-                      setDraft({
-                        ...draftRow,
-                        cantidad: toNum(limpiarNumeroInput(e.target.value)),
-                      })
-                    }
-                    className={cellInputCls}
-                  />
-                ) : (
-                  row.cantidad
-                )}
+                {item.cantidad}
               </td>
 
               {/* Punto 3.3: la medida es de SOLO LECTURA (la define el ítem
                   del catálogo): no se edita ni al agregar ni al editar. */}
               <td className={tdBase + " text-xs text-muted-foreground"}>
-                {row.unidad}
+                {item.unidad}
               </td>
 
               <td className={tdBase + " text-sm"}>
-                {draftRow ? (
-                  <input
-                    type="number"
-                    min={0}
-                    value={draftRow.precioUnitario === 0 ? "" : draftRow.precioUnitario}
-                    placeholder="0"
-                    onChange={(e) =>
-                      setDraft({
-                        ...draftRow,
-                        precioUnitario: toNum(limpiarNumeroInput(e.target.value)),
-                      })
-                    }
-                    className={cellInputCls}
-                  />
-                ) : (
-                  fmtCOP(row.precioUnitario)
-                )}
+                {fmtCOP(item.precioUnitario)}
               </td>
 
               {colIvaSimple && (
                 <td className={tdBase + " text-xs"}>
-                  {draftRow ? (
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        // Vacío = 0 % (punto B1): el 0 sigue siendo un valor
-                        // válido y los totales no se van a NaN.
-                        value={draftRow.iva === 0 ? "" : draftRow.iva}
-                        placeholder="0"
-                        onChange={(e) =>
-                          setDraft({
-                            ...draftRow,
-                            iva: toNum(limpiarNumeroInput(e.target.value)),
-                          })
-                        }
-                        className={cellInputCls}
-                      />
-                      {sufijoIva}
-                    </div>
-                  ) : (
-                    <span className="text-[13px] text-foreground/80">{row.iva}%</span>
-                  )}
-                  {/* Mientras se edita el monto no se pinta: quedaba "$ 0"
-                      debajo del input y agrandaba la fila. */}
-                  {!draftRow && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {fmtCOP(ivaDeLinea(row))}
-                    </p>
-                  )}
+                  <span className="text-[13px] text-foreground/80">{item.iva}%</span>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {fmtCOP(ivaDeLinea(item))}
+                  </p>
                 </td>
               )}
 
               {!colIvaSimple && modoIva && (
                 <td className={tdBase + " text-xs text-muted-foreground"}>
-                  {draftRow ? (
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={draftRow.iva === 0 ? "" : draftRow.iva}
-                        placeholder="0"
-                        onChange={(e) =>
-                          setDraft({
-                            ...draftRow,
-                            iva: toNum(limpiarNumeroInput(e.target.value)),
-                          })
-                        }
-                        className={cellInputCls}
-                      />
-                      {sufijoIva}
-                    </div>
-                  ) : (
-                    row.iva + "%"
-                  )}
+                  {item.iva + "%"}
                 </td>
               )}
 
               {!colIvaSimple && modoIva && (
                 <td className={tdBase + " text-xs text-muted-foreground whitespace-nowrap"}>
-                  {fmtCOP(calcularLinea(row).montoIva)}
+                  {fmtCOP(calcularLinea(item).montoIva)}
                 </td>
               )}
 
               {!colIvaSimple && !modoIva && mostrarColsIva && (
                 <td className={tdBase + " text-xs text-muted-foreground"}>
-                  {row.iva}%
+                  {item.iva}%
                 </td>
               )}
 
               {mostrarSubtotal && (
                 <td className={tdBase + " text-sm font-semibold"}>
                   {modoIva
-                    ? fmtCOP(calcularLinea(row).subtotalConIva)
-                    : fmtCOP(row.cantidad * row.precioUnitario)}
+                    ? fmtCOP(calcularLinea(item).subtotalConIva)
+                    : fmtCOP(item.cantidad * item.precioUnitario)}
                 </td>
               )}
 
               {showActions && (
                 <td className={tdBase + " whitespace-nowrap"}>
-                  {draftRow ? (
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1">
+                    {onEdit && (
                       <button
                         type="button"
-                        onClick={commitEdit}
-                        title="Guardar cambios"
-                        className="p-1 rounded text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={cancelEdit}
-                        title="Cancelar"
-                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      {onUpdate && (
-                        <button
-                          type="button"
-                          onClick={() => startEdit(item)}
-                          title="Editar insumo"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => onRemove?.(item.rowId)}
-                        title="Eliminar insumo"
+                        onClick={() => onEdit(item)}
+                        title="Editar ítem"
                         className={`${CLASE_BASE} ${CLASE_HOVER}`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" />
                       </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onRemove?.(item.rowId)}
+                      title="Eliminar insumo"
+                      className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               )}
             </tr>
@@ -579,8 +395,19 @@ export function InsumosSolicitadosTable({
   if (enPagina) {
     return (
       <div className={"flex flex-col flex-1 min-h-0 " + className}>
-        <div className="flex-1 min-h-0 overflow-auto">
-          <table className="table-fixed w-full min-w-[500px] text-sm [&_td]:py-2">
+        <div
+          className={
+            "flex-1 min-h-0 " +
+            // `sinScrollX`: la tabla se queda en el ancho del panel (sin
+            // desplazamiento horizontal); los demás usos conservan el
+            // `overflow-auto` de siempre con su `min-width`.
+            (sinScrollX ? "overflow-y-auto overflow-x-hidden" : "overflow-auto")
+          }
+        >
+          <table
+            className="table-fixed w-full text-sm [&_td]:py-2"
+            style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
+          >
             {colgroup}
             <thead
               className={"text-[10px] uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
@@ -590,13 +417,13 @@ export function InsumosSolicitadosTable({
                 {headers.map((h) => (
                   <th
                     key={h}
-                    className="px-1.5 py-1.5 text-left font-semibold bg-muted"
+                    className={`${sinScrollX ? "px-1" : "px-1.5"} py-1.5 text-left font-semibold bg-muted`}
                   >
                     {h}
                   </th>
                 ))}
                 {showActions && (
-                  <th className="px-1.5 py-1.5 bg-muted" />
+                  <th className={`${sinScrollX ? "px-1" : "px-1.5"} py-1.5 bg-muted`} />
                 )}
               </tr>
             </thead>
@@ -630,10 +457,16 @@ export function InsumosSolicitadosTable({
         </div>
       )}
       <div
-        className={"flex-1 min-h-0 overflow-auto " +
-          (enPagina && items.length === 0 ? "flex items-center" : "")}
+        className={
+          "flex-1 min-h-0 " +
+          (sinScrollX ? "overflow-y-auto overflow-x-hidden" : "overflow-auto") +
+          (enPagina && items.length === 0 ? " flex items-center" : "")
+        }
       >
-        <table className={"table-fixed w-full min-w-[500px] text-sm " + (enPagina ? "[&_td]:py-2" : "")}>
+        <table
+          className={"table-fixed w-full text-sm " + (enPagina ? "[&_td]:py-2" : "")}
+          style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
+        >
           {colgroup}
           <thead
             className={"text-[10px] uppercase tracking-wider " +
@@ -643,7 +476,7 @@ export function InsumosSolicitadosTable({
               {headers.map((h) => (
                 <th
                   key={h}
-                  className={"px-1.5 " + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold " +
+                  className={(sinScrollX ? "px-1 " : "px-1.5 ") + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold " +
                     (enPagina
                       ? "sticky top-0 z-10 border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
@@ -654,7 +487,7 @@ export function InsumosSolicitadosTable({
               ))}
               {showActions && (
                 <th
-                  className={"px-1.5 py-2.5 " +
+                  className={(sinScrollX ? "px-1 py-2.5 " : "px-1.5 py-2.5 ") +
                     (enPagina
                       ? "sticky top-0 z-10 border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")

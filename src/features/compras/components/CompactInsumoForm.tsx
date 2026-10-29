@@ -75,6 +75,11 @@ export interface CompactInsumoFormProps {
    *  stepper y botón debajo alineado a la izquierda. Igual que la sección
    *  "Agregar insumo no solicitado" de Recepción de compra. */
   variante?: "normal" | "compacta";
+  /** Modo edición (lápiz de la tabla): al pasar `onCancelar` se pinta un
+   *  botón secundario "Cancelar" junto al principal; su callback limpia el
+   *  formulario y sale del modo edición. Sin la prop no se pinta nada y los
+   *  demás usos quedan idénticos. */
+  onCancelar?: () => void;
   /** P11: en la Nueva compra la unidad NO se elige a mano: siempre es la del
    *  insumo seleccionado (o "und"), así que el select de Medida se oculta. */
   ocultarMedida?: boolean;
@@ -128,6 +133,7 @@ export function CompactInsumoForm({
   iva,
   onIvaChange,
   onAgregar,
+  onCancelar,
   suggestions,
   showSuggestions,
   onSelectSuggestion,
@@ -454,19 +460,30 @@ export function CompactInsumoForm({
 
       {/* Botón Agregar para variante compacta: debajo, alineado a la izquierda */}
       {esCompacta && (
-        <button
-          type="button"
-          onClick={onAgregar}
-          disabled={bloqueado || !!errorPrecioVenta}
-          className={`mt-2 inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-            bloqueado || errorPrecioVenta
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer hover:bg-red-700"
-          }`}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          {buttonLabel}
-        </button>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onAgregar}
+            disabled={bloqueado || !!errorPrecioVenta}
+            className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
+              bloqueado || errorPrecioVenta
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer hover:bg-red-700"
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {buttonLabel}
+          </button>
+          {onCancelar && (
+            <button
+              type="button"
+              onClick={onCancelar}
+              className="inline-flex h-9 items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
