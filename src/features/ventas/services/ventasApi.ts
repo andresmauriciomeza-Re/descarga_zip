@@ -1,4 +1,6 @@
 import api from '@/shared/services/api';
+import { crearError401Checkout } from '@/shared/services/api';
+import { obtenerToken } from '@/shared/services/authService';
 import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
 import type { Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
 
@@ -220,7 +222,10 @@ export async function crearVentaCliente(payload: {
   productos: Array<{ id_producto: number; cantidad: number; tamano: string | null }>;
   pago: { tipo: string; comprobante: string };
 }) {
-  const { data } = await api.post<VentaApi>('/ventas', payload);
+  if (!obtenerToken()) throw crearError401Checkout();
+  const { data } = await api.post<VentaApi>('/ventas', payload, {
+    checkoutAuth: true,
+  });
   return { id: String(data.id_venta), total: Number(data.monto), venta: ventaApiAVenta(data) };
 }
 

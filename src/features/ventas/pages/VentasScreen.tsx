@@ -2189,15 +2189,15 @@ export function VentasScreen({
                           <button
                             onClick={() => setConfirmVerif("rechazar")}
                             title="Rechazar pago"
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors active:scale-95 cursor-pointer"
+                            className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors active:scale-95 cursor-pointer"
                           >
-                            <ShieldX className="w-3.5 h-3.5" /> Rechazar
+                            Rechazar
                           </button>
-                          <button onClick={() => setModalFaltante(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95">
-                            <AlertCircle className="w-3.5 h-3.5" /> Monto faltante
+                          <button onClick={() => setModalFaltante(true)} className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95">
+                            Monto faltante
                           </button>
-                          <button onClick={() => setConfirmVerif("aprobar")} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
-                            <ShieldCheck className="w-3.5 h-3.5" /> Aceptar
+                          <button onClick={() => setConfirmVerif("aprobar")} className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
+                            Aceptar
                           </button>
                         </div>
                       </div>

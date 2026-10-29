@@ -100,9 +100,10 @@ import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { subirArchivo } from "@/shared/services/uploadService";
 import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
+import { crearError401Checkout, es401GenericoCheckout, registrarManejadorCierreSesion } from "@/shared/services/api";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
@@ -3266,7 +3267,10 @@ function CartScreen({
   onOrder,
   isLoggedIn,
   clienteSesion,
-  onRequireLogin,
+  onRequireCheckoutLogin,
+  onCheckoutUnauthorized,
+  abrirCheckoutTrasLogin,
+  onCheckoutAbierto,
   confirmationData,
   onClearConfirmation,
 }: {
@@ -3289,7 +3293,10 @@ function CartScreen({
   isLoggedIn: boolean;
   /** Nombre del usuario en sesión; se muestra en el resumen y la confirmación. */
   clienteSesion?: string;
-  onRequireLogin: (order: PendingOrder) => void;
+  onRequireCheckoutLogin: () => void;
+  onCheckoutUnauthorized: () => void;
+  abrirCheckoutTrasLogin: boolean;
+  onCheckoutAbierto: () => void;
   /** Resumen del pedido ya registrado que se viene a mostrar (llega
       del login, cuando un invitado inicia sesión con el pedido a
       medio hacer). */
@@ -3302,7 +3309,7 @@ function CartScreen({
     0,
   );
   const [comprobante, setComprobante] = useState<string>("");
-  const { subir, subiendo } = useSubirArchivo();
+  const [subiendo, setSubiendo] = useState(false);
   const [horaRecogida, setHoraRecogida] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
@@ -3337,6 +3344,38 @@ function CartScreen({
   /** Barrera anti doble envío: el `disabled` del botón no alcanza si llegan
       dos clics en el mismo tick. */
   const enviandoRef = useRef(false);
+
+  useEffect(() => {
+    if (!abrirCheckoutTrasLogin || !isLoggedIn || !obtenerToken()) return;
+    setCheckoutStep(1);
+    onCheckoutAbierto();
+  }, [abrirCheckoutTrasLogin, isLoggedIn, onCheckoutAbierto]);
+
+  const cargarComprobanteCheckout = async (file: File) => {
+    if (!isLoggedIn) {
+      onRequireCheckoutLogin();
+      return;
+    }
+    if (!obtenerToken()) {
+      onCheckoutUnauthorized();
+      return;
+    }
+    setSubiendo(true);
+    try {
+      const url = await subirArchivo(file, "comprobantes", { checkoutAuth: true });
+      if (url) setComprobante(url);
+    } catch (error) {
+      if (es401GenericoCheckout(error)) {
+        onCheckoutUnauthorized();
+      } else if ((error as ApiErrorConEstado).status !== 401) {
+        toast.error(
+          error instanceof Error ? error.message : "No se pudo subir el archivo.",
+        );
+      }
+    } finally {
+      setSubiendo(false);
+    }
+  };
 
   const cartTotal = (item: CartItem) =>
     (item.sizePrice + item.extrasPrice) * item.quantity;
@@ -3451,6 +3490,14 @@ function CartScreen({
   const handleConfirm = async () => {
     // Ya hay un pedido en curso: no se envía otro.
     if (enviandoRef.current) return;
+    if (!isLoggedIn) {
+      onRequireCheckoutLogin();
+      return;
+    }
+    if (!obtenerToken()) {
+      onCheckoutUnauthorized();
+      return;
+    }
     if (!comprobante) {
       toast.error("Por favor sube el comprobante de pago");
       return;
@@ -3504,7 +3551,11 @@ function CartScreen({
       setCheckoutStep(0);
       setPedidoConfirmado(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");
+      if (es401GenericoCheckout(error)) {
+        onCheckoutUnauthorized();
+      } else if ((error as ApiErrorConEstado).status !== 401) {
+        toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");
+      }
     } finally {
       setLoading(false);
       enviandoRef.current = false;
@@ -3917,9 +3968,18 @@ function CartScreen({
                 </p>
               )}
               <PrimaryBtn
-                // Sin sesión lo primero es el formulario de datos; con sesión
-                // se entra directo al resumen como siempre.
-                onClick={() => setCheckoutStep(isLoggedIn ? 1 : 3)}
+                // El paso de pago solo se abre desde una sesión autenticada.
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    onRequireCheckoutLogin();
+                    return;
+                  }
+                  if (!obtenerToken()) {
+                    onCheckoutUnauthorized();
+                    return;
+                  }
+                  setCheckoutStep(1);
+                }}
                 size="lg"
                 disabled={
                   itemsNoDisponibles.length > 0 ||
@@ -4390,11 +4450,7 @@ function CartScreen({
                   }}
                   subiendo={subiendo}
                   fileRef={fileRef}
-                  onFileChange={(file) => {
-                    void subir(file, "comprobantes").then((url) => {
-                      if (url) setComprobante(url);
-                    });
-                  }}
+                  onFileChange={(file) => void cargarComprobanteCheckout(file)}
                 />
                 {/* Footer */}
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
@@ -7325,6 +7381,74 @@ const leerFichasPersistidas = () => {
 // localStorage.removeItem(CARRITOS_USUARIOS_STORAGE_KEY).
 const CARRITO_STORAGE_KEY = "sivpro.carrito.v1";
 const CARRITOS_USUARIOS_STORAGE_KEY = "sivpro.carritos.usuarios.v1";
+const CHECKOUT_RETURN_STORAGE_KEY = "sivpro.checkout.return.v1";
+const CHECKOUT_RETURN_TTL_MS = 60 * 60 * 1000;
+
+const guardarRetornoCheckout = () => {
+  try {
+    localStorage.setItem(
+      CHECKOUT_RETURN_STORAGE_KEY,
+      JSON.stringify({
+        expira: Date.now() + CHECKOUT_RETURN_TTL_MS,
+        autorizado: false,
+      }),
+    );
+  } catch {
+    // El checkout sigue bloqueado si el navegador no permite persistir el retorno.
+  }
+};
+
+const consumirRetornoCheckout = (): boolean => {
+  try {
+    const raw = localStorage.getItem(CHECKOUT_RETURN_STORAGE_KEY);
+    localStorage.removeItem(CHECKOUT_RETURN_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("expira" in parsed) ||
+      typeof parsed.expira !== "number"
+    ) return false;
+    if (parsed.expira <= Date.now()) return false;
+    if (!("autorizado" in parsed) || parsed.autorizado !== true) return false;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const autorizarRetornoCheckout = () => {
+  try {
+    const raw = localStorage.getItem(CHECKOUT_RETURN_STORAGE_KEY);
+    if (!raw) return;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("expira" in parsed) ||
+      typeof parsed.expira !== "number" ||
+      parsed.expira <= Date.now()
+    ) {
+      localStorage.removeItem(CHECKOUT_RETURN_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(
+      CHECKOUT_RETURN_STORAGE_KEY,
+      JSON.stringify({ expira: parsed.expira, autorizado: true }),
+    );
+  } catch {
+    // Sin persistencia no se reanuda el checkout en un login posterior.
+  }
+};
+
+const borrarRetornoCheckout = () => {
+  try {
+    localStorage.removeItem(CHECKOUT_RETURN_STORAGE_KEY);
+  } catch {
+    // El marcador expira en una hora si el almacenamiento no está disponible.
+  }
+};
 
 // No hay credenciales persistidas en esta build, pero se limpian también las
 // claves que usa el contrato de autenticación para evitar sesiones parciales
@@ -7609,7 +7733,9 @@ export default function App() {
   const sesionRestaurandose =
     isLoggedIn && sesionActiva !== null && !restauracionSesionLista;
   const [ventas, setVentas] = useState<Venta[]>([]);
-  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  // The legacy guest auto-submit branch is retained but has no producer.
+  const pendingOrder: PendingOrder | null = null;
+  const [abrirCheckoutTrasLogin, setAbrirCheckoutTrasLogin] = useState(false);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
   // Correo que queda precargado en "Iniciar sesión" cuando se llega desde el
@@ -8620,6 +8746,11 @@ export default function App() {
     );
   };
 
+  const cierreSesionApiRef = useRef(false);
+  const checkoutAvisoToastIdRef = useRef<string | number | undefined>(undefined);
+  const checkoutAvisoToastCounterRef = useRef(0);
+  const checkoutAvisoAccionRef = useRef(false);
+
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
     setUsuarios(prev => prev.map(u => u.id === user.id ? {
       ...u,
@@ -8646,6 +8777,8 @@ export default function App() {
       }
     }
 
+    cierreSesionApiRef.current = false;
+    const volverAlCheckout = consumirRetornoCheckout();
     setIsLoggedIn(true);
     setLoginNotice(false);
     setLoginEmailPre("");
@@ -8672,7 +8805,7 @@ export default function App() {
           items: orderToResume.items,
           total,
         });
-        window.setTimeout(() => { setPendingOrder(null); navigate("cart"); }, 0);
+        window.setTimeout(() => navigate("cart"), 0);
       }).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido."));
     }
 
@@ -8717,7 +8850,10 @@ export default function App() {
         : "inicio";
 
     setUserRole(nextRole);
-    if (!orderToResume) {
+    if (volverAlCheckout) {
+      setAbrirCheckoutTrasLogin(true);
+      navigate("cart");
+    } else if (!orderToResume) {
       navigate(nextScreen);
     }
     return { ok: true };
@@ -8992,6 +9128,7 @@ export default function App() {
       clearAuthStorage();
       borrarToken();
       borrarSesionGuardada();
+      borrarRetornoCheckout();
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
@@ -9002,6 +9139,95 @@ export default function App() {
       }
     }
   };
+
+  const mostrarAvisoCheckout = () => {
+    const avisoAnteriorId = checkoutAvisoToastIdRef.current;
+    const avisoId = `checkout-login-required-${++checkoutAvisoToastCounterRef.current}`;
+    checkoutAvisoToastIdRef.current = avisoId;
+    checkoutAvisoAccionRef.current = false;
+    if (avisoAnteriorId !== undefined) toast.dismiss(avisoAnteriorId);
+    toast("Para pagar tu pedido debes iniciar sesión.", {
+      id: avisoId,
+      duration: Infinity,
+      action: {
+        label: "Iniciar sesión",
+        onClick: () => {
+          checkoutAvisoAccionRef.current = true;
+          autorizarRetornoCheckout();
+          openLogin();
+          setLoginNotice(true);
+        },
+      },
+      cancel: {
+        label: "Crear cuenta",
+        onClick: () => {
+          checkoutAvisoAccionRef.current = true;
+          autorizarRetornoCheckout();
+          navigate("register");
+        },
+      },
+      onDismiss: () => {
+        if (checkoutAvisoToastIdRef.current !== avisoId) return;
+        checkoutAvisoToastIdRef.current = undefined;
+        if (!checkoutAvisoAccionRef.current) borrarRetornoCheckout();
+      },
+    });
+  };
+
+  const requerirLoginCheckout = () => {
+    guardarRetornoCheckout();
+    mostrarAvisoCheckout();
+  };
+
+  const checkoutUnauthorized = async () => {
+    if (isLoggedIn) {
+      await logout({ silenciarAviso: true, destino: "login" });
+    }
+    guardarRetornoCheckout();
+    mostrarAvisoCheckout();
+  };
+
+  useEffect(() => registrarManejadorCierreSesion((mensaje) => {
+    cierreSesionApiRef.current = true;
+    void logout({ silenciarAviso: true, destino: "login" }).then(() => {
+      toast.error(mensaje);
+    });
+  }), [logout]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !obtenerToken()) return;
+
+    let activa = true;
+    let validando = false;
+    const validarSesion = async () => {
+      if (!activa || validando || !obtenerToken()) return;
+      validando = true;
+      try {
+        await obtenerPerfil();
+      } catch (error) {
+        const status = (error as ApiErrorConEstado).status;
+        if (status !== 401) {
+          console.error("No se pudo validar la sesión con el servidor.", error);
+        }
+      } finally {
+        validando = false;
+      }
+    };
+
+    const intervalo = window.setInterval(() => void validarSesion(), 30 * 1000);
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === "visible") void validarSesion();
+    };
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    window.addEventListener("focus", validarSesion);
+
+    return () => {
+      activa = false;
+      window.clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+      window.removeEventListener("focus", validarSesion);
+    };
+  }, [isLoggedIn, loggedInUserId]);
 
   /** Refresca el perfil del usuario de la sesión desde GET /auth/me y hace
    *  merge en la lista local `usuarios` (nombre, correo, teléfono, tipo y
@@ -9120,7 +9346,7 @@ export default function App() {
     let reintento: number | undefined;
     const restaurar = async () => {
       if (!obtenerToken()) {
-        if (!cancelado) void logout();
+        if (!cancelado && !cierreSesionApiRef.current) void logout();
         return;
       }
       const correcto = await refrescarPerfil();
@@ -9130,7 +9356,7 @@ export default function App() {
         return;
       }
       if (!obtenerToken()) {
-        void logout();
+        if (!cierreSesionApiRef.current) void logout();
         return;
       }
       // Un fallo de red no prueba que el token sea inválido ni que falten roles.
@@ -9594,11 +9820,10 @@ export default function App() {
                       clear={() => setCart([])}
                       onOrder={registrarPedido}
                       isLoggedIn={isLoggedIn}
-                      onRequireLogin={(order) => {
-                        setPendingOrder(order);
-                        setLoginNotice(true);
-                        openLogin();
-                      }}
+                      onRequireCheckoutLogin={requerirLoginCheckout}
+                      onCheckoutUnauthorized={() => void checkoutUnauthorized()}
+                      abrirCheckoutTrasLogin={abrirCheckoutTrasLogin}
+                      onCheckoutAbierto={() => setAbrirCheckoutTrasLogin(false)}
                       confirmationData={orderConfirmation ?? undefined}
                       onClearConfirmation={() => setOrderConfirmation(null)}
                       clienteSesion={loggedInUser?.nombre}
