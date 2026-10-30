@@ -1,12 +1,11 @@
 import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Trash2, X,
-  AlertCircle, AlertTriangle, Clock, PackageX, Minus, Layers,
+  Plus, Search, Trash2, X, Play, CheckCircle2, Ban,
+  AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
@@ -36,9 +35,13 @@ import {
   crearOrdenPreparacionApi,
   darBajaOrdenProduccion,
   eliminarOrdenProduccion,
+  obtenerCalculoVerificacionOrden,
+  obtenerCapacidadOrdenProduccion,
   iniciarOrdenProduccion,
   mapearFaltanteApi,
   mensajeErrorOrdenes,
+  type CapacidadLineaApi,
+  type CalculoVerificacionLineaApi,
   type ErrorConFaltantes,
 } from "@/features/orden-produccion/services/ordenesProduccionApi";
 import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/fichasApi";
@@ -46,7 +49,7 @@ import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/f
 const SERIF = "var(--font-titulo)";
 
 // ─────────────────────────── Tipos ───────────────────────────
-export type EstadoOrden = "pendiente" | "en-proceso" | "completada" | "cancelada";
+export type EstadoOrden = "pendiente" | "en-proceso" | "por-verificar" | "completada" | "cancelada";
 
 /** Las dos formas de trabajar en la cocina. */
 export type TipoOrden = "preparacion" | "pedido";
@@ -56,6 +59,17 @@ export const TIPO_LABEL: Record<TipoOrden, string> = {
   pedido: "Pedido",
 };
 
+function etiquetaAsignacion(o: OrdenProduccion, productos: Producto[]): string {
+  if (o.tipo === "pedido") return "Por cocinar";
+  const etiquetas = new Set(o.lineas.map((linea) => {
+    const idProducto = linea.productoId ?? linea.idProducto;
+    const producto = productos.find((p) => p.id === idProducto);
+    const categoria = normalizarNombre(producto?.categoriaNombre ?? "");
+    return categoria === "pizzas" || categoria === "lasanas" ? "Pre cocido" : "Preparación";
+  }));
+  return [...etiquetas].join(" / ") || "Preparación";
+}
+
 /** Tiempo fijo de una orden "Pedido de cliente": el plato solo pasa por el
     horno. El `tiempoPreparacion` de la ficha técnica es de "Preparación en
     lote" y NO se usa en las órdenes de pedido. */
@@ -64,13 +78,15 @@ const HORNEADO_MIN = 15;
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
   pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
   "en-proceso": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  "por-verificar": "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
   completada:   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
   cancelada:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
 
 const ESTADO_LABEL: Record<EstadoOrden, string> = {
   pendiente:    "Pendiente",
-  "en-proceso": "En Proceso",
+  "en-proceso": "En proceso",
+  "por-verificar": "Por verificar",
   completada:   "Completada",
   cancelada:    "Cancelada",
 };
@@ -79,13 +95,14 @@ const ESTADO_LABEL: Record<EstadoOrden, string> = {
 // solo se alcanza mediante el flujo de "Dar de baja".
 export const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
   pendiente:    ["en-proceso"],
-  "en-proceso": ["completada"],
+  "en-proceso": ["por-verificar"],
+  "por-verificar": ["completada"],
   completada:   [],
   cancelada:    [],
 };
 
-// Los 4 estados, en su orden natural de avance por el flujo de producción.
-export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "completada", "cancelada"];
+// Los 5 estados, en su orden natural de avance por el flujo de producción.
+export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "por-verificar", "completada", "cancelada"];
 
 // Qué estados pueden elegirse a mano desde el listado, dado el estado actual.
 export const esEstadoSeleccionable = (actual: EstadoOrden, destino: EstadoOrden): boolean => {
@@ -115,6 +132,7 @@ export interface LineaOrden {
   nombre: string;
   unidad: string;
   cantidadEstimada: number;
+  cantidadDebida?: number | null;
   /** Solo Forma 2: id del producto del catálogo y tamaño elegido por el cliente. */
   productoId?: string | null;
   tamano?: string;
@@ -131,7 +149,7 @@ export interface LineaOrden {
   sinFicha?: boolean;
   /** Solo Forma 2: pasos de la ficha vigente, en solo lectura. */
   pasos?: string[];
-  /** Se llenan al completar la orden (modal "Registrar producción real"). */
+  /** Se llenan al verificar la orden. */
   cantidadReal?: number | null;
   merma?: number;
   /** Snapshot de la ficha al momento de crear/editar la orden. Si existe,
@@ -186,6 +204,7 @@ export interface OrdenProduccion {
   cliente?: string | null;
   fechaSolicitada: string;   // "YYYY-MM-DD"
   horaSolicitada: string;    // "HH:MM"
+  fechaLimite?: string | null; // timestamp local de Bogotá, sin zona en PostgreSQL
   estadoOrden: EstadoOrden;
   observacion: string;
   creadaEn: string;          // ISO — columna "Fecha/Hora de estado" si aún no hubo cambio
@@ -239,9 +258,43 @@ function fmtDT(iso: string | null | undefined): string {
   return `${dd}/${MM}/${d.getFullYear()} ${hh}:${mm}`;
 }
 
+function fmtFechaHoraLocal(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const [fecha, hora] = iso.split("T");
+  if (!fecha || !hora) return "—";
+  const [anio, mes, dia] = fecha.split("-");
+  return `${dia}/${mes}/${anio} ${hora.slice(0, 5)}`;
+}
+
 const nowISO = () => new Date().toISOString();
 const addMinutesISO = (iso: string, min: number) =>
   new Date(new Date(iso).getTime() + min * 60000).toISOString();
+
+const fechaHoraBogotaDesdeEpoch = (epoch: number, incluirSegundos = false) => {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(incluirSegundos ? { second: "2-digit" as const } : {}),
+    hourCycle: "h23",
+  }).formatToParts(new Date(epoch));
+  const fecha = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
+  return `${fecha.year}-${fecha.month}-${fecha.day}T${fecha.hour}:${fecha.minute}${incluirSegundos ? `:${fecha.second}` : ""}`;
+};
+const fechaHoraBogotaMasMinuto = () =>
+  fechaHoraBogotaDesdeEpoch(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000);
+const fechaHoraBogotaActual = () => fechaHoraBogotaDesdeEpoch(Date.now(), true);
+
+function fechaRecogidaLocalBogota(orden: OrdenProduccion): string | null {
+  if (!orden.horaSolicitada) return null;
+  const hora = orden.horaSolicitada.length === 5
+    ? `${orden.horaSolicitada}:00`
+    : orden.horaSolicitada.slice(0, 8);
+  return `${orden.fechaSolicitada}T${hora}`;
+}
 
 /** Fecha local "YYYY-MM-DD" (en Colombia después de las 19:00 `toISOString()`
     ya devuelve el día siguiente). */
@@ -842,6 +895,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
     coloresEstado: {
       Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
       "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
+      "Por verificar": { texto: "FF9A3412", fondo: "FFFFEDD5" },
       Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
       Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
     },
@@ -928,6 +982,7 @@ function LineaPreparacion({
   onRemove,
   puedeQuitar,
   insumos,
+  productos,
   fichas,
 }: {
   linea: LineaOrden;
@@ -935,24 +990,31 @@ function LineaPreparacion({
   onRemove: () => void;
   puedeQuitar: boolean;
   insumos: Insumo[];
+  productos: Producto[];
   fichas: FichasPorProducto;
 }) {
-  const opciones = insumos.filter((i) => esProductoInsumo(i) && i.estado === "activo");
-  const pi = insumos.find((i) => i.id === linea.idProducto);
+  const opcionesInsumos = insumos.filter((i) => esProductoInsumo(i) && i.estado === "activo");
+  const opcionesProductos = productos;
+  const pi = esIdInsumo(linea.idProducto)
+    ? insumos.find((i) => i.id === linea.idProducto)
+    : undefined;
   const bajo = !!pi && pi.stockActual < pi.stockMinimo;
+  const ficha = fichaVigente(fichas, linea.idProducto);
   const requeridos = requeridosDeLinea(linea, fichas);
   // C8: "Necesita: …" de ESTA línea, con el mismo número que descuenta el
   // Inicio (factor de tamaño y unidades contables incluidos).
   const necesita = resumenNecesita(requeridos);
 
   const elegir = (id: string) => {
-    const elegido = insumos.find((i) => i.id === id);
+    const esInsumo = esIdInsumo(id);
+    const elegidoInsumo = esInsumo ? insumos.find((i) => i.id === id) : undefined;
+    const elegidoProducto = esInsumo ? undefined : productos.find((p) => p.id === id);
     const ficha = fichaVigente(fichas, id);
     onChange({
       ...linea,
       idProducto: id,
-      nombre: elegido?.nombre ?? "",
-      unidad: elegido?.unidadMedida ?? "und",
+      nombre: elegidoInsumo?.nombre ?? elegidoProducto?.nombre ?? "",
+      unidad: elegidoInsumo?.unidadMedida ?? "und",
       cantidadEstimada: 0,
       // La línea nace con su foto de la ficha: la descripción, el tiempo y los
       // insumos requeridos se leen de aquí, no de la ficha vigente.
@@ -973,11 +1035,28 @@ function LineaPreparacion({
             className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer"
           >
             <option value="">Selecciona un Producto Insumo</option>
-            {opciones.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.nombre} · {i.stockActual} {i.unidadMedida} (mín {i.stockMinimo})
-              </option>
-            ))}
+            {opcionesProductos.length > 0 && (
+              <optgroup label="Productos">
+                {opcionesProductos.map((p) => {
+                  const puedeProducirse =
+                    tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
+                  return (
+                    <option key={p.id} value={p.id} disabled={!puedeProducirse}>
+                      {p.nombre}{puedeProducirse ? "" : " · No disponible para producción"}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
+            {opcionesInsumos.length > 0 && (
+              <optgroup label="Insumos">
+                {opcionesInsumos.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.nombre} · {i.stockActual} {i.unidadMedida} (mín {i.stockMinimo})
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           {bajo && (
             <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
@@ -1002,7 +1081,7 @@ function LineaPreparacion({
             className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
           {linea.idProducto && linea.cantidadEstimada < 1 && (
-            <p className="mt-1 text-[11px] font-semibold text-red-600">
+            <p className="mt-1 text-[11px] font-semibold text-amber-700">
               La cantidad mínima es 1 {linea.unidad}
             </p>
           )}
@@ -1019,7 +1098,7 @@ function LineaPreparacion({
         )}
       </div>
 
-      {pi && (
+      {(pi || ficha) && (
         <div className="space-y-3">
           {necesita && (
             // C8: lo que esta línea gasta en total, con el factor de su
@@ -1067,7 +1146,6 @@ export function OrdenProduccionScreen({
   onReintentar,
   recargarProduccion,
   canCreate = true,
-  canEdit = true,
   canDelete = true,
   canExportExcel = true,
   abrirOrdenId,
@@ -1200,11 +1278,92 @@ export function OrdenProduccionScreen({
     if (orden) setDetailItem(orden);
   }, [detalleOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Estado del modal de Completar: `reales` guarda la "Cantidad que salió"
-  // de cada línea (obligatoria en preparación; vacío en un pedido, que es de
-  // solo lectura).
+  // Estado del modal de Verificar para las cantidades reales y debidas.
   const [completarItem, setCompletarItem] = useState<OrdenProduccion | null>(null);
   const [reales, setReales] = useState<Record<number, string>>({});
+  const [calculosDebidos, setCalculosDebidos] = useState<Record<number, CalculoVerificacionLineaApi>>({});
+  const [cargandoCalculoDebido, setCargandoCalculoDebido] = useState(false);
+  const [generarItem, setGenerarItem] = useState<OrdenProduccion | null>(null);
+  const [cantidadesGenerar, setCantidadesGenerar] = useState<Record<number, string>>({});
+  const [fechaLimiteGenerar, setFechaLimiteGenerar] = useState("");
+  const [minFechaLimiteGenerar, setMinFechaLimiteGenerar] = useState(fechaHoraBogotaMasMinuto);
+  const [ahoraBogotaGenerar, setAhoraBogotaGenerar] = useState(fechaHoraBogotaActual);
+  const [capacidadGenerar, setCapacidadGenerar] = useState<{
+    cantidades_bloqueadas: boolean;
+    lineas: CapacidadLineaApi[];
+  } | null>(null);
+  const [cargandoCapacidadGenerar, setCargandoCapacidadGenerar] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const [faltantesGenerar, setFaltantesGenerar] = useState<Faltante[]>([]);
+
+  useEffect(() => {
+    if (!generarItem) return;
+    const actualizarHora = () => {
+      setMinFechaLimiteGenerar(fechaHoraBogotaMasMinuto());
+      setAhoraBogotaGenerar(fechaHoraBogotaActual());
+    };
+    actualizarHora();
+    const intervalo = window.setInterval(actualizarHora, 15_000);
+    return () => window.clearInterval(intervalo);
+  }, [generarItem]);
+
+  const fechaRecogidaGenerar = generarItem?.tipo === "pedido"
+    ? fechaRecogidaLocalBogota(generarItem)
+    : null;
+  const recogidaFuturaGenerar = !!fechaRecogidaGenerar
+    && fechaRecogidaGenerar > ahoraBogotaGenerar;
+  const recogidaVencidaGenerar = generarItem?.tipo === "pedido"
+    && !!generarItem.horaSolicitada
+    && !recogidaFuturaGenerar;
+
+  const maximosGenerar = useMemo(() => {
+    if (!capacidadGenerar || capacidadGenerar.cantidades_bloqueadas) return {};
+    return Object.fromEntries(capacidadGenerar.lineas.map((linea) => {
+      if (linea.requeridos_por_unidad.length === 0) return [linea.id_detalle_op, null];
+      let maximo = Number.POSITIVE_INFINITY;
+      for (const requerido of linea.requeridos_por_unidad) {
+        if (requerido.motivo || requerido.stock == null || requerido.requerido <= 0) {
+          maximo = 0;
+          break;
+        }
+        const consumidoPorOtrasLineas = capacidadGenerar.lineas
+          .filter((otra) => otra.id_detalle_op !== linea.id_detalle_op)
+          .reduce((total, otra) => {
+            const recurso = otra.requeridos_por_unidad.find((item) => item.id_insumo === requerido.id_insumo);
+            return total + (recurso?.requerido ?? 0) * Number(cantidadesGenerar[otra.id_detalle_op] ?? 0);
+          }, 0);
+        const disponible = requerido.stock - consumidoPorOtrasLineas;
+        maximo = Math.min(maximo, Math.max(0, Math.floor((disponible + 0.000001) / requerido.requerido)));
+      }
+      return [linea.id_detalle_op, Number.isFinite(maximo) ? maximo : null];
+    }));
+  }, [capacidadGenerar, cantidadesGenerar]);
+
+  const cantidadesGenerarValidas = !!generarItem && generarItem.lineas.every((linea) => {
+    if (generarItem.tipo === "pedido") return true;
+    const idDetalle = linea.idDetalleOp;
+    if (idDetalle == null) return false;
+    const texto = cantidadesGenerar[idDetalle] ?? "";
+    const cantidad = Number(texto);
+    if (texto.trim() === "" || !Number.isFinite(cantidad) || cantidad < 1) return false;
+    if (!esIdInsumo(linea.idProducto) && !Number.isSafeInteger(cantidad)) return false;
+    const maximo = maximosGenerar[idDetalle];
+    return maximo == null || cantidad <= maximo;
+  });
+  const capacidadGenerarCompleta = !!generarItem && !!capacidadGenerar
+    && capacidadGenerar.lineas.length === generarItem.lineas.length
+    && generarItem.lineas.every((linea) =>
+      capacidadGenerar.lineas.some((capacidad) => capacidad.id_detalle_op === linea.idDetalleOp));
+  const generacionValida =
+    !!fechaLimiteGenerar &&
+    fechaLimiteGenerar >= minFechaLimiteGenerar &&
+    (generarItem?.tipo !== "pedido" ||
+      !recogidaFuturaGenerar ||
+      (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16))) &&
+    cantidadesGenerarValidas &&
+    !cargandoCapacidadGenerar &&
+    capacidadGenerarCompleta &&
+    !generando;
   // Faltantes detectados al INICIAR: abren el modal "Inventario insuficiente"
   // (lista de "Faltan X de Y (hay Z)" con su motivo) y la orden se queda
   // Pendiente: no se descuenta nada ni cambia de estado.
@@ -1309,7 +1468,9 @@ export function OrdenProduccionScreen({
     }
     const lineasPayload = form.lineas
       .filter((l) => l.idProducto && l.cantidadEstimada > 0)
-      .map((l) => ({ id: l.idProducto, cantidad: l.cantidadEstimada }));
+      .map((l) => esIdInsumo(l.idProducto)
+        ? { id: l.idProducto, cantidad: l.cantidadEstimada }
+        : { id_producto: Number(l.idProducto), cantidad: l.cantidadEstimada });
     try {
       const guardada = editando
         ? await actualizarOrdenProduccion(editando.id, editando.tipo === "pedido"
@@ -1505,76 +1666,118 @@ export function OrdenProduccionScreen({
     return HORNEADO_MIN;
   };
 
-  /** Iniciar (Pendiente → En proceso): lo hace la API (`POST /iniciar`), que
-      valida el inventario y descuenta los insumos una sola vez. Un 409 abre
-      "Inventario insuficiente" con los faltantes DEL SERVIDOR y la orden se
-      queda Pendiente. Después se recargan insumos y órdenes porque el stock
-      cambió en la base. */
-  const iniciar = async (id: string) => {
-    const orden = ordenes.find((o) => o.id === id);
-    if (!orden) return;
+  const abrirGenerar = async (orden: OrdenProduccion) => {
+    if (orden.lineas.some((linea) => linea.idDetalleOp == null)) {
+      toast.error("No se pudieron cargar los detalles de la orden. Recarga el listado e inténtalo de nuevo.");
+      return;
+    }
+    setGenerarItem(orden);
+    setCantidadesGenerar(Object.fromEntries(orden.lineas.map((linea) => [
+      linea.idDetalleOp as number,
+      String(linea.cantidadEstimada),
+    ])));
+    const recogida = orden.tipo === "pedido" ? fechaRecogidaLocalBogota(orden) : null;
+    setFechaLimiteGenerar(
+      recogida && recogida > fechaHoraBogotaActual()
+        ? recogida.slice(0, 16)
+        : "",
+    );
+    setCapacidadGenerar(null);
+    setFaltantesGenerar([]);
+    setCargandoCapacidadGenerar(true);
     try {
-      const actualizada = await iniciarOrdenProduccion(id);
-      setOrdenes((p) => p.map((o) => (o.id === id ? actualizada : o)));
+      setCapacidadGenerar(await obtenerCapacidadOrdenProduccion(orden.id));
+    } catch (error) {
+      setGenerarItem(null);
+      toast.error(mensajeErrorOrdenes(error, "No se pudo calcular la capacidad de producción."));
+    } finally {
+      setCargandoCapacidadGenerar(false);
+    }
+  };
+
+  /** Generar (Pendiente → En proceso) actualiza cantidades, valida la fecha
+      límite, bloquea y descuenta insumos dentro de la transacción del backend. */
+  const confirmarGenerar = async () => {
+    if (!generarItem || !generacionValida) return;
+    const orden = generarItem;
+    setGenerando(true);
+    setFaltantesGenerar([]);
+    try {
+      const actualizada = await iniciarOrdenProduccion(orden.id, {
+        fechaEntregaEstimada: fechaLimiteGenerar,
+        ...(orden.tipo === "preparacion"
+          ? {
+              lineas: orden.lineas.map((linea) => ({
+                idDetalleOp: linea.idDetalleOp as number,
+                cantidad: Number(cantidadesGenerar[linea.idDetalleOp as number]),
+              })),
+            }
+          : {}),
+      });
+      setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizada : o)));
       toast.success(
-        actualizada.insumosDescontados
-          ? `${id} en proceso — insumos descontados`
-          : `${id} en proceso`,
+        orden.tipo === "preparacion" && actualizada.insumosDescontados
+          ? `${orden.id} en proceso — insumos descontados`
+          : `${orden.id} en proceso`,
       );
+      setGenerarItem(null);
+      setCapacidadGenerar(null);
       await recargarProduccion?.();
     } catch (error) {
       const faltantes = ((error as ErrorConFaltantes).faltantes ?? []).map(mapearFaltanteApi);
       if (faltantes.length > 0) {
-        setFaltantesIniciar({ ordenId: id, faltantes });
+        setFaltantesGenerar(faltantes);
         return;
       }
-      // «X» no tiene ficha técnica, insumo inactivo, etc.
-      toast.error(mensajeErrorOrdenes(error, "No se pudo iniciar la orden."));
+      toast.error(mensajeErrorOrdenes(error, "No se pudo generar la orden."));
+    } finally {
+      setGenerando(false);
     }
   };
 
-  const abrirCompletar = (id: string) => {
+  const abrirCompletar = async (id: string) => {
     const orden = ordenes.find((o) => o.id === id);
     if (!orden) return;
     setCompletarItem(orden);
-    // En preparación en lote, "Cantidad que salió" arranca VACÍA: es
-    // obligatoria, con error en tiempo real y con Completar deshabilitado
-    // hasta que cada línea tenga un valor ≥ 0. En pedido no se pide nada: el
-    // modal es de solo lectura (producto, tamaño y cantidad).
     setReales({});
+    setCalculosDebidos({});
+    if (orden.tipo !== "preparacion") return;
+    setCargandoCalculoDebido(true);
+    try {
+      const { lineas } = await obtenerCalculoVerificacionOrden(orden.id);
+      setCalculosDebidos(Object.fromEntries(lineas.map((linea) => [linea.id_detalle_op, linea])));
+    } catch (error) {
+      toast.error(mensajeErrorOrdenes(error, "No se pudo calcular la cantidad que debió hacerse."));
+    } finally {
+      setCargandoCalculoDebido(false);
+    }
   };
 
-  /** C4 — ¿Cada línea de "Cantidad que salió" trae un número ≥ 0? El vacío o
-      un negativo dejan el error en rojo en la propia línea y bloquean el botón
-      Completar (la red de seguridad de `confirmarCompletar` repite esto). */
-  const realesOk = (o: OrdenProduccion | null): boolean =>
-    !!o && o.lineas.every((_, i) => {
-      const txt = (reales[i] ?? "").trim();
-      const n = Number(txt);
-      return txt !== "" && Number.isFinite(n) && n >= 0;
+  const cantidadesVerificacionOk = (o: OrdenProduccion | null): boolean =>
+    !!o && o.lineas.every((linea, i) => {
+      const realTexto = (reales[i] ?? "").trim();
+      const real = Number(realTexto);
+      const calculo = linea.idDetalleOp == null ? undefined : calculosDebidos[linea.idDetalleOp];
+      return realTexto !== ""
+        && Number.isSafeInteger(real)
+        && real >= 0
+        && calculo != null
+        && Number.isSafeInteger(calculo.cantidad_debida)
+        && calculo.cantidad_debida >= 0;
     });
-  // Modal de completar: un Pedido se revisa y confirma (solo lectura, C3); una
-  // Preparación en lote necesita todas sus "Cantidad que salió" ≥ 0 (C4).
   const completarEsPedido = completarItem?.tipo === "pedido";
-  const completarOk = !completarItem || completarEsPedido || realesOk(completarItem);
+  const completarOk = !completarItem || completarEsPedido
+    || (!cargandoCalculoDebido && cantidadesVerificacionOk(completarItem));
 
-  /** Completa la orden contra la API (`POST /completar`): la producción real
-      por línea (solo Preparación) y todo el inventario lo aplica el servidor
-      (insumos, bebidas y stock del Producto Insumo producido). La merma la
-      registra el backend en Productos no conformes en la misma transacción;
-      aquí solo se avisa y se recarga (recargarProduccion incluye CPN). */
+  /** Verifica la producción; el backend aplica stock y registra la merma en
+      la misma transacción. */
   const confirmarCompletar = async () => {
     if (!completarItem) return;
     const orden = ordenes.find((o) => o.id === completarItem.id);
     if (!orden) return;
 
-    // 2) Producción real: SOLO preparación en lote (C4). Cada línea necesita
-    // su "Cantidad que salió" ≥ 0; el vacío o un negativo bloquean (el botón
-    // ya viene deshabilitado, esto es la red de seguridad). Un pedido no pide
-    // cantidades: su modal es de solo lectura y sus líneas no llevan real ni
-    // merma.
-    if (orden.tipo === "preparacion" && !realesOk(orden)) {
-      toast.error("Cada línea necesita su «Cantidad que salió» (0 o más)");
+    if (orden.tipo === "preparacion" && !cantidadesVerificacionOk(orden)) {
+      toast.error("Indica una cantidad real entera mayor o igual a cero.");
       return;
     }
 
@@ -1597,25 +1800,19 @@ export function OrdenProduccionScreen({
       // aquí solo se avisa por línea (esa cantidad nunca entró al stock).
       if (orden.tipo === "preparacion") {
         orden.lineas.forEach((l, i) => {
-          const merma = Math.max(0, Math.round((l.cantidadEstimada - Number(reales[i])) * 1000) / 1000);
+          const calculo = l.idDetalleOp == null ? undefined : calculosDebidos[l.idDetalleOp];
+          const merma = Math.max(0, Number(calculo?.cantidad_debida ?? 0) - Number(reales[i]));
           if (merma > 0) toast.success(`Se registró la merma de ${l.nombre} en Productos no conformes`);
         });
       }
       setCompletarItem(null);
       setReales({});
+      setCalculosDebidos({});
       // El stock de los insumos cambió en la base.
       await recargarProduccion?.();
     } catch (error) {
       toast.error(mensajeErrorOrdenes(error, "No se pudo completar la orden."));
     }
-  };
-
-  /** Cambio de estado desde el listado: solo las transiciones del backend.
-      "En proceso" llama a Iniciar y "Completada" abre el modal de producción
-      real; "Cancelada" solo llega por el flujo de Dar de baja. */
-  const applyTransition = (id: string, next: EstadoOrden) => {
-    if (next === "en-proceso") return iniciar(id);
-    if (next === "completada") return abrirCompletar(id);
   };
 
   // ── Dar de baja (no se toca el flujo) ──────────────────────────────
@@ -1762,7 +1959,7 @@ export function OrdenProduccionScreen({
                 </td></tr>
               ) : paged.map(o => {
                 const soloPendiente = o.estadoOrden === "pendiente";
-                const puedeBaja = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
+                const puedeCancelar = o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
                 // Bloque 4: ¿faltan insumos para esta orden según el stock de
@@ -1785,7 +1982,7 @@ export function OrdenProduccionScreen({
                       <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
                         o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
                       }`}>
-                        {TIPO_LABEL[o.tipo]}
+                        {etiquetaAsignacion(o, productos)}
                       </span>
                     </td>
                     <td className="px-4 py-2">
@@ -1817,23 +2014,9 @@ export function OrdenProduccionScreen({
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-col items-start gap-1.5">
-                        {/* Pill de estado (diseño de Proveedores). La transición
-                            se aplica igual que antes; sin transiciones (estados
-                            finales) la pill queda sin menú. */}
-                        <EstadoSelect
-                          value={o.estadoOrden}
-                          onChange={next => {
-                            if (next === o.estadoOrden) return;
-                            applyTransition(o.id, next);
-                          }}
-                          options={[
-                            { value: o.estadoOrden, label: ESTADO_LABEL[o.estadoOrden], color: ESTADO_COLOR[o.estadoOrden] },
-                            ...VALID_TRANSITIONS[o.estadoOrden].map(n => ({
-                              value: n, label: ESTADO_LABEL[n], color: ESTADO_COLOR[n],
-                            })),
-                          ]}
-                          disabled={VALID_TRANSITIONS[o.estadoOrden].length === 0}
-                        />
+                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
+                          {ESTADO_LABEL[o.estadoOrden]}
+                        </span>
                         {/* Bloque 4: la fila dice enseguida si a la orden aún
                             no le alcanza el inventario (solo Pendientes).
                             El título detalla cada faltante al pasar el mouse. */}
@@ -1854,30 +2037,50 @@ export function OrdenProduccionScreen({
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Bloque 4: un pedido de cliente NO se elimina: su
-                            retiro es "Dar de baja" (el botón de al lado).
-                            Solo las preparaciones conservan Eliminar. */}
+                        {o.estadoOrden === "pendiente" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void abrirGenerar(o);
+                            }}
+                            title="Generar orden de producción"
+                            aria-label="Generar orden de producción"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
+                        )}
+                        {o.estadoOrden === "por-verificar" && (
+                          <button
+                            type="button"
+                            onClick={() => abrirCompletar(o.id)}
+                            title="Verificar producción"
+                            aria-label="Verificar producción"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
                         <ActionIcons
                           onView={() => setDetailItem(o)}
-                          onEdit={canEdit ? () => setEditItem({ ...o }) : undefined}
-                          editDisabled={!soloPendiente}
-                          editTitle={soloPendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
-                          onDelete={canDelete && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
-                          deleteDisabled={!soloPendiente}
+                          onDelete={canDelete && soloPendiente && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
                           deleteTitle={
                             o.tipo === "pedido"
                               ? "Los pedidos no se eliminan: usa Dar de baja"
-                              : soloPendiente
-                                ? "Eliminar"
-                                : "Solo se puede eliminar en estado Pendiente"
+                              : "Eliminar preparación pendiente"
                           }
                         />
-                        <button onClick={() => puedeBaja && openDarBaja(o)}
-                          disabled={!puedeBaja}
-                          title={puedeBaja ? "Dar de baja" : "No se puede dar de baja en este estado"}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                          <PackageX className="w-4 h-4" />
-                        </button>
+                        {puedeCancelar && (
+                          <button
+                            type="button"
+                            onClick={() => openDarBaja(o)}
+                            title="Cancelar orden"
+                            aria-label="Cancelar orden"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1893,6 +2096,147 @@ export function OrdenProduccionScreen({
       {filtradas.length > 0 && (
         <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
+
+      <AnimatePresence>
+        {generarItem && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: .95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: .95, opacity: 0 }}
+                transition={{ duration: .15 }}
+                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div>
+                    <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
+                      Generar orden — {generarItem.id}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {generarItem.tipo === "pedido" ? "Pedido · cantidades bloqueadas" : "Preparación · ajusta las cantidades según el inventario"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGenerarItem(null)}
+                    aria-label="Cerrar generación de orden"
+                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                      Fecha y hora límite (hora de Bogotá)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      min={minFechaLimiteGenerar}
+                      max={generarItem.tipo === "pedido" && recogidaFuturaGenerar
+                        ? fechaRecogidaGenerar?.slice(0, 16)
+                        : undefined}
+                      value={fechaLimiteGenerar}
+                      onChange={(event) => setFechaLimiteGenerar(event.target.value)}
+                      className={iCls}
+                    />
+                    {!fechaLimiteGenerar && (
+                      <p role="alert" className="mt-1 text-xs font-semibold text-red-600">
+                        Indica la fecha y hora límite
+                      </p>
+                    )}
+                    {generarItem.tipo === "pedido" && recogidaFuturaGenerar
+                      && fechaLimiteGenerar > (fechaRecogidaGenerar?.slice(0, 16) ?? "") && (
+                        <p role="alert" className="mt-1 text-xs font-semibold text-red-600">
+                          La fecha límite no puede ser posterior a la hora de recogida.
+                        </p>
+                      )}
+                  </div>
+                  {recogidaVencidaGenerar && (
+                    <p role="status" className="text-xs font-semibold text-amber-700">
+                      La hora de recogida ya pasó; esta orden va retrasada
+                    </p>
+                  )}
+                  {cargandoCapacidadGenerar ? (
+                    <p className="text-sm text-muted-foreground">Calculando máximo producible…</p>
+                  ) : generarItem.lineas.map((linea) => {
+                    const idDetalle = linea.idDetalleOp as number;
+                    const cantidad = Number(cantidadesGenerar[idDetalle] ?? "");
+                    const maximo = maximosGenerar[idDetalle];
+                    const excedeMaximo = generarItem.tipo === "preparacion"
+                      && maximo != null
+                      && Number.isFinite(cantidad)
+                      && cantidad > maximo;
+                    return (
+                      <div key={idDetalle} className="p-4 border border-border rounded-2xl bg-card space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold text-foreground">{linea.nombre}</p>
+                          {maximo != null && generarItem.tipo === "preparacion" && (
+                            <span className="text-xs font-semibold text-muted-foreground text-right">
+                              Máximo: {fmtCant(maximo, linea.unidad)}
+                            </span>
+                          )}
+                        </div>
+                        <label className="block text-xs font-semibold text-muted-foreground">
+                          Cantidad a producir ({linea.unidad})
+                        </label>
+                        <input
+                          type="number"
+                          min={generarItem.tipo === "pedido" ? linea.cantidadEstimada : 1}
+                          max={generarItem.tipo === "pedido" ? linea.cantidadEstimada : maximo ?? undefined}
+                          step={esDecimal(linea.unidad) ? "0.01" : "1"}
+                          value={cantidadesGenerar[idDetalle] ?? String(linea.cantidadEstimada)}
+                          readOnly={generarItem.tipo === "pedido"}
+                          onChange={(event) => {
+                            setCantidadesGenerar((actual) => ({ ...actual, [idDetalle]: limpiarNumeroInput(event.target.value) }));
+                            setFaltantesGenerar([]);
+                          }}
+                          className={iCls + (excedeMaximo ? " ring-2 ring-red-400" : "")}
+                        />
+                        {excedeMaximo && (
+                          <p role="alert" className="text-xs font-semibold text-red-700">
+                            Solo hay insumos para {fmtCant(maximo, linea.unidad)} de {linea.nombre}. Disminuye la cantidad para continuar.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {faltantesGenerar.length > 0 && <AvisoFaltantes faltantes={faltantesGenerar} />}
+                  {generarItem.tipo === "preparacion" && generarItem.lineas.some((linea) => {
+                    const maximo = maximosGenerar[linea.idDetalleOp as number];
+                    return maximo === 0;
+                  }) && (
+                    <p role="alert" className="text-xs font-semibold text-red-700">
+                      El inventario actual no permite producir la cantidad mínima de una o más líneas.
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-3 px-5 py-4 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setGenerarItem(null)}
+                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!generacionValida}
+                    onClick={() => void confirmarGenerar()}
+                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors ${
+                      generacionValida ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
+                    }`}
+                  >
+                    {generando ? "Generando…" : "Generar orden"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ── Modal: Crear ── */}
       <AnimatePresence>
@@ -1918,6 +2262,7 @@ export function OrdenProduccionScreen({
                     key={idx}
                     linea={l}
                     insumos={insumos}
+                    productos={productos}
                     fichas={fichasPorProducto}
                     puedeQuitar={form.lineas.length > 1}
                     onChange={(nl) => setForm(p => ({ ...p, lineas: p.lineas.map((x, i) => i === idx ? nl : x) }))}
@@ -1941,7 +2286,7 @@ export function OrdenProduccionScreen({
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={tCls} />
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Toda orden nace <strong>Pendiente</strong>. Se avanza a En proceso y luego a Completada.
+                Toda orden nace Pendiente. Se avanza a En proceso, luego a Por verificar y finalmente a Completada.
               </p>
             </div>
           ),
@@ -1978,6 +2323,7 @@ export function OrdenProduccionScreen({
                       key={idx}
                       linea={l}
                       insumos={insumos}
+                      productos={productos}
                       fichas={fichasPorProducto}
                       puedeQuitar={editItem.lineas.length > 1}
                       onChange={(nl) => setEditItem(x => x && ({ ...x, lineas: x.lineas.map((y, i) => i === idx ? nl : y) }))}
@@ -2028,10 +2374,7 @@ export function OrdenProduccionScreen({
         })}
       </AnimatePresence>
 
-      {/* ── Modal: Completar ── Pedido = solo lectura (C3); Preparación en
-          lote = "Cantidad que salió" obligatoria y ≥ 0 con error en tiempo
-          real (C4). El bloque rojo de "completar igual" ya no existe (C5):
-          el inventario se valida en el Inicio. */}
+      {/* ── Modal: Verificar ── */}
       <AnimatePresence>
         {completarItem && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -2040,88 +2383,106 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {completarEsPedido ? "Completar pedido" : "Registrar producción real"} — {completarItem.id}
+                  Verificar orden — {completarItem.id}
                 </h3>
-                <button onClick={() => { setCompletarItem(null); setReales({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted p-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground">Tipo</p>
+                    <p className="text-sm font-semibold text-foreground">{completarEsPedido ? "Pedido" : "Preparación"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground">
+                      {completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
+                    </p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {completarEsPedido
+                        ? `${completarItem.fechaSolicitada.split("-").reverse().join("/")}${completarItem.horaSolicitada ? ` ${hora12(completarItem.horaSolicitada)}` : ""}`
+                        : fmtFechaHoraLocal(completarItem.fechaLimite)}
+                    </p>
+                  </div>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {completarEsPedido
-                    ? "Solo lectura: revisa las líneas del pedido y confirma. Las pizzas y las lasañas se preparan con sus insumos."
-                    : "Al completar, al stock del Producto Insumo sube solo la cantidad real; la merma no existe como producto. «Cantidad que salió» es obligatoria."}
+                    ? "Revisa los productos y confirma la orden. El pedido no modifica cantidades ni merma."
+                    : "La cantidad que debí hacer se calcula con los insumos usados al Generar y no se puede editar. La merma es esa cantidad menos la cantidad real, mínimo 0."}
                 </p>
+                {cargandoCalculoDebido && !completarEsPedido && (
+                  <p role="status" className="text-sm text-muted-foreground">Calculando la cantidad que debí hacer…</p>
+                )}
                 {completarEsPedido && completarItem.lineas.some((linea) => esBebida(linea, productos)) && (
                   <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
                     El stock de las bebidas se descontó al aceptar la venta.
                   </p>
                 )}
                 {completarItem.lineas.map((l, i) => completarEsPedido ? (
-                  // ── C3: pedido en solo lectura (producto, tamaño, cantidad)
                   <div key={i} className="p-4 border border-border rounded-2xl bg-card">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {[l.tamano ? `Tamaño ${l.tamano}` : "Tamaño único",
-                            l.porciones ? `${l.porciones} porciones` : null].filter(Boolean).join(" · ")}
-                        </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
                         <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
                       </div>
                     </div>
-                    {l.sinFicha && (
-                      <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
-                    )}
                   </div>
                 ) : (
-                  // ── C4: preparación en lote con "Cantidad que salió" ──
                   (() => {
-                    const txt = reales[i] ?? "";
-                    const n = Number(txt);
-                    const vacio = txt.trim() === "";
-                    // Vacío o negativo = error en tiempo real y Completar
-                    // deshabilitado (lo revalida `confirmarCompletar`).
-                    const invalido = vacio || !Number.isFinite(n) || n < 0;
-                    const real = invalido ? 0 : n;
-                    const sobra = !invalido && real > l.cantidadEstimada;
-                    const merma = Math.max(0, Math.round((l.cantidadEstimada - real) * 1000) / 1000);
+                    const realTxt = reales[i] ?? "";
+                    const calculo = l.idDetalleOp == null ? undefined : calculosDebidos[l.idDetalleOp];
+                    const debida = calculo?.cantidad_debida;
+                    const real = Number(realTxt);
+                    const realInvalida = realTxt.trim() === "" || !Number.isSafeInteger(real) || real < 0;
+                    const invalido = realInvalida || debida == null;
+                    const merma = invalido ? 0 : Math.max(0, debida - real);
+                    const sobrante = !invalido && real > debida;
                     return (
                       <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
                         <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad estimada</label>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad estimada original</label>
                             <input value={fmtCant(l.cantidadEstimada, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad que salió ({l.unidad})
+                              Cantidad que debí hacer ({l.unidad})
+                            </label>
+                            <input value={debida == null ? "" : fmtCant(debida, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
+                            {calculo?.calculada_al_verificar && (
+                              <p className="mt-1 text-[11px] text-muted-foreground">Calculada al verificar para esta orden antigua.</p>
+                            )}
+                            {debida != null && debida < l.cantidadEstimada && (
+                              <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                El cálculo es menor que la cantidad estimada; la merma se calcula desde este valor.
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                              Cantidad real hecha ({l.unidad})
                             </label>
                             <input
-                              type="number" min={0}
-                              step={esDecimal(l.unidad) ? 0.01 : 1}
-                              // Texto con vacío permitido (punto B1); se limpian
-                              // los ceros a la izquierda al teclear.
-                              value={txt}
+                              type="number" min={0} step={1}
+                              value={realTxt}
                               placeholder="0"
                               onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
-                              className={iCls + (invalido ? " ring-2 ring-red-400" : "")}
+                              className={iCls + (realInvalida ? " ring-2 ring-red-400" : "")}
                             />
-                            {invalido && (
+                            {realInvalida && (
                               <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                {vacio
-                                  ? "Obligatoria: escribe la cantidad que salió (0 o más)"
-                                  : "No se aceptan cantidades negativas"}
+                                Ingresa un entero mayor o igual a cero.
                               </p>
                             )}
                           </div>
                         </div>
                         {!invalido && (
-                          <p className={`text-xs font-semibold ${sobra ? "text-blue-600" : merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                            {sobra
-                              ? `Sobrante: ${fmtCant(real - l.cantidadEstimada, l.unidad)} — se confirma al completar y la merma queda en 0`
+                          <p className={`text-xs font-semibold ${sobrante ? "text-blue-600" : merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                            {sobrante
+                              ? `Sobrante: ${fmtCant(real - debida, l.unidad)} — la merma queda en 0`
                               : `Merma: ${fmtCant(merma, l.unidad)}`}
                           </p>
                         )}
@@ -2131,20 +2492,28 @@ export function OrdenProduccionScreen({
                 ))}
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
-                <button onClick={() => { setCompletarItem(null); setReales({}); }}
+                <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }}
                   className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
                 <button
-                  disabled={!completarOk}
+                  disabled={!completarOk || cargandoCalculoDebido}
                   onClick={() => {
                     if (!completarOk) return;
                     if (!completarEsPedido) {
-                      // C4: con una línea en 0, todo lo planificado de esa
-                      // línea se registra como merma.
-                      if (completarItem.lineas.some((_, i) => Number(reales[i]) === 0) &&
+                      if (completarItem.lineas.some((linea, i) => {
+                        const debida = linea.idDetalleOp == null
+                          ? 0
+                          : calculosDebidos[linea.idDetalleOp]?.cantidad_debida ?? 0;
+                        return Number(reales[i]) === 0 && debida > 0;
+                      }) &&
                           !window.confirm("Se registrará todo como merma. ¿Completar la orden?")) return;
-                      const haySobrante = completarItem.lineas.some((l, i) => Number(reales[i]) > l.cantidadEstimada);
+                      const haySobrante = completarItem.lineas.some((linea, i) => {
+                        const debida = linea.idDetalleOp == null
+                          ? 0
+                          : calculosDebidos[linea.idDetalleOp]?.cantidad_debida ?? 0;
+                        return Number(reales[i]) > debida;
+                      });
                       if (haySobrante && !window.confirm(
                         "Hay líneas con más producción que la estimada. La merma de esas líneas queda en 0. ¿Completar la orden?",
                       )) return;
@@ -2154,7 +2523,7 @@ export function OrdenProduccionScreen({
                   className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
-                  Completar orden
+                  Verificar orden
                 </button>
               </div>
             </motion.div>
@@ -2280,7 +2649,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{TIPO_LABEL[detailItem.tipo]}</span>
+                  <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
                   <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
                   <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {fmtDT(ultimoCambio(detailItem))}</span>
                 </div>
@@ -2296,6 +2665,7 @@ export function OrdenProduccionScreen({
                   {[
                     { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
                     { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
+                    { l: "Fecha límite", v: fmtDT(detailItem.fechaLimite) },
                     { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
                   ].map(({ l, v }) => (
                     <div key={l}>
@@ -2343,6 +2713,11 @@ export function OrdenProduccionScreen({
                           <div className="text-right shrink-0">
                             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimada</p>
                             <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
+                            {l.cantidadDebida != null && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                Debí hacer: {fmtCant(l.cantidadDebida, l.unidad)}
+                              </p>
+                            )}
                             {l.cantidadReal != null && (
                               <>
                                 <p className="text-[11px] text-muted-foreground mt-0.5">Real: {fmtCant(l.cantidadReal, l.unidad)}</p>

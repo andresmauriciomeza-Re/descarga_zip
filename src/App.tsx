@@ -118,7 +118,7 @@ import {
 } from "@/features/insumos/pages/GestionInsumosScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
-import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos } from "@/features/productos/services/productosApi";
+import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/productos/services/productosApi";
 import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/insumos/services/insumosApi";
 import { mapearFichasApi, obtenerFichasVigentes } from "@/features/productos/services/fichasApi";
 import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/orden-produccion/services/ordenesProduccionApi";
@@ -8095,7 +8095,7 @@ export default function App() {
     return actualizado;
   };
 
-  const cambiarEstadoEnServidor = async (id: string, estado: Producto["estado"]) => {
+  const cambiarEstadoEnServidor = async (id: string, estado: EstadoProductoManual) => {
     const actualizado = await cambiarEstadoProducto(id, estado);
     aplicarProductoRespuesta(actualizado);
     await recargarCatalogoTrasCambio();
@@ -8636,13 +8636,24 @@ export default function App() {
       el stock de los insumos cambió en la base. */
   const recargarProduccion = async () => {
     // CPN también: completar una preparación con merma crea su registro.
-    await Promise.all([cargarInsumosFichas(productos), cargarOrdenes(), cargarNoConformes()]);
+    const productosCargados = await recargarInventarioProductos();
+    await Promise.all([
+      cargarInsumosFichas(productosCargados),
+      cargarOrdenes(),
+      cargarNoConformes(),
+    ]);
+  };
+
+  const recargarInventarioProductos = async () => {
+    const productosCargados = await cargarProductosGestion();
+    await recargarCatalogoTrasCambio();
+    return productosCargados;
   };
 
   /** Crear o eliminar un producto no conforme manual mueve stock en la base
       (producto de reventa o insumo): se recargan productos e insumos. */
   const recargarInventarioCpn = async () => {
-    const productosCargados = await cargarProductosGestion();
+    const productosCargados = await recargarInventarioProductos();
     await cargarInsumosFichas(productosCargados);
   };
 
@@ -9966,7 +9977,7 @@ export default function App() {
                       categorias={categoriasCatalogo}
                       onCrearProducto={crearProductoDesdeCompras}
                       categoriasInsumo={categoriasInsumo}
-                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onRecargarCatalogo={recargarInventarioCpn}
                       // Cambios de estado (p. ej. marcar Completado a mano):
                       // la lista completa se resincroniza con el backend.
                       onRecargarOrdenes={() => void cargarOrdenesCompra()}
@@ -10103,7 +10114,7 @@ export default function App() {
                       categorias={categoriasCatalogo}
                       onCrearProducto={crearProductoDesdeCompras}
                       categoriasInsumo={categoriasInsumo}
-                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onRecargarCatalogo={recargarInventarioCpn}
                       // Tras anular una compra asociada a una OC se recarga
                       // la lista COMPLETA de órdenes: el badge (Completado ↔
                       // Enviado) y el botón "OC" salen del backend.
@@ -10130,7 +10141,7 @@ export default function App() {
                       categorias={categoriasCatalogo}
                       onCrearProducto={crearProductoDesdeCompras}
                       categoriasInsumo={categoriasInsumo}
-                      onRecargarCatalogo={recargarCatalogoTrasCambio}
+                      onRecargarCatalogo={recargarInventarioCpn}
                       onBack={() => navigate("gestion-compra")}
                     />
                   )}
@@ -10154,6 +10165,7 @@ export default function App() {
                       {...getPerms("ventas-pedidos")}
                       pedidos={ventas}
                       setPedidos={setVentas}
+                      onInventarioCambiado={recargarInventarioProductos}
                       productos={productosCatalogo
                         .filter((producto) => producto.estado === "Disponible")
                         .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
@@ -10176,6 +10188,7 @@ export default function App() {
                       onAbierta={() => setDevolucionAAbrir(null)}
                       onRecargarOrdenes={cargarOrdenes}
                       onRecargarNoConformes={cargarNoConformes}
+                      onRecargarInventario={recargarInventarioProductos}
                     />
                   )}
                   {screen === "gestion-productos" && (

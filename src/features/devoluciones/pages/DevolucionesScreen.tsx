@@ -96,6 +96,7 @@ export function DevolucionesScreen({
   onAbierta,
   onRecargarOrdenes,
   onRecargarNoConformes,
+  onRecargarInventario,
 }: {
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
@@ -125,6 +126,8 @@ export function DevolucionesScreen({
   /** Recarga Productos no conformes desde la API (las líneas «Producto malo»
       las registra el backend al resolver la devolución). */
   onRecargarNoConformes?: () => Promise<void>;
+  /** Refresca el stock y estado de productos que pudo cambiar la devolución. */
+  onRecargarInventario?: () => Promise<unknown>;
 }) {
   const devoluciones = pedidos.filter((p) => p.estado === "Devolucion");
   const pendientes   = devoluciones.filter((d) => !d.devolucionResuelta);
@@ -614,6 +617,7 @@ export function DevolucionesScreen({
     if (lineasDev.some(({ motivo }) => motivo === "Producto malo")) {
       void onRecargarNoConformes?.();
     }
+    if (sumas.size > 0 || bajas.size > 0) void onRecargarInventario?.();
 
     setResumen({
       unidadesDevueltas: totalDevueltos,

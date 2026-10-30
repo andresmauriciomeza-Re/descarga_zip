@@ -1,6 +1,8 @@
 import api from "@/shared/services/api";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 
+export type EstadoProductoManual = "Descontinuado" | "Automático";
+
 export interface ProductoApi {
   id_producto: number | string;
   id_categoria: number | string;
@@ -170,7 +172,7 @@ export const editarProducto = async (
 
 export const cambiarEstadoProducto = async (
   id: string,
-  estado: Producto["estado"],
+  estado: EstadoProductoManual,
 ): Promise<Producto> => {
   const { data } = await api.patch<ProductoApi | { producto: ProductoApi } | { mensaje?: string }>(
     `/productos/${encodeURIComponent(id)}/estado`,

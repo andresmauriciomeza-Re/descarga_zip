@@ -8,6 +8,7 @@ import {
   Trash2,
   AlertCircle,
   Check,
+  ChevronDown,
   // Icono del indicador de imágenes múltiples del listado (P13).
   Image as ImageIcon,
 } from "lucide-react";
@@ -42,7 +43,12 @@ import {
   ESTADO_COLORES,
   type EstadoProducto,
 } from "@/shared/components/EstadoProducto";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/ActionIcons";
@@ -61,8 +67,10 @@ import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
 // Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
 // ni espacios de más) compartida con Insumos y Compras.
 import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/nombres";
-import { mensajeErrorProductos } from "@/features/productos/services/productosApi";
-import { crearOrdenPreparacionApi } from "@/features/orden-produccion/services/ordenesProduccionApi";
+import {
+  mensajeErrorProductos,
+  type EstadoProductoManual,
+} from "@/features/productos/services/productosApi";
 // Bloque 4: las fichas de producto se guardan contra la API (POST /fichas) y
 // las guardadas en local (respaldo fase 1) se suben con "Subir ficha guardada".
 import {
@@ -227,11 +235,6 @@ export interface Producto {
       `productoApiAProducto` / `limiteStockDe`). No confundir con
       `stockDisponible`, que es el stock del panel (siempre un número). */
   stockApi?: number;
-  /** SOLO al CREAR un Producto insumo (pizza/lasaña): cantidad inicial que se
-      manda a Orden de Producción para hacer esas unidades (pre-hechas). No se
-      guarda en el producto; `handleCreate` la usa para crear una orden y luego
-      se descarta. Vacío/0 = no se crea orden. */
-  cantidadInicialProduccion?: number;
   estado: EstadoProducto;
 }
 
@@ -928,7 +931,7 @@ export function GestionProductosScreen({
   onReintentarCarga?: () => void;
   onCrearEnServidor?: (producto: Producto) => Promise<Producto>;
   onEditarEnServidor?: (producto: Producto) => Promise<Producto>;
-  onCambiarEstadoEnServidor?: (id: string, estado: EstadoProducto) => Promise<Producto>;
+  onCambiarEstadoEnServidor?: (id: string, estado: EstadoProductoManual) => Promise<Producto>;
   onDescontinuarEnServidor?: (id: string) => Promise<Producto>;
   canCreate?: boolean;
   canEdit?: boolean;
@@ -957,7 +960,7 @@ export function GestionProductosScreen({
   // un número es una versión guardada, que se ve en solo lectura.
   const [editFichaSel, setEditFichaSel] = useState<number | "borrador">("borrador");
   const [confirmEstado, setConfirmEstado] = useState<{
-    id: string; nombre: string; current: EstadoProducto; next: EstadoProducto;
+    id: string; nombre: string; current: EstadoProducto; next: EstadoProductoManual;
   } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
@@ -1050,7 +1053,7 @@ export function GestionProductosScreen({
     unidadCompra: "und",
     unidadesPorEmpaque: undefined,
     stockDisponible: 0,
-    estado: "Disponible",
+    estado: "No disponible",
   });
   const [form, setForm] = useState(emptyForm());
     // "¿Tiene ficha técnica?" (Crear): solo aparece cuando la categoría NO está
@@ -1560,25 +1563,6 @@ export function GestionProductosScreen({
           toast.error(mensajeErrorProductos(error, "El producto se creó pero su ficha técnica no se pudo guardar."));
         }
       }
-      // Cantidad inicial a producir (solo Producto insumo): si se pidió, se
-      // manda a Orden de Producción como "Preparación en lote" para hacer esas
-      // unidades (pre-hechas). Al completarse la orden, el backend suma la
-      // cantidad real al stock del producto. Un fallo aquí NO revierte el
-      // producto ya creado; solo se avisa.
-      const cantidadInicial = Number(form.cantidadInicialProduccion ?? 0);
-      if (tipoFinal === TIPOS_PRODUCTO[0] && Number.isFinite(cantidadInicial) && cantidadInicial > 0) {
-        try {
-          const hoy = new Date().toISOString().slice(0, 10);
-          await crearOrdenPreparacionApi({
-            fecha_solicitada: hoy,
-            observacion: `Producción inicial de ${creado.nombre}`,
-            lineas: [{ id: creado.id, cantidad: Math.round(cantidadInicial) }],
-          });
-          toast.success(`Cantidad enviada a Orden de Producción: ${Math.round(cantidadInicial)} ${creado.nombre}`);
-        } catch (error) {
-          toast.error(mensajeErrorProductos(error, "El producto se creó pero la orden de producción no se pudo crear."));
-        }
-      }
       setShowCreate(false);
       setForm(emptyForm());
       resetFichaForm();
@@ -1899,35 +1883,6 @@ export function GestionProductosScreen({
             )}
           </div>
         </div>
-        {/* Cantidad inicial a producir (solo Crear, solo Producto insumo:
-            pizza/lasaña). Esas unidades se mandan a Orden de Producción para
-            hacerlas (pre-hechas); al completarse la orden suben al stock del
-            producto. Vacío = no se crea orden. */}
-        {esCrear && !esTerminado && (
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-              Cantidad inicial a producir (opcional)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={values.cantidadInicialProduccion ?? ""}
-              placeholder="Ej: 10"
-              onChange={(e) =>
-                onChange(
-                  "cantidadInicialProduccion",
-                  e.target.value === "" ? 0 : Number(e.target.value),
-                )
-              }
-              disabled={readOnly}
-              className={readOnly ? roCls : inputCls}
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Si la llenas, se envía a Orden de Producción para preparar esa cantidad.
-            </p>
-          </div>
-        )}
         {/* Contenido de la bebida (ej. 400 ml, 1.5 L). Obligatorio en Crear;
             en Editar/Ver detalle se muestra y se puede ajustar. Las pizzas y
             lasañas no lo llevan. */}
@@ -2971,16 +2926,16 @@ export function GestionProductosScreen({
                 {[
                   { h: "Nombre", w: "w-[16.5%]" },
                   { h: "Tipo", w: "w-[14.5%]" },
-                  { h: "Ficha técnica", w: "w-[9.5%]" },
-                  { h: "Categoría", w: "w-[7.5%]" },
+                  { h: "Ficha técnica", w: "w-[12%]" },
+                  { h: "Categoría", w: "w-[9%]" },
                   { h: "Precio de venta", w: "w-[9%]" },
-                  { h: "Stock", w: "w-[15%]", pl: "pl-10" },
+                  { h: "Stock", w: "w-[11%]", pl: "pl-10" },
                   { h: "Estado", w: "w-[16%]" },
                   { h: "Acciones", w: "w-[12%]" },
                 ].map(({ h, w, pl }) => (
                   <th
                     key={h}
-                    className={`px-4 py-2 text-left font-semibold whitespace-nowrap ${w} ${pl ?? ""}`}
+                    className={`px-4 py-2 text-left font-semibold whitespace-normal break-words leading-tight ${w} ${pl ?? ""}`}
                   >
                     {h}
                   </th>
@@ -3095,30 +3050,50 @@ export function GestionProductosScreen({
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      {/* Pill de estado (diseño de Proveedores). El estado se
-                          elige de la lista; al elegir se confirma en el modal
-                          "pasará de X a Y". Sin permiso de edición queda la
-                          pill sin menú. */}
-                      <EstadoSelect
-                        value={p.estado}
-                        disabled={!canEdit}
-                        onChange={(next) =>
-                          setConfirmEstado({ id: p.id, nombre: p.nombre, current: p.estado, next })
-                        }
-                        options={ESTADOS_PRODUCTO.map((e) => ({
-                          value: e,
-                          label: e,
-                          color: ESTADO_PRODUCTO_CLASES[e],
-                          disabled: e === "Disponible" && tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0,
-                          help: e === "Disponible" && tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0
-                            ? "Se habilita al registrar una compra con precio de venta"
-                            : undefined,
-                        }))}
-                      />
-                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] && p.precioUnitario <= 0 && (
-                        <p className="mt-1 max-w-40 text-[10px] leading-tight text-muted-foreground">
-                          Se habilita al registrar una compra con precio de venta
-                        </p>
+                      {canEdit ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Acciones de estado (actual: ${p.estado}) para ${p.nombre}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold whitespace-nowrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              style={{
+                                backgroundColor: `${ESTADO_COLORES[p.estado]}1A`,
+                                color: ESTADO_COLORES[p.estado],
+                                fontSize: 13,
+                              }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ESTADO_COLORES[p.estado] }} />
+                              {p.estado}
+                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              disabled={p.estado === "Descontinuado"}
+                              onSelect={() => setConfirmEstado({
+                                id: p.id,
+                                nombre: p.nombre,
+                                current: p.estado,
+                                next: "Descontinuado",
+                              })}
+                            >
+                              Descontinuado
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setConfirmEstado({
+                                id: p.id,
+                                nombre: p.nombre,
+                                current: p.estado,
+                                next: "Automático",
+                              })}
+                            >
+                              Disponible
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <EstadoBadge estado={p.estado} />
                       )}
                     </td>
                     <td className="px-4 py-2.5">
@@ -3211,7 +3186,13 @@ export function GestionProductosScreen({
               <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
                 <EstadoBadge estado={confirmEstado.current} />
                 <span className="text-muted-foreground text-sm">→</span>
-                <EstadoBadge estado={confirmEstado.next} />
+                {confirmEstado.next === "Descontinuado" ? (
+                  <EstadoBadge estado={confirmEstado.next} />
+                ) : (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold whitespace-nowrap ${ESTADO_PRODUCTO_CLASES["No disponible"]}`} style={{ fontSize: 13 }}>
+                    Automático
+                  </span>
+                )}
               </div>
               {confirmEstado.next === "Descontinuado" && (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
@@ -3233,9 +3214,13 @@ export function GestionProductosScreen({
                   setGuardando(true);
                   void (async () => {
                     try {
-                      await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
+                      const actualizado = await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
                       setConfirmEstado(null);
-                      toast.success(`Estado cambiado a: ${confirmEstado.next}`);
+                      toast.success(
+                        confirmEstado.next === "Automático"
+                          ? `Estado recalculado: ${actualizado.estado}`
+                          : `Estado cambiado a: ${actualizado.estado}`,
+                      );
                     } catch (error) {
                       toast.error(mensajeErrorProductos(error, "No se pudo cambiar el estado."));
                     } finally {
