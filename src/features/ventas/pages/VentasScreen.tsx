@@ -1372,6 +1372,7 @@ export function VentasScreen({
   pedidos,
   setPedidos,
   productos,
+  onInventarioCambiado,
   onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit = true,
@@ -1380,6 +1381,7 @@ export function VentasScreen({
   pedidos: Venta[];
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
   productos: ProductoMenu[];
+  onInventarioCambiado?: () => Promise<unknown>;
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
@@ -1454,6 +1456,7 @@ export function VentasScreen({
       await verificarVentaApi(id, payload);
       const respuesta = await (await import("../services/ventasApi")).obtenerVentasPanel();
       setPedidos(respuesta);
+      if (payload.accion === "aceptar") await onInventarioCambiado?.();
       toast.success(payload.accion === "aceptar" ? "Pago aprobado — orden de producción creada" : payload.accion === "monto_faltante" ? "Se notificó el saldo pendiente al cliente" : "Venta rechazada");
       cerrarDetalle();
     } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta."); }

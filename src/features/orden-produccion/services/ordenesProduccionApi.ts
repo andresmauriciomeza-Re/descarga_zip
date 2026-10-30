@@ -20,6 +20,7 @@ export interface LineaOrdenApi {
   nombre: string;
   tamano: string | null;
   cantidad_estimada: number | string;
+  cantidad_debida: number | string | null;
   cantidad_real: number | string | null;
   merma: number | string | null;
   unidad: string;
@@ -31,8 +32,9 @@ export interface OrdenApi {
   tipo: "Preparacion" | "Pedido";
   id_venta: number | string | null;
   fecha_solicitada: string;
+  fecha_entrega_estimada: string | null;
   hora_solicitada: string | null;
-  estado: "Pendiente" | "En proceso" | "Completada" | "Cancelada";
+  estado: "Pendiente" | "En proceso" | "Por verificar" | "Completada" | "Cancelada";
   observacion: string | null;
   venta_numero: string | null;
   cliente: string | null;
@@ -102,11 +104,13 @@ export const mapearFaltanteApi = (f: FaltanteApi): FaltanteUnidad => ({
 const estadoAFront = (estado: OrdenApi["estado"]): EstadoOrden =>
   estado === "En proceso"
     ? "en-proceso"
-    : estado === "Completada"
-      ? "completada"
-      : estado === "Cancelada"
-        ? "cancelada"
-        : "pendiente";
+    : estado === "Por verificar"
+      ? "por-verificar"
+      : estado === "Completada"
+        ? "completada"
+        : estado === "Cancelada"
+          ? "cancelada"
+          : "pendiente";
 
 const parsearJson = <T>(valor: T | string | null | undefined): T => {
   if (typeof valor === "string") {
@@ -132,6 +136,7 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
       nombre: l.nombre,
       unidad: l.unidad,
       cantidadEstimada: Number(l.cantidad_estimada),
+      ...(l.cantidad_debida == null ? {} : { cantidadDebida: Number(l.cantidad_debida) }),
       ...(l.tamano ? { tamano: l.tamano } : {}),
       ...(l.cantidad_real == null ? {} : { cantidadReal: Number(l.cantidad_real) }),
       ...(l.merma == null ? {} : { merma: Number(l.merma) }),
@@ -165,6 +170,9 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     ventaNumero: row.venta_numero,
     cliente: row.cliente,
     fechaSolicitada: String(row.fecha_solicitada).slice(0, 10),
+    fechaLimite: row.fecha_entrega_estimada
+      ? String(row.fecha_entrega_estimada).replace(" ", "T").slice(0, 16)
+      : null,
     horaSolicitada: row.hora_solicitada ?? "",
     estadoOrden: estadoAFront(row.estado),
     observacion: row.observacion ?? "",
@@ -241,25 +249,65 @@ export const obtenerRequeridosOrden = async (
   };
 };
 
+export interface CapacidadLineaApi {
+  id_detalle_op: number;
+  requeridos_por_unidad: {
+    id_insumo: number;
+    nombre: string;
+    requerido: number;
+    stock: number | null;
+    unidad: string | null;
+    motivo?: string | null;
+  }[];
+}
+
+export interface CalculoVerificacionLineaApi {
+  id_detalle_op: number;
+  cantidad_debida: number;
+  calculada_al_verificar: boolean;
+}
+
+export const obtenerCalculoVerificacionOrden = async (
+  id: string,
+): Promise<{ lineas: CalculoVerificacionLineaApi[] }> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const { data } = await api.get<{ lineas: CalculoVerificacionLineaApi[] }>(
+    `/ordenes-produccion/${idApi}/verificacion`,
+  );
+  return data;
+};
+
+export const obtenerCapacidadOrdenProduccion = async (
+  id: string,
+): Promise<{ cantidades_bloqueadas: boolean; lineas: CapacidadLineaApi[] }> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const { data } = await api.get<{ cantidades_bloqueadas: boolean; lineas: CapacidadLineaApi[] }>(
+    `/ordenes-produccion/${idApi}/capacidad`,
+  );
+  return data;
+};
+
 /** Crear "Preparación en lote". `lineas[].id` es el id del frontend ("INS-###")
-    del producto insumo a preparar. 409 con `faltantes` si no alcanza el stock. */
+    del producto insumo a preparar; `id_producto` identifica sin ambigüedad un
+    producto del menú. 409 con `faltantes` si no alcanza el stock. */
 export const crearOrdenPreparacionApi = async (payload: {
-  fecha_solicitada: string;
+  fecha_solicitada?: string;
   hora_solicitada?: string | null;
   observacion?: string | null;
-  lineas: { id: string; cantidad: number }[];
+  lineas: ({ id: string; cantidad: number } | { id_producto: number; cantidad: number })[];
 }): Promise<OrdenProduccion> => {
   const data = await conFaltantes(
     api.post<OrdenApi>(
       "/ordenes-produccion",
       {
-        fecha_solicitada: payload.fecha_solicitada,
+        ...(payload.fecha_solicitada ? { fecha_solicitada: payload.fecha_solicitada } : {}),
         hora_solicitada: payload.hora_solicitada ?? null,
         observacion: payload.observacion ?? null,
-        lineas: payload.lineas.map((l) => ({
-          id_insumo: idInsumoApiDesdeFront(l.id),
-          cantidad: l.cantidad,
-        })),
+        lineas: payload.lineas.map((linea) => (
+          "id_producto" in linea
+            ? { id_producto: linea.id_producto, cantidad: linea.cantidad }
+            : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
+        )),
       },
       crudo,
     ),
@@ -273,7 +321,7 @@ export const actualizarOrdenProduccion = async (
     fecha_solicitada?: string;
     hora_solicitada?: string | null;
     observacion?: string | null;
-    lineas?: { id: string; cantidad: number }[];
+    lineas?: ({ id: string; cantidad: number } | { id_producto: number; cantidad: number })[];
   },
 ): Promise<OrdenProduccion> => {
   const idApi = Number(String(id).replace(/^OP-/, ""));
@@ -286,10 +334,11 @@ export const actualizarOrdenProduccion = async (
         ...(payload.observacion !== undefined ? { observacion: payload.observacion } : {}),
         ...(payload.lineas
           ? {
-              lineas: payload.lineas.map((l) => ({
-                id_insumo: idInsumoApiDesdeFront(l.id),
-                cantidad: l.cantidad,
-              })),
+              lineas: payload.lineas.map((linea) => (
+                "id_producto" in linea
+                  ? { id_producto: linea.id_producto, cantidad: linea.cantidad }
+                  : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
+              )),
             }
           : {}),
       },
@@ -305,16 +354,36 @@ export const eliminarOrdenProduccion = async (id: string): Promise<void> => {
 };
 
 /** Inicia la orden (descuenta insumos). 409 con `faltantes` si no alcanza. */
-export const iniciarOrdenProduccion = async (id: string): Promise<OrdenProduccion> => {
+export const iniciarOrdenProduccion = async (
+  id: string,
+  payload: {
+    fechaEntregaEstimada: string;
+    lineas?: { idDetalleOp: number; cantidad: number }[];
+  },
+): Promise<OrdenProduccion> => {
   const idApi = Number(String(id).replace(/^OP-/, ""));
   const data = await conFaltantes(
-    api.post<OrdenApi>(`/ordenes-produccion/${idApi}/iniciar`, {}, crudo),
+    api.post<OrdenApi>(
+      `/ordenes-produccion/${idApi}/iniciar`,
+      {
+        fecha_entrega_estimada: payload.fechaEntregaEstimada,
+        ...(payload.lineas
+          ? {
+              lineas: payload.lineas.map((linea) => ({
+                id_detalle_op: linea.idDetalleOp,
+                cantidad: linea.cantidad,
+              })),
+            }
+          : {}),
+      },
+      crudo,
+    ),
   );
   return mapearOrdenApi(data);
 };
 
-/** Completa la orden. Preparación: manda la "cantidad que salió" por línea
-    (`idDetalleOp`); pedido: sin body. La merma la guarda el backend. */
+/** Verifica la producción. Preparación manda solo cantidades reales; el
+    servidor determina la cantidad debida desde el dato congelado. */
 export const completarOrdenProduccion = async (
   id: string,
   lineas?: { idDetalleOp: number; cantidadReal: number }[],
@@ -324,7 +393,10 @@ export const completarOrdenProduccion = async (
     api.post<OrdenApi>(
       `/ordenes-produccion/${idApi}/completar`,
       lineas
-        ? { lineas: lineas.map((l) => ({ id_detalle_op: l.idDetalleOp, cantidad_real: l.cantidadReal })) }
+        ? { lineas: lineas.map((l) => ({
+            id_detalle_op: l.idDetalleOp,
+            cantidad_real: l.cantidadReal,
+          })) }
         : {},
       crudo,
     ),
