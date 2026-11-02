@@ -12,6 +12,7 @@ export function ChartCard({
   etiqueta,
   periodo,
   onPeriodo,
+  controlAdicional,
   children,
 }: {
   titulo: string;
@@ -19,6 +20,7 @@ export function ChartCard({
   /** Si se pasa junto a `onPeriodo`, muestra el filtro propio de la gráfica. */
   periodo?: Periodo;
   onPeriodo?: (p: Periodo) => void;
+  controlAdicional?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -31,12 +33,17 @@ export function ChartCard({
           <p className="text-xs text-muted-foreground mt-0.5">{etiqueta}</p>
         </div>
         {periodo !== undefined && onPeriodo && (
-          <FiltroPeriodo
-            value={periodo}
-            onChange={onPeriodo}
-            size="sm"
-            ariaLabel={`Filtro de ${titulo}`}
-          />
+          <div className="flex max-w-full items-center justify-end gap-2 flex-wrap">
+            <FiltroPeriodo
+              value={periodo}
+              onChange={onPeriodo}
+              size="sm"
+              ariaLabel={`Filtro de ${titulo}`}
+            />
+            <div className="flex w-auto max-w-full shrink-0 justify-end sm:w-48">
+              {controlAdicional}
+            </div>
+          </div>
         )}
       </div>
       <div className="mt-4">{children}</div>

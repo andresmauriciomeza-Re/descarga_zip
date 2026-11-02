@@ -7758,6 +7758,10 @@ export default function App() {
   const sesionRestaurandose =
     isLoggedIn && sesionActiva !== null && !restauracionSesionLista;
   const [ventas, setVentas] = useState<Venta[]>([]);
+  const [ventasCargando, setVentasCargando] = useState(true);
+  const [ventasError, setVentasError] = useState<string | null>(null);
+  const ventasSolicitudIdRef = useRef(0);
+  const ventasFallosConsecutivosRef = useRef(0);
   // The legacy guest auto-submit branch is retained but has no producer.
   const pendingOrder: PendingOrder | null = null;
   const [abrirCheckoutTrasLogin, setAbrirCheckoutTrasLogin] = useState(false);
@@ -7806,6 +7810,7 @@ export default function App() {
   const [noConformidades, setNoConformidades] = useState<NoConformidad[]>([]);
   const [noConformesCargando, setNoConformesCargando] = useState(false);
   const [errorNoConformes, setErrorNoConformes] = useState<string | null>(null);
+  const [noConformesCargados, setNoConformesCargados] = useState(false);
   // Categorías de producto de la gestión (API, GET /categorias-productos/gestion):
   // activas e inactivas, con sus productos asociados. Solo las usa la pantalla
   // de Categoría Producto; el resto de la app usa `categoriasCatalogo`.
@@ -7940,6 +7945,7 @@ export default function App() {
   /** Productos no conformes (API). */
   const cargarNoConformes = async () => {
     setNoConformesCargando(true);
+    setNoConformesCargados(false);
     setErrorNoConformes(null);
     try {
       setNoConformidades(await listarNoConformidades());
@@ -7947,6 +7953,7 @@ export default function App() {
       setErrorNoConformes(mensajeErrorNoConformes(error, "No se pudieron cargar los productos no conformes."));
     } finally {
       setNoConformesCargando(false);
+      setNoConformesCargados(true);
     }
   };
 
@@ -7979,6 +7986,7 @@ export default function App() {
   /** Órdenes de compra (API, fase 3). */
   const cargarOrdenesCompra = async () => {
     setOrdenesCompraCargando(true);
+    setOrdenesCompraCargadas(false);
     setErrorOrdenesCompra(null);
     try {
       setOrdenes(await listarOrdenesCompra());
@@ -7986,12 +7994,14 @@ export default function App() {
       setErrorOrdenesCompra(mensajeErrorOrdenesCompra(error, "No se pudieron cargar las órdenes de compra."));
     } finally {
       setOrdenesCompraCargando(false);
+      setOrdenesCompraCargadas(true);
     }
   };
 
   /** Compras (API, fase 3). */
   const cargarCompras = async () => {
     setComprasCargando(true);
+    setComprasCargadas(false);
     setErrorCompras(null);
     try {
       setGestiones(await listarCompras());
@@ -7999,6 +8009,7 @@ export default function App() {
       setErrorCompras(mensajeErrorCompras(error, "No se pudieron cargar las compras."));
     } finally {
       setComprasCargando(false);
+      setComprasCargadas(true);
     }
   };
 
@@ -8486,9 +8497,11 @@ export default function App() {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
   const [ordenesCompraCargando, setOrdenesCompraCargando] = useState(false);
   const [errorOrdenesCompra, setErrorOrdenesCompra] = useState<string | null>(null);
+  const [ordenesCompraCargadas, setOrdenesCompraCargadas] = useState(false);
   const [gestiones, setGestiones] = useState<GestionCompra[]>([]);
   const [comprasCargando, setComprasCargando] = useState(false);
   const [errorCompras, setErrorCompras] = useState<string | null>(null);
+  const [comprasCargadas, setComprasCargadas] = useState(false);
   // Catálogo de insumos (API). Sin semilla local: lo llena
   // `cargarInsumosFichas`; si falla se muestra el error con "Reintentar" y no
   // se vuelve a datos de ejemplo.
@@ -8543,29 +8556,57 @@ export default function App() {
   // se guardan en localStorage: viven en la API (respaldos locales en las
   // claves `-respaldo-fase2` y `-respaldo-cpn`).
 
-  // Las ventas se cargan al entrar a Ventas, al Dashboard y al Inicio: así el
-  // Dashboard no queda en $0 después de un F5. El backend exige el permiso
-  // "Ver" de Ventas, así que sin ese permiso no se llama (ni sale un error).
+  // Las ventas se cargan al entrar a Ventas, al Dashboard, al Inicio y a
+  // Estadísticas. El backend exige el permiso "Ver" de Ventas, salvo en la
+  // pantalla de Ventas, que conserva su manejo de acceso existente.
   const puedeVerVentas =
     loggedInUser?.esSuperAdmin === true ||
     canViewPermission(loggedInAccesos, KEY("Ventas", "Ventas"));
   useEffect(() => {
-    if (screen !== "ventas-pedidos" && screen !== "dashboard" && screen !== "inicio") return;
+    if (
+      screen !== "ventas-pedidos" &&
+      screen !== "dashboard" &&
+      screen !== "inicio" &&
+      screen !== "sales-chart"
+    ) return;
     if (screen !== "ventas-pedidos" && !puedeVerVentas) return;
-    void obtenerVentasPanel().then(setVentas).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudieron cargar las ventas."));
-  }, [screen, puedeVerVentas]);
+    let cargaEnCurso = false;
+    setVentasCargando(true);
+    setVentasError(null);
 
-  // Refresco automático cada 60 s mientras se está en Ventas/Dashboard: el
-  // backend avanza solo las ventas "Por entregar" a "Completado" al llegar su
-  // hora de recogida, y este tick hace que el cambio se vea sin recargar.
-  useEffect(() => {
-    if (screen !== "ventas-pedidos" && screen !== "dashboard" && screen !== "inicio") return;
-    if (!puedeVerVentas) return;
-    const id = setInterval(() => {
-      void obtenerVentasPanel().then(setVentas).catch(() => {
-        // Silencioso: es un refresco de fondo, no una acción del usuario.
-      });
-    }, 60_000);
+    const cargarVentas = async (cargaInicial: boolean) => {
+      if (cargaEnCurso) return;
+      cargaEnCurso = true;
+      const solicitudId = ++ventasSolicitudIdRef.current;
+      try {
+        const filas = await obtenerVentasPanel();
+        if (solicitudId !== ventasSolicitudIdRef.current) return;
+        setVentas(filas);
+        ventasFallosConsecutivosRef.current = 0;
+        setVentasError(null);
+      } catch (error) {
+        if (solicitudId !== ventasSolicitudIdRef.current) return;
+        ventasFallosConsecutivosRef.current += 1;
+        console.error("[Ventas] No se pudieron cargar las ventas.", error);
+        if (cargaInicial || ventasFallosConsecutivosRef.current >= 3) {
+          const detalle = error instanceof Error ? error.message : "Intenta de nuevo más tarde.";
+          setVentasError(detalle);
+          if (cargaInicial) {
+            toast.error(detalle || "No se pudieron cargar las ventas.");
+          } else if (ventasFallosConsecutivosRef.current === 3) {
+            toast.error("No se han podido actualizar las ventas tras varios intentos.");
+          }
+        }
+      } finally {
+        cargaEnCurso = false;
+        if (solicitudId === ventasSolicitudIdRef.current && cargaInicial) setVentasCargando(false);
+      }
+    };
+
+    void cargarVentas(true);
+    // El backend puede completar automáticamente las ventas "Por entregar"
+    // cuando llega su hora de recogida; el refresco mantiene la lista al día.
+    const id = setInterval(() => void cargarVentas(false), 60_000);
     return () => clearInterval(id);
   }, [screen, puedeVerVentas]);
 
@@ -9935,6 +9976,15 @@ export default function App() {
                       <DashboardScreen
                         navigate={navigate}
                         ventas={ventas}
+                        ventasCargando={ventasCargando}
+                        ventasError={ventasError}
+                        puedeVerVentas={puedeVerVentas}
+                        ordenesCompraCargando={ordenesCompraCargando || !ordenesCompraCargadas}
+                        errorOrdenesCompra={errorOrdenesCompra}
+                        comprasCargando={comprasCargando || !comprasCargadas}
+                        errorCompras={errorCompras}
+                        noConformesCargando={noConformesCargando || !noConformesCargados}
+                        errorNoConformes={errorNoConformes}
                         gestiones={gestiones}
                         ordenes={ordenes}
                         noConformidades={noConformidades}
