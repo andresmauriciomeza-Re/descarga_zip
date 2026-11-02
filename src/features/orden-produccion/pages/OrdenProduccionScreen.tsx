@@ -45,8 +45,15 @@ import {
   type ErrorConFaltantes,
 } from "@/features/orden-produccion/services/ordenesProduccionApi";
 import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/fichasApi";
+import {
+  SelectorProductoInsumo,
+  type GrupoProductoInsumo,
+} from "@/features/orden-produccion/components/SelectorProductoInsumo";
 
 const SERIF = "var(--font-titulo)";
+
+const INPUT_LINEA_CLS = "w-full h-[54px] px-[18px] bg-muted border border-border text-base text-foreground rounded-[14px] focus:outline-none focus:ring-2 focus:ring-primary/30";
+const OBS_CREAR_CLS = "w-full min-h-[110px] px-[18px] py-4 bg-muted border border-border text-base text-foreground rounded-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ─────────────────────────── Tipos ───────────────────────────
 export type EstadoOrden = "pendiente" | "en-proceso" | "por-verificar" | "completada" | "cancelada";
@@ -1022,42 +1029,45 @@ function LineaPreparacion({
     });
   };
 
+  const grupos: GrupoProductoInsumo[] = [
+    ...(opcionesProductos.length > 0
+      ? [{
+          label: "Productos",
+          opciones: opcionesProductos.map((p) => {
+            const puedeProducirse =
+              tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
+            return {
+              id: p.id,
+              label: `${p.nombre}${puedeProducirse ? "" : " · No disponible para producción"}`,
+              disabled: !puedeProducirse,
+            };
+          }),
+        }]
+      : []),
+    ...(opcionesInsumos.length > 0
+      ? [{
+          label: "Insumos",
+          opciones: opcionesInsumos.map((i) => ({
+            id: i.id,
+            label: `${i.nombre} · ${i.stockActual} ${i.unidadMedida} (mín ${i.stockMinimo})`,
+          })),
+        }]
+      : []),
+  ];
+
   return (
-    <div className="p-4 border border-border rounded-2xl bg-card space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-end">
+    <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+          <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Producto Insumo a preparar
           </label>
-          <select
+          <SelectorProductoInsumo
             value={linea.idProducto}
-            onChange={(e) => elegir(e.target.value)}
-            className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer"
-          >
-            <option value="">Selecciona un Producto Insumo</option>
-            {opcionesProductos.length > 0 && (
-              <optgroup label="Productos">
-                {opcionesProductos.map((p) => {
-                  const puedeProducirse =
-                    tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
-                  return (
-                    <option key={p.id} value={p.id} disabled={!puedeProducirse}>
-                      {p.nombre}{puedeProducirse ? "" : " · No disponible para producción"}
-                    </option>
-                  );
-                })}
-              </optgroup>
-            )}
-            {opcionesInsumos.length > 0 && (
-              <optgroup label="Insumos">
-                {opcionesInsumos.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.nombre} · {i.stockActual} {i.unidadMedida} (mín {i.stockMinimo})
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+            placeholder="Selecciona un Producto Insumo"
+            grupos={grupos}
+            onSelect={elegir}
+          />
           {bajo && (
             <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
               Stock bajo
@@ -1065,7 +1075,7 @@ function LineaPreparacion({
           )}
         </div>
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+          <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Cantidad a producir ({linea.unidad})
           </label>
           {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
@@ -1078,7 +1088,7 @@ function LineaPreparacion({
             value={linea.cantidadEstimada === 0 ? "" : linea.cantidadEstimada}
             placeholder="0"
             onChange={(e) => onChange({ ...linea, cantidadEstimada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
-            className="w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className={INPUT_LINEA_CLS}
           />
           {linea.idProducto && linea.cantidadEstimada < 1 && (
             <p className="mt-1 text-[11px] font-semibold text-amber-700">
@@ -1091,9 +1101,9 @@ function LineaPreparacion({
             type="button"
             onClick={onRemove}
             title="Quitar línea"
-            className="p-2.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+            className="w-[54px] h-[54px] grid place-items-center border border-border rounded-[14px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-5 h-5" />
           </button>
         )}
       </div>
@@ -1855,26 +1865,27 @@ export function OrdenProduccionScreen({
   };
 
   // ── Modales ────────────────────────────────────────────────────────
-  const Modal = ({ title, onClose, onConfirm, label, ancho, deshabilitado, children }: {
+  const Modal = ({ title, onClose, onConfirm, label, ancho, deshabilitado, crear, children }: {
     title: string; onClose: () => void; onConfirm: () => void; label: string;
     ancho?: string;
     /** C6: bloquea el botón de confirmar (preparaciones con cantidad < 1). */
     deshabilitado?: boolean;
+    crear?: boolean;
     children: React.ReactNode;
   }) => (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
         className={`bg-card rounded-2xl w-full ${ancho ?? "max-w-lg"} shadow-2xl border border-border max-h-[90vh] flex flex-col my-4`}>
-        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+        <div className={`shrink-0 flex items-center justify-between ${crear ? "px-9 py-7" : "px-5 py-4"} border-b border-border`}>
+          <h3 className={`${crear ? "text-2xl" : "text-lg"} font-bold text-foreground`} style={{ fontFamily: SERIF }}>{title}</h3>
+          <button onClick={onClose} className={`${crear ? "p-2.5" : "p-1.5"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
+        <div className={`flex-1 overflow-y-auto ${crear ? "px-9 pt-7 pb-2" : "px-5 py-4"}`}>{children}</div>
+        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-5 pb-7" : "px-5 py-4"} border-t border-border`}>
+          <button onClick={onClose} className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} border border-border font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors`}>Cancelar</button>
           <button onClick={onConfirm} disabled={deshabilitado}
-            className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+            className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} bg-primary text-white font-semibold transition-colors active:scale-95 ${
               deshabilitado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"
             }`}>{label}</button>
         </div>
@@ -2245,18 +2256,19 @@ export function OrdenProduccionScreen({
           onClose: () => setShowCreate(false),
           onConfirm: handleCreate,
           label: "Crear Orden",
-          ancho: "max-w-2xl",
+          ancho: "max-w-[800px]",
+          crear: true,
           // C6: Crear bloqueado mientras alguna línea no tenga producto o su
           // cantidad sea menor a 1; Bloque 4: también mientras falten insumos
           // para la preparación (igual que al crear producto insumo en Insumos).
           deshabilitado: form.tipo === "preparacion"
             && (preparacionInvalida(form.lineas) || faltantesForm.length > 0),
           children: (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Solo se crean Preparaciones en lote: los pedidos los crea el
                   backend al aceptar una venta. */}
-              <p className="text-xs font-semibold text-muted-foreground">Preparación en lote (Producto Insumo)</p>
-              <div className="space-y-3">
+              <p className="text-[15px] font-semibold text-muted-foreground">Preparación en lote (Producto Insumo)</p>
+              <div className="space-y-4">
                 {form.lineas.map((l, idx) => (
                   <LineaPreparacion
                     key={idx}
@@ -2272,8 +2284,8 @@ export function OrdenProduccionScreen({
               </div>
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
-                className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
+                className="inline-flex items-center justify-center gap-2.5 w-full h-[54px] border-[1.5px] border-dashed border-border rounded-[14px] text-[15px] font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+                <Plus className="w-[18px] h-[18px]" /> Agregar Producto Insumo
               </button>
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
@@ -2281,11 +2293,11 @@ export function OrdenProduccionScreen({
               <AvisoFaltantes faltantes={faltantesForm} />
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2.5">Observación</label>
                 <textarea value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))}
-                  rows={2} placeholder="Notas adicionales sobre esta orden..." className={tCls} />
+                  rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[13.5px] leading-relaxed text-muted-foreground">
                 Toda orden nace Pendiente. Se avanza a En proceso, luego a Por verificar y finalmente a Completada.
               </p>
             </div>
