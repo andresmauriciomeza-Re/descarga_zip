@@ -60,6 +60,7 @@ import { useIsMobile } from "@/shared/components/ui/use-mobile";
 import imgCocaCola from "@/assets/img/Coca-Cola.webp";
 import fondoBienvenidoDark from "@/assets/img/bienvenido-la-sirena-dark.webp";
 import fondoBienvenidoLight from "@/assets/img/bienvenido-la-sirena-light.webp";
+import fondoMenu from "@/assets/img/fondo_menu.webp";
 import pizzaHero from "@/assets/img/image-23.webp";
 import imagenLocal from "@/assets/img/imagen_local.webp";
 import lasanaCarne from "@/assets/img/lasaña_carne.webp";
@@ -2064,7 +2065,7 @@ function LandingScreen({
                           sola etiqueta a la vez: si está agotado se oculta el
                           verde y se pinta el "Agotado" rojo en su lugar. */}
                       <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
-                        {etiqueta !== "agotado" && (
+                        {etiqueta !== "agotado" && estadoDeProducto(favorita) !== "Disponible" && (
                           <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
                         )}
                         {etiqueta === "agotado" && (
@@ -2473,7 +2474,7 @@ function CantidadInput({
         if (ajustada !== value) onChange(ajustada);
       }}
       onBlur={() => setTexto(null)}
-      className="w-12 text-center text-sm font-bold bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg py-1"
+      className="w-12 text-center text-sm font-bold bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   );
 }
@@ -2798,7 +2799,18 @@ function CatalogScreen({
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="relative min-h-[calc(100dvh-80px)]">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-0 bg-fixed"
+        style={{
+          backgroundImage: `url(${fondoMenu})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
       <div className="mb-8" id="catalogo-inicio">
         <h1
           className="text-3xl font-bold text-foreground"
@@ -2922,6 +2934,7 @@ function CatalogScreen({
       </div>
 
       <VolverArriba />
+      </div>
     </div>
   );
 }
@@ -3036,7 +3049,18 @@ function ProductDetailScreen({
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="relative min-h-[calc(100dvh-80px)]">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-0 bg-fixed"
+        style={{
+          backgroundImage: `url(${fondoMenu})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
+      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={onBack}
@@ -3241,6 +3265,7 @@ function ProductDetailScreen({
                 : "Agregar al carrito"}
           </PrimaryBtn>
         </div>
+      </div>
       </div>
     </div>
   );
