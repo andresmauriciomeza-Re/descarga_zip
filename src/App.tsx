@@ -835,13 +835,15 @@ interface SesionGuardada {
   /** Última pantalla vista, para restaurarla tras recargar. */
   screen: string;
   ultimaActividad: number;
+  avatarInicial?: string;
+  avatarColor?: string;
 }
 
 const leerSesionGuardada = (): SesionGuardada | null => {
   try {
     const raw = localStorage.getItem(SESION_STORAGE_KEY);
     if (!raw) return null;
-    const m = JSON.parse(raw) as SesionGuardada;
+    const m = JSON.parse(raw) as Partial<SesionGuardada> | null;
     if (
       m &&
       typeof m === "object" &&
@@ -849,7 +851,22 @@ const leerSesionGuardada = (): SesionGuardada | null => {
       m.userId &&
       typeof m.ultimaActividad === "number"
     ) {
-      return m;
+      const avatarInicial =
+        typeof m.avatarInicial === "string" && /^[A-ZÁÉÍÓÚÜÑ]$/i.test(m.avatarInicial)
+          ? m.avatarInicial.toUpperCase()
+          : undefined;
+      const avatarColor =
+        typeof m.avatarColor === "string" && AVATAR_PALETTE.includes(m.avatarColor)
+          ? m.avatarColor
+          : undefined;
+      return {
+        userId: m.userId,
+        rolActivo: typeof m.rolActivo === "string" ? m.rolActivo : null,
+        screen: typeof m.screen === "string" ? m.screen : "landing",
+        ultimaActividad: m.ultimaActividad,
+        avatarInicial,
+        avatarColor,
+      };
     }
   } catch {
     // Dato corrupto: no hay sesión que restaurar.
@@ -1415,6 +1432,7 @@ function PublicNav({
   isLoggedIn,
   isStaff,
   loggedInUser,
+  perfilPendiente,
   onLogout,
   darkMode,
   setDarkMode,
@@ -1425,6 +1443,7 @@ function PublicNav({
   isLoggedIn: boolean;
   isStaff: boolean;
   loggedInUser: { iniciales: string; avatarColor: string } | null;
+  perfilPendiente: boolean;
   onLogout: () => void;
   darkMode: boolean;
   setDarkMode: (v: boolean) => void;
@@ -1520,7 +1539,13 @@ function PublicNav({
           {/* Profile / Login — en móvil (<768 px) el acceso a sesión lo da la
               barra inferior ("Ingresar"), así que este botón del header solo
               existe desde md para que nunca se vean las dos opciones a la vez. */}
-          {isLoggedIn ? (
+          {isLoggedIn ? (perfilPendiente && !loggedInUser ? (
+            <div
+              className="hidden md:flex w-10 h-10 rounded-full bg-muted border border-border"
+              role="status"
+              aria-label="Cargando perfil"
+            />
+          ) : (
             <button
               onClick={() =>
                 navigate(isStaff ? "store-profile" : "client-profile")
@@ -1531,7 +1556,7 @@ function PublicNav({
             >
               {(loggedInUser?.iniciales.charAt(0) ?? (isStaff ? "G" : "S")).toUpperCase()}
             </button>
-          ) : (
+          )) : (
             <button
               onClick={onLogin}
               className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
@@ -4719,6 +4744,7 @@ function ClientProfileScreen({
   perfilCargando,
   perfilError,
   onReintentarPerfil,
+  perfilPendiente,
 }: {
   navigate: (s: Screen) => void;
   onLogout: () => void;
@@ -4746,6 +4772,7 @@ function ClientProfileScreen({
   perfilCargando?: boolean;
   perfilError?: string | null;
   onReintentarPerfil?: () => void;
+  perfilPendiente: boolean;
 }) {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -4850,15 +4877,15 @@ function ClientProfileScreen({
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {/* Avatar */}
         <div className="flex flex-wrap items-center gap-5 px-6 py-6 border-b border-border bg-muted/30">
-          <div className={`w-16 h-16 rounded-full ${loggedInUser?.avatarColor ?? "bg-blue-600"} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm`}>
-            {loggedInUser?.iniciales ?? "S"}
+          <div className={`w-16 h-16 rounded-full ${perfilPendiente ? "bg-muted border border-border" : loggedInUser?.avatarColor ?? "bg-blue-600"} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm`}>
+            {perfilPendiente ? null : loggedInUser?.iniciales ?? "S"}
           </div>
           <div className="flex-1 min-w-0">
             <h2
               className="text-xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
             >
-              {loggedInUser?.nombre ?? "Sebastián"}
+              {loggedInUser?.nombre ?? (perfilPendiente ? "Cargando…" : "—")}
             </h2>
             <span className="inline-block mt-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
               {loggedInUser ? loggedInRoleName : "Cliente"}
@@ -4936,7 +4963,7 @@ function ClientProfileScreen({
               <User className="w-3.5 h-3.5" /> Nombre completo
             </label>
             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground">
-              {loggedInUser?.nombre ?? "Sebastián"}
+              {loggedInUser?.nombre ?? (perfilPendiente ? "Cargando…" : "—")}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
               Este campo no es editable
@@ -8479,6 +8506,16 @@ export default function App() {
 
   // Derived display values for top bar and sidebar permissions
   const loggedInUser = loggedInUserId ? usuarios.find(u => u.id === loggedInUserId) ?? null : null;
+  const avatarGuardado = sesionActiva?.userId === loggedInUserId
+    ? sesionActiva
+    : null;
+  const avatarParaHeader = sesionRestaurandose
+    ? (avatarGuardado?.avatarInicial && avatarGuardado.avatarColor
+      ? { iniciales: avatarGuardado.avatarInicial, avatarColor: avatarGuardado.avatarColor }
+      : null)
+    : loggedInUser
+      ? { iniciales: loggedInUser.iniciales, avatarColor: loggedInUser.avatarColor }
+      : null;
   const loggedInUserName = loggedInUser?.nombre ?? "Gloria";
   // Nombre con el que se guardan y se buscan los pedidos del usuario en sesión
   const pedidosUsuarioNombre =
@@ -9521,10 +9558,17 @@ export default function App() {
         perfil.numeroDocumento ?? "",
         perfil.correo ?? "",
       );
+      const puedeCruzarPorIdentidad =
+        docValida(claveDoc(perfil.tipoDocumento ?? "", perfil.numeroDocumento ?? "")) ||
+        Boolean(perfil.correo?.trim());
+      if (loggedInUserId !== id) setLoggedInUserId(id);
       setUsuarios(prev => {
-        const existente = prev.find(u =>
-          u.id === id || u.id === loggedInUserId ||
-          clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil,
+        const existente = prev.find(u => u.id === id) ?? (
+          puedeCruzarPorIdentidad
+            ? prev.find(u =>
+              clavePersona(u.tipoDocumento, u.numeroDocumento, u.correo) === clavePerfil,
+            )
+            : undefined
         );
         const rolIdsApi = (perfil.roles ?? []).flatMap(rolApi => {
           const local = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolApi.nombre));
@@ -9533,7 +9577,7 @@ export default function App() {
         const nombre = perfil.nombre || existente?.nombre || "";
         const base: Usuario = {
           ...(existente ?? {} as Usuario),
-          id: existente?.id ?? loggedInUserId ?? id,
+          id,
           nombre,
           iniciales: existente?.iniciales ?? nombre.trim().split(/\s+/).filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase(),
           avatarColor: existente?.avatarColor ?? AVATAR_PALETTE[0],
@@ -9586,6 +9630,16 @@ export default function App() {
             : u,
         ),
       );
+      if (id === loggedInUserId && loggedInUser) {
+        const sesion = leerSesionGuardada();
+        if (sesion?.userId === id) {
+            escribirSesionGuardada({
+              ...sesion,
+              avatarInicial: loggedInUser.iniciales.charAt(0).toUpperCase(),
+              avatarColor: loggedInUser.avatarColor,
+            });
+        }
+      }
       return { ok: true };
     } catch (error) {
       const mensaje =
@@ -9686,8 +9740,10 @@ export default function App() {
       rolActivo: rolActivoId,
       screen,
       ultimaActividad: ultimaActividadRef.current,
+      avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
+      avatarColor: avatarParaHeader?.avatarColor,
     });
-  }, [isLoggedIn, loggedInUserId, rolActivoId, screen]);
+  }, [isLoggedIn, loggedInUserId, rolActivoId, screen, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
 
   // Inactividad: escucha de eventos de actividad con throttle (máx. una vez
   // cada 30 s) y un intervalo que revisa cada 30 s si pasaron 15 min. Usa refs
@@ -9697,10 +9753,22 @@ export default function App() {
   useEffect(() => {
     logoutRef.current = logout;
   });
-  const sesionActualRef = useRef({ loggedInUserId, rolActivoId, screen });
+  const sesionActualRef = useRef({
+    loggedInUserId,
+    rolActivoId,
+    screen,
+    avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
+    avatarColor: avatarParaHeader?.avatarColor,
+  });
   useEffect(() => {
-    sesionActualRef.current = { loggedInUserId, rolActivoId, screen };
-  }, [loggedInUserId, rolActivoId, screen]);
+    sesionActualRef.current = {
+      loggedInUserId,
+      rolActivoId,
+      screen,
+      avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
+      avatarColor: avatarParaHeader?.avatarColor,
+    };
+  }, [loggedInUserId, rolActivoId, screen, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -9711,13 +9779,21 @@ export default function App() {
       ultimaActividadRef.current = ahora;
       // Mantener viva la sesión en localStorage (valor compartido entre
       // pestañas) para que la actividad de esta alimente el chequeo global.
-      const { loggedInUserId: uid, rolActivoId: rid, screen: scr } = sesionActualRef.current;
+      const {
+        loggedInUserId: uid,
+        rolActivoId: rid,
+        screen: scr,
+        avatarInicial,
+        avatarColor,
+      } = sesionActualRef.current;
       if (uid) {
         escribirSesionGuardada({
           userId: uid,
           rolActivo: rid,
           screen: scr,
           ultimaActividad: ahora,
+          avatarInicial,
+          avatarColor,
         });
       }
     };
@@ -9915,7 +9991,8 @@ export default function App() {
             cart={cart}
             isLoggedIn={isLoggedIn}
             isStaff={isStaff}
-            loggedInUser={loggedInUser ? { iniciales: loggedInUser.iniciales, avatarColor: loggedInUser.avatarColor } : null}
+            loggedInUser={avatarParaHeader}
+            perfilPendiente={sesionRestaurandose && Boolean(sesionActiva?.userId)}
             onLogout={logout}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
@@ -10137,6 +10214,7 @@ export default function App() {
                     <ClientProfileScreen
                       navigate={navigate}
                       onLogout={logout}
+                      perfilPendiente={sesionRestaurandose && Boolean(sesionActiva?.userId)}
                       loggedInUser={loggedInUser ? {
                         id: loggedInUser.id,
                         nombre: loggedInUser.nombre,
