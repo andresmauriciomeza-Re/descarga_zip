@@ -37,6 +37,8 @@ import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { Paginador } from "@/shared/components/Paginador";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+// Visor grande (lightbox) de las imágenes de la vista Crear producto.
+import { VisorImagen } from "@/shared/components/VisorImagen";
 import {
   EstadoBadge,
   ESTADOS_PRODUCTO,
@@ -238,8 +240,9 @@ export interface Producto {
   estado: EstadoProducto;
 }
 
-/** La API almacena una URL de imagen por producto. */
-export const MAX_IMAGENES = 1;
+/** La API almacena una URL de imagen por producto (máx. 4: la primera es la
+    portada del menú). */
+export const MAX_IMAGENES = 4;
 
 /** Imágenes de un producto como ARREGLO siempre: usa `imagenes` si existe;
     si no, la única `imagen` (dato viejo o de semilla). Es lo que pintan el
@@ -567,6 +570,7 @@ function CampoImagenes({
   readOnly = false,
   inputCls,
   llenarAlto = false,
+  onVerImagen,
 }: {
   imagenes: string[];
   onChange: (imgs: string[]) => void;
@@ -579,6 +583,9 @@ function CampoImagenes({
       la derecha. Con columna única o en móvil no hay alto libre y las casillas
       se quedan en su mínimo (el alto actual). */
   llenarAlto?: boolean;
+  /** Abre la imagen en el visor grande (lightbox). Solo lo pasa Crear: sin él
+      las miniaturas no son clicables y el resto de vistas quedan igual. */
+  onVerImagen?: (src: string) => void;
 }) {
   // URL pendiente de agregar. Estado propio para no tener que escribir en el
   // producto mientras se teclea (antes el input escribía `imagen` en vivo).
@@ -617,9 +624,10 @@ function CampoImagenes({
             return (
               <div
                 key={`imagen-${idx}`}
+                onClick={onVerImagen ? () => onVerImagen(src) : undefined}
                 className={`relative ${altoCasilla} rounded-xl overflow-hidden bg-muted border border-border ${
                   esPortada ? "ring-2 ring-primary" : ""
-                }`}
+                } ${onVerImagen ? "cursor-pointer" : ""}`}
               >
                 {/* La foto va absoluta para no aportar alto intrínseco: la
                     casilla crece solo con la rejilla (llenarAlto). */}
@@ -633,7 +641,12 @@ function CampoImagenes({
                   <button
                     type="button"
                     title="Quitar imagen"
-                    onClick={() => onChange(imagenes.filter((_, i) => i !== idx))}
+                    onClick={(e) => {
+                      // La X no debe abrir el visor: se come el clic antes de
+                      // que burbujee al contenedor de la miniatura.
+                      e.stopPropagation();
+                      onChange(imagenes.filter((_, i) => i !== idx));
+                    }}
                     className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -675,16 +688,25 @@ function CampoImagenes({
             <input
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               disabled={subiendo || completa}
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                const archivos = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (file) {
-                  void subir(file, "productos").then((nuevaUrl) => {
-                    if (nuevaUrl) agregar(nuevaUrl);
-                  });
-                }
+                // Varios archivos a la vez: se suben en orden y solo se
+                // aceptan los que quepan hasta completar MAX_IMAGENES.
+                void (async () => {
+                  const acumuladas = [...imagenes];
+                  for (const archivo of archivos) {
+                    if (acumuladas.length >= MAX_IMAGENES) break;
+                    const nuevaUrl = await subir(archivo, "productos");
+                    if (nuevaUrl) {
+                      acumuladas.push(nuevaUrl);
+                      onChange([...acumuladas]);
+                    }
+                  }
+                })();
               }}
             />
           </label>
@@ -695,6 +717,7 @@ function CampoImagenes({
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && agregar(url)}
               placeholder="Pega una URL de imagen..."
+              disabled={completa}
               className={`flex-1 min-w-0 ${inputCls}`}
             />
             <button
@@ -709,6 +732,11 @@ function CampoImagenes({
           <p className="text-[11px] text-muted-foreground mt-2">
             {imagenes.length}/{MAX_IMAGENES} imágenes · la primera es la portada del menú
           </p>
+          {completa && (
+            <p className="text-[11px] font-semibold text-primary mt-1">
+              Se alcanzó el máximo de {MAX_IMAGENES} imágenes
+            </p>
+          )}
         </>
       )}
     </div>
@@ -780,6 +808,7 @@ function TarjetaImagenes({
   readOnly = false,
   inputCls,
   llenarAlto = false,
+  onVerImagen,
 }: {
   imagenes: string[];
   onChange: (imgs: string[]) => void;
@@ -788,6 +817,8 @@ function TarjetaImagenes({
   /** Dos columnas con ficha visible (solo Crear ahora): la tarjeta crece
       (grow, sin encogerse) hasta el fondo y las casillas estiran su alto. */
   llenarAlto?: boolean;
+  /** Abre la imagen en el visor grande. Solo lo pasa Crear. */
+  onVerImagen?: (src: string) => void;
 }) {
   return (
     <Tarjeta titulo="Imágenes del producto" className={llenarAlto ? "grow shrink-0" : ""}>
@@ -797,6 +828,7 @@ function TarjetaImagenes({
         readOnly={readOnly}
         inputCls={inputCls}
         llenarAlto={llenarAlto}
+        onVerImagen={onVerImagen}
       />
     </Tarjeta>
   );
@@ -947,6 +979,12 @@ export function GestionProductosScreen({
   // mientras el filtro esté activo, para poder salir de él).
   const [filtroStockBajo, setFiltroStockBajo] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  // Visor grande (lightbox) de las imágenes en la vista Crear: el src de la
+  // miniatura clicada o null con el visor cerrado.
+  const [visorCrear, setVisorCrear] = useState<string | null>(null);
+  // Raíz de la vista Crear: alcance del CSS que quita los spinners y del
+  // listener que evita que la rueda cambie inputs numéricos con foco.
+  const raizCrearRef = useRef<HTMLDivElement>(null);
   const [editItem, setEditItem] = useState<Producto | null>(
     null,
   );
@@ -1436,6 +1474,30 @@ export function GestionProductosScreen({
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
+  // Crear producto: la rueda del mouse NO cambia el valor de un input
+  // numérico mientras ese input tiene foco (si el foco está en otro lado la
+  // rueda sigue desplazando la columna con normalidad). Listener NATIVO con
+  // passive: false: React registra onWheel como pasivo y no podría cancelar
+  // el evento. El alcance es la raíz de la vista Crear, así que el resto de
+  // pantallas no se ve afectado.
+  useEffect(() => {
+    if (!showCreate) return;
+    const raiz = raizCrearRef.current;
+    if (!raiz) return;
+    const alRodar = (e: WheelEvent) => {
+      const destino = e.target;
+      if (
+        destino instanceof HTMLInputElement &&
+        destino.type === "number" &&
+        document.activeElement === destino
+      ) {
+        e.preventDefault();
+      }
+    };
+    raiz.addEventListener("wheel", alRodar, { passive: false });
+    return () => raiz.removeEventListener("wheel", alRodar);
+  }, [showCreate]);
+
   // IDs que ya tienen ficha propia: los productos del menú y los Productos
   // Insumo de Compras comparten el mismo mapa `fichas`, así que la numeración
   // de fichas (001, 002, …) tiene que contar los dos tipos de registro.
@@ -1564,6 +1626,7 @@ export function GestionProductosScreen({
         }
       }
       setShowCreate(false);
+      setVisorCrear(null);
       setForm(emptyForm());
       resetFichaForm();
       setFormTieneFicha(null);
@@ -2131,7 +2194,24 @@ export function GestionProductosScreen({
          la pantalla medía 56px más que la ventana (scroll de página) y el
          footer la empujaba fuera del viewport. Cada columna scrollea por
          dentro, nunca la página. */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
+      <div
+        ref={raizCrearRef}
+        className="crear-producto-vista h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden"
+      >
+        {/* CSS local de ESTA vista: quita las flechas (spinners) de todos sus
+            inputs numéricos —Precio de venta, Contenido y los de la ficha
+            técnica— sin tocar el componente compartido de la ficha. */}
+        <style>{`
+          .crear-producto-vista input[type="number"]::-webkit-inner-spin-button,
+          .crear-producto-vista input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+          }
+          .crear-producto-vista input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+          }
+        `}</style>
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
@@ -2148,7 +2228,7 @@ export function GestionProductosScreen({
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
-            <button onClick={() => { setShowCreate(false); setForm(emptyForm()); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
+            <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -2212,6 +2292,7 @@ export function GestionProductosScreen({
                 onChange={(imgs) => setForm((p) => ({ ...p, imagenes: imgs, imagen: imgs[0] ?? "" }))}
                 inputCls={iCls}
                 llenarAlto={!fichaOculta && mostrarEditor}
+                onVerImagen={setVisorCrear}
               />
             </div>
           </div>
@@ -2308,6 +2389,9 @@ export function GestionProductosScreen({
             />
           )}
         </AnimatePresence>
+        {/* Visor grande de las imágenes de ESTA vista (se cierra con la X,
+            con Esc o haciendo clic fuera de la foto). */}
+        <VisorImagen src={visorCrear} onClose={() => setVisorCrear(null)} />
       </div>
     );
   }
