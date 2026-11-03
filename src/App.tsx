@@ -52,8 +52,25 @@ import {
   Users,
   X
 } from "lucide-react";
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { Component, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from "motion/react";
+import {
+  Component,
+  Suspense,
+  lazy,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
@@ -1762,13 +1779,38 @@ function BottomNav({
 const REVEAL_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 /** Props de revelado al entrar en viewport. `once` evita re-animar la sección
-    en cada movimiento del scroll (y al actualizar el catálogo). */
-const reveal = (delay = 0, y = 18, amount = 0.2) => ({
-  initial: { opacity: 0, y },
-  whileInView: { opacity: 1, y: 0 },
+    en cada movimiento del scroll (y al actualizar el catálogo). `x` y `scale`
+    permiten variar la dirección y la profundidad sin repetir el mismo efecto. */
+const reveal = (
+  delay = 0,
+  y = 18,
+  amount = 0.2,
+  x = 0,
+  scale = 1,
+) => ({
+  initial: { opacity: 0, y, x, scale },
+  whileInView: { opacity: 1, y: 0, x: 0, scale: 1 },
   viewport: { once: true, amount },
   transition: { duration: 0.5, delay, ease: REVEAL_EASE },
 });
+
+/** Parallax de la foto de una favorita: solo puntero fino (ratón), nunca
+    táctil. Escribe variables CSS, así que no re-renderiza la tarjeta y el
+    navegador compone el movimiento con el zoom de hover. */
+function desplazarFotoProducto(e: ReactPointerEvent<HTMLDivElement>) {
+  if (e.pointerType !== "mouse") return;
+  const caja = e.currentTarget.getBoundingClientRect();
+  if (caja.width === 0 || caja.height === 0) return;
+  const x = ((e.clientX - caja.left) / caja.width - 0.5) * 8;
+  const y = ((e.clientY - caja.top) / caja.height - 0.5) * 8;
+  e.currentTarget.style.setProperty("--foto-x", `${x.toFixed(2)}px`);
+  e.currentTarget.style.setProperty("--foto-y", `${y.toFixed(2)}px`);
+}
+
+function reposarFotoProducto(e: ReactPointerEvent<HTMLDivElement>) {
+  e.currentTarget.style.setProperty("--foto-x", "0px");
+  e.currentTarget.style.setProperty("--foto-y", "0px");
+}
 
 function LandingScreen({
   navigate,
@@ -1791,22 +1833,60 @@ function LandingScreen({
   /** Abre el detalle guardando la pantalla de origen. */
   onOpenDetail: (p: Product) => void;
 }) {
+  const reduceMotion = useReducedMotion();
+  const isMobile = useIsMobile();
+  const heroRef = useRef<HTMLElement | null>(null);
+  const historiaRef = useRef<HTMLElement | null>(null);
+  /** La profundidad ligada al scroll se reserva para escritorio: en móvil el
+      desplazamiento ya es corto y conviene mantener la composición estable. */
+  const profundidadActiva = !isMobile && !reduceMotion;
+
+  const { scrollYProgress: heroProgreso } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+  const heroFotoY = useTransform(heroProgreso, [0, 1], ["0%", "6%"]);
+  const heroFotoEscala = useTransform(heroProgreso, [0, 1], [1, 1.12]);
+
+  const { scrollYProgress: historiaProgreso } = useScroll({
+    target: historiaRef,
+    offset: ["start end", "end start"],
+  });
+  const historiaFotoY = useTransform(historiaProgreso, [0, 1], ["0%", "2%"]);
+  const historiaFotoEscala = useTransform(historiaProgreso, [0, 1], [1, 1.04]);
+  const revealHeroLine = (delay: number) => ({
+    initial: reduceMotion ? { y: 0 } : { y: "110%" },
+    animate: { y: 0 },
+    transition: reduceMotion
+      ? { duration: 0 }
+      : { duration: 0.72, delay, ease: REVEAL_EASE },
+  });
+
   return (
     <MotionConfig reducedMotion="user">
     <div>
       {/* Hero – full width con imagen de fondo */}
-      <section className="relative w-full min-h-screen overflow-hidden">
+      <section ref={heroRef} className="relative w-full min-h-screen overflow-hidden">
         {/* Imagen de fondo full-bleed. Es el LCP de la página: por eso lleva
-            fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy. */}
-        <img
-          src={pizzaHero}
-          alt="Pizza pepperoni artesanal La Sirena recién horneada"
-          width={1536}
-          height={1024}
-          fetchPriority="high"
-          decoding="async"
-          className="absolute inset-0 w-full h-full object-cover object-center"
-        />
+            fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy.
+            La escala y el desplazamiento están compensados (la imagen crece lo
+            mismo que se desplaza) para que nunca se vean bordes vacíos. El
+            movimiento va en el contenedor para no interferir con la carga. */}
+        <motion.div
+          aria-hidden="true"
+          style={profundidadActiva ? { y: heroFotoY, scale: heroFotoEscala } : undefined}
+          className="absolute inset-0"
+        >
+          <img
+            src={pizzaHero}
+            alt="Pizza pepperoni artesanal La Sirena recién horneada"
+            width={1536}
+            height={1024}
+            {...{ fetchpriority: "high" }}
+            decoding="async"
+            className="w-full h-full object-cover object-center"
+          />
+        </motion.div>
 
         {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
             garantizar el contraste del texto blanco sobre la foto, sin tocar
@@ -1819,41 +1899,53 @@ function LandingScreen({
         {/* Contenido sobre la zona oscura izquierda */}
         <div className="relative z-10 w-full min-h-screen flex items-center">
           <div className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl">
-            <motion.div
-              initial={{ opacity: 0, y: 36 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: "easeOut" }}
-            >
+            <div>
               {/* Badge */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.92 }}
+                initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
+                transition={{ duration: 0.45, delay: 0.06, ease: REVEAL_EASE }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#DC2626] text-white text-sm font-bold rounded-full mb-8 shadow-lg shadow-red-900/30"
               >
                 ⭐ Artesanal · Medellín · Desde 1994
               </motion.div>
 
               {/* Main title */}
-              <h1
+              <motion.h1
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.75, delay: 0.14, ease: REVEAL_EASE }}
                 className="text-[clamp(3rem,8vw,5.5rem)] font-bold text-white leading-[1.0] mb-6"
                 style={{ fontFamily: SERIF }}
               >
-                La Sirena
-                <br />
-                <span className="text-[#DC2626]">
-                  El sabor que
+                <span className="block overflow-hidden">
+                  <motion.span {...revealHeroLine(0.2)} className="block">
+                    La Sirena
+                  </motion.span>
                 </span>
-                <br />
-                conquista
-              </h1>
+                <span className="block overflow-hidden">
+                  <motion.span {...revealHeroLine(0.3)} className="block text-[#DC2626]">
+                    El sabor que
+                  </motion.span>
+                </span>
+                <span className="block overflow-hidden">
+                  <motion.span {...revealHeroLine(0.4)} className="block">
+                    conquista
+                  </motion.span>
+                </span>
+              </motion.h1>
 
               {/* Description */}
-              <p className="text-white/70 text-lg md:text-xl leading-relaxed mb-10">
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.65, delay: 0.24, ease: REVEAL_EASE }}
+                className="text-white/70 text-lg md:text-xl leading-relaxed mb-10"
+              >
                 Pizzas artesanales horneadas con tradición
                 familiar. Ingredientes frescos, masa propia y
                 treinta años de amor.
-              </p>
+              </motion.p>
 
               {/* CTAs — en columna solo por debajo de `sm`; en escritorio van
                   siempre en la misma fila. `flex-col` estira los dos botones al
@@ -1862,7 +1954,12 @@ function LandingScreen({
                   Por debajo de `md` este botón lleva un velo oscuro propio
                   (`max-md:bg-black/45`): sin fondo dependía de lo que se viera
                   detrás de la imagen del hero y en móvil se veía transparente. */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <motion.div
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.32, ease: REVEAL_EASE }}
+                className="flex flex-col sm:flex-row sm:items-center gap-4"
+              >
                 <button
                   onClick={() => navigate("catalog")}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DC2626] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
@@ -1877,7 +1974,7 @@ function LandingScreen({
                   Ver menú completo
                   <ArrowRight className="w-5 h-5" />
                 </button>
-              </div>
+              </motion.div>
 
               {/* Estadísticas del hero — tarjeta oscura con divisores, NO la
                   franja roja de ancho completo de más abajo: esa se mantiene
@@ -1887,7 +1984,12 @@ function LandingScreen({
                   que a 360 px bajaba "30 años / De tradición" a una segunda
                   fila). `divide-x` conserva los divisores verticales; `min-w-0`
                   en cada celda evita que la cifra o la etiqueta desborden. */}
-              <div className="mt-10 w-full grid grid-cols-3 items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4, ease: REVEAL_EASE }}
+                className="mt-10 w-full grid grid-cols-3 items-stretch rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 px-1.5 sm:px-3 py-4 divide-x divide-white/15"
+              >
                 {[
                   {
                     value: "+5.200",
@@ -1921,8 +2023,8 @@ function LandingScreen({
                     </p>
                   </div>
                 ))}
-              </div>
-            </motion.div>
+              </motion.div>
+            </div>
           </div>
         </div>
       </section>
@@ -1956,16 +2058,24 @@ function LandingScreen({
               .map((c, i) => (
                 <motion.button
                   key={c.id}
-                  {...reveal((i % 3) * 0.06, 16)}
+                  {...reveal(
+                    (i % 3) * 0.06,
+                    i % 2 === 0 ? 18 : 24,
+                    0.25,
+                    i % 3 === 0 ? -10 : i % 3 === 2 ? 10 : 0,
+                    0.97,
+                  )}
+                  whileHover={{ y: -4, scale: 1.03, transition: { duration: 0.2, ease: "easeOut" } }}
+                  whileTap={{ scale: 0.99, transition: { duration: 0.1 } }}
                   onClick={() => onCategoryNavigate(c.nombre)}
-                  className="group min-h-[220px] md:min-h-[260px] bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-3 px-4 py-6"
+                  className="group min-h-[220px] md:min-h-[260px] bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col items-center justify-center gap-3 px-4 py-6"
                 >
                   {/* Emoji de la categoría (columna emoji), también en las
                       originales: texto grande, el mismo tamaño de siempre. */}
                   {c.icono && (
                     <span
                       aria-hidden="true"
-                      className="text-[96px] leading-none"
+                      className="text-[96px] leading-none transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-hover:rotate-0"
                     >
                       {c.icono}
                     </span>
@@ -2049,7 +2159,28 @@ function LandingScreen({
                 return (
                   <motion.div
                     key={producto.id}
-                    {...reveal(i * 0.08, 20, 0.2)}
+                    initial={reduceMotion ? "visible" : "hidden"}
+                    whileInView="visible"
+                    viewport={{ once: true, amount: 0.2 }}
+                    variants={{
+                      hidden: {
+                        opacity: 0,
+                        y: i % 2 === 0 ? 20 : 26,
+                        scale: 0.97,
+                      },
+                      visible: {
+                        opacity: 1,
+                        y: 0,
+                        scale: 1,
+                        transition: {
+                          duration: 0.5,
+                          delay: i * 0.09,
+                          ease: REVEAL_EASE,
+                        },
+                      },
+                    }}
+                    whileHover={{ y: -6, scale: 1.02, transition: { duration: 0.22, ease: "easeOut" } }}
+                    whileTap={{ scale: 0.995, transition: { duration: 0.1 } }}
                     onClick={() => onOpenDetail(favorita)}
                     role="button"
                     tabIndex={0}
@@ -2060,17 +2191,33 @@ function LandingScreen({
                         onOpenDetail(favorita);
                       }
                     }}
-                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.03] transition-all duration-200 ease-out cursor-pointer flex flex-col motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
+                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl transition-shadow duration-200 ease-out cursor-pointer flex flex-col"
                   >
                     {/* Image */}
-                    <div className="relative h-52 bg-muted overflow-hidden">
-                      <img
+                    <div
+                      className="relative h-52 bg-muted overflow-hidden"
+                      onPointerMove={desplazarFotoProducto}
+                      onPointerLeave={reposarFotoProducto}
+                      onPointerCancel={reposarFotoProducto}
+                    >
+                      <motion.img
                         src={getImageUrl(favorita.image)}
                         alt={favorita.name}
                         onError={onErrorImagen}
                         loading="lazy"
                         decoding="async"
-                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
+                        variants={{
+                          hidden: { clipPath: "inset(0 0 100% 0)" },
+                          visible: {
+                            clipPath: "inset(0 0 0% 0)",
+                            transition: {
+                              duration: 0.72,
+                              delay: 0.08,
+                              ease: REVEAL_EASE,
+                            },
+                          },
+                        }}
+                        className={`favorite-foto w-full h-full object-cover ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
                       />
                       {/* Estado del producto (arriba a la izquierda, 12 px)
                           y, debajo, la insignia "Favorita" de siempre. Una
@@ -2124,17 +2271,38 @@ function LandingScreen({
       </section>
 
       {/* ── Nuestra Historia ── */}
-      <section className="bg-card py-16 md:py-24">
+      <section ref={historiaRef} className="bg-card py-16 md:py-24">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             {/* Left — image with floating founder card */}
-            <motion.div {...reveal(0, 16)} className="relative">
+            <motion.div
+              initial={reduceMotion ? "visible" : "hidden"}
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+              variants={{
+                hidden: { opacity: 0, y: 16 },
+                visible: {
+                  opacity: 1,
+                  y: 0,
+                  transition: { duration: 0.5, ease: REVEAL_EASE },
+                },
+              }}
+              className="relative"
+            >
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
-                <img
+                <motion.img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
                   loading="lazy"
                   decoding="async"
+                  style={profundidadActiva ? { y: historiaFotoY, scale: historiaFotoEscala } : undefined}
+                  variants={{
+                    hidden: { clipPath: "inset(0 0 100% 0)" },
+                    visible: {
+                      clipPath: "inset(0 0 0% 0)",
+                      transition: { duration: 0.85, ease: REVEAL_EASE },
+                    },
+                  }}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -2166,38 +2334,45 @@ function LandingScreen({
             </motion.div>
 
             {/* Right — text content */}
-            <motion.div {...reveal(0.12, 18)} className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6">
               {/* Badge */}
-              <div className="inline-flex">
+              <motion.div {...reveal(0.06, 14)} className="inline-flex">
                 <span className="px-4 py-1.5 bg-red-50 text-[#DC2626] text-sm font-semibold rounded-full border border-red-100">
                   Nuestra historia
                 </span>
-              </div>
+              </motion.div>
 
               {/* Title */}
-              <h2
+              <motion.h2
+                {...reveal(0.12, 20)}
                 className="text-4xl md:text-5xl font-bold text-foreground leading-[1.1]"
                 style={{ fontFamily: SERIF }}
               >
                 30 años de pasión por la pizza artesanal
-              </h2>
+              </motion.h2>
 
               {/* Body */}
-              <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
+              <motion.p
+                {...reveal(0.2, 16)}
+                className="text-muted-foreground text-base md:text-lg leading-relaxed"
+              >
                 En 1994, Gloria Inés abrió La Sirena con una
                 receta familiar y el sueño de compartir el mejor
                 sabor con Medellín. Hoy, tres décadas después,
                 seguimos horneando cada pizza con el mismo amor
                 de siempre.
-              </p>
-              <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
+              </motion.p>
+              <motion.p
+                {...reveal(0.28, 16)}
+                className="text-muted-foreground text-base md:text-lg leading-relaxed"
+              >
                 Masa elaborada a mano, ingredientes
                 seleccionados y el secreto inconfesable de
                 nuestra salsa artesanal. Eso es La Sirena.
-              </p>
+              </motion.p>
 
               {/* CTAs */}
-              <div className="flex flex-wrap gap-3 pt-2">
+              <motion.div {...reveal(0.36, 14)} className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => navigate("catalog")}
                   className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#DC2626] text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-md shadow-red-900/20 cursor-pointer text-sm"
@@ -2212,8 +2387,8 @@ function LandingScreen({
                 >
                   📞 Llamar
                 </button>
-              </div>
-            </motion.div>
+              </motion.div>
+            </div>
           </div>
         </div>
       </section>
@@ -2243,10 +2418,12 @@ function LandingScreen({
             ].map(({ icon, title, desc }, i) => (
               <motion.div
                 key={title}
-                {...reveal(0.08 + i * 0.07, 16, 0.25)}
-                className="bg-card rounded-2xl p-6 border border-border shadow-sm text-center"
+                {...reveal(0.08 + i * 0.09, 16, 0.25, i === 0 ? -24 : 24, 0.98)}
+                className="group bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-md transition-shadow duration-200 text-center"
               >
-                <div className="text-4xl mb-4">{icon}</div>
+                <div className="text-4xl mb-4 transition-transform duration-300 ease-out group-hover:scale-110 group-hover:-rotate-6 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-hover:rotate-0">
+                  {icon}
+                </div>
                 <h3 className="text-lg font-bold mb-2 text-foreground">
                   {title}
                 </h3>
@@ -2264,10 +2441,10 @@ function LandingScreen({
         style={{ backgroundColor: "#000000" }}
         className="py-12 rounded-t-3xl"
       >
-        <motion.div {...reveal(0, 12, 0.1)} className="max-w-6xl mx-auto px-6">
+        <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-8">
             {/* Brand */}
-            <div className="flex flex-col gap-3">
+            <motion.div {...reveal(0, 12, 0.15)} className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
                 <img
                   src={logoBlanco}
@@ -2289,9 +2466,9 @@ function LandingScreen({
                 artesanales de Medellín con receta familiar y
                 amor auténtico.
               </p>
-            </div>
+            </motion.div>
             {/* Contacto */}
-            <div className="flex flex-col gap-3">
+            <motion.div {...reveal(0.08, 12, 0.15)} className="flex flex-col gap-3">
               <h3 className="font-bold text-white text-sm uppercase tracking-wider">
                 Contacto
               </h3>
@@ -2312,9 +2489,9 @@ function LandingScreen({
                   <span>{DIRECCION_LOCAL}</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
             {/* Horario */}
-            <div className="flex flex-col gap-3">
+            <motion.div {...reveal(0.16, 12, 0.15)} className="flex flex-col gap-3">
               <h3 className="font-bold text-white text-sm uppercase tracking-wider">
                 Horario de atención
               </h3>
@@ -2348,9 +2525,10 @@ function LandingScreen({
                   Solo pedidos presenciales en local
                 </p>
               </div>
-            </div>
+            </motion.div>
           </div>
-          <div
+          <motion.div
+            {...reveal(0.24, 10, 0.15)}
             className="pt-6 flex flex-col md:flex-row items-center justify-between gap-3"
             style={{
               borderTop: "1px solid rgba(255,255,255,0.1)",
@@ -2370,8 +2548,8 @@ function LandingScreen({
               NIT: 900.123.456-7 · Establecimiento de comercio
               registrado
             </p>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </footer>
     </div>
     </MotionConfig>
