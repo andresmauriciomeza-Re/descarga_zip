@@ -52,7 +52,7 @@ import {
   Users,
   X
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Component, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
@@ -1758,6 +1758,18 @@ function BottomNav({
 
 // ─────────────────────────── LANDING ───────────────────────────
 
+/** Curva de entrada de la landing: desaceleración suave, sin rebotes. */
+const REVEAL_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+/** Props de revelado al entrar en viewport. `once` evita re-animar la sección
+    en cada movimiento del scroll (y al actualizar el catálogo). */
+const reveal = (delay = 0, y = 18, amount = 0.2) => ({
+  initial: { opacity: 0, y },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount },
+  transition: { duration: 0.5, delay, ease: REVEAL_EASE },
+});
+
 function LandingScreen({
   navigate,
   setProduct,
@@ -1780,6 +1792,7 @@ function LandingScreen({
   onOpenDetail: (p: Product) => void;
 }) {
   return (
+    <MotionConfig reducedMotion="user">
     <div>
       {/* Hero – full width con imagen de fondo */}
       <section className="relative w-full min-h-screen overflow-hidden">
@@ -1923,7 +1936,7 @@ function LandingScreen({
       <section className="bg-muted pt-16 md:pt-20 pb-10 md:pb-12">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Heading */}
-          <div className="text-center mb-12">
+          <motion.div {...reveal(0, 14, 0.3)} className="text-center mb-12">
             <h2
               className="text-4xl md:text-5xl font-bold text-foreground mb-3"
               style={{ fontFamily: SERIF }}
@@ -1933,16 +1946,17 @@ function LandingScreen({
             <p className="text-muted-foreground text-base md:text-lg">
               Descubre todo lo que tenemos para ti
             </p>
-          </div>
+          </motion.div>
 
           {/* Cards — grid 3/2/1 columnas al ancho completo del contenedor
               (mismo ancho que "Las favoritas"), cards de alto mínimo generoso. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {categorias
               .filter((c) => estadoDe(c) !== "Inactivo")
-              .map((c) => (
-                <button
+              .map((c, i) => (
+                <motion.button
                   key={c.id}
+                  {...reveal((i % 3) * 0.06, 16)}
                   onClick={() => onCategoryNavigate(c.nombre)}
                   className="group min-h-[220px] md:min-h-[260px] bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:-translate-y-1 hover:scale-105 active:scale-100 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-3 px-4 py-6"
                 >
@@ -1962,7 +1976,7 @@ function LandingScreen({
                   >
                     {c.nombre}
                   </p>
-                </button>
+                </motion.button>
               ))}
           </div>
         </div>
@@ -1972,7 +1986,7 @@ function LandingScreen({
       <section className="bg-muted pt-10 md:pt-12 pb-16 md:pb-20">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Header row */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-10">
+          <motion.div {...reveal(0, 14, 0.25)} className="flex flex-wrap items-center justify-between gap-3 mb-10">
             <h2
               className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
@@ -1985,7 +1999,7 @@ function LandingScreen({
             >
               Ver todas <ArrowRight className="w-4 h-4" />
             </button>
-          </div>
+          </motion.div>
 
           {/* Cards — punto 2.2: en móvil pasan a grid de 1 columna (antes
               carrusel con `overflow-x-auto`, donde la última tarjeta quedaba
@@ -2035,9 +2049,7 @@ function LandingScreen({
                 return (
                   <motion.div
                     key={producto.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08, duration: 0.45 }}
+                    {...reveal(i * 0.08, 20, 0.2)}
                     onClick={() => onOpenDetail(favorita)}
                     role="button"
                     tabIndex={0}
@@ -2116,7 +2128,7 @@ function LandingScreen({
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             {/* Left — image with floating founder card */}
-            <div className="relative">
+            <motion.div {...reveal(0, 16)} className="relative">
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
                 <img
                   src={imagenLocal}
@@ -2127,7 +2139,10 @@ function LandingScreen({
                 />
               </div>
               {/* Floating founder card */}
-              <div className="absolute bottom-5 left-5 bg-card rounded-2xl shadow-xl px-5 py-4 max-w-[220px]">
+              <motion.div
+                {...reveal(0.22, 8)}
+                className="absolute bottom-5 left-5 bg-card rounded-2xl shadow-xl px-5 py-4 max-w-[220px]"
+              >
                 <div className="flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-full bg-[#DC2626] flex items-center justify-center text-white font-bold text-sm shrink-0"
@@ -2147,11 +2162,11 @@ function LandingScreen({
                     </p>
                   </div>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
 
             {/* Right — text content */}
-            <div className="flex flex-col gap-6">
+            <motion.div {...reveal(0.12, 18)} className="flex flex-col gap-6">
               {/* Badge */}
               <div className="inline-flex">
                 <span className="px-4 py-1.5 bg-red-50 text-[#DC2626] text-sm font-semibold rounded-full border border-red-100">
@@ -2198,7 +2213,7 @@ function LandingScreen({
                   📞 Llamar
                 </button>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -2206,12 +2221,13 @@ function LandingScreen({
       {/* ── Por qué La Sirena ── */}
       <section className="bg-muted py-16">
         <div className="max-w-6xl mx-auto px-6">
-          <h2
+          <motion.h2
+            {...reveal(0, 14)}
             className="text-3xl font-bold text-center mb-12 text-foreground"
             style={{ fontFamily: SERIF }}
           >
             ¿Por qué La Sirena?
-          </h2>
+          </motion.h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {[
               {
@@ -2224,9 +2240,10 @@ function LandingScreen({
                 title: "Ingredientes frescos",
                 desc: "Seleccionamos los mejores ingredientes locales cada día para garantizar calidad en cada mordida.",
               },
-            ].map(({ icon, title, desc }) => (
-              <div
+            ].map(({ icon, title, desc }, i) => (
+              <motion.div
                 key={title}
+                {...reveal(0.08 + i * 0.07, 16, 0.25)}
                 className="bg-card rounded-2xl p-6 border border-border shadow-sm text-center"
               >
                 <div className="text-4xl mb-4">{icon}</div>
@@ -2236,7 +2253,7 @@ function LandingScreen({
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   {desc}
                 </p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -2247,7 +2264,7 @@ function LandingScreen({
         style={{ backgroundColor: "#000000" }}
         className="py-12 rounded-t-3xl"
       >
-        <div className="max-w-6xl mx-auto px-6">
+        <motion.div {...reveal(0, 12, 0.1)} className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-8">
             {/* Brand */}
             <div className="flex flex-col gap-3">
@@ -2354,9 +2371,10 @@ function LandingScreen({
               registrado
             </p>
           </div>
-        </div>
+        </motion.div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
 
