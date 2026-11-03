@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Archive,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   DollarSign,
   FileText,
@@ -62,6 +64,93 @@ import { FiltroPeriodo } from "@/shared/components/FiltroPeriodo";
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+interface MesDisponible {
+  clave: string;
+  etiqueta: string;
+}
+
+function mesesDesdeFechas(fechas: string[], mesActual: string): MesDisponible[] {
+  const fechasValidas = fechas.filter(
+    (fecha) => esFechaISO(fecha) && fecha.slice(0, 7) <= mesActual,
+  );
+  const primerMes = fechasValidas.length
+    ? fechasValidas.reduce((minimo, fecha) => {
+        const clave = fecha.slice(0, 7);
+        return clave < minimo ? clave : minimo;
+      }, mesActual)
+    : mesActual;
+  const meses: MesDisponible[] = [];
+  let anio = Number(primerMes.slice(0, 4));
+  let mes = Number(primerMes.slice(5, 7));
+  while (`${anio}-${String(mes).padStart(2, "0")}` <= mesActual) {
+    const clave = `${anio}-${String(mes).padStart(2, "0")}`;
+    meses.push({
+      clave,
+      etiqueta: `${MESES_ES[mes - 1].charAt(0).toUpperCase()}${MESES_ES[mes - 1].slice(1)} ${anio}`,
+    });
+    mes += 1;
+    if (mes > 12) {
+      mes = 1;
+      anio += 1;
+    }
+  }
+  return meses;
+}
+
+function SelectorMes({
+  periodo,
+  mes,
+  meses,
+  onChange,
+}: {
+  periodo: Periodo;
+  mes: string;
+  meses: MesDisponible[];
+  onChange: (mes: string) => void;
+}) {
+  if (periodo !== "mes") return null;
+  const indiceEncontrado = meses.findIndex((opcion) => opcion.clave === mes);
+  const indice = indiceEncontrado < 0 ? meses.length - 1 : indiceEncontrado;
+  const seleccionado = meses[indice];
+  const mesAnterior = meses[indice - 1];
+  const mesSiguiente = meses[indice + 1];
+  if (!seleccionado) return null;
+
+  return (
+    <div className="flex items-center gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Seleccionar mes">
+      <button
+        type="button"
+        onClick={() => {
+          if (mesAnterior) onChange(mesAnterior.clave);
+        }}
+        disabled={indice === 0}
+        className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+        aria-label="Mes anterior"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="min-w-[7.5rem] text-center text-xs font-semibold text-foreground" aria-live="polite">
+        {seleccionado.etiqueta}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          if (mesSiguiente) onChange(mesSiguiente.clave);
+        }}
+        disabled={indice === meses.length - 1}
+        className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+        aria-label="Mes siguiente"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 /** Rango real de atención (utils/hora.ts): 4 p. m. a 10 p. m. */
 const HORAS_HOY = [16, 17, 18, 19, 20, 21, 22];
@@ -102,6 +191,40 @@ function SinDatos({ texto = "No hay datos en este periodo" }: { texto?: string }
   return (
     <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4 rounded-xl bg-muted/30">
       {texto}
+    </div>
+  );
+}
+
+function EstadoVentas({
+  estado,
+  error,
+  textoCargando = "Cargando ventas…",
+  textoError = "No fue posible cargar las ventas.",
+}: {
+  estado: "cargando" | "error" | "permiso";
+  error?: string | null;
+  textoCargando?: string;
+  textoError?: string;
+}) {
+  const Icon = estado === "cargando" ? RefreshCw : estado === "permiso" ? Lock : AlertTriangle;
+  const texto =
+    estado === "cargando"
+      ? textoCargando
+      : estado === "permiso"
+        ? "No tienes permiso para ver ventas. Solicita al administrador el permiso Ventas > Ver."
+        : `${textoError}${error ? ` ${error}` : " Intenta de nuevo más tarde."}`;
+
+  return (
+    <div
+      role={estado === "error" ? "alert" : "status"}
+      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm text-center ${
+        estado === "error"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-muted/30 text-muted-foreground"
+      }`}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${estado === "cargando" ? "animate-spin" : ""}`} />
+      <span>{texto}</span>
     </div>
   );
 }
@@ -153,6 +276,15 @@ function TarjetaIndicador({
 export function DashboardScreen({
   navigate,
   ventas,
+  ventasCargando,
+  ventasError,
+  puedeVerVentas,
+  ordenesCompraCargando,
+  errorOrdenesCompra,
+  comprasCargando,
+  errorCompras,
+  noConformesCargando,
+  errorNoConformes,
   gestiones,
   ordenes,
   noConformidades,
@@ -169,6 +301,15 @@ export function DashboardScreen({
 }: {
   navigate: (s: Screen) => void;
   ventas: Venta[];
+  ventasCargando: boolean;
+  ventasError: string | null;
+  puedeVerVentas: boolean;
+  ordenesCompraCargando: boolean;
+  errorOrdenesCompra: string | null;
+  comprasCargando: boolean;
+  errorCompras: string | null;
+  noConformesCargando: boolean;
+  errorNoConformes: string | null;
   gestiones: GestionCompra[];
   ordenes: OrdenCompra[];
   noConformidades: NoConformidad[];
@@ -255,9 +396,45 @@ export function DashboardScreen({
    */
   const esVentaIngresante = (v: Venta) => v.estado === "Completado";
 
+  const mesActual = hoyISO().slice(0, 7);
+  const enPeriodoGrafica = (fecha: string, p: Periodo, mes: string) =>
+    p === "mes"
+      ? esFechaISO(fecha) && fecha.slice(0, 7) === mes
+      : enPeriodo(fecha, p);
+
+  const ventasCompletadas = ventas.filter(esVentaIngresante);
+  const ventasConDetalle = ventasCompletadas.filter((v) => (v.detalle?.length ?? 0) > 0);
+  const ordenesNoAnuladas = ordenes.filter(
+    (o) => o.estado !== "Anulado" && esFechaISO(o.fecha),
+  );
+  const gestionesNoAnuladas = gestiones.filter(
+    (g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura),
+  );
+
+  const mesesVentas = mesesDesdeFechas(ventasCompletadas.map((v) => v.fecha), mesActual);
+  const mesesClientes = mesesVentas;
+  const mesesProductos = mesesDesdeFechas(ventasConDetalle.map((v) => v.fecha), mesActual);
+  const mesesOrdenesCompras = mesesDesdeFechas(
+    [
+      ...ordenesNoAnuladas.map((o) => o.fecha),
+      ...gestionesNoAnuladas.map((g) => g.fechaFactura),
+    ],
+    mesActual,
+  );
+  const mesesProveedores = mesesDesdeFechas(
+    gestionesNoAnuladas.map((g) => g.fechaFactura),
+    mesActual,
+  );
+  const mesesNoConformes = mesesDesdeFechas(
+    noConformidades.map((n) => n.fechaRegistro),
+    mesActual,
+  );
+
   /** Ventas que suman dentro de un periodo dado (filtro de cada gráfica). */
-  const ventasEn = (p: Periodo) =>
-    ventas.filter((v) => enPeriodo(v.fecha, p) && esVentaIngresante(v));
+  const ventasEn = (p: Periodo, mes: string) =>
+    ventasCompletadas.filter((v) => enPeriodoGrafica(v.fecha, p, mes));
+  const estadoCargaVentas: "cargando" | "error" | "permiso" | null =
+    !puedeVerVentas ? "permiso" : ventasCargando ? "cargando" : ventasError ? "error" : null;
 
   // ── Filtro propio de cada gráfica (todas arrancan en Semanal) ──
   const [fVentas, setFVentas] = useState<Periodo>("semana");
@@ -266,6 +443,24 @@ export function DashboardScreen({
   const [fOC, setFOC] = useState<Periodo>("semana");
   const [fProv, setFProv] = useState<Periodo>("semana");
   const [fNC, setFNC] = useState<Periodo>("semana");
+  const [mesVentas, setMesVentas] = useState(mesActual);
+  const [mesClientes, setMesClientes] = useState(mesActual);
+  const [mesProductos, setMesProductos] = useState(mesActual);
+  const [mesOC, setMesOC] = useState(mesActual);
+  const [mesProv, setMesProv] = useState(mesActual);
+  const [mesNC, setMesNC] = useState(mesActual);
+
+  const estadoCargaOrdenesCompras =
+    ordenesCompraCargando || comprasCargando
+      ? "cargando"
+      : errorOrdenesCompra || errorCompras
+        ? "error"
+        : null;
+  const errorCargaOrdenesCompras = errorOrdenesCompra ?? errorCompras;
+  const estadoCargaCompras =
+    comprasCargando ? "cargando" : errorCompras ? "error" : null;
+  const estadoCargaNoConformes =
+    noConformesCargando ? "cargando" : errorNoConformes ? "error" : null;
 
   // Filtro global → tarjetas de indicadores.
   const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha, periodo));
@@ -298,7 +493,7 @@ export function DashboardScreen({
   }[] = [
     {
       label: "Ingresos",
-      value: fmt(ingresosPeriodo),
+      value: estadoCargaVentas ? "—" : fmt(ingresosPeriodo),
       Icon: DollarSign,
       bg: "bg-emerald-50",
       ic: "text-emerald-600",
@@ -306,7 +501,7 @@ export function DashboardScreen({
     },
     {
       label: "Ventas",
-      value: String(ingresantesGlobal.length),
+      value: estadoCargaVentas ? "—" : String(ingresantesGlobal.length),
       Icon: ShoppingBag,
       bg: "bg-blue-50",
       ic: "text-blue-600",
@@ -317,7 +512,7 @@ export function DashboardScreen({
       // la fecha de la devolución. Sin `sub`, muestra la etiqueta del periodo
       // ("Hoy" / "Esta semana" / "Este mes") como Ingresos y Ventas.
       label: "Devoluciones",
-      value: String(devolucionesPeriodo.length),
+      value: estadoCargaVentas ? "—" : String(devolucionesPeriodo.length),
       Icon: RotateCcw,
       bg: "bg-orange-50",
       ic: "text-orange-600",
@@ -337,7 +532,7 @@ export function DashboardScreen({
 
   // ── 1. Top 10 clientes: pedidos vs valor (unión de ambos top 10) ──
   const clientesAgg = Object.values(
-    ventasEn(fClientes).reduce<Record<string, { nombre: string; pedidos: number; total: number }>>(
+    ventasEn(fClientes, mesClientes).reduce<Record<string, { nombre: string; pedidos: number; total: number }>>(
       (acc, venta) => {
         const nombre = venta.usuario?.trim() || "Venta general";
         const actual = acc[nombre] ?? { nombre, pedidos: 0, total: 0 };
@@ -358,7 +553,7 @@ export function DashboardScreen({
 
   // ── 2. Top 10 productos más vendidos: Σ detalle[].cantidad ──
   const dataProductos = Object.values(
-    ventasEn(fProductos)
+    ventasEn(fProductos, mesProductos)
       .flatMap((v) => v.detalle ?? [])
       .reduce<Record<string, { nombre: string; vendidos: number }>>((acc, det) => {
         const actual = acc[det.nombre] ?? { nombre: det.nombre, vendidos: 0 };
@@ -371,10 +566,10 @@ export function DashboardScreen({
     .slice(0, 10);
 
   // ── Órdenes y compras por gráfica (sin anuladas) ──
-  const ordenesEn = (p: Periodo) =>
-    ordenes.filter((o) => o.estado !== "Anulado" && esFechaISO(o.fecha) && enPeriodo(o.fecha, p));
-  const gestionesEn = (p: Periodo) =>
-    gestiones.filter((g) => g.estado !== "Anulado" && esFechaISO(g.fechaFactura) && enPeriodo(g.fechaFactura, p));
+  const ordenesEn = (p: Periodo, mes: string) =>
+    ordenesNoAnuladas.filter((o) => enPeriodoGrafica(o.fecha, p, mes));
+  const gestionesEn = (p: Periodo, mes: string) =>
+    gestionesNoAnuladas.filter((g) => enPeriodoGrafica(g.fechaFactura, p, mes));
 
   // ── Eje X estandarizado de las gráficas de compras, órdenes y no
   // conformes: "dia" → un grupo "Hoy", "semana" → Lun–Dom, "mes" → Semana 1–5. ──
@@ -406,7 +601,7 @@ export function DashboardScreen({
     ingresos: number;
     unidades: number;
   }
-  const ventasGrafica = ventasEn(fVentas);
+  const ventasGrafica = ventasEn(fVentas, mesVentas);
   const dataVentasGrafica: PuntoVenta[] =
     fVentas === "dia"
       ? (() => {
@@ -432,8 +627,8 @@ export function DashboardScreen({
         });
 
   // ── 4. Órdenes de compra vs compras (eje X según el filtro de la gráfica) ──
-  const ordenesGrafica = ordenesEn(fOC);
-  const gestionesGrafica = gestionesEn(fOC);
+  const ordenesGrafica = ordenesEn(fOC, mesOC);
+  const gestionesGrafica = gestionesEn(fOC, mesOC);
   const dataOCvsCompras = gruposEje(fOC).map((g) => ({
     etiqueta: g.etiqueta,
     ordenes: ordenesGrafica
@@ -445,7 +640,7 @@ export function DashboardScreen({
   }));
 
   // ── 5. Compras por proveedor: eje X del filtro, una serie por proveedor ──
-  const gestionesProv = gestionesEn(fProv);
+  const gestionesProv = gestionesEn(fProv, mesProv);
   const proveedoresPorTotal = [...gestionesProv.reduce<Map<string, number>>((acc, g) => {
     const p = (g.proveedor ?? "").trim() || "Sin proveedor";
     acc.set(p, (acc.get(p) ?? 0) + g.valorTotal);
@@ -480,7 +675,7 @@ export function DashboardScreen({
     Venta: "#1565C0",
   };
   const noConformesGrafica = noConformidades.filter(
-    (n) => esFechaISO(n.fechaRegistro) && enPeriodo(n.fechaRegistro, fNC),
+    (n) => esFechaISO(n.fechaRegistro) && enPeriodoGrafica(n.fechaRegistro, fNC, mesNC),
   );
   const dataNoConformes = gruposEje(fNC).map((g) => {
     const fila: Record<string, string | number> = { etiqueta: g.etiqueta };
@@ -908,6 +1103,11 @@ export function DashboardScreen({
               ariaLabel="Filtro de los indicadores"
             />
           </div>
+          {estadoCargaVentas && (
+            <div className="mb-4">
+              <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {tarjetas.map(({ label, value, sub, Icon, bg, ic, screen }) => (
               <TarjetaIndicador
@@ -944,8 +1144,13 @@ export function DashboardScreen({
               } (COP)`}
               periodo={fVentas}
               onPeriodo={setFVentas}
+              controlAdicional={
+                <SelectorMes periodo={fVentas} mes={mesVentas} meses={mesesVentas} onChange={setMesVentas} />
+              }
             >
-              {vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades])) ? (
+              {estadoCargaVentas ? (
+                <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+              ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades])) ? (
                 <SinDatos texto="Sin ventas en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -984,8 +1189,18 @@ export function DashboardScreen({
               etiqueta="Unión del top 10 por pedidos y del top 10 por valor, ordenada por pedidos"
               periodo={fClientes}
               onPeriodo={setFClientes}
+              controlAdicional={
+                <SelectorMes
+                  periodo={fClientes}
+                  mes={mesClientes}
+                  meses={mesesClientes}
+                  onChange={setMesClientes}
+                />
+              }
             >
-              {dataClientes.length === 0 ? (
+              {estadoCargaVentas ? (
+                <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+              ) : dataClientes.length === 0 ? (
                 <SinDatos texto="Sin ventas de clientes en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1009,8 +1224,18 @@ export function DashboardScreen({
               etiqueta="Suma de detalle[].cantidad de las ventas del periodo (unidades)"
               periodo={fProductos}
               onPeriodo={setFProductos}
+              controlAdicional={
+                <SelectorMes
+                  periodo={fProductos}
+                  mes={mesProductos}
+                  meses={mesesProductos}
+                  onChange={setMesProductos}
+                />
+              }
             >
-              {dataProductos.length === 0 ? (
+              {estadoCargaVentas ? (
+                <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+              ) : dataProductos.length === 0 ? (
                 <SinDatos texto="Sin productos vendidos en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1031,8 +1256,18 @@ export function DashboardScreen({
               etiqueta={`Valor de órdenes creadas vs facturas registradas ${ejeDe(fOC)}, sin anuladas (COP)`}
               periodo={fOC}
               onPeriodo={setFOC}
+              controlAdicional={
+                <SelectorMes periodo={fOC} mes={mesOC} meses={mesesOrdenesCompras} onChange={setMesOC} />
+              }
             >
-              {vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
+              {estadoCargaOrdenesCompras ? (
+                <EstadoVentas
+                  estado={estadoCargaOrdenesCompras}
+                  error={errorCargaOrdenesCompras}
+                  textoCargando="Cargando órdenes y compras…"
+                  textoError="No fue posible cargar órdenes de compra y compras."
+                />
+              ) : vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
                 <SinDatos texto="Sin compras ni órdenes en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1055,8 +1290,18 @@ export function DashboardScreen({
               etiqueta={`Facturas no anuladas ${ejeDe(fProv)}, una serie por proveedor (top 8 + Otros, COP)`}
               periodo={fProv}
               onPeriodo={setFProv}
+              controlAdicional={
+                <SelectorMes periodo={fProv} mes={mesProv} meses={mesesProveedores} onChange={setMesProv} />
+              }
             >
-              {!hayComprasProveedores ? (
+              {estadoCargaCompras ? (
+                <EstadoVentas
+                  estado={estadoCargaCompras}
+                  error={errorCompras}
+                  textoCargando="Cargando compras…"
+                  textoError="No fue posible cargar las compras."
+                />
+              ) : !hayComprasProveedores ? (
                 <SinDatos texto="Sin compras registradas en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1087,8 +1332,18 @@ export function DashboardScreen({
               etiqueta={`Registros por tipo ${ejeDe(fNC)}, según la fecha de registro`}
               periodo={fNC}
               onPeriodo={setFNC}
+              controlAdicional={
+                <SelectorMes periodo={fNC} mes={mesNC} meses={mesesNoConformes} onChange={setMesNC} />
+              }
             >
-              {noConformesGrafica.length === 0 ? (
+              {estadoCargaNoConformes ? (
+                <EstadoVentas
+                  estado={estadoCargaNoConformes}
+                  error={errorNoConformes}
+                  textoCargando="Cargando productos no conformes…"
+                  textoError="No fue posible cargar los productos no conformes."
+                />
+              ) : noConformesGrafica.length === 0 ? (
                 <SinDatos texto="Sin productos no conformes en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1155,7 +1410,13 @@ export function DashboardScreen({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {ventasRecientes.length === 0 ? (
+                {estadoCargaVentas ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-8">
+                      <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+                    </td>
+                  </tr>
+                ) : ventasRecientes.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       No hay ventas registradas todavía
