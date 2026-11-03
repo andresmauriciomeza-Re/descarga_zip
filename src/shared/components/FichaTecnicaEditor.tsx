@@ -667,14 +667,18 @@ export function FichaTecnicaEditor({
         {esInsumo && errorInsumos && (
           <p className="shrink-0 text-xs text-red-500 dark:text-red-400 mt-1 mb-2 leading-tight">{errorInsumos}</p>
         )}
-        <div className="flex flex-wrap items-end gap-2 shrink-0">
+        <div className={`shrink-0 gap-2 ${
+          esInsumo
+            ? "grid grid-cols-[1fr_1fr_1fr_auto] items-end [&>div]:min-w-0 [&_input]:truncate"
+            : "flex flex-wrap items-end"
+        }`}>
           <InsumoSearchField
             insumos={catalogo}
             valor={nombre}
             onValorChange={v => { setNombre(v); setSel(null); }}
             onSelect={seleccionarInsumo}
           />
-          <div className="w-20">
+          <div className={esInsumo ? "min-w-0" : "w-20"}>
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
             {/* Arranca en 1 (regla del alta de insumos) y borra a vacío sin
                 volver a 0 (punto B1). */}
@@ -684,7 +688,7 @@ export function FichaTecnicaEditor({
               onChange={e => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
               className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
-          <div className="w-24">
+          <div className={esInsumo ? "min-w-0 [&_button]:py-2 [&_button_span]:min-w-0 [&_button_span]:truncate" : "w-24"}>
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
             {/* SOLO modo insumo: mismo UnidadSelect redondeado que "Unidad de
                 medida", pero con la lista compartida UNIDADES_INSUMO y, una
@@ -708,7 +712,7 @@ export function FichaTecnicaEditor({
             )}
           </div>
           <button onClick={addInsumo} title="Agregar insumo"
-            className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+            className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
             <Plus className="w-4 h-4" />
           </button>
         </div>
