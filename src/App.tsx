@@ -8093,7 +8093,7 @@ export default function App() {
     }
   };
 
-  const cargarProductosGestion = async (): Promise<Producto[]> => {
+  const cargarProductosGestion = async (): Promise<Producto[] | null> => {
     setProductosCargando(true);
     setErrorCargaProductos(null);
     try {
@@ -8104,7 +8104,7 @@ export default function App() {
     } catch (error) {
       setErrorCargaProductos(mensajeErrorProductos(error, "No se pudieron cargar los productos."));
       setProductosGestionCargados(false);
-      return [];
+      return null;
     } finally {
       setProductosCargando(false);
     }
@@ -8125,7 +8125,7 @@ export default function App() {
       es el catálogo ya leído: hace falta para derivar los tamaños de cada
       ficha. Si falla NO se vuelve a datos de ejemplo: queda el error con
       "Reintentar". */
-  const cargarInsumosFichas = async (productosCargados?: Producto[]) => {
+  const cargarInsumosFichas = async (productosCargados?: Producto[]): Promise<boolean> => {
     setInsumosCargando(true);
     setErrorInsumos(null);
     try {
@@ -8145,35 +8145,41 @@ export default function App() {
         (id) => configDeProducto(id, base),
       );
       setFichasPorProducto({ ...datosInsumos.fichas, ...fichasDeProducto });
+      return true;
     } catch (error) {
       setErrorInsumos(mensajeErrorInsumos(error, "No se pudieron cargar los insumos."));
+      return false;
     } finally {
       setInsumosCargando(false);
     }
   };
 
   /** Órdenes de producción (API). */
-  const cargarOrdenes = async () => {
+  const cargarOrdenes = async (): Promise<boolean> => {
     setOrdenesCargando(true);
     setErrorOrdenes(null);
     try {
       setOrdenesProduccion(await listarOrdenesProduccion());
+      return true;
     } catch (error) {
       setErrorOrdenes(mensajeErrorOrdenes(error, "No se pudieron cargar las órdenes de producción."));
+      return false;
     } finally {
       setOrdenesCargando(false);
     }
   };
 
   /** Productos no conformes (API). */
-  const cargarNoConformes = async () => {
+  const cargarNoConformes = async (): Promise<boolean> => {
     setNoConformesCargando(true);
     setNoConformesCargados(false);
     setErrorNoConformes(null);
     try {
       setNoConformidades(await listarNoConformidades());
+      return true;
     } catch (error) {
       setErrorNoConformes(mensajeErrorNoConformes(error, "No se pudieron cargar los productos no conformes."));
+      return false;
     } finally {
       setNoConformesCargando(false);
       setNoConformesCargados(true);
@@ -8243,7 +8249,7 @@ export default function App() {
       // los tamaños de "Porciones por tamaño".
       const productosCargados = await cargarProductosGestion();
       await Promise.all([
-        cargarInsumosFichas(productosCargados),
+        cargarInsumosFichas(productosCargados ?? productos),
         cargarOrdenes(),
         cargarNoConformes(),
         cargarProveedores(),
@@ -8933,14 +8939,15 @@ export default function App() {
   /** Recarga insumos, fichas y órdenes desde la API tras una acción del módulo
       de Producción (crear un producto insumo, iniciar o completar una orden…):
       el stock de los insumos cambió en la base. */
-  const recargarProduccion = async () => {
+  const recargarProduccion = async (): Promise<boolean> => {
     // CPN también: completar una preparación con merma crea su registro.
     const productosCargados = await recargarInventarioProductos();
-    await Promise.all([
-      cargarInsumosFichas(productosCargados),
+    const resultados = await Promise.all([
+      cargarInsumosFichas(productosCargados ?? productos),
       cargarOrdenes(),
       cargarNoConformes(),
     ]);
+    return productosCargados !== null && resultados.every(Boolean);
   };
 
   const recargarInventarioProductos = async () => {
@@ -8953,7 +8960,7 @@ export default function App() {
       (producto de reventa o insumo): se recargan productos e insumos. */
   const recargarInventarioCpn = async () => {
     const productosCargados = await recargarInventarioProductos();
-    await cargarInsumosFichas(productosCargados);
+    await cargarInsumosFichas(productosCargados ?? productos);
   };
 
   /** "Ver orden" del toast de Insumos: salta a Orden de Producción con el
@@ -10535,9 +10542,9 @@ export default function App() {
                       catalogoCanje={productosCatalogo.map((producto) => productoACatalogo(producto, categoriasCatalogo))}
                       abrirDevolucionId={devolucionAAbrir}
                       onAbierta={() => setDevolucionAAbrir(null)}
-                      onRecargarOrdenes={cargarOrdenes}
-                      onRecargarNoConformes={cargarNoConformes}
-                      onRecargarInventario={recargarInventarioProductos}
+                      onRecargarOrdenes={async () => { await cargarOrdenes(); }}
+                      onRecargarNoConformes={async () => { await cargarNoConformes(); }}
+                      onRecargarInventario={async () => { await recargarInventarioProductos(); }}
                     />
                   )}
                   {screen === "gestion-productos" && (
@@ -10728,7 +10735,7 @@ export default function App() {
                       abrirOrdenProduccion={abrirOrdenProduccion}
                       /* A2: al crear un producto insumo la API crea su orden
                          automática y el toast ofrece "Ver orden". */
-                      recargarProduccion={recargarProduccion}
+                      recargarProduccion={async () => { await recargarProduccion(); }}
                       verOrdenProduccion={verOrdenProduccion}
                     />
                   )}

@@ -1179,7 +1179,7 @@ export function OrdenProduccionScreen({
   errorCarga?: string | null;
   onReintentar?: () => void;
   /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
-  recargarProduccion?: () => Promise<void>;
+  recargarProduccion?: () => Promise<boolean | void>;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1904,7 +1904,19 @@ export function OrdenProduccionScreen({
         <div className="flex items-center gap-3">
           {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
           {canCreate && (
-            <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
+            <button onClick={async () => {
+              try {
+                const recargaExitosa = await recargarProduccion?.();
+                if (recargaExitosa === false) {
+                  toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+                }
+              } catch {
+                toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+              } finally {
+                setForm(emptyForm());
+                setShowCreate(true);
+              }
+            }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
               <Plus className="w-4 h-4" /> Crear Orden de Producción
             </button>
