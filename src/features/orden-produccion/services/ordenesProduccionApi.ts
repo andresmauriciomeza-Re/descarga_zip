@@ -34,7 +34,7 @@ export interface OrdenApi {
   fecha_solicitada: string;
   fecha_entrega_estimada: string | null;
   hora_solicitada: string | null;
-  estado: "Pendiente" | "En proceso" | "Por verificar" | "Completada" | "Cancelada";
+  estado: "Pendiente" | "En proceso" | "Completada" | "Cancelada";
   observacion: string | null;
   venta_numero: string | null;
   cliente: string | null;
@@ -101,16 +101,14 @@ export const mapearFaltanteApi = (f: FaltanteApi): FaltanteUnidad => ({
   ...(f.motivo ? { motivoTexto: f.motivo } : {}),
 });
 
-const estadoAFront = (estado: OrdenApi["estado"]): EstadoOrden =>
-  estado === "En proceso"
+const estadoAFront = (estado: string): EstadoOrden =>
+  estado === "En proceso" || estado === "Por verificar"
     ? "en-proceso"
-    : estado === "Por verificar"
-      ? "por-verificar"
-      : estado === "Completada"
-        ? "completada"
-        : estado === "Cancelada"
-          ? "cancelada"
-          : "pendiente";
+    : estado === "Completada"
+      ? "completada"
+      : estado === "Cancelada"
+        ? "cancelada"
+        : "pendiente";
 
 const parsearJson = <T>(valor: T | string | null | undefined): T => {
   if (typeof valor === "string") {
@@ -294,6 +292,7 @@ export const crearOrdenPreparacionApi = async (payload: {
   fecha_solicitada?: string;
   hora_solicitada?: string | null;
   observacion?: string | null;
+  validar_stock?: boolean;
   lineas: ({ id: string; cantidad: number } | { id_producto: number; cantidad: number })[];
 }): Promise<OrdenProduccion> => {
   const data = await conFaltantes(
@@ -303,6 +302,7 @@ export const crearOrdenPreparacionApi = async (payload: {
         ...(payload.fecha_solicitada ? { fecha_solicitada: payload.fecha_solicitada } : {}),
         hora_solicitada: payload.hora_solicitada ?? null,
         observacion: payload.observacion ?? null,
+        ...(payload.validar_stock === undefined ? {} : { validar_stock: payload.validar_stock }),
         lineas: payload.lineas.map((linea) => (
           "id_producto" in linea
             ? { id_producto: linea.id_producto, cantidad: linea.cantidad }

@@ -227,6 +227,16 @@ function CampoComprobante({
  *  Producción y el backend; este alias conserva el nombre con el que se
  *  referencia en todo el frontend. */
 export type VentaStatus = EstadoVenta;
+export type EstadoClienteVenta =
+  | "Pendiente"
+  | "En espera"
+  | "Aceptado"
+  | "En proceso"
+  | "Por entregar"
+  | "Completado"
+  | "Rechazado"
+  | "Anulado"
+  | "Devolución";
 
 /** Estado de devolución se asigna desde el flujo de Devoluciones. */
 export const VENTA_STATUS_MANUALES: VentaStatus[] = ["Devolucion"];
@@ -344,6 +354,8 @@ export interface Venta {
   cantidad: number;
   total: number;
   estado: VentaStatus;
+  estadoCliente?: EstadoClienteVenta | VentaStatus;
+  estadoOrden?: string;
   detalle?: DetalleProd[];
   metodoPago?: string;
   comprobante?: string;

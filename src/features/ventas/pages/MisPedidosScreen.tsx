@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Clock,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { Venta, VentaStatus } from "./VentasScreen";
+import type { EstadoClienteVenta, Venta, VentaStatus } from "./VentasScreen";
 import { hora12 } from "@/shared/utils/hora";
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -29,55 +29,144 @@ const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
 /** Etiquetas y mensajes PARA EL CLIENTE de cada estado de la venta (la tabla
     de la sección 3 difiere de los nombres del panel admin). */
-const ESTADO: Record<
-  VentaStatus,
-  { label: string; color: string; mensaje: string }
-> = {
-  "Por verificar": {
-    label: "Por verificar",
+const ESTADO: Record<string, { label: string; color: string; mensaje: string }> = {
+  Pendiente: {
+    label: "Pendiente",
     color: "bg-amber-100 text-amber-800",
-    mensaje: "Estamos revisando tu comprobante de pago.",
+    mensaje: "Estamos verificando tu pago.",
   },
-  // Punto C2: estado nuevo entre "pago verificado" y "listo para recoger":
-  // la venta espera a que su orden de producción se complete en cocina.
+  "Por verificar": {
+    label: "Pendiente",
+    color: "bg-amber-100 text-amber-800",
+    mensaje: "Estamos verificando tu pago.",
+  },
+  Aceptado: {
+    label: "Aceptado",
+    color: "bg-sky-100 text-sky-800",
+    mensaje: "Pago aceptado, tu pedido entra a cocina.",
+  },
+  "En proceso": {
+    label: "En proceso",
+    color: "bg-indigo-100 text-indigo-800",
+    mensaje: "Estamos preparando tu pedido.",
+  },
   "Por entregar": {
     label: "Por entregar",
     color: "bg-blue-100 text-blue-800",
-    mensaje: "Tu pago fue confirmado. Tu pedido está listo para recoger.",
+    mensaje: "¡Listo! Recógelo.",
   },
   Completado: {
     label: "Completado",
     color: "bg-emerald-100 text-emerald-800",
-    mensaje: "Pedido entregado. ¡Gracias por elegir La Sirena!",
+    mensaje: "¡Gracias por tu compra!",
+  },
+  Rechazado: {
+    label: "Rechazado",
+    color: "bg-red-100 text-red-700",
+    mensaje: "El comprobante de este pedido fue rechazado.",
+  },
+  Anulado: {
+    label: "Anulado",
+    color: "bg-red-100 text-red-700",
+    mensaje: "Este pedido fue anulado por la pizzería.",
+  },
+  "Devolución": {
+    label: "Devolución",
+    color: "bg-orange-100 text-orange-800",
+    mensaje: "Este pedido tiene una devolución registrada.",
   },
   Devolucion: {
     label: "Devolución",
     color: "bg-orange-100 text-orange-800",
     mensaje: "Este pedido tiene una devolución registrada.",
   },
-  Anulado: {
-    label: "Rechazado",
-    color: "bg-red-100 text-red-700",
-    mensaje: "El comprobante de este pedido fue rechazado.",
-  },
   "En espera": {
     label: "En espera",
     color: "bg-violet-100 text-violet-800",
-    mensaje: "Falta un valor por pagar para completar tu pedido.",
+    mensaje: "Falta parte del pago.",
   },
 };
 
-/** Estado a mostrar para UN pedido concreto: el estado "Anulado" tapa dos
-    flujos — el comprobante rechazado (Rechazado) y la anulación/cancelación,
-    la única que trae `montoReembolso` porque devuelve dinero. */
-const estadoCliente = (p: Venta): (typeof ESTADO)[Venta["estado"]] =>
-  p.estado === "Anulado" && p.montoReembolso !== undefined
-    ? {
-        label: "Anulado",
-        color: ESTADO.Anulado.color,
-        mensaje: "Este pedido fue anulado por la pizzería.",
-      }
-    : ESTADO[p.estado];
+const PASOS_PEDIDO: EstadoClienteVenta[] = [
+  "Pendiente",
+  "Aceptado",
+  "En proceso",
+  "Por entregar",
+  "Completado",
+];
+
+const estadoCliente = (p: Venta): EstadoClienteVenta | VentaStatus =>
+  p.estadoCliente ?? p.estado;
+
+const datosEstadoCliente = (p: Venta) => {
+  const estado = estadoCliente(p);
+  const datos = ESTADO[estado] ?? ESTADO[p.estado];
+  if (estado === "Por entregar" && p.horaRecogida) {
+    return { ...datos, mensaje: `¡Listo! Recógelo a las ${p.horaRecogida}.` };
+  }
+  return datos;
+};
+
+function BarraProgresoPedido({ pedido }: { pedido: Venta }) {
+  const estado = estadoCliente(pedido);
+  const estadoProgreso =
+    estado === "En espera" || estado === "Por verificar" ? "Pendiente" : estado;
+  const indiceActual = PASOS_PEDIDO.indexOf(estadoProgreso as EstadoClienteVenta);
+  if (indiceActual < 0) return null;
+
+  return (
+    <div className="px-5 pb-4" aria-label={`Progreso: ${estadoProgreso}`}>
+      <ol className="flex w-full">
+        {PASOS_PEDIDO.map((paso, indice) => {
+          const anterior = indice < indiceActual;
+          const actual = indice === indiceActual;
+          return (
+            <li key={paso} className="relative flex-1 text-center">
+              {indice > 0 && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-0 right-1/2 top-3 h-0.5 ${
+                    indice <= indiceActual ? "bg-emerald-500" : "bg-border"
+                  }`}
+                />
+              )}
+              {indice < PASOS_PEDIDO.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-1/2 right-0 top-3 h-0.5 ${
+                    indice < indiceActual ? "bg-emerald-500" : "bg-border"
+                  }`}
+                />
+              )}
+              <span
+                className={`relative z-10 mx-auto flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                  actual
+                    ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
+                    : anterior
+                      ? "bg-emerald-500 text-white"
+                      : "bg-muted text-muted-foreground"
+                }`}
+                aria-current={actual ? "step" : undefined}
+              >
+                {anterior ? "✓" : indice + 1}
+              </span>
+              <span
+                className={`mt-1 hidden text-[10px] leading-tight sm:block ${
+                  actual ? "font-bold text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {paso}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-1 text-center text-xs font-semibold text-foreground sm:hidden">
+        {estadoProgreso}
+      </p>
+    </div>
+  );
+}
 
 /** Cómo se resolvió una devolución ya cerrada, en una línea para el cliente:
     "Cambio de producto · nuevo pedido #11", "Devolución de dinero", … El pedido
@@ -121,21 +210,52 @@ interface Props {
 
 export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, onVerMenu }: Props) {
   const [misPedidos, setMisPedidos] = useState<Venta[]>([]);
-  const cargar = async () => {
-    try { setMisPedidos(await obtenerMisVentas()); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "No se pudieron cargar tus pedidos."); }
-  };
-  useEffect(() => { void cargar(); }, []);
-  // Refresco automático cada 60 s: el backend avanza solo "Por entregar" →
-  // "Completado" al llegar la hora de recogida, y este tick lo refleja sin F5.
-  useEffect(() => {
-    const id = setInterval(() => {
-      void obtenerMisVentas().then(setMisPedidos).catch(() => {
-        // Silencioso: refresco de fondo, no acción del usuario.
-      });
-    }, 60_000);
-    return () => clearInterval(id);
+  const [cargaInicialResuelta, setCargaInicialResuelta] = useState(false);
+  const cargaEnCursoRef = useRef(false);
+  const cargar = useCallback(async (silencioso = false) => {
+    if (cargaEnCursoRef.current) return;
+    cargaEnCursoRef.current = true;
+    try {
+      setMisPedidos(await obtenerMisVentas());
+    } catch (error) {
+      if (!silencioso) {
+        toast.error(error instanceof Error ? error.message : "No se pudieron cargar tus pedidos.");
+      }
+    } finally {
+      cargaEnCursoRef.current = false;
+      setCargaInicialResuelta(true);
+    }
   }, []);
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  // Refresca cada 15 s solo con la pestaña visible y al volver a ella.
+  useEffect(() => {
+    let id: ReturnType<typeof setInterval> | null = null;
+    const configurarRefresco = () => {
+      if (id !== null) clearInterval(id);
+      id = null;
+      if (document.visibilityState === "visible") {
+        id = setInterval(() => {
+          if (document.visibilityState === "visible") void cargar(true);
+        }, 15_000);
+      }
+    };
+    const alCambiarVisibilidad = () => {
+      configurarRefresco();
+      if (document.visibilityState === "visible") void cargar(true);
+    };
+    const alEnfocar = () => {
+      if (document.visibilityState === "visible") void cargar(true);
+    };
+    configurarRefresco();
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    window.addEventListener("focus", alEnfocar);
+    return () => {
+      if (id !== null) clearInterval(id);
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+      window.removeEventListener("focus", alEnfocar);
+    };
+  }, [cargar]);
 
   // ── Cancelación del cliente (primeros 10 minutos) ──
   // El backend calcula, al cargar la lista, cuántos segundos quedaban de la
@@ -231,40 +351,50 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   }, [pestana, pendientes.length]);
 
   // ── Cambios de estado en tiempo real (3.7) ──
-  // Compara el estado anterior con el actual de cada pedido y avisa con un
-  // toast cuando cambia (aprobado, faltante solicitado, faltante resuelto,
-  // rechazado). Al montar, avisa de los pedidos que ya están "En espera".
-  const prevEstadosRef = useRef<Record<string, VentaStatus>>({});
+  // Compara los estados visibles al cliente, no los estados internos de venta.
+  const prevEstadosRef = useRef<Record<string, EstadoClienteVenta | VentaStatus>>({});
   const primeraCargaRef = useRef(true);
   useEffect(() => {
     if (primeraCargaRef.current) {
+      if (!cargaInicialResuelta) return;
       primeraCargaRef.current = false;
-      for (const p of misPedidos) prevEstadosRef.current[p.id] = p.estado;
+      for (const p of misPedidos) prevEstadosRef.current[p.id] = estadoCliente(p);
       // Aviso de pedidos que ya esperan dinero faltante.
       for (const p of misPedidos) {
-        if (p.estado === "En espera") {
+        if (estadoCliente(p) === "En espera") {
           toast.info(`El pedido ${p.id} espera un faltante de ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
         }
       }
       return;
     }
     for (const p of misPedidos) {
+      const estadoActual = estadoCliente(p);
       const prev = prevEstadosRef.current[p.id];
-      if (prev !== undefined && prev !== p.estado) {
-        if (p.estado === "Por entregar") {
-          toast.success(`Tu pedido ${p.id} está listo para recoger.`);
-        } else if (p.estado === "En espera") {
+      if (prev !== undefined && prev !== estadoActual) {
+        if (estadoActual === "Pendiente") {
+          toast.info(`Tu pedido #${p.id} está pendiente de verificación.`);
+        } else if (estadoActual === "Aceptado") {
+          toast.success(`El pago de tu pedido #${p.id} fue aceptado.`);
+        } else if (estadoActual === "En proceso") {
+          toast.info(`Tu pedido #${p.id} está en preparación.`);
+        } else if (estadoActual === "Por entregar") {
+          toast.success(`¡Tu pedido #${p.id} está listo para recoger!`);
+        } else if (estadoActual === "En espera") {
           toast.info(`El pedido ${p.id}: falta ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
-        } else if (p.estado === "Anulado") {
-          toast.error(`El pedido ${p.id} fue rechazado.`);
-        } else if (p.estado === "Completado") {
-          toast.success(`Tu pedido ${p.id} fue entregado. ¡Gracias!`);
+        } else if (estadoActual === "Rechazado") {
+          toast.error(`Tu pedido #${p.id} fue rechazado.`);
+        } else if (estadoActual === "Anulado") {
+          toast.error(`Tu pedido #${p.id} fue anulado.`);
+        } else if (estadoActual === "Devolución" || estadoActual === "Devolucion") {
+          toast.info(`El pedido #${p.id} tiene una devolución registrada.`);
+        } else if (estadoActual === "Completado") {
+          toast.success(`¡Gracias por tu compra! El pedido #${p.id} fue completado.`);
         }
       }
-      prevEstadosRef.current[p.id] = p.estado;
+      prevEstadosRef.current[p.id] = estadoActual;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [misPedidos]);
+  }, [misPedidos, cargaInicialResuelta]);
 
   // Limpieza del modal al abrir/cerrar.
   const abrirCompletar = (id: string) => {
@@ -371,7 +501,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
 
       <div className="space-y-4">
         {lista.map((p) => {
-          const est = estadoCliente(p);
+          const estado = estadoCliente(p);
+          const est = datosEstadoCliente(p);
           const abierta = abierto === p.id;
 
           return (
@@ -419,8 +550,10 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                 </div>
               </button>
 
+              <BarraProgresoPedido pedido={p} />
+
               {/* Alerta de falta de pago: visible sin expandir la tarjeta. */}
-              {p.estado === "En espera" && (
+              {estado === "En espera" && (
                 <div className="px-5 pb-4 -mt-1">
                   <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-start gap-2 text-violet-900">
@@ -444,7 +577,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   ("Enviar dinero faltante") abre el modal "Completar pago",
                   donde está el QR para enviar el saldo y subir el comprobante:
                   mismo flujo, sin duplicar. */}
-              {pestana === "pendientes" && p.estado === "En espera" && (
+              {pestana === "pendientes" && estado === "En espera" && (
                 <div className="px-5 pb-4 -mt-1">
                   <p className="text-sm font-semibold text-violet-900">
                     Monto que falta:{" "}

@@ -10563,6 +10563,8 @@ export default function App() {
                       onEditarEnServidor={editarProductoEnServidor}
                       onCambiarEstadoEnServidor={cambiarEstadoEnServidor}
                       onDescontinuarEnServidor={descontinuarProductoEnServidor}
+                      recargarProduccion={recargarProduccion}
+                      verOrdenProduccion={verOrdenProduccion}
                     />
                   )}
                   {screen === "cat-producto" && (
