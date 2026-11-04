@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
 import {
   copiarFicha,
@@ -1483,7 +1484,7 @@ export function GestionProductosScreen({
     // El buscador busca por nombre (con su presentación: bebidas →
     // "Coca-Cola · 1.5 L · Paca x12" y "Coca-Cola 1.5 L"), categoría y
     // tipo; NO por id (el id es interno y ya no se muestra).
-    return productos.filter(
+    const filtrados = productos.filter(
       (p) =>
         // Filtro del aviso de stock bajo: solo esas bebidas (el resto de
         // condiciones sigue aplicando para que los otros filtros manden igual).
@@ -1495,6 +1496,7 @@ export function GestionProductosScreen({
           catName(p.idCategoria).toLowerCase().includes(q) ||
           tipoDe(p, catName(p.idCategoria)).toLowerCase().includes(q)),
     );
+    return ordenarPorIdDescendente(filtrados, (producto) => producto.id);
   }, [productos, search, filtroTipo, filtroEstado, filtroStockBajo]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -1559,8 +1561,6 @@ export function GestionProductosScreen({
       toast.error("Nombre y categoría son obligatorios");
       return;
     }
-    // Bloque 1.1: el error ya se pinta en tiempo real bajo el campo Nombre;
-    // acá se bloquea el Crear por si el formulario llega por otro camino.
     if (nombreRepetido(form.nombre)) {
       toast.error("Ya existe un producto con ese nombre");
       return;
@@ -1962,14 +1962,6 @@ export function GestionProductosScreen({
     const precioGrandeVisible =
       values.precioGrande ??
       (readOnly && esPizza ? values.precioUnitario + RECARGO_TAMANO_GRANDE : undefined);
-    const errorPrecioGrande =
-      !readOnly && esPizza
-        ? !Number.isFinite(Number(values.precioGrande)) || Number(values.precioGrande) <= 0
-          ? "El precio Grande debe ser mayor a 0."
-          : Number(values.precioGrande) <= values.precioUnitario
-            ? "El precio Grande debe ser mayor que el precio Mediana."
-            : ""
-        : "";
     /** Bebida / reventa: el precio de venta se define en Compras, no aquí. */
     const esTerminado = tipo === TIPOS_PRODUCTO[1];
     /** El campo Precio de venta se pinta salvo al CREAR una bebida. */
@@ -1988,8 +1980,6 @@ export function GestionProductosScreen({
     const compraPorEmpaque =
       esTerminado && (values.unidadCompra === "paca" || values.unidadCompra === "caja");
     const nEmpaque = Number(values.unidadesPorEmpaque);
-    const empaqueVacio =
-      !Number.isFinite(nEmpaque) || !Number.isInteger(nEmpaque) || nEmpaque <= 1;
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {/* Categoría: PRIMER campo de "Datos del producto" (se muestra solo el
@@ -2055,8 +2045,6 @@ export function GestionProductosScreen({
                     : `${inputCls}${errorNombre ? " border-red-400 focus:ring-red-300" : ""}`
                 }
               />
-              {/* Bloque 1.1: aviso en TIEMPO REAL si el nombre ya existe
-                  (sin tildes, mayúsculas ni espacios de más). */}
               {errorNombre && (
                 <p className="text-xs text-red-500 mt-0.5">{errorNombre}</p>
               )}
@@ -2092,11 +2080,8 @@ export function GestionProductosScreen({
                       valor={precioGrandeVisible ?? 0}
                       onCambio={(n) => onChange("precioGrande", n)}
                       readOnly={precioSoloLectura}
-                      cls={`${precioSoloLectura ? roCls : inputCls}${errorPrecioGrande ? " border-red-400 focus:ring-red-300" : ""}`}
+                      cls={precioSoloLectura ? roCls : inputCls}
                     />
-                    {errorPrecioGrande && (
-                      <p className="text-xs text-red-500 mt-0.5">{errorPrecioGrande}</p>
-                    )}
                   </div>
                 )}
               </>
@@ -2247,11 +2232,6 @@ export function GestionProductosScreen({
                     disabled={readOnly}
                     className={readOnly ? roCls : inputCls}
                   />
-                  {empaqueVacio && (
-                    <p className="text-[11px] text-red-500 mt-1">
-                      Mínimo 2 unidades por presentación
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -2363,11 +2343,6 @@ export function GestionProductosScreen({
     // Reventa definida (por categoría o por la respuesta): no hay ficha que
     // ocultar/mostrar, así que el botón queda deshabilitado.
     const sinFichaDefinitiva = (cfgCrear?.tipo === TIPOS_PRODUCTO[1]) || formTieneFicha === "no";
-    // Bloque 1.1: error en TIEMPO REAL bajo el campo Nombre; mientras exista,
-    // el botón Crear queda deshabilitado (además del toast de handleCreate).
-    const errorNombreCrear = nombreRepetido(form.nombre)
-      ? "Ya existe un producto con ese nombre"
-      : errorNombreServidor;
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -2414,8 +2389,8 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={() => void handleCreate()}
-              disabled={guardando || errorNombreCrear !== ""}
-              title={errorNombreCrear || undefined}
+              disabled={guardando}
+              title={errorNombreServidor || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Crear"}
             </button>
@@ -2457,8 +2432,7 @@ export function GestionProductosScreen({
                   // esCrear); las imágenes viven en su propia tarjeta.
                   esCrear: true,
                   mostrarEstado: false,
-                  // Bloque 1.1: nombre repetido en tiempo real bajo el campo.
-                  errorNombre: errorNombreCrear,
+                  errorNombre: errorNombreServidor,
                   // La pastilla del tipo espera a tener el tipo definido.
                   mostrarTipo: !mostrarPregunta || formTieneFicha !== null,
                   trasCategoria: mostrarPregunta ? (
@@ -2857,13 +2831,6 @@ export function GestionProductosScreen({
     // Pregunta "¿Tiene ficha técnica?" (solo categorías SIN configuración):
     // bloqueada cuando el producto ya tiene versiones guardadas.
     const tieneHistorialFicha = (fichas[editItem.id]?.length ?? 0) > 0;
-    // Bloque 1.1: nombre repetido en tiempo real, excluyéndose a sí mismo.
-    // El nombre hoy está bloqueado en el form (lockNombre: el menú y el panel
-    // se emparejan por nombre), así que solo saltaría con duplicados viejos en
-    // los datos; queda listo por si se desbloquea al conectar la API.
-    const errorNombreEdit = nombreRepetido(editItem.nombre, editItem.id)
-      ? "Ya existe un producto con ese nombre"
-      : errorNombreServidor;
     // Versión histórica seleccionada (null = borrador editable).
     const vSel = editFichaSel === "borrador" ? null : editFichaVersiones[editFichaSel];
     return (
@@ -2892,8 +2859,8 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={() => void handleEdit()}
-              disabled={guardando || errorNombreEdit !== ""}
-              title={errorNombreEdit || undefined}
+              disabled={guardando}
+              title={errorNombreServidor || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Guardar"}
             </button>
@@ -2927,8 +2894,7 @@ export function GestionProductosScreen({
                   },
                   mostrarEstado: true,
                   lockNombre: false,
-                  // Bloque 1.1: nombre repetido en tiempo real bajo el campo.
-                  errorNombre: errorNombreEdit,
+                  errorNombre: errorNombreServidor,
                   // "¿Tiene ficha técnica?" — solo para categorías SIN
                   // configuración (si no, el tipo lo da la categoría) y
                   // bloqueada si ya hay versiones guardadas.

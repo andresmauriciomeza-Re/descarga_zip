@@ -5,6 +5,7 @@ import {
   Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -2067,14 +2068,14 @@ export function GestionCompraScreen({
   }, [detail]);
 
   const filtered = useMemo(() =>
-    gestiones.filter(g => {
+    ordenarPorIdDescendente(gestiones.filter(g => {
       const q = search.toLowerCase();
       if (!q) return true;
       const proveedor = g.proveedor ?? getOrden(g.ordenId)?.proveedor ?? "";
       return proveedor.toLowerCase().includes(q)
         || g.numeroFactura.toLowerCase().includes(q)
         || g.estado.toLowerCase().includes(q);
-    }),
+    }), (gestion) => gestion.id),
     [gestiones, search, ordenes]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca

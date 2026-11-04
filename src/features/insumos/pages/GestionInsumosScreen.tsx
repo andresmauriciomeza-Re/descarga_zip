@@ -14,6 +14,7 @@ import {
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 // Bloque 3: limpieza y comparación de nombres compartidas con Gestión de
 // Productos y el "+ Crear insumo" de Compras (una sola copia de las reglas).
 import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/nombres";
@@ -53,12 +54,6 @@ import {
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 5;
 const formatoCantidad = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
-const formatoCostoBase = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 const esOtraPresentacion = (valor: string) =>
   valor === OTRA_PRESENTACION_G || valor === OTRA_PRESENTACION_ML;
 const etiquetaContenido = (valor: string, contenido: number, unidadBase: "g" | "ml") =>
@@ -407,7 +402,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
   const [unidad, setUnidad] = useState(UNIDADES_INSUMO[0].valor);
   const [contenidoPresentacion, setContenidoPresentacion] = useState(0);
   const [stockActual, setStockActual] = useState(0);
-  const [costoUnitario, setCostoUnitario] = useState(0);
 
   // Form state - solo Producto Insumo. La ficha técnica única (la comparte
   // con Producción > Productos y con Orden de Producción) es donde vive todo
@@ -468,14 +462,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         categoriaNombre(i.categoriaId).toLowerCase().includes(q)
       );
     }
-    // Orden por defecto: se RESPETA el orden del array (orden de creación) y ya
-    // no se reordena por ID. Antes había un `sort((a, b) => a.id.localeCompare(b.id))`
-    // que mandaba el insumo recién creado al FINAL, porque se inserta con
-    // `setInsumos(prev => [nuevo, ...prev])` al inicio y su ID es la más baja
-    // de la lista (INS-001, INS-002…): el usuario quiere ver LO ÚLTIMO CREADO
-    // ARRIBA, así que manda el orden de creación. Paginación, filtros y la
-    // descarga a Excel siguen funcionando igual: solo cambia el orden de las filas.
-    return result;
+    return ordenarPorIdDescendente(result, (insumo) => insumo.id);
   }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -616,7 +603,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     setUnidad(UNIDADES_INSUMO[0].valor);
     setContenidoPresentacion(0);
     setStockActual(0);
-    setCostoUnitario(0);
     setPiFicha(emptyFichaVersion(1));
     setPiUnidadMedida("");
     setTocado({});
@@ -672,7 +658,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       setUnidad(insumo.unidadMedida);
       setContenidoPresentacion(0);
       setStockActual(insumo.stockActual);
-      setCostoUnitario(insumo.costoUnitario);
     }
     setShowModal(true);
   };
@@ -718,13 +703,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       (esOtraPresentacion(unidad) && !(contenidoPresentacion > 0))
     ) return;
     if (guardando) return;
-    if (costoUnitario < 0) {
-      toast.error("El costo unitario no puede ser negativo.");
-      return;
-    }
 
     if (editingId) {
-      // PUT con nombre, categoría, stock mínimo y descripción (+ costo e IVA
+      // PUT con nombre, categoría, stock mínimo y descripción (+ IVA
       // si es Insumo). El stock actual lo mueven Compras (suma) y Producción
       // (resta), nunca este formulario. Descripción e IVA no tienen campo en
       // el modal: viajan con su valor actual.
@@ -738,7 +719,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           stock_minimo: stockMinimo,
           descripcion: original.descripcion ?? null,
           ...(original.tipo === "Insumo"
-            ? { costo_unitario: costoUnitario, iva: original.iva ?? 0 }
+            ? { iva: original.iva ?? 0 }
             : {}),
         });
         setInsumos(prev => prev.map(i => (i.id === editingId ? actualizado : i)));
@@ -766,7 +747,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         id_categoria_insumo: Number(categoriaId),
         unidad_medida: resolverPresentacionUnidad(unidad, contenidoPresentacion)?.unidadBase ?? unidad,
         stock_minimo: stockMinimo * (resolverPresentacionUnidad(unidad, contenidoPresentacion)?.contenido ?? 1),
-        costo_unitario: costoUnitario / (resolverPresentacionUnidad(unidad, contenidoPresentacion)?.contenido ?? 1),
       });
       setInsumos(prev => [creado.insumo, ...prev]);
       // El stock nace en 0 por diseño, así que solo se avisa si el stock
@@ -839,7 +819,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       // Campos propios del insumo normal que no aplican aquí.
       setUnidad(UNIDADES_INSUMO[0].valor);
       setStockActual(0);
-      setCostoUnitario(0);
       // La unidad de la ficha arranca vacía: es un campo obligatorio.
       setPiUnidadMedida("");
       setContenidoPresentacion(0);
@@ -1153,18 +1132,17 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         <table className="w-full min-w-[900px]">
           <colgroup>
             <col style={{ width: "7%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "23%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "29%" }} />
             <col style={{ width: "6%" }} />
             <col style={{ width: "11%" }} />
             <col style={{ width: "8%" }} />
-            <col style={{ width: "12%" }} />
             <col style={{ width: "10%" }} />
             <col style={{ width: "11%" }} />
           </colgroup>
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
-              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "COSTO UNIT.", "ESTADO", "ACCIONES"].map(h => (
+              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "ESTADO", "ACCIONES"].map(h => (
                 <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -1172,7 +1150,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           <tbody className="divide-y divide-border">
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-14 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-14 text-center text-muted-foreground">
                   <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p className="font-medium">No hay resultados</p>
                 </td>
@@ -1217,7 +1195,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     </div>
                   </td>
                   <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
-                  <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{esProductoInsumo ? "-" : fmtCOP(insumo.costoUnitario)}</td>
                   <td className="px-3 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). Mantiene el
                         flujo de siempre: elegir la opción contraria pide la
@@ -1678,45 +1655,6 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       )}
                     </div>
                   </div>
-                  {!editingId && (
-                    <div className="mt-3">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        {presentacionUnidad || esOtraPresentacion(unidad)
-                          ? `Costo por ${etiquetaContenido(unidad, presentacionUnidad?.contenido ?? contenidoPresentacion, (presentacionUnidad?.unidadBase ?? unidadBaseDeSeleccion(unidad))!)} (COP)`
-                          : "Costo Unitario (COP)"}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={costoUnitario || ""}
-                        onChange={(e) => setCostoUnitario(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                        className="w-full px-3 py-2.5 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                      {presentacionUnidad && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          = {formatoCostoBase.format(costoUnitario / presentacionUnidad.contenido)} por {presentacionUnidad.unidadBase}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {editingId && (
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Costo Unitario (COP)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={costoUnitario || ""}
-                        disabled={!!editingId}
-                        onChange={e => setCostoUnitario(Number(e.target.value))}
-                        className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
-                          editingId
-                            ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                            : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                        }`}
-                      />
-                    </div>
-                  )}
                 </div>
                 </div>
               )}

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Briefcase, RefreshCw, Send, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import {
   cambiarEstadoEmpleado,
   crearContratacion,
@@ -134,7 +135,7 @@ export function GestionEmpleadosScreen({
   const [search,      setSearch]    = useState("");
   const [filterEstado,setFiltro]    = useState("todos");
   const [editErrors,  setEditErrors] = useState<Record<string, string | undefined>>({});
-  const [sortBy,      setSortBy]    = useState("nombre");
+  const [sortBy,      setSortBy]    = useState("id");
   const [page,        setPage]      = useState(1);
   const [detailItem,  setDetailItem] = useState<Empleado | null>(null);
   const [editItem,    setEditItem]  = useState<Empleado | null>(null);
@@ -162,7 +163,8 @@ export function GestionEmpleadosScreen({
       }
       setNombresRoles(nombres);
       setCargosApi(cargos.cargos.map(c => ({ id: String(c.idRol), nombre: c.nombre })));
-      setEmpleados(lista.empleados.map(mapearEmpleadoApi));
+      const cargados = lista.empleados.map(mapearEmpleadoApi);
+      setEmpleados(cargados);
     } catch (error) {
       const mensaje = mensajeError(error, "No se pudieron cargar los empleados.");
       if (mostrarCarga) setErrorCarga(mensaje); else toast.error(mensaje);
@@ -316,8 +318,8 @@ export function GestionEmpleadosScreen({
     // desactivar un rol dejaría la lista ordenada y filtrada por el nombre
     // anterior.
     if (sortBy === "cargo") r = [...r].sort((a,b) => primerCargo(a.rolIds).localeCompare(primerCargo(b.rolIds)));
-    else                    r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
-    return r;
+    else if (sortBy === "nombre") r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
+    return sortBy === "id" ? ordenarPorIdDescendente(r, (empleado) => empleado.id) : r;
   }, [empleados, roles, search, filterEstado, sortBy]);
 
   // 5 empleados por página (unificado con el resto de listados): la tabla
@@ -629,6 +631,7 @@ export function GestionEmpleadosScreen({
           <option value="inactivo">Inactivo</option>
         </select>
         <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className={iCls}>
+          <option value="id">Ordenar por ID</option>
           <option value="nombre">Ordenar por nombre</option>
           <option value="cargo">Ordenar por cargo</option>
         </select>

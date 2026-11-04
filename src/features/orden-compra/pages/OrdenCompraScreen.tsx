@@ -31,6 +31,7 @@ import {
   AlertTriangle, CheckCircle2, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
@@ -2450,7 +2451,7 @@ export function OrdenCompraScreen({
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
 
   const filtered = useMemo(() =>
-    ordenes.filter(o => {
+    ordenarPorIdDescendente(ordenes.filter(o => {
       const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
@@ -2464,7 +2465,7 @@ export function OrdenCompraScreen({
         || facturasTexto.toLowerCase().includes(q)
         || (o.estado ?? "").toLowerCase().includes(q)
         || (o.fecha ?? "").toLowerCase().includes(q);
-    }),
+    }), (orden) => orden.id),
     [ordenes, search, gestiones, proveedores]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca

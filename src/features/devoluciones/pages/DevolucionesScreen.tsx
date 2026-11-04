@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Banknote, Check, CircleCheck, Eye, FileText, Minus, PackageCheck, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
+import { compararIdsDesc } from "@/shared/utils/ordenarPorId";
 
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
@@ -175,7 +176,13 @@ export function DevolucionesScreen({
         ].join(" "),
       ).includes(busqueda),
     );
-  })();
+  })().sort((a, b) => {
+    if (a.idDevolucion != null && b.idDevolucion != null) {
+      return compararIdsDesc(a.idDevolucion, b.idDevolucion);
+    }
+    const porFecha = (b.devolucionFecha ?? b.fecha).localeCompare(a.devolucionFecha ?? a.fecha);
+    return porFecha || compararIdsDesc(a.idDevolucion ?? 0, b.idDevolucion ?? 0);
+  });
 
   // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
   // devolución indicada: el modal de gestión si sigue pendiente, o la vista de

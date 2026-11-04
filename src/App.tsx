@@ -10650,6 +10650,7 @@ export default function App() {
                       errorCarga={errorOrdenes}
                       onReintentar={() => void cargarOrdenes()}
                       recargarProduccion={recargarProduccion}
+                      onNavigateTo={(destino) => navigate(destino)}
                       abrirOrdenId={ordenAAbrir}
                       setOrdenAAbrir={setOrdenAAbrir}
                       detalleOrdenId={ordenDetalleAAbrir}

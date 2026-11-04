@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
@@ -529,7 +530,7 @@ export function GestionPerdidasScreen({
 
   const filtered = useMemo(
     () =>
-      perdidas.filter(
+      ordenarPorIdDescendente(perdidas.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.idVenta
@@ -538,7 +539,7 @@ export function GestionPerdidasScreen({
           p.usuario
             .toLowerCase()
             .includes(search.toLowerCase()),
-      ),
+      ), (perdida) => perdida.id),
     [perdidas, search],
   );
 

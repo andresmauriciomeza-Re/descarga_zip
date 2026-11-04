@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
@@ -69,7 +70,8 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     setCargando(true); setErrorCarga("");
     try {
       const filas = await listarClientes();
-      setClientes(filas.map(adaptarClienteApi));
+      const cargados = filas.map(adaptarClienteApi);
+      setClientes(cargados);
     } catch (error) {
       setErrorCarga(error instanceof Error ? error.message : "No se pudieron cargar los clientes.");
     } finally { setCargando(false); }
@@ -77,7 +79,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   useEffect(() => { void cargarClientes(); }, []);
   const [search,       setSearch]     = useState("");
   const [filterEstado, setFiltro]     = useState("todos");
-  const [sortBy,       setSortBy]     = useState("nombre");
+  const [sortBy,       setSortBy]     = useState("id");
   const [page,         setPage]       = useState(1);
   const [detailItem,   setDetailItem] = useState<Cliente | null>(null);
   const edicionExternaConsumida = useRef<string | null>(null);
@@ -113,8 +115,8 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     // El desempate alfabético mantiene el orden determinista si dos clientes
     // tienen los mismos pedidos.
     if (sortBy === "pedidos") r = [...r].sort((a,b) => b.pedidos - a.pedidos || a.nombre.localeCompare(b.nombre));
-    else                      r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
-    return r;
+    else if (sortBy === "nombre") r = [...r].sort((a,b) => a.nombre.localeCompare(b.nombre));
+    return sortBy === "id" ? ordenarPorIdDescendente(r, (cliente) => cliente.id) : r;
   }, [clientes, search, filterEstado, sortBy]);
 
   // 5 clientes por página (unificado con el resto de listados): la tabla
@@ -355,6 +357,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
           <option value="inactivo">Inactivo</option>
         </select>
         <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className={iCls}>
+          <option value="id">Ordenar por ID</option>
           <option value="nombre">Ordenar por nombre</option>
           <option value="pedidos">Ordenar por pedidos</option>
         </select>

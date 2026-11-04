@@ -21,6 +21,7 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
@@ -1644,7 +1645,7 @@ export function VentasScreen({
 
   const filtered = useMemo(
     () =>
-      ventasListado.filter(
+      ordenarPorIdDescendente(ventasListado.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.usuario
@@ -1653,7 +1654,7 @@ export function VentasScreen({
           p.productos
             .toLowerCase()
             .includes(search.toLowerCase()),
-      ),
+      ), (venta) => venta.id),
     [ventasListado, search],
   );
 
