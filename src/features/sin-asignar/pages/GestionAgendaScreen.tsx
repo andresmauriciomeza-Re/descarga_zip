@@ -302,7 +302,7 @@ export function GestionAgendaScreen() {
     });
     if (sortBy==="empleado") r=[...r].sort((a,b)=>a.empleado.localeCompare(b.empleado));
     else if (sortBy==="estado") r=[...r].sort((a,b)=>Number(b.activo)-Number(a.activo));
-    else r=[...r].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    else if (sortBy==="fecha") r=[...r].sort((a,b)=>a.fecha.localeCompare(b.fecha) || a.horaEntrada.localeCompare(b.horaEntrada));
     return r;
   },[agendas,search,filterFecha,filterEstado,sortBy]);
 

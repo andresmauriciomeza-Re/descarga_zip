@@ -5,6 +5,7 @@ import {
   AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -634,7 +635,16 @@ function requeridosDePreparaciones(
     para preparaciones (eso es solo para pedidos, que vienen de una venta ya
     pagada). Con insumo ausente/inactivo/unidad incompatible manda el motivo
     (`motivoFaltante`), que ya trae el nombre del insumo. */
-function AvisoFaltantes({ faltantes }: { faltantes: Faltante[] }) {
+const esInsumoInactivo = (faltante: Faltante) =>
+  faltante.motivo === "inactivo" || /insumo .+ está inactivo/i.test(faltante.motivoTexto ?? "");
+
+function AvisoFaltantes({
+  faltantes,
+  onIrInsumos,
+}: {
+  faltantes: Faltante[];
+  onIrInsumos?: () => void;
+}) {
   if (faltantes.length === 0) return null;
   return (
     <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
@@ -643,11 +653,26 @@ function AvisoFaltantes({ faltantes }: { faltantes: Faltante[] }) {
         <span>No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.</span>
       </p>
       {faltantes.map((f) => (
-        <p key={f.insumoId} className="pl-6 text-xs text-red-700">
-          {f.motivo
-            ? motivoFaltante(f)
-            : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
-        </p>
+        <div key={f.insumoId} className="pl-6 text-xs text-red-700">
+          {esInsumoInactivo(f) ? (
+            <p>
+              Insumo inactivo: {f.nombre}.{" "}
+              <button
+                type="button"
+                onClick={onIrInsumos}
+                className="font-semibold underline underline-offset-2 cursor-pointer"
+              >
+                Ve a Insumos para habilitarlo
+              </button>
+            </p>
+          ) : (
+            <p>
+              {f.motivo
+                ? motivoFaltante(f)
+                : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
+            </p>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -931,9 +956,15 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
 function TablaInsumosRequeridos({
   requeridos,
   insumos,
+  descontados = false,
+  onIrCompras,
+  onIrInsumos,
 }: {
   requeridos: InsumoRequerido[];
   insumos: Insumo[];
+  descontados?: boolean;
+  onIrCompras?: () => void;
+  onIrInsumos?: () => void;
 }) {
   if (requeridos.length === 0) {
     return (
@@ -952,22 +983,63 @@ function TablaInsumosRequeridos({
         <span className="text-right">Estado</span>
       </div>
       {requeridos.map((r) => {
-        const stock = insumos.find((i) => i.id === r.insumoId)?.stockActual;
+        const insumo = insumos.find((i) => i.id === r.insumoId)
+          ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+        const stock = insumo?.stockActual;
         // Un insumo que la receta menciona y no está en el catálogo no es un
         // faltante: se avisa distinto para que no se bloquee la orden por un alta
         // que falta en Gestión de Insumos.
         const noExiste = stock === undefined;
-        const falta = noExiste ? 0 : Math.max(0, Math.round((r.cantidad - stock) * 1000) / 1000);
+        const calculoFaltante = descontados ? undefined : faltantesPara([r], 1, insumos)[0];
+        const inactivo = !descontados && (insumo?.estado === "inactivo" || calculoFaltante?.motivo === "inactivo");
+        const unidadIncompatible = !descontados && calculoFaltante?.motivo === "unidad-incompatible";
+        const falta = !descontados && !inactivo && !noExiste && calculoFaltante?.motivo !== "unidad-incompatible"
+          ? calculoFaltante?.falta ?? 0
+          : 0;
         return (
-          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-xs border-t border-border items-center ${noExiste ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
+          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-xs border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
             <span className="col-span-2 font-medium text-foreground truncate">{r.nombre}</span>
             <span className="text-right tabular-nums font-semibold text-foreground">{fmtCant(r.cantidad, r.unidad)}</span>
-            <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, r.unidad)}</span>
-            <span className="text-right">
-              {noExiste
+            <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, insumo?.unidadMedida ?? r.unidad)}</span>
+            <span className="flex flex-col items-end gap-1 text-right">
+              {descontados
+                ? <span className="text-emerald-600 font-semibold">Descontado ✓</span>
+                : noExiste
                 ? <span className="text-amber-600 font-semibold" title="El insumo no está dado de alta en Gestión de Insumos">No está en el catálogo</span>
+                : inactivo
+                  ? <>
+                      <span className="text-red-600 font-semibold">Insumo inactivo</span>
+                      <span className="text-red-600">Ve a Insumos para habilitarlo</span>
+                      {onIrInsumos && (
+                        <button
+                          type="button"
+                          onClick={onIrInsumos}
+                          className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
+                        >
+                          Ir a Insumos
+                        </button>
+                      )}
+                    </>
+                : unidadIncompatible
+                  ? <span className="text-amber-600 font-semibold">{motivoFaltante(calculoFaltante!)}</span>
                 : falta > 0
-                  ? <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, r.unidad)}</span>
+                  ? <>
+                      <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</span>
+                      {onIrCompras && (
+                        <>
+                          <span className="max-w-48 text-red-600">
+                            Debes comprar {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)} de {r.nombre}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={onIrCompras}
+                            className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
+                          >
+                            Hacer compra de insumo faltante
+                          </button>
+                        </>
+                      )}
+                    </>
                   : <span className="text-emerald-600 font-semibold">Alcanza</span>}
             </span>
           </div>
@@ -1149,6 +1221,7 @@ export function OrdenProduccionScreen({
   errorCarga,
   onReintentar,
   recargarProduccion,
+  onNavigateTo,
   canCreate = true,
   canDelete = true,
   canExportExcel = true,
@@ -1174,6 +1247,7 @@ export function OrdenProduccionScreen({
   onReintentar?: () => void;
   /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
   recargarProduccion?: () => Promise<boolean | void>;
+  onNavigateTo?: (screen: "purchases" | "supplies") => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1430,7 +1504,7 @@ export function OrdenProduccionScreen({
   };
 
   const filtradas = useMemo(() =>
-    ordenes.filter((o) => {
+    ordenarPorIdDescendente(ordenes.filter((o) => {
       if (filtroTipo !== "todos" && o.tipo !== filtroTipo) return false;
       if (filtroEstado !== "todos" && o.estadoOrden !== filtroEstado) return false;
       const q = search.trim().toLowerCase();
@@ -1439,7 +1513,8 @@ export function OrdenProduccionScreen({
         || (o.ventaNumero ?? "").toLowerCase().includes(q)
         || (o.cliente ?? "").toLowerCase().includes(q)
         || o.lineas.some((l) => l.nombre.toLowerCase().includes(q));
-    }), [ordenes, search, filtroTipo, filtroEstado]);
+    }), (orden) => orden.id),
+    [ordenes, search, filtroTipo, filtroEstado]);
 
   const totalPages = Math.ceil(filtradas.length / PER_PAGE);
   const paged = filtradas.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -2054,7 +2129,7 @@ export function OrdenProduccionScreen({
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {o.estadoOrden === "pendiente" && (
+                        {o.estadoOrden === "pendiente" && faltantesFila.length === 0 && (
                           <button
                             type="button"
                             onClick={() => {
@@ -2220,7 +2295,12 @@ export function OrdenProduccionScreen({
                       </div>
                     );
                   })}
-                  {faltantesGenerar.length > 0 && <AvisoFaltantes faltantes={faltantesGenerar} />}
+                  {faltantesGenerar.length > 0 && (
+                    <AvisoFaltantes
+                      faltantes={faltantesGenerar}
+                      onIrInsumos={() => onNavigateTo?.("supplies")}
+                    />
+                  )}
                   {generarItem.tipo === "preparacion" && generarItem.lineas.some((linea) => {
                     const maximo = maximosGenerar[linea.idDetalleOp as number];
                     return maximo === 0;
@@ -2296,7 +2376,7 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}
-              <AvisoFaltantes faltantes={faltantesForm} />
+              <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
 
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2.5">Observación</label>
@@ -2380,7 +2460,7 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: ídem Crear — mensaje y lista mientras falten
                   insumos; el botón Guardar queda deshabilitado. */}
-              <AvisoFaltantes faltantes={faltantesForm} />
+              <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
@@ -2771,7 +2851,13 @@ export function OrdenProduccionScreen({
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">
                     {detailItem.tipo === "preparacion" ? "Insumos usados" : "Insumos a usar"}
                   </p>
-                  <TablaInsumosRequeridos requeridos={detailItem.insumosRequeridos} insumos={insumos} />
+                  <TablaInsumosRequeridos
+                    requeridos={detailItem.insumosRequeridos}
+                    insumos={insumos}
+                    descontados={detailItem.insumosDescontados}
+                    onIrCompras={() => onNavigateTo?.("purchases")}
+                    onIrInsumos={() => onNavigateTo?.("supplies")}
+                  />
                 </div>
 
                 {detailItem.tipo === "preparacion" && (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { EstadoSelect, ESTADO_ACTIVO_COLOR, ESTADO_INACTIVO_COLOR } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -174,13 +175,13 @@ export function GestionUsuariosScreen({
   const rolesDisponibles = useMemo(() => [...new Set(usuarios.flatMap(u => [u.rol, ...(u.rolesExtra ?? []), ...(u.esCliente ? ["Cliente"] : []), ...(u.esEmpleado ? ["Empleado"] : [])]).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [usuarios]);
   const filtrados = useMemo(() => {
     const q = normalizar(search);
-    return usuarios.filter(u => {
+    return ordenarPorIdDescendente(usuarios.filter(u => {
       const etiquetas = [u.rol, ...(u.rolesExtra ?? []), ...(u.esCliente ? ["Cliente"] : []), ...(u.esEmpleado ? ["Empleado"] : [])];
       const coincideTexto = !q || [u.nombre, u.correo, u.tipo_documento, String(u.id_usuario), `${u.tipo_documento} ${u.id_usuario}`, ...etiquetas].some(v => normalizar(String(v ?? "")).includes(q));
       const coincideRol = filterRol === "todos" || etiquetas.some(r => normalizar(r) === normalizar(filterRol));
       const coincideEstado = filterEstado === "todos" || (filterEstado === "activo" ? u.estado : !u.estado);
       return coincideTexto && coincideRol && coincideEstado;
-    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }), (usuario) => usuario.id_usuario);
   }, [usuarios, search, filterRol, filterEstado]);
 
   const porPagina = 5;

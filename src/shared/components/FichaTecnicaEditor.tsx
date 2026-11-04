@@ -145,8 +145,7 @@ function InsumoFilaEditable({
   const [contenidoPersonalizado, setContenidoPersonalizado] = useState(
     presentacionFila?.contenidoPersonalizado ?? 0,
   );
-  // A5.2: en modo insumo solo unidades compatibles con la del catálogo; en
-  // modo producto, la lista de siempre.
+  // Las medidas deben ser compatibles con la unidad del insumo seleccionado.
   const opcionesUnidad: readonly OpcionUnidad[] = opcionesMedidaFila(unidad, unidadCatalogo);
   const detallePresentacion = usarUnidadSelect && unidadCatalogo
     ? resolverPresentacion(unidad, unidadCatalogo, contenidoPersonalizado)
@@ -222,7 +221,10 @@ function InsumoFilaEditable({
             onChange={(e) => setUnidad(e.target.value)}
             className="px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none cursor-pointer"
           >
-            {UNIDADES_FICHA.map((u) => <option key={u}>{u}</option>)}
+            {(unidadCatalogo
+              ? UNIDADES_FICHA.filter((opcion) => unidadesCompatibles(opcion, unidadCatalogo))
+              : UNIDADES_FICHA
+            ).map((u) => <option key={u}>{u}</option>)}
           </select>
         )}
         {usarUnidadSelect && unidad === OTRA_PRESENTACION && (
@@ -551,7 +553,8 @@ export function FichaTecnicaEditor({
         ? ins.unidadMedida
         : UNIDADES_FICHA.includes(ins.unidadMedida)
           ? ins.unidadMedida
-          : UNIDADES_FICHA[0],
+          : UNIDADES_FICHA.find((opcion) => unidadesCompatibles(opcion, ins.unidadMedida))
+            ?? UNIDADES_FICHA[0],
     );
   };
 
@@ -894,17 +897,19 @@ export function FichaTecnicaEditor({
                   onEdit={setEditandoIdx}
                   onChange={updateInsumo}
                   onRemove={removeInsumo}
+                  insumosCatalogo={insumos}
                 />
               </div>
             ) : (
               <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
             )}
-            <div className="shrink-0 flex flex-wrap items-end gap-2">
+            <div className="shrink-0 flex flex-nowrap items-end gap-2">
               <InsumoSearchField
                 insumos={catalogo}
                 valor={nombre}
                 onValorChange={v => { setNombre(v); setSel(null); }}
                 onSelect={seleccionarInsumo}
+                direction="down"
               />
               <div className="w-20">
                 <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
@@ -918,11 +923,15 @@ export function FichaTecnicaEditor({
                 <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
                 <select value={unidad} onChange={e => setUnidad(e.target.value)}
                   className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                  {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
+                  {(sel
+                    ? UNIDADES_FICHA.filter((opcion) => unidadesCompatibles(opcion, sel.unidadMedida))
+                    : UNIDADES_FICHA
+                  ).map((opcion) => <option key={opcion}>{opcion}</option>)}
                 </select>
               </div>
               <button type="button" onClick={addInsumo} title="Agregar insumo"
-                className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                disabled={!puedeAgregarInsumo}
+                className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95">
                 <Plus className="w-4 h-4" />
               </button>
             </div>

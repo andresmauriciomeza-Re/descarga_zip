@@ -14,6 +14,7 @@ import {
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 // Bloque 3: limpieza y comparación de nombres compartidas con Gestión de
 // Productos y el "+ Crear insumo" de Compras (una sola copia de las reglas).
 import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/nombres";
@@ -461,14 +462,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         categoriaNombre(i.categoriaId).toLowerCase().includes(q)
       );
     }
-    // Orden por defecto: se RESPETA el orden del array (orden de creación) y ya
-    // no se reordena por ID. Antes había un `sort((a, b) => a.id.localeCompare(b.id))`
-    // que mandaba el insumo recién creado al FINAL, porque se inserta con
-    // `setInsumos(prev => [nuevo, ...prev])` al inicio y su ID es la más baja
-    // de la lista (INS-001, INS-002…): el usuario quiere ver LO ÚLTIMO CREADO
-    // ARRIBA, así que manda el orden de creación. Paginación, filtros y la
-    // descarga a Excel siguen funcionando igual: solo cambia el orden de las filas.
-    return result;
+    return ordenarPorIdDescendente(result, (insumo) => insumo.id);
   }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft, User, Building2, Phone, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
@@ -433,7 +434,7 @@ export function SuppliersScreen({
   // el proveedor, tenga o no compras u órdenes asociadas.
 
   const filtered = useMemo(
-    () => suppliers.filter(s =>
+    () => ordenarPorIdDescendente(suppliers.filter(s =>
       s.nombre.toLowerCase().includes(search.toLowerCase()) ||
       s.nit.toLowerCase().includes(search.toLowerCase()) ||
       // Los campos de contacto son opcionales en el modelo (Persona Natural no
@@ -442,7 +443,7 @@ export function SuppliersScreen({
       (s.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (s.asesorComercial ?? "").toLowerCase().includes(search.toLowerCase()) ||
       s.estado.toLowerCase().includes(search.toLowerCase())
-    ),
+    ), (supplier) => supplier.id),
     [suppliers, search],
   );
 

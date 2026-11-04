@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 
 const SERIF = "var(--font-titulo)";
 
@@ -50,10 +51,10 @@ export function ProductoTerminadoScreen() {
   const [recalentado,  setRecalentado]  = useState(false);
 
   const filtered = useMemo(() =>
-    productos.filter(p =>
+    ordenarPorIdDescendente(productos.filter(p =>
       p.id.toLowerCase().includes(search.toLowerCase()) ||
       p.nombreReceta.toLowerCase().includes(search.toLowerCase())
-    ), [productos, search]);
+    ), (producto) => producto.id), [productos, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
