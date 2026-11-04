@@ -21,6 +21,7 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
@@ -227,6 +228,16 @@ function CampoComprobante({
  *  Producción y el backend; este alias conserva el nombre con el que se
  *  referencia en todo el frontend. */
 export type VentaStatus = EstadoVenta;
+export type EstadoClienteVenta =
+  | "Pendiente"
+  | "En espera"
+  | "Aceptado"
+  | "En proceso"
+  | "Por entregar"
+  | "Completado"
+  | "Rechazado"
+  | "Anulado"
+  | "Devolución";
 
 /** Estado de devolución se asigna desde el flujo de Devoluciones. */
 export const VENTA_STATUS_MANUALES: VentaStatus[] = ["Devolucion"];
@@ -344,6 +355,8 @@ export interface Venta {
   cantidad: number;
   total: number;
   estado: VentaStatus;
+  estadoCliente?: EstadoClienteVenta | VentaStatus;
+  estadoOrden?: string;
   detalle?: DetalleProd[];
   metodoPago?: string;
   comprobante?: string;
@@ -1632,7 +1645,7 @@ export function VentasScreen({
 
   const filtered = useMemo(
     () =>
-      ventasListado.filter(
+      ordenarPorIdDescendente(ventasListado.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.usuario
@@ -1641,7 +1654,7 @@ export function VentasScreen({
           p.productos
             .toLowerCase()
             .includes(search.toLowerCase()),
-      ),
+      ), (venta) => venta.id),
     [ventasListado, search],
   );
 

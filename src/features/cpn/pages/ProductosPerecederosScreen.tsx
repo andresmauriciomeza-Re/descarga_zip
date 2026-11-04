@@ -5,6 +5,7 @@ import {
   Upload, ShoppingCart, ChevronDown, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
@@ -296,7 +297,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
   [noConformidades]);
 
   const filtered = useMemo(() =>
-    allItems.filter(i => {
+    ordenarPorIdDescendente(allItems.filter(i => {
       const q = search.toLowerCase();
       const matchQ = !q ||
         i.id.toLowerCase().includes(q) ||
@@ -305,7 +306,8 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         i.tipoNoConformidad.toLowerCase().includes(q);
       const matchEst = !filterEst || i.estado === filterEst;
       return matchQ && matchEst;
-    }), [allItems, search, filterEst]);
+    }), (item) => item.id),
+  [allItems, search, filterEst]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);

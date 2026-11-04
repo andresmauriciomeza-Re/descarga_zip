@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
+import type { ReactNode } from "react";
 
 /**
  * Colores compartidos para el pill de estado "Activo"/"Inactivo" (diseño de
@@ -29,6 +30,9 @@ interface EstadoSelectProps<T extends string> {
   options: EstadoOption<T>[];
   disabled?: boolean;
   className?: string;
+  triggerContent?: ReactNode;
+  triggerTitle?: string;
+  triggerAriaLabel?: string;
 }
 
 export function EstadoSelect<T extends string>({
@@ -37,19 +41,27 @@ export function EstadoSelect<T extends string>({
   options,
   disabled = false,
   className = "",
+  triggerContent,
+  triggerTitle,
+  triggerAriaLabel = "Estado",
 }: EstadoSelectProps<T>) {
   const seleccionada = options.find((o) => o.value === value);
 
   return (
     <Select.Root value={value} onValueChange={onChange} disabled={disabled}>
       <Select.Trigger
-        aria-label="Estado"
-        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors ${
-          seleccionada?.color || "bg-gray-100 text-gray-700"
-        } ${disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer"} ${className}`}
+        aria-label={triggerAriaLabel}
+        title={triggerTitle}
+        className={`${triggerContent
+          ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+          : `inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 ${
+              seleccionada?.color || "bg-gray-100 text-gray-700"
+            }`} focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors ${
+          disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+        } ${className}`}
       >
-        <Select.Value placeholder={seleccionada?.label || value} />
-        {!disabled && <ChevronDown className="w-3 h-3 shrink-0" />}
+        {triggerContent ?? <Select.Value placeholder={seleccionada?.label || value} />}
+        {!disabled && !triggerContent && <ChevronDown className="w-3 h-3 shrink-0" />}
       </Select.Trigger>
       <Select.Portal>
         {/* z-[100]: el menú va en un portal al <body>, por encima de los overlays

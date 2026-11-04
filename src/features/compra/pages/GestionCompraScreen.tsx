@@ -3,13 +3,19 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft,
   Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { calcularLineaIva } from "@/features/compras/services/iva";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
-import { CompactInsumoForm, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
+import {
+  CompactInsumoForm,
+  type CompactInsumoFormValues,
+  type InsumoSuggestion,
+} from "@/features/compras/components/CompactInsumoForm";
 // Bloque 2: "+ Crear producto" desde el desplegable de ítems de la compra.
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
@@ -849,34 +855,12 @@ function CompraForm({
    *  POR UNIDAD — si la línea es de paca/caja el monto (por presentación) se
    *  divide en `itemFactor`; unidad suelta ⇒ factor 1, sin cambios. */
   const itemFactor = unidadesPorLinea({ unidadesPorEmpaque: itemEmpaque });
-  const costoRef = costoConIva(itemPrecio, itemIva) / itemFactor;
-
-  const onMontoChange = (v: number) => setItemPrecio(v);
-
-  const onIvaChange = (v: number) => setItemIva(v);
-
-  /** Escribir el precio de venta a mano (sin % de ganancia: el precio manda
-   *  y se valida contra el costo con IVA). */
-  const onPrecioVentaChange = (v: number) => setItemPrecioVenta(v);
 
   /** Costo con IVA POR UNIDAD de una línea YA agregada (punto 3 + ajuste +
    *  backstop de guardar): con paca/caja el monto es por presentación. */
   const costoConIvaDeLinea = (i: ItemFactura) =>
     (ivaIncluido === false ? i.precioUnitario * (1 + i.iva / 100) : i.precioUnitario) /
     unidadesPorLinea(i);
-
-  /** Punto B2 + punto 3 + ajuste: precio de venta OBLIGATORIO en líneas de
-   *  producto: vacío, 0 o ≤ al costo por unidad CON IVA es un error en
-   *  tiempo real; el botón Agregar queda deshabilitado y no existe
-   *  "respaldo" de precio = costo. */
-  const errorPrecioVenta =
-    itemTipo === "producto" && itemNombre.trim()
-      ? itemPrecioVenta <= 0
-        ? "Ingresa el precio de venta del producto."
-        : itemPrecioVenta <= costoRef
-          ? "El precio de venta debe ser mayor que el costo por unidad con IVA."
-          : undefined
-      : undefined;
 
   /** P11 + ajuste: unidad que se guarda en la fila. SIEMPRE la del catálogo
    *  del ítem seleccionado — para productos, su presentación de compra
@@ -893,7 +877,7 @@ function CompraForm({
     return delCatalogo?.trim() || itemUnidad.trim() || "und";
   };
 
-  const agregarItem = () => {
+  const agregarItem = ({ cantidad, precio, iva, precioVenta }: CompactInsumoFormValues) => {
     // Sin elegir cómo vienen los precios no se puede agregar nada: se marca el
     // intento y aparece el aviso rojo bajo las tarjetas (la sección está a la
     // mitad de opacidad y los campos, deshabilitados).
@@ -906,11 +890,11 @@ function CompraForm({
       toast.error("Ingresa el nombre del ítem.");
       return;
     }
-    if (itemCantidad <= 0) {
+    if (cantidad <= 0) {
       toast.error("La cantidad debe ser mayor que cero.");
       return;
     }
-    if (itemPrecio < 0) {
+    if (precio < 0) {
       toast.error("El precio unitario no puede ser negativo.");
       return;
     }
@@ -919,11 +903,11 @@ function CompraForm({
     // línea no se agrega y la bebida seguiría sin precio de venta en el
     // catálogo.
     if (itemTipo === "producto") {
-      if (itemPrecioVenta <= 0) {
+      if (!precioVenta || precioVenta <= 0) {
         toast.error("El precio de venta del producto debe ser mayor que cero.");
         return;
       }
-      if (itemPrecioVenta <= costoRef) {
+      if (precioVenta <= costoConIva(precio, iva) / itemFactor) {
         toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
         return;
       }
@@ -945,12 +929,12 @@ function CompraForm({
       idInsumo: itemId || `INS-FAC-${Date.now()}`,
       nombre: itemNombre.trim(),
       unidad: unidadElegida(),
-      cantidad: itemCantidad,
-      costoUnitario: itemPrecio,
-      precioUnitario: itemPrecio,
-      iva: itemIva,
+      cantidad,
+      costoUnitario: precio,
+      precioUnitario: precio,
+      iva,
       tipoItem: itemTipo,
-      precioVenta: itemTipo === "producto" ? itemPrecioVenta : undefined,
+      precioVenta: itemTipo === "producto" ? precioVenta : undefined,
       unidadesPorEmpaque:
         itemTipo === "producto" && itemEmpaque && itemEmpaque > 1
           ? itemEmpaque
@@ -1574,23 +1558,19 @@ function CompraForm({
                     }}
                     onNombreFocus={() => setItemSugAbierto(true)}
                     cantidad={itemCantidad}
-                    onCantidadChange={setItemCantidad}
                     unidad={itemUnidad}
                     onUnidadChange={setItemUnidad}
                     disabled={ivaIncluido === null}
                     precio={itemPrecio}
-                    onPrecioChange={onMontoChange}
                     iva={itemIva}
-                    onIvaChange={onIvaChange}
                     // Punto 3: costo de referencia CON IVA que se muestra
                     // debajo del monto y contra el que se valida el precio
                     // de venta.
-                    costoConIva={costoRef}
+                    ivaIncluido={ivaIncluido ?? true}
+                    factorCostoUnidad={itemFactor}
                     // Precio de venta al público: sólo para líneas de producto.
                     mostrarPrecioVenta={itemTipo === "producto"}
                     precioVenta={itemPrecioVenta}
-                    onPrecioVentaChange={onPrecioVentaChange}
-                    errorPrecioVenta={errorPrecioVenta}
                     onAgregar={agregarItem}
                     suggestions={itemSugs}
                     showSuggestions={itemSugAbierto}
@@ -2067,14 +2047,14 @@ export function GestionCompraScreen({
   }, [detail]);
 
   const filtered = useMemo(() =>
-    gestiones.filter(g => {
+    ordenarPorIdDescendente(gestiones.filter(g => {
       const q = search.toLowerCase();
       if (!q) return true;
       const proveedor = g.proveedor ?? getOrden(g.ordenId)?.proveedor ?? "";
       return proveedor.toLowerCase().includes(q)
         || g.numeroFactura.toLowerCase().includes(q)
         || g.estado.toLowerCase().includes(q);
-    }),
+    }), (gestion) => gestion.id),
     [gestiones, search, ordenes]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
@@ -2340,27 +2320,34 @@ export function GestionCompraScreen({
                           : <span className="text-muted-foreground font-normal">—</span>}
                       </td>
                       <td className="px-4 py-3.5 overflow-hidden">
-                        <EstadoSelect
-                          value={g.estado}
-                          onChange={(nuevoEstado) => {
-                            if (nuevoEstado === g.estado) return;
-                            pedirCambiarEstado(g.id, nuevoEstado);
-                          }}
-                          options={[
-                            { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
-                            { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
-                          ]}
-                          disabled={g.estado === "Anulado"}
-                        />
+                        <EstadoBadge e={g.estado} />
                       </td>
                       <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
-                        <button
-                          onClick={() => setDetail(g)}
-                          title="Ver detalle"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setDetail(g)}
+                            title="Ver detalle"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {g.estado !== "Anulado" && (
+                            <EstadoSelect
+                              value={g.estado}
+                              onChange={(nuevoEstado) => {
+                                if (nuevoEstado === g.estado) return;
+                                pedirCambiarEstado(g.id, nuevoEstado);
+                              }}
+                              options={[
+                                { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
+                                { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
+                              ]}
+                              triggerContent={<RefreshCw className="w-4 h-4" />}
+                              triggerTitle="Cambiar estado"
+                              triggerAriaLabel="Cambiar estado"
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2403,19 +2390,7 @@ export function GestionCompraScreen({
                           : <p className="text-sm text-muted-foreground">—</p>}
                         <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{g.fechaFactura || "—"}</p>
                       </div>
-                      <EstadoSelect
-                        value={g.estado}
-                        onChange={(nuevoEstado) => {
-                          if (nuevoEstado === g.estado) return;
-                          pedirCambiarEstado(g.id, nuevoEstado);
-                        }}
-                        options={[
-                          { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
-                          { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
-                        ]}
-                        disabled={g.estado === "Anulado"}
-                        className="shrink-0"
-                      />
+                      <EstadoBadge e={g.estado} />
                     </div>
 
                     {/* Proveedor con NIT */}
@@ -2436,6 +2411,22 @@ export function GestionCompraScreen({
 
                     {/* Ver detalle */}
                     <div className="mt-2.5 flex items-center justify-end gap-2">
+                      {g.estado !== "Anulado" && (
+                        <EstadoSelect
+                          value={g.estado}
+                          onChange={(nuevoEstado) => {
+                            if (nuevoEstado === g.estado) return;
+                            pedirCambiarEstado(g.id, nuevoEstado);
+                          }}
+                          options={[
+                            { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
+                            { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
+                          ]}
+                          triggerContent={<RefreshCw className="w-4 h-4" />}
+                          triggerTitle="Cambiar estado"
+                          triggerAriaLabel="Cambiar estado"
+                        />
+                      )}
                       <button
                         onClick={() => setDetail(g)}
                         title="Ver detalle"

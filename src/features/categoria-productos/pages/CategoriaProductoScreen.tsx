@@ -7,6 +7,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { MensajeError } from "@/shared/components/campo";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -245,7 +246,7 @@ interface Props {
   cargando?: boolean;
   errorCarga?: string | null;
   onReintentar?: () => void;
-  onCrear: (datos: CategoriaGuardar) => Promise<unknown>;
+  onCrear: (datos: CategoriaGuardar) => Promise<CategoriaProducto>;
   onEditar: (id: string, datos: CategoriaGuardar) => Promise<unknown>;
   onCambiarEstado: (id: string, estado: EstadoCategoria) => Promise<unknown>;
   onEliminar: (id: string) => Promise<unknown>;
@@ -332,11 +333,11 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
 
   const filtered = useMemo(
     () =>
-      categorias.filter(
+      ordenarPorIdDescendente(categorias.filter(
         (c) =>
           c.id.toLowerCase().includes(search.toLowerCase()) ||
           c.nombre.toLowerCase().includes(search.toLowerCase()),
-      ),
+      ), (categoria) => categoria.id),
     [categorias, search],
   );
 
@@ -363,7 +364,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
     setGuardando(true);
     try {
       // El id lo asigna la base (id_categoria).
-      await onCrear({
+      const creada = await onCrear({
         nombre: nombreLimpio(formNombre),
         emoji: formIcono,
         estado: formEstado === "Activo",

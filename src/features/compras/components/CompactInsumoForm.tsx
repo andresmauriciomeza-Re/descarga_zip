@@ -1,5 +1,5 @@
-import React from "react";
-import { Plus, Search, Minus } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus, Search } from "lucide-react";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 
 const SERIF = "var(--font-titulo)";
@@ -35,6 +35,13 @@ export interface InsumoSuggestion {
   contenido?: string;
 }
 
+export interface CompactInsumoFormValues {
+  cantidad: number;
+  precio: number;
+  iva: number;
+  precioVenta?: number;
+}
+
 function fmtCompactCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -43,21 +50,23 @@ function fmtCompactCOP(n: number) {
   }).format(n);
 }
 
+function numeroDesdeTexto(texto: string): number {
+  const normalizado = texto.trim().replace(",", ".");
+  return normalizado === "" ? Number.NaN : Number(normalizado);
+}
+
 export interface CompactInsumoFormProps {
   titulo: string;
   nombre: string;
   onNombreChange: (value: string) => void;
   onNombreFocus: () => void;
   cantidad: number;
-  onCantidadChange: (value: number) => void;
   unidad: string;
   onUnidadChange: (value: string) => void;
   unidadDisabled?: boolean;
   precio: number;
-  onPrecioChange: (value: number) => void;
   iva: number;
-  onIvaChange: (value: number) => void;
-  onAgregar: () => void;
+  onAgregar: (values: CompactInsumoFormValues) => void;
   suggestions: InsumoSuggestion[];
   showSuggestions: boolean;
   onSelectSuggestion: (suggestion: InsumoSuggestion) => void;
@@ -102,20 +111,15 @@ export interface CompactInsumoFormProps {
    *  `mostrarPrecioVenta` es true (líneas de tipo producto); la Orden de
    *  Compra no lo pasa, así que ese formulario queda intacto. Es dato
    *  informativo para el detalle: la factura sigue calculando con el monto
-   *  unitario. */
-  precioVenta?: number;
-  onPrecioVentaChange?: (value: number) => void;
-  /** Muestra el campo "Precio de venta" (sólo al agregar PRODUCTOS). */
+    *  unitario. */
+   precioVenta?: number;
+   /** Muestra el campo "Precio de venta" (sólo al agregar PRODUCTOS). */
   mostrarPrecioVenta?: boolean;
   /** Punto B2: precio de venta inválido (vacío, 0 o ≤ monto unitario). Pinta
    *  el campo en rojo, muestra el mensaje bajo la fila y deshabilita el
    *  botón Agregar: un producto nunca se agrega sin precio de venta válido. */
-  errorPrecioVenta?: string;
-  /** Punto 3: costo de referencia CON IVA, POR UNIDAD (con paca/caja el
-   *  monto de la factura es por presentación y la pantalla que lo pasa ya lo
-   *  dividió). Es contra él que se valida el precio de venta; se muestra
-   *  debajo de la fila. */
-  costoConIva?: number;
+  ivaIncluido?: boolean;
+  factorCostoUnidad?: number;
 }
 
 export function CompactInsumoForm({
@@ -124,14 +128,11 @@ export function CompactInsumoForm({
   onNombreChange,
   onNombreFocus,
   cantidad,
-  onCantidadChange,
   unidad,
   onUnidadChange,
   unidadDisabled = false,
   precio,
-  onPrecioChange,
   iva,
-  onIvaChange,
   onAgregar,
   onCancelar,
   suggestions,
@@ -152,15 +153,89 @@ export function CompactInsumoForm({
   ocultarCrearInsumo = false,
   ocultarCrearProducto = false,
   precioVenta = 0,
-  onPrecioVentaChange,
   mostrarPrecioVenta = false,
-  errorPrecioVenta,
-  costoConIva,
+  ivaIncluido = true,
+  factorCostoUnidad = 1,
 }: CompactInsumoFormProps) {
   /** `readOnly` y `disabled` bloquean los controles; el primero es solo lectura
       visual, el segundo deshabilita por completo (p. ej. falta elegir el IVA). */
   const bloqueado = readOnly || disabled;
   const esCompacta = variante === "compacta";
+  const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
+  const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
+  const [ivaTexto, setIvaTexto] = useState(iva ? String(iva) : "");
+  const [precioVentaTexto, setPrecioVentaTexto] = useState(precioVenta ? String(precioVenta) : "");
+  const [intentoAgregar, setIntentoAgregar] = useState(false);
+
+  useEffect(() => {
+    setCantidadTexto(String(cantidad));
+  }, [cantidad]);
+
+  useEffect(() => {
+    setPrecioTexto(precio ? String(precio) : "");
+  }, [precio]);
+
+  useEffect(() => {
+    setIvaTexto(iva ? String(iva) : "");
+  }, [iva]);
+
+  useEffect(() => {
+    setPrecioVentaTexto(precioVenta ? String(precioVenta) : "");
+  }, [precioVenta]);
+
+  const cantidadNumero = numeroDesdeTexto(cantidadTexto);
+  const precioNumero = precioTexto.trim() === "" ? 0 : numeroDesdeTexto(precioTexto);
+  const ivaNumero = ivaTexto.trim() === "" ? 0 : numeroDesdeTexto(ivaTexto);
+  const precioVentaNumero =
+    precioVentaTexto.trim() === "" ? 0 : numeroDesdeTexto(precioVentaTexto);
+  const costoConIva =
+    (ivaIncluido ? precioNumero : precioNumero * (1 + ivaNumero / 100)) /
+    Math.max(1, factorCostoUnidad);
+  const errorPrecioVenta =
+    mostrarPrecioVenta && nombre.trim()
+      ? !Number.isFinite(precioVentaNumero) || precioVentaNumero <= 0
+        ? "Ingresa el precio de venta del producto."
+        : precioVentaNumero <= costoConIva
+          ? "El precio de venta debe ser mayor que el costo por unidad con IVA."
+          : undefined
+      : undefined;
+  const errorCantidad =
+    intentoAgregar && (!Number.isFinite(cantidadNumero) || cantidadNumero <= 0)
+      ? "La cantidad debe ser mayor que cero."
+      : "";
+  const errorPrecio =
+    intentoAgregar && (!Number.isFinite(precioNumero) || precioNumero < 0)
+      ? "El monto unitario no puede ser negativo."
+      : "";
+  const errorIva =
+    intentoAgregar && (!Number.isFinite(ivaNumero) || ivaNumero < 0 || ivaNumero > 100)
+      ? "El IVA debe estar entre 0 y 100."
+      : "";
+  const agregarValidado = () => {
+    setIntentoAgregar(true);
+    if (
+      !Number.isFinite(cantidadNumero) ||
+      cantidadNumero <= 0 ||
+      !Number.isFinite(precioNumero) ||
+      precioNumero < 0 ||
+      !Number.isFinite(ivaNumero) ||
+      ivaNumero < 0 ||
+      ivaNumero > 100 ||
+      (mostrarPrecioVenta &&
+        (!Number.isFinite(precioVentaNumero) ||
+          precioVentaNumero <= 0 ||
+          precioVentaNumero <= costoConIva))
+    ) {
+      return;
+    }
+    onAgregar({
+      cantidad: cantidadNumero,
+      precio: precioNumero,
+      iva: ivaNumero,
+      ...(mostrarPrecioVenta ? { precioVenta: precioVentaNumero } : {}),
+    });
+    setIntentoAgregar(false);
+  };
 
   // Estilos para la variante compacta
   const contenedorCls = esCompacta
@@ -263,49 +338,38 @@ export function CompactInsumoForm({
             )}
           </div>
 
-          {/* Cantidad — stepper con botones +/- (normal) o input simple (compacta) */}
+          {/* Cantidad permanece como texto hasta que se intenta agregar. */}
           {esCompacta ? (
             <div className="w-[70px] flex-none">
               <label className={labelClsCompacta}>Cantidad</label>
               <input
-                type="number"
-                min={1}
-                value={cantidad}
-                onChange={(e) => onCantidadChange(Math.max(1, Number(e.target.value)))}
+                type="text"
+                inputMode="decimal"
+                value={cantidadTexto}
+                onChange={(e) => {
+                  setCantidadTexto(e.target.value);
+                  setIntentoAgregar(false);
+                }}
                 disabled={bloqueado}
-                className={inputClsCompacta}
+                className={`${inputClsCompacta}${errorCantidad ? " border-red-400" : ""}`}
               />
+              {errorCantidad && <p className="mt-1 text-[10px] text-red-500">{errorCantidad}</p>}
             </div>
           ) : (
             <div className="w-[112px]">
               <label className={labelCls}>Cantidad</label>
-
-              <div className="flex items-stretch h-10">
-                <button
-                  type="button"
-                  onClick={() => onCantidadChange(Math.max(1, cantidad - 1))}
-                  disabled={bloqueado}
-                  className="flex items-center justify-center w-9 bg-muted border border-border rounded-l-xl text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  value={cantidad}
-                  onChange={(e) => onCantidadChange(Math.max(1, Number(e.target.value)))}
-                  disabled={bloqueado}
-                  className="w-full min-w-0 px-1 bg-muted border-y border-border text-sm text-foreground text-center focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => onCantidadChange(cantidad + 1)}
-                  disabled={bloqueado}
-                  className="flex items-center justify-center w-9 bg-muted border border-border rounded-r-xl text-muted-foreground hover:bg-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cantidadTexto}
+                onChange={(e) => {
+                  setCantidadTexto(e.target.value);
+                  setIntentoAgregar(false);
+                }}
+                disabled={bloqueado}
+                className={`${compactInputCls} text-center${errorCantidad ? " border-red-400" : ""}`}
+              />
+              {errorCantidad && <p className="mt-1 text-[10px] text-red-500">{errorCantidad}</p>}
             </div>
           )}
 
@@ -355,14 +419,18 @@ export function CompactInsumoForm({
             <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
 
             <input
-              type="number"
-              min={0}
-              value={precio || ""}
-              onChange={(e) => onPrecioChange(Number(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={precioTexto}
+              onChange={(e) => {
+                setPrecioTexto(e.target.value);
+                setIntentoAgregar(false);
+              }}
               placeholder="0"
               disabled={bloqueado}
-              className={readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}
+              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-red-400" : ""}`}
             />
+            {errorPrecio && <p className="mt-1 text-[10px] text-red-500">{errorPrecio}</p>}
           </div>
 
           {/* IVA */}
@@ -370,22 +438,25 @@ export function CompactInsumoForm({
             <label className={esCompacta ? labelClsCompacta : labelCls}>IVA %</label>
 
             <input
-              type="number"
-              min={0}
-              max={100}
+              type="text"
+              inputMode="decimal"
               // FIX: el IVA arranca en 0 y `value={iva}` hacía que el campo
               // mostrara "0" fijo; al escribir "19" el resultado visual era
               // "019" (y al borrarlo no se podía dejar vacío). Con `iva || ""`
               // el campo queda vacío cuando vale 0 (mismo patrón que Monto
-              // unitario) y al dejarlo en blanco el onChange ya deja 0
-              // implícito al agregar la línea. Se propaga a Compra, Orden de
+              // unitario); el valor se interpreta al agregar la línea.
+              // Se propaga a Compra, Orden de
               // Compra y Recepción, que usan este mismo componente.
-              value={iva || ""}
-              onChange={(e) => onIvaChange(Math.min(100, Math.max(0, Number(e.target.value))))}
+              value={ivaTexto}
+              onChange={(e) => {
+                setIvaTexto(e.target.value);
+                setIntentoAgregar(false);
+              }}
               placeholder="0"
               disabled={bloqueado}
-              className={readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}
+              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorIva ? " border-red-400" : ""}`}
             />
+            {errorIva && <p className="mt-1 text-[10px] text-red-500">{errorIva}</p>}
           </div>
 
           {/* Precio de venta al público del producto: sólo se pinta al
@@ -398,12 +469,13 @@ export function CompactInsumoForm({
               </label>
 
               <input
-                type="number"
-                min={0}
-                value={precioVenta || ""}
-                onChange={(e) =>
-                  onPrecioVentaChange?.(Math.max(0, Number(e.target.value)))
-                }
+                type="text"
+                inputMode="decimal"
+                value={precioVentaTexto}
+                onChange={(e) => {
+                  setPrecioVentaTexto(e.target.value);
+                  setIntentoAgregar(false);
+                }}
                 placeholder="0"
                 disabled={bloqueado}
                 className={`${
@@ -417,7 +489,7 @@ export function CompactInsumoForm({
           {!esCompacta && (
             <button
               type="button"
-              onClick={onAgregar}
+              onClick={agregarValidado}
               disabled={bloqueado || !!errorPrecioVenta}
               className={`ml-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-primary text-white text-sm font-semibold rounded-xl transition-colors ${
                 bloqueado || errorPrecioVenta
@@ -463,7 +535,7 @@ export function CompactInsumoForm({
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
-            onClick={onAgregar}
+            onClick={agregarValidado}
             disabled={bloqueado || !!errorPrecioVenta}
             className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
               bloqueado || errorPrecioVenta

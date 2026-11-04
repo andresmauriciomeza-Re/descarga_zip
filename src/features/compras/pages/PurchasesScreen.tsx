@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Pencil, X, Check, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { INITIAL_SUPPLIERS } from "@/features/proveedores/pages/SuppliersScreen";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
@@ -391,13 +392,13 @@ export function PurchasesScreen() {
 
   const filtered = useMemo(
     () =>
-      purchases.filter(
+      ordenarPorIdDescendente(purchases.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.idProveedor
             .toLowerCase()
             .includes(search.toLowerCase()),
-      ),
+      ), (purchase) => purchase.id),
     [purchases, search],
   );
 

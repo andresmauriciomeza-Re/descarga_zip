@@ -9,7 +9,12 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { motion, AnimatePresence } from "motion/react";
-import { CompactInsumoForm, UNIDADES, type InsumoSuggestion } from "@/features/compras/components/CompactInsumoForm";
+import {
+  CompactInsumoForm,
+  UNIDADES,
+  type CompactInsumoFormValues,
+  type InsumoSuggestion,
+} from "@/features/compras/components/CompactInsumoForm";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -29,8 +34,10 @@ import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/compras/services/inventario";
@@ -758,6 +765,7 @@ export function OrdenModal({
   onCrearInsumo,
   onCrearProducto,
   categoriasInsumo,
+  initialItems,
 }: {
   mode: "create" | "edit" | "view";
   orden?: OrdenCompra;
@@ -784,6 +792,7 @@ export function OrdenModal({
    *  "+ Crear producto" (bloque 2): recibe el Producto COMPLETO que arma
    *  CrearProductoModal (precio 0, sin imagen, "No disponible"). */
   onCrearProducto?: (prod: Producto) => Promise<Producto>;
+  initialItems?: OrdenItem[];
 }) {
   const isView = mode === "view";
   const isCompra = tipo === "compra";
@@ -798,7 +807,7 @@ export function OrdenModal({
     estado: isCompra
       ? "Recibido"
       : (orden?.estado === "Enviado" ? "Enviado" : "Borrador"),
-    items: orden?.items.map(i => ({ ...i })) ?? [],
+    items: orden?.items.map(i => ({ ...i })) ?? initialItems?.map(i => ({ ...i })) ?? [],
     numeroFactura: "",
   });
   const pf = (p: Partial<OrdenFormData>) => setForm(f => ({ ...f, ...p }));
@@ -1027,7 +1036,7 @@ export function OrdenModal({
     return creado;
   };
 
-  const addItem = () => {
+  const addItem = ({ cantidad, precio, iva }: CompactInsumoFormValues) => {
     // Modo edición (lápiz de la tabla): la fila está cargada arriba, así que
     // solo se reemplaza y se deja el formulario listo para el siguiente.
     if (editando) {
@@ -1038,12 +1047,12 @@ export function OrdenModal({
       }
       actualizarItem(editando, {
         nombre: aNombre.trim(),
-        cantidad: aCant,
+        cantidad,
         // Unidad de la fila: "und" si la medida quedó vacía (producto sin
         // elegir); con presentación cargada va "Paca x12" tal cual.
         unidad: aUnidad.trim() || "und",
-        precioUnitario: aPrecio,
-        iva: aIva,
+        precioUnitario: precio,
+        iva,
         // Punto 3.3: el ítem puede haber cambiado de catálogo (insumo ↔
         // producto) mientras estaba cargado en el formulario.
         tipoItem: aTipoItem,
@@ -1073,13 +1082,13 @@ export function OrdenModal({
         rowId: `r${nextRow}`,
         idInsumo: aInsumoId || `INS-M-${nextRow}`,
         nombre: aNombre.trim(),
-        cantidad: aCant,
+        cantidad,
         // Medida: "und" si no se eligió nada (producto a mano); con un ítem
         // del catálogo elegido trae su unidad / presentación de compra.
         unidad: aUnidad.trim() || "und",
-        costoUnitario: aPrecio,
-        precioUnitario: aPrecio,
-        iva: aIva,
+        costoUnitario: precio,
+        precioUnitario: precio,
+        iva,
         // Punto 3.3: la fila guarda de qué catálogo salió (insumo/producto).
         tipoItem: aTipoItem,
         // Ajuste de bebidas: sólo las líneas de producto en paca/caja
@@ -1532,16 +1541,13 @@ export function OrdenModal({
                     }}
                     onNombreFocus={() => setAShowSug(true)}
                     cantidad={aCant}
-                    onCantidadChange={setACant}
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
                     // Punto 3.3: la Medida es texto de SOLO LECTURA (la define
                     // el ítem del catálogo), en vez del UnidadSelect editable.
                     medidaSoloLectura
                     precio={aPrecio}
-                    onPrecioChange={setAPrecio}
                     iva={aIva}
-                    onIvaChange={setAIva}
                     onAgregar={addItem}
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
@@ -1846,6 +1852,8 @@ interface NuevaOrdenCompraPageProps {
   onBack: () => void;
   /** Orden a editar (modo edición). Si no se pasa, es modo creación. */
   orden?: OrdenCompra;
+  /** Ítems precargados al llegar desde una orden de producción. */
+  initialItems?: OrdenItem[];
 }
 
 export function NuevaOrdenCompraPage({
@@ -1862,6 +1870,7 @@ export function NuevaOrdenCompraPage({
   onNuevoProveedor,
   onBack,
   orden,
+  initialItems,
 }: NuevaOrdenCompraPageProps) {
   const isEdit = !!orden;
   // La orden a editar se relee de `ordenes` por id: App guarda una copia en
@@ -1936,6 +1945,7 @@ export function NuevaOrdenCompraPage({
       mode={isEdit ? "edit" : "create"}
       tipo="orden"
       orden={orden}
+      initialItems={isEdit ? undefined : initialItems}
       // Pantalla completa dentro del panel (no modal): cabecera con ← y
       // pie Cancelar/Guardar siempre visibles, sin scroll de página.
       fullPage
@@ -2450,7 +2460,7 @@ export function OrdenCompraScreen({
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
 
   const filtered = useMemo(() =>
-    ordenes.filter(o => {
+    ordenarPorIdDescendente(ordenes.filter(o => {
       const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
@@ -2464,7 +2474,7 @@ export function OrdenCompraScreen({
         || facturasTexto.toLowerCase().includes(q)
         || (o.estado ?? "").toLowerCase().includes(q)
         || (o.fecha ?? "").toLowerCase().includes(q);
-    }),
+    }), (orden) => orden.id),
     [ordenes, search, gestiones, proveedores]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
@@ -2897,30 +2907,7 @@ export function OrdenCompraScreen({
                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                        </td>
                         <td className="px-3 py-2.5 overflow-hidden">
-                        <EstadoSelect
-                          value={o.estado}
-                          onChange={(nuevoEstado) => {
-                            if (nuevoEstado === o.estado) return;
-                            setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                          }}
-                          options={opcionesEstado(o.estado)}
-                          disabled={o.estado === "Anulado" || o.estado === "Completado"}
-                        />
-                         <p className="text-[11px] text-muted-foreground mt-1 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
-                        {/* El tooltip envuelve SOLO el botón y su cuadro se pinta
-                            en un portal al <body>: ni la tabla ni el footer lo
-                            recortan. */}
-                        <EstadoHistorialTooltip
-                          historial={o.historialEstados ?? []}
-                          estadoColors={ESTADO_CONFIG}
-                        >
-                          <button
-                            type="button"
-                            className="text-[11px] text-primary hover:underline mt-0.5"
-                          >
-                            Ver historial
-                          </button>
-                        </EstadoHistorialTooltip>
+                        <EstadoBadge e={o.estado} />
                       </td>
                        <td className="px-3 py-2.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                          <div className="flex items-center gap-1 flex-nowrap">
@@ -2931,6 +2918,31 @@ export function OrdenCompraScreen({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
+                          {!["Anulado", "Completado"].includes(o.estado) && (
+                            <EstadoSelect
+                              value={o.estado}
+                              onChange={(nuevoEstado) => {
+                                if (nuevoEstado === o.estado) return;
+                                setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                              }}
+                              options={opcionesEstado(o.estado)}
+                              triggerContent={<RefreshCw className="w-4 h-4" />}
+                              triggerTitle="Cambiar estado"
+                              triggerAriaLabel="Cambiar estado"
+                            />
+                          )}
+                          <EstadoHistorialTooltip
+                            historial={o.historialEstados ?? []}
+                            estadoColors={ESTADO_CONFIG}
+                          >
+                            <button
+                              type="button"
+                              title="Ver historial"
+                              className="text-[11px] text-primary hover:underline px-1"
+                            >
+                              Historial
+                            </button>
+                          </EstadoHistorialTooltip>
                           {/* Editar sólo en Borrador: `onEditarOrden` conecta con
                               setOrdenAEditar + navigate("nueva-orden-compra").
                               En el resto de estados se reserva el mismo ancho
@@ -2991,16 +3003,7 @@ export function OrdenCompraScreen({
                         <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
                         <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
                       </div>
-                      <EstadoSelect
-                        value={o.estado}
-                        onChange={(nuevoEstado) => {
-                          if (nuevoEstado === o.estado) return;
-                          setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                        }}
-                        options={opcionesEstado(o.estado)}
-                        disabled={o.estado === "Anulado" || o.estado === "Completado"}
-                        className="shrink-0"
-                      />
+                      <EstadoBadge e={o.estado} />
                     </div>
 
                     {/* Proveedor con NIT */}
@@ -3047,6 +3050,19 @@ export function OrdenCompraScreen({
                         en Borrador y botón OC sólo cuando la orden está Enviado
                         y le faltan insumos por recibir. */}
                     <div className="mt-2.5 flex items-center gap-1 flex-wrap">
+                      {!["Anulado", "Completado"].includes(o.estado) && (
+                      <EstadoSelect
+                        value={o.estado}
+                        onChange={(nuevoEstado) => {
+                          if (nuevoEstado === o.estado) return;
+                          setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                        }}
+                        options={opcionesEstado(o.estado)}
+                        triggerContent={<RefreshCw className="w-4 h-4" />}
+                        triggerTitle="Cambiar estado"
+                        triggerAriaLabel="Cambiar estado"
+                      />
+                      )}
                       <button
                         onClick={() => onVerDetalle(o)}
                         title="Ver detalle"

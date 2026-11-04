@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Check, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import {
   EstadoSelect,
@@ -982,11 +983,11 @@ export function GestionConfigScreen({
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return roles;
-    return roles.filter(r =>
+    const filtrados = !q ? roles : roles.filter(r =>
       r.nombre.toLowerCase().includes(q) ||
       (r.descripcion ?? "").toLowerCase().includes(q)
     );
+    return ordenarPorIdDescendente(filtrados, (rol) => rol.id);
   }, [roles, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);

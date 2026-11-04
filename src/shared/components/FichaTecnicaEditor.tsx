@@ -14,13 +14,13 @@
  *   - "insumo": ficha de un Producto Insumo → tiempo + rendimiento por
  *     preparación + insumos (SOLO crudos) + pasos.
  */
-import { Fragment, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
-import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
+import { PRESENTACIONES_INSUMO, UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { unidadesCompatibles } from "@/shared/utils/disponibilidad";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
@@ -38,6 +38,41 @@ import {
     suya; el modal de Insumos usa esta por defecto). */
 export const FICHA_INPUT_CLS =
   "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+const formatoCantidadFicha = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+const OTRA_PRESENTACION = "Otra presentación…";
+
+interface PresentacionFila {
+  medida: string;
+  cantidadOriginal: number;
+  etiqueta: string;
+  contenido: number;
+  unidadBase: "g" | "ml";
+  contenidoPersonalizado?: number;
+}
+
+const familiaDeUnidad = (unidad: string): { base: "g" | "ml"; unidades: string[] } | null => {
+  if (unidad === "kg" || unidad === "g") return { base: "g", unidades: ["kg", "g"] };
+  if (unidad === "lt" || unidad === "ml") return { base: "ml", unidades: ["lt", "ml"] };
+  return null;
+};
+
+const resolverPresentacion = (
+  medida: string,
+  unidadCatalogo: string,
+  contenidoPersonalizado: number,
+): Omit<PresentacionFila, "cantidadOriginal" | "medida"> | null => {
+  const fija = PRESENTACIONES_INSUMO.find((p) => p.valor === medida);
+  if (fija) return { etiqueta: fija.etiqueta, contenido: fija.contenido, unidadBase: fija.unidadBase };
+  if (medida !== OTRA_PRESENTACION || !(contenidoPersonalizado > 0)) return null;
+  const familia = familiaDeUnidad(unidadCatalogo);
+  if (!familia) return null;
+  return {
+    etiqueta: `${formatoCantidadFicha.format(contenidoPersonalizado)} ${familia.base}`,
+    contenido: contenidoPersonalizado,
+    unidadBase: familia.base,
+    contenidoPersonalizado,
+  };
+};
 
 /** A5.2 — Lista de "Medida" para una fila de la ficha, según el modo:
     - Modo INSUMO: solo las unidades COMPATIBLES con la del insumo del
@@ -56,9 +91,26 @@ const opcionesMedidaFila = (
   const compatibles: readonly OpcionUnidad[] = UNIDADES_INSUMO.filter((u) =>
     unidadesCompatibles(u.valor, unidadCatalogo),
   );
-  return compatibles.some((u) => u.valor === unidadFila)
-    ? compatibles
-    : [...compatibles, { valor: unidadFila, etiqueta: unidadFila }];
+  const familia = familiaDeUnidad(unidadCatalogo);
+  const presentaciones = familia
+    ? PRESENTACIONES_INSUMO
+        .filter((p) => p.unidadBase === familia.base)
+        .map(({ valor, etiqueta }) => ({ valor, etiqueta, textoCorto: etiqueta }))
+    : [];
+  const opciones = [
+    ...compatibles,
+    ...presentaciones,
+    ...(familia
+      ? [{
+          valor: OTRA_PRESENTACION,
+          etiqueta: `Otra presentación… ${familia.base}`,
+          textoCorto: `Otra presentación… ${familia.base}`,
+        }]
+      : []),
+  ];
+  return opciones.some((u) => u.valor === unidadFila)
+    ? opciones
+    : [...opciones, { valor: unidadFila, etiqueta: unidadFila }];
 };
 
 /**
@@ -71,6 +123,7 @@ function InsumoFilaEditable({
   ins,
   usarUnidadSelect,
   unidadCatalogo,
+  presentacionFila,
   onSave,
   onCancel,
 }: {
@@ -83,14 +136,38 @@ function InsumoFilaEditable({
       "Medida" de la fila ofrece solo las unidades compatibles con ella
       (A5.2). Ausente = lista histórica UNIDADES_FICHA (modo producto). */
   unidadCatalogo?: string;
-  onSave: (r: RInsumo) => void;
+  presentacionFila?: PresentacionFila;
+  onSave: (r: RInsumo, presentacion?: PresentacionFila | null) => void;
   onCancel: () => void;
 }) {
-  const [cantidad, setCantidad] = useState(ins.cantidad);
-  const [unidad, setUnidad] = useState(ins.unidad);
-  // A5.2: en modo insumo solo unidades compatibles con la del catálogo; en
-  // modo producto, la lista de siempre.
+  const [cantidad, setCantidad] = useState(presentacionFila?.cantidadOriginal ?? ins.cantidad);
+  const [unidad, setUnidad] = useState(presentacionFila?.medida ?? ins.unidad);
+  const [contenidoPersonalizado, setContenidoPersonalizado] = useState(
+    presentacionFila?.contenidoPersonalizado ?? 0,
+  );
+  // Las medidas deben ser compatibles con la unidad del insumo seleccionado.
   const opcionesUnidad: readonly OpcionUnidad[] = opcionesMedidaFila(unidad, unidadCatalogo);
+  const detallePresentacion = usarUnidadSelect && unidadCatalogo
+    ? resolverPresentacion(unidad, unidadCatalogo, contenidoPersonalizado)
+    : null;
+  const puedeGuardar =
+    cantidad > 0 && (unidad !== OTRA_PRESENTACION || Boolean(detallePresentacion));
+  const guardar = () => {
+    if (detallePresentacion) {
+      const meta: PresentacionFila = {
+        medida: unidad,
+        cantidadOriginal: cantidad,
+        ...detallePresentacion,
+      };
+      onSave({
+        ...ins,
+        cantidad: cantidad * detallePresentacion.contenido,
+        unidad: detallePresentacion.unidadBase,
+      }, meta);
+      return;
+    }
+    onSave({ ...ins, cantidad, unidad }, null);
+  };
   const inputNumCls =
     "w-20 px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   return (
@@ -136,6 +213,7 @@ function InsumoFilaEditable({
             unidades={opcionesUnidad}
             ariaLabel="Medida"
             fieldClassName="bg-card text-foreground"
+            mostrarValorSeleccionadoCorto
           />
         ) : (
           <select
@@ -143,8 +221,28 @@ function InsumoFilaEditable({
             onChange={(e) => setUnidad(e.target.value)}
             className="px-2 py-1 bg-card rounded-lg border border-border text-sm font-mono text-foreground focus:outline-none cursor-pointer"
           >
-            {UNIDADES_FICHA.map((u) => <option key={u}>{u}</option>)}
+            {(unidadCatalogo
+              ? UNIDADES_FICHA.filter((opcion) => unidadesCompatibles(opcion, unidadCatalogo))
+              : UNIDADES_FICHA
+            ).map((u) => <option key={u}>{u}</option>)}
           </select>
+        )}
+        {usarUnidadSelect && unidad === OTRA_PRESENTACION && (
+          <div className="relative mt-1">
+            <input
+              type="number"
+              min={0.01}
+              step={0.01}
+              value={contenidoPersonalizado || ""}
+              placeholder="Contenido"
+              aria-label="Contenido"
+              onChange={(e) => setContenidoPersonalizado(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+              className="w-full rounded-lg border border-border bg-card px-2 py-1 pr-9 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              {familiaDeUnidad(unidadCatalogo ?? "")?.base}
+            </span>
+          </div>
         )}
       </td>
       <td className="px-3 py-2">
@@ -152,8 +250,9 @@ function InsumoFilaEditable({
           <button
             type="button"
             title="Aceptar"
-            onClick={() => onSave({ ...ins, cantidad, unidad })}
-            className="p-1.5 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 cursor-pointer transition-colors"
+            disabled={usarUnidadSelect && !puedeGuardar}
+            onClick={guardar}
+            className="p-1.5 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
             <Check className="w-4 h-4" />
           </button>
@@ -183,13 +282,14 @@ function InsumosFichaTable({
   editandoIdx,
   usarUnidadSelect,
   insumosCatalogo,
+  presentaciones,
   onEdit,
   onChange,
   onRemove,
+  onPresentationChange,
   contenedorClassName,
   contenedorRef,
   stickyHeader,
-  erroresPorFila,
 }: {
   insumos: RInsumo[];
   editable: boolean;
@@ -201,9 +301,12 @@ function InsumosFichaTable({
       ofrece solo las unidades compatibles (A5.2). Ausente = modo producto,
       sin cambios. */
   insumosCatalogo?: Insumo[];
+  /** Metadatos de presentaciones vigentes solo durante esta sesión de edición. */
+  presentaciones?: Record<string, PresentacionFila>;
   onEdit: (idx: number | null) => void;
   onChange: (idx: number, patch: Partial<RInsumo>) => void;
   onRemove: (idx: number) => void;
+  onPresentationChange?: (key: string, presentacion: PresentacionFila | null) => void;
   /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
       Insumos). Por defecto solo hay scroll horizontal. */
   contenedorClassName?: string;
@@ -211,11 +314,6 @@ function InsumosFichaTable({
   contenedorRef?: Ref<HTMLDivElement>;
   /** Encabezado sticky cuando el contenedor tiene scroll vertical. */
   stickyHeader?: boolean;
-  /** Mensaje de validación por FILA (índice de `insumos`), en rojo debajo de
-      la propia fila, con su cantidad también en rojo. Solo lo llena el modal
-      de Crear Producto Insumo (modo "insumo"): las fichas de Productos del
-      menú pasan sin esto y se ven exactamente igual que siempre. */
-  erroresPorFila?: Record<number, string>;
 }) {
   return (
     <div
@@ -236,9 +334,7 @@ function InsumosFichaTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {insumos.map((ins, idx) => {
-            const errorFila = erroresPorFila?.[idx];
-            return (
+          {insumos.map((ins, idx) => (
             <Fragment key={`${ins.nombre}-${idx}`}>
             <tr className="bg-muted/40">
               {editable && editandoIdx === idx ? (
@@ -246,6 +342,7 @@ function InsumosFichaTable({
                   key={idx}
                   ins={ins}
                   usarUnidadSelect={usarUnidadSelect}
+                  presentacionFila={presentaciones?.[ins.insumoId ?? ins.nombre]}
                   /* A5.2: unidad del insumo del catálogo (por id real o, en
                      fichas viejas, por nombre normalizado) para filtrar las
                      medidas compatibles de la fila. */
@@ -255,8 +352,9 @@ function InsumosFichaTable({
                         resolverInsumo(insumosCatalogo, ins.nombre)?.unidadMedida)
                       : undefined
                   }
-                  onSave={(r) => {
+                  onSave={(r, presentacion) => {
                     onChange(idx, r);
+                    onPresentationChange?.(r.insumoId ?? r.nombre, presentacion ?? null);
                     onEdit(null);
                   }}
                   onCancel={() => onEdit(null)}
@@ -264,7 +362,17 @@ function InsumosFichaTable({
               ) : (
                 <>
                   <td className="px-3 py-2 text-sm font-medium text-foreground">{ins.nombre}</td>
-                  <td className={`px-3 py-2 text-sm font-mono ${errorFila ? "text-red-600 dark:text-red-400 font-semibold" : "text-muted-foreground"}`}>{ins.cantidad}</td>
+                  <td className="px-3 py-2 text-sm font-mono text-muted-foreground">
+                    {presentaciones?.[ins.insumoId ?? ins.nombre] ? (
+                      <div>
+                        <div>{formatoCantidadFicha.format(ins.cantidad)}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {formatoCantidadFicha.format(presentaciones[ins.insumoId ?? ins.nombre].cantidadOriginal)} ×{" "}
+                          {presentaciones[ins.insumoId ?? ins.nombre].etiqueta}
+                        </div>
+                      </div>
+                    ) : ins.cantidad}
+                  </td>
                   <td className="px-3 py-2 text-sm text-muted-foreground font-mono">{ins.unidad}</td>
                   {editable && (
                     <td className="px-3 py-2">
@@ -291,18 +399,8 @@ function InsumosFichaTable({
                 </>
               )}
             </tr>
-            {/* Mensaje de validación de ESTA fila (p. ej. el insumo no alcanza
-                para la "Cantidad a hacer"): el `divide-y` de arriba queda entre
-                la fila y su mensaje, como una continuación en rojo. */}
-            {errorFila && (
-              <tr>
-                <td colSpan={editable ? 4 : 3} className="px-3 pb-2 text-xs font-semibold text-red-600 dark:text-red-400 leading-tight">
-                  {errorFila}
-                </td>
-              </tr>
-            )}
             </Fragment>
-          );})}
+          ))}
         </tbody>
       </table>
     </div>
@@ -327,26 +425,20 @@ export interface FichaTecnicaEditorProps {
       configurada, el padre pasa un único elemento ("Único"). Ausente =
       modo libre (fallback de datos viejos). */
   tamanoFijo?: readonly string[];
-  /** Unidad de medida del Producto Insumo ("kg", "lt", …). SOLO modo insumo:
-      se muestra junto a "Cantidad a hacer" (la cantidad a hacer se expresa
-      en esta unidad). Ausente = solo el número, como antes. */
+  /** Unidad de medida del Producto Insumo, visible junto a "Cantidad a hacer". */
   unidadCantidad?: string;
-  /** Mensajes de validación en tiempo real (SOLO modo insumo). El padre
-      decide cuándo mostrarlos (al tocar el campo o al intentar guardar);
+  /** Presentación del Producto Insumo; solo se usa en modo "insumo". */
+  presentacionCantidad?: {
+    contenido: number;
+    unidadBase: "g" | "ml";
+    etiquetaContenido: string;
+  };
+  /** Mensajes de validación (SOLO modo insumo). El padre decide cuándo
+      mostrarlos; el formulario de Producto Insumo los muestra al guardar;
       aquí solo se pintan con el estilo de error del sistema. */
   errorTiempo?: string;
   errorCantidad?: string;
   errorInsumos?: string;
-  /** Mensaje de validación por FILA de "Insumos a usar" (índice de
-      `ficha.insumos`), en rojo debajo de esa fila. SOLO modo insumo: el
-      modal de Crear Producto Insumo avisa así cuando un insumo no alcanza
-      en stock para la "Cantidad a hacer". En modo "producto" se ignora, así
-      las fichas de los productos del menú se ven igual que siempre. */
-  erroresInsumosFila?: Record<number, string>;
-  /** Campo extra que el padre quiere ENTRE "Cantidad a hacer" e "Insumos a
-      usar" (SOLO modo insumo): el modal de Compras > Insumos mete ahí el
-      selector "Unidad de medida *" del Producto Insumo. */
-  campoAdicional?: ReactNode;
 }
 
 export function FichaTecnicaEditor({
@@ -357,14 +449,13 @@ export function FichaTecnicaEditor({
   inputCls = FICHA_INPUT_CLS,
   tamanoFijo,
   unidadCantidad,
+  presentacionCantidad,
   errorTiempo,
   errorCantidad,
   errorInsumos,
-  erroresInsumosFila,
-  campoAdicional,
 }: FichaTecnicaEditorProps) {
   const esInsumo = modo === "insumo";
-  const filaInputCls = esInsumo ? `${inputCls} h-12` : inputCls;
+  const filaInputCls = esInsumo ? `${inputCls} h-11` : inputCls;
   const insumosScrollRef = useRef<HTMLDivElement>(null);
   const insumosCantidadRef = useRef(ficha.insumos.length);
 
@@ -384,6 +475,8 @@ export function FichaTecnicaEditor({
   const [nombre, setNombre] = useState("");
   const [cantidad, setCantidad] = useState(1);
   const [unidad, setUnidad] = useState(UNIDADES_FICHA[0]);
+  const [contenidoOtraPresentacion, setContenidoOtraPresentacion] = useState(0);
+  const [presentacionesFila, setPresentacionesFila] = useState<Record<string, PresentacionFila>>({});
   // Fila de la tabla de insumos abierta en edición (solo una a la vez).
   const [editandoIdx, setEditandoIdx] = useState<number | null>(null);
   const [paso, setPaso] = useState("");
@@ -393,6 +486,19 @@ export function FichaTecnicaEditor({
   const catalogo = esInsumo
     ? insumos.filter((i) => i.tipo !== "ProductoInsumo" && i.estado === "activo")
     : insumos;
+  const idsInsumosAgregados = ficha.insumos
+    .map((fila) => fila.insumoId ?? resolverInsumo(catalogo, fila.nombre)?.id)
+    .filter((id): id is string => Boolean(id));
+  const detallePresentacion = sel
+    ? resolverPresentacion(unidad, sel.unidadMedida, contenidoOtraPresentacion)
+    : null;
+  const resumenPresentacion = detallePresentacion && cantidad > 0
+    ? `${formatoCantidadFicha.format(cantidad)} × ${detallePresentacion.etiqueta} = ${formatoCantidadFicha.format(cantidad * detallePresentacion.contenido)} ${detallePresentacion.unidadBase}${
+        detallePresentacion.unidadBase === "ml" && cantidad * detallePresentacion.contenido >= 1000
+          ? ` (${formatoCantidadFicha.format((cantidad * detallePresentacion.contenido) / 1000)} lt)`
+          : ""
+      }`
+    : null;
 
   // Filas de "Porciones por tamaño". Con `tamanoFijo` (la categoría del
   // producto manda los tamaños) se muestran EXACTAMENTE esas etiquetas: las
@@ -441,21 +547,23 @@ export function FichaTecnicaEditor({
   const seleccionarInsumo = (ins: Insumo) => {
     setSel(ins);
     setNombre(ins.nombre);
+    setContenidoOtraPresentacion(0);
     setUnidad(
       esInsumo
         ? ins.unidadMedida
         : UNIDADES_FICHA.includes(ins.unidadMedida)
           ? ins.unidadMedida
-          : UNIDADES_FICHA[0],
+          : UNIDADES_FICHA.find((opcion) => unidadesCompatibles(opcion, ins.unidadMedida))
+            ?? UNIDADES_FICHA[0],
     );
   };
 
   // Solo se agrega un insumo que exista en el catálogo: o se seleccionó del
   // buscador, o el texto escrito coincide exactamente con un insumo real.
   const addInsumo = () => {
-    const ins = sel ?? resolverInsumo(catalogo, nombre);
+    const ins = esInsumo ? sel : sel ?? resolverInsumo(catalogo, nombre);
     if (!ins) {
-      toast.error("Selecciona un insumo del catálogo de Insumos");
+      if (!esInsumo) toast.error("Selecciona un insumo del catálogo de Insumos");
       return;
     }
     if (
@@ -463,36 +571,66 @@ export function FichaTecnicaEditor({
         (i) => i.nombre === ins.nombre || (i.insumoId && i.insumoId === ins.id),
       )
     ) {
-      toast.error("Este insumo ya está en la ficha; edítalo en la tabla");
+      if (!esInsumo) toast.error("Este insumo ya está en la ficha; edítalo en la tabla");
       return;
     }
+    const presentacion = esInsumo
+      ? resolverPresentacion(unidad, ins.unidadMedida, contenidoOtraPresentacion)
+      : null;
+    const fila: RInsumo = {
+      insumoId: ins.id,
+      nombre: ins.nombre,
+      cantidad: presentacion ? cantidad * presentacion.contenido : cantidad,
+      unidad: presentacion
+        ? presentacion.unidadBase
+        : esInsumo && !unidadesCompatibles(unidad, ins.unidadMedida)
+          ? ins.unidadMedida
+          : unidad,
+    };
     onChange({
       ...ficha,
-      insumos: [
-        ...ficha.insumos,
-        // A5.2: en modo insumo la fila debe quedar en una unidad
-        // COMPATIBLE con la del catálogo (el resto del sistema solo convierte
-        // kg↔g y lt↔ml); si se escribió otro insumo distinto al seleccionado
-        // y la medida ya no corresponde, vuelve a la unidad del insumo.
-        {
-          insumoId: ins.id,
-          nombre: ins.nombre,
-          cantidad,
-          unidad: esInsumo && !unidadesCompatibles(unidad, ins.unidadMedida) ? ins.unidadMedida : unidad,
-        },
-      ],
+      insumos: [...ficha.insumos, fila],
     });
+    if (presentacion) {
+      setPresentacionesFila((actuales) => ({
+        ...actuales,
+        [ins.id]: { medida: unidad, cantidadOriginal: cantidad, ...presentacion },
+      }));
+    }
     setNombre("");
     setCantidad(1);
     setSel(null);
+    setContenidoOtraPresentacion(0);
   };
+  const puedeAgregarInsumo = Boolean(
+    sel &&
+    cantidad > 0 &&
+    !idsInsumosAgregados.includes(sel.id) &&
+    (unidad !== OTRA_PRESENTACION || detallePresentacion),
+  );
   const updateInsumo = (idx: number, patch: Partial<RInsumo>) =>
     onChange({
       ...ficha,
       insumos: ficha.insumos.map((ins, j) => (j === idx ? { ...ins, ...patch } : ins)),
     });
-  const removeInsumo = (idx: number) =>
+  const removeInsumo = (idx: number) => {
+    const fila = ficha.insumos[idx];
+    if (fila) {
+      setPresentacionesFila((actuales) => {
+        const siguientes = { ...actuales };
+        delete siguientes[fila.insumoId ?? fila.nombre];
+        return siguientes;
+      });
+    }
     onChange({ ...ficha, insumos: ficha.insumos.filter((_, j) => j !== idx) });
+  };
+  const guardarPresentacionFila = (key: string, presentacion: PresentacionFila | null) =>
+    setPresentacionesFila((actuales) => {
+      const siguientes = { ...actuales };
+      if (presentacion) siguientes[key] = presentacion;
+      else delete siguientes[key];
+      return siguientes;
+    });
 
   const addPaso = () => {
     if (!paso.trim()) return;
@@ -510,11 +648,11 @@ export function FichaTecnicaEditor({
     <div className={esInsumo ? "flex min-h-0 flex-col gap-4 lg:h-full" : "space-y-4"}>
       {/* En producto la rejilla "Tiempo | Porciones" es 1 : 1.4 (la columna de
           porciones es más ancha: lleva las cajitas lado a lado). En insumo,
-          Tiempo, Cantidad a hacer y Unidad de medida comparten una sola fila. */}
+          Tiempo y Cantidad a hacer comparten una fila. */}
       <div
         className={`shrink-0 grid ${
           esInsumo
-            ? "grid-cols-1 sm:grid-cols-3 items-end gap-4"
+            ? "grid-cols-1 sm:grid-cols-2 items-start gap-4"
             : "grid-cols-[1fr_1.4fr] gap-3"
         }`}
       >
@@ -530,7 +668,11 @@ export function FichaTecnicaEditor({
           </label>
           {/* Como todos los numéricos del sistema (punto B1): el 0 se muestra
               vacío con placeholder "0", en producto y en insumo. */}
-          <input type="number" min={0}
+          <input
+            type="number"
+            min={0}
+            aria-label="Tiempo de preparación"
+            data-producto-insumo-campo={esInsumo ? "tiempo" : undefined}
             value={ficha.tiempoPreparacion === 0 ? "" : ficha.tiempoPreparacion}
             placeholder="0"
             onChange={e => onChange({ ...ficha, tiempoPreparacion: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
@@ -540,18 +682,39 @@ export function FichaTecnicaEditor({
           )}
         </div>
         {esInsumo ? (
-          <div className="flex min-w-0 flex-col gap-2">
-            <label className="flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground">
-              Cantidad a hacer{unidadCantidad ? ` (${unidadCantidad})` : ""} *
+          <div className="flex min-w-0 flex-col">
+            <label className="flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground mb-2">
+              {`Cantidad a hacer${presentacionCantidad ? ` (× ${presentacionCantidad.etiquetaContenido})` : unidadCantidad ? ` (${unidadCantidad})` : ""} *`}
             </label>
             {/* Vacío = cantidad sin escribir (punto B1): al consumirlo los
                 demás módulos usan `rendimientoDe`, que cae en 1 si es 0. */}
-            <input type="number" min={0.1} step={0.1}
-              value={ficha.rendimiento && ficha.rendimiento > 0 ? rendimientoDe(ficha) : ""}
-              placeholder="0"
-              aria-label="Cantidad a hacer"
-              onChange={e => onChange({ ...ficha, rendimiento: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
-              className={filaInputCls} />
+            <div className="relative">
+              <input type="number" min={0.1} step={0.1}
+                value={ficha.rendimiento && ficha.rendimiento > 0 ? rendimientoDe(ficha) : ""}
+                placeholder="0"
+                aria-label="Cantidad a hacer"
+                data-producto-insumo-campo="cantidad"
+                onChange={e => onChange({ ...ficha, rendimiento: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
+                className={`${filaInputCls} ${unidadCantidad && !presentacionCantidad ? "pr-16" : ""}`} />
+              {unidadCantidad && !presentacionCantidad ? (
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  {unidadCantidad}
+                </span>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Elige la unidad de medida en Datos
+                </p>
+              )}
+            </div>
+            {presentacionCantidad && ficha.rendimiento > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatoCantidadFicha.format(ficha.rendimiento)} × {presentacionCantidad.etiquetaContenido} ={" "}
+                {formatoCantidadFicha.format(ficha.rendimiento * presentacionCantidad.contenido)} {presentacionCantidad.unidadBase}
+                {presentacionCantidad.unidadBase === "ml" && ficha.rendimiento * presentacionCantidad.contenido >= 1000
+                  ? ` (${formatoCantidadFicha.format((ficha.rendimiento * presentacionCantidad.contenido) / 1000)} lt)`
+                  : ""}
+              </p>
+            )}
             {errorCantidad && (
               <p className="text-xs text-red-500 dark:text-red-400 leading-tight">{errorCantidad}</p>
             )}
@@ -622,100 +785,158 @@ export function FichaTecnicaEditor({
             )}
           </div>
         )}
-        {esInsumo && campoAdicional}
       </div>
 
       {/* Insumos */}
-      <div className={esInsumo ? "flex min-h-0 flex-col lg:flex-1" : ""}>
-        <label className="shrink-0 block text-xs font-semibold text-muted-foreground mb-2">
-          {esInsumo ? "Insumos a usar *" : "Insumos"}
-        </label>
-        {ficha.insumos.length > 0 ? (
-          <div className={esInsumo ? "mb-3 flex min-h-0 flex-col lg:flex-1" : "mb-3"}>
-            {/* SOLO en modo insumo la tabla tiene scroll interno: en el modal
-                de Compras > Insumos es el único scroll permitido. */}
-            <InsumosFichaTable
-              insumos={ficha.insumos}
-              editable={true}
-              editandoIdx={editandoIdx}
-              usarUnidadSelect={esInsumo}
-              onEdit={setEditandoIdx}
-              onChange={updateInsumo}
-              onRemove={removeInsumo}
-              contenedorClassName={
-                esInsumo
-                  ? "no-scrollbar max-h-60 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0"
-                  : undefined
-              }
-              contenedorRef={esInsumo ? insumosScrollRef : undefined}
-              stickyHeader={esInsumo}
-              /* En modo insumo cada fila conoce la unidad de su insumo del
-                 catálogo (A5.2); en modo producto se ignora. */
-              insumosCatalogo={esInsumo ? insumos : undefined}
-              /* Los mensajes por fila son exclusivos del modo insumo (el
-                 modal de Crear Producto Insumo valida contra stock). */
-              erroresPorFila={esInsumo ? erroresInsumosFila : undefined}
-            />
-          </div>
-        ) : esInsumo ? (
-          <div className="mb-3 flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-3 text-xs italic text-muted-foreground lg:flex-1">
-            Sin insumos agregados
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
-        )}
-        {esInsumo && errorInsumos && (
-          <p className="shrink-0 text-xs text-red-500 dark:text-red-400 mt-1 mb-2 leading-tight">{errorInsumos}</p>
-        )}
-        <div className={`shrink-0 gap-2 ${
-          esInsumo
-            ? "grid grid-cols-[1fr_1fr_1fr_auto] items-end [&>div]:min-w-0 [&_input]:truncate"
-            : "flex flex-wrap items-end"
-        }`}>
-          <InsumoSearchField
-            insumos={catalogo}
-            valor={nombre}
-            onValorChange={v => { setNombre(v); setSel(null); }}
-            onSelect={seleccionarInsumo}
-          />
-          <div className={esInsumo ? "min-w-0" : "w-20"}>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
-            {/* Arranca en 1 (regla del alta de insumos) y borra a vacío sin
-                volver a 0 (punto B1). */}
-            <input type="number" min={0.1} step={0.1}
-              value={cantidad === 0 ? "" : cantidad}
-              placeholder="0"
-              onChange={e => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-              className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-          </div>
-          <div className={esInsumo ? "min-w-0 [&_button]:py-2 [&_button_span]:min-w-0 [&_button_span]:truncate" : "w-24"}>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
-            {/* SOLO modo insumo: mismo UnidadSelect redondeado que "Unidad de
-                medida", pero con la lista compartida UNIDADES_INSUMO y, una
-                vez elegido el insumo, reducida a las unidades compatibles
-                con la suya (A5.2). En modo producto el select nativo queda
-                exactamente igual que antes. */}
-            {esInsumo ? (
-              <UnidadSelect
-                value={unidad}
-                onChange={setUnidad}
-                unidades={
-                  sel ? opcionesMedidaFila(unidad, sel.unidadMedida) : UNIDADES_INSUMO
-                }
-                ariaLabel="Medida"
+      <div className={esInsumo ? "relative z-10 flex min-h-0 flex-col gap-4 lg:flex-1" : ""}>
+        {esInsumo ? (
+          <>
+            <label className="shrink-0 block text-xs font-semibold text-muted-foreground">
+              Insumos a usar *
+            </label>
+            <div className="relative z-20 shrink-0">
+              <InsumoSearchField
+                insumos={catalogo}
+                valor={nombre}
+                onValorChange={v => { setNombre(v); setSel(null); }}
+                onSelect={seleccionarInsumo}
+                label="Buscar insumo"
+                placeholder="Buscar insumo por nombre..."
+                direction="down"
+                excluirIds={idsInsumosAgregados}
+                maxResultados={6}
+                mensajeSinResultados="No se encontraron insumos"
+                dataField="insumos"
               />
-            ) : (
-              <select value={unidad} onChange={e => setUnidad(e.target.value)}
-                className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
-                {UNIDADES_FICHA.map(u => <option key={u}>{u}</option>)}
-              </select>
+            </div>
+            <div className="shrink-0 grid grid-cols-[1fr_1fr_auto] items-end gap-3">
+              <div className="min-w-0">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
+                <input type="number" min={0.1} step={0.1}
+                  value={cantidad === 0 ? "" : cantidad}
+                  placeholder="0"
+                  onChange={e => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+                  className="h-11 w-full min-w-0 px-3 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div className="min-w-0 [&_button]:h-11 [&_button_span]:min-w-0 [&_button_span]:truncate">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Medida</label>
+                <UnidadSelect
+                  value={unidad}
+                  onChange={setUnidad}
+                  unidades={sel ? opcionesMedidaFila(unidad, sel.unidadMedida) : UNIDADES_INSUMO}
+                  ariaLabel="Medida"
+                  mostrarValorSeleccionadoCorto
+                />
+                {sel && unidad === OTRA_PRESENTACION && (
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={contenidoOtraPresentacion || ""}
+                      placeholder="Contenido"
+                      aria-label="Contenido"
+                      onChange={(e) => setContenidoOtraPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+                      className="h-11 w-full rounded-xl border border-border bg-muted px-2 pr-9 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      {familiaDeUnidad(sel.unidadMedida)?.base}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={addInsumo}
+                title="Agregar insumo"
+                disabled={!puedeAgregarInsumo}
+                className="h-11 w-11 shrink-0 inline-flex items-center justify-center bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+            {resumenPresentacion && (
+              <p className="shrink-0 -mt-2 text-xs text-muted-foreground">{resumenPresentacion}</p>
             )}
-          </div>
-          <button onClick={addInsumo} title="Agregar insumo"
-            className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
+            {errorInsumos && (
+              <p className="shrink-0 text-xs text-red-500 dark:text-red-400 leading-tight">{errorInsumos}</p>
+            )}
+            {ficha.insumos.length > 0 ? (
+              <div className="mt-4 min-h-0 lg:flex-1">
+                <InsumosFichaTable
+                  insumos={ficha.insumos}
+                  editable
+                  editandoIdx={editandoIdx}
+                  usarUnidadSelect
+                  presentaciones={presentacionesFila}
+                  onEdit={setEditandoIdx}
+                  onChange={updateInsumo}
+                  onRemove={removeInsumo}
+                  onPresentationChange={guardarPresentacionFila}
+                  contenedorClassName="no-scrollbar max-h-60 overflow-y-auto overscroll-contain lg:max-h-60"
+                  contenedorRef={insumosScrollRef}
+                  stickyHeader
+                  insumosCatalogo={insumos}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 flex min-h-16 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-3 text-xs italic text-muted-foreground">
+                Sin insumos agregados
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <label className="shrink-0 block text-xs font-semibold text-muted-foreground mb-2">Insumos</label>
+            {ficha.insumos.length > 0 ? (
+              <div className="mb-3">
+                <InsumosFichaTable
+                  insumos={ficha.insumos}
+                  editable
+                  editandoIdx={editandoIdx}
+                  onEdit={setEditandoIdx}
+                  onChange={updateInsumo}
+                  onRemove={removeInsumo}
+                  insumosCatalogo={insumos}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
+            )}
+            <div className="shrink-0 flex flex-nowrap items-end gap-2">
+              <InsumoSearchField
+                insumos={catalogo}
+                valor={nombre}
+                onValorChange={v => { setNombre(v); setSel(null); }}
+                onSelect={seleccionarInsumo}
+                direction="down"
+              />
+              <div className="w-20">
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Cantidad</label>
+                <input type="number" min={0.1} step={0.1}
+                  value={cantidad === 0 ? "" : cantidad}
+                  placeholder="0"
+                  onChange={e => setCantidad(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+                  className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Medida</label>
+                <select value={unidad} onChange={e => setUnidad(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer">
+                  {(sel
+                    ? UNIDADES_FICHA.filter((opcion) => unidadesCompatibles(opcion, sel.unidadMedida))
+                    : UNIDADES_FICHA
+                  ).map((opcion) => <option key={opcion}>{opcion}</option>)}
+                </select>
+              </div>
+              <button type="button" onClick={addInsumo} title="Agregar insumo"
+                disabled={!puedeAgregarInsumo}
+                className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95">
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Pasos de elaboración — SOLO en modo producto. Un Producto Insumo
@@ -799,7 +1020,7 @@ export function FichaTecnicaDetalle({
         </div>
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-0.5">
-            {modo === "insumo" ? "Cantidad a hacer" : "Porciones por tamaño"}
+            {modo === "insumo" ? "Unidades (porciones)" : "Porciones por tamaño"}
           </p>
           {modo === "insumo" ? (
             <div className={readCls}>

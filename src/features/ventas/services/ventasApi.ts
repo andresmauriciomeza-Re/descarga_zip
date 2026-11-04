@@ -2,7 +2,7 @@ import api from '@/shared/services/api';
 import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
 import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
-import type { Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
+import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
 
 export interface PagoVentaApi {
   id_pago: number;
@@ -22,6 +22,8 @@ export interface VentaApi {
   hora_recogida: string | null;
   monto: number | string;
   estado: VentaStatus;
+  estado_cliente?: EstadoClienteVenta;
+  estado_orden?: string | null;
   fecha_estado: string | null;
   motivo_rechazo: string | null;
   /** Quién dejó la venta en 'Anulado': 'Administrador' o 'Cliente'. */
@@ -112,6 +114,8 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     cantidad: detalles.reduce((suma, detalle) => suma + detalle.cantidad, 0),
     total: Number(row.monto),
     estado: row.estado,
+    estadoCliente: row.estado_cliente ?? row.estado,
+    estadoOrden: row.estado_orden ?? undefined,
     detalle: detalles.map((detalle) => ({
       nombre: detalle.nombre,
       precio: Number(detalle.precio_unitario),

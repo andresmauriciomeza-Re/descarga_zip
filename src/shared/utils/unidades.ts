@@ -30,3 +30,59 @@ export const UNIDADES_INSUMO: readonly { valor: string; etiqueta: string }[] = [
   { valor: "caja", etiqueta: "Caja (caja)" },
   { valor: "bolsa", etiqueta: "Bolsa (bolsa)" },
 ];
+
+export interface PresentacionInsumo {
+  valor: string;
+  etiqueta: string;
+  unidadBase: "g" | "ml";
+  contenido: number;
+  divisorAntes?: boolean;
+}
+
+export const OTRA_PRESENTACION_G = "__otra_presentacion_g__";
+export const OTRA_PRESENTACION_ML = "__otra_presentacion_ml__";
+
+export const PRESENTACIONES_INSUMO: readonly PresentacionInsumo[] = [
+  { valor: "Bolsa 250 g", etiqueta: "250 g", unidadBase: "g", contenido: 250 },
+  { valor: "Bolsa 500 g", etiqueta: "500 g", unidadBase: "g", contenido: 500 },
+  { valor: "Bolsa 1000 g", etiqueta: "1000 g", unidadBase: "g", contenido: 1000 },
+  { valor: "Envase 900 ml", etiqueta: "900 ml", unidadBase: "ml", contenido: 900 },
+  { valor: "Envase 1100 ml", etiqueta: "1100 ml", unidadBase: "ml", contenido: 1100 },
+  { valor: "Envase 2 lt", etiqueta: "2 lt", unidadBase: "ml", contenido: 2000 },
+];
+
+export function resolverPresentacionUnidad(
+  valor: string,
+  contenidoPersonalizado = 0,
+): PresentacionInsumo | null {
+  const fija = PRESENTACIONES_INSUMO.find((presentacion) => presentacion.valor === valor);
+  if (fija) return fija;
+  if (valor === OTRA_PRESENTACION_G && contenidoPersonalizado > 0) {
+    return {
+      valor,
+      etiqueta: `${contenidoPersonalizado} g`,
+      unidadBase: "g",
+      contenido: contenidoPersonalizado,
+    };
+  }
+  if (valor === OTRA_PRESENTACION_ML && contenidoPersonalizado > 0) {
+    return {
+      valor,
+      etiqueta: `${contenidoPersonalizado} ml`,
+      unidadBase: "ml",
+      contenido: contenidoPersonalizado,
+    };
+  }
+  return null;
+}
+
+export const UNIDADES_Y_PRESENTACIONES_INSUMO = [
+  ...UNIDADES_INSUMO.map(({ valor }) => ({ valor, etiqueta: valor })),
+  ...PRESENTACIONES_INSUMO.map((presentacion, index) => ({
+    ...presentacion,
+    divisorAntes: index === 0,
+    textoCorto: presentacion.etiqueta,
+  })),
+  { valor: OTRA_PRESENTACION_G, etiqueta: "… g", textoCorto: "… g" },
+  { valor: OTRA_PRESENTACION_ML, etiqueta: "… ml", textoCorto: "… ml" },
+] as const;

@@ -1,14 +1,16 @@
-import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useMemo, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Trash2, X, Play, CheckCircle2, Ban,
+  Plus, Search, Trash2, X, Play, CheckCircle2, Ban, Calculator,
   AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
@@ -46,6 +48,17 @@ import {
 } from "@/features/orden-produccion/services/ordenesProduccionApi";
 import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/fichasApi";
 import {
+  guardarParametrosCostos,
+  obtenerParametrosCostos,
+  type ParametrosCostosPayload,
+} from "@/features/productos/services/parametrosCostosApi";
+import { ParametrosCostosModal } from "@/features/productos/components/ParametrosCostosModal";
+import {
+  calcularCostoOrden,
+  formatearCOP,
+  type ParametrosCostos,
+} from "@/shared/utils/costos";
+import {
   SelectorProductoInsumo,
   type GrupoProductoInsumo,
 } from "@/features/orden-produccion/components/SelectorProductoInsumo";
@@ -56,7 +69,7 @@ const INPUT_LINEA_CLS = "w-full h-[54px] px-[18px] bg-muted border border-border
 const OBS_CREAR_CLS = "w-full min-h-[110px] px-[18px] py-4 bg-muted border border-border text-base text-foreground rounded-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ─────────────────────────── Tipos ───────────────────────────
-export type EstadoOrden = "pendiente" | "en-proceso" | "por-verificar" | "completada" | "cancelada";
+export type EstadoOrden = "pendiente" | "en-proceso" | "completada" | "cancelada";
 
 /** Las dos formas de trabajar en la cocina. */
 export type TipoOrden = "preparacion" | "pedido";
@@ -85,7 +98,6 @@ const HORNEADO_MIN = 15;
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
   pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
   "en-proceso": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
-  "por-verificar": "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
   completada:   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
   cancelada:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
@@ -93,29 +105,25 @@ const ESTADO_COLOR: Record<EstadoOrden, string> = {
 const ESTADO_LABEL: Record<EstadoOrden, string> = {
   pendiente:    "Pendiente",
   "en-proceso": "En proceso",
-  "por-verificar": "Por verificar",
   completada:   "Completada",
   cancelada:    "Cancelada",
 };
 
-// Transiciones válidas de estado. "Cancelada" NO es seleccionable:
-// solo se alcanza mediante el flujo de "Dar de baja".
+// Cancelada solo se alcanza mediante el flujo de "Dar de baja".
 export const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
-  pendiente:    ["en-proceso"],
-  "en-proceso": ["por-verificar"],
-  "por-verificar": ["completada"],
+  pendiente:    ["en-proceso", "cancelada"],
+  "en-proceso": ["completada", "cancelada"],
   completada:   [],
   cancelada:    [],
 };
 
-// Los 5 estados, en su orden natural de avance por el flujo de producción.
-export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "por-verificar", "completada", "cancelada"];
+export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "completada", "cancelada"];
 
 // Qué estados pueden elegirse a mano desde el listado, dado el estado actual.
 export const esEstadoSeleccionable = (actual: EstadoOrden, destino: EstadoOrden): boolean => {
-  if (destino === actual) return true;                    // el estado actual siempre visible
-  if (destino === "cancelada") return false;              // solo vía "Dar de baja"
-  return ORDEN_ESTADOS.indexOf(destino) > ORDEN_ESTADOS.indexOf(actual);
+  if (destino === actual) return true;
+  if (destino === "cancelada") return false;
+  return VALID_TRANSITIONS[actual].includes(destino);
 };
 
 const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
@@ -156,7 +164,7 @@ export interface LineaOrden {
   sinFicha?: boolean;
   /** Solo Forma 2: pasos de la ficha vigente, en solo lectura. */
   pasos?: string[];
-  /** Se llenan al verificar la orden. */
+  /** Se llenan al completar la orden. */
   cantidadReal?: number | null;
   merma?: number;
   /** Snapshot de la ficha al momento de crear/editar la orden. Si existe,
@@ -639,7 +647,16 @@ function requeridosDePreparaciones(
     para preparaciones (eso es solo para pedidos, que vienen de una venta ya
     pagada). Con insumo ausente/inactivo/unidad incompatible manda el motivo
     (`motivoFaltante`), que ya trae el nombre del insumo. */
-function AvisoFaltantes({ faltantes }: { faltantes: Faltante[] }) {
+const esInsumoInactivo = (faltante: Faltante) =>
+  faltante.motivo === "inactivo" || /insumo .+ está inactivo/i.test(faltante.motivoTexto ?? "");
+
+function AvisoFaltantes({
+  faltantes,
+  onIrInsumos,
+}: {
+  faltantes: Faltante[];
+  onIrInsumos?: () => void;
+}) {
   if (faltantes.length === 0) return null;
   return (
     <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
@@ -648,11 +665,26 @@ function AvisoFaltantes({ faltantes }: { faltantes: Faltante[] }) {
         <span>No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.</span>
       </p>
       {faltantes.map((f) => (
-        <p key={f.insumoId} className="pl-6 text-xs text-red-700">
-          {f.motivo
-            ? motivoFaltante(f)
-            : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
-        </p>
+        <div key={f.insumoId} className="pl-6 text-xs text-red-700">
+          {esInsumoInactivo(f) ? (
+            <p>
+              Insumo inactivo: {f.nombre}.{" "}
+              <button
+                type="button"
+                onClick={onIrInsumos}
+                className="font-semibold underline underline-offset-2 cursor-pointer"
+              >
+                Ve a Insumos para habilitarlo
+              </button>
+            </p>
+          ) : (
+            <p>
+              {f.motivo
+                ? motivoFaltante(f)
+                : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
+            </p>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -902,7 +934,6 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
     coloresEstado: {
       Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
       "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
-      "Por verificar": { texto: "FF9A3412", fondo: "FFFFEDD5" },
       Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
       Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
     },
@@ -937,9 +968,15 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
 function TablaInsumosRequeridos({
   requeridos,
   insumos,
+  descontados = false,
+  onIrCompras,
+  onIrInsumos,
 }: {
   requeridos: InsumoRequerido[];
   insumos: Insumo[];
+  descontados?: boolean;
+  onIrCompras?: (faltantes: Faltante[]) => void;
+  onIrInsumos?: () => void;
 }) {
   if (requeridos.length === 0) {
     return (
@@ -949,6 +986,11 @@ function TablaInsumosRequeridos({
       </p>
     );
   }
+  const faltantesCompra = descontados
+    ? []
+    : faltantesPara(requeridos, 1, insumos).filter(
+        (faltante) => !faltante.motivo && faltante.falta > 0,
+      );
   return (
     <div className="rounded-xl border border-border overflow-hidden">
       <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -958,22 +1000,63 @@ function TablaInsumosRequeridos({
         <span className="text-right">Estado</span>
       </div>
       {requeridos.map((r) => {
-        const stock = insumos.find((i) => i.id === r.insumoId)?.stockActual;
+        const insumo = insumos.find((i) => i.id === r.insumoId)
+          ?? insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
+        const stock = insumo?.stockActual;
         // Un insumo que la receta menciona y no está en el catálogo no es un
         // faltante: se avisa distinto para que no se bloquee la orden por un alta
         // que falta en Gestión de Insumos.
         const noExiste = stock === undefined;
-        const falta = noExiste ? 0 : Math.max(0, Math.round((r.cantidad - stock) * 1000) / 1000);
+        const calculoFaltante = descontados ? undefined : faltantesPara([r], 1, insumos)[0];
+        const inactivo = !descontados && (insumo?.estado === "inactivo" || calculoFaltante?.motivo === "inactivo");
+        const unidadIncompatible = !descontados && calculoFaltante?.motivo === "unidad-incompatible";
+        const falta = !descontados && !inactivo && !noExiste && calculoFaltante?.motivo !== "unidad-incompatible"
+          ? calculoFaltante?.falta ?? 0
+          : 0;
         return (
-          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-xs border-t border-border items-center ${noExiste ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
+          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-xs border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
             <span className="col-span-2 font-medium text-foreground truncate">{r.nombre}</span>
             <span className="text-right tabular-nums font-semibold text-foreground">{fmtCant(r.cantidad, r.unidad)}</span>
-            <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, r.unidad)}</span>
-            <span className="text-right">
-              {noExiste
+            <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, insumo?.unidadMedida ?? r.unidad)}</span>
+            <span className="flex flex-col items-end gap-1 text-right">
+              {descontados
+                ? <span className="text-emerald-600 font-semibold">Descontado ✓</span>
+                : noExiste
                 ? <span className="text-amber-600 font-semibold" title="El insumo no está dado de alta en Gestión de Insumos">No está en el catálogo</span>
+                : inactivo
+                  ? <>
+                      <span className="text-red-600 font-semibold">Insumo inactivo</span>
+                      <span className="text-red-600">Ve a Insumos para habilitarlo</span>
+                      {onIrInsumos && (
+                        <button
+                          type="button"
+                          onClick={onIrInsumos}
+                          className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
+                        >
+                          Ir a Insumos
+                        </button>
+                      )}
+                    </>
+                : unidadIncompatible
+                  ? <span className="text-amber-600 font-semibold">{motivoFaltante(calculoFaltante!)}</span>
                 : falta > 0
-                  ? <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, r.unidad)}</span>
+                  ? <>
+                      <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</span>
+                      {onIrCompras && (
+                        <>
+                          <span className="max-w-48 text-red-600">
+                            Debes comprar {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)} de {r.nombre}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onIrCompras(faltantesCompra)}
+                            className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
+                          >
+                            Hacer compra de insumo faltante
+                          </button>
+                        </>
+                      )}
+                    </>
                   : <span className="text-emerald-600 font-semibold">Alcanza</span>}
             </span>
           </div>
@@ -1000,6 +1083,9 @@ function LineaPreparacion({
   productos: Producto[];
   fichas: FichasPorProducto;
 }) {
+  const [tipoSelector, setTipoSelector] = useState<"insumo" | "producto">(
+    () => (linea.idProducto && !esIdInsumo(linea.idProducto) ? "producto" : "insumo"),
+  );
   const opcionesInsumos = insumos.filter((i) => esProductoInsumo(i) && i.estado === "activo");
   const opcionesProductos = productos;
   const pi = esIdInsumo(linea.idProducto)
@@ -1029,42 +1115,63 @@ function LineaPreparacion({
     });
   };
 
-  const grupos: GrupoProductoInsumo[] = [
-    ...(opcionesProductos.length > 0
-      ? [{
-          label: "Productos",
-          opciones: opcionesProductos.map((p) => {
-            const puedeProducirse =
-              tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
-            return {
-              id: p.id,
-              label: `${p.nombre}${puedeProducirse ? "" : " · No disponible para producción"}`,
-              disabled: !puedeProducirse,
-            };
-          }),
-        }]
-      : []),
-    ...(opcionesInsumos.length > 0
-      ? [{
-          label: "Insumos",
-          opciones: opcionesInsumos.map((i) => ({
-            id: i.id,
-            label: `${i.nombre} · ${i.stockActual} ${i.unidadMedida} (mín ${i.stockMinimo})`,
-          })),
-        }]
-      : []),
-  ];
+  const grupos: GrupoProductoInsumo[] = tipoSelector === "producto"
+    ? (opcionesProductos.length > 0
+        ? [{
+            label: "Productos",
+            opciones: opcionesProductos.map((p) => {
+              const puedeProducirse =
+                tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
+              return {
+                id: p.id,
+                label: `${p.nombre}${puedeProducirse ? "" : " · No disponible para producción"}`,
+                disabled: !puedeProducirse,
+              };
+            }),
+          }]
+        : [])
+    : (opcionesInsumos.length > 0
+        ? [{
+            label: "Producto insumo",
+            opciones: opcionesInsumos.map((i) => ({
+              id: i.id,
+              label: `${i.nombre} · ${i.stockActual} ${i.unidadMedida} (mín ${i.stockMinimo})`,
+            })),
+          }]
+        : []);
 
   return (
     <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Producto Insumo a preparar
+            Producto a preparar
           </label>
+          <SegmentadoButtons
+            valor={tipoSelector}
+            opciones={[
+              { valor: "insumo", etiqueta: "Producto insumo" },
+              { valor: "producto", etiqueta: "Producto" },
+            ]}
+            onChange={(valor) => {
+              const nuevoTipo = valor as "insumo" | "producto";
+              if (nuevoTipo === tipoSelector) return;
+              setTipoSelector(nuevoTipo);
+              onChange({
+                ...linea,
+                idProducto: "",
+                nombre: "",
+                unidad: "und",
+                cantidadEstimada: 0,
+                fichaSnapshot: undefined,
+              });
+            }}
+            fullWidth
+            className="mb-2"
+          />
           <SelectorProductoInsumo
             value={linea.idProducto}
-            placeholder="Selecciona un Producto Insumo"
+            placeholder={tipoSelector === "producto" ? "Buscar producto..." : "Buscar producto insumo..."}
             grupos={grupos}
             onSelect={elegir}
           />
@@ -1076,7 +1183,7 @@ function LineaPreparacion({
         </div>
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Cantidad a producir ({linea.unidad})
+            Cantidad a producir ({tipoSelector === "producto" ? "und" : linea.unidad})
           </label>
           {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
               como 0. C6: mínimo 1 una vez elegido el producto, con error en
@@ -1155,9 +1262,11 @@ export function OrdenProduccionScreen({
   errorCarga,
   onReintentar,
   recargarProduccion,
+  onNavigateTo,
   canCreate = true,
   canDelete = true,
   canExportExcel = true,
+  esAdministradorSesion = false,
   abrirOrdenId,
   setOrdenAAbrir,
   detalleOrdenId,
@@ -1179,11 +1288,13 @@ export function OrdenProduccionScreen({
   errorCarga?: string | null;
   onReintentar?: () => void;
   /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
-  recargarProduccion?: () => Promise<void>;
+  recargarProduccion?: () => Promise<boolean | void>;
+  onNavigateTo?: (screen: "orden-compra" | "supplies", faltantes?: Faltante[]) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
+  esAdministradorSesion?: boolean;
   /** id de Producto Insumo desde Insumos: abre Crear orden ya prellenado. */
   abrirOrdenId?: string | null;
   /** Limpia `abrirOrdenId` apenas se consume: si queda guardado, cada vuelta
@@ -1207,6 +1318,37 @@ export function OrdenProduccionScreen({
   const [verFicha, setVerFicha] = useState<{ ordenId: string; lineaIdx: number } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OrdenForm>(emptyForm());
+  const [mostrarParametrosCostos, setMostrarParametrosCostos] = useState(false);
+  const [parametrosCostos, setParametrosCostos] = useState<ParametrosCostos | null>(null);
+  const [parametrosCostosCargando, setParametrosCostosCargando] = useState(true);
+  const [parametrosCostosError, setParametrosCostosError] = useState<string | null>(null);
+
+  const cargarParametrosCostos = useCallback(async () => {
+    setParametrosCostosCargando(true);
+    setParametrosCostosError(null);
+    try {
+      setParametrosCostos(await obtenerParametrosCostos());
+    } catch (error) {
+      setParametrosCostosError(
+        `No se pudieron cargar los parámetros de costos: ${
+          error instanceof Error ? error.message : "error desconocido"
+        }`,
+      );
+    } finally {
+      setParametrosCostosCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarParametrosCostos();
+  }, [cargarParametrosCostos]);
+
+  const guardarCostos = async (datos: ParametrosCostosPayload) => {
+    const guardados = await guardarParametrosCostos(datos);
+    setParametrosCostos(guardados);
+    setMostrarParametrosCostos(false);
+    toast.success("Parámetros de costos actualizados");
+  };
 
   // Al cerrar el detalle se olvida el modal de ficha: si se vuelve a abrir la
   // misma orden, la ficha no reaparece sola.
@@ -1288,7 +1430,7 @@ export function OrdenProduccionScreen({
     if (orden) setDetailItem(orden);
   }, [detalleOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Estado del modal de Verificar para las cantidades reales y debidas.
+  // Estado del modal de completar para las cantidades reales y debidas.
   const [completarItem, setCompletarItem] = useState<OrdenProduccion | null>(null);
   const [reales, setReales] = useState<Record<number, string>>({});
   const [calculosDebidos, setCalculosDebidos] = useState<Record<number, CalculoVerificacionLineaApi>>({});
@@ -1436,7 +1578,7 @@ export function OrdenProduccionScreen({
   };
 
   const filtradas = useMemo(() =>
-    ordenes.filter((o) => {
+    ordenarPorIdDescendente(ordenes.filter((o) => {
       if (filtroTipo !== "todos" && o.tipo !== filtroTipo) return false;
       if (filtroEstado !== "todos" && o.estadoOrden !== filtroEstado) return false;
       const q = search.trim().toLowerCase();
@@ -1445,7 +1587,8 @@ export function OrdenProduccionScreen({
         || (o.ventaNumero ?? "").toLowerCase().includes(q)
         || (o.cliente ?? "").toLowerCase().includes(q)
         || o.lineas.some((l) => l.nombre.toLowerCase().includes(q));
-    }), [ordenes, search, filtroTipo, filtroEstado]);
+    }), (orden) => orden.id),
+    [ordenes, search, filtroTipo, filtroEstado]);
 
   const totalPages = Math.ceil(filtradas.length / PER_PAGE);
   const paged = filtradas.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -1779,7 +1922,7 @@ export function OrdenProduccionScreen({
   const completarOk = !completarItem || completarEsPedido
     || (!cargandoCalculoDebido && cantidadesVerificacionOk(completarItem));
 
-  /** Verifica la producción; el backend aplica stock y registra la merma en
+  /** Completa la producción; el backend aplica stock y registra la merma en
       la misma transacción. */
   const confirmarCompletar = async () => {
     if (!completarItem) return;
@@ -1902,15 +2045,47 @@ export function OrdenProduccionScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMostrarParametrosCostos(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted"
+          >
+            <Calculator className="h-4 w-4" />
+            Parámetros de costos
+          </button>
           {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
           {canCreate && (
-            <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
+            <button onClick={async () => {
+              try {
+                const recargaExitosa = await recargarProduccion?.();
+                if (recargaExitosa === false) {
+                  toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+                }
+              } catch {
+                toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+              } finally {
+                setForm(emptyForm());
+                setShowCreate(true);
+              }
+            }}
               className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
               <Plus className="w-4 h-4" /> Crear Orden de Producción
             </button>
           )}
         </div>
       </div>
+
+      {mostrarParametrosCostos && (
+        <ParametrosCostosModal
+          parametros={parametrosCostos}
+          cargando={parametrosCostosCargando}
+          error={parametrosCostosError}
+          puedeEditar={esAdministradorSesion}
+          onReintentar={() => void cargarParametrosCostos()}
+          onCerrar={() => setMostrarParametrosCostos(false)}
+          onGuardar={guardarCostos}
+        />
+      )}
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -1955,11 +2130,23 @@ export function OrdenProduccionScreen({
       ) : (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1100px] table-fixed">
+            <colgroup>
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+            </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -1970,7 +2157,7 @@ export function OrdenProduccionScreen({
                 </td></tr>
               ) : paged.map(o => {
                 const soloPendiente = o.estadoOrden === "pendiente";
-                const puedeCancelar = o.estadoOrden === "en-proceso";
+                const puedeCancelar = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
                 // Bloque 4: ¿faltan insumos para esta orden según el stock de
@@ -1997,8 +2184,8 @@ export function OrdenProduccionScreen({
                       </span>
                     </td>
                     <td className="px-4 py-2">
-                      <p className="text-sm font-medium text-foreground">{resumenProductos(o)}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="break-words text-sm font-medium text-foreground">{resumenProductos(o)}</p>
+                      <p className="break-words text-[11px] text-muted-foreground">
                         {o.lineas.map((l) => `${l.cantidadEstimada} × ${l.nombre}`).join(", ")}
                       </p>
                     </td>
@@ -2047,8 +2234,8 @@ export function OrdenProduccionScreen({
                       {fmtDT(ultimoCambio(o))}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {o.estadoOrden === "pendiente" && (
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        {o.estadoOrden === "pendiente" && faltantesFila.length === 0 && (
                           <button
                             type="button"
                             onClick={() => {
@@ -2061,12 +2248,12 @@ export function OrdenProduccionScreen({
                             <Play className="w-4 h-4" />
                           </button>
                         )}
-                        {o.estadoOrden === "por-verificar" && (
+                        {o.estadoOrden === "en-proceso" && (
                           <button
                             type="button"
                             onClick={() => abrirCompletar(o.id)}
-                            title="Verificar producción"
-                            aria-label="Verificar producción"
+                            title="Completar orden"
+                            aria-label="Completar orden"
                             className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <CheckCircle2 className="w-4 h-4" />
@@ -2214,7 +2401,12 @@ export function OrdenProduccionScreen({
                       </div>
                     );
                   })}
-                  {faltantesGenerar.length > 0 && <AvisoFaltantes faltantes={faltantesGenerar} />}
+                  {faltantesGenerar.length > 0 && (
+                    <AvisoFaltantes
+                      faltantes={faltantesGenerar}
+                      onIrInsumos={() => onNavigateTo?.("supplies")}
+                    />
+                  )}
                   {generarItem.tipo === "preparacion" && generarItem.lineas.some((linea) => {
                     const maximo = maximosGenerar[linea.idDetalleOp as number];
                     return maximo === 0;
@@ -2290,7 +2482,7 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}
-              <AvisoFaltantes faltantes={faltantesForm} />
+              <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
 
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2.5">Observación</label>
@@ -2298,7 +2490,7 @@ export function OrdenProduccionScreen({
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
               <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-                Toda orden nace Pendiente. Se avanza a En proceso, luego a Por verificar y finalmente a Completada.
+                Toda orden nace Pendiente. Se avanza a En proceso y luego a Completada. Solo se cancela con Dar de baja, y nunca vuelve a un estado anterior.
               </p>
             </div>
           ),
@@ -2374,7 +2566,7 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: ídem Crear — mensaje y lista mientras falten
                   insumos; el botón Guardar queda deshabilitado. */}
-              <AvisoFaltantes faltantes={faltantesForm} />
+              <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
@@ -2386,7 +2578,7 @@ export function OrdenProduccionScreen({
         })}
       </AnimatePresence>
 
-      {/* ── Modal: Verificar ── */}
+      {/* ── Modal: Completar ── */}
       <AnimatePresence>
         {completarItem && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -2395,7 +2587,7 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Verificar orden — {completarItem.id}
+                  Completar orden — {completarItem.id}
                 </h3>
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
@@ -2465,7 +2657,9 @@ export function OrdenProduccionScreen({
                             </label>
                             <input value={debida == null ? "" : fmtCant(debida, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
                             {calculo?.calculada_al_verificar && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">Calculada al verificar para esta orden antigua.</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                Calculada al completar esta orden antigua.
+                              </p>
                             )}
                             {debida != null && debida < l.cantidadEstimada && (
                               <p className="mt-1 text-[11px] font-semibold text-red-600">
@@ -2535,7 +2729,7 @@ export function OrdenProduccionScreen({
                   className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
-                  Verificar orden
+                  Completar orden
                 </button>
               </div>
             </motion.div>
@@ -2763,7 +2957,81 @@ export function OrdenProduccionScreen({
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">
                     {detailItem.tipo === "preparacion" ? "Insumos usados" : "Insumos a usar"}
                   </p>
-                  <TablaInsumosRequeridos requeridos={detailItem.insumosRequeridos} insumos={insumos} />
+                  <TablaInsumosRequeridos
+                    requeridos={detailItem.insumosRequeridos}
+                    insumos={insumos}
+                    descontados={detailItem.insumosDescontados}
+                    onIrCompras={(faltantes) => onNavigateTo?.("orden-compra", faltantes)}
+                    onIrInsumos={() => onNavigateTo?.("supplies")}
+                  />
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
+                  {parametrosCostosError ? (
+                    <p className="text-xs text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">
+                      {parametrosCostosError}
+                    </p>
+                  ) : !parametrosCostos ? (
+                    <p className="text-xs text-muted-foreground bg-muted/60 rounded-xl border border-border px-3 py-2">
+                      Cargando parámetros de costos…
+                    </p>
+                  ) : (() => {
+                    const resumen = calcularCostoOrden(
+                      detailItem.insumosRequeridos,
+                      insumos,
+                      parametrosCostos,
+                      tiempoTotalOrden(detailItem),
+                    );
+                    const cantidadEstimada = totalEstimado(detailItem.lineas);
+                    const unidades = new Set(detailItem.lineas.map((linea) => linea.unidad));
+                    const unidadCosto = unidades.size === 1
+                      ? `por ${detailItem.lineas[0]?.unidad ?? "unidad"}`
+                      : "por unidad estimada (unidades mixtas)";
+                    return (
+                      <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Insumos</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.insumos)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mano de obra</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.manoObra)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Gas</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.gas)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Costo por unidad</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">
+                              {cantidadEstimada > 0
+                                ? `${formatearCOP(resumen.costoTotal / cantidadEstimada)} ${unidadCosto}`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="border-t border-border pt-2 flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold text-foreground uppercase tracking-wide">Costo total</span>
+                          <span className="text-lg font-bold text-foreground tabular-nums">{formatearCOP(resumen.costoTotal)}</span>
+                        </div>
+                        {resumen.avisos.length > 0 && (
+                          <div className="space-y-1">
+                            {resumen.avisos.map((aviso, index) => (
+                              <p key={`${aviso.nombre}-${index}`} className="text-[11px] text-amber-700">
+                                {aviso.tipo === "sin-costo"
+                                  ? `${aviso.nombre} sin costo: regístralo en una compra`
+                                  : aviso.tipo === "no-encontrado"
+                                    ? `${aviso.nombre}: no se encontró en el catálogo de insumos`
+                                    : `${aviso.nombre}: unidad incompatible para calcular el costo`}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {detailItem.tipo === "preparacion" && (

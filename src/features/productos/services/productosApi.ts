@@ -1,5 +1,7 @@
 import api from "@/shared/services/api";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
+import { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
+import { normalizarTexto } from "@/shared/utils/nombres";
 
 export type EstadoProductoManual = "Descontinuado" | "Automático";
 
@@ -56,6 +58,9 @@ export interface EntradaCompraApi {
   ultimo_monto_digitado?: number;
 }
 
+const esCategoriaPizza = (categoria?: string | null): boolean =>
+  normalizarTexto(categoria ?? "").includes("pizza");
+
 const idCategoriaNumero = (id: string): number => {
   const n = Number(id);
   if (!Number.isSafeInteger(n) || n <= 0) throw new Error("Selecciona una categoría válida.");
@@ -64,6 +69,7 @@ const idCategoriaNumero = (id: string): number => {
 
 export const productoPanelACreacion = (p: Producto): ProductoApiCreacion => {
   const reventa = p.tipo === "Producto terminado";
+  const esPizza = esCategoriaPizza(p.categoriaNombre);
   return {
     id_categoria: idCategoriaNumero(p.idCategoria),
     nombre: p.nombre.trim(),
@@ -81,14 +87,16 @@ export const productoPanelACreacion = (p: Producto): ProductoApiCreacion => {
         }
       : {
           precio_venta: Number(p.precioUnitario),
-          ...(p.precioGrande == null ? {} : { precio_grande: Number(p.precioGrande) }),
+          precio_grande: esPizza
+            ? Number(p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE)
+            : null,
         }),
   };
 };
 
 export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCreacion, "tipo">> => {
   const reventa = p.tipo === "Producto terminado";
-  const esPizza = (p.categoriaNombre ?? "").toLowerCase().includes("pizza");
+  const esPizza = esCategoriaPizza(p.categoriaNombre);
   return {
     id_categoria: idCategoriaNumero(p.idCategoria),
     nombre: p.nombre.trim(),
@@ -109,7 +117,9 @@ export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCrea
         }
       : {
           precio_venta: Number(p.precioUnitario),
-          precio_grande: esPizza && p.precioGrande != null ? Number(p.precioGrande) : null,
+          precio_grande: esPizza
+            ? Number(p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE)
+            : null,
         }),
   };
 };
