@@ -873,7 +873,7 @@ export function DashboardScreen({
     };
     const ESTADO_OP: Record<string, string> = {
       pendiente: "Pendiente",
-      "en-proceso": "En producción",
+      "en-proceso": "En proceso",
       completada: "Completada",
       cancelada: "Cancelada",
     };

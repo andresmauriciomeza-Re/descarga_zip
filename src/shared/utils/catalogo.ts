@@ -2,6 +2,7 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
 import { mapearProductoApi, type ProductoApi } from "@/features/productos/services/productosApi";
+import { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
 
 import { getImageUrl, IMAGEN_DEFAULT, imagenEnApi } from "@/shared/utils/getImageUrl";
 
@@ -46,13 +47,11 @@ export interface Product {
   sales: number;
 }
 
-// Recargo del tamaño "Grande" de pizza por encima del precio de venta.
-export const RECARGO_TAMANO_GRANDE = 2000; // Precio Grande = precio de venta + este valor. Confirmar con la clienta.
+export { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
 
-/** Tamaños del menú público para un producto del panel: se derivan SIEMPRE del
-    precio de venta (`precioUnitario`), para que crear o editar el precio en
-    Gestión de Productos se refleje en el detalle público y en el carrito:
-    - Pizza (id 1): Mediana = precio de venta; Grande = precio + RECARGO_TAMANO_GRANDE.
+/** Tamaños del menú público para un producto del panel: Mediana usa el precio
+    de venta y Grande el precio explícito o, en datos antiguos, el recargo:
+    - Pizza (id 1): Mediana = precio de venta; Grande = precio registrado o el recargo para datos antiguos.
     - Lasaña (id 2): Normal = precio de venta.
     - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
 export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes"] =>

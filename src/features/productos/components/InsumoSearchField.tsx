@@ -40,7 +40,13 @@ export interface InsumoSearchFieldProps {
   onValorChange: (valor: string) => void;
   /** Se dispara al elegir un insumo del dropdown. */
   onSelect: (insumo: Insumo) => void;
+  label?: string;
   placeholder?: string;
+  direction?: "up" | "down";
+  excluirIds?: readonly string[];
+  maxResultados?: number;
+  mensajeSinResultados?: string;
+  dataField?: string;
 }
 
 /**
@@ -54,11 +60,23 @@ export function InsumoSearchField({
   valor,
   onValorChange,
   onSelect,
+  label = "Nombre",
   placeholder = "Buscar insumo...",
+  direction = "up",
+  excluirIds = [],
+  maxResultados = 8,
+  mensajeSinResultados = "Sin resultados",
+  dataField,
 }: InsumoSearchFieldProps) {
   const [abierto, setAbierto] = useState(false);
+  const [indiceActivo, setIndiceActivo] = useState(-1);
   const contenedorRef = useRef<HTMLDivElement>(null);
-  const sugerencias = filtrarInsumos(insumos, valor);
+  const excluidos = new Set(excluirIds);
+  const sugerencias = filtrarInsumos(
+    insumos.filter((insumo) => !excluidos.has(insumo.id)),
+    valor,
+    maxResultados,
+  );
 
   // Cierra el dropdown al hacer clic fuera del campo.
   useEffect(() => {
@@ -70,48 +88,89 @@ export function InsumoSearchField({
     return () => document.removeEventListener("mousedown", onClickFuera);
   }, [abierto]);
 
-  const mostrar = abierto;
+  const elegir = (insumo: Insumo) => {
+    onSelect(insumo);
+    setAbierto(false);
+    setIndiceActivo(-1);
+  };
 
   return (
     <div ref={contenedorRef} className="relative flex-[2] min-w-[180px]">
       <label className="block text-xs font-semibold text-muted-foreground mb-1">
-        Nombre
+        {label}
       </label>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
 
         <input
+          role="combobox"
+          aria-label={label}
+          aria-expanded={abierto}
+          aria-controls="insumo-resultados"
+          aria-activedescendant={
+            abierto && indiceActivo >= 0 && sugerencias[indiceActivo]
+              ? `insumo-sugerencia-${sugerencias[indiceActivo].id}`
+              : undefined
+          }
+          data-producto-insumo-campo={dataField}
           value={valor}
           onChange={(e) => {
             onValorChange(e.target.value);
             setAbierto(true);
+            setIndiceActivo(-1);
           }}
           onFocus={() => setAbierto(true)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" && sugerencias.length > 0) {
+              e.preventDefault();
+              setAbierto(true);
+              setIndiceActivo((actual) => (actual + 1) % sugerencias.length);
+            } else if (e.key === "ArrowUp" && sugerencias.length > 0) {
+              e.preventDefault();
+              setAbierto(true);
+              setIndiceActivo((actual) => (actual <= 0 ? sugerencias.length - 1 : actual - 1));
+            } else if (e.key === "Enter" && abierto && indiceActivo >= 0 && sugerencias[indiceActivo]) {
+              e.preventDefault();
+              elegir(sugerencias[indiceActivo]);
+            } else if (e.key === "Escape") {
+              setAbierto(false);
+              setIndiceActivo(-1);
+            }
+          }}
           placeholder={placeholder}
           autoComplete="off"
           className={`${inputCls} pl-8`}
         />
       </div>
 
-      {mostrar && (
+      {abierto && (
         <div
-          className="absolute bottom-full left-0 mb-2 w-full max-h-44 overflow-y-auto overscroll-contain no-scrollbar bg-card border border-border rounded-xl shadow-xl z-50"
+          id="insumo-resultados"
+          className={`absolute left-0 w-full max-h-60 overflow-y-auto overscroll-contain no-scrollbar bg-card border border-border rounded-xl shadow-xl z-[70] ${
+            direction === "down" ? "top-full mt-2" : "bottom-full mb-2"
+          }`}
+          role="listbox"
           onWheel={(e) => e.stopPropagation()}
         >
           {sugerencias.length > 0 ? (
-            sugerencias.map((ins) => (
+            sugerencias.map((ins, index) => (
               <button
                 key={ins.id}
+                id={`insumo-sugerencia-${ins.id}`}
                 type="button"
+                role="option"
+                aria-selected={index === indiceActivo}
+                onMouseEnter={() => setIndiceActivo(index)}
                 // onMouseDown corre antes que el blur del input: evita que la
                 // lista se cierre antes de registrar la selección.
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  onSelect(ins);
-                  setAbierto(false);
+                  elegir(ins);
                 }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-muted cursor-pointer border-b border-border last:border-0 ${
+                  index === indiceActivo ? "bg-muted" : ""
+                }`}
               >
                 <span className="font-semibold text-foreground">{ins.nombre}</span>
                 <span className="text-muted-foreground"> · {ins.unidadMedida}</span>
@@ -119,7 +178,7 @@ export function InsumoSearchField({
             ))
           ) : (
             <div className="px-3 py-2 text-sm italic text-muted-foreground">
-              Sin resultados
+              {mensajeSinResultados}
             </div>
           )}
         </div>

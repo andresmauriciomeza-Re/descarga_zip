@@ -56,7 +56,7 @@ const INPUT_LINEA_CLS = "w-full h-[54px] px-[18px] bg-muted border border-border
 const OBS_CREAR_CLS = "w-full min-h-[110px] px-[18px] py-4 bg-muted border border-border text-base text-foreground rounded-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ─────────────────────────── Tipos ───────────────────────────
-export type EstadoOrden = "pendiente" | "en-proceso" | "por-verificar" | "completada" | "cancelada";
+export type EstadoOrden = "pendiente" | "en-proceso" | "completada" | "cancelada";
 
 /** Las dos formas de trabajar en la cocina. */
 export type TipoOrden = "preparacion" | "pedido";
@@ -85,7 +85,6 @@ const HORNEADO_MIN = 15;
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
   pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
   "en-proceso": "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
-  "por-verificar": "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300",
   completada:   "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
   cancelada:    "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
 };
@@ -93,29 +92,25 @@ const ESTADO_COLOR: Record<EstadoOrden, string> = {
 const ESTADO_LABEL: Record<EstadoOrden, string> = {
   pendiente:    "Pendiente",
   "en-proceso": "En proceso",
-  "por-verificar": "Por verificar",
   completada:   "Completada",
   cancelada:    "Cancelada",
 };
 
-// Transiciones válidas de estado. "Cancelada" NO es seleccionable:
-// solo se alcanza mediante el flujo de "Dar de baja".
+// Cancelada solo se alcanza mediante el flujo de "Dar de baja".
 export const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
-  pendiente:    ["en-proceso"],
-  "en-proceso": ["por-verificar"],
-  "por-verificar": ["completada"],
+  pendiente:    ["en-proceso", "cancelada"],
+  "en-proceso": ["completada", "cancelada"],
   completada:   [],
   cancelada:    [],
 };
 
-// Los 5 estados, en su orden natural de avance por el flujo de producción.
-export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "por-verificar", "completada", "cancelada"];
+export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "completada", "cancelada"];
 
 // Qué estados pueden elegirse a mano desde el listado, dado el estado actual.
 export const esEstadoSeleccionable = (actual: EstadoOrden, destino: EstadoOrden): boolean => {
-  if (destino === actual) return true;                    // el estado actual siempre visible
-  if (destino === "cancelada") return false;              // solo vía "Dar de baja"
-  return ORDEN_ESTADOS.indexOf(destino) > ORDEN_ESTADOS.indexOf(actual);
+  if (destino === actual) return true;
+  if (destino === "cancelada") return false;
+  return VALID_TRANSITIONS[actual].includes(destino);
 };
 
 const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
@@ -156,7 +151,7 @@ export interface LineaOrden {
   sinFicha?: boolean;
   /** Solo Forma 2: pasos de la ficha vigente, en solo lectura. */
   pasos?: string[];
-  /** Se llenan al verificar la orden. */
+  /** Se llenan al completar la orden. */
   cantidadReal?: number | null;
   merma?: number;
   /** Snapshot de la ficha al momento de crear/editar la orden. Si existe,
@@ -902,7 +897,6 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
     coloresEstado: {
       Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
       "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
-      "Por verificar": { texto: "FF9A3412", fondo: "FFFFEDD5" },
       Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
       Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
     },
@@ -1060,11 +1054,11 @@ function LineaPreparacion({
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Producto Insumo a preparar
+            Producto a preparar
           </label>
           <SelectorProductoInsumo
             value={linea.idProducto}
-            placeholder="Selecciona un Producto Insumo"
+            placeholder="Buscar producto o producto insumo..."
             grupos={grupos}
             onSelect={elegir}
           />
@@ -1288,7 +1282,7 @@ export function OrdenProduccionScreen({
     if (orden) setDetailItem(orden);
   }, [detalleOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Estado del modal de Verificar para las cantidades reales y debidas.
+  // Estado del modal de completar para las cantidades reales y debidas.
   const [completarItem, setCompletarItem] = useState<OrdenProduccion | null>(null);
   const [reales, setReales] = useState<Record<number, string>>({});
   const [calculosDebidos, setCalculosDebidos] = useState<Record<number, CalculoVerificacionLineaApi>>({});
@@ -1779,7 +1773,7 @@ export function OrdenProduccionScreen({
   const completarOk = !completarItem || completarEsPedido
     || (!cargandoCalculoDebido && cantidadesVerificacionOk(completarItem));
 
-  /** Verifica la producción; el backend aplica stock y registra la merma en
+  /** Completa la producción; el backend aplica stock y registra la merma en
       la misma transacción. */
   const confirmarCompletar = async () => {
     if (!completarItem) return;
@@ -1982,7 +1976,7 @@ export function OrdenProduccionScreen({
                 </td></tr>
               ) : paged.map(o => {
                 const soloPendiente = o.estadoOrden === "pendiente";
-                const puedeCancelar = o.estadoOrden === "en-proceso";
+                const puedeCancelar = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
                 // Bloque 4: ¿faltan insumos para esta orden según el stock de
@@ -2073,12 +2067,12 @@ export function OrdenProduccionScreen({
                             <Play className="w-4 h-4" />
                           </button>
                         )}
-                        {o.estadoOrden === "por-verificar" && (
+                        {o.estadoOrden === "en-proceso" && (
                           <button
                             type="button"
                             onClick={() => abrirCompletar(o.id)}
-                            title="Verificar producción"
-                            aria-label="Verificar producción"
+                            title="Completar orden"
+                            aria-label="Completar orden"
                             className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
                           >
                             <CheckCircle2 className="w-4 h-4" />
@@ -2310,7 +2304,7 @@ export function OrdenProduccionScreen({
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
               <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-                Toda orden nace Pendiente. Se avanza a En proceso, luego a Por verificar y finalmente a Completada.
+                Toda orden nace Pendiente. Se avanza a En proceso y luego a Completada. Solo se cancela con Dar de baja, y nunca vuelve a un estado anterior.
               </p>
             </div>
           ),
@@ -2398,7 +2392,7 @@ export function OrdenProduccionScreen({
         })}
       </AnimatePresence>
 
-      {/* ── Modal: Verificar ── */}
+      {/* ── Modal: Completar ── */}
       <AnimatePresence>
         {completarItem && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -2407,7 +2401,7 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Verificar orden — {completarItem.id}
+                  Completar orden — {completarItem.id}
                 </h3>
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
@@ -2477,7 +2471,9 @@ export function OrdenProduccionScreen({
                             </label>
                             <input value={debida == null ? "" : fmtCant(debida, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
                             {calculo?.calculada_al_verificar && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">Calculada al verificar para esta orden antigua.</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                Calculada al completar esta orden antigua.
+                              </p>
                             )}
                             {debida != null && debida < l.cantidadEstimada && (
                               <p className="mt-1 text-[11px] font-semibold text-red-600">
@@ -2547,7 +2543,7 @@ export function OrdenProduccionScreen({
                   className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
-                  Verificar orden
+                  Completar orden
                 </button>
               </div>
             </motion.div>
