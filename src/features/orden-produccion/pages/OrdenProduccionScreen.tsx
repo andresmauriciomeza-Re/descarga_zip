@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useMemo, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Plus, Search, Trash2, X, Play, CheckCircle2, Ban,
+  Plus, Search, Trash2, X, Play, CheckCircle2, Ban, Calculator,
   AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
@@ -46,6 +47,17 @@ import {
   type ErrorConFaltantes,
 } from "@/features/orden-produccion/services/ordenesProduccionApi";
 import { mapearFichaApi, obtenerFichasDe } from "@/features/productos/services/fichasApi";
+import {
+  guardarParametrosCostos,
+  obtenerParametrosCostos,
+  type ParametrosCostosPayload,
+} from "@/features/productos/services/parametrosCostosApi";
+import { ParametrosCostosModal } from "@/features/productos/components/ParametrosCostosModal";
+import {
+  calcularCostoOrden,
+  formatearCOP,
+  type ParametrosCostos,
+} from "@/shared/utils/costos";
 import {
   SelectorProductoInsumo,
   type GrupoProductoInsumo,
@@ -963,7 +975,7 @@ function TablaInsumosRequeridos({
   requeridos: InsumoRequerido[];
   insumos: Insumo[];
   descontados?: boolean;
-  onIrCompras?: () => void;
+  onIrCompras?: (faltantes: Faltante[]) => void;
   onIrInsumos?: () => void;
 }) {
   if (requeridos.length === 0) {
@@ -974,6 +986,11 @@ function TablaInsumosRequeridos({
       </p>
     );
   }
+  const faltantesCompra = descontados
+    ? []
+    : faltantesPara(requeridos, 1, insumos).filter(
+        (faltante) => !faltante.motivo && faltante.falta > 0,
+      );
   return (
     <div className="rounded-xl border border-border overflow-hidden">
       <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -1032,7 +1049,7 @@ function TablaInsumosRequeridos({
                           </span>
                           <button
                             type="button"
-                            onClick={onIrCompras}
+                            onClick={() => onIrCompras(faltantesCompra)}
                             className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
                           >
                             Hacer compra de insumo faltante
@@ -1066,6 +1083,9 @@ function LineaPreparacion({
   productos: Producto[];
   fichas: FichasPorProducto;
 }) {
+  const [tipoSelector, setTipoSelector] = useState<"insumo" | "producto">(
+    () => (linea.idProducto && !esIdInsumo(linea.idProducto) ? "producto" : "insumo"),
+  );
   const opcionesInsumos = insumos.filter((i) => esProductoInsumo(i) && i.estado === "activo");
   const opcionesProductos = productos;
   const pi = esIdInsumo(linea.idProducto)
@@ -1095,31 +1115,30 @@ function LineaPreparacion({
     });
   };
 
-  const grupos: GrupoProductoInsumo[] = [
-    ...(opcionesProductos.length > 0
-      ? [{
-          label: "Productos",
-          opciones: opcionesProductos.map((p) => {
-            const puedeProducirse =
-              tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
-            return {
-              id: p.id,
-              label: `${p.nombre}${puedeProducirse ? "" : " · No disponible para producción"}`,
-              disabled: !puedeProducirse,
-            };
-          }),
-        }]
-      : []),
-    ...(opcionesInsumos.length > 0
-      ? [{
-          label: "Insumos",
-          opciones: opcionesInsumos.map((i) => ({
-            id: i.id,
-            label: `${i.nombre} · ${i.stockActual} ${i.unidadMedida} (mín ${i.stockMinimo})`,
-          })),
-        }]
-      : []),
-  ];
+  const grupos: GrupoProductoInsumo[] = tipoSelector === "producto"
+    ? (opcionesProductos.length > 0
+        ? [{
+            label: "Productos",
+            opciones: opcionesProductos.map((p) => {
+              const puedeProducirse =
+                tipoDe(p, p.categoriaNombre) === "Producto insumo" && !!fichaVigente(fichas, p.id);
+              return {
+                id: p.id,
+                label: `${p.nombre}${puedeProducirse ? "" : " · No disponible para producción"}`,
+                disabled: !puedeProducirse,
+              };
+            }),
+          }]
+        : [])
+    : (opcionesInsumos.length > 0
+        ? [{
+            label: "Producto insumo",
+            opciones: opcionesInsumos.map((i) => ({
+              id: i.id,
+              label: `${i.nombre} · ${i.stockActual} ${i.unidadMedida} (mín ${i.stockMinimo})`,
+            })),
+          }]
+        : []);
 
   return (
     <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
@@ -1128,9 +1147,31 @@ function LineaPreparacion({
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Producto a preparar
           </label>
+          <SegmentadoButtons
+            valor={tipoSelector}
+            opciones={[
+              { valor: "insumo", etiqueta: "Producto insumo" },
+              { valor: "producto", etiqueta: "Producto" },
+            ]}
+            onChange={(valor) => {
+              const nuevoTipo = valor as "insumo" | "producto";
+              if (nuevoTipo === tipoSelector) return;
+              setTipoSelector(nuevoTipo);
+              onChange({
+                ...linea,
+                idProducto: "",
+                nombre: "",
+                unidad: "und",
+                cantidadEstimada: 0,
+                fichaSnapshot: undefined,
+              });
+            }}
+            fullWidth
+            className="mb-2"
+          />
           <SelectorProductoInsumo
             value={linea.idProducto}
-            placeholder="Buscar producto o producto insumo..."
+            placeholder={tipoSelector === "producto" ? "Buscar producto..." : "Buscar producto insumo..."}
             grupos={grupos}
             onSelect={elegir}
           />
@@ -1142,7 +1183,7 @@ function LineaPreparacion({
         </div>
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Cantidad a producir ({linea.unidad})
+            Cantidad a producir ({tipoSelector === "producto" ? "und" : linea.unidad})
           </label>
           {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
               como 0. C6: mínimo 1 una vez elegido el producto, con error en
@@ -1225,6 +1266,7 @@ export function OrdenProduccionScreen({
   canCreate = true,
   canDelete = true,
   canExportExcel = true,
+  esAdministradorSesion = false,
   abrirOrdenId,
   setOrdenAAbrir,
   detalleOrdenId,
@@ -1247,11 +1289,12 @@ export function OrdenProduccionScreen({
   onReintentar?: () => void;
   /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
   recargarProduccion?: () => Promise<boolean | void>;
-  onNavigateTo?: (screen: "purchases" | "supplies") => void;
+  onNavigateTo?: (screen: "orden-compra" | "supplies", faltantes?: Faltante[]) => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canExportExcel?: boolean;
+  esAdministradorSesion?: boolean;
   /** id de Producto Insumo desde Insumos: abre Crear orden ya prellenado. */
   abrirOrdenId?: string | null;
   /** Limpia `abrirOrdenId` apenas se consume: si queda guardado, cada vuelta
@@ -1275,6 +1318,37 @@ export function OrdenProduccionScreen({
   const [verFicha, setVerFicha] = useState<{ ordenId: string; lineaIdx: number } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OrdenForm>(emptyForm());
+  const [mostrarParametrosCostos, setMostrarParametrosCostos] = useState(false);
+  const [parametrosCostos, setParametrosCostos] = useState<ParametrosCostos | null>(null);
+  const [parametrosCostosCargando, setParametrosCostosCargando] = useState(true);
+  const [parametrosCostosError, setParametrosCostosError] = useState<string | null>(null);
+
+  const cargarParametrosCostos = useCallback(async () => {
+    setParametrosCostosCargando(true);
+    setParametrosCostosError(null);
+    try {
+      setParametrosCostos(await obtenerParametrosCostos());
+    } catch (error) {
+      setParametrosCostosError(
+        `No se pudieron cargar los parámetros de costos: ${
+          error instanceof Error ? error.message : "error desconocido"
+        }`,
+      );
+    } finally {
+      setParametrosCostosCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarParametrosCostos();
+  }, [cargarParametrosCostos]);
+
+  const guardarCostos = async (datos: ParametrosCostosPayload) => {
+    const guardados = await guardarParametrosCostos(datos);
+    setParametrosCostos(guardados);
+    setMostrarParametrosCostos(false);
+    toast.success("Parámetros de costos actualizados");
+  };
 
   // Al cerrar el detalle se olvida el modal de ficha: si se vuelve a abrir la
   // misma orden, la ficha no reaparece sola.
@@ -1971,6 +2045,14 @@ export function OrdenProduccionScreen({
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMostrarParametrosCostos(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted"
+          >
+            <Calculator className="h-4 w-4" />
+            Parámetros de costos
+          </button>
           {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
           {canCreate && (
             <button onClick={async () => {
@@ -1992,6 +2074,18 @@ export function OrdenProduccionScreen({
           )}
         </div>
       </div>
+
+      {mostrarParametrosCostos && (
+        <ParametrosCostosModal
+          parametros={parametrosCostos}
+          cargando={parametrosCostosCargando}
+          error={parametrosCostosError}
+          puedeEditar={esAdministradorSesion}
+          onReintentar={() => void cargarParametrosCostos()}
+          onCerrar={() => setMostrarParametrosCostos(false)}
+          onGuardar={guardarCostos}
+        />
+      )}
 
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -2036,11 +2130,23 @@ export function OrdenProduccionScreen({
       ) : (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1100px] table-fixed">
+            <colgroup>
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+            </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -2078,8 +2184,8 @@ export function OrdenProduccionScreen({
                       </span>
                     </td>
                     <td className="px-4 py-2">
-                      <p className="text-sm font-medium text-foreground">{resumenProductos(o)}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="break-words text-sm font-medium text-foreground">{resumenProductos(o)}</p>
+                      <p className="break-words text-[11px] text-muted-foreground">
                         {o.lineas.map((l) => `${l.cantidadEstimada} × ${l.nombre}`).join(", ")}
                       </p>
                     </td>
@@ -2128,7 +2234,7 @@ export function OrdenProduccionScreen({
                       {fmtDT(ultimoCambio(o))}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1 whitespace-nowrap">
                         {o.estadoOrden === "pendiente" && faltantesFila.length === 0 && (
                           <button
                             type="button"
@@ -2855,9 +2961,77 @@ export function OrdenProduccionScreen({
                     requeridos={detailItem.insumosRequeridos}
                     insumos={insumos}
                     descontados={detailItem.insumosDescontados}
-                    onIrCompras={() => onNavigateTo?.("purchases")}
+                    onIrCompras={(faltantes) => onNavigateTo?.("orden-compra", faltantes)}
                     onIrInsumos={() => onNavigateTo?.("supplies")}
                   />
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
+                  {parametrosCostosError ? (
+                    <p className="text-xs text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">
+                      {parametrosCostosError}
+                    </p>
+                  ) : !parametrosCostos ? (
+                    <p className="text-xs text-muted-foreground bg-muted/60 rounded-xl border border-border px-3 py-2">
+                      Cargando parámetros de costos…
+                    </p>
+                  ) : (() => {
+                    const resumen = calcularCostoOrden(
+                      detailItem.insumosRequeridos,
+                      insumos,
+                      parametrosCostos,
+                      tiempoTotalOrden(detailItem),
+                    );
+                    const cantidadEstimada = totalEstimado(detailItem.lineas);
+                    const unidades = new Set(detailItem.lineas.map((linea) => linea.unidad));
+                    const unidadCosto = unidades.size === 1
+                      ? `por ${detailItem.lineas[0]?.unidad ?? "unidad"}`
+                      : "por unidad estimada (unidades mixtas)";
+                    return (
+                      <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Insumos</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.insumos)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mano de obra</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.manoObra)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Gas</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.gas)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Costo por unidad</p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">
+                              {cantidadEstimada > 0
+                                ? `${formatearCOP(resumen.costoTotal / cantidadEstimada)} ${unidadCosto}`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="border-t border-border pt-2 flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold text-foreground uppercase tracking-wide">Costo total</span>
+                          <span className="text-lg font-bold text-foreground tabular-nums">{formatearCOP(resumen.costoTotal)}</span>
+                        </div>
+                        {resumen.avisos.length > 0 && (
+                          <div className="space-y-1">
+                            {resumen.avisos.map((aviso, index) => (
+                              <p key={`${aviso.nombre}-${index}`} className="text-[11px] text-amber-700">
+                                {aviso.tipo === "sin-costo"
+                                  ? `${aviso.nombre} sin costo: regístralo en una compra`
+                                  : aviso.tipo === "no-encontrado"
+                                    ? `${aviso.nombre}: no se encontró en el catálogo de insumos`
+                                    : `${aviso.nombre}: unidad incompatible para calcular el costo`}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {detailItem.tipo === "preparacion" && (

@@ -161,6 +161,7 @@ import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
 import type {
   GestionCompra,
   OrdenCompra,
+  OrdenItem,
   ProveedorRef,
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 import {
@@ -179,6 +180,7 @@ import {
   crearOrdenReemplazo,
   siguienteOrdenId,
   normalizarNombre,
+  type Faltante,
   type OrdenProduccion,
 } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { ProductosPerecederosScreen, type NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
@@ -191,7 +193,6 @@ import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/featu
 // funciones con App), así que se cargan bajo demanda para reducir el bundle
 // inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
 const ProductoTerminadoScreen = lazy(() => import("@/features/productos/pages/ProductoTerminadoScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
-const PurchasesScreen = lazy(() => import("@/features/compras/pages/PurchasesScreen").then((m) => ({ default: m.PurchasesScreen })));
 const RecepcionCompraScreen = lazy(() => import("@/features/orden-compra/pages/RecepcionCompraScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
 const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
 const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardScreen").then((m) => ({ default: m.DashboardScreen })));
@@ -718,7 +719,6 @@ const ADMIN_SCREENS: Screen[] = [
   "permissions",
   "users",
   "access",
-  "purchases",
   "supply-categories",
   "supplies",
   "product-categories",
@@ -923,11 +923,6 @@ const SCREEN_META: Partial<
     title: "Gestión de Acceso",
     icon: "🚪",
     desc: "Controla quién accede a qué sección.",
-  },
-  purchases: {
-    title: "Gestión de Compras",
-    icon: "🛒",
-    desc: "Registra y controla tus compras de insumos.",
   },
   "supply-categories": {
     title: "Categorías de Insumos",
@@ -1629,7 +1624,6 @@ function AdminTopBar({
     users: "Gestión de usuarios",
     empleados: "Gestión de empleados",
     access: "Gestión de acceso",
-    purchases: "Gestión de compras",
     perecederos: "CPN",
     "orden-compra": "Órdenes de Compra",
     "nueva-orden-compra": ordenAEditar ? "Editar Orden de Compra" : "Nueva Orden de Compra",
@@ -7962,6 +7956,7 @@ export default function App() {
     useState<OrdenCompra | null>(null);
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenCompra | null>(null);
   const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
+  const [ordenCompraItemsIniciales, setOrdenCompraItemsIniciales] = useState<OrdenItem[]>([]);
   const [ordenCompraPage, setOrdenCompraPage] = useState(1);
   // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
@@ -10290,7 +10285,6 @@ export default function App() {
                   {screen === "orders" && (
                     <OrdersScreen initialOrders={orders} />
                   )}
-                  {screen === "purchases" && <PurchasesScreen />}
                   {screen === "perecederos" && (
                     <ProductosPerecederosScreen
                       {...getPerms("perecederos")}
@@ -10343,10 +10337,12 @@ export default function App() {
                       }}
                       onNuevaOrden={() => {
                         setOrdenAEditar(null);
+                        setOrdenCompraItemsIniciales([]);
                         navigate("nueva-orden-compra");
                       }}
                       onEditarOrden={(orden) => {
                         setOrdenAEditar(orden);
+                        setOrdenCompraItemsIniciales([]);
                         navigate("nueva-orden-compra");
                       }}
                       page={ordenCompraPage}
@@ -10375,9 +10371,11 @@ export default function App() {
                       setInsumos={setInsumos}
                       onBack={() => {
                         setOrdenAEditar(null);
+                        setOrdenCompraItemsIniciales([]);
                         navigate("orden-compra");
                       }}
                       orden={ordenAEditar}
+                      initialItems={ordenCompraItemsIniciales}
                     />
                   )}
                   {screen === "recepcion-compra" && ordenRecepcion && (
@@ -10650,7 +10648,31 @@ export default function App() {
                       errorCarga={errorOrdenes}
                       onReintentar={() => void cargarOrdenes()}
                       recargarProduccion={recargarProduccion}
-                      onNavigateTo={(destino) => navigate(destino)}
+                      esAdministradorSesion={normalizarNombreRol(loggedInRoleName) === "administrador"}
+                      onNavigateTo={(destino, faltantes) => {
+                        if (destino === "supplies") {
+                          navigate("supplies");
+                          return;
+                        }
+                        const items = (faltantes ?? []).map((faltante, index) => {
+                          const insumo = insumos.find((item) => item.id === faltante.insumoId);
+                          const precio = Number(insumo?.costoUnitario ?? insumo?.precioUnitario ?? 0);
+                          return {
+                            rowId: `r${index + 1}`,
+                            idInsumo: faltante.insumoId,
+                            nombre: faltante.nombre,
+                            cantidad: faltante.falta,
+                            unidad: faltante.unidad,
+                            costoUnitario: precio,
+                            precioUnitario: precio,
+                            iva: Number(insumo?.iva ?? 0),
+                            tipoItem: "insumo" as const,
+                          };
+                        });
+                        setOrdenAEditar(null);
+                        setOrdenCompraItemsIniciales(items);
+                        navigate("nueva-orden-compra");
+                      }}
                       abrirOrdenId={ordenAAbrir}
                       setOrdenAAbrir={setOrdenAAbrir}
                       detalleOrdenId={ordenDetalleAAbrir}
@@ -10748,7 +10770,6 @@ export default function App() {
                       "inicio",
                       "manage-products",
                       "orders",
-                      "purchases",
                       "suppliers",
                       "ventas-pedidos",
                       "gestion-productos",
