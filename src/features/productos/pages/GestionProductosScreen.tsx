@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -89,6 +89,11 @@ import {
   payloadFicha,
 } from "@/features/productos/services/fichasApi";
 import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
+import {
+  obtenerParametrosCostos,
+} from "@/features/productos/services/parametrosCostosApi";
+import { CostosProductoPanel } from "@/features/productos/components/CostosProductoPanel";
+import type { ParametrosCostos } from "@/shared/utils/costos";
 
 export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
 export type { ConfigCategoria } from "@/shared/utils/configCategoria";
@@ -1015,6 +1020,25 @@ export function GestionProductosScreen({
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
   const [errorNombreServidor, setErrorNombreServidor] = useState("");
+  const [parametrosCostos, setParametrosCostos] = useState<ParametrosCostos | null>(null);
+  const [parametrosCostosCargando, setParametrosCostosCargando] = useState(true);
+  const [parametrosCostosError, setParametrosCostosError] = useState<string | null>(null);
+
+  const cargarParametrosCostos = useCallback(async () => {
+    setParametrosCostosCargando(true);
+    setParametrosCostosError(null);
+    try {
+      setParametrosCostos(await obtenerParametrosCostos());
+    } catch (error) {
+      setParametrosCostosError(mensajeErrorProductos(error, "No se pudieron cargar los parámetros de costos."));
+    } finally {
+      setParametrosCostosCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarParametrosCostos();
+  }, [cargarParametrosCostos]);
 
   // ── Bloque 4: fichas guardadas en local (respaldo de la fase 1) ──
   // NO se suben solas: solo habilitan el botón "Subir ficha guardada" en la
@@ -2518,6 +2542,24 @@ export function GestionProductosScreen({
                      "Único" de etiqueta fija, si no está configurada). */
                   tamanoFijo={tamanoFijoDe(cfgCrear)}
                 />
+                <CostosProductoPanel
+                  ficha={fichaBorrador}
+                  insumos={insumos}
+                  parametros={parametrosCostos}
+                  porcionesFallback={cfgCrear?.tamanos ?? undefined}
+                  precioMediana={form.precioUnitario}
+                  precioGrande={form.precioGrande}
+                  cargando={parametrosCostosCargando}
+                  error={parametrosCostosError}
+                  onReintentar={() => void cargarParametrosCostos()}
+                  onUsarPrecio={(precio, tamano) =>
+                    setForm((prev) =>
+                      tamano.trim().toLowerCase() === "grande"
+                        ? { ...prev, precioGrande: precio }
+                        : { ...prev, precioUnitario: precio },
+                    )
+                  }
+                />
               </Tarjeta>
             )}
           </div>
@@ -2810,7 +2852,26 @@ export function GestionProductosScreen({
                     <p className="text-xs text-muted-foreground">Este producto no tiene ficha técnica registrada</p>
                   </div>
                 ) : (
-                  <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
+                  <>
+                    <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
+                    <CostosProductoPanel
+                      ficha={fichaV}
+                      insumos={insumos}
+                      parametros={parametrosCostos}
+                      porcionesFallback={cfgDe(detailItem.idCategoria)?.tamanos ?? undefined}
+                      precioMediana={detailItem.precioUnitario}
+                      precioGrande={
+                        detailItem.precioGrande ??
+                        (esCategoriaPizza(catName(detailItem.idCategoria))
+                          ? detailItem.precioUnitario + RECARGO_TAMANO_GRANDE
+                          : undefined)
+                      }
+                      soloLectura
+                      cargando={parametrosCostosCargando}
+                      error={parametrosCostosError}
+                      onReintentar={() => void cargarParametrosCostos()}
+                    />
+                  </>
                 )}
               </Tarjeta>
             )}
@@ -2999,16 +3060,38 @@ export function GestionProductosScreen({
                     />
                   </div>
                 ) : (
-                  <FichaTecnicaEditor
-                    ficha={editFichaBorrador}
-                    onChange={setEditFichaBorrador}
-                    insumos={insumos}
-                    modo="producto"
-                    inputCls={inputCls}
-                    /* Los tamaños los define la categoría (o la fila única
-                       "Único" de etiqueta fija, si no está configurada). */
-                    tamanoFijo={tamanoFijoDe(cfgEditar)}
-                  />
+                  <>
+                    <FichaTecnicaEditor
+                      ficha={editFichaBorrador}
+                      onChange={setEditFichaBorrador}
+                      insumos={insumos}
+                      modo="producto"
+                      inputCls={inputCls}
+                      /* Los tamaños los define la categoría (o la fila única
+                         "Único" de etiqueta fija, si no está configurada). */
+                      tamanoFijo={tamanoFijoDe(cfgEditar)}
+                    />
+                    <CostosProductoPanel
+                      ficha={editFichaBorrador}
+                      insumos={insumos}
+                      parametros={parametrosCostos}
+                      porcionesFallback={cfgEditar?.tamanos ?? undefined}
+                      precioMediana={editItem.precioUnitario}
+                      precioGrande={editItem.precioGrande}
+                      cargando={parametrosCostosCargando}
+                      error={parametrosCostosError}
+                      onReintentar={() => void cargarParametrosCostos()}
+                      onUsarPrecio={(precio, tamano) =>
+                        setEditItem((prev) =>
+                          !prev
+                            ? prev
+                            : tamano.trim().toLowerCase() === "grande"
+                              ? { ...prev, precioGrande: precio }
+                              : { ...prev, precioUnitario: precio },
+                        )
+                      }
+                    />
+                  </>
                 )}
               </Tarjeta>
             </div>

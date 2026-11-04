@@ -19,7 +19,6 @@ export type Screen =
   | "permissions"
   | "users"
   | "access"
-  | "purchases"
   | "sales-chart"
   | "supply-categories"
   | "supplies"
