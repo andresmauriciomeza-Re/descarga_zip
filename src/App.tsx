@@ -1837,6 +1837,21 @@ function reposarFotoProducto(e: ReactPointerEvent<HTMLDivElement>) {
   e.currentTarget.style.setProperty("--foto-y", "0px");
 }
 
+function inclinarTarjetaProducto(e: ReactPointerEvent<HTMLDivElement>) {
+  if (e.pointerType !== "mouse") return;
+  const caja = e.currentTarget.getBoundingClientRect();
+  if (caja.width === 0 || caja.height === 0) return;
+  const x = (e.clientX - caja.left) / caja.width - 0.5;
+  const y = (e.clientY - caja.top) / caja.height - 0.5;
+  e.currentTarget.style.setProperty("--card-tilt-x", `${(-y * 4).toFixed(2)}deg`);
+  e.currentTarget.style.setProperty("--card-tilt-y", `${(x * 4).toFixed(2)}deg`);
+}
+
+function reposarTarjetaProducto(e: ReactPointerEvent<HTMLDivElement>) {
+  e.currentTarget.style.setProperty("--card-tilt-x", "0deg");
+  e.currentTarget.style.setProperty("--card-tilt-y", "0deg");
+}
+
 function LandingScreen({
   navigate,
   setProduct,
@@ -1872,6 +1887,12 @@ function LandingScreen({
   });
   const heroFotoY = useTransform(heroProgreso, [0, 1], ["0%", "6%"]);
   const heroFotoEscala = useTransform(heroProgreso, [0, 1], [1, 1.12]);
+  const heroContenidoY = useTransform(heroProgreso, [0, 0.65], [0, -22]);
+  const heroContenidoOpacidad = useTransform(
+    heroProgreso,
+    [0, 0.48, 0.76],
+    [1, 1, 0],
+  );
 
   const { scrollYProgress: historiaProgreso } = useScroll({
     target: historiaRef,
@@ -1879,6 +1900,11 @@ function LandingScreen({
   });
   const historiaFotoY = useTransform(historiaProgreso, [0, 1], ["0%", "2%"]);
   const historiaFotoEscala = useTransform(historiaProgreso, [0, 1], [1, 1.04]);
+  const historiaContenidoY = useTransform(
+    historiaProgreso,
+    [0, 1],
+    [12, -12],
+  );
   const revealHeroLine = (delay: number) => ({
     initial: reduceMotion ? { y: 0 } : { y: "110%" },
     animate: { y: 0 },
@@ -1923,7 +1949,14 @@ function LandingScreen({
 
         {/* Contenido sobre la zona oscura izquierda */}
         <div className="relative z-10 w-full min-h-screen flex items-center">
-          <div className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl">
+          <motion.div
+            style={
+              profundidadActiva
+                ? { y: heroContenidoY, opacity: heroContenidoOpacidad }
+                : undefined
+            }
+            className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl"
+          >
             <div>
               {/* Badge */}
               <motion.div
@@ -2050,7 +2083,7 @@ function LandingScreen({
                 ))}
               </motion.div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -2216,75 +2249,80 @@ function LandingScreen({
                         onOpenDetail(favorita);
                       }
                     }}
-                    className="group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl transition-shadow duration-200 ease-out cursor-pointer flex flex-col"
+                    onPointerMove={reduceMotion ? undefined : inclinarTarjetaProducto}
+                    onPointerLeave={reposarTarjetaProducto}
+                    onPointerCancel={reposarTarjetaProducto}
+                    className="favorite-card-frame group w-full md:w-auto bg-card rounded-[20px] overflow-hidden shadow-sm hover:shadow-2xl transition-shadow duration-200 ease-out cursor-pointer flex flex-col"
                   >
-                    {/* Image */}
-                    <div
-                      className="relative h-52 bg-muted overflow-hidden"
-                      onPointerMove={desplazarFotoProducto}
-                      onPointerLeave={reposarFotoProducto}
-                      onPointerCancel={reposarFotoProducto}
-                    >
-                      <motion.img
-                        src={getImageUrl(favorita.image)}
-                        alt={favorita.name}
-                        onError={onErrorImagen}
-                        loading="lazy"
-                        decoding="async"
-                        variants={{
-                          hidden: { clipPath: "inset(0 0 100% 0)" },
-                          visible: {
-                            clipPath: "inset(0 0 0% 0)",
-                            transition: {
-                              duration: 0.72,
-                              delay: 0.08,
-                              ease: REVEAL_EASE,
-                            },
-                          },
-                        }}
-                        className={`favorite-foto w-full h-full object-cover ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
-                      />
-                      {/* Estado del producto (arriba a la izquierda, 12 px)
-                          y, debajo, la insignia "Favorita" de siempre. Una
-                          sola etiqueta a la vez: si está agotado se oculta el
-                          verde y se pinta el "Agotado" rojo en su lugar. */}
-                      <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
-                        {etiqueta !== "agotado" && estadoDeProducto(favorita) !== "Disponible" && (
-                          <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
-                        )}
-                        {etiqueta === "agotado" && (
-                          <AgotadoMenuBadge />
-                        )}
-                        <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
-                          <Star className="w-3 h-3 fill-white text-white" />
-                          Favorita
-                        </div>
-                      </div>
-                      {noDisponible && (
-                        <NoDisponibleOverlay className="absolute inset-0 z-[5]" />
-                      )}
-                    </div>
-
-                    {/* Body */}
-                    <div className="p-5 flex flex-col flex-1">
-                      <h3
-                        className="text-foreground font-bold text-base mb-1.5 leading-snug"
-                        style={{ fontFamily: SERIF }}
+                    <div className="favorite-card-surface flex flex-col flex-1">
+                      {/* Image */}
+                      <div
+                        className="relative h-52 bg-muted overflow-hidden"
+                        onPointerMove={desplazarFotoProducto}
+                        onPointerLeave={reposarFotoProducto}
+                        onPointerCancel={reposarFotoProducto}
                       >
-                        {favorita.name}
-                      </h3>
-                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
-                        {favorita.description}
-                      </p>
+                        <motion.img
+                          src={getImageUrl(favorita.image)}
+                          alt={favorita.name}
+                          onError={onErrorImagen}
+                          loading="lazy"
+                          decoding="async"
+                          variants={{
+                            hidden: { clipPath: "inset(0 0 100% 0)" },
+                            visible: {
+                              clipPath: "inset(0 0 0% 0)",
+                              transition: {
+                                duration: 0.72,
+                                delay: 0.08,
+                                ease: REVEAL_EASE,
+                              },
+                            },
+                          }}
+                          className={`favorite-foto w-full h-full object-cover ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
+                        />
+                        {/* Estado del producto (arriba a la izquierda, 12 px)
+                            y, debajo, la insignia "Favorita" de siempre. Una
+                            sola etiqueta a la vez: si está agotado se oculta el
+                            verde y se pinta el "Agotado" rojo en su lugar. */}
+                        <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
+                          {etiqueta !== "agotado" && estadoDeProducto(favorita) !== "Disponible" && (
+                            <EstadoMenuBadge estado={estadoDeProducto(favorita)} />
+                          )}
+                          {etiqueta === "agotado" && (
+                            <AgotadoMenuBadge />
+                          )}
+                          <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
+                            <Star className="w-3 h-3 fill-white text-white" />
+                            Favorita
+                          </div>
+                        </div>
+                        {noDisponible && (
+                          <NoDisponibleOverlay className="absolute inset-0 z-[5]" />
+                        )}
+                      </div>
 
-                      {/* Price + Rating */}
-                      <div className="flex items-center justify-between mt-auto">
-                        <span
-                          className={`text-[#DC2626] text-lg font-semibold ${atenuada ? "opacity-60" : ""}`}
-                          style={{ fontFamily: MONO }}
+                      {/* Body */}
+                      <div className="p-5 flex flex-col flex-1">
+                        <h3
+                          className="text-foreground font-bold text-base mb-1.5 leading-snug"
+                          style={{ fontFamily: SERIF }}
                         >
-                          $ {favorita.price.toLocaleString("es-CO")}
-                        </span>
+                          {favorita.name}
+                        </h3>
+                        <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 flex-1 mb-4">
+                          {favorita.description}
+                        </p>
+
+                        {/* Price + Rating */}
+                        <div className="flex items-center justify-between mt-auto">
+                          <span
+                            className={`text-[#DC2626] text-lg font-semibold ${atenuada ? "opacity-60" : ""}`}
+                            style={{ fontFamily: MONO }}
+                          >
+                            $ {favorita.price.toLocaleString("es-CO")}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -2359,7 +2397,10 @@ function LandingScreen({
             </motion.div>
 
             {/* Right — text content */}
-            <div className="flex flex-col gap-6">
+            <motion.div
+              style={profundidadActiva ? { y: historiaContenidoY } : undefined}
+              className="flex flex-col gap-6"
+            >
               {/* Badge */}
               <motion.div {...reveal(0.06, 14)} className="inline-flex">
                 <span className="px-4 py-1.5 bg-red-50 text-[#DC2626] text-sm font-semibold rounded-full border border-red-100">
@@ -2413,7 +2454,7 @@ function LandingScreen({
                   📞 Llamar
                 </button>
               </motion.div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>

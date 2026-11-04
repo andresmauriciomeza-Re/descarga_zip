@@ -60,6 +60,21 @@
   transform: translate3d(var(--foto-x, 0px), var(--foto-y, 0px), 0) scale(1.05);
 }
 
+.favorite-card-frame {
+  perspective: 900px;
+}
+
+.favorite-card-surface {
+  transform-style: preserve-3d;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .favorite-card-surface {
+    transform: rotateX(var(--card-tilt-x, 0deg)) rotateY(var(--card-tilt-y, 0deg));
+    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
 /* Movimiento reducido: la franja se muestra estática y centrada, sin cambiar
    su velocidad, dirección ni pausa en condiciones normales. */
 @media (prefers-reduced-motion: reduce) {
@@ -83,5 +98,14 @@
 
   .stats-marquee-track > div:not(:first-child) {
     display: none;
+  }
+
+  .favorite-card-frame {
+    perspective: none;
+  }
+
+  .favorite-card-surface {
+    transform: none;
+    transition: none;
   }
 }
