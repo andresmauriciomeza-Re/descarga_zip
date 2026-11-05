@@ -2025,7 +2025,7 @@ export function OrdenProduccionScreen({
           <button onClick={onClose} className={`${crear ? "p-2.5" : "p-1.5"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
         </div>
         <div className={`flex-1 overflow-y-auto ${crear ? "px-9 pt-7 pb-2" : "px-5 py-4"}`}>{children}</div>
-        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-5 pb-7" : "px-5 py-4"} border-t border-border`}>
+        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-3 pb-7" : "px-5 py-4"} border-t border-border`}>
           <button onClick={onClose} className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} border border-border font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors`}>Cancelar</button>
           <button onClick={onConfirm} disabled={deshabilitado}
             className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} bg-primary text-white font-semibold transition-colors active:scale-95 ${
@@ -2489,9 +2489,6 @@ export function OrdenProduccionScreen({
                 <textarea value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))}
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
-              <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-                Toda orden nace Pendiente. Se avanza a En proceso y luego a Completada. Solo se cancela con Dar de baja, y nunca vuelve a un estado anterior.
-              </p>
             </div>
           ),
         })}

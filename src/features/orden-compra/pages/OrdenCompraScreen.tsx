@@ -34,7 +34,6 @@ import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
   AlertTriangle, CheckCircle2, Lock,
-  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
@@ -2752,7 +2751,7 @@ export function OrdenCompraScreen({
   };
 
   return (
-    <div className="px-4 md:px-6 pt-3 pb-2 h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="px-4 md:px-6 pt-3 pb-2 h-full min-h-0 flex flex-col overflow-x-hidden overflow-y-auto">
       <div className="flex items-center justify-between gap-4 mb-3 shrink-0 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
@@ -2814,21 +2813,30 @@ export function OrdenCompraScreen({
       ) : (
       <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
         <div className="overflow-x-auto">
-          {/* Escritorio/tablet (>=768px): tabla. Las 3 columnas de dinero y la
-              fecha sólo existen desde 1440px; por debajo se fusionan en Total y
-              la fecha va bajo el N° de orden. */}
-          <table className="hidden md:table w-full table-fixed md:min-w-[780px]">
+          {/* Escritorio/tablet (>=768px): tabla con columnas independientes. */}
+          <table className="hidden md:table w-full table-fixed md:min-w-[1050px]">
+            <colgroup>
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "14%" }} />
+            </colgroup>
             <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[16%] min-[1440px]:w-[9%]">N° Orden</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[19%] min-[1440px]:w-[15%]">Proveedor</th>
-                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[8%]">Fecha</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[13%] min-[1440px]:w-[9%]">N° Factura</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[10%]">Total</th>
-                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[11%]">Facturado</th>
-                <th className="hidden min-[1440px]:table-cell px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[11%]">Por facturar</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[13%]">Estado</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[16%] min-[1440px]:w-[14%]">Acciones</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted">N° Orden</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Proveedor</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Fecha</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">N° Factura</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Total</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Facturado</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Por facturar</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Estado</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -2853,13 +2861,12 @@ export function OrdenCompraScreen({
                       <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
                         <td className="px-3 py-2.5 sticky left-0 z-10 bg-card group-hover:bg-muted/20">
                           <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap min-[1440px]:hidden">{o.fecha}</p>
                         </td>
                          <td className="px-3 py-2.5 overflow-hidden">
                            <p className="text-sm text-foreground break-words" title={o.proveedor}>{o.proveedor}</p>
                            {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                          </td>
-                         <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
+                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
                        <td className="px-3 py-2.5 text-xs overflow-hidden">
                          {facturas.length > 0 ? (
                            <>
@@ -2885,30 +2892,40 @@ export function OrdenCompraScreen({
                        </td>
                        <td className="px-3 py-2.5">
                          <p className="text-sm font-semibold text-foreground whitespace-nowrap">{fmtCOP(totalOrden)}</p>
-                         {/* Sólo hasta 1399px: el total arriba y el desglose en
-                             texto pequeño debajo (fusiona las 3 columnas). */}
-                         <p className="text-[11px] leading-tight mt-0.5 text-muted-foreground min-[1440px]:hidden">
-                           {totalFacturado > 0 ? (
-                             <>
-                               Facturado <span className="font-semibold text-emerald-700">{fmtCOP(totalFacturado)}</span>
-                               {" · "}Por facturar <span className="font-semibold text-amber-700">{fmtCOP(porFacturar)}</span>
-                             </>
-                           ) : (
-                             <>
-                               Por facturar <span className="font-semibold text-amber-700">{fmtCOP(porFacturar)}</span>
-                             </>
-                           )}
-                         </p>
                        </td>
-                       <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
+                       <td className="px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
                          {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
                        </td>
-                       <td className="hidden min-[1440px]:table-cell px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
+                       <td className="px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                        </td>
                         <td className="px-3 py-2.5 overflow-hidden">
-                        <EstadoBadge e={o.estado} />
-                      </td>
+                          <div className="flex flex-col items-start gap-1">
+                            {["Anulado", "Completado"].includes(o.estado) ? (
+                              <EstadoBadge e={o.estado} />
+                            ) : (
+                              <EstadoSelect
+                                value={o.estado}
+                                onChange={(nuevoEstado) => {
+                                  if (nuevoEstado === o.estado) return;
+                                  setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                                }}
+                                options={opcionesEstado(o.estado)}
+                                triggerTitle="Cambiar estado"
+                                triggerAriaLabel="Cambiar estado"
+                              />
+                            )}
+                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{fechaUltimoCambio(o)}</span>
+                            <EstadoHistorialTooltip
+                              historial={o.historialEstados ?? []}
+                              estadoColors={ESTADO_CONFIG}
+                            >
+                              <button type="button" className="text-[11px] text-primary hover:underline">
+                                Ver historial
+                              </button>
+                            </EstadoHistorialTooltip>
+                          </div>
+                        </td>
                        <td className="px-3 py-2.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                          <div className="flex items-center gap-1 flex-nowrap">
                           <button
@@ -2918,31 +2935,6 @@ export function OrdenCompraScreen({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {!["Anulado", "Completado"].includes(o.estado) && (
-                            <EstadoSelect
-                              value={o.estado}
-                              onChange={(nuevoEstado) => {
-                                if (nuevoEstado === o.estado) return;
-                                setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                              }}
-                              options={opcionesEstado(o.estado)}
-                              triggerContent={<RefreshCw className="w-4 h-4" />}
-                              triggerTitle="Cambiar estado"
-                              triggerAriaLabel="Cambiar estado"
-                            />
-                          )}
-                          <EstadoHistorialTooltip
-                            historial={o.historialEstados ?? []}
-                            estadoColors={ESTADO_CONFIG}
-                          >
-                            <button
-                              type="button"
-                              title="Ver historial"
-                              className="text-[11px] text-primary hover:underline px-1"
-                            >
-                              Historial
-                            </button>
-                          </EstadoHistorialTooltip>
                           {/* Editar sólo en Borrador: `onEditarOrden` conecta con
                               setOrdenAEditar + navigate("nueva-orden-compra").
                               En el resto de estados se reserva el mismo ancho
@@ -2966,9 +2958,7 @@ export function OrdenCompraScreen({
                               className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
                             >
                               <ClipboardCheck className="w-3.5 h-3.5" />
-                              {/* Sólo desde 1440px: por debajo el botón va con
-                                  el ícono solo, con el mismo tooltip. */}
-                              <span className="hidden min-[1440px]:inline">OC</span>
+                              <span>OC</span>
                             </button>
                           )}
                         </div>
@@ -2997,14 +2987,8 @@ export function OrdenCompraScreen({
                 const nit = o.proveedorNit || prov?.nit || "";
                 return (
                   <div key={o.id} className="p-4">
-                    {/* N° de orden y estado arriba */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{fechaUltimoCambio(o)}</p>
-                      </div>
-                      <EstadoBadge e={o.estado} />
-                    </div>
+                    {/* N° de orden */}
+                    <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
 
                     {/* Proveedor con NIT */}
                     <div className="mt-2.5 min-w-0">
@@ -3046,23 +3030,37 @@ export function OrdenCompraScreen({
                       </div>
                     </div>
 
+                    {/* Estado, fecha del último cambio e historial */}
+                    <div className="mt-2.5 flex flex-col items-start gap-1">
+                      {["Anulado", "Completado"].includes(o.estado) ? (
+                        <EstadoBadge e={o.estado} />
+                      ) : (
+                        <EstadoSelect
+                          value={o.estado}
+                          onChange={(nuevoEstado) => {
+                            if (nuevoEstado === o.estado) return;
+                            setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
+                          }}
+                          options={opcionesEstado(o.estado)}
+                          triggerTitle="Cambiar estado"
+                          triggerAriaLabel="Cambiar estado"
+                        />
+                      )}
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{fechaUltimoCambio(o)}</span>
+                      <EstadoHistorialTooltip
+                        historial={o.historialEstados ?? []}
+                        estadoColors={ESTADO_CONFIG}
+                      >
+                        <button type="button" className="text-[11px] text-primary hover:underline">
+                          Ver historial
+                        </button>
+                      </EstadoHistorialTooltip>
+                    </div>
+
                     {/* Acciones abajo — mismas reglas que la tabla: editar sólo
                         en Borrador y botón OC sólo cuando la orden está Enviado
                         y le faltan insumos por recibir. */}
-                    <div className="mt-2.5 flex items-center gap-1 flex-wrap">
-                      {!["Anulado", "Completado"].includes(o.estado) && (
-                      <EstadoSelect
-                        value={o.estado}
-                        onChange={(nuevoEstado) => {
-                          if (nuevoEstado === o.estado) return;
-                          setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                        }}
-                        options={opcionesEstado(o.estado)}
-                        triggerContent={<RefreshCw className="w-4 h-4" />}
-                        triggerTitle="Cambiar estado"
-                        triggerAriaLabel="Cambiar estado"
-                      />
-                      )}
+                    <div className="mt-2.5 flex items-center gap-1 flex-nowrap">
                       <button
                         onClick={() => onVerDetalle(o)}
                         title="Ver detalle"
@@ -3088,17 +3086,6 @@ export function OrdenCompraScreen({
                           <ClipboardCheck className="w-3.5 h-3.5" /> OC
                         </button>
                       )}
-                      <EstadoHistorialTooltip
-                        historial={o.historialEstados ?? []}
-                        estadoColors={ESTADO_CONFIG}
-                      >
-                        <button
-                          type="button"
-                          className="ml-auto text-[11px] text-primary hover:underline px-2 py-2"
-                        >
-                          Ver historial
-                        </button>
-                      </EstadoHistorialTooltip>
                     </div>
                   </div>
                 );
@@ -3109,8 +3096,10 @@ export function OrdenCompraScreen({
       )}
 
       {/* Paginador fuera y debajo de la card (unificado). */}
-      {filtered.length > 0 && (
-        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+      {totalPages > 1 && (
+        <div className="shrink-0">
+          <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+        </div>
       )}
 
       <AnimatePresence>

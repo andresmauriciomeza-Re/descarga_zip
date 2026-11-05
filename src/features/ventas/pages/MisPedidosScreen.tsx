@@ -20,7 +20,12 @@ import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { VisorImagen } from "@/shared/components/VisorImagen";
-import { cancelarVentaApi, obtenerMisVentas, subirComprobanteVenta } from "../services/ventasApi";
+import {
+  cancelarVentaApi,
+  obtenerMiVenta,
+  obtenerMisVentas,
+  subirComprobanteVenta,
+} from "../services/ventasApi";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -210,6 +215,9 @@ interface Props {
 
 export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, onVerMenu }: Props) {
   const [misPedidos, setMisPedidos] = useState<Venta[]>([]);
+  const [detallesPedidos, setDetallesPedidos] = useState<Record<string, Venta>>({});
+  const [pedidoDetalleCargando, setPedidoDetalleCargando] = useState<string | null>(null);
+  const detallesPedidoEnCargaRef = useRef(new Set<string>());
   const [cargaInicialResuelta, setCargaInicialResuelta] = useState(false);
   const cargaEnCursoRef = useRef(false);
   const cargar = useCallback(async (silencioso = false) => {
@@ -410,6 +418,24 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
     setCompComprobante("");
   };
 
+  const alternarPedido = (id: string, yaAbierto: boolean) => {
+    if (yaAbierto) {
+      setAbierto(null);
+      return;
+    }
+    setAbierto(id);
+    if (detallesPedidos[id] || detallesPedidoEnCargaRef.current.has(id)) return;
+    detallesPedidoEnCargaRef.current.add(id);
+    setPedidoDetalleCargando(id);
+    void obtenerMiVenta(id)
+      .then((detalle) => setDetallesPedidos((actuales) => ({ ...actuales, [id]: detalle })))
+      .catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo cargar el comprobante del pedido."))
+      .finally(() => {
+        detallesPedidoEnCargaRef.current.delete(id);
+        setPedidoDetalleCargando((actual) => actual === id ? null : actual);
+      });
+  };
+
   const enviarFaltante = () => {
     if (!completarId || !compComprobante) return;
     void subirComprobanteVenta(completarId, { tipo: metodo, comprobante: compComprobante })
@@ -500,7 +526,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       )}
 
       <div className="space-y-4">
-        {lista.map((p) => {
+        {lista.map((pedidoListado) => {
+          const p = detallesPedidos[pedidoListado.id] ?? pedidoListado;
           const estado = estadoCliente(p);
           const est = datosEstadoCliente(p);
           const abierta = abierto === p.id;
@@ -512,7 +539,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
             >
               {/* Resumen */}
               <button
-                onClick={() => setAbierto(abierta ? null : p.id)}
+                onClick={() => alternarPedido(p.id, abierta)}
                 className="w-full flex items-center gap-4 px-5 py-4 text-left cursor-pointer hover:bg-muted/40 transition-colors"
               >
                 <div className="flex-1 min-w-0">
@@ -770,6 +797,9 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                         className="w-full max-h-56 object-contain rounded-xl border border-border bg-muted"
                       />
                     </div>
+                  )}
+                  {!p.comprobante && p.tieneComprobante && pedidoDetalleCargando === p.id && (
+                    <p className="text-xs text-muted-foreground">Cargando comprobante de pago…</p>
                   )}
 
                   {/* Seguimiento */}
