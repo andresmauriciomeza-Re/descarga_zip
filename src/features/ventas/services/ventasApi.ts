@@ -8,7 +8,8 @@ export interface PagoVentaApi {
   id_pago: number;
   tipo: string;
   fecha: string;
-  comprobante: string | null;
+  comprobante?: string | null;
+  tiene_comprobante?: boolean;
   cantidad_pagar: number | string;
   depositado: number | string;
   faltante: number | string;
@@ -139,6 +140,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
       faltante: Number(pago.faltante),
       estado: pago.estado,
     })),
+    tieneComprobante: pagos.some((pago) => pago.tiene_comprobante ?? Boolean(pago.comprobante)),
     montoPagado: totalPagado,
     montoFaltante: faltante,
     // El motivo es texto libre: los fijos ("Comprobante falso", "Comprobante
@@ -209,6 +211,11 @@ export function ventaApiAVenta(row: VentaApi): Venta {
 export async function obtenerMisVentas() {
   const { data } = await api.get<VentaApi[]>('/ventas/mias');
   return data.map(ventaApiAVenta);
+}
+
+export async function obtenerMiVenta(id: string) {
+  const { data } = await api.get<VentaApi>(`/ventas/mias/${id}`);
+  return ventaApiAVenta(data);
 }
 
 export async function obtenerVentasPanel() {

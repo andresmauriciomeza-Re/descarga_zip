@@ -384,6 +384,8 @@ export interface Venta {
       compatibilidad con ventas viejas: si no está, se usa `comprobante`. */
   comprobantes?: ComprobanteVenta[];
   pagos?: PagoVenta[];
+  /** El listado informa si hay comprobante sin transferir su contenido. */
+  tieneComprobante?: boolean;
   montoPagado?: number;
   /** Motivo por el que se rechazó el pago (estado Anulado). */
   motivoRechazo?: MotivoRechazo;
