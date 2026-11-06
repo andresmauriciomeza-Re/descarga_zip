@@ -31,6 +31,7 @@ export interface OrdenApi {
   id_orden_produccion: number | string;
   tipo: "Preparacion" | "Pedido";
   id_venta: number | string | null;
+  venta_local: boolean;
   fecha_solicitada: string;
   fecha_entrega_estimada: string | null;
   hora_solicitada: string | null;
@@ -170,6 +171,7 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     lineas,
     insumosRequeridos: requeridos,
     ...(row.id_venta == null ? {} : { ventaId: String(row.id_venta) }),
+    ventaLocal: row.venta_local === true,
     ventaNumero: row.venta_numero,
     cliente: row.cliente,
     fechaSolicitada: String(row.fecha_solicitada).slice(0, 10),
@@ -377,6 +379,7 @@ export const iniciarOrdenProduccion = async (
   id: string,
   payload: {
     fechaEntregaEstimada: string;
+    fechaLimiteAutomatica?: boolean;
     lineas?: { idDetalleOp: number; cantidad: number }[];
   },
 ): Promise<OrdenProduccion> => {
@@ -386,6 +389,7 @@ export const iniciarOrdenProduccion = async (
       `/ordenes-produccion/${idApi}/iniciar`,
       {
         fecha_entrega_estimada: payload.fechaEntregaEstimada,
+        ...(payload.fechaLimiteAutomatica === undefined ? {} : { fecha_limite_automatica: payload.fechaLimiteAutomatica }),
         ...(payload.lineas
           ? {
               lineas: payload.lineas.map((linea) => ({

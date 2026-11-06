@@ -119,7 +119,7 @@ const resumenProductosPedido = (pedido: Venta) =>
   pedido.detalle?.length
     ? pedido.detalle.map((detalle) =>
       esDetallePizza(detalle)
-        ? `${detalle.nombre} · ${detalle.cantidad} porciones — ${detalle.tamaño}`
+        ? `${detalle.nombre} · ${detalle.cantidad} ${detalle.cantidad === 1 ? "porción" : "porciones"} — ${detalle.tamaño}`
         : `${detalle.nombre}${detalle.tamaño ? ` (${detalle.tamaño})` : ""} x${detalle.cantidad}`,
     ).join(", ")
     : pedido.productos;
@@ -758,7 +758,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                               )}
                               <p className="text-sm text-muted-foreground">
                                 {esDetallePizza(d)
-                                  ? `${d.cantidad} porciones — ${d.tamaño}`
+                                  ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${d.tamaño}`
                                   : `${d.cantidad} × ${fmtCOP(d.precio)}`}
                               </p>
                               {esDetallePizza(d) && (

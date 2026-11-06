@@ -222,6 +222,7 @@ export interface OrdenProduccion {
   insumosRequeridos: InsumoRequerido[];
   /** Solo Forma 2. Una venta = una sola orden; este vínculo la bloquea. */
   ventaId?: string | null;
+  ventaLocal?: boolean;
   ventaNumero?: string | null;
   cliente?: string | null;
   fechaSolicitada: string;   // "YYYY-MM-DD"
@@ -327,7 +328,7 @@ const fechaHoraBogotaMasMinuto = () =>
 const fechaHoraBogotaActual = () => fechaHoraBogotaDesdeEpoch(Date.now(), true);
 
 function fechaRecogidaLocalBogota(orden: OrdenProduccion): string | null {
-  if (!orden.horaSolicitada) return null;
+  if (orden.ventaLocal || !orden.horaSolicitada) return null;
   const hora = orden.horaSolicitada.length === 5
     ? `${orden.horaSolicitada}:00`
     : orden.horaSolicitada.slice(0, 8);
@@ -1061,7 +1062,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       { header: "Cant. estimada", valor: (o) => o.lineas.map((l) => fmtCant(l.cantidadEstimada, l.unidad)).join("; ") },
       {
         header: "Cant. real",
-        valor: (o) => (o.estadoOrden === "completada"
+        valor: (o) => (o.estadoOrden === "completada" && o.tipo !== "pedido"
           ? o.lineas.map((l) => fmtCant(l.cantidadReal ?? 0, l.unidad)).join("; ")
           : "—"),
       },
@@ -1622,6 +1623,7 @@ export function OrdenProduccionScreen({
   const [generarItem, setGenerarItem] = useState<OrdenProduccion | null>(null);
   const [cantidadesGenerar, setCantidadesGenerar] = useState<Record<number, string>>({});
   const [fechaLimiteGenerar, setFechaLimiteGenerar] = useState("");
+  const [fechaLimiteAutomatica, setFechaLimiteAutomatica] = useState(false);
   const [minFechaLimiteGenerar, setMinFechaLimiteGenerar] = useState(fechaHoraBogotaMasMinuto);
   const [ahoraBogotaGenerar, setAhoraBogotaGenerar] = useState(fechaHoraBogotaActual);
   const [capacidadGenerar, setCapacidadGenerar] = useState<{
@@ -1637,11 +1639,14 @@ export function OrdenProduccionScreen({
     const actualizarHora = () => {
       setMinFechaLimiteGenerar(fechaHoraBogotaMasMinuto());
       setAhoraBogotaGenerar(fechaHoraBogotaActual());
+      if (generarItem.ventaLocal && fechaLimiteAutomatica) {
+        setFechaLimiteGenerar(fechaHoraBogotaDesdeEpoch(Date.now()));
+      }
     };
     actualizarHora();
     const intervalo = window.setInterval(actualizarHora, 15_000);
     return () => window.clearInterval(intervalo);
-  }, [generarItem]);
+  }, [generarItem, fechaLimiteAutomatica]);
 
   const fechaRecogidaGenerar = generarItem?.tipo === "pedido"
     ? fechaRecogidaLocalBogota(generarItem)
@@ -1649,6 +1654,7 @@ export function OrdenProduccionScreen({
   const recogidaFuturaGenerar = !!fechaRecogidaGenerar
     && fechaRecogidaGenerar > ahoraBogotaGenerar;
   const recogidaVencidaGenerar = generarItem?.tipo === "pedido"
+    && !generarItem.ventaLocal
     && !!generarItem.horaSolicitada
     && !recogidaFuturaGenerar;
 
@@ -1692,7 +1698,9 @@ export function OrdenProduccionScreen({
       capacidadGenerar.lineas.some((capacidad) => capacidad.id_detalle_op === linea.idDetalleOp));
   const generacionValida =
     !!fechaLimiteGenerar &&
-    fechaLimiteGenerar >= minFechaLimiteGenerar &&
+    (generarItem?.ventaLocal
+      ? fechaLimiteAutomatica || fechaLimiteGenerar >= ahoraBogotaGenerar.slice(0, 16)
+      : fechaLimiteGenerar >= minFechaLimiteGenerar) &&
     (generarItem?.tipo !== "pedido" ||
       !recogidaFuturaGenerar ||
       (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16))) &&
@@ -2044,8 +2052,11 @@ export function OrdenProduccionScreen({
       String(linea.cantidadEstimada),
     ])));
     const recogida = orden.tipo === "pedido" ? fechaRecogidaLocalBogota(orden) : null;
+    setFechaLimiteAutomatica(orden.ventaLocal === true);
     setFechaLimiteGenerar(
-      recogida && recogida > fechaHoraBogotaActual()
+      orden.ventaLocal
+        ? fechaHoraBogotaDesdeEpoch(Date.now())
+        : recogida && recogida > fechaHoraBogotaActual()
         ? recogida.slice(0, 16)
         : "",
     );
@@ -2072,6 +2083,7 @@ export function OrdenProduccionScreen({
     try {
       const actualizada = await iniciarOrdenProduccion(orden.id, {
         fechaEntregaEstimada: fechaLimiteGenerar,
+        ...(orden.ventaLocal ? { fechaLimiteAutomatica } : {}),
         ...(orden.tipo === "preparacion"
           ? {
               lineas: orden.lineas.map((linea) => ({
@@ -2332,6 +2344,37 @@ export function OrdenProduccionScreen({
     </div>
   );
 
+  const accionesListado = (o: OrdenProduccion, tieneFaltantes: boolean) => (
+    <div className="flex items-center gap-1 whitespace-nowrap">
+      {o.estadoOrden === "pendiente" && !tieneFaltantes && (
+        <button type="button" onClick={() => void abrirGenerar(o)}
+          title="Generar orden de producción" aria-label="Generar orden de producción"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <Play className="w-4 h-4" />
+        </button>
+      )}
+      {o.estadoOrden === "en-proceso" && (
+        <button type="button" onClick={() => abrirCompletar(o.id)}
+          title="Completar orden" aria-label="Completar orden"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <CheckCircle2 className="w-4 h-4" />
+        </button>
+      )}
+      <ActionIcons
+        onView={() => setDetailItem(o)}
+        onDelete={canDelete && o.estadoOrden === "pendiente" && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
+        deleteTitle={o.tipo === "pedido" ? "Los pedidos no se eliminan: usa Dar de baja" : "Eliminar preparación pendiente"}
+      />
+      {(o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso") && (
+        <button type="button" onClick={() => openDarBaja(o)}
+          title="Cancelar orden" aria-label="Cancelar orden"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <Ban className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="px-4 sm:px-6 py-6">
       {/* Header */}
@@ -2424,23 +2467,22 @@ export function OrdenProduccionScreen({
           )}
         </div>
       ) : (
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px] table-fixed">
+      <div className="bg-card border border-border rounded-2xl mb-3">
+          <table className="hidden md:table w-full table-fixed">
             <colgroup>
               <col style={{ width: "6%" }} />
-              <col style={{ width: "10%" }} />
+              <col style={{ width: "11%" }} />
               <col style={{ width: "20%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "15%" }} />
             </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">
+                {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
+                  <th key={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -2453,7 +2495,6 @@ export function OrdenProduccionScreen({
                 </td></tr>
               ) : paged.map(o => {
                 const soloPendiente = o.estadoOrden === "pendiente";
-                const puedeCancelar = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
                 // Bloque 4: ¿faltan insumos para esta orden según el stock de
@@ -2466,26 +2507,34 @@ export function OrdenProduccionScreen({
                   : [];
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-2">
+                    <td className="px-1 py-2 align-middle">
                       {/* Solo el número: de "OP-004" muestra "004". `o.id` y
                           `o.ventaNumero` no cambian: los siguen usando el
                           buscador, el Excel, el detalle y la creación. */}
-                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id.replace("OP-", "")}</p>
+                      <p className="text-sm font-mono font-semibold text-foreground break-all">{o.id.replace("OP-", "")}</p>
                     </td>
-                    <td className="px-4 py-2">
-                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
+                    <td className="px-1 py-2 align-middle">
+                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${
                         o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
                       }`}>
                         {etiquetaAsignacion(o, productos)}
                       </span>
+                      {o.ventaLocal && (
+                        <span className="block mt-1 text-[10px] font-semibold text-muted-foreground">Venta en el local</span>
+                      )}
                     </td>
-                    <td className="px-4 py-2 min-w-0">
+                    <td className="px-1 py-2 align-middle min-w-0">
                       <p className="truncate text-sm font-medium text-foreground" title={resumenProductos(o)}>{resumenProductos(o)}</p>
                       <p className="truncate text-[11px] text-muted-foreground whitespace-nowrap" title={o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}>
                         {o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}
                       </p>
+                      {o.tipo === "pedido" && o.ventaNumero && (
+                        <p className="truncate text-[11px] text-muted-foreground" title={`Venta ${o.ventaNumero}${o.cliente ? ` · ${o.cliente}` : ""}`}>
+                          Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}
+                        </p>
+                      )}
                     </td>
-                    <td className="px-4 py-2 text-sm font-semibold text-foreground whitespace-nowrap">
+                    <td className="px-1 py-2 align-middle text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
                       {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
                         ? `${totalPorcionesPizza(o)} porc.`
                         : o.lineas.some(esPizzaOrdenLinea)
@@ -2494,8 +2543,8 @@ export function OrdenProduccionScreen({
                         ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad)
                         : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
-                    <td className="px-4 py-2 text-sm whitespace-nowrap">
-                      {!completada ? (
+                    <td className="px-1 py-2 align-middle text-sm [overflow-wrap:anywhere]">
+                      {!completada || o.tipo === "pedido" ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <>
@@ -2516,9 +2565,9 @@ export function OrdenProduccionScreen({
                         </>
                       )}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-1 py-2 align-middle">
                       <div className="flex flex-col items-start gap-1.5">
-                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
+                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${ESTADO_COLOR[o.estadoOrden]}`}>
                           {ESTADO_LABEL[o.estadoOrden]}
                         </span>
                         {/* Bloque 4: la fila dice enseguida si a la orden aún
@@ -2529,70 +2578,72 @@ export function OrdenProduccionScreen({
                             title={faltantesFila
                               .map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`)
                               .join("\n")}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap"
+                            className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 [overflow-wrap:anywhere]"
                           >
                             <AlertTriangle className="w-3 h-3" /> Faltan insumos
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                    <td className="px-1 py-2 align-middle text-xs text-muted-foreground tabular-nums [overflow-wrap:anywhere]">
                       {fmtDT(ultimoCambio(o))}
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-1 whitespace-nowrap">
-                        {o.estadoOrden === "pendiente" && faltantesFila.length === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void abrirGenerar(o);
-                            }}
-                            title="Generar orden de producción"
-                            aria-label="Generar orden de producción"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Play className="w-4 h-4" />
-                          </button>
-                        )}
-                        {o.estadoOrden === "en-proceso" && (
-                          <button
-                            type="button"
-                            onClick={() => abrirCompletar(o.id)}
-                            title="Completar orden"
-                            aria-label="Completar orden"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        <ActionIcons
-                          onView={() => setDetailItem(o)}
-                          onDelete={canDelete && soloPendiente && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
-                          deleteTitle={
-                            o.tipo === "pedido"
-                              ? "Los pedidos no se eliminan: usa Dar de baja"
-                              : "Eliminar preparación pendiente"
-                          }
-                        />
-                        {puedeCancelar && (
-                          <button
-                            type="button"
-                            onClick={() => openDarBaja(o)}
-                            title="Cancelar orden"
-                            aria-label="Cancelar orden"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                    <td className="px-1 py-2 align-middle">
+                      {accionesListado(o, faltantesFila.length > 0)}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </div>
+          <div className="md:hidden divide-y divide-border">
+            {paged.length === 0 ? (
+              <div className="px-4 py-14 text-center text-muted-foreground">
+                <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
+              </div>
+            ) : paged.map((o) => {
+              const faltantes = o.tipo === "preparacion" && o.estadoOrden === "pendiente"
+                ? faltantesPara(o.insumosRequeridos, 1, insumos) : [];
+              return (
+                <div key={o.id} className="p-4 space-y-2 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-mono font-semibold text-foreground">{o.id}</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>{ESTADO_LABEL[o.estadoOrden]}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(o, productos)}</span>
+                    {o.ventaLocal && <span className="text-[10px] font-semibold text-muted-foreground">Venta en el local</span>}
+                    {faltantes.length > 0 && (
+                      <span title={faltantes.map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`).join("\n")}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <AlertTriangle className="w-3 h-3" /> Faltan insumos
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-foreground break-words">{resumenProductos(o)}</p>
+                  <p className="text-xs text-muted-foreground break-words">{o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}</p>
+                  {o.tipo === "pedido" && o.ventaNumero && <p className="text-xs text-muted-foreground break-words">Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}</p>}
+                  <p className="text-xs text-muted-foreground">Cant. estimada: {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                    ? `${totalPorcionesPizza(o)} porc.`
+                    : o.lineas.some(esPizzaOrdenLinea)
+                      ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
+                      : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad) : fmtCant(totalEstimado(o.lineas), "und")}</p>
+                  <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.tipo === "pedido"
+                    ? "—"
+                    : o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                      ? `${totalPorcionesPizza(o, true)} porc.`
+                      : o.lineas.some(esPizzaOrdenLinea)
+                        ? o.lineas.map((linea) => esPizzaOrdenLinea(linea) ? cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0) : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
+                        : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad) : fmtCant(totalReal(o.lineas), "und")}</p>
+                  {o.estadoOrden === "completada" && o.tipo !== "pedido" && totalMerma(o.lineas) > 0 && (
+                    <p className="text-xs font-semibold text-red-600">−{resumenMerma(o.lineas)} de pérdida</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">Fecha/Hora de estado: {fmtDT(ultimoCambio(o))}</p>
+                  {accionesListado(o, faltantes.length > 0)}
+                </div>
+              );
+            })}
+          </div>
       </div>
       )}
 
@@ -2638,12 +2689,15 @@ export function OrdenProduccionScreen({
                     <input
                       type="datetime-local"
                       required
-                      min={minFechaLimiteGenerar}
+                      min={generarItem.ventaLocal ? ahoraBogotaGenerar.slice(0, 16) : minFechaLimiteGenerar}
                       max={generarItem.tipo === "pedido" && recogidaFuturaGenerar
                         ? fechaRecogidaGenerar?.slice(0, 16)
                         : undefined}
                       value={fechaLimiteGenerar}
-                      onChange={(event) => setFechaLimiteGenerar(event.target.value)}
+                      onChange={(event) => {
+                        setFechaLimiteAutomatica(false);
+                        setFechaLimiteGenerar(event.target.value);
+                      }}
                       className={iCls}
                     />
                     {!fechaLimiteGenerar && (
@@ -2908,10 +2962,12 @@ export function OrdenProduccionScreen({
                   </div>
                   <div>
                     <p className="text-[11px] font-semibold text-muted-foreground">
-                      {completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
+                      {completarItem.ventaLocal ? "Origen" : completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
                     </p>
                     <p className="text-sm font-semibold text-foreground">
-                      {completarEsPedido
+                      {completarItem.ventaLocal
+                        ? "Venta en el local"
+                        : completarEsPedido
                         ? `${completarItem.fechaSolicitada.split("-").reverse().join("/")}${completarItem.horaSolicitada ? ` ${hora12(completarItem.horaSolicitada)}` : ""}`
                         : fmtFechaHoraLocal(completarItem.fechaLimite)}
                     </p>
@@ -3207,6 +3263,7 @@ export function OrdenProduccionScreen({
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
+                  {detailItem.ventaLocal && <span className="text-[11px] font-semibold text-muted-foreground">Venta en el local</span>}
                   <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
                   <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {fmtDT(ultimoCambio(detailItem))}</span>
                 </div>
@@ -3220,7 +3277,7 @@ export function OrdenProduccionScreen({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
+                    ...(detailItem.ventaLocal ? [] : [{ l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" }]),
                     { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
                     { l: "Fecha límite", v: fmtDT(detailItem.fechaLimite) },
                     { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },

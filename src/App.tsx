@@ -1190,7 +1190,7 @@ function PrimaryBtn({
   className = "",
 }: {
   children: React.ReactNode;
-  onClick?: () => void;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
   type?: "button" | "submit" | "reset";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
@@ -2324,16 +2324,16 @@ function LandingScreen({
                               );
                             })}
                           </div>
-                          <button
-                            type="button"
+                          <PrimaryBtn
                             onClick={(event) => {
                               event.stopPropagation();
                               onOpenDetail(favorita);
                             }}
-                            className="w-full px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
+                            size="sm"
+                            className="w-full"
                           >
                             Ver detalle
-                          </button>
+                          </PrimaryBtn>
                         </div>
                       </div>
                     </div>
@@ -2667,7 +2667,7 @@ const mensajeMaximoDe = (
 ): string =>
   elaborado
   ? ["Mediana", "Grande"].includes(tamano ?? "")
-    ? `Solo quedan ${max} porciones de ${nombre} ${tamano} disponibles`
+    ? `Solo ${max === 1 ? "queda" : "quedan"} ${max} ${max === 1 ? "porción" : "porciones"} de ${nombre} ${tamano} ${max === 1 ? "disponible" : "disponibles"}`
     : `Solo quedan ${max} ${nombre}${tamano ? ` ${tamano}` : ""} disponibles`
     : `Máximo disponible: ${max}. No hay más unidades de ${nombre}`;
 
@@ -2901,15 +2901,6 @@ function ProductCard({
             </span>
           )}
           <div className="flex gap-2">
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpen(p);
-              }}
-              className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
-            >
-              Ver detalle
-            </button>
             {/* Solo ícono: el botón nunca se transforma. Cada clic suma 1
                 unidad (quickAdd deduplica dentro de setCart) y dispara el
                 toast, sin abrir el carrito. El tamaño se elige en el detalle
@@ -2942,6 +2933,16 @@ function ProductCard({
             </button>
           </div>
         </div>
+        <PrimaryBtn
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(p);
+          }}
+          size="sm"
+          className="w-full mt-3"
+        >
+          Ver detalle
+        </PrimaryBtn>
       </div>
     </motion.div>
   );
@@ -3495,7 +3496,7 @@ function ProductDetailScreen({
                                 ? "Disponibilidad no informada"
                                 : limiteTamano.max === 0
                                   ? "Agotado"
-                                  : `Disponibles: ${limiteTamano.max} porciones`}
+                                  : `Disponibles: ${limiteTamano.max} ${limiteTamano.max === 1 ? "porción" : "porciones"}`}
                             </span>
                           )}
                           {esPizza && agotadoTamano && sizeIdx !== i && (
@@ -3595,7 +3596,7 @@ function ProductDetailScreen({
               : agotado
                 ? "Agotado"
                 : esPizza
-                  ? `Agregar ${qty} porciones al carrito`
+                  ? `Agregar ${qty} ${qty === 1 ? "porción" : "porciones"} al carrito`
                   : "Agregar al carrito"}
           </PrimaryBtn>
         </div>
@@ -3988,7 +3989,7 @@ function CartScreen({
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {item.product.category.toLowerCase().includes("pizza")
-                        ? `${item.quantity} porciones · ${item.size}`
+                        ? `${item.quantity} ${item.quantity === 1 ? "porción" : "porciones"} · ${item.size}`
                         : `${item.size ? `${item.size} · ` : ""}x${item.quantity}`}
                     </p>
                     {item.product.category.toLowerCase().includes("pizza") && (
@@ -4211,7 +4212,7 @@ function CartScreen({
                         />
                         {item.product.category.toLowerCase().includes("pizza") ? (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {item.quantity} porciones · {item.size}
+                            {item.quantity} {item.quantity === 1 ? "porción" : "porciones"} · {item.size}
                           </p>
                         ) : item.size ? (
                           <p className="text-sm text-muted-foreground mt-1">
@@ -4426,7 +4427,7 @@ function CartScreen({
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {item.product.category.toLowerCase().includes("pizza")
-                                ? `${item.quantity} porciones · ${item.size}`
+                                ? `${item.quantity} ${item.quantity === 1 ? "porción" : "porciones"} · ${item.size}`
                                 : `${item.size ? `${item.size} · ` : ""}x${item.quantity}`}
                             </p>
                             {item.selectedExtras.length > 0 && (
@@ -10653,6 +10654,13 @@ export default function App() {
                       pedidos={ventas}
                       setPedidos={setVentas}
                       onInventarioCambiado={recargarInventarioProductos}
+                      onVentaPanelCambiada={async () => {
+                        const [inventario, ordenesActualizadas] = await Promise.all([
+                          recargarInventarioProductos(),
+                          cargarOrdenes(),
+                        ]);
+                        return inventario !== null && ordenesActualizadas;
+                      }}
                       productos={productosCatalogo
                         .filter((producto) => producto.estado === "Disponible")
                         .map((producto) => productoACatalogo(producto, categoriasCatalogo))}

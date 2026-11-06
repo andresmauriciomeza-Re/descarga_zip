@@ -105,7 +105,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     : '';
   const productos = detalles.map((detalle) =>
     detalle.tamano === 'Mediana' || detalle.tamano === 'Grande'
-      ? `${detalle.nombre} · ${detalle.cantidad} porciones — ${detalle.tamano} · $${Number(detalle.precio_unitario).toLocaleString('es-CO')} / porción`
+      ? `${detalle.nombre} · ${detalle.cantidad} ${Number(detalle.cantidad) === 1 ? 'porción' : 'porciones'} — ${detalle.tamano} · $${Number(detalle.precio_unitario).toLocaleString('es-CO')} / porción`
       : `${detalle.nombre}${detalle.tamano ? ` (${detalle.tamano})` : ''} x${detalle.cantidad}`,
   ).join(', ');
   return {

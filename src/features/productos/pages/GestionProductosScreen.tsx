@@ -2157,22 +2157,7 @@ export function GestionProductosScreen({
                 <p className="text-xs text-red-500 mt-0.5">{errorNombre}</p>
               )}
             </div>
-            {mostrarPrecio && esPizza && readOnly && (
-              <div className="sm:col-span-6 text-sm text-foreground space-y-0.5">
-                {(["Mediana", "Grande"] as const).map((t) => {
-                  const precio = t === "Grande" ? precioGrandeVisible ?? 0 : values.precioUnitario;
-                  return (
-                    <p key={t}>
-                      <span className="font-semibold">Precio porción {t}:</span> {fmtCOP(precio)}
-                      {recomendados && (
-                        <span className="text-muted-foreground"> (recomendado {fmtCOP(recomendados[t])})</span>
-                      )}
-                    </p>
-                  );
-                })}
-              </div>
-            )}
-            {mostrarPrecio && !(esPizza && readOnly) && (
+            {mostrarPrecio && (
               <>
                 <div className={esPizza ? "sm:col-span-3" : "sm:col-span-2"}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
@@ -3322,22 +3307,18 @@ export function GestionProductosScreen({
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed min-w-[900px]">
+          <table className="w-full table-fixed min-w-[1100px]">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
                     Crear/Editar (aquí solo ocupaba ancho y alto). */}
-                {/* Los anchos suman SIEMPRE 100 % de la tabla. `min-w-[900px]`
-                    hace que por debajo de ese ancho aparezca scroll horizontal
-                    en vez de apretar las columnas. El ID entra primero (5,5 %) y
-                    se compensa sobre todo en Stock, que era la que más
-                    sobrante tenía. Estado y Acciones quedan intactas. */}
+                {/* El ancho mínimo preserva las dos líneas de precio sin invadir Stock. */}
                 {[
-                  { h: "Nombre", w: "w-[16%]" },
+                  { h: "Nombre", w: "w-[13%]" },
                   { h: "Tipo", w: "w-[13%]" },
                   { h: "Ficha técnica", w: "w-[11%]" },
                   { h: "Categoría", w: "w-[9%]" },
-                  { h: "Precio de venta", w: "w-[9%]" },
+                  { h: "Precio de venta", w: "w-[12%]" },
                   { h: "Stock", w: "w-[14%]" },
                   { h: "Estado", w: "w-[18%]" },
                   { h: "Acciones", w: "w-[10%]" },
@@ -3420,13 +3401,19 @@ export function GestionProductosScreen({
                     {/* Precio de venta al público (precioUnitario), NO el
                         costo: antes esta columna pintaba costoUnitario. */}
                     <td
-                      className="px-4 py-2.5 text-sm font-bold text-foreground"
+                      className={`${esCategoriaPizza(catName(p.idCategoria)) ? "px-2 overflow-hidden" : "px-4"} py-2.5 text-sm font-bold text-foreground`}
                       style={{ fontFamily: MONO }}
                     >
                       {esCategoriaPizza(catName(p.idCategoria)) ? (
-                        <span className="block text-sm leading-5">
-                          <span className="block">Med. {fmtCOP(p.precioUnitario)} / porción</span>
-                          <span className="block">Gde. {fmtCOP(p.precioGrande ?? 0)} / porción</span>
+                        <span className="block text-xs leading-5">
+                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
+                            <span className="text-[11px] font-normal text-muted-foreground">Mediana</span>
+                            <span className="truncate" title={fmtCOP(p.precioUnitario)}>{fmtCOP(p.precioUnitario)}</span>
+                          </span>
+                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
+                            <span className="text-[11px] font-normal text-muted-foreground">Grande</span>
+                            <span className="truncate" title={fmtCOP(p.precioGrande ?? 0)}>{fmtCOP(p.precioGrande ?? 0)}</span>
+                          </span>
                         </span>
                       ) : (
                         fmtCOP(p.precioUnitario)

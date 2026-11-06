@@ -60,7 +60,7 @@ function cuerpoHTML(v: FacturaVenta, ticket: boolean): string {
       return `
         <tr>
           <td>${esc(d.nombre)}${esc(tam)}${esc(extras)}</td>
-          <td class="num">${esPizza ? `${d.cantidad} porciones — ${esc(d.tamaño!)}` : d.cantidad}</td>
+          <td class="num">${esPizza ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${esc(d.tamaño!)}` : d.cantidad}</td>
           <td class="num">${fmtCOP(d.precio)}${esPizza ? " / porción" : ""}</td>
           <td class="num">${fmtCOP(total)}</td>
         </tr>`;

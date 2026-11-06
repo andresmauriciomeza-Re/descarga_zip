@@ -2811,32 +2811,31 @@ export function OrdenCompraScreen({
           )}
         </div>
       ) : (
-      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
-        <div className="overflow-x-auto">
-          {/* Escritorio/tablet (>=768px): tabla con columnas independientes. */}
-          <table className="hidden md:table w-full table-fixed md:min-w-[1050px]">
+      <div className="flex flex-col bg-card border border-border rounded-2xl shrink-0">
+        <div>
+          <table className="hidden md:table w-full table-fixed">
             <colgroup>
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "calc(8.7% - 23.4px)" }} />
+              <col style={{ width: "calc(23.2% - 62.4px)" }} />
+              <col style={{ width: "calc(13% - 35px)" }} />
+              <col style={{ width: "calc(15.9% - 42.8px)" }} />
+              <col style={{ width: "calc(13% - 35px)" }} />
+              <col style={{ width: "calc(13% - 35px)" }} />
+              <col style={{ width: "calc(13.2% - 35.4px)" }} />
+              <col style={{ width: "125px" }} />
+              <col style={{ width: "144px" }} />
             </colgroup>
             <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted">N° Orden</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Proveedor</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Fecha</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">N° Factura</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Total</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Facturado</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Por facturar</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted">Estado</th>
-                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted">Acciones</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">N° Orden</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Proveedor</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Fecha</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">N° Factura</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Total</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Facturado</th>
+                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Por facturar</th>
+                <th className="px-2 py-3 text-left font-semibold leading-tight">Estado</th>
+                <th className="px-2 py-3 text-left font-semibold leading-tight">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -2859,15 +2858,15 @@ export function OrdenCompraScreen({
                     const nit = o.proveedorNit || prov?.nit || "";
                     return (
                       <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
-                        <td className="px-3 py-2.5 sticky left-0 z-10 bg-card group-hover:bg-muted/20">
-                          <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id}</p>
+                        <td className="px-1 py-2.5">
+                          <p className="text-sm font-mono font-semibold text-foreground break-all">{o.id}</p>
                         </td>
-                         <td className="px-3 py-2.5 overflow-hidden">
-                           <p className="text-sm text-foreground break-words" title={o.proveedor}>{o.proveedor}</p>
+                         <td className="px-1 py-2.5 overflow-hidden">
+                           <p className="text-sm text-foreground [overflow-wrap:anywhere]" title={o.proveedor}>{o.proveedor}</p>
                            {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                          </td>
-                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{o.fecha}</td>
-                       <td className="px-3 py-2.5 text-xs overflow-hidden">
+                         <td className="px-1 py-2.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">{o.fecha}</td>
+                       <td className="px-1 py-2.5 text-xs overflow-hidden">
                          {facturas.length > 0 ? (
                            <>
                              {facturas.map((f) => (
@@ -2890,16 +2889,16 @@ export function OrdenCompraScreen({
                            )
                          )}
                        </td>
-                       <td className="px-3 py-2.5">
-                         <p className="text-sm font-semibold text-foreground whitespace-nowrap">{fmtCOP(totalOrden)}</p>
+                       <td className="px-1 py-2.5">
+                         <p className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{fmtCOP(totalOrden)}</p>
                        </td>
-                       <td className="px-3 py-2.5 text-sm text-emerald-700 font-semibold whitespace-nowrap">
+                       <td className="px-1 py-2.5 text-sm text-emerald-700 font-semibold [overflow-wrap:anywhere]">
                          {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
                        </td>
-                       <td className="px-3 py-2.5 text-sm text-amber-700 font-semibold whitespace-nowrap">
+                       <td className="px-1 py-2.5 text-sm text-amber-700 font-semibold [overflow-wrap:anywhere]">
                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
                        </td>
-                        <td className="px-3 py-2.5 overflow-hidden">
+                        <td className="px-2 py-2.5">
                           <div className="flex flex-col items-start gap-1">
                             {["Anulado", "Completado"].includes(o.estado) ? (
                               <EstadoBadge e={o.estado} />
@@ -2915,7 +2914,7 @@ export function OrdenCompraScreen({
                                 triggerAriaLabel="Cambiar estado"
                               />
                             )}
-                            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{fechaUltimoCambio(o)}</span>
+                            <span className="text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{fechaUltimoCambio(o)}</span>
                             <EstadoHistorialTooltip
                               historial={o.historialEstados ?? []}
                               estadoColors={ESTADO_CONFIG}
@@ -2926,7 +2925,7 @@ export function OrdenCompraScreen({
                             </EstadoHistorialTooltip>
                           </div>
                         </td>
-                       <td className="px-3 py-2.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
+                       <td className="px-2 py-2.5">
                          <div className="flex items-center gap-1 flex-nowrap">
                           <button
                             onClick={() => onVerDetalle(o)}
@@ -2969,7 +2968,6 @@ export function OrdenCompraScreen({
             </tbody>
           </table>
 
-          {/* Celular (<768px): cada orden como tarjeta. */}
           <div className="md:hidden divide-y divide-border">
             {paged.length === 0
               ? (
