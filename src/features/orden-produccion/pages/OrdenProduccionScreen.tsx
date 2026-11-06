@@ -17,6 +17,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { hora12 } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
+import { TamanosPizzaPicker } from "@/shared/components/TamanosPizzaPicker";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
 import { tipoDe, type Producto, type FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
@@ -56,6 +57,9 @@ import { ParametrosCostosModal } from "@/features/productos/components/Parametro
 import {
   calcularCostoOrden,
   formatearCOP,
+  calcularCostoProducto,
+  precioRecomendadoPorPorcion,
+  recomendadoGrandeIgualado,
   type ParametrosCostos,
 } from "@/shared/utils/costos";
 import {
@@ -80,7 +84,7 @@ export const TIPO_LABEL: Record<TipoOrden, string> = {
 };
 
 function etiquetaAsignacion(o: OrdenProduccion, productos: Producto[]): string {
-  if (o.tipo === "pedido") return "Por cocinar";
+  if (o.tipo === "pedido") return "Para calentar";
   const etiquetas = new Set(o.lineas.map((linea) => {
     const idProducto = linea.productoId ?? linea.idProducto;
     const producto = productos.find((p) => p.id === idProducto);
@@ -147,7 +151,9 @@ export interface LineaOrden {
   nombre: string;
   unidad: string;
   cantidadEstimada: number;
-  cantidadDebida?: number | null;
+  /** Solo formulario de pizzas: pizzas Grandes; `cantidadEstimada` lleva las
+      Medianas. Al guardar se separa en una línea por tamaño. */
+  cantidadGrande?: number;
   /** Solo Forma 2: id del producto del catálogo y tamaño elegido por el cliente. */
   productoId?: string | null;
   tamano?: string;
@@ -166,6 +172,7 @@ export interface LineaOrden {
   pasos?: string[];
   /** Se llenan al completar la orden. */
   cantidadReal?: number | null;
+  cantidadDebida?: number | null;
   merma?: number;
   /** Snapshot de la ficha al momento de crear/editar la orden. Si existe,
       requeridos y tiempo salen SIEMPRE de aquí, nunca de la ficha vigente. */
@@ -194,7 +201,7 @@ export interface InsumoRequerido {
 }
 
 interface TransicionEstado {
-  de: EstadoOrden;
+  de: EstadoOrden | null; // null = paso inicial (Orden creada)
   a: EstadoOrden;
   fechaHora: string; // ISO
   /** Motivo del paso, cuando no es un cambio de estado (p. ej. "Creada desde
@@ -215,6 +222,7 @@ export interface OrdenProduccion {
   insumosRequeridos: InsumoRequerido[];
   /** Solo Forma 2. Una venta = una sola orden; este vínculo la bloquea. */
   ventaId?: string | null;
+  ventaLocal?: boolean;
   ventaNumero?: string | null;
   cliente?: string | null;
   fechaSolicitada: string;   // "YYYY-MM-DD"
@@ -263,14 +271,30 @@ function fmtMinutos(min: number): string {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
+const TIENE_ZONA = /(Z|[+-]\d{2}(:?\d{2})?)$/i;
+
+/** Instante en ms. Sin zona (timestamp de Bogotá del backend) se toma como
+    hora de Bogotá (UTC-5); con "Z" u offset es un instante absoluto. */
+function epochOrden(iso: string): number {
+  const t = iso.trim().replace(" ", "T");
+  const conZona = TIENE_ZONA.test(t.slice(10));
+  const ms = Date.parse(conZona ? t : `${t}-05:00`);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/** Fecha y hora siempre en Bogotá (UTC-5), vengan en UTC o ya en Bogotá. */
 function fmtDT(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const MM = String(d.getMonth() + 1).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${MM}/${d.getFullYear()} ${hh}:${mm}`;
+  const ms = epochOrden(iso);
+  if (!ms) return "—";
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Bogota",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]),
+  );
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }
 
 function fmtFechaHoraLocal(iso: string | null | undefined): string {
@@ -304,7 +328,7 @@ const fechaHoraBogotaMasMinuto = () =>
 const fechaHoraBogotaActual = () => fechaHoraBogotaDesdeEpoch(Date.now(), true);
 
 function fechaRecogidaLocalBogota(orden: OrdenProduccion): string | null {
-  if (!orden.horaSolicitada) return null;
+  if (orden.ventaLocal || !orden.horaSolicitada) return null;
   const hora = orden.horaSolicitada.length === 5
     ? `${orden.horaSolicitada}:00`
     : orden.horaSolicitada.slice(0, 8);
@@ -321,6 +345,34 @@ export const normalizarNombre = (s: string) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 const normalizar = normalizarNombre;
+
+const esPizzaProducto = (producto?: Producto | null): boolean =>
+  producto?.idCategoria === "1"
+  || producto?.idCategoria === "CAT-001"
+  || normalizar(producto?.categoriaNombre ?? "").includes("pizza");
+
+const porcionesPorPizza = (tamano?: string | null): number =>
+  normalizar(tamano ?? "") === "grande" ? 8 : 6;
+
+const cantidadPorcionesPizza = (cantidad: number, tamano?: string | null): number =>
+  cantidad * porcionesPorPizza(tamano);
+
+/** Pizzas Mediana y Grande de una línea de formulario (acepta también una
+    línea con un solo tamaño). */
+const cantidadesPizzaForm = (l: LineaOrden): { mediana: number; grande: number } =>
+  l.cantidadGrande !== undefined || l.tamano !== "Grande"
+    ? { mediana: l.cantidadEstimada || 0, grande: l.cantidadGrande ?? 0 }
+    : { mediana: 0, grande: l.cantidadEstimada || 0 };
+
+/** Una línea de formulario de pizza → una línea por tamaño con cantidad. */
+const separarLineaPizza = (l: LineaOrden): LineaOrden[] => {
+  const { mediana, grande } = cantidadesPizzaForm(l);
+  const { cantidadGrande: _grande, ...base } = l;
+  const lineas: LineaOrden[] = [];
+  if (mediana > 0) lineas.push({ ...base, cantidadEstimada: mediana, tamano: "Mediana" });
+  if (grande > 0) lineas.push({ ...base, cantidadEstimada: grande, tamano: "Grande" });
+  return lineas;
+};
 
 /** Ficha técnica vigente de un producto: la que sigue sin fecha de fin.
     Se exporta porque App la usa para el tope de unidades del carrito
@@ -385,6 +437,12 @@ const esProductoInsumo = (i: Insumo) => i.tipo === "ProductoInsumo";
     además avisa con un `motivo` cuando el insumo no está en el catálogo, está
     inactivo o sus unidades no se pueden convertir. */
 export type Faltante = FaltanteUnidad;
+
+/** El faltante es una preparación (Producto Insumo): no se compra, se prepara. */
+const esFaltanteProductoInsumo = (f: Faltante, insumos: Insumo[]): boolean => {
+  const i = insumos.find((x) => x.id === f.insumoId);
+  return !!i && esProductoInsumo(i);
+};
 
 /** Producto de una línea del pedido: por id y, si la línea es vieja o el id ya
     no está en Productos, por nombre normalizado (el detalle trae el tamaño
@@ -524,8 +582,17 @@ function nuevaLinea(tipo: TipoOrden): LineaOrden {
 /** C6 — En "Preparación en lote" cada línea necesita un Producto Insumo
     elegido y una cantidad MAYOR O IGUAL A 1. Mientras eso no se cumpla, la
     línea pinta su error en tiempo real y Guardar queda bloqueado. */
-const preparacionInvalida = (lineas: LineaOrden[]): boolean =>
-  lineas.some((l) => !l.idProducto || l.cantidadEstimada < 1);
+const preparacionInvalida = (lineas: LineaOrden[], productos: Producto[], exigirTamano = true): boolean =>
+  lineas.some((l) => {
+    const pizza = esPizzaProducto(productos.find((p) => p.id === l.idProducto));
+    if (pizza) {
+      const { mediana, grande } = cantidadesPizzaForm(l);
+      return !l.idProducto
+        || !Number.isSafeInteger(mediana) || !Number.isSafeInteger(grande)
+        || mediana < 0 || grande < 0 || (exigirTamano && mediana + grande < 1);
+    }
+    return !l.idProducto || l.cantidadEstimada < 1;
+  });
 
 const totalEstimado = (lineas: LineaOrden[]) =>
   lineas.reduce((s, l) => s + (l.cantidadEstimada || 0), 0);
@@ -562,6 +629,18 @@ function requeridosDeLinea(linea: LineaOrden, fichas: FichasPorProducto): Insumo
     ? { insumos: snap.insumos, rendimiento: snap.rendimiento, porcionesPorTamano: ficha?.porcionesPorTamano }
     : ficha;
   if (!base) return [];
+  // Línea de formulario de pizza con Mediana y Grande: suma los dos tamaños.
+  if (linea.cantidadGrande !== undefined) {
+    return [
+      ...requeridosDeLinea({ ...linea, cantidadGrande: undefined, tamano: "Mediana" }, fichas),
+      ...requeridosDeLinea({ ...linea, cantidadGrande: undefined, cantidadEstimada: linea.cantidadGrande, tamano: "Grande" }, fichas),
+    ].reduce<InsumoRequerido[]>((acc, r) => {
+      const previo = acc.find((x) => x.insumoId === r.insumoId && x.unidad === r.unidad);
+      if (previo) previo.cantidad += r.cantidad;
+      else acc.push({ ...r });
+      return acc;
+    }, []);
+  }
   const cantidad = linea.cantidadEstimada || 0;
   return requeridosPorUnidad(base, linea.tamano).map((r) => ({
     ...r,
@@ -653,11 +732,20 @@ const esInsumoInactivo = (faltante: Faltante) =>
 function AvisoFaltantes({
   faltantes,
   onIrInsumos,
+  insumos,
+  onComprar,
+  onPreparar,
 }: {
   faltantes: Faltante[];
   onIrInsumos?: () => void;
+  insumos?: Insumo[];
+  onComprar?: (faltantes: Faltante[]) => void;
+  onPreparar?: (faltante: Faltante) => void;
 }) {
   if (faltantes.length === 0) return null;
+  const reales = faltantes.filter((f) => !f.motivo && f.falta > 0);
+  const productosInsumo = insumos ? reales.filter((f) => esFaltanteProductoInsumo(f, insumos)) : [];
+  const crudos = reales.filter((f) => !productosInsumo.includes(f));
   return (
     <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
       <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
@@ -686,6 +774,29 @@ function AvisoFaltantes({
           )}
         </div>
       ))}
+      {((onComprar && crudos.length > 0) || (onPreparar && productosInsumo.length > 0)) && (
+        <div className="pl-6 pt-1 flex flex-wrap gap-2">
+          {onComprar && crudos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onComprar(crudos)}
+              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+            >
+              Comprar insumos faltantes
+            </button>
+          )}
+          {onPreparar && productosInsumo.map((f) => (
+            <button
+              key={f.insumoId}
+              type="button"
+              onClick={() => onPreparar(f)}
+              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+            >
+              Preparar {f.nombre}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -713,6 +824,7 @@ function lineasDeVenta(
     const producto = porId ?? porNombre ?? null;
     const tamano = d.tamaño ?? (d.nombre.includes(" — ") ? d.nombre.split(" — ")[1].trim() : "");
     const ficha = producto ? fichaVigente(fichas, producto.id) : null;
+    const pizza = esPizzaProducto(producto);
 
     lineas.push({
       idProducto: producto?.id ?? "",
@@ -721,7 +833,9 @@ function lineasDeVenta(
       unidad: "und",
       cantidadEstimada: d.cantidad,
       tamano,
-      porciones: ficha ? d.cantidad * (porcionesReferencia(ficha) || 0) : undefined,
+      porciones: pizza
+        ? d.cantidad
+        : ficha ? d.cantidad * (porcionesReferencia(ficha) || 0) : undefined,
       sinFicha: !ficha,
       pasos: ficha?.pasos?.length ? [...ficha.pasos] : undefined,
       fichaSnapshot: ficha ? {
@@ -948,11 +1062,11 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       { header: "Cant. estimada", valor: (o) => o.lineas.map((l) => fmtCant(l.cantidadEstimada, l.unidad)).join("; ") },
       {
         header: "Cant. real",
-        valor: (o) => (o.estadoOrden === "completada"
+        valor: (o) => (o.estadoOrden === "completada" && o.tipo !== "pedido"
           ? o.lineas.map((l) => fmtCant(l.cantidadReal ?? 0, l.unidad)).join("; ")
           : "—"),
       },
-      { header: "Merma", valor: (o) => (totalMerma(o.lineas) > 0 ? resumenMerma(o.lineas) : "0"), numFmt: "#,##0.00" },
+      { header: "Pérdida", valor: (o) => (totalMerma(o.lineas) > 0 ? resumenMerma(o.lineas) : "0"), numFmt: "#,##0.00" },
       { header: "Estado", valor: (o) => ESTADO_LABEL[o.estadoOrden], esEstado: true },
       { header: "Fecha/Hora de estado", valor: (o) => fmtDT(o.historial[o.historial.length - 1]?.fechaHora ?? o.creadaEn) },
       { header: "Observación", valor: (o) => o.observacion },
@@ -971,12 +1085,14 @@ function TablaInsumosRequeridos({
   descontados = false,
   onIrCompras,
   onIrInsumos,
+  onPreparar,
 }: {
   requeridos: InsumoRequerido[];
   insumos: Insumo[];
   descontados?: boolean;
   onIrCompras?: (faltantes: Faltante[]) => void;
   onIrInsumos?: () => void;
+  onPreparar?: (faltante: Faltante) => void;
 }) {
   if (requeridos.length === 0) {
     return (
@@ -991,7 +1107,15 @@ function TablaInsumosRequeridos({
     : faltantesPara(requeridos, 1, insumos).filter(
         (faltante) => !faltante.motivo && faltante.falta > 0,
       );
+  const faltantesCrudos = faltantesCompra.filter((f) => !esFaltanteProductoInsumo(f, insumos));
+  const faltantesPreparar = faltantesCompra.filter((f) => esFaltanteProductoInsumo(f, insumos));
+  const inactivos = descontados
+    ? []
+    : faltantesPara(requeridos, 1, insumos).filter(esInsumoInactivo);
+  const hayAviso = (onIrCompras || onPreparar || onIrInsumos)
+    && (faltantesCompra.length > 0 || inactivos.length > 0);
   return (
+    <div className="space-y-3">
     <div className="rounded-xl border border-border overflow-hidden">
       <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         <span className="col-span-2">Insumo</span>
@@ -1026,42 +1150,72 @@ function TablaInsumosRequeridos({
                 : inactivo
                   ? <>
                       <span className="text-red-600 font-semibold">Insumo inactivo</span>
-                      <span className="text-red-600">Ve a Insumos para habilitarlo</span>
-                      {onIrInsumos && (
-                        <button
-                          type="button"
-                          onClick={onIrInsumos}
-                          className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
-                        >
-                          Ir a Insumos
-                        </button>
-                      )}
                     </>
                 : unidadIncompatible
                   ? <span className="text-amber-600 font-semibold">{motivoFaltante(calculoFaltante!)}</span>
                 : falta > 0
-                  ? <>
-                      <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</span>
-                      {onIrCompras && (
-                        <>
-                          <span className="max-w-48 text-red-600">
-                            Debes comprar {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)} de {r.nombre}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onIrCompras(faltantesCompra)}
-                            className="font-semibold text-primary underline underline-offset-2 cursor-pointer"
-                          >
-                            Hacer compra de insumo faltante
-                          </button>
-                        </>
-                      )}
-                    </>
+                  ? <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</span>
                   : <span className="text-emerald-600 font-semibold">Alcanza</span>}
             </span>
           </div>
         );
       })}
+    </div>
+    {hayAviso && (
+      <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
+        <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>Faltan insumos para iniciar esta orden</span>
+        </p>
+        {inactivos.map((f) => (
+          <div key={`i-${f.insumoId}`} className="pl-6 text-xs text-red-700 flex flex-wrap items-center gap-2">
+            <span>· Insumo inactivo: {f.nombre}</span>
+            {onIrInsumos && (
+              <button
+                type="button"
+                onClick={onIrInsumos}
+                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+              >
+                Ir a Insumos
+              </button>
+            )}
+          </div>
+        ))}
+        {faltantesCrudos.map((f) => (
+          <p key={`c-${f.insumoId}`} className="pl-6 text-xs text-red-700">
+            · Debes comprar {fmtCant(f.falta, f.unidad)} de {f.nombre}
+          </p>
+        ))}
+        {faltantesPreparar.map((f) => (
+          <p key={`p-${f.insumoId}`} className="pl-6 text-xs text-red-700">
+            · Debes preparar {fmtCant(f.falta, f.unidad)} de {f.nombre}
+          </p>
+        ))}
+        {((onIrCompras && faltantesCrudos.length > 0) || (onPreparar && faltantesPreparar.length > 0)) && (
+          <div className="pl-6 pt-1 flex flex-wrap gap-2">
+            {onIrCompras && faltantesCrudos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onIrCompras(faltantesCrudos)}
+                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+              >
+                Comprar insumos faltantes
+              </button>
+            )}
+            {onPreparar && faltantesPreparar.map((f) => (
+              <button
+                key={f.insumoId}
+                type="button"
+                onClick={() => onPreparar(f)}
+                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+              >
+                Preparar {f.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   );
 }
@@ -1091,12 +1245,16 @@ function LineaPreparacion({
   const pi = esIdInsumo(linea.idProducto)
     ? insumos.find((i) => i.id === linea.idProducto)
     : undefined;
+  const productoSeleccionado = productos.find((p) => p.id === linea.idProducto);
+  const esPizza = tipoSelector === "producto" && esPizzaProducto(productoSeleccionado);
   const bajo = !!pi && pi.stockActual < pi.stockMinimo;
   const ficha = fichaVigente(fichas, linea.idProducto);
   const requeridos = requeridosDeLinea(linea, fichas);
   // C8: "Necesita: …" de ESTA línea, con el mismo número que descuenta el
   // Inicio (factor de tamaño y unidades contables incluidos).
   const necesita = resumenNecesita(requeridos);
+  const sinTamanos = esPizza
+    && cantidadesPizzaForm(linea).mediana + cantidadesPizzaForm(linea).grande < 1;
 
   const elegir = (id: string) => {
     const esInsumo = esIdInsumo(id);
@@ -1109,7 +1267,10 @@ function LineaPreparacion({
       nombre: elegidoInsumo?.nombre ?? elegidoProducto?.nombre ?? "",
       unidad: elegidoInsumo?.unidadMedida ?? "und",
       cantidadEstimada: 0,
-      // La línea nace con su foto de la ficha: la descripción, el tiempo y los
+      // Una pizza se pide por tamaño: Mediana en cantidadEstimada y Grande aparte.
+      tamano: esPizzaProducto(elegidoProducto) ? "Mediana" : undefined,
+      cantidadGrande: esPizzaProducto(elegidoProducto) ? 0 : undefined,
+      // Snapshot de la ficha: la descripción, el tiempo y los
       // insumos requeridos se leen de aquí, no de la ficha vigente.
       fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
     });
@@ -1142,7 +1303,7 @@ function LineaPreparacion({
 
   return (
     <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
+      <div className={`grid grid-cols-1 ${esPizza ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[1fr_200px_auto]"} gap-5 items-end`}>
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Producto a preparar
@@ -1163,6 +1324,8 @@ function LineaPreparacion({
                 nombre: "",
                 unidad: "und",
                 cantidadEstimada: 0,
+                tamano: undefined,
+                cantidadGrande: undefined,
                 fichaSnapshot: undefined,
               });
             }}
@@ -1181,28 +1344,32 @@ function LineaPreparacion({
             </span>
           )}
         </div>
+        {!esPizza && (
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Cantidad a producir ({tipoSelector === "producto" ? "und" : linea.unidad})
           </label>
-          {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
-              como 0. C6: mínimo 1 una vez elegido el producto, con error en
-              tiempo real y el botón Guardar bloqueado. */}
-          <input
-            type="number"
-            min={1}
-            step={esDecimal(linea.unidad) ? 0.1 : 1}
-            value={linea.cantidadEstimada === 0 ? "" : linea.cantidadEstimada}
-            placeholder="0"
-            onChange={(e) => onChange({ ...linea, cantidadEstimada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
-            className={INPUT_LINEA_CLS}
-          />
-          {linea.idProducto && linea.cantidadEstimada < 1 && (
-            <p className="mt-1 text-[11px] font-semibold text-amber-700">
-              La cantidad mínima es 1 {linea.unidad}
-            </p>
-          )}
+          <>
+              {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
+                  como 0. C6: mínimo 1 una vez elegido el producto, con error en
+                  tiempo real y el botón Guardar bloqueado. */}
+              <input
+                type="number"
+                min={1}
+                step={esDecimal(linea.unidad) ? 0.1 : 1}
+                value={linea.cantidadEstimada === 0 ? "" : linea.cantidadEstimada}
+                placeholder="0"
+                onChange={(e) => onChange({ ...linea, cantidadEstimada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
+                className={INPUT_LINEA_CLS}
+              />
+              {linea.idProducto && linea.cantidadEstimada < 1 && (
+                <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                  La cantidad mínima es 1 {linea.unidad}
+                </p>
+              )}
+          </>
         </div>
+        )}
         {puedeQuitar && (
           <button
             type="button"
@@ -1215,24 +1382,41 @@ function LineaPreparacion({
         )}
       </div>
 
+      {esPizza && (
+        <TamanosPizzaPicker
+          mediana={cantidadesPizzaForm(linea).mediana}
+          grande={cantidadesPizzaForm(linea).grande}
+          onChange={(mediana, grande) =>
+            onChange({ ...linea, tamano: "Mediana", cantidadEstimada: mediana, cantidadGrande: grande })}
+        />
+      )}
+
       {(pi || ficha) && (
         <div className="space-y-3">
-          {necesita && (
-            // C8: lo que esta línea gasta en total, con el factor de su
-            // tamaño y con las unidades contables sin multiplicar. Es el
-            // mismo número que descuenta Insumos al Iniciar.
-            <p className="text-[11px] text-muted-foreground">
-              Necesita: <span className="font-semibold text-foreground">{necesita}</span>
-            </p>
+          {sinTamanos ? (
+            <p className="text-[11px] text-muted-foreground">Agrega un tamaño para calcular los insumos</p>
+          ) : (
+            <>
+              {necesita && (
+                // C8: lo que esta línea gasta en total, con el factor de su
+                // tamaño y con las unidades contables sin multiplicar. Es el
+                // mismo número que descuenta Insumos al Iniciar.
+                <p className="text-[11px] text-muted-foreground">
+                  Necesita: <span className="font-semibold text-foreground">{necesita}</span>
+                </p>
+              )}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos requeridos</p>
+                <TablaInsumosRequeridos requeridos={requeridos} insumos={insumos} />
+              </div>
+            </>
           )}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos requeridos</p>
-            <TablaInsumosRequeridos requeridos={requeridos} insumos={insumos} />
-          </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground mb-1.5">Descripción de la preparación</p>
             <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
-              {linea.fichaSnapshot?.pasos.join("\n") || "Este Producto Insumo no tiene descripción de preparación."}
+              {linea.fichaSnapshot?.pasos.join("\n") || (tipoSelector === "producto"
+                ? "Este producto no tiene descripción de preparación."
+                : "Este Producto Insumo no tiene descripción de preparación.")}
             </p>
           </div>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1433,11 +1617,13 @@ export function OrdenProduccionScreen({
   // Estado del modal de completar para las cantidades reales y debidas.
   const [completarItem, setCompletarItem] = useState<OrdenProduccion | null>(null);
   const [reales, setReales] = useState<Record<number, string>>({});
+  const [preciosCompletar, setPreciosCompletar] = useState<Record<string, string>>({});
   const [calculosDebidos, setCalculosDebidos] = useState<Record<number, CalculoVerificacionLineaApi>>({});
   const [cargandoCalculoDebido, setCargandoCalculoDebido] = useState(false);
   const [generarItem, setGenerarItem] = useState<OrdenProduccion | null>(null);
   const [cantidadesGenerar, setCantidadesGenerar] = useState<Record<number, string>>({});
   const [fechaLimiteGenerar, setFechaLimiteGenerar] = useState("");
+  const [fechaLimiteAutomatica, setFechaLimiteAutomatica] = useState(false);
   const [minFechaLimiteGenerar, setMinFechaLimiteGenerar] = useState(fechaHoraBogotaMasMinuto);
   const [ahoraBogotaGenerar, setAhoraBogotaGenerar] = useState(fechaHoraBogotaActual);
   const [capacidadGenerar, setCapacidadGenerar] = useState<{
@@ -1453,11 +1639,14 @@ export function OrdenProduccionScreen({
     const actualizarHora = () => {
       setMinFechaLimiteGenerar(fechaHoraBogotaMasMinuto());
       setAhoraBogotaGenerar(fechaHoraBogotaActual());
+      if (generarItem.ventaLocal && fechaLimiteAutomatica) {
+        setFechaLimiteGenerar(fechaHoraBogotaDesdeEpoch(Date.now()));
+      }
     };
     actualizarHora();
     const intervalo = window.setInterval(actualizarHora, 15_000);
     return () => window.clearInterval(intervalo);
-  }, [generarItem]);
+  }, [generarItem, fechaLimiteAutomatica]);
 
   const fechaRecogidaGenerar = generarItem?.tipo === "pedido"
     ? fechaRecogidaLocalBogota(generarItem)
@@ -1465,6 +1654,7 @@ export function OrdenProduccionScreen({
   const recogidaFuturaGenerar = !!fechaRecogidaGenerar
     && fechaRecogidaGenerar > ahoraBogotaGenerar;
   const recogidaVencidaGenerar = generarItem?.tipo === "pedido"
+    && !generarItem.ventaLocal
     && !!generarItem.horaSolicitada
     && !recogidaFuturaGenerar;
 
@@ -1508,7 +1698,9 @@ export function OrdenProduccionScreen({
       capacidadGenerar.lineas.some((capacidad) => capacidad.id_detalle_op === linea.idDetalleOp));
   const generacionValida =
     !!fechaLimiteGenerar &&
-    fechaLimiteGenerar >= minFechaLimiteGenerar &&
+    (generarItem?.ventaLocal
+      ? fechaLimiteAutomatica || fechaLimiteGenerar >= ahoraBogotaGenerar.slice(0, 16)
+      : fechaLimiteGenerar >= minFechaLimiteGenerar) &&
     (generarItem?.tipo !== "pedido" ||
       !recogidaFuturaGenerar ||
       (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16))) &&
@@ -1522,17 +1714,6 @@ export function OrdenProduccionScreen({
   const [faltantesIniciar, setFaltantesIniciar] = useState<
     { ordenId: string; faltantes: Faltante[] } | null
   >(null);
-  // Bloque 4 — Pedido (viene de una venta pagada): NUNCA se bloquea al
-  // guardar. El aviso lista los faltantes de insumos y/o las líneas cuya
-  // receta no se pudo calcular (pizza sin ficha técnica, producto del menú
-  // sin resolver) y se confirma con "Guardar igual": la orden queda Pendiente
-  // con su badge "Faltan insumos" y el bloqueo real sigue en Iniciar.
-  // (La preparación en lote no pasa por aquí: ella bloquea con el botón
-  // Crear/Guardar deshabilitado — ver `faltantesForm` y `AvisoFaltantes`.)
-  const [avisoGuardar, setAvisoGuardar] = useState<
-    { faltantes: Faltante[]; avisos: string[]; onConfirm: () => void } | null
-  >(null);
-
   /** Bloque 4 — Faltantes EN VIVO de la preparación en lote que se está
       creando o editando: mientras haya, el botón Crear/Guardar queda
       deshabilitado y se muestran el mensaje + la lista de faltantes dentro
@@ -1550,6 +1731,38 @@ export function OrdenProduccionScreen({
     );
     return faltantesPara(requeridos, 1, insumos);
   }, [editItem, form.tipo, form.lineas, fichasPorProducto, insumos]);
+
+  const [versionForm, setVersionForm] = useState(0);
+
+  // Faltante que es un Producto Insumo: se prepara, no se compra. Abre Crear
+  // orden con ese producto y la cantidad que falta.
+  const prepararFaltante = (f: Faltante, desdeCrear: boolean) => {
+    const pi = insumos.find((i) => i.id === f.insumoId);
+    if (!pi) return;
+    const ficha = fichaVigente(fichasPorProducto, pi.id);
+    setDetailItem(null);
+    setVersionForm((v) => v + 1);
+    setForm({
+      tipo: "preparacion",
+      lineas: [{
+        idProducto: pi.id,
+        nombre: pi.nombre,
+        unidad: pi.unidadMedida,
+        cantidadEstimada: esDecimal(pi.unidadMedida) ? Math.ceil(f.falta * 1000) / 1000 : Math.ceil(f.falta),
+        fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
+      }],
+      ventaId: null,
+      fechaSolicitada: "",
+      horaSolicitada: "",
+      observacion: "",
+    });
+    setShowCreate(true);
+  };
+
+  const comprarDesdeCrear = (faltantes: Faltante[]) => {
+    setShowCreate(false);
+    onNavigateTo?.("orden-compra", faltantes);
+  };
 
   const [darBajaItem, setDarBajaItem] = useState<OrdenProduccion | null>(null);
   const [darBajaForm, setDarBajaForm] = useState<{
@@ -1571,8 +1784,41 @@ export function OrdenProduccionScreen({
   const ultimoCambio = (o: OrdenProduccion) =>
     o.historial[o.historial.length - 1]?.fechaHora ?? o.creadaEn;
 
+  const esPizzaOrdenLinea = (linea: LineaOrden) =>
+    esPizzaProducto(productoDeLinea(linea, productos));
+
+  const nombreLineaOrden = (linea: LineaOrden) =>
+    esPizzaOrdenLinea(linea) && linea.tamano
+      ? `${linea.nombre} — ${linea.tamano}`
+      : linea.nombre;
+
+  const cantidadLineaOrden = (
+    orden: OrdenProduccion,
+    linea: LineaOrden,
+    cantidad = linea.cantidadEstimada,
+  ): string => {
+    if (!esPizzaOrdenLinea(linea)) return fmtCant(cantidad, linea.unidad);
+    if (orden.tipo === "pedido") return `${cantidad} porciones — ${linea.tamano ?? "Tamaño no definido"}`;
+    const cantidadPorciones = cantidadPorcionesPizza(cantidad, linea.tamano);
+    return `${cantidad} ${cantidad === 1 ? "pizza" : "pizzas"} (${cantidadPorciones} porciones)`;
+  };
+
+  const totalPorcionesPizza = (orden: OrdenProduccion, real = false) =>
+    orden.lineas.reduce((total, linea) => {
+      if (!esPizzaOrdenLinea(linea)) return total;
+      const cantidad = real ? linea.cantidadReal ?? 0 : linea.cantidadEstimada;
+      return total + (orden.tipo === "pedido"
+        ? cantidad
+        : cantidadPorcionesPizza(cantidad, linea.tamano));
+    }, 0);
+
+  const subtituloLineaOrden = (orden: OrdenProduccion, linea: LineaOrden) =>
+    esPizzaOrdenLinea(linea)
+      ? `${linea.cantidadEstimada} × ${linea.nombre}`
+      : `${nombreLineaOrden(linea)} · ${cantidadLineaOrden(orden, linea)}`;
+
   const resumenProductos = (o: OrdenProduccion) => {
-    const nombres = o.lineas.map((l) => l.nombre);
+    const nombres = o.lineas.map((linea) => linea.nombre);
     if (nombres.length === 0) return "—";
     return nombres.length === 1 ? nombres[0] : `${nombres[0]} +${nombres.length - 1} más`;
   };
@@ -1620,10 +1866,15 @@ export function OrdenProduccionScreen({
       return;
     }
     const lineasPayload = form.lineas
+      .flatMap((l) => (esPizzaProducto(productos.find((p) => p.id === l.idProducto)) ? separarLineaPizza(l) : [l]))
       .filter((l) => l.idProducto && l.cantidadEstimada > 0)
       .map((l) => esIdInsumo(l.idProducto)
         ? { id: l.idProducto, cantidad: l.cantidadEstimada }
-        : { id_producto: Number(l.idProducto), cantidad: l.cantidadEstimada });
+        : {
+            id_producto: Number(l.idProducto),
+            cantidad: l.cantidadEstimada,
+            ...(l.tamano ? { tamano: l.tamano as "Mediana" | "Grande" } : {}),
+          });
     try {
       const guardada = editando
         ? await actualizarOrdenProduccion(editando.id, editando.tipo === "pedido"
@@ -1668,51 +1919,18 @@ export function OrdenProduccionScreen({
         la orden queda Pendiente con su badge y el bloqueo real sigue en
         Iniciar (flujo ya existente). */
   const guardarConValidacion = (form: OrdenForm) => {
-    const venta = form.tipo === "pedido" && form.ventaId
-      ? ventas.find((v) => v.id === form.ventaId)
-      : undefined;
-    const armado = venta
-      ? lineasDeVenta(venta, productos, fichasPorProducto, insumos)
-      : null;
-    // Requeridos del MISMO modo que los guarda `guardarOrden`: pedidos desde
-    // el detalle de la venta; preparaciones con su snapshot cargado.
-    const requeridos = armado
-      ? armado.insumos
-      : requeridosDePreparaciones(
-          prepararLineasSnapshot(form.lineas, fichasPorProducto),
-          fichasPorProducto,
-          insumos,
-        );
-
-    // Preparación en lote: bloqueo. El mensaje y la lista ya están a la
-    // vista en el formulario (botón deshabilitado), el toast evita atajos.
-    if (form.tipo === "preparacion") {
-      if (faltantesPara(requeridos, 1, insumos).length > 0) {
-        toast.error("No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.");
-        return;
-      }
+    if (form.tipo === "pedido") {
       guardarOrden(form);
       return;
     }
 
-    // Pedido: avisos de receta no calculable (nunca bloquean)…
-    const avisos: string[] = [];
-    if (armado) {
-      for (const l of armado.lineas) {
-        if (esBebida(l, productos)) continue;
-        if (!productoDeLinea(l, productos)) {
-          avisos.push(`No se encontró «${l.nombre}» en Productos: revisa que el nombre sea igual al del menú`);
-          continue;
-        }
-        const clave = l.productoId ?? l.idProducto;
-        const conFicha = l.fichaSnapshot ?? (clave ? fichaVigente(fichasPorProducto, clave) : null);
-        if (!conFicha) avisos.push(`«${l.nombre}» no tiene ficha técnica`);
-      }
-    }
-    // …y faltantes de insumos: ninguno de los dos corta el guardado.
-    const faltantes = faltantesPara(requeridos, 1, insumos);
-    if (faltantes.length > 0 || avisos.length > 0) {
-      setAvisoGuardar({ faltantes, avisos, onConfirm: () => guardarOrden(form) });
+    const requeridos = requeridosDePreparaciones(
+      prepararLineasSnapshot(form.lineas, fichasPorProducto),
+      fichasPorProducto,
+      insumos,
+    );
+    if (faltantesPara(requeridos, 1, insumos).length > 0) {
+      toast.error("No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.");
       return;
     }
     guardarOrden(form);
@@ -1733,10 +1951,14 @@ export function OrdenProduccionScreen({
         toast.error("Esa venta ya tiene una orden de producción");
         return;
       }
-    } else if (preparacionInvalida(form.lineas)) {
+    } else if (form.lineas.some((l) => esPizzaProducto(productos.find((p) => p.id === l.idProducto))
+      && cantidadesPizzaForm(l).mediana + cantidadesPizzaForm(l).grande < 1)) {
+      toast.error("Agrega al menos un tamaño");
+      return;
+    } else if (preparacionInvalida(form.lineas, productos)) {
       // C6: producto elegido y cantidad ≥ 1 en cada línea. El error ya se
       // pinta en la propia línea y el botón Crear viene bloqueado.
-      toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
+      toast.error("Elige el producto y una cantidad entera mayor o igual a 1 en cada línea");
       return;
     }
     guardarConValidacion(form);
@@ -1744,8 +1966,8 @@ export function OrdenProduccionScreen({
 
   const handleEdit = () => {
     if (!editItem) return;
-    if (editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas)) {
-      toast.error("Elige un Producto Insumo y una cantidad mayor o igual a 1 en cada línea");
+    if (editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas, productos)) {
+      toast.error("Elige producto, tamaño para pizzas y una cantidad entera mayor o igual a 1 en cada línea");
       return;
     }
     guardarConValidacion({
@@ -1830,8 +2052,11 @@ export function OrdenProduccionScreen({
       String(linea.cantidadEstimada),
     ])));
     const recogida = orden.tipo === "pedido" ? fechaRecogidaLocalBogota(orden) : null;
+    setFechaLimiteAutomatica(orden.ventaLocal === true);
     setFechaLimiteGenerar(
-      recogida && recogida > fechaHoraBogotaActual()
+      orden.ventaLocal
+        ? fechaHoraBogotaDesdeEpoch(Date.now())
+        : recogida && recogida > fechaHoraBogotaActual()
         ? recogida.slice(0, 16)
         : "",
     );
@@ -1858,6 +2083,7 @@ export function OrdenProduccionScreen({
     try {
       const actualizada = await iniciarOrdenProduccion(orden.id, {
         fechaEntregaEstimada: fechaLimiteGenerar,
+        ...(orden.ventaLocal ? { fechaLimiteAutomatica } : {}),
         ...(orden.tipo === "preparacion"
           ? {
               lineas: orden.lineas.map((linea) => ({
@@ -1893,6 +2119,7 @@ export function OrdenProduccionScreen({
     if (!orden) return;
     setCompletarItem(orden);
     setReales({});
+    setPreciosCompletar({});
     setCalculosDebidos({});
     if (orden.tipo !== "preparacion") return;
     setCargandoCalculoDebido(true);
@@ -1916,11 +2143,72 @@ export function OrdenProduccionScreen({
         && real >= 0
         && calculo != null
         && Number.isSafeInteger(calculo.cantidad_debida)
-        && calculo.cantidad_debida >= 0;
+        && calculo.cantidad_debida >= 0
+        && real <= calculo.cantidad_debida;
     });
   const completarEsPedido = completarItem?.tipo === "pedido";
+  // Precios por porción: una sección por cada pizza distinta de la preparación.
+  const pizzasCompletar: Producto[] = completarItem?.tipo === "preparacion"
+    ? Array.from(new Set(completarItem.lineas.map((l) => l.idProducto)))
+        .map((id) => productos.find((p) => p.id === id))
+        .filter((p): p is Producto => !!p && esPizzaProducto(p))
+    : [];
+  const preciosActualesDe = (p: Producto) => ({
+    Mediana: Number(p.precioUnitario ?? 0),
+    Grande: Number(p.precioGrande ?? 0),
+  });
+  const precioRecomendadoPizza = (p: Producto, tamano: "Mediana" | "Grande"): number => {
+    const ficha = fichaVigente(fichasPorProducto, p.id);
+    if (!ficha || !parametrosCostos) return 0;
+    return precioRecomendadoPorPorcion(ficha, insumos, parametrosCostos, tamano);
+  };
+  /** Costo de una porción del tamaño y tiempo de la ficha: explican de dónde
+      sale el recomendado. */
+  const detalleCostoPizza = (p: Producto, tamano: "Mediana" | "Grande") => {
+    const ficha = fichaVigente(fichasPorProducto, p.id);
+    if (!ficha || !parametrosCostos) return null;
+    const resumen = calcularCostoProducto(ficha, insumos, parametrosCostos, tamano);
+    return {
+      resumen,
+      sinTiempo: !(Number(ficha.tiempoPreparacion) > 0),
+      igualado: tamano === "Grande" && recomendadoGrandeIgualado(ficha, insumos, parametrosCostos),
+    };
+  };
+  const valorPrecioCompletar = (p: Producto, tamano: "Mediana" | "Grande"): string => {
+    const escrito = preciosCompletar[`${p.id}:${tamano}`];
+    if (escrito !== undefined) return escrito;
+    const actual = preciosActualesDe(p)[tamano];
+    const base = actual > 0 ? actual : precioRecomendadoPizza(p, tamano);
+    return base > 0 ? String(base) : "";
+  };
+  /** Tamaños de la pizza que tienen línea en la orden. */
+  const tamanosDeOrden = (p: Producto): Set<"Mediana" | "Grande"> => new Set(
+    (completarItem?.lineas ?? [])
+      .filter((l) => l.idProducto === p.id)
+      .map((l) => (l.tamano === "Grande" ? "Grande" : "Mediana") as "Mediana" | "Grande"),
+  );
+  /** Precio que quedaría guardado: el de pantalla para los tamaños de la orden
+      (o escritos) y el ya guardado para el otro tamaño. */
+  const precioEfectivoPizza = (p: Producto, tamano: "Mediana" | "Grande"): number => {
+    if (tamanosDeOrden(p).has(tamano) || preciosCompletar[`${p.id}:${tamano}`] !== undefined) {
+      return Number(valorPrecioCompletar(p, tamano));
+    }
+    return preciosActualesDe(p)[tamano];
+  };
+  const grandeNoMayorQueMediana = (p: Producto): boolean => {
+    const m = precioEfectivoPizza(p, "Mediana");
+    const g = precioEfectivoPizza(p, "Grande");
+    return m > 0 && g > 0 && g <= m;
+  };
+  const mostrarTamanoPizza = (p: Producto, tamano: "Mediana" | "Grande"): boolean =>
+    tamanosDeOrden(p).has(tamano)
+    || preciosCompletar[`${p.id}:${tamano}`] !== undefined
+    || grandeNoMayorQueMediana(p);
+  const preciosCompletarOk = pizzasCompletar.every((p) =>
+    Array.from(tamanosDeOrden(p)).every((t) => precioEfectivoPizza(p, t) > 0)
+    && !grandeNoMayorQueMediana(p));
   const completarOk = !completarItem || completarEsPedido
-    || (!cargandoCalculoDebido && cantidadesVerificacionOk(completarItem));
+    || (!cargandoCalculoDebido && cantidadesVerificacionOk(completarItem) && preciosCompletarOk);
 
   /** Completa la producción; el backend aplica stock y registra la merma en
       la misma transacción. */
@@ -1934,6 +2222,25 @@ export function OrdenProduccionScreen({
       return;
     }
 
+    // Solo viajan los precios que cambian o que aún están en 0.
+    const preciosPizzas = pizzasCompletar.flatMap((p) => {
+      const actuales = preciosActualesDe(p);
+      const enOrden = tamanosDeOrden(p);
+      const enviar = (t: "Mediana" | "Grande") => {
+        if (!enOrden.has(t) && preciosCompletar[`${p.id}:${t}`] === undefined) return undefined;
+        const valor = Number(valorPrecioCompletar(p, t));
+        return valor > 0 && (actuales[t] <= 0 || valor !== actuales[t]) ? valor : undefined;
+      };
+      const mediana = enviar("Mediana");
+      const grande = enviar("Grande");
+      const item = {
+        idProducto: Number(p.id),
+        ...(mediana !== undefined ? { precioMediana: mediana } : {}),
+        ...(grande !== undefined ? { precioGrande: grande } : {}),
+      };
+      return item.precioMediana !== undefined || item.precioGrande !== undefined ? [item] : [];
+    });
+
     try {
       const actualizada = await completarOrdenProduccion(
         orden.id,
@@ -1945,6 +2252,7 @@ export function OrdenProduccionScreen({
               }))
               .filter((l) => l.idDetalleOp > 0)
           : undefined,
+        preciosPizzas,
       );
       setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizada : o)));
       toast.success(`${orden.id} completada`);
@@ -1955,7 +2263,7 @@ export function OrdenProduccionScreen({
         orden.lineas.forEach((l, i) => {
           const calculo = l.idDetalleOp == null ? undefined : calculosDebidos[l.idDetalleOp];
           const merma = Math.max(0, Number(calculo?.cantidad_debida ?? 0) - Number(reales[i]));
-          if (merma > 0) toast.success(`Se registró la merma de ${l.nombre} en Productos no conformes`);
+          if (merma > 0) toast.success(`Se registró la pérdida de ${l.nombre} en Productos no conformes`);
         });
       }
       setCompletarItem(null);
@@ -2025,7 +2333,7 @@ export function OrdenProduccionScreen({
           <button onClick={onClose} className={`${crear ? "p-2.5" : "p-1.5"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
         </div>
         <div className={`flex-1 overflow-y-auto ${crear ? "px-9 pt-7 pb-2" : "px-5 py-4"}`}>{children}</div>
-        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-5 pb-7" : "px-5 py-4"} border-t border-border`}>
+        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-3 pb-7" : "px-5 py-4"} border-t border-border`}>
           <button onClick={onClose} className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} border border-border font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors`}>Cancelar</button>
           <button onClick={onConfirm} disabled={deshabilitado}
             className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} bg-primary text-white font-semibold transition-colors active:scale-95 ${
@@ -2033,6 +2341,37 @@ export function OrdenProduccionScreen({
             }`}>{label}</button>
         </div>
       </motion.div>
+    </div>
+  );
+
+  const accionesListado = (o: OrdenProduccion, tieneFaltantes: boolean) => (
+    <div className="flex items-center gap-1 whitespace-nowrap">
+      {o.estadoOrden === "pendiente" && !tieneFaltantes && (
+        <button type="button" onClick={() => void abrirGenerar(o)}
+          title="Generar orden de producción" aria-label="Generar orden de producción"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <Play className="w-4 h-4" />
+        </button>
+      )}
+      {o.estadoOrden === "en-proceso" && (
+        <button type="button" onClick={() => abrirCompletar(o.id)}
+          title="Completar orden" aria-label="Completar orden"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <CheckCircle2 className="w-4 h-4" />
+        </button>
+      )}
+      <ActionIcons
+        onView={() => setDetailItem(o)}
+        onDelete={canDelete && o.estadoOrden === "pendiente" && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
+        deleteTitle={o.tipo === "pedido" ? "Los pedidos no se eliminan: usa Dar de baja" : "Eliminar preparación pendiente"}
+      />
+      {(o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso") && (
+        <button type="button" onClick={() => openDarBaja(o)}
+          title="Cancelar orden" aria-label="Cancelar orden"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <Ban className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 
@@ -2128,23 +2467,22 @@ export function OrdenProduccionScreen({
           )}
         </div>
       ) : (
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-3">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] table-fixed">
+      <div className="bg-card border border-border rounded-2xl mb-3">
+          <table className="hidden md:table w-full table-fixed">
             <colgroup>
               <col style={{ width: "6%" }} />
               <col style={{ width: "11%" }} />
-              <col style={{ width: "18%" }} />
+              <col style={{ width: "20%" }} />
               <col style={{ width: "11%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "13%" }} />
               <col style={{ width: "15%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "15%" }} />
             </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha/Hora de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">
+                {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
+                  <th key={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -2157,7 +2495,6 @@ export function OrdenProduccionScreen({
                 </td></tr>
               ) : paged.map(o => {
                 const soloPendiente = o.estadoOrden === "pendiente";
-                const puedeCancelar = o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso";
                 const merma = totalMerma(o.lineas);
                 const completada = o.estadoOrden === "completada";
                 // Bloque 4: ¿faltan insumos para esta orden según el stock de
@@ -2165,54 +2502,72 @@ export function OrdenProduccionScreen({
                 // vs `insumos` actual). Solo en Pendiente: al pasar a En
                 // proceso los insumos ya se descontaron y comparar otra vez
                 // daría faltantes falsos.
-                const faltantesFila = soloPendiente
+                const faltantesFila = o.tipo === "preparacion" && soloPendiente
                   ? faltantesPara(o.insumosRequeridos, 1, insumos)
                   : [];
                 return (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-2">
+                    <td className="px-1 py-2 align-middle">
                       {/* Solo el número: de "OP-004" muestra "004". `o.id` y
                           `o.ventaNumero` no cambian: los siguen usando el
                           buscador, el Excel, el detalle y la creación. */}
-                      <p className="text-sm font-mono font-semibold text-foreground whitespace-nowrap">{o.id.replace("OP-", "")}</p>
+                      <p className="text-sm font-mono font-semibold text-foreground break-all">{o.id.replace("OP-", "")}</p>
                     </td>
-                    <td className="px-4 py-2">
-                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
+                    <td className="px-1 py-2 align-middle">
+                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${
                         o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
                       }`}>
                         {etiquetaAsignacion(o, productos)}
                       </span>
+                      {o.ventaLocal && (
+                        <span className="block mt-1 text-[10px] font-semibold text-muted-foreground">Venta en el local</span>
+                      )}
                     </td>
-                    <td className="px-4 py-2">
-                      <p className="break-words text-sm font-medium text-foreground">{resumenProductos(o)}</p>
-                      <p className="break-words text-[11px] text-muted-foreground">
-                        {o.lineas.map((l) => `${l.cantidadEstimada} × ${l.nombre}`).join(", ")}
+                    <td className="px-1 py-2 align-middle min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground" title={resumenProductos(o)}>{resumenProductos(o)}</p>
+                      <p className="truncate text-[11px] text-muted-foreground whitespace-nowrap" title={o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}>
+                        {o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}
                       </p>
+                      {o.tipo === "pedido" && o.ventaNumero && (
+                        <p className="truncate text-[11px] text-muted-foreground" title={`Venta ${o.ventaNumero}${o.cliente ? ` · ${o.cliente}` : ""}`}>
+                          Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}
+                        </p>
+                      )}
                     </td>
-                    <td className="px-4 py-2 text-sm font-semibold text-foreground whitespace-nowrap">
-                      {o.lineas.length === 1
+                    <td className="px-1 py-2 align-middle text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+                      {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                        ? `${totalPorcionesPizza(o)} porc.`
+                        : o.lineas.some(esPizzaOrdenLinea)
+                          ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
+                        : o.lineas.length === 1
                         ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad)
                         : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
-                    <td className="px-4 py-2 text-sm whitespace-nowrap">
-                      {!completada ? (
+                    <td className="px-1 py-2 align-middle text-sm [overflow-wrap:anywhere]">
+                      {!completada || o.tipo === "pedido" ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <>
                           <span className="font-semibold text-foreground tabular-nums">
-                            {o.lineas.length === 1
-                              ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad)
-                              : fmtCant(totalReal(o.lineas), "und")}
+                            {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                              ? `${totalPorcionesPizza(o, true)} porc.`
+                              : o.lineas.some(esPizzaOrdenLinea)
+                                ? o.lineas.map((linea) => esPizzaOrdenLinea(linea)
+                                  ? cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)
+                                  : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
+                              : o.lineas.length === 1
+                                ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad)
+                                : fmtCant(totalReal(o.lineas), "und")}
                           </span>
                           {merma > 0 && (
-                            <p className="text-[11px] font-semibold text-red-600 tabular-nums">−{resumenMerma(o.lineas)} merma</p>
+                            <p className="text-[11px] font-semibold text-red-600 tabular-nums">−{resumenMerma(o.lineas)} de pérdida</p>
                           )}
                         </>
                       )}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-1 py-2 align-middle">
                       <div className="flex flex-col items-start gap-1.5">
-                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>
+                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${ESTADO_COLOR[o.estadoOrden]}`}>
                           {ESTADO_LABEL[o.estadoOrden]}
                         </span>
                         {/* Bloque 4: la fila dice enseguida si a la orden aún
@@ -2223,70 +2578,72 @@ export function OrdenProduccionScreen({
                             title={faltantesFila
                               .map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`)
                               .join("\n")}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap"
+                            className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 [overflow-wrap:anywhere]"
                           >
                             <AlertTriangle className="w-3 h-3" /> Faltan insumos
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                    <td className="px-1 py-2 align-middle text-xs text-muted-foreground tabular-nums [overflow-wrap:anywhere]">
                       {fmtDT(ultimoCambio(o))}
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-1 whitespace-nowrap">
-                        {o.estadoOrden === "pendiente" && faltantesFila.length === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void abrirGenerar(o);
-                            }}
-                            title="Generar orden de producción"
-                            aria-label="Generar orden de producción"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Play className="w-4 h-4" />
-                          </button>
-                        )}
-                        {o.estadoOrden === "en-proceso" && (
-                          <button
-                            type="button"
-                            onClick={() => abrirCompletar(o.id)}
-                            title="Completar orden"
-                            aria-label="Completar orden"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        <ActionIcons
-                          onView={() => setDetailItem(o)}
-                          onDelete={canDelete && soloPendiente && o.tipo !== "pedido" ? () => setDeleteId(o.id) : undefined}
-                          deleteTitle={
-                            o.tipo === "pedido"
-                              ? "Los pedidos no se eliminan: usa Dar de baja"
-                              : "Eliminar preparación pendiente"
-                          }
-                        />
-                        {puedeCancelar && (
-                          <button
-                            type="button"
-                            onClick={() => openDarBaja(o)}
-                            title="Cancelar orden"
-                            aria-label="Cancelar orden"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                    <td className="px-1 py-2 align-middle">
+                      {accionesListado(o, faltantesFila.length > 0)}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </div>
+          <div className="md:hidden divide-y divide-border">
+            {paged.length === 0 ? (
+              <div className="px-4 py-14 text-center text-muted-foreground">
+                <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
+              </div>
+            ) : paged.map((o) => {
+              const faltantes = o.tipo === "preparacion" && o.estadoOrden === "pendiente"
+                ? faltantesPara(o.insumosRequeridos, 1, insumos) : [];
+              return (
+                <div key={o.id} className="p-4 space-y-2 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-mono font-semibold text-foreground">{o.id}</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>{ESTADO_LABEL[o.estadoOrden]}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(o, productos)}</span>
+                    {o.ventaLocal && <span className="text-[10px] font-semibold text-muted-foreground">Venta en el local</span>}
+                    {faltantes.length > 0 && (
+                      <span title={faltantes.map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`).join("\n")}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <AlertTriangle className="w-3 h-3" /> Faltan insumos
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-foreground break-words">{resumenProductos(o)}</p>
+                  <p className="text-xs text-muted-foreground break-words">{o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}</p>
+                  {o.tipo === "pedido" && o.ventaNumero && <p className="text-xs text-muted-foreground break-words">Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}</p>}
+                  <p className="text-xs text-muted-foreground">Cant. estimada: {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                    ? `${totalPorcionesPizza(o)} porc.`
+                    : o.lineas.some(esPizzaOrdenLinea)
+                      ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
+                      : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad) : fmtCant(totalEstimado(o.lineas), "und")}</p>
+                  <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.tipo === "pedido"
+                    ? "—"
+                    : o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
+                      ? `${totalPorcionesPizza(o, true)} porc.`
+                      : o.lineas.some(esPizzaOrdenLinea)
+                        ? o.lineas.map((linea) => esPizzaOrdenLinea(linea) ? cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0) : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
+                        : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad) : fmtCant(totalReal(o.lineas), "und")}</p>
+                  {o.estadoOrden === "completada" && o.tipo !== "pedido" && totalMerma(o.lineas) > 0 && (
+                    <p className="text-xs font-semibold text-red-600">−{resumenMerma(o.lineas)} de pérdida</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">Fecha/Hora de estado: {fmtDT(ultimoCambio(o))}</p>
+                  {accionesListado(o, faltantes.length > 0)}
+                </div>
+              );
+            })}
+          </div>
       </div>
       )}
 
@@ -2332,12 +2689,15 @@ export function OrdenProduccionScreen({
                     <input
                       type="datetime-local"
                       required
-                      min={minFechaLimiteGenerar}
+                      min={generarItem.ventaLocal ? ahoraBogotaGenerar.slice(0, 16) : minFechaLimiteGenerar}
                       max={generarItem.tipo === "pedido" && recogidaFuturaGenerar
                         ? fechaRecogidaGenerar?.slice(0, 16)
                         : undefined}
                       value={fechaLimiteGenerar}
-                      onChange={(event) => setFechaLimiteGenerar(event.target.value)}
+                      onChange={(event) => {
+                        setFechaLimiteAutomatica(false);
+                        setFechaLimiteGenerar(event.target.value);
+                      }}
                       className={iCls}
                     />
                     {!fechaLimiteGenerar && (
@@ -2401,7 +2761,7 @@ export function OrdenProduccionScreen({
                       </div>
                     );
                   })}
-                  {faltantesGenerar.length > 0 && (
+                  {generarItem.tipo === "preparacion" && faltantesGenerar.length > 0 && (
                     <AvisoFaltantes
                       faltantes={faltantesGenerar}
                       onIrInsumos={() => onNavigateTo?.("supplies")}
@@ -2454,7 +2814,7 @@ export function OrdenProduccionScreen({
           // cantidad sea menor a 1; Bloque 4: también mientras falten insumos
           // para la preparación (igual que al crear producto insumo en Insumos).
           deshabilitado: form.tipo === "preparacion"
-            && (preparacionInvalida(form.lineas) || faltantesForm.length > 0),
+            && (preparacionInvalida(form.lineas, productos, false) || faltantesForm.length > 0),
           children: (
             <div className="space-y-6">
               {/* Solo se crean Preparaciones en lote: los pedidos los crea el
@@ -2463,7 +2823,7 @@ export function OrdenProduccionScreen({
               <div className="space-y-4">
                 {form.lineas.map((l, idx) => (
                   <LineaPreparacion
-                    key={idx}
+                    key={`${versionForm}-${idx}`}
                     linea={l}
                     insumos={insumos}
                     productos={productos}
@@ -2482,16 +2842,19 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}
-              <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
+              <AvisoFaltantes
+                faltantes={faltantesForm}
+                onIrInsumos={() => onNavigateTo?.("supplies")}
+                insumos={insumos}
+                onComprar={comprarDesdeCrear}
+                onPreparar={(f) => prepararFaltante(f, true)}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2.5">Observación</label>
                 <textarea value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))}
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
-              <p className="text-[13.5px] leading-relaxed text-muted-foreground">
-                Toda orden nace Pendiente. Se avanza a En proceso y luego a Completada. Solo se cancela con Dar de baja, y nunca vuelve a un estado anterior.
-              </p>
             </div>
           ),
         })}
@@ -2508,7 +2871,7 @@ export function OrdenProduccionScreen({
           // C6: ídem Crear; Bloque 4: además deshabilitado mientras falten
           // insumos para la preparación (sin "Guardar igual": eso es de pedido).
           deshabilitado: editItem.tipo === "preparacion"
-            && (preparacionInvalida(editItem.lineas) || faltantesForm.length > 0),
+            && (preparacionInvalida(editItem.lineas, productos) || faltantesForm.length > 0),
           children: (
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/60 rounded-xl border border-border">
@@ -2599,10 +2962,12 @@ export function OrdenProduccionScreen({
                   </div>
                   <div>
                     <p className="text-[11px] font-semibold text-muted-foreground">
-                      {completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
+                      {completarItem.ventaLocal ? "Origen" : completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
                     </p>
                     <p className="text-sm font-semibold text-foreground">
-                      {completarEsPedido
+                      {completarItem.ventaLocal
+                        ? "Venta en el local"
+                        : completarEsPedido
                         ? `${completarItem.fechaSolicitada.split("-").reverse().join("/")}${completarItem.horaSolicitada ? ` ${hora12(completarItem.horaSolicitada)}` : ""}`
                         : fmtFechaHoraLocal(completarItem.fechaLimite)}
                     </p>
@@ -2610,8 +2975,8 @@ export function OrdenProduccionScreen({
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {completarEsPedido
-                    ? "Revisa los productos y confirma la orden. El pedido no modifica cantidades ni merma."
-                    : "La cantidad que debí hacer se calcula con los insumos usados al Generar y no se puede editar. La merma es esa cantidad menos la cantidad real, mínimo 0."}
+                    ? "Revisa los productos y confirma la orden. El pedido no modifica cantidades ni pérdida."
+                    : "La cantidad que debí hacer se calcula con los insumos usados al Generar y no se puede editar. La pérdida es esa cantidad menos la cantidad real, mínimo 0."}
                 </p>
                 {cargandoCalculoDebido && !completarEsPedido && (
                   <p role="status" className="text-sm text-muted-foreground">Calculando la cantidad que debí hacer…</p>
@@ -2625,11 +2990,13 @@ export function OrdenProduccionScreen({
                   <div key={i} className="p-4 border border-border rounded-2xl bg-card">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
+                        <p className="text-sm font-semibold text-foreground">{nombreLineaOrden(l)}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
-                        <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
+                        <p className="text-base font-bold text-foreground tabular-nums">
+                          {cantidadLineaOrden(completarItem, l)}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -2640,22 +3007,34 @@ export function OrdenProduccionScreen({
                     const debida = calculo?.cantidad_debida;
                     const real = Number(realTxt);
                     const realInvalida = realTxt.trim() === "" || !Number.isSafeInteger(real) || real < 0;
+                    const realExcede = !realInvalida && debida != null && real > debida;
                     const invalido = realInvalida || debida == null;
                     const merma = invalido ? 0 : Math.max(0, debida - real);
-                    const sobrante = !invalido && real > debida;
                     return (
                       <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
-                        <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
+                        <p className="text-sm font-semibold text-foreground">{nombreLineaOrden(l)}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad estimada original</label>
-                            <input value={fmtCant(l.cantidadEstimada, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                              Cantidad estimada original{esPizzaOrdenLinea(l) ? " (pizzas)" : ""}
+                            </label>
+                            <input
+                              value={esPizzaOrdenLinea(l) ? `${l.cantidadEstimada} ${l.cantidadEstimada === 1 ? "pizza" : "pizzas"}` : fmtCant(l.cantidadEstimada, l.unidad)}
+                              readOnly
+                              className={iCls + " opacity-70 cursor-default"}
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad que debí hacer ({l.unidad})
+                              Cantidad que debí hacer ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
                             </label>
-                            <input value={debida == null ? "" : fmtCant(debida, l.unidad)} readOnly className={iCls + " opacity-70 cursor-default"} />
+                            <input
+                              value={debida == null ? "" : esPizzaOrdenLinea(l)
+                                ? `${debida} ${debida === 1 ? "pizza" : "pizzas"}`
+                                : fmtCant(debida, l.unidad)}
+                              readOnly
+                              className={iCls + " opacity-70 cursor-default"}
+                            />
                             {calculo?.calculada_al_verificar && (
                               <p className="mt-1 text-[11px] text-muted-foreground">
                                 Calculada al completar esta orden antigua.
@@ -2663,21 +3042,31 @@ export function OrdenProduccionScreen({
                             )}
                             {debida != null && debida < l.cantidadEstimada && (
                               <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                El cálculo es menor que la cantidad estimada; la merma se calcula desde este valor.
+                                El cálculo es menor que la cantidad estimada; la pérdida se calcula desde este valor.
                               </p>
                             )}
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad real hecha ({l.unidad})
+                              Cantidad real hecha ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
                             </label>
                             <input
-                              type="number" min={0} step={1}
+                              type="number" min={0} max={debida ?? undefined} step={1}
                               value={realTxt}
                               placeholder="0"
                               onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
-                              className={iCls + (realInvalida ? " ring-2 ring-red-400" : "")}
+                              className={iCls + (realInvalida || realExcede ? " ring-2 ring-red-400" : "")}
                             />
+                            {esPizzaOrdenLinea(l) && !realInvalida && !realExcede && (
+                              <p className="mt-1 text-[11px] font-semibold text-emerald-700">
+                                Al completar: {cantidadPorcionesPizza(real, l.tamano)} porciones ingresan al stock {l.tamano}.
+                              </p>
+                            )}
+                            {realExcede && (
+                              <p className="mt-1 text-[11px] font-semibold text-red-600">
+                                No puede ser mayor que la cantidad que debías hacer ({debida}).
+                              </p>
+                            )}
                             {realInvalida && (
                               <p className="mt-1 text-[11px] font-semibold text-red-600">
                                 Ingresa un entero mayor o igual a cero.
@@ -2685,16 +3074,105 @@ export function OrdenProduccionScreen({
                             )}
                           </div>
                         </div>
-                        {!invalido && (
-                          <p className={`text-xs font-semibold ${sobrante ? "text-blue-600" : merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                            {sobrante
-                              ? `Sobrante: ${fmtCant(real - debida, l.unidad)} — la merma queda en 0`
-                              : `Merma: ${fmtCant(merma, l.unidad)}`}
+                        {!invalido && !realExcede && (
+                          <p className={`text-xs font-semibold ${merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                            Pérdida: {fmtCant(merma, l.unidad)}
                           </p>
                         )}
                       </div>
                     );
                   })()
+                ))}
+                {pizzasCompletar.map((pz) => (
+                  <div key={pz.id} className="p-4 border border-border rounded-2xl bg-card space-y-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      Precio de venta por porción{pizzasCompletar.length > 1 ? ` — ${pz.nombre}` : ""}
+                    </p>
+                    {grandeNoMayorQueMediana(pz) && !(tamanosDeOrden(pz).has("Mediana") && tamanosDeOrden(pz).has("Grande")) && (
+                      <p className="text-[11px] font-semibold text-red-600">
+                        La porción Grande ({formatearCOP(precioEfectivoPizza(pz, "Grande"))}) quedaría igual o más barata que la Mediana
+                        ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))}). Ajusta también el precio {tamanosDeOrden(pz).has("Grande") ? "Mediana" : "Grande"}
+                      </p>
+                    )}
+                    <div className={`grid grid-cols-1 gap-3 ${(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).length > 1 ? "sm:grid-cols-2" : ""}`}>
+                      {(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).map((t) => {
+                        const rec = precioRecomendadoPizza(pz, t);
+                        const actual = preciosActualesDe(pz)[t];
+                        const detalle = detalleCostoPizza(pz, t);
+                        const invalido = !(Number(valorPrecioCompletar(pz, t)) > 0);
+                        return (
+                          <div key={t} className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
+                            <p className="text-xs font-bold text-foreground">{t}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Precio actual: {formatearCOP(actual)}
+                            </p>
+                            {detalle && (
+                              <div className="space-y-0.5 text-xs">
+                                {([
+                                  ["Insumos", detalle.resumen.insumos],
+                                  ["Mano de obra", detalle.resumen.manoObra],
+                                  ["Gas", detalle.resumen.gas],
+                                ] as const).map(([etiqueta, valor]) => (
+                                  <div key={etiqueta} className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">{etiqueta}</span>
+                                    <span className="font-semibold text-foreground tabular-nums">{formatearCOP(valor)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-sm font-bold text-emerald-700">
+                              Precio recomendado: {rec > 0 ? formatearCOP(rec) : "—"}
+                            </p>
+                            {rec > 0 && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Pizza completa: {formatearCOP(rec * porcionesPorPizza(t))} ({porcionesPorPizza(t)} porciones)
+                              </p>
+                            )}
+                            {t === "Grande" && detalle?.igualado && (
+                              <p className="text-[11px] font-semibold text-amber-700">Ajustado: 10 % más que la porción Mediana</p>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number" min={0} step={100}
+                                aria-label={`Precio por porción ${t}`}
+                                value={valorPrecioCompletar(pz, t)}
+                                onChange={(e) => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: limpiarNumeroInput(e.target.value) }))}
+                                className={iCls + (invalido ? " ring-2 ring-red-400" : "")}
+                              />
+                              <button
+                                type="button"
+                                disabled={rec <= 0}
+                                onClick={() => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: String(rec) }))}
+                                className="shrink-0 px-3 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Usar recomendado
+                              </button>
+                            </div>
+                            {!invalido && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Con este precio, la pizza completa vale {formatearCOP(Number(valorPrecioCompletar(pz, t)) * porcionesPorPizza(t))}
+                              </p>
+                            )}
+                            {t === "Grande" && !invalido
+                              && Number(valorPrecioCompletar(pz, t)) <= precioEfectivoPizza(pz, "Mediana")
+                              && precioEfectivoPizza(pz, "Mediana") > 0 && (
+                              <p className="text-[11px] font-semibold text-red-600">
+                                Debe ser mayor que el precio de la porción Mediana ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))})
+                              </p>
+                            )}
+                            {invalido && (
+                              <p className="text-[11px] font-semibold text-red-600">Ingresa un precio mayor a 0.</p>
+                            )}
+                            {detalle?.sinTiempo && (
+                              <p className="text-[11px] font-semibold text-amber-700">
+                                La ficha no tiene tiempo de preparación: el recomendado no incluye mano de obra ni gas
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
@@ -2713,16 +3191,7 @@ export function OrdenProduccionScreen({
                           : calculosDebidos[linea.idDetalleOp]?.cantidad_debida ?? 0;
                         return Number(reales[i]) === 0 && debida > 0;
                       }) &&
-                          !window.confirm("Se registrará todo como merma. ¿Completar la orden?")) return;
-                      const haySobrante = completarItem.lineas.some((linea, i) => {
-                        const debida = linea.idDetalleOp == null
-                          ? 0
-                          : calculosDebidos[linea.idDetalleOp]?.cantidad_debida ?? 0;
-                        return Number(reales[i]) > debida;
-                      });
-                      if (haySobrante && !window.confirm(
-                        "Hay líneas con más producción que la estimada. La merma de esas líneas queda en 0. ¿Completar la orden?",
-                      )) return;
+                          !window.confirm("Se registrará todo como pérdida. ¿Completar la orden?")) return;
                     }
                     confirmarCompletar();
                   }}
@@ -2780,68 +3249,6 @@ export function OrdenProduccionScreen({
         )}
       </AnimatePresence>
 
-      {/* ── Modal: Aviso al GUARDAR un PEDIDO (Bloque 4) ── NUNCA bloquea:
-          lista los faltantes de insumos y/o las líneas cuya receta no se
-          pudo calcular (pizza sin ficha, producto del menú sin resolver) y
-          se confirma con "Guardar igual". La preparación en lote no pasa
-          por aquí: ella bloquea con el botón deshabilitado y el mensaje +
-          lista dentro de su propio modal (`AvisoFaltantes`). */}
-      <AnimatePresence>
-        {avisoGuardar && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
-              <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: SERIF }}>
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                  {avisoGuardar.faltantes.length > 0 ? "Faltan insumos" : "Aviso al guardar"}
-                </h3>
-                <button onClick={() => setAvisoGuardar(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Este pedido viene de una venta ya pagada: se puede guardar igual. Queda{" "}
-                  <strong className="text-foreground">Pendiente</strong>, se marcará con el badge{" "}
-                  <strong className="text-foreground">"Faltan insumos"</strong> si le faltan insumos, y al{" "}
-                  <strong className="text-foreground">Iniciarla</strong> vuelve a validarse contra el inventario de ese
-                  momento (ahí ya no se avanza si falta algo).
-                </p>
-                {avisoGuardar.avisos.map((a, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                    <p className="text-sm font-semibold text-amber-800 flex items-start gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-1" />
-                      <span>{a}</span>
-                    </p>
-                  </div>
-                ))}
-                {avisoGuardar.faltantes.map((f) => (
-                  <div key={f.insumoId} className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-0.5">
-                    <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
-                      <Minus className="w-3.5 h-3.5 shrink-0 mt-1" />
-                      <span>Faltan {fmtCant(f.falta, f.unidad)} de {f.nombre} (hay {fmtCant(f.stock, f.unidad)})</span>
-                    </p>
-                    {f.motivo && (
-                      <p className="pl-6 text-[11px] text-red-700">{motivoFaltante(f)}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
-                <button onClick={() => setAvisoGuardar(null)}
-                  className="flex-1 py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => { const guardar = avisoGuardar.onConfirm; setAvisoGuardar(null); guardar(); }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
-                  Guardar igual
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* ── Modal: Ver detalle ── */}
       <AnimatePresence>
         {detailItem && (
@@ -2856,6 +3263,7 @@ export function OrdenProduccionScreen({
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
+                  {detailItem.ventaLocal && <span className="text-[11px] font-semibold text-muted-foreground">Venta en el local</span>}
                   <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
                   <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {fmtDT(ultimoCambio(detailItem))}</span>
                 </div>
@@ -2869,7 +3277,7 @@ export function OrdenProduccionScreen({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" },
+                    ...(detailItem.ventaLocal ? [] : [{ l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" }]),
                     { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
                     { l: "Fecha límite", v: fmtDT(detailItem.fechaLimite) },
                     { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
@@ -2883,12 +3291,12 @@ export function OrdenProduccionScreen({
 
                 {(() => {
                   const mermas = noConformidades.filter(
-                    (n) => n.ordenRef === detailItem.id && n.tipoNoConformidad === "Merma de cocina",
+                    (n) => n.ordenRef === detailItem.id && n.tipoNoConformidad === "Pérdida en cocina",
                   );
                   if (mermas.length === 0) return null;
                   return (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                      <p className="text-xs font-semibold text-amber-800">Merma registrada en Productos no conformes</p>
+                      <p className="text-xs font-semibold text-amber-800">Pérdida registrada en Productos no conformes</p>
                       <p className="text-xs text-amber-700 mt-0.5">
                         {mermas.map((m) => `${m.nombre} · ${m.cantidadAfectada} ${m.unidadMedida}`).join(", ")}
                       </p>
@@ -2909,8 +3317,12 @@ export function OrdenProduccionScreen({
                       <div key={i} className="p-3 bg-muted rounded-xl">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                            {(l.tamano || l.porciones) && (
+                            <p className="text-sm font-semibold text-foreground">
+                              {esPizzaOrdenLinea(l) && detailItem.tipo === "preparacion"
+                                ? `${l.nombre} — ${l.tamano ?? "Tamaño no definido"}:`
+                                : nombreLineaOrden(l)}
+                            </p>
+                            {(l.tamano || l.porciones) && !esPizzaOrdenLinea(l) && (
                               <p className="text-[11px] text-muted-foreground">
                                 {[l.tamano ? `Tamaño ${l.tamano}` : null, l.porciones ? `${l.porciones} porciones` : null].filter(Boolean).join(" · ")}
                               </p>
@@ -2918,17 +3330,27 @@ export function OrdenProduccionScreen({
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimada</p>
-                            <p className="text-base font-bold text-foreground tabular-nums">{fmtCant(l.cantidadEstimada, l.unidad)}</p>
+                            <p className="text-base font-bold text-foreground tabular-nums">
+                              {cantidadLineaOrden(detailItem, l)}
+                            </p>
                             {l.cantidadDebida != null && (
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Debí hacer: {fmtCant(l.cantidadDebida, l.unidad)}
+                                Debí hacer: {esPizzaOrdenLinea(l)
+                                  ? `${l.cantidadDebida} ${l.cantidadDebida === 1 ? "pizza" : "pizzas"}`
+                                  : fmtCant(l.cantidadDebida, l.unidad)}
                               </p>
                             )}
                             {l.cantidadReal != null && (
                               <>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">Real: {fmtCant(l.cantidadReal, l.unidad)}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Real: {cantidadLineaOrden(detailItem, l, l.cantidadReal)}
+                                </p>
                                 {(l.merma ?? 0) > 0 && (
-                                  <p className="text-[11px] font-semibold text-red-600">−{fmtCant(l.merma ?? 0, l.unidad)} merma</p>
+                                  <p className="text-[11px] font-semibold text-red-600">
+                                    −{esPizzaOrdenLinea(l)
+                                      ? cantidadLineaOrden(detailItem, l, l.merma)
+                                      : fmtCant(l.merma ?? 0, l.unidad)} de pérdida
+                                  </p>
                                 )}
                               </>
                             )}
@@ -2937,12 +3359,12 @@ export function OrdenProduccionScreen({
                         {l.sinFicha && (
                           <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
                         )}
-                        {necesita && (
+                        {detailItem.tipo === "preparacion" && necesita && (
                           <p className="mt-1.5 text-[11px] text-muted-foreground">
                             Necesita: <span className="font-semibold text-foreground">{necesita}</span>
                           </p>
                         )}
-                        {l.pasos && l.pasos.length > 0 && (
+                        {detailItem.tipo === "preparacion" && l.pasos && l.pasos.length > 0 && (
                           <ol className="mt-1.5 list-decimal list-inside text-[11px] text-muted-foreground space-y-0.5">
                             {l.pasos.map((p, j) => <li key={j}>{p}</li>)}
                           </ol>
@@ -2951,20 +3373,35 @@ export function OrdenProduccionScreen({
                       );
                     })}
                   </div>
+                  {detailItem.tipo === "preparacion" && detailItem.lineas.some(esPizzaOrdenLinea) && (
+                    <p className="mt-2 text-xs font-semibold text-foreground">
+                      {(["Mediana", "Grande"] as const)
+                        .map((tamano) => {
+                          const total = detailItem.lineas.reduce((sum, linea) =>
+                            esPizzaOrdenLinea(linea) && linea.tamano === tamano
+                              ? sum + cantidadPorcionesPizza(linea.cantidadEstimada, linea.tamano)
+                              : sum, 0);
+                          return total > 0 ? `Total ${tamano}: ${total} porciones` : null;
+                        })
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  )}
                 </div>
 
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">
-                    {detailItem.tipo === "preparacion" ? "Insumos usados" : "Insumos a usar"}
-                  </p>
-                  <TablaInsumosRequeridos
-                    requeridos={detailItem.insumosRequeridos}
-                    insumos={insumos}
-                    descontados={detailItem.insumosDescontados}
-                    onIrCompras={(faltantes) => onNavigateTo?.("orden-compra", faltantes)}
-                    onIrInsumos={() => onNavigateTo?.("supplies")}
-                  />
-                </div>
+                {detailItem.tipo === "preparacion" && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos usados</p>
+                    <TablaInsumosRequeridos
+                      requeridos={detailItem.insumosRequeridos}
+                      insumos={insumos}
+                      descontados={detailItem.insumosDescontados}
+                      onIrCompras={(faltantes) => onNavigateTo?.("orden-compra", faltantes)}
+                      onPreparar={(f) => prepararFaltante(f, false)}
+                      onIrInsumos={() => onNavigateTo?.("supplies")}
+                    />
+                  </div>
+                )}
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
@@ -2977,17 +3414,60 @@ export function OrdenProduccionScreen({
                       Cargando parámetros de costos…
                     </p>
                   ) : (() => {
-                    const resumen = calcularCostoOrden(
-                      detailItem.insumosRequeridos,
-                      insumos,
-                      parametrosCostos,
-                      tiempoTotalOrden(detailItem),
-                    );
+                    const resumen = (() => {
+                      if (detailItem.tipo !== "preparacion") {
+                        return calcularCostoOrden(detailItem.insumosRequeridos, insumos, parametrosCostos, tiempoTotalOrden(detailItem));
+                      }
+                      // Por línea, con la ficha de la orden (snapshot) o la vigente:
+                      // mismo cálculo y tiempo que "Completar orden".
+                      const acumulado = { insumos: 0, manoObra: 0, gas: 0, costoTotal: 0, avisos: [] as ReturnType<typeof calcularCostoOrden>["avisos"] };
+                      for (const linea of detailItem.lineas) {
+                        const { ficha } = fichaParaVer(linea, fichasPorProducto);
+                        if (!ficha) return calcularCostoOrden(detailItem.insumosRequeridos, insumos, parametrosCostos, tiempoTotalOrden(detailItem));
+                        const r = calcularCostoProducto(ficha, insumos, parametrosCostos, esPizzaOrdenLinea(linea) ? linea.tamano ?? undefined : undefined);
+                        const rend = Number(ficha.rendimiento) > 0 ? Number(ficha.rendimiento) : 1;
+                        const cant = linea.cantidadEstimada || 0;
+                        // Pizza: tiempo por pizza. Producto insumo: tiempo por tanda (rendimiento).
+                        const veces = esPizzaOrdenLinea(linea) ? cant : cant / rend;
+                        const ins = r.insumos * cant;
+                        const mo = r.manoObra * veces;
+                        const gs = r.gas * veces;
+                        acumulado.insumos += ins;
+                        acumulado.manoObra += mo;
+                        acumulado.gas += gs;
+                        acumulado.costoTotal += ins + mo + gs;
+                        for (const a of r.avisos) {
+                          if (!acumulado.avisos.some((x) => x.nombre === a.nombre && x.tipo === a.tipo)) acumulado.avisos.push(a);
+                        }
+                      }
+                      return acumulado;
+                    })();
                     const cantidadEstimada = totalEstimado(detailItem.lineas);
                     const unidades = new Set(detailItem.lineas.map((linea) => linea.unidad));
                     const unidadCosto = unidades.size === 1
                       ? `por ${detailItem.lineas[0]?.unidad ?? "unidad"}`
                       : "por unidad estimada (unidades mixtas)";
+                    const soloPizzasPrep = detailItem.tipo === "preparacion"
+                      && detailItem.lineas.length > 0 && detailItem.lineas.every(esPizzaOrdenLinea);
+                    const lineaPizzaUnica = soloPizzasPrep
+                      || (detailItem.lineas.length === 1 && esPizzaOrdenLinea(detailItem.lineas[0]));
+                    const cantidadPizzaBase = soloPizzasPrep
+                      ? detailItem.lineas.reduce((s, l) => s + (l.cantidadEstimada || 0), 0)
+                      : lineaPizzaUnica
+                        ? detailItem.lineas[0].cantidadEstimada
+                        : 0;
+                    const porcionesPizzaBase = soloPizzasPrep
+                      ? (cantidadPizzaBase > 0
+                          ? detailItem.lineas.reduce((s, l) => s + cantidadPorcionesPizza(l.cantidadEstimada || 0, l.tamano), 0) / cantidadPizzaBase
+                          : 0)
+                      : lineaPizzaUnica
+                        ? porcionesPorPizza(detailItem.lineas[0].tamano)
+                        : 0;
+                    const costoUnidadPizza = lineaPizzaUnica && cantidadPizzaBase > 0
+                      ? detailItem.tipo === "pedido"
+                        ? resumen.costoTotal / cantidadPizzaBase * porcionesPizzaBase
+                        : resumen.costoTotal / cantidadPizzaBase
+                      : 0;
                     return (
                       <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -3004,12 +3484,23 @@ export function OrdenProduccionScreen({
                             <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.gas)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Costo por unidad</p>
-                            <p className="text-sm font-semibold text-foreground tabular-nums">
-                              {cantidadEstimada > 0
-                                ? `${formatearCOP(resumen.costoTotal / cantidadEstimada)} ${unidadCosto}`
-                                : "—"}
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {lineaPizzaUnica ? "Costo por pizza" : "Costo por unidad"}
                             </p>
+                            <p className="text-sm font-semibold text-foreground tabular-nums">
+                              {lineaPizzaUnica
+                                ? cantidadPizzaBase > 0 ? formatearCOP(costoUnidadPizza) : "—"
+                                : cantidadEstimada > 0
+                                  ? `${formatearCOP(resumen.costoTotal / cantidadEstimada)} ${unidadCosto}`
+                                  : "—"}
+                            </p>
+                            {lineaPizzaUnica && porcionesPizzaBase > 0 && (
+                              <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                                Costo por porción: {cantidadPizzaBase > 0
+                                  ? formatearCOP(costoUnidadPizza / porcionesPizzaBase)
+                                  : "—"}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="border-t border-border pt-2 flex items-center justify-between gap-3">
@@ -3057,7 +3548,7 @@ export function OrdenProduccionScreen({
                     <p className="text-xs font-semibold text-muted-foreground mb-1.5">Preparación</p>
                     <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      Horneado: <strong>{fmtMinutos(HORNEADO_MIN)}</strong>
+                      Calentamiento: <strong>{fmtMinutos(HORNEADO_MIN)}</strong>
                     </p>
                   </div>
                 )}
@@ -3080,13 +3571,20 @@ export function OrdenProduccionScreen({
                         <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
                           Sin transiciones. Creada el {fmtDT(detailItem.creadaEn)}.
                         </p>
-                      ) : (
+                      ) : (() => {
+                        // Más antigua → más reciente. "Orden creada" va primero y
+                        // se omite si el historial ya trae su paso inicial.
+                        const pasos = [...detailItem.historial].sort((a, b) => epochOrden(a.fechaHora) - epochOrden(b.fechaHora));
+                        const traeInicial = pasos.some((h) => h.de === null);
+                        return (
                         <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
-                            <span className="text-xs font-semibold text-foreground">Orden creada</span>
-                            <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(detailItem.creadaEn)}</span>
-                          </div>
-                          {detailItem.historial.map((h, i) => (
+                          {!traeInicial && (
+                            <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
+                              <span className="text-xs font-semibold text-foreground">Orden creada</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(detailItem.creadaEn)}</span>
+                            </div>
+                          )}
+                          {pasos.map((h, i) => (
                             <div key={i} className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
                               {h.detalle ? (
                                 // Paso sin cambio de estado (p. ej. "Creada
@@ -3095,7 +3593,11 @@ export function OrdenProduccionScreen({
                                 <span className="text-xs font-semibold text-foreground">{h.detalle}</span>
                               ) : (
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                                  {h.de === null ? (
+                                    <span className="text-xs font-semibold text-foreground">Orden creada</span>
+                                  ) : (
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                                  )}
                                   <span className="text-muted-foreground text-xs">→</span>
                                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
                                 </div>
@@ -3104,7 +3606,8 @@ export function OrdenProduccionScreen({
                             </div>
                           ))}
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   );
                   const observacion = detailItem.observacion ? (
@@ -3447,10 +3950,6 @@ function CamposPedido({
               Detalle de la venta (solo lectura)
             </div>
             {elegidas.lineas.map((l, i) => {
-              // C8: lo que ESTA línea va a gastar al Iniciar (con el factor
-              // de su tamaño y con las unidades contables sin multiplicar).
-              // Las bebidas no llevan ficha y no piden insumos.
-              const necesita = resumenNecesita(requeridosDeLinea(l, fichas));
               return (
               <div key={i} className="flex items-start justify-between gap-3 px-3 py-2 border-t border-border">
                 <div className="min-w-0">
@@ -3459,20 +3958,7 @@ function CamposPedido({
                     {l.tamano ? `Tamaño ${l.tamano} · ` : ""}{l.cantidadEstimada} und
                     {l.porciones ? ` · ${l.porciones} porciones` : ""}
                   </p>
-                  {l.sinFicha && (
-                    <p className="text-[11px] text-muted-foreground italic mt-0.5">Sin preparación · se entrega directo</p>
-                  )}
-                  {necesita && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Necesita: <span className="font-semibold text-foreground">{necesita}</span>
-                    </p>
-                  )}
                 </div>
-                {l.sinFicha ? (
-                  <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">Sin ficha</span>
-                ) : (
-                  <Layers className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                )}
               </div>
               );
             })}
@@ -3483,14 +3969,10 @@ function CamposPedido({
                 ficha (eso es de "Preparación en lote"). */}
             <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
-              Horneado: <strong className="text-foreground">{fmtMinutos(HORNEADO_MIN)}</strong>
+              Calentamiento: <strong className="text-foreground">{fmtMinutos(HORNEADO_MIN)}</strong>
             </div>
           </div>
 
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos a usar</p>
-            <TablaInsumosRequeridos requeridos={elegidas.insumos} insumos={insumos} />
-          </div>
         </>
       )}
     </div>

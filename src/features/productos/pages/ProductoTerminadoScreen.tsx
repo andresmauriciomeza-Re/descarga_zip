@@ -27,21 +27,29 @@ interface ProductoTerminado {
   fechaEntrega: string;
   horaEntrega: string;
   cantidad: number;
+  tamano: "Mediana" | "Grande";
   estadoEntrega: EstadoEntrega;
   recalentado?: boolean;
   fechaEntregaReal?: string;
 }
 
+interface PizzaStock {
+  id: string;
+  nombre: string;
+  stockMediana: number;
+  stockGrande: number;
+}
+
 const INITIAL_PRODUCTOS: ProductoTerminado[] = [
-  { id:"ORD-001", idReceta:"REC-001", nombreReceta:"Margarita Clásica",   fechaEntrega:"2024-01-15", horaEntrega:"19:00", cantidad:20, estadoEntrega:"entregado", recalentado:true,  fechaEntregaReal:"2024-01-15" },
-  { id:"ORD-002", idReceta:"REC-002", nombreReceta:"Pepperoni Premium",   fechaEntrega:"2024-01-15", horaEntrega:"20:30", cantidad:15, estadoEntrega:"listo" },
-  { id:"ORD-003", idReceta:"REC-003", nombreReceta:"Cuatro Quesos",       fechaEntrega:"2024-01-16", horaEntrega:"18:00", cantidad:10, estadoEntrega:"listo" },
-  { id:"ORD-005", idReceta:"REC-005", nombreReceta:"Veggie Mediterránea", fechaEntrega:"2024-01-17", horaEntrega:"19:30", cantidad:8,  estadoEntrega:"listo" },
+  { id:"ORD-001", idReceta:"REC-001", nombreReceta:"Margarita Clásica",   fechaEntrega:"2024-01-15", horaEntrega:"19:00", cantidad:20, tamano:"Mediana", estadoEntrega:"entregado", recalentado:true,  fechaEntregaReal:"2024-01-15" },
+  { id:"ORD-002", idReceta:"REC-002", nombreReceta:"Pepperoni Premium",   fechaEntrega:"2024-01-15", horaEntrega:"20:30", cantidad:15, tamano:"Grande", estadoEntrega:"listo" },
+  { id:"ORD-003", idReceta:"REC-003", nombreReceta:"Cuatro Quesos",       fechaEntrega:"2024-01-16", horaEntrega:"18:00", cantidad:10, tamano:"Mediana", estadoEntrega:"listo" },
+  { id:"ORD-005", idReceta:"REC-005", nombreReceta:"Veggie Mediterránea", fechaEntrega:"2024-01-17", horaEntrega:"19:30", cantidad:8,  tamano:"Grande", estadoEntrega:"listo" },
 ];
 
 const PER_PAGE = 5;
 
-export function ProductoTerminadoScreen() {
+export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[] }) {
   const [productos, setProductos] = useState<ProductoTerminado[]>(INITIAL_PRODUCTOS);
   const [search,    setSearch]    = useState("");
   const [page,      setPage]      = useState(1);
@@ -107,6 +115,39 @@ export function ProductoTerminadoScreen() {
         </div>
       </div>
 
+      <section className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+        <div className="px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-bold text-foreground">Stock de pizzas por tamaño</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Existencias en porciones; se actualizan desde producción y ventas.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+              <tr>
+                {["Pizza", "Mediana (porciones)", "Grande (porciones)"].map((heading) => (
+                  <th key={heading} className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {pizzas.map((pizza) => (
+                <tr key={pizza.id}>
+                  <td className="px-4 py-2.5 text-sm font-medium text-foreground">{pizza.nombre}</td>
+                  {[pizza.stockMediana, pizza.stockGrande].map((stock, index) => (
+                    <td key={index} className={`px-4 py-2.5 text-sm font-semibold ${stock <= 0 ? "text-red-600 dark:text-red-400" : stock <= 10 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      {stock} porc.{stock <= 0 ? " · Agotado" : stock <= 10 ? " · Stock bajo" : ""}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {pizzas.length === 0 && (
+                <tr><td colSpan={3} className="px-4 py-5 text-sm text-center text-muted-foreground">No hay pizzas en el catálogo.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Search */}
       <SearchInput
         value={search}
@@ -120,7 +161,7 @@ export function ProductoTerminadoScreen() {
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID Orden","Receta","Fecha Entrega","Hora Entrega","Cantidad","Estado","Recalentado","Acciones"].map(h => (
+                {["ID Orden","Receta","Fecha Entrega","Hora Entrega","Porciones / tamaño","Estado","Recalentado","Acciones"].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -145,7 +186,7 @@ export function ProductoTerminadoScreen() {
                       {p.horaEntrega || "—"}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{p.cantidad}</td>
+                  <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{p.cantidad} porc. · {p.tamano}</td>
                   <td className="px-4 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). La única
                         transición es listo → entregado y pasa por el MISMO
@@ -246,7 +287,7 @@ export function ProductoTerminadoScreen() {
                   <div>
                     <p className="text-sm font-semibold text-foreground">¿Confirmar entrega de este producto?</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {confirmItem.nombreReceta} · {confirmItem.cantidad} und. · {confirmItem.horaEntrega}
+                      {confirmItem.nombreReceta} · {confirmItem.cantidad} porc. · {confirmItem.tamano} · {confirmItem.horaEntrega}
                     </p>
                   </div>
                 </div>

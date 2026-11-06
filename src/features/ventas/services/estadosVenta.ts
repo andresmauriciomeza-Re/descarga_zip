@@ -38,12 +38,13 @@ export const TRANSICIONES_VENTA: readonly TransicionVenta[] = [
     sólo la vista (botón del listado y contador). */
 export const SEGUNDOS_ANULACION = 10 * 60;
 
-/** Estados desde los que el panel ofrece "Anular" (verbatim a los estados
-    anulables del backend `TRANSICIONES_VENTA`). */
+/** Estados desde los que el panel ofrece "Anular"; Completado aplica solo a
+    ventas cobradas en local sin orden de tienda, dentro de los primeros 10 min. */
 export const ESTADOS_ANULABLES: readonly EstadoVenta[] = [
   'Por verificar',
   'En espera',
   'Por entregar',
+  'Completado',
 ];
 
 export const puedeTransicionar = (desde: EstadoVenta, a: EstadoVenta): boolean =>

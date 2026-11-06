@@ -1,9 +1,13 @@
 import api from "@/shared/services/api";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
-import { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
 import { normalizarTexto } from "@/shared/utils/nombres";
 
 export type EstadoProductoManual = "Descontinuado" | "Automático";
+
+export interface ResultadoCambioEstado {
+  producto: Producto;
+  mensaje?: string;
+}
 
 export interface ProductoApi {
   id_producto: number | string;
@@ -22,6 +26,8 @@ export interface ProductoApi {
   tiene_imagen?: boolean | null;
   estado: string;
   stock?: number | string | null;
+  stock_mediana?: number | string | null;
+  stock_grande?: number | string | null;
   contenido?: number | string | null;
   contenido_unidad?: "ml" | "L" | null;
   unidad_compra?: "und" | "paca" | "caja" | null;
@@ -30,6 +36,7 @@ export interface ProductoApi {
   ultimo_iva_compra?: number | string | null;
   /** Punto C1: último monto digitado (tal cual, sin convertir IVA). */
   ultimo_monto_digitado?: number | string | null;
+  mensaje?: string;
 }
 
 export interface ProductoApiCreacion {
@@ -86,9 +93,9 @@ export const productoPanelACreacion = (p: Producto): ProductoApiCreacion => {
             : {}),
         }
       : {
-          precio_venta: Number(p.precioUnitario),
+          precio_venta: Number(p.precioUnitario) || 0,
           precio_grande: esPizza
-            ? Number(p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE)
+            ? Number(p.precioGrande) || 0
             : null,
         }),
   };
@@ -118,7 +125,7 @@ export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCrea
       : {
           precio_venta: Number(p.precioUnitario),
           precio_grande: esPizza
-            ? Number(p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE)
+            ? Number(p.precioGrande)
             : null,
         }),
   };
@@ -136,6 +143,8 @@ export const mapearProductoApi = (p: ProductoApi): Producto => ({
   costoUnitario: Number(p.costo_unitario ?? 0),
   precioUnitario: Number(p.precio_venta ?? 0),
   ...(p.precio_grande == null ? {} : { precioGrande: Number(p.precio_grande) }),
+  ...(p.stock_mediana == null ? {} : { stockMediana: Number(p.stock_mediana) }),
+  ...(p.stock_grande == null ? {} : { stockGrande: Number(p.stock_grande) }),
   unidadVenta: p.unidad_venta,
   contenido: p.contenido == null ? undefined : Number(p.contenido),
   contenidoUnidad: p.contenido_unidad ?? undefined,
@@ -183,16 +192,18 @@ export const editarProducto = async (
 export const cambiarEstadoProducto = async (
   id: string,
   estado: EstadoProductoManual,
-): Promise<Producto> => {
+): Promise<ResultadoCambioEstado> => {
   const { data } = await api.patch<ProductoApi | { producto: ProductoApi } | { mensaje?: string }>(
     `/productos/${encodeURIComponent(id)}/estado`,
     { estado },
   );
-  if (pareceProductoApi(data) || (data && "producto" in data)) return productoDeRespuesta(data as ProductoApi | { producto: ProductoApi });
-  const listado = await listarGestion();
-  const actualizado = listado.find((p) => p.id === id);
-  if (!actualizado) throw new Error("El producto se actualizó, pero no apareció en la respuesta del servidor.");
-  return actualizado;
+  if (pareceProductoApi(data)) {
+    return { producto: mapearProductoApi(data), mensaje: data.mensaje };
+  }
+  if (data && "producto" in data && pareceProductoApi(data.producto)) {
+    return { producto: mapearProductoApi(data.producto), mensaje: data.producto.mensaje };
+  }
+  throw new Error("El producto se actualizó, pero no apareció en la respuesta del servidor.");
 };
 
 export const entradaCompra = async (id: string, payload: EntradaCompraApi): Promise<Producto> => {

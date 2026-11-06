@@ -8,7 +8,7 @@ import { ActionIcons } from "@/shared/components/ActionIcons";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { normalizarTexto } from "@/shared/utils/nombres";
-import { productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
+import { limiteStockDe, productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalogo";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
@@ -285,8 +285,17 @@ export function DevolucionesScreen({
       const etiqueta = tam?.label ?? "";
       const coincide = (c: Reemplazo) => c.id === prod.id && (c.tamaño ?? "") === etiqueta;
       const curQty = prev.compensacion.find(coincide)?.cantidad ?? 0;
-      const nuevo = Math.max(0, curQty + delta);
-      if (nuevo > devueltosTot) return prev;
+      const esPizza = prod.category.toLowerCase().includes("pizza");
+      const stockTamano = esPizza ? limiteStockDe(prod, etiqueta) : undefined;
+      const otrasDelTamano = prev.compensacion
+        .filter((linea) => linea.id === prod.id && !coincide(linea))
+        .reduce((total, linea) => total + linea.cantidad, 0);
+      const maximo = Math.min(
+        devueltosTot,
+        stockTamano === undefined ? Infinity : Math.max(0, stockTamano - otrasDelTamano),
+      );
+      const nuevo = Math.max(0, Math.min(maximo, curQty + delta));
+      if (nuevo === curQty) return prev;
       const rest = prev.compensacion.filter((c) => !coincide(c));
       const nueva =
         nuevo === 0
@@ -898,12 +907,9 @@ export function DevolucionesScreen({
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-foreground truncate">{nombre}</p>
                               <p className="text-xs text-muted-foreground">
-                                {resto.length > 0 ? `${resto.join(" — ")} · ` : ""}
-                                {/* Cantidad pedida. Va antes del unitario y un punto
-                                    más grande que él, porque al lado del precio se
-                                    confundía con el valor de la línea. */}
-                                <span className="text-sm font-bold text-foreground">{d.cantidad} ped.</span>
-                                <span> · {fmtCOPDev(d.precio)} c/u</span>
+                                {d.tamaño === "Mediana" || d.tamaño === "Grande"
+                                  ? `${d.cantidad} porciones — ${d.tamaño} · ${fmtCOPDev(d.precio)} / porción`
+                                  : <>{resto.length > 0 ? `${resto.join(" — ")} · ` : ""}<span className="text-sm font-bold text-foreground">{d.cantidad} ped.</span><span> · {fmtCOPDev(d.precio)} c/u</span></>}
                               </p>
                               {motivoLinea && (
                                 <p className="text-[11px] text-orange-700 dark:text-orange-400 truncate mt-0.5">
@@ -1036,11 +1042,11 @@ export function DevolucionesScreen({
                               {activa.compensacion.map((r) => (
                                 <div key={`${r.id}-${r.tamaño ?? ""}`} className="flex justify-between gap-2 text-xs text-blue-900 dark:text-blue-200 py-0.5">
                                   <span className="truncate">
-                                    • {r.cantidad}x {r.nombre}
+                                    • {r.cantidad} {r.tamaño === "Mediana" || r.tamaño === "Grande" ? "porciones" : "unidades"} {r.nombre}
                                     {r.tamaño ? ` (${r.tamaño})` : ""}
                                   </span>
                                   <span className="font-semibold whitespace-nowrap">
-                                    {fmtCOPDev(r.cantidad * r.precio)}
+                                    {fmtCOPDev(r.cantidad * r.precio)}{r.tamaño === "Mediana" || r.tamaño === "Grande" ? ` · ${fmtCOPDev(r.precio)}/porción` : ""}
                                   </span>
                                 </div>
                               ))}
@@ -1133,7 +1139,13 @@ export function DevolucionesScreen({
                                   <div className="flex gap-1.5">
                                     {variantes.map((v) => {
                                       const cant = cantCanje(prod, v.label);
-                                      const lleno = totalComp >= totalDevueltos;
+                                      const esPizza = prod.category.toLowerCase().includes("pizza");
+                                      const stock = esPizza ? limiteStockDe(prod, v.label) : undefined;
+                                      const disponibles = stock === undefined
+                                        ? undefined
+                                        : Math.max(0, stock - cant);
+                                      const lleno = totalComp >= totalDevueltos ||
+                                        (disponibles !== undefined && disponibles <= 0);
                                       return (
                                         <div
                                           key={v.label || "base"}
@@ -1150,8 +1162,17 @@ export function DevolucionesScreen({
                                             className="text-[10px] text-muted-foreground truncate"
                                             style={{ fontFamily: MONO_DEV }}
                                           >
-                                            {fmtCOPDev(v.price)}
+                                            {fmtCOPDev(v.price)}{esPizza ? " / porción" : ""}
                                           </p>
+                                          {esPizza && (
+                                            <p className="text-[9px] text-muted-foreground">
+                                              {disponibles === undefined
+                                                ? "Stock no informado"
+                                                : disponibles === 0
+                                                  ? "Agotado"
+                                                  : `Disponibles: ${disponibles} porc.`}
+                                            </p>
+                                          )}
                                           <div className="flex items-center justify-between mt-0.5">
                                             <button
                                               type="button"
@@ -1163,6 +1184,7 @@ export function DevolucionesScreen({
                                             </button>
                                             <span className="text-[11px] font-bold text-foreground">
                                               {cant}
+                                              {esPizza ? " porc." : ""}
                                             </span>
                                             <button
                                               type="button"
@@ -1523,8 +1545,9 @@ export function DevolucionesScreen({
                             {r.tamaño ? ` · ${r.tamaño}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {r.cantidad} {r.cantidad === 1 ? "unidad" : "unidades"} ×{" "}
-                            {fmtCOPDev(r.precio)}
+                            {r.tamaño === "Mediana" || r.tamaño === "Grande"
+                              ? `${r.cantidad} porciones — ${r.tamaño} · ${fmtCOPDev(r.precio)} / porción`
+                              : `${r.cantidad} ${r.cantidad === 1 ? "unidad" : "unidades"} × ${fmtCOPDev(r.precio)}`}
                           </p>
                         </div>
                         <p className="text-sm font-bold text-blue-700 dark:text-blue-300 shrink-0" style={{ fontFamily: MONO_DEV }}>
@@ -1678,7 +1701,11 @@ export function DevolucionesScreen({
                         <div key={`${item.nombre}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border last:border-0">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{item.nombre}</p>
-                            <p className="text-xs text-muted-foreground">x{item.cantidad} · {fmtCOPDev(item.precio)} c/u</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.tamaño === "Mediana" || item.tamaño === "Grande"
+                                ? `${item.cantidad} porciones — ${item.tamaño} · ${fmtCOPDev(item.precio)} / porción`
+                                : `x${item.cantidad} · ${fmtCOPDev(item.precio)} c/u`}
+                            </p>
                           </div>
                           <p className="text-sm font-semibold text-foreground whitespace-nowrap">
                             {fmtCOPDev(item.precio * item.cantidad)}

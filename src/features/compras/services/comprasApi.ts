@@ -9,6 +9,7 @@ export interface CompraApi {
   id_ocompra: number | string | null;
   id_proveedor: number | string | null;
   proveedor_nombre?: string | null;
+  proveedor_nit?: string | null;
   n_factura: string;
   fecha: string;
   iva_incluido: boolean;
@@ -34,6 +35,7 @@ export const mapearCompraApi = (row: CompraApi): GestionCompra => {
     id: String(row.id_compra),
     ordenId: row.id_ocompra == null ? "" : String(row.id_ocompra),
     ...(row.proveedor_nombre ? { proveedor: row.proveedor_nombre } : {}),
+    ...(row.proveedor_nit ? { proveedorNit: row.proveedor_nit } : {}),
     ...(row.id_proveedor == null ? {} : { proveedorId: String(row.id_proveedor) }),
     numeroFactura: row.n_factura,
     fechaFactura: String(row.fecha ?? "").slice(0, 10),
