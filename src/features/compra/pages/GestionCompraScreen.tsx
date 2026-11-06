@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft,
   Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
-  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
@@ -19,8 +18,6 @@ import {
 // Bloque 2: "+ Crear producto" desde el desplegable de ítems de la compra.
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
-import { InsumosSolicitadosTable } from "@/features/compras/components/InsumosSolicitadosTable";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -76,11 +73,16 @@ import {
  *   no debe duplicar la suma).
  * - `stockRevertido`: esa suma ya se devolvió al anular. Guard para que una
  *   segunda anulación (o un reintentos) no reste dos veces la misma compra.
+ * - `proveedorNit`: NIT del proveedor tal como lo devuelve el backend
+ *   (`p.nit AS proveedor_nit`). El listado lo muestra bajo el nombre y NUNCA
+ *   se busca "difusamente" por nombre: un `id_proveedor` NULL devuelve el
+ *   proveedor vacío y la fila muestra «—».
  */
 declare module "@/features/orden-compra/pages/OrdenCompraScreen" {
   interface GestionCompra {
     stockAplicado?: boolean;
     stockRevertido?: boolean;
+    proveedorNit?: string;
   }
 }
 
@@ -124,6 +126,12 @@ const seccionCls =
 /** Labels de las guías: 13px en gris oscuro (pantalla completa). */
 const labelPaginaCls = "block text-[13px] leading-tight font-medium text-foreground/70 mb-1";
 const labelModalCls = "block text-xs font-semibold text-muted-foreground mb-1.5";
+
+/** Detalle de compra (vista): rejilla compacta de resumen — label pequeño en
+ *  mayúsculas gris y valor en negrita, sin cards anidadas. */
+const labelDatoCls =
+  "block text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground mb-1.5";
+const valorDatoCls = "block text-sm font-semibold text-foreground break-words";
 
 /** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
  *  (py-2.5 + border da 42px, y la fila de insumos y el selector de IVA van a
@@ -615,14 +623,8 @@ function CompraForm({
     () => new Set((orden?.items ?? []).map((i) => i.idInsumo)),
     [orden]
   );
-  const solicitados = useMemo(
-    () => (orden ? items.filter((i) => idsOrden.has(i.idInsumo)) : []),
-    [orden, items, idsOrden]
-  );
-  const noSolicitados = useMemo(
-    () => (orden ? items.filter((i) => !idsOrden.has(i.idInsumo)) : []),
-    [orden, items, idsOrden]
-  );
+  // La separación en dos tablas ya no existe: el detalle usa UNA sola tabla
+  // y pinta "Solicitado" / "No solicitado" fila por fila con `idsOrden`.
   // Punto 1: totales con la fórmula única `calcularLineaIva`.
   // Orden siempre: Subtotal sin IVA → IVA → Total pagado, y por construcción
   // subtotalSinIva + totalIva === totalPagado.
@@ -1088,7 +1090,7 @@ function CompraForm({
   /** Subtítulo de la cabecera (solo cuando aporta algo). */
   const subtitulo = isView
     ? compra
-      ? `Compra ${compra.id}`
+      ? `Compra N° ${compra.id}`
       : ""
     : isPage
       ? "Registra una factura de proveedor"
@@ -1163,7 +1165,14 @@ function CompraForm({
               className={
                 isPage
                   ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto overflow-x-clip"
-                  : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
+                  : isView
+                    // Detalle: el modal se AJUSTA al contenido (sin
+                    // `flex-1 min-h-0`, que lo estiraba hasta el tope y
+                    // dejaba el hueco muerto). El `max-h` —más el alto de la
+                    // cabecera— garantiza que quepa en pantalla y que el
+                    // cuerpo scrollee cuando hay muchos ítems.
+                    ? "px-5 py-5 flex flex-col gap-4 overflow-y-auto max-h-[calc(100dvh-9rem)]"
+                    : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
               {/* Columna IZQUIERDA — formulario (50 %). En el modal es solo un
@@ -1180,11 +1189,24 @@ function CompraForm({
                     : "flex flex-col gap-5"
                 }
               >
-              {/* Banners de estado */}
+              {/* Franja de anulación: motivo + fecha (trazabilidad de la
+                  anulación), en vez del aviso genérico de antes. */}
               {isView && compra?.estado === "Anulado" && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
-                  <Ban className="w-4 h-4 shrink-0" />
-                  Esta compra ha sido anulada.
+                <div className="shrink-0 flex items-start gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                  <Ban className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="font-semibold">Esta compra ha sido anulada.</p>
+                    {compra?.motivoAnulacion && (
+                      <p className="mt-1 break-words">
+                        <span className="font-semibold">Motivo:</span> {compra.motivoAnulacion}
+                      </p>
+                    )}
+                    {compra?.fechaAnulacion && (
+                      <p className="text-xs text-red-700/80 mt-0.5">
+                        Anulada el {compra.fechaAnulacion}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1196,17 +1218,59 @@ function CompraForm({
               >
                 {isPage && <p className={seccionCls}>Datos de la factura</p>}
 
-                {/* Detalle (vista): 3 columnas. Creación en pantalla completa:
+                {/* Detalle (vista): rejilla compacta de resumen — 4 columnas
+                    en escritorio, 2 en móvil. Creación en pantalla completa:
                     Fila 1: Número de factura * | Proveedor (opcional)
                     Fila 2: Fecha de factura * | Estado (badge Recibido)
                     En el modal se conserva la rejilla original. */}
+                {isView ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 shrink-0">
+                    <div className="min-w-0">
+                      <p className={labelDatoCls}>N° de factura</p>
+                      <p className={valorDatoCls}>{numeroFactura || "—"}</p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className={labelDatoCls}>Fecha de factura</p>
+                      <p className={valorDatoCls}>{fechaFactura || "—"}</p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className={labelDatoCls}>Proveedor</p>
+                      {provQuery ? (
+                        <>
+                          <p className={valorDatoCls} title={provQuery}>{provQuery}</p>
+                          {compra?.proveedorNit && (
+                            <p className="text-[11px] text-muted-foreground font-mono mt-0.5 break-words">
+                              NIT {compra.proveedorNit}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className={`${valorDatoCls} text-muted-foreground`}>—</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className={labelDatoCls}>Orden de compra</p>
+                      <p className={valorDatoCls}>
+                        {compra?.ordenId ? `OC N° ${compra.ordenId}` : "Compra directa"}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className={labelDatoCls}>Tipo de montos</p>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-muted border border-border text-muted-foreground">
+                        {ivaIncluido ? "Montos con IVA incluido" : "Montos sin IVA"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
                 <div
                   className={`grid gap-4 shrink-0 ${
-                    isView
-                      ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
-                      : isPage
-                        ? "grid-cols-1 sm:grid-cols-2"
-                        : "grid-cols-1 md:grid-cols-3"
+                    isPage
+                      ? "grid-cols-1 sm:grid-cols-2"
+                      : "grid-cols-1 md:grid-cols-3"
                   }`}
                 >
                   <div className="relative">
@@ -1246,6 +1310,12 @@ function CompraForm({
                           value={provQuery}
                           onChange={(e) => {
                             setProvQuery(e.target.value);
+                            // Toda edición manual suelta el proveedor elegido:
+                            // si el texto ya no es el de una opción seleccionada
+                            // (o se borró), se guarda SIN proveedor. Si el
+                            // usuario vuelve a elegir una sugerencia,
+                            // `seleccionarProveedor` re-fija `provId`.
+                            setProvId("");
                             setProvSugAbierto(true);
                           }}
                           onFocus={() => setProvSugAbierto(true)}
@@ -1410,6 +1480,7 @@ function CompraForm({
                     </div>
                   )}
                 </div>
+                )}
 
               {/* Selector de precios (pantalla completa): dos tarjetas tipo
                   radio, en la MISMA fila. NINGUNA viene elegida al abrir; con
@@ -1693,61 +1764,137 @@ function CompraForm({
                 )}
 
               {isView ? (
-                <div className="flex flex-col gap-4">
-                  {/* Punto 1: el detalle indica si los montos guardados traen
-                      IVA incluido o no. */}
-                  <div className="shrink-0">
-                    <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-muted border border-border text-muted-foreground">
-                      {ivaIncluido ? "Montos con IVA incluido" : "Montos sin IVA"}
+                <div className="flex flex-col gap-3 shrink-0">
+                  {/* Título fijo: una sola tabla para insumos y productos
+                      (antes había "solicitados" / "no solicitados" / "recibidos"
+                      por separado). */}
+                  <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
+                    <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
+                      Ítems de la factura
+                    </p>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {items.length} {items.length === 1 ? "ítem" : "ítems"}
+                      {nProductos > 0 &&
+                        ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${
+                          nProductos === 1 ? "producto" : "productos"
+                        }`}
                     </span>
                   </div>
-                  {orden ? (
-                    <>
-                      <InsumosSolicitadosTable
-                        items={solicitados}
-                        showActions={false}
-                        titulo="Insumos solicitados"
-                        subtotalLabel="Subtotal solicitados"
-                        mostrarIva
-                        mostrarTotal={false}
-                        modoIva
-                        ivaIncluido={ivaIncluido ?? true}
-                        className={isPage ? "flex-1 min-h-0" : ""}
-                      />
-                      {noSolicitados.length > 0 && (
-                        <InsumosSolicitadosTable
-                          items={noSolicitados}
-                          showActions={false}
-                          tono="amber"
-                          titulo="Insumos no solicitados"
-                          subtotalLabel="Subtotal no solicitados"
-                          mostrarIva
-                          mostrarTotal={false}
-                          modoIva
-                          ivaIncluido={ivaIncluido ?? true}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <InsumosSolicitadosTable
-                      items={items}
-                      showActions={false}
-                      titulo="Insumos recibidos"
-                      subtotalLabel="Subtotal"
-                      mostrarIva
-                      mostrarTotal={false}
-                      modoIva
-                      ivaIncluido={ivaIncluido ?? true}
-                      className={isPage ? "flex-1 min-h-0" : ""}
-                    />
-                  )}
 
-                  {/* Total pagado */}
-                  <div className="flex justify-between items-center px-1 pt-1 border-t border-border shrink-0">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  {/* Con más de ~6 filas la tabla scrollea por dentro; el
+                      modal se queda con su alto natural. Sin scroll
+                      horizontal: por debajo de `md` se ocultan Tipo, Medida,
+                      IVA % y Monto IVA (el Tipo baja junto al nombre). */}
+                  <div
+                    className={
+                      "rounded-xl border border-border bg-muted/30 overflow-hidden " +
+                      (items.length > 6 ? "max-h-[340px] overflow-y-auto" : "")
+                    }
+                  >
+                    <table className="table-fixed w-full text-sm">
+                      <thead className="text-[10px] uppercase tracking-wider bg-muted/50 text-muted-foreground">
+                        <tr>
+                          <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-16">Tipo</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-11">Cantidad</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[52px]">Medida</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[78px]">Monto unitario</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-11">IVA %</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[78px]">Monto IVA</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[86px]">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {items.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="text-center text-[11px] font-medium text-muted-foreground/80 px-3 py-6">
+                              Sin ítems agregados
+                            </td>
+                          </tr>
+                        ) : (
+                          items.map((row) => {
+                            const l = calcularLineaIva({
+                              cantidad: row.cantidad,
+                              montoUnitario: row.precioUnitario,
+                              porcentajeIva: row.iva,
+                              ivaIncluido: ivaIncluido ?? true,
+                            });
+                            const esProducto = (row.tipoItem ?? "insumo") === "producto";
+                            // Misma regla de siempre: "solicitado" si el id está
+                            // en el detalle de la OC; sin OC no se etiqueta.
+                            const etiqueta = orden
+                              ? idsOrden.has(row.idInsumo)
+                                ? "Solicitado"
+                                : "No solicitado"
+                              : null;
+                            return (
+                              <tr key={row.rowId} className="hover:bg-muted/20 transition-colors">
+                                <td className="align-middle px-2 py-2.5 min-w-0">
+                                  <div className="truncate text-sm font-medium text-foreground" title={row.nombre}>
+                                    {row.nombre}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="md:hidden text-[11px] text-muted-foreground">
+                                      {esProducto ? "Producto" : "Insumo"}
+                                    </span>
+                                    {etiqueta && (
+                                      <span
+                                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                          etiqueta === "Solicitado"
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-amber-100 text-amber-700"
+                                        }`}
+                                      >
+                                        {etiqueta}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
+                                  {esProducto ? "Producto" : "Insumo"}
+                                </td>
+                                <td className="align-middle px-2 py-2.5 text-sm text-right">{row.cantidad}</td>
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
+                                  {row.unidad}
+                                </td>
+                                <td className="align-middle px-2 py-2.5 text-sm text-right whitespace-nowrap">
+                                  {fmtCOP(row.precioUnitario)}
+                                </td>
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground">
+                                  {row.iva}%
+                                </td>
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground whitespace-nowrap">
+                                  {fmtCOP(l.montoIva)}
+                                </td>
+                                <td className="align-middle px-2 py-2.5 text-sm font-semibold text-foreground text-right whitespace-nowrap">
+                                  {fmtCOP(l.subtotalConIva)}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totales pegados debajo de la tabla, a la derecha. */}
+                  <div className="ml-auto w-fit grid grid-cols-[auto_7rem] gap-x-3 gap-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
+                      Subtotal sin IVA
+                    </span>
+                    <span className="text-sm font-semibold text-foreground text-right">
+                      {fmtCOP(subtotalSinIva)}
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
+                      IVA
+                    </span>
+                    <span className="text-sm font-semibold text-foreground text-right">
+                      {fmtCOP(totalIva)}
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
                       Total pagado
                     </span>
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-base font-bold text-foreground text-right">
                       {fmtCOP(totalPagado)}
                     </span>
                   </div>
@@ -2024,12 +2171,17 @@ export function GestionCompraScreen({
   errorCarga,
   onReintentar,
   canCreate = true,
+  // El backend exige el privilegio "Editar" en PATCH /compras/:id/anular:
+  // sin él no se muestra el ícono de anular.
+  canEdit = true,
   canExportExcel = true,
 }: Props) {
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   const [detail, setDetail]   = useState<GestionCompra | null>(null);
-  const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion; next: EstadoGestion } | null>(null);
+  /** Confirmación de ANULACIÓN: es el ÚNICO cambio de estado que existe en
+   *  este módulo (el select de estado se reemplazó por el ícono de anular). */
+  const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion } | null>(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
   // Se declara antes del `useMemo` de abajo porque la fábrica lo invoca durante
@@ -2050,12 +2202,13 @@ export function GestionCompraScreen({
     ordenarPorIdDescendente(gestiones.filter(g => {
       const q = search.toLowerCase();
       if (!q) return true;
-      const proveedor = g.proveedor ?? getOrden(g.ordenId)?.proveedor ?? "";
+      // Proveedor vacío ⇒ cadena vacía: el `?? ""` evita el `undefined`.
+      const proveedor = g.proveedor ?? "";
       return proveedor.toLowerCase().includes(q)
         || g.numeroFactura.toLowerCase().includes(q)
         || g.estado.toLowerCase().includes(q);
     }), (gestion) => gestion.id),
-    [gestiones, search, ordenes]);
+    [gestiones, search]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
   // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
@@ -2076,12 +2229,12 @@ export function GestionCompraScreen({
     ? gestiones.find((g) => g.id === estadoConfirm.id)?.ordenId ?? ""
     : "";
 
-  /** Pide confirmación antes de aplicar el cambio de estado. */
-  const pedirCambiarEstado = (id: string, next: EstadoGestion) => {
+  /** Pide confirmación de ANULACIÓN (único caso: "Anulado"). */
+  const pedirCambiarEstado = (id: string) => {
     const actual = gestiones.find((g) => g.id === id)?.estado;
 
-    // "Anulado" es definitivo: no se puede volver a "Recibido".
-    if (!actual || actual === next || actual === "Anulado") {
+    // "Anulado" es definitivo: sólo se anulan compras en estado "Recibido".
+    if (actual !== "Recibido") {
       setEstadoConfirm(null);
       return;
     }
@@ -2089,76 +2242,61 @@ export function GestionCompraScreen({
     // Punto 6: el diálogo siempre arranca con el motivo vacío (si no, el botón
     // "Anular" se habilitaría con el motivo de una anulación anterior).
     setMotivoAnulacion("");
-    setEstadoConfirm({ id, from: actual, next });
+    setEstadoConfirm({ id, from: actual });
   };
 
-  const handleCambiarEstado = async (id: string, next: EstadoGestion, motivo?: string) => {
+  const handleCambiarEstado = async (id: string, motivo?: string) => {
     const compra = gestiones.find((g) => g.id === id);
 
     // ANULACIÓN (6.2): la hace el backend, que devuelve al inventario lo que
     // la compra sumó (insumos y productos). Un 409 ("ya se usaron/vendieron
     // unidades de «X»") muestra su mensaje y NO se anula nada.
-    if (next === "Anulado") {
-      try {
-        const anulada = await anularCompraApi(id, (motivo ?? "").trim());
-        setGestiones((prev) => prev.map((x) => (x.id === id ? anulada : x)));
-        // El stock cambió en la base: se recargan insumos y productos.
-        await onRecargarCatalogo?.();
+    try {
+      const anulada = await anularCompraApi(id, (motivo ?? "").trim());
+      setGestiones((prev) => prev.map((x) => (x.id === id ? anulada : x)));
+      // El stock cambió en la base: se recargan insumos y productos.
+      await onRecargarCatalogo?.();
 
-        // El backend anula la Orden de Compra cuando ésta tenía una sola
-        // compra asociada: aquí solo se refleja su estado (con recarga).
-        const ordenId = compra?.ordenId ?? "";
-        if (!ordenId) {
+      // El backend anula la Orden de Compra cuando ésta tenía una sola
+      // compra asociada: aquí solo se refleja su estado (con recarga).
+      const ordenId = compra?.ordenId ?? "";
+      if (!ordenId) {
+        toast.success(`Compra ${id} anulada`);
+      } else {
+        try {
+          // La orden puntual sólo decide el TEXTO del toast (¿la anulación
+          // arrastró la OC?): el estado del listado y el botón "OC" salen
+          // de la recarga COMPLETA de GET /ordenes-compra de abajo.
+          const orden = await obtenerOrdenCompra(ordenId);
+          toast.success(
+            orden.estado === "Anulado"
+              ? `Compra ${id} y orden ${ordenId} anuladas`
+              : `Compra ${id} anulada`,
+          );
+        } catch {
+          // La compra ya quedó anulada: se informa solo eso.
           toast.success(`Compra ${id} anulada`);
-        } else {
-          try {
-            // La orden puntual sólo decide el TEXTO del toast (¿la anulación
-            // arrastró la OC?): el estado del listado y el botón "OC" salen
-            // de la recarga COMPLETA de GET /ordenes-compra de abajo.
-            const orden = await obtenerOrdenCompra(ordenId);
-            toast.success(
-              orden.estado === "Anulado"
-                ? `Compra ${id} y orden ${ordenId} anuladas`
-                : `Compra ${id} anulada`,
-            );
-          } catch {
-            // La compra ya quedó anulada: se informa solo eso.
-            toast.success(`Compra ${id} anulada`);
-          }
-          // La OC vuelve de Completado a Enviado (o se anula): se recarga la
-          // lista completa de órdenes para que el badge y el botón "OC" se
-          // actualicen sin recargar la página.
-          await onRecargarOrdenes?.();
         }
-      } catch (error) {
-        toast.error(mensajeErrorCompras(error, "No se pudo anular la compra."));
-      } finally {
-        setEstadoConfirm(null);
-        setMotivoAnulacion("");
+        // La OC vuelve de Completado a Enviado (o se anula): se recarga la
+        // lista completa de órdenes para que el badge y el botón "OC" se
+        // actualicen sin recargar la página.
+        await onRecargarOrdenes?.();
       }
-      return;
+    } catch (error) {
+      toast.error(mensajeErrorCompras(error, "No se pudo anular la compra."));
+    } finally {
+      setEstadoConfirm(null);
+      setMotivoAnulacion("");
     }
-
-    // Solo se actualiza el estado de la Compra puntual (por su ID).
-    setGestiones((prev) => prev.map((x) => (x.id === id ? { ...x, estado: next } : x)));
-    setEstadoConfirm(null);
-    setMotivoAnulacion("");
-    toast.success(`Estado cambiado a: ${next}`);
   };
 
   const handleDownload = async () => {
     // Preparar datos agrupados: cada compra con sus insumos debajo
     const comprasParaExcel: GestionCompraConInsumos[] = filtered.map(g => {
       const orden = getOrden(g.ordenId);
-      // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
-      const prov = g.proveedorId
-        ? proveedores.find(p => p.id === g.proveedorId)
-        : proveedores.find(p => 
-            p.nombre === (orden?.proveedor ?? g.proveedor) || 
-            p.nombre.toLowerCase() === (orden?.proveedor ?? g.proveedor)?.toLowerCase() ||
-            p.nombre.toLowerCase().includes((orden?.proveedor ?? g.proveedor)?.toLowerCase() || '') ||
-            (orden?.proveedor ?? g.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
-          );
+      // Proveedor y NIT vienen resueltos del backend: vacío si la compra no
+      // tiene proveedor (nunca "difuso" por nombre, que con el campo en blanco
+      // elegía el primer proveedor del catálogo).
       const idsOrden = new Set(orden?.items.map(i => i.idInsumo) ?? []);
       
       const items = (g.items ?? []).map(item => {
@@ -2182,8 +2320,8 @@ export function GestionCompraScreen({
       return {
         id: g.id,
         numeroFactura: g.numeroFactura || "—",
-        proveedor: prov?.nombre ?? orden?.proveedor ?? g.proveedor ?? "—",
-        nit: prov?.nit ?? "",
+        proveedor: g.proveedor ?? "",
+        nit: g.proveedorNit ?? "",
         fechaFactura: g.fechaFactura,
         estado: g.estado,
         subtotalSinIva: g.subtotalSinIva ?? 0,
@@ -2283,19 +2421,11 @@ export function GestionCompraScreen({
                   </tr>
                 )
                 : paged.map(g => {
-                  const orden = getOrden(g.ordenId);
-
-                  // Buscar proveedor por ID primero (JOIN correcto), luego por nombre como fallback
-                  const prov = g.proveedorId
-                    ? proveedores.find(p => p.id === g.proveedorId)
-                    : proveedores.find(p =>
-                        p.nombre === (g.proveedor || orden?.proveedor) ||
-                        p.nombre.toLowerCase() === (g.proveedor || orden?.proveedor)?.toLowerCase() ||
-                        p.nombre.toLowerCase().includes((g.proveedor || orden?.proveedor)?.toLowerCase() || '') ||
-                        (g.proveedor || orden?.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
-                      );
-                  const nit = prov?.nit ?? "";
-                  const nombreMostrar = prov?.nombre || g.proveedor || orden?.proveedor || "—";
+                  // El proveedor viene YA resuelto del backend (LEFT JOIN a
+                  // tb_proveedores): sin búsqueda difusa por nombre, que con
+                  // el campo vacío asignaba el PRIMER proveedor de la lista.
+                  const nombreMostrar = g.proveedor || "";
+                  const nit = g.proveedorNit || "";
                   return (
                     <tr key={g.id} className="group hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3.5 text-xs sticky left-0 z-10 bg-card group-hover:bg-muted/20">
@@ -2311,7 +2441,9 @@ export function GestionCompraScreen({
                         {g.fechaFactura || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-sm overflow-hidden">
-                        <p className="text-sm text-foreground break-words" title={nombreMostrar}>{nombreMostrar}</p>
+                        {nombreMostrar
+                          ? <p className="text-sm text-foreground break-words" title={nombreMostrar}>{nombreMostrar}</p>
+                          : <p className="text-sm text-muted-foreground">—</p>}
                         {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
                       </td>
                       <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
@@ -2331,21 +2463,15 @@ export function GestionCompraScreen({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {g.estado !== "Anulado" && (
-                            <EstadoSelect
-                              value={g.estado}
-                              onChange={(nuevoEstado) => {
-                                if (nuevoEstado === g.estado) return;
-                                pedirCambiarEstado(g.id, nuevoEstado);
-                              }}
-                              options={[
-                                { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
-                                { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
-                              ]}
-                              triggerContent={<RefreshCw className="w-4 h-4" />}
-                              triggerTitle="Cambiar estado"
-                              triggerAriaLabel="Cambiar estado"
-                            />
+                          {g.estado === "Recibido" && canEdit && (
+                            <button
+                              onClick={() => pedirCambiarEstado(g.id)}
+                              title="Anular compra"
+                              aria-label="Anular compra"
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -2368,18 +2494,10 @@ export function GestionCompraScreen({
                 </div>
               )
               : paged.map(g => {
-                const orden = getOrden(g.ordenId);
-
-                const prov = g.proveedorId
-                  ? proveedores.find(p => p.id === g.proveedorId)
-                  : proveedores.find(p =>
-                      p.nombre === (g.proveedor || orden?.proveedor) ||
-                      p.nombre.toLowerCase() === (g.proveedor || orden?.proveedor)?.toLowerCase() ||
-                      p.nombre.toLowerCase().includes((g.proveedor || orden?.proveedor)?.toLowerCase() || '') ||
-                      (g.proveedor || orden?.proveedor)?.toLowerCase().includes(p.nombre.toLowerCase() || '')
-                    );
-                const nit = prov?.nit ?? "";
-                const nombreMostrar = prov?.nombre || g.proveedor || orden?.proveedor || "—";
+                // Igual que en la tabla: el dato viene del backend, sin
+                // búsqueda difusa (con vacío asignaba el primer proveedor).
+                const nombreMostrar = g.proveedor || "";
+                const nit = g.proveedorNit || "";
                 return (
                   <div key={g.id} className="p-4">
                     {/* N° de factura y estado arriba */}
@@ -2395,7 +2513,9 @@ export function GestionCompraScreen({
 
                     {/* Proveedor con NIT */}
                     <div className="mt-2.5 min-w-0">
-                      <p className="text-sm text-foreground break-words">{nombreMostrar}</p>
+                      {nombreMostrar
+                        ? <p className="text-sm text-foreground break-words">{nombreMostrar}</p>
+                        : <p className="text-sm text-muted-foreground">—</p>}
                       {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
                     </div>
 
@@ -2409,24 +2529,8 @@ export function GestionCompraScreen({
                       </span>
                     </div>
 
-                    {/* Ver detalle */}
+                    {/* Ver detalle + anular */}
                     <div className="mt-2.5 flex items-center justify-end gap-2">
-                      {g.estado !== "Anulado" && (
-                        <EstadoSelect
-                          value={g.estado}
-                          onChange={(nuevoEstado) => {
-                            if (nuevoEstado === g.estado) return;
-                            pedirCambiarEstado(g.id, nuevoEstado);
-                          }}
-                          options={[
-                            { value: "Recibido" as EstadoGestion, label: "Recibido", color: ESTADO_CONFIG.Recibido },
-                            { value: "Anulado" as EstadoGestion, label: "Anulado", color: ESTADO_CONFIG.Anulado },
-                          ]}
-                          triggerContent={<RefreshCw className="w-4 h-4" />}
-                          triggerTitle="Cambiar estado"
-                          triggerAriaLabel="Cambiar estado"
-                        />
-                      )}
                       <button
                         onClick={() => setDetail(g)}
                         title="Ver detalle"
@@ -2434,6 +2538,16 @@ export function GestionCompraScreen({
                       >
                         <Eye className="w-4 h-4" />
                       </button>
+                      {g.estado === "Recibido" && canEdit && (
+                        <button
+                          onClick={() => pedirCambiarEstado(g.id)}
+                          title="Anular compra"
+                          aria-label="Anular compra"
+                          className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                        >
+                          <Ban className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -2452,11 +2566,7 @@ export function GestionCompraScreen({
         {detail && (
           <CompraForm
             mode="view"
-            compra={{
-              ...detail,
-              proveedor:
-                detail.proveedor ?? getOrden(detail.ordenId)?.proveedor ?? "",
-            }}
+            compra={detail}
             proveedores={proveedores}
             setProveedores={setProveedores}
             insumos={insumos}
@@ -2475,34 +2585,24 @@ export function GestionCompraScreen({
       <AnimatePresence>
         {estadoConfirm && (
           <ConfirmModal
-            title={`¿Cambiar el estado a ${estadoConfirm.next}?`}
-            body={`La compra ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
+            title="¿Anular la compra?"
+            body={`La compra ${estadoConfirm.id} pasará de ${estadoConfirm.from} a Anulado.`}
             detail={
-              estadoConfirm.next === "Anulado"
-                ? estadoOrdenConfirm
-                  ? `La orden ${estadoOrdenConfirm} también quedará anulada y no podrá recibir más facturas.`
-                  : "Una compra anulada no puede volver al estado Recibido."
-                : "Volverá a contar en los totales de Gestión de Compras."
+              estadoOrdenConfirm
+                ? `La orden ${estadoOrdenConfirm} también quedará anulada y no podrá recibir más facturas.`
+                : "Una compra anulada no puede volver al estado Recibido."
             }
-            confirmLabel={
-              estadoConfirm.next === "Anulado" ? "Anular" : `Marcar ${estadoConfirm.next}`
-            }
-            danger={estadoConfirm.next === "Anulado"}
+            confirmLabel="Anular"
+            danger
             icon={
-              estadoConfirm.next === "Anulado" ? (
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <Ban className="w-5 h-5 text-red-600" />
-                </div>
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                </div>
-              )
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-red-600" />
+              </div>
             }
-            showMotivo={estadoConfirm.next === "Anulado"}
+            showMotivo
             motivo={motivoAnulacion}
             onMotivoChange={setMotivoAnulacion}
-            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next, motivoAnulacion)}
+            onConfirm={() => handleCambiarEstado(estadoConfirm.id, motivoAnulacion)}
             onCancel={() => {
               setEstadoConfirm(null);
               setMotivoAnulacion("");
