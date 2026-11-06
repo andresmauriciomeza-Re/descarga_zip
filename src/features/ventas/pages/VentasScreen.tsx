@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 import { hora12 } from "@/shared/utils/hora";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
+import { disponiblePizza } from "@/shared/utils/stockPizza";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -64,6 +66,7 @@ interface ProductoMenu {
   sales: number;
   stockMediana?: number;
   stockGrande?: number;
+  stockPartes?: number;
 }
 
 const esPizzaVenta = (producto: { category?: string; tamaño?: string }) =>
@@ -364,6 +367,10 @@ export interface Venta {
   estado: VentaStatus;
   estadoCliente?: EstadoClienteVenta | VentaStatus;
   estadoOrden?: string;
+  ventaLocal?: boolean;
+  horaCompletadoLocal?: string;
+  finVentaLocalMs?: number;
+  finCalentamientoMs?: number;
   detalle?: DetalleProd[];
   metodoPago?: string;
   comprobante?: string;
@@ -748,6 +755,11 @@ const hoyFecha = () => {
       return undefined;
     };
     const disponibleParaVenta = (p: ProductoMenu, tamaño: string) => {
+      if (p.category.toLowerCase().includes("pizza") && p.stockPartes != null) {
+        return disponiblePizza(p.stockPartes, tamaño, selProductos
+          .filter((linea) => linea.id === p.id && linea.tamaño !== tamaño)
+          .map((linea) => ({ tamano: linea.tamaño, cantidad: linea.cantidad })));
+      }
       const stock = stockPizzaDe(p, tamaño);
       if (!p.category.toLowerCase().includes("pizza") || stock == null) return undefined;
       return Math.max(0, Math.floor(stock));
@@ -1261,7 +1273,7 @@ const hoyFecha = () => {
                             <span className="text-[10px] font-semibold text-muted-foreground">
                               {disponible === undefined
                                 ? "Disponibilidad no informada"
-                                : `Disponibles: ${disponible} porciones`}
+                                : `Disponibles para agregar: ${Math.max(0, disponible - p.cantidad)} porciones`}
                             </span>
                           )}
                           {/* Precio unitario + total */}
@@ -1290,7 +1302,7 @@ const hoyFecha = () => {
                           <button
                             type="button"
                             onClick={() => agregarTamanoPizza(prodData, otroTamano.label)}
-                            disabled={disponibleParaVenta(prodData, otroTamano.label) === 0 || otroTamano.price <= 0}
+                            disabled={(disponibleParaVenta(prodData, otroTamano.label) ?? 0) <= (selProductos.find((x) => x.id === prodData.id && x.tamaño === otroTamano.label)?.cantidad ?? 0) || otroTamano.price <= 0}
                             className="mt-2 text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             + Agregar {otroTamano.label}
@@ -1401,7 +1413,9 @@ const hoyFecha = () => {
                               {variantesDe(p).map((s) => {
                                 if (esPizza) {
                                   const active = selProductos.some((x) => x.id === p.id && x.tamaño === s.label);
-                                  const stock = disponibleParaVenta(p, s.label);
+                                  const maximo = disponibleParaVenta(p, s.label);
+                                  const elegidas = selProductos.find((x) => x.id === p.id && x.tamaño === s.label)?.cantidad ?? 0;
+                                  const stock = maximo === undefined ? undefined : Math.max(0, maximo - elegidas);
                                   return (
                                     <button
                                       key={s.label}
@@ -1624,6 +1638,23 @@ export function VentasScreen({
   // ventana. Aquí se descuenta lo transcurrido desde esa carga para que el
   // botón se deshabilite solo; el límite real lo aplica siempre el servidor.
   const [ahora, setAhora] = useState(() => Date.now());
+  useRefrescarAlVencer(
+    pedidos.filter((p) => p.ventaLocal && p.estado === "Por entregar").map((p) => p.finVentaLocalMs),
+    async () => { setPedidos(await obtenerVentasPanel()); },
+  );
+  useEffect(() => {
+    setDetailItem((actual) => {
+      if (!actual) return null;
+      const actualizada = pedidos.find((p) => p.id === actual.id);
+      return actualizada ? {
+        ...actual,
+        estado: actualizada.estado,
+        estadoCliente: actualizada.estadoCliente,
+        estadoOrden: actualizada.estadoOrden,
+        finVentaLocalMs: actualizada.finVentaLocalMs,
+      } : actual;
+    });
+  }, [pedidos]);
   const cargadoEnRef = useRef(Date.now());
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 1000);
@@ -1981,6 +2012,9 @@ export function VentasScreen({
                       >
                         {etiquetaEstadoVenta(p)}
                       </span>
+                      {p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null && (
+                        <p className="mt-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">⏱ {tiempoRestante(p.finVentaLocalMs, ahora)}</p>
+                      )}
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
@@ -2081,6 +2115,9 @@ export function VentasScreen({
                   {etiquetaEstadoVenta(detailItem)}
                 </span>
               </div>
+              {detailItem.ventaLocal && detailItem.estado === "Por entregar" && detailItem.finVentaLocalMs != null && (
+                <p className="text-sm text-muted-foreground mb-2 tabular-nums">⏱ {tiempoRestante(detailItem.finVentaLocalMs, ahora)}</p>
+              )}
 
               <h1 className="text-2xl font-bold text-foreground mb-6" style={{ fontFamily: SERIF }}>
                 Detalle de venta — ID {detailItem.id}
@@ -2400,8 +2437,7 @@ export function VentasScreen({
                     numero_documento: v.documento ?? "",
                     nombre: v.usuario,
                   },
-                  // Sin hora: el backend auto-asigna ahora + 25 minutos
-                  // (pedido tomado en local, tiempo de preparación).
+                  // Sin hora: el backend usa la hora actual del local.
                   productos: (v.detalle ?? []).map((detalle) => ({
                     id_producto: Number(detalle.productoId),
                     cantidad: detalle.cantidad,
@@ -2412,7 +2448,7 @@ export function VentasScreen({
                 const ventasActualizadas = await obtenerVentasPanel();
                 setPedidos(ventasActualizadas);
                 setShowCreate(false);
-                toast.success(`Venta #${id} registrada y completada`);
+                toast.success(`Venta #${id} registrada — Por entregar`);
                 try {
                   if (onVentaPanelCambiada && !await onVentaPanelCambiada()) {
                     toast.warning("La venta se registró, pero no se pudieron actualizar todos los datos de producción e inventario.");

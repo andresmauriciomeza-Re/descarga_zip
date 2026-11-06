@@ -4,7 +4,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 
 export type TamanoPizza = "Mediana" | "Grande";
 
-const PORCIONES: Record<TamanoPizza, number> = { Mediana: 6, Grande: 8 };
+const PORCIONES: Record<TamanoPizza, number> = { Mediana: 8, Grande: 6 };
 const TAMANOS: TamanoPizza[] = ["Mediana", "Grande"];
 
 export const porcionesDeTamano = (tamano: TamanoPizza, pizzas: number): number =>
@@ -69,8 +69,8 @@ export function TamanosPizzaPicker({
             onChange={(e) => setTamano(e.target.value as TamanoPizza)}
             className={`${CAMPO_CLS} cursor-pointer`}
           >
-            <option value="Mediana">Mediana (6 porciones)</option>
-            <option value="Grande">Grande (8 porciones)</option>
+            <option value="Mediana">Mediana (8 porciones)</option>
+            <option value="Grande">Grande (6 porciones)</option>
           </select>
         </div>
         <div className="min-w-0">

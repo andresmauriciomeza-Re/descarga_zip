@@ -8,9 +8,7 @@
  * insumos requeridos y los faltantes, y Gestión de Productos las usa para
  * pintar "Se pueden preparar", así que los dos cálculos nunca dan distinto.
  *
- * La pizza de un tamaño mayor gasta la ficha × (porciones del tamaño pedido ÷
- * porciones del primer tamaño de la ficha): Mediana 6 y Grande 8 → factor
- * 8/6. Una lasaña (un solo tamaño) o cualquier línea sin tamaño → factor 1.
+ * Las pizzas se preparan completas: el corte no altera la receta.
  *
  * Vive en `shared/utils` sin imports de features: los tipos se reciben
  * estructuralmente (mismo criterio que `presentacion.ts`), así no se crean
@@ -118,10 +116,10 @@ const esMasaOVolumen = (unidad: string): boolean =>
   ["kg", "g", "lt", "ml"].includes(normalizar(unidad));
 
 /**
- * A1 — Factor de tamaño: porciones del tamaño pedido ÷ porciones del PRIMER
- * tamaño de la ficha (el primero es la referencia del resto de la app).
+ * A1 — Las pizzas usan la ficha completa para ambos cortes. Para otras fichas,
+ * el factor es porciones del tamaño pedido ÷ porciones del primer tamaño.
  * Sin `porcionesPorTamano`, con un solo tamaño, sin tamaño pedido o con un
- * tamaño que la ficha no conoce → 1 (una lasaña, una pizza Mediana y una
+ * tamaño que la ficha no conoce → 1 (una lasaña, una pizza y una
  * preparación en lote gastan la ficha tal cual).
  */
 export const factorTamano = (
@@ -130,6 +128,8 @@ export const factorTamano = (
 ): number => {
   const filas = ficha?.porcionesPorTamano;
   if (!filas || filas.length < 2) return 1;
+  if (filas.some((fila) => normalizar(fila.tamano) === "mediana")
+      && filas.some((fila) => normalizar(fila.tamano) === "grande")) return 1;
   const base = filas[0]?.porciones;
   if (!base || base <= 0) return 1;
   if (!tamano || !tamano.trim()) return 1;
@@ -158,9 +158,8 @@ export function requeridosPorUnidad(
     nombre: r.nombre,
     // El factor de tamaño solo escala lo que se DEJA CAER en la masa o el
     // molde (peso o volumen): queso, salsa, harina. Lo que se CUESTA por
-    // unidad —und, paq, caja, pza, bolsa— no se multiplica: una pizza
-    // Grande lleva la MISMA 1 masa que una Mediana, solo gasta más de lo
-    // que se desparrama. El rendimiento sigue aplicando a todas las filas.
+    // unidad —und, paq, caja, pza, bolsa— no se multiplica. El rendimiento
+    // sigue aplicando a todas las filas.
     cantidad:
       (r.cantidad || 0) * (esMasaOVolumen(r.unidad) ? factor : 1) / rendimiento,
     unidad: r.unidad,

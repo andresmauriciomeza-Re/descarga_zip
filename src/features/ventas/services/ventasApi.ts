@@ -26,6 +26,10 @@ export interface VentaApi {
   estado_cliente?: EstadoClienteVenta;
   estado_orden?: string | null;
   fecha_estado: string | null;
+  venta_local: boolean;
+  hora_completado_local?: string | null;
+  fin_venta_local_ms?: number | string | null;
+  fin_calentamiento_ms?: number | string | null;
   motivo_rechazo: string | null;
   /** Quién dejó la venta en 'Anulado': 'Administrador' o 'Cliente'. */
   anulado_por?: string | null;
@@ -119,6 +123,10 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     estado: row.estado,
     estadoCliente: row.estado_cliente ?? row.estado,
     estadoOrden: row.estado_orden ?? undefined,
+    ventaLocal: row.venta_local === true,
+    horaCompletadoLocal: row.hora_completado_local ?? undefined,
+    finVentaLocalMs: row.fin_venta_local_ms == null ? undefined : Number(row.fin_venta_local_ms),
+    finCalentamientoMs: row.fin_calentamiento_ms == null ? undefined : Number(row.fin_calentamiento_ms),
     detalle: detalles.map((detalle) => ({
       nombre: detalle.nombre,
       precio: Number(detalle.precio_unitario),
@@ -244,8 +252,7 @@ export async function crearVentaCliente(payload: {
 
 export async function crearVentaPanel(payload: {
   cliente: { tipo_documento: string; numero_documento: string; nombre: string };
-  /** Opcional: si no viene, el backend auto-asigna ahora + 25 minutos
-      (pedido tomado en el local, tiempo de preparación de la pizza). */
+  /** Opcional: si no viene, el backend usa la hora actual del local. */
   hora_recogida?: string;
   productos: Array<{ id_producto: number; cantidad: number; tamano: string | null }>;
   pago: { tipo: string; comprobante?: null };

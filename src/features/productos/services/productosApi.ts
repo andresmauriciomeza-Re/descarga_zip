@@ -26,8 +26,9 @@ export interface ProductoApi {
   tiene_imagen?: boolean | null;
   estado: string;
   stock?: number | string | null;
-  stock_mediana?: number | string | null;
-  stock_grande?: number | string | null;
+  stock_partes?: number | string | null;
+  disponibles_mediana?: number | string | null;
+  disponibles_grande?: number | string | null;
   contenido?: number | string | null;
   contenido_unidad?: "ml" | "L" | null;
   unidad_compra?: "und" | "paca" | "caja" | null;
@@ -143,8 +144,9 @@ export const mapearProductoApi = (p: ProductoApi): Producto => ({
   costoUnitario: Number(p.costo_unitario ?? 0),
   precioUnitario: Number(p.precio_venta ?? 0),
   ...(p.precio_grande == null ? {} : { precioGrande: Number(p.precio_grande) }),
-  ...(p.stock_mediana == null ? {} : { stockMediana: Number(p.stock_mediana) }),
-  ...(p.stock_grande == null ? {} : { stockGrande: Number(p.stock_grande) }),
+  ...(p.stock_partes == null ? {} : { stockPartes: Number(p.stock_partes) }),
+  ...(p.disponibles_mediana == null ? {} : { stockMediana: Number(p.disponibles_mediana) }),
+  ...(p.disponibles_grande == null ? {} : { stockGrande: Number(p.disponibles_grande) }),
   unidadVenta: p.unidad_venta,
   contenido: p.contenido == null ? undefined : Number(p.contenido),
   contenidoUnidad: p.contenido_unidad ?? undefined,

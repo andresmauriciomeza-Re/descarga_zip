@@ -116,6 +116,7 @@ import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVent
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
+import { disponiblePizza } from "@/shared/utils/stockPizza";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
 import { obtenerCatalogo } from "@/shared/services/catalogoService";
 import { subirArchivo } from "@/shared/services/uploadService";
@@ -3426,7 +3427,7 @@ function ProductDetailScreen({
           </p>
           {esPizza && (
             <p className="mb-6 rounded-xl border border-border bg-muted/70 px-3 py-2 text-sm text-muted-foreground">
-              Se vende por porción. Mediana: 6 porciones · Grande: 8 porciones.
+              Se vende por porción. Mediana: 1/8 de pizza · Grande: 1/6 de pizza (más grande).
             </p>
           )}
 
@@ -9344,6 +9345,11 @@ export default function App() {
       enCatalogo.idCategoria === "CAT-001" ||
       enCategoria?.toLowerCase().includes("pizza") === true;
     const stock = limiteStockDe(enCatalogo, linea.size);
+    if (esPizza && enCatalogo.stockPartes != null) {
+      const consumo = otras.filter((l) => mismoNombre(l.product.name))
+        .map((l) => ({ tamano: l.size, cantidad: l.quantity }));
+      return { max: disponiblePizza(enCatalogo.stockPartes, linea.size, consumo), elaborado, stock };
+    }
     if (stock === undefined || !Number.isFinite(stock)) {
       return { max: undefined, elaborado };
     }

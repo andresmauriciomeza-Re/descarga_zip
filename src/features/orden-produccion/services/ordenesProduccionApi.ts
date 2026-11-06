@@ -31,7 +31,7 @@ export interface OrdenApi {
   id_orden_produccion: number | string;
   tipo: "Preparacion" | "Pedido";
   id_venta: number | string | null;
-  venta_local: boolean;
+  es_venta_local: boolean;
   fecha_solicitada: string;
   fecha_entrega_estimada: string | null;
   hora_solicitada: string | null;
@@ -41,6 +41,8 @@ export interface OrdenApi {
   cliente: string | null;
   fecha_creacion: string;
   fecha_en_proceso: string | null;
+  fin_calentamiento_ms?: number | string | null;
+  fin_preparacion_ms?: number | string | null;
   fecha_completada: string | null;
   fecha_cancelada: string | null;
   descripcion_preparacion: string | null;
@@ -58,6 +60,8 @@ interface TransicionApi {
   a: string;
   fechaHora: string;
   detalle?: string | null;
+  automatico?: boolean;
+  verificacion?: { id_detalle_op: number; pizzas_medianas?: number; pizzas_grandes?: number }[];
 }
 
 interface RequeridoApi {
@@ -132,8 +136,13 @@ const parsearJson = <T>(valor: T | string | null | undefined): T => {
     el `idFt` de cada línea). */
 export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
   const tipo: TipoOrden = row.tipo === "Pedido" ? "pedido" : "preparacion";
+  const transiciones = parsearJson<TransicionApi[]>(row.historial);
+  const cortes = new Map(
+    transiciones.flatMap((h) => h.verificacion ?? []).map((v) => [Number(v.id_detalle_op), v]),
+  );
   const lineas = (row.lineas ?? []).map((l): LineaOrden => {
     const esPedido = l.id_producto != null && l.id_producto !== "";
+    const corte = cortes.get(Number(l.id_detalle_op));
     return {
       idProducto: esPedido ? String(l.id_producto) : idInsumoFront(l.id_insumo as number | string),
       ...(esPedido ? { productoId: String(l.id_producto) } : {}),
@@ -143,6 +152,8 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
       ...(l.cantidad_debida == null ? {} : { cantidadDebida: Number(l.cantidad_debida) }),
       ...(l.tamano ? { tamano: l.tamano } : {}),
       ...(l.cantidad_real == null ? {} : { cantidadReal: Number(l.cantidad_real) }),
+      ...(corte?.pizzas_medianas == null ? {} : { pizzasMedianas: Number(corte.pizzas_medianas) }),
+      ...(corte?.pizzas_grandes == null ? {} : { pizzasGrandes: Number(corte.pizzas_grandes) }),
       ...(l.merma == null ? {} : { merma: Number(l.merma) }),
       ...(esPedido && l.id_ft == null ? { sinFicha: true } : {}),
       idDetalleOp: Number(l.id_detalle_op),
@@ -158,11 +169,12 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
       unidad: r.unidad ?? "und",
     }),
   );
-  const historial = parsearJson<TransicionApi[]>(row.historial).map((h) => ({
+  const historial = transiciones.map((h) => ({
     de: h.de ? estadoAFront(h.de as OrdenApi["estado"]) : null,
     a: estadoAFront(h.a as OrdenApi["estado"]),
     fechaHora: h.fechaHora,
     ...(h.detalle ? { detalle: h.detalle } : {}),
+    ...(h.automatico ? { automatico: true } : {}),
   }));
   return {
     id: `OP-${String(Number(row.id_orden_produccion)).padStart(3, "0")}`,
@@ -171,7 +183,7 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     lineas,
     insumosRequeridos: requeridos,
     ...(row.id_venta == null ? {} : { ventaId: String(row.id_venta) }),
-    ventaLocal: row.venta_local === true,
+    ventaLocal: row.es_venta_local === true,
     ventaNumero: row.venta_numero,
     cliente: row.cliente,
     fechaSolicitada: String(row.fecha_solicitada).slice(0, 10),
@@ -183,6 +195,8 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     observacion: row.observacion ?? "",
     creadaEn: row.fecha_creacion,
     inicioProduccion: row.fecha_en_proceso,
+    finCalentamientoMs: row.fin_calentamiento_ms == null ? undefined : Number(row.fin_calentamiento_ms),
+    finPreparacionMs: row.fin_preparacion_ms == null ? undefined : Number(row.fin_preparacion_ms),
     entregaEstimada: row.fecha_completada ?? row.fecha_cancelada ?? null,
     historial,
     ...(row.descripcion_preparacion
@@ -378,7 +392,7 @@ export const eliminarOrdenProduccion = async (id: string): Promise<void> => {
 export const iniciarOrdenProduccion = async (
   id: string,
   payload: {
-    fechaEntregaEstimada: string;
+    fechaEntregaEstimada?: string;
     fechaLimiteAutomatica?: boolean;
     lineas?: { idDetalleOp: number; cantidad: number }[];
   },
@@ -388,7 +402,7 @@ export const iniciarOrdenProduccion = async (
     api.post<OrdenApi>(
       `/ordenes-produccion/${idApi}/iniciar`,
       {
-        fecha_entrega_estimada: payload.fechaEntregaEstimada,
+        ...(payload.fechaEntregaEstimada === undefined ? {} : { fecha_entrega_estimada: payload.fechaEntregaEstimada }),
         ...(payload.fechaLimiteAutomatica === undefined ? {} : { fecha_limite_automatica: payload.fechaLimiteAutomatica }),
         ...(payload.lineas
           ? {

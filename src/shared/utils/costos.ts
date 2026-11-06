@@ -130,8 +130,7 @@ export const calcularCostoProducto = (
   };
 };
 
-/** Precio recomendado por PORCIÓN de pizza: costo del tamaño ÷ porciones
-    (Mediana 6, Grande 8) × (1 + margen), redondeado a la centena. */
+/** Precio recomendado por porción: costo de la pizza completa con margen. */
 const precioPorPorcionBruto = (
   ficha: FichaVersion,
   insumosCatalogo: readonly InsumoCosto[],
@@ -140,7 +139,7 @@ const precioPorPorcionBruto = (
   porcionesFallback?: readonly PorcionesTamano[],
 ): number => {
   const resumen = calcularCostoProducto(ficha, insumosCatalogo, parametros, tamano, porcionesFallback);
-  const porciones = tamano.trim().toLowerCase() === "grande" ? 8 : 6;
+  const porciones = tamano.trim().toLowerCase() === "grande" ? 6 : 8;
   return Math.ceil(((resumen.costoTotal / porciones) * (1 + parametros.margen_ganancia / 100)) / 100) * 100;
 };
 

@@ -58,7 +58,7 @@ export const mensajeErrorFichas = (error: unknown, fallback: string): string =>
 
 /** Porciones por tamaño de una ficha de PRODUCTO: los tamaños que define la
     categoría (CONFIG_CATEGORIA) con el primero = `porciones` de la base (es el
-    único que se guarda en la tabla) y la Grande de pizza fija en 8, que es lo
+    único que se guarda en la tabla) y los cortes de pizza fijos, que es lo
     que muestra el editor y por lo que no se pierde nada al guardar. Sin
     configuración no se arma la lista (el editor muestra "Único"). */
 const porcionesPorTamanoDe = (
@@ -67,10 +67,13 @@ const porcionesPorTamanoDe = (
 ): FichaVersion["porcionesPorTamano"] => {
   const tamanos = config?.tamanos;
   if (!tamanos || tamanos.length === 0) return undefined;
+  if (tamanos.some((t) => t.tamano === "Mediana") && tamanos.some((t) => t.tamano === "Grande")) {
+    return tamanos.map((t) => ({ ...t }));
+  }
   return tamanos.map((t, i) =>
     i === 0
       ? { tamano: t.tamano, porciones: porcionesBase }
-      : { tamano: t.tamano, porciones: t.tamano === "Grande" ? 8 : t.porciones },
+      : { tamano: t.tamano, porciones: t.porciones },
   );
 };
 
@@ -85,7 +88,9 @@ export const mapearFichaApi = (
   const destino: DestinoFicha = esInsumo
     ? { tipo: "producto-insumo", insumoId: idInsumoFront(f.id_insumo as number | string) }
     : { tipo: "producto", productoId: String(f.id_producto) };
-  const porciones = Number(f.porciones ?? 1) || 1;
+  const esPizza = config?.tamanos?.some((t) => t.tamano === "Mediana")
+    && config.tamanos.some((t) => t.tamano === "Grande");
+  const porciones = esPizza ? 8 : Number(f.porciones ?? 1) || 1;
   return {
     version: Number(f.version),
     idReceta: String(Number(f.id_ft)).padStart(3, "0"),
@@ -139,7 +144,10 @@ export const payloadFicha = (
     ...(enBase ? { id_producto: dueno.id_producto } : { id_insumo: (dueno as { id_insumo: number }).id_insumo }),
     cantidad: enBase ? 1 : Number(v.rendimiento) || 1,
     medida: enBase ? "und" : (dueno as { unidadMedida: string }).unidadMedida,
-    porciones: enBase ? v.porciones : null,
+    porciones: enBase
+      ? v.porcionesPorTamano?.some((t) => t.tamano === "Mediana") && v.porcionesPorTamano.some((t) => t.tamano === "Grande")
+        ? 8 : v.porciones
+      : null,
     tiempo_preparacion: v.tiempoPreparacion > 0 ? v.tiempoPreparacion : null,
     pasos: v.pasos,
     insumos: v.insumos.map((l) => ({
