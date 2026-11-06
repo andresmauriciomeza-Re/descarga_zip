@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
+import { TamanosPizzaPicker } from "@/shared/components/TamanosPizzaPicker";
 import {
   copiarFicha,
   emptyFichaVersion,
@@ -70,10 +71,10 @@ import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
 // Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
 // ni espacios de más) compartida con Insumos y Compras.
 import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/nombres";
-import { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
 import {
   mensajeErrorProductos,
   type EstadoProductoManual,
+  type ResultadoCambioEstado,
 } from "@/features/productos/services/productosApi";
 import {
   crearOrdenPreparacionApi,
@@ -92,8 +93,10 @@ import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
 import {
   obtenerParametrosCostos,
 } from "@/features/productos/services/parametrosCostosApi";
-import { CostosProductoPanel } from "@/features/productos/components/CostosProductoPanel";
-import type { ParametrosCostos } from "@/shared/utils/costos";
+import { precioRecomendadoPorPorcion, type ParametrosCostos } from "@/shared/utils/costos";
+
+const mensajeGrandeMayorQueMediana = (mediana: number) =>
+  `Debe ser mayor que el precio de la porción Mediana ($${mediana.toLocaleString("es-CO")})`;
 
 export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
 export type { ConfigCategoria } from "@/shared/utils/configCategoria";
@@ -113,11 +116,10 @@ const esCategoriaLasana = (nombre: string): boolean => normalizarTexto(nombre).i
 export const TIPOS_PRODUCTO = ["Producto insumo", "Producto terminado"] as const;
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 
-// ── Umbrales de stock bajo (SOLO bebidas / Producto terminado) ──────────────
+// ── Umbrales de stock bajo (bebidas y stock por tamaño de pizza) ────────────
 // El profesor pidió 10 y 5 unidades. Viven en UN solo lugar para que el
 // listado, "Ver detalle" y los tooltips no puedan divergir: se reemplazan los
-// umbrales viejos (15 y 5). Productos Insumo (pizzas, lasañas) NO usan esto:
-// ellos no tienen stock propio.
+// umbrales viejos (15 y 5). Lasañas conservan su cálculo de capacidad.
 const STOCK_BAJO = 10;
 const STOCK_CRITICO = 5;
 
@@ -132,6 +134,13 @@ const estadoStockBebida = (n: number): { cls: string; etiqueta: string } =>
       : n <= STOCK_BAJO
         ? { cls: "text-yellow-600 dark:text-yellow-400", etiqueta: "Stock bajo" }
         : { cls: "text-emerald-600 dark:text-emerald-400", etiqueta: "" };
+
+const estadoStockPizza = (n: number): { cls: string; etiqueta: string } =>
+  n <= 0
+    ? { cls: "text-red-600 dark:text-red-400", etiqueta: "Agotado" }
+    : n <= STOCK_BAJO
+      ? { cls: "text-yellow-600 dark:text-yellow-400", etiqueta: "Stock bajo" }
+      : { cls: "text-emerald-600 dark:text-emerald-400", etiqueta: "" };
 
 /** Texto explicativo de cada tipo, para los `title` de las pastillas y las
     líneas de ayuda bajo el selector de categoría. */
@@ -159,6 +168,47 @@ export const tipoDe = (
   if (p.tipo === TIPOS_PRODUCTO[0] || p.tipo === TIPOS_PRODUCTO[1]) return p.tipo;
   // Dato viejo ("Producto de reventa", "Producto"): tipo sin ficha (índice 1).
   return TIPOS_PRODUCTO[1];
+};
+
+const stockTotalPizza = (p: Producto): number =>
+  (p.stockMediana ?? 0) + (p.stockGrande ?? 0);
+
+const textoStockPizza = (p: Producto): string => {
+  const total = stockTotalPizza(p);
+  return total === 0 ? "Agotado" : `${total} porc.`;
+};
+
+const pintarStockPizza = (p: Producto): React.ReactNode => {
+  const total = stockTotalPizza(p);
+  return (
+    <span
+      className={`block text-sm font-bold leading-5 whitespace-nowrap ${
+        total === 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+      }`}
+    >
+      {textoStockPizza(p)}
+    </span>
+  );
+};
+
+const pintarDetalleStockPizza = (p: Producto): React.ReactNode => {
+  const existencias = [
+    { nombre: "Stock Mediana", cantidad: p.stockMediana ?? 0 },
+    { nombre: "Stock Grande", cantidad: p.stockGrande ?? 0 },
+  ];
+  return (
+    <div className="space-y-1 text-sm">
+      {existencias.map(({ nombre, cantidad }) => (
+        <p key={nombre} className="font-semibold">
+          {nombre}: {cantidad} porciones
+          {cantidad === 0 && <span className="ml-1 text-red-600 dark:text-red-400">· Agotado</span>}
+        </p>
+      ))}
+      <p className="border-t border-border pt-1 font-bold">
+        Total: {stockTotalPizza(p)} porciones
+      </p>
+    </div>
+  );
 };
 
 /** Pastilla de color por tipo (índice, detalle, Crear/Editar). */
@@ -204,8 +254,11 @@ export interface Producto {
       carrito). En Bebidas ("Producto terminado") NO se escribe aquí: el precio
        se define en Compras. */
   precioUnitario: number;
-  /** Precio especial de la pizza Grande; sin valor usa el recargo configurado. */
+  /** Precio por porción Grande para pizzas. */
   precioGrande?: number;
+  /** Existencias de pizza por tamaño, expresadas en porciones. */
+  stockMediana?: number;
+  stockGrande?: number;
   /** Nombre recibido del backend para que el catálogo local de categorías
       no pierda la categoría numérica de productos recién sincronizados. */
   categoriaNombre?: string;
@@ -978,7 +1031,7 @@ export function GestionProductosScreen({
   onReintentarCarga?: () => void;
   onCrearEnServidor?: (producto: Producto) => Promise<Producto>;
   onEditarEnServidor?: (producto: Producto) => Promise<Producto>;
-  onCambiarEstadoEnServidor?: (id: string, estado: EstadoProductoManual) => Promise<Producto>;
+  onCambiarEstadoEnServidor?: (id: string, estado: EstadoProductoManual) => Promise<ResultadoCambioEstado>;
   onDescontinuarEnServidor?: (id: string) => Promise<Producto>;
   recargarProduccion?: () => Promise<boolean | void>;
   verOrdenProduccion?: (idOrden: string) => void;
@@ -1015,7 +1068,7 @@ export function GestionProductosScreen({
   // un número es una versión guardada, que se ve en solo lectura.
   const [editFichaSel, setEditFichaSel] = useState<number | "borrador">("borrador");
   const [confirmEstado, setConfirmEstado] = useState<{
-    id: string; nombre: string; current: EstadoProducto; next: EstadoProductoManual;
+    id: string; nombre: string; current: EstadoProducto; next: EstadoProductoManual; tieneStock: boolean;
   } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const guardandoRef = useRef(false);
@@ -1131,6 +1184,7 @@ export function GestionProductosScreen({
   });
   const [form, setForm] = useState(emptyForm());
   const [cantidadAPreparar, setCantidadAPreparar] = useState("");
+  const [cantidadGrandeAPreparar, setCantidadGrandeAPreparar] = useState("");
     // "¿Tiene ficha técnica?" (Crear): solo aparece cuando la categoría NO está
   // en CONFIG_CATEGORIA; null = sin respuesta. De ahí sale el tipo (Sí =
   // Producto insumo, No = Producto terminado). Con categoría configurada
@@ -1205,9 +1259,7 @@ export function GestionProductosScreen({
     const esPizza = esCategoriaPizza(catName(p.idCategoria));
     setEditItem({
       ...p,
-      precioGrande: esPizza
-        ? p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE
-        : p.precioGrande,
+      precioGrande: p.precioGrande,
       imagenes: imagenesDe(p),
     });
     const guardadas = (fichas[p.id] ?? []).map(copiarFicha);
@@ -1281,6 +1333,7 @@ export function GestionProductosScreen({
     if (!esCategoriaPizza(catName(nueva)) && !esCategoriaLasana(catName(nueva))) {
       setCantidadAPreparar("");
     }
+    if (!esCategoriaPizza(catName(nueva))) setCantidadGrandeAPreparar("");
     setFormTieneFicha(null);
     setTieneFichaError("");
     setFichaBorrador((v) => ajustarFilasTamano(v, cfg));
@@ -1354,6 +1407,9 @@ export function GestionProductosScreen({
   };
 
   const ayudaStock = (p: Producto): string => {
+    if (esCategoriaPizza(catName(p.idCategoria))) {
+      return "Sube al completar una OP y baja con ventas o productos no conformes";
+    }
     if (tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]) {
       // B4: un Producto insumo no tiene stock propio que suba con compras
       // ni que baje con ventas: sale de su ficha y de Insumos.
@@ -1474,17 +1530,17 @@ export function GestionProductosScreen({
         { header: "Nombre", valor: (p) => p.nombre },
         { header: "Tipo", valor: (p) => tipoDe(p, catName(p.idCategoria)) },
         { header: "Categoría", valor: (p) => catName(p.idCategoria) },
-        { header: "Precio Mediana / venta", valor: (p) => p.precioUnitario, numFmt: '"$"#,##0' },
-        { header: "Precio Grande", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? (p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE) : "", numFmt: '"$"#,##0' },
+        { header: "Precio porción Mediana", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? p.precioUnitario : "", numFmt: '"$"#,##0' },
+        { header: "Precio porción Grande", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? (p.precioGrande ?? "") : "", numFmt: '"$"#,##0' },
+        { header: "Precio venta", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? "" : p.precioUnitario, numFmt: '"$"#,##0' },
+        { header: "Stock Mediana (porc.)", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? (p.stockMediana ?? 0) : "" },
+        { header: "Stock Grande (porc.)", valor: (p) => esCategoriaPizza(catName(p.idCategoria)) ? (p.stockGrande ?? 0) : "" },
         {
           header: "Stock",
-          // B5: un Producto insumo NO exporta su `stockDisponible` (ese
-          // número ya no significa nada) sino lo que admite preparar hoy con
-          // su ficha vigente y el stock de Insumos — en pizzas, la cantidad
-          // del primer tamaño, Mediana, que es la de referencia de la ficha.
-          // Sin ficha todavía, el aviso. Las bebidas siguen exportando su
-          // número de siempre.
+          // Pizzas exportan el stock por tamaño en columnas propias; lasañas
+          // conservan la capacidad calculada por ficha y bebidas su stock real.
           valor: (p) => {
+            if (esCategoriaPizza(catName(p.idCategoria))) return "";
             if (tipoDe(p, catName(p.idCategoria)) !== TIPOS_PRODUCTO[0]) {
               return p.stockDisponible;
             }
@@ -1603,29 +1659,36 @@ export function GestionProductosScreen({
     const crearOrdenPreparacion =
       tipoFinal === TIPOS_PRODUCTO[0] &&
       (esCategoriaPizza(catName(form.idCategoria)) || esCategoriaLasana(catName(form.idCategoria)));
-    const cantidadPreparar = cantidadAPreparar.trim() === "" ? null : Number(cantidadAPreparar);
-    if (
-      crearOrdenPreparacion &&
-      cantidadPreparar !== null &&
-      (!Number.isSafeInteger(cantidadPreparar) || cantidadPreparar < 1)
-    ) {
-      toast.error("La cantidad a preparar debe ser un entero mayor o igual a 1.");
-      return;
+    const esPizzaCrear = esCategoriaPizza(catName(form.idCategoria));
+    // Pizza: Mediana y Grande se piden por separado (una línea por tamaño con cantidad).
+    const aEntero = (texto: string) => (texto.trim() === "" ? 0 : Number(texto));
+    const lineasPreparar: { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }[] = [];
+    let cantidadPreparar: number | null = null;
+    if (esPizzaCrear) {
+      const mediana = aEntero(cantidadAPreparar);
+      const grande = aEntero(cantidadGrandeAPreparar);
+      if (crearOrdenPreparacion && (!Number.isSafeInteger(mediana) || mediana < 0 || !Number.isSafeInteger(grande) || grande < 0)) {
+        toast.error("Las cantidades de pizzas a preparar deben ser enteros mayores o iguales a 0.");
+        return;
+      }
+      if (mediana > 0) lineasPreparar.push({ id_producto: 0, cantidad: mediana, tamano: "Mediana" });
+      if (grande > 0) lineasPreparar.push({ id_producto: 0, cantidad: grande, tamano: "Grande" });
+      cantidadPreparar = mediana + grande > 0 ? mediana + grande : null;
+    } else {
+      cantidadPreparar = cantidadAPreparar.trim() === "" ? null : Number(cantidadAPreparar);
+      if (
+        crearOrdenPreparacion &&
+        cantidadPreparar !== null &&
+        (!Number.isSafeInteger(cantidadPreparar) || cantidadPreparar < 1)
+      ) {
+        toast.error("La cantidad a preparar debe ser un entero mayor o igual a 1.");
+        return;
+      }
+      if (cantidadPreparar !== null) lineasPreparar.push({ id_producto: 0, cantidad: cantidadPreparar });
     }
-    if (!esTerminado(tipoFinal) && (!Number.isFinite(form.precioUnitario) || form.precioUnitario <= 0)) {
+    if (!esTerminado(tipoFinal) && !esPizzaCrear && (!Number.isFinite(form.precioUnitario) || form.precioUnitario <= 0)) {
       toast.error("El precio de venta debe ser mayor a 0");
       return;
-    }
-    if (esCategoriaPizza(catName(form.idCategoria))) {
-      const precioGrande = Number(form.precioGrande);
-      if (!Number.isFinite(precioGrande) || precioGrande <= 0) {
-        toast.error("El precio Grande debe ser mayor a 0.");
-        return;
-      }
-      if (precioGrande <= form.precioUnitario) {
-        toast.error("El precio Grande debe ser mayor que el precio Mediana.");
-        return;
-      }
     }
     // Bebidas ("Producto terminado"): la presentación es obligatoria (ej. 400
     // ml, 1.5 L). Sin contenido no se puede guardar la bebida. Bloque 2.3:
@@ -1678,6 +1741,7 @@ export function GestionProductosScreen({
         ...form,
         categoriaNombre: catName(form.idCategoria),
         tipo: tipoFinal,
+        ...(esPizzaCrear ? { precioUnitario: 0, precioGrande: 0 } : {}),
         ...(esTerminadoFinal
           ? {
               precioUnitario: 0,
@@ -1714,7 +1778,7 @@ export function GestionProductosScreen({
       if (crearOrdenPreparacion && cantidadPreparar !== null && cantidadPreparar >= 1) {
         try {
           const orden = await crearOrdenPreparacionApi({
-            lineas: [{ id_producto: Number(creado.id), cantidad: cantidadPreparar }],
+            lineas: lineasPreparar.map((l) => ({ ...l, id_producto: Number(creado.id) })),
             observacion: "Creada desde Productos",
             validar_stock: false,
           });
@@ -1741,6 +1805,7 @@ export function GestionProductosScreen({
       setVisorCrear(null);
       setForm(emptyForm());
       setCantidadAPreparar("");
+      setCantidadGrandeAPreparar("");
       resetFichaForm();
       setFormTieneFicha(null);
       setTieneFichaError("");
@@ -1795,18 +1860,20 @@ export function GestionProductosScreen({
       toast.error("El tipo de producto no se puede cambiar al editar");
       return;
     }
-    if (!esTerminado(tipoFinal) && (!Number.isFinite(editItem.precioUnitario) || editItem.precioUnitario <= 0)) {
+    const pizzaSinPrecio = esCategoriaPizza(catName(editItem.idCategoria))
+      && !(Number(editItem.precioUnitario) > 0) && !(Number(editItem.precioGrande) > 0);
+    if (!esTerminado(tipoFinal) && !pizzaSinPrecio && (!Number.isFinite(editItem.precioUnitario) || editItem.precioUnitario <= 0)) {
       toast.error("El precio de venta debe ser mayor a 0");
       return;
     }
-    if (esCategoriaPizza(catName(editItem.idCategoria))) {
+    if (esCategoriaPizza(catName(editItem.idCategoria)) && !pizzaSinPrecio) {
       const precioGrande = Number(editItem.precioGrande);
       if (!Number.isFinite(precioGrande) || precioGrande <= 0) {
         toast.error("El precio Grande debe ser mayor a 0.");
         return;
       }
-      if (precioGrande <= editItem.precioUnitario) {
-        toast.error("El precio Grande debe ser mayor que el precio Mediana.");
+      if (Number(editItem.precioUnitario) > 0 && precioGrande <= Number(editItem.precioUnitario)) {
+        toast.error(mensajeGrandeMayorQueMediana(Number(editItem.precioUnitario)));
         return;
       }
     }
@@ -1936,11 +2003,26 @@ export function GestionProductosScreen({
   };
 
   const roCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
+  const recomendadosPizza = (
+    f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
+    idCategoria: string,
+  ): { Mediana: number; Grande: number } | undefined => {
+    if (!f || !parametrosCostos) return undefined;
+    const fallback = cfgDe(idCategoria)?.tamanos ?? undefined;
+    return {
+      Mediana: precioRecomendadoPorPorcion(f, insumos, parametrosCostos, "Mediana", fallback),
+      Grande: precioRecomendadoPorPorcion(f, insumos, parametrosCostos, "Grande", fallback),
+    };
+  };
+
   const FormFields = ({
     values,
     onChange,
+    recomendados,
     cantidadAPreparar = "",
     onCantidadAPreparar,
+    cantidadGrandeAPreparar = "",
+    onCantidadGrandeAPreparar,
     hideUnidad = false,
     readOnly = false,
     lockNombre = false,
@@ -1952,8 +2034,12 @@ export function GestionProductosScreen({
   }: {
     values: Omit<Producto, "id">;
     onChange: (f: keyof Omit<Producto, "id">, v: string | number) => void;
+    /** Precio recomendado por porción de una pizza (si hay ficha y parámetros). */
+    recomendados?: { Mediana: number; Grande: number };
     cantidadAPreparar?: string;
     onCantidadAPreparar?: (valor: string) => void;
+    cantidadGrandeAPreparar?: string;
+    onCantidadGrandeAPreparar?: (valor: string) => void;
     hideUnidad?: boolean;
     readOnly?: boolean;
     lockNombre?: boolean;
@@ -1983,13 +2069,11 @@ export function GestionProductosScreen({
       tipo === TIPOS_PRODUCTO[0] &&
       (esPizza || esLasana) &&
       onCantidadAPreparar !== undefined;
-    const precioGrandeVisible =
-      values.precioGrande ??
-      (readOnly && esPizza ? values.precioUnitario + RECARGO_TAMANO_GRANDE : undefined);
+    const precioGrandeVisible = values.precioGrande;
     /** Bebida / reventa: el precio de venta se define en Compras, no aquí. */
     const esTerminado = tipo === TIPOS_PRODUCTO[1];
     /** El campo Precio de venta se pinta salvo al CREAR una bebida. */
-    const mostrarPrecio = !(esCrear && esTerminado);
+    const mostrarPrecio = !(esCrear && (esTerminado || esPizza));
     /** Una bebida nunca se edita a mano: en Editar y Ver detalle queda solo
         lectura con la ayuda "Se define en Compras". */
     const precioSoloLectura = readOnly || esTerminado;
@@ -2054,7 +2138,7 @@ export function GestionProductosScreen({
             precio no se pide (se define en Compras) y el nombre ocupa todo. */}
         <div className="sm:col-span-2">
           <div className={`grid grid-cols-1 ${esPizza ? "sm:grid-cols-10" : "sm:grid-cols-5"} gap-2`}>
-            <div className={mostrarPrecio ? (esPizza ? "sm:col-span-4" : "sm:col-span-3") : "sm:col-span-5"}>
+            <div className={mostrarPrecio ? (esPizza ? "sm:col-span-4" : "sm:col-span-3") : esPizza ? "sm:col-span-10" : "sm:col-span-5"}>
               <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
                 Nombre *
               </label>
@@ -2073,12 +2157,27 @@ export function GestionProductosScreen({
                 <p className="text-xs text-red-500 mt-0.5">{errorNombre}</p>
               )}
             </div>
-            {mostrarPrecio && (
+            {mostrarPrecio && esPizza && readOnly && (
+              <div className="sm:col-span-6 text-sm text-foreground space-y-0.5">
+                {(["Mediana", "Grande"] as const).map((t) => {
+                  const precio = t === "Grande" ? precioGrandeVisible ?? 0 : values.precioUnitario;
+                  return (
+                    <p key={t}>
+                      <span className="font-semibold">Precio porción {t}:</span> {fmtCOP(precio)}
+                      {recomendados && (
+                        <span className="text-muted-foreground"> (recomendado {fmtCOP(recomendados[t])})</span>
+                      )}
+                    </p>
+                  );
+                })}
+              </div>
+            )}
+            {mostrarPrecio && !(esPizza && readOnly) && (
               <>
                 <div className={esPizza ? "sm:col-span-3" : "sm:col-span-2"}>
                   <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
                     {esPizza
-                      ? "Precio Mediana (COP) *"
+                      ? "Precio porción Mediana (COP) *"
                       : esLasana
                         ? "Precio (COP) *"
                         : "Precio de venta (COP)"}
@@ -2089,6 +2188,11 @@ export function GestionProductosScreen({
                     readOnly={precioSoloLectura}
                     cls={precioSoloLectura ? roCls : inputCls}
                   />
+                  {esPizza && recomendados && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Recomendado: {fmtCOP(recomendados.Mediana)}
+                    </p>
+                  )}
                   {esTerminado && (
                     <p className="text-[11px] text-muted-foreground mt-1">
                       Se define en Compras
@@ -2098,7 +2202,7 @@ export function GestionProductosScreen({
                 {esPizza && (
                   <div className="sm:col-span-3">
                     <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                      Precio Grande (COP) *
+                      Precio porción Grande (COP) *
                     </label>
                     <CampoPrecio
                       valor={precioGrandeVisible ?? 0}
@@ -2106,33 +2210,62 @@ export function GestionProductosScreen({
                       readOnly={precioSoloLectura}
                       cls={precioSoloLectura ? roCls : inputCls}
                     />
+                    {recomendados && (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Recomendado: {fmtCOP(recomendados.Grande)}
+                      </p>
+                    )}
+                    {!readOnly && Number(values.precioUnitario) > 0 && Number(precioGrandeVisible) > 0
+                      && Number(precioGrandeVisible) <= Number(values.precioUnitario) && (
+                      <p className="text-[11px] font-semibold text-red-600 mt-1">
+                        {mensajeGrandeMayorQueMediana(Number(values.precioUnitario))}
+                      </p>
+                    )}
                   </div>
                 )}
               </>
             )}
           </div>
+          {esPizza && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              La Mediana trae 6 porciones y la Grande 8. La pizza se vende solo por porciones.
+            </p>
+          )}
         </div>
         {mostrarCantidadAPreparar && (
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-              Cantidad a preparar (opcional)
+              Cantidad a preparar (opcional){esPizza ? " · pizzas" : ""}
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={cantidadAPreparar}
-                onChange={(e) => onCantidadAPreparar?.(e.target.value)}
-                placeholder="0"
-                className={inputCls}
+            {esPizza ? (
+              <TamanosPizzaPicker
+                mediana={Number(cantidadAPreparar) || 0}
+                grande={Number(cantidadGrandeAPreparar) || 0}
+                onChange={(mediana, grande) => {
+                  onCantidadAPreparar?.(mediana > 0 ? String(mediana) : "");
+                  onCantidadGrandeAPreparar?.(grande > 0 ? String(grande) : "");
+                }}
               />
-              <span className="shrink-0 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                und
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={cantidadAPreparar}
+                  onChange={(e) => onCantidadAPreparar?.(e.target.value)}
+                  placeholder="0"
+                  className={inputCls}
+                />
+                <span className="shrink-0 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                  und
+                </span>
+              </div>
+            )}
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Si escribes una cantidad, se crea una orden de producción Pendiente.
+              {esPizza
+                ? "La cantidad es en pizzas enteras; se crea una orden Pendiente con una línea por cada tamaño con cantidad."
+                : "Si escribes una cantidad, se crea una orden de producción Pendiente."}
             </p>
           </div>
         )}
@@ -2408,7 +2541,7 @@ export function GestionProductosScreen({
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
-            <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); setCantidadAPreparar(""); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
+            <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); setCantidadAPreparar(""); setCantidadGrandeAPreparar(""); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -2440,6 +2573,8 @@ export function GestionProductosScreen({
                   values: form,
                   cantidadAPreparar,
                   onCantidadAPreparar: setCantidadAPreparar,
+                  cantidadGrandeAPreparar,
+                  onCantidadGrandeAPreparar: setCantidadGrandeAPreparar,
                   onChange: (f, v) => {
                     // La categoría tiene regla propia: pide confirmación antes
                     // de reajustar los tamaños de la ficha.
@@ -2541,24 +2676,6 @@ export function GestionProductosScreen({
                   /* Los tamaños los define la categoría (o la fila única
                      "Único" de etiqueta fija, si no está configurada). */
                   tamanoFijo={tamanoFijoDe(cfgCrear)}
-                />
-                <CostosProductoPanel
-                  ficha={fichaBorrador}
-                  insumos={insumos}
-                  parametros={parametrosCostos}
-                  porcionesFallback={cfgCrear?.tamanos ?? undefined}
-                  precioMediana={form.precioUnitario}
-                  precioGrande={form.precioGrande}
-                  cargando={parametrosCostosCargando}
-                  error={parametrosCostosError}
-                  onReintentar={() => void cargarParametrosCostos()}
-                  onUsarPrecio={(precio, tamano) =>
-                    setForm((prev) =>
-                      tamano.trim().toLowerCase() === "grande"
-                        ? { ...prev, precioGrande: precio }
-                        : { ...prev, precioUnitario: precio },
-                    )
-                  }
                 />
               </Tarjeta>
             )}
@@ -2666,6 +2783,7 @@ export function GestionProductosScreen({
               <Tarjeta titulo="Datos del producto" className="shrink-0">
                 {FormFields({
                   values: detailItem,
+                  recomendados: recomendadosPizza(fichaV, detailItem.idCategoria),
                   onChange: () => {},
                   readOnly: true,
                   mostrarEstado: true,
@@ -2675,32 +2793,39 @@ export function GestionProductosScreen({
                     bloque quepa en 1366×768 sin barra en la columna. */}
                 <div className="mt-3 pt-3 border-t border-border">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Stock</p>
-                  {/* B1/B3/B6: un Producto insumo NO tiene stock propio: aquí
-                      no se pinta `stockDisponible` (sigue guardado en el
-                      producto, solo deja de mostrarse para estos productos)
-                      sino cuántas unidades admite preparar HOY su ficha
-                      vigente con el stock real de Insumos; sin ficha, el
-                      aviso para registrarla. Las bebidas quedan como siempre
-                      (sus "porciones" nunca se mostraban acá). */}
-                  {llevaFichaDetalle ? (
-                    preparacion ? (
-                      <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
-                        <span className="font-bold">
-                          Se pueden preparar:{" "}
-                          {pintarCifras(detailItem, preparacion.cifras)}
+                  {/* Las pizzas muestran sus existencias reales en porciones;
+                      lasañas conservan la capacidad por ficha y bebidas su
+                      stock real. */}
+                  {esCategoriaPizza(catName(detailItem.idCategoria)) ? (
+                    pintarDetalleStockPizza(detailItem)
+                  ) : llevaFichaDetalle ? (
+                    <>
+                      {/* Stock real del producto (tb_productos.stock), siempre visible. */}
+                      <p className={`mb-1 text-sm font-bold ${estadoStockBebida(detailItem.stockDisponible).cls}`}>
+                        Stock: {detailItem.stockDisponible} {detailItem.unidadVenta || "und"}
+                        {estadoStockBebida(detailItem.stockDisponible).etiqueta && (
+                          <span className="ml-1">· {estadoStockBebida(detailItem.stockDisponible).etiqueta}</span>
+                        )}
+                      </p>
+                      {preparacion ? (
+                        <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                          <span className="font-bold">
+                            Se pueden preparar:{" "}
+                            {pintarCifras(detailItem, preparacion.cifras)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                          Sin ficha técnica
                         </span>
-                      </div>
-                    ) : (
-                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                        Sin ficha técnica
-                      </span>
-                    )
+                      )}
+                    </>
                   ) : (
                     <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
                       {/* Bebidas: umbrales únicos (0 Agotado · ≤5 crítico ·
                           ≤10 bajo · más verde), con variante oscuro. */}
                       <span className={`font-bold ${estadoStockBebida(detailItem.stockDisponible).cls}`}>
-                        {textoStockBebida(detailItem)}
+                        Stock: {textoStockBebida(detailItem)}
                       </span>
                     </div>
                   )}
@@ -2854,23 +2979,6 @@ export function GestionProductosScreen({
                 ) : (
                   <>
                     <FichaTecnicaDetalle v={fichaV} readCls={readCls} modo="producto" />
-                    <CostosProductoPanel
-                      ficha={fichaV}
-                      insumos={insumos}
-                      parametros={parametrosCostos}
-                      porcionesFallback={cfgDe(detailItem.idCategoria)?.tamanos ?? undefined}
-                      precioMediana={detailItem.precioUnitario}
-                      precioGrande={
-                        detailItem.precioGrande ??
-                        (esCategoriaPizza(catName(detailItem.idCategoria))
-                          ? detailItem.precioUnitario + RECARGO_TAMANO_GRANDE
-                          : undefined)
-                      }
-                      soloLectura
-                      cargando={parametrosCostosCargando}
-                      error={parametrosCostosError}
-                      onReintentar={() => void cargarParametrosCostos()}
-                    />
                   </>
                 )}
               </Tarjeta>
@@ -2920,7 +3028,9 @@ export function GestionProductosScreen({
               Cancelar
             </button>
             <button onClick={() => void handleEdit()}
-              disabled={guardando}
+              disabled={guardando || (esCategoriaPizza(catName(editItem.idCategoria))
+                && Number(editItem.precioUnitario) > 0 && Number(editItem.precioGrande) > 0
+                && Number(editItem.precioGrande) <= Number(editItem.precioUnitario))}
               title={errorNombreServidor || undefined}
               className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Guardar"}
@@ -2941,6 +3051,7 @@ export function GestionProductosScreen({
               <Tarjeta titulo="Datos del producto" className="shrink-0">
                 {FormFields({
                   values: editItem,
+                  recomendados: recomendadosPizza(editFichaBorrador, editItem.idCategoria),
                   onChange: (f, v) => {
                     // La categoría tiene reglas propias (confirmación al cambiar
                     // y bloqueo hacia categorías sin ficha con historial).
@@ -3071,26 +3182,6 @@ export function GestionProductosScreen({
                          "Único" de etiqueta fija, si no está configurada). */
                       tamanoFijo={tamanoFijoDe(cfgEditar)}
                     />
-                    <CostosProductoPanel
-                      ficha={editFichaBorrador}
-                      insumos={insumos}
-                      parametros={parametrosCostos}
-                      porcionesFallback={cfgEditar?.tamanos ?? undefined}
-                      precioMediana={editItem.precioUnitario}
-                      precioGrande={editItem.precioGrande}
-                      cargando={parametrosCostosCargando}
-                      error={parametrosCostosError}
-                      onReintentar={() => void cargarParametrosCostos()}
-                      onUsarPrecio={(precio, tamano) =>
-                        setEditItem((prev) =>
-                          !prev
-                            ? prev
-                            : tamano.trim().toLowerCase() === "grande"
-                              ? { ...prev, precioGrande: precio }
-                              : { ...prev, precioUnitario: precio },
-                        )
-                      }
-                    />
                   </>
                 )}
               </Tarjeta>
@@ -3137,6 +3228,7 @@ export function GestionProductosScreen({
               onClick={() => {
                 setForm(emptyForm());
                 setCantidadAPreparar("");
+                setCantidadGrandeAPreparar("");
                 setErrorNombreServidor("");
                 resetFichaForm();
                 setFormTieneFicha(null);
@@ -3241,18 +3333,18 @@ export function GestionProductosScreen({
                     se compensa sobre todo en Stock, que era la que más
                     sobrante tenía. Estado y Acciones quedan intactas. */}
                 {[
-                  { h: "Nombre", w: "w-[16.5%]" },
-                  { h: "Tipo", w: "w-[14.5%]" },
-                  { h: "Ficha técnica", w: "w-[12%]" },
+                  { h: "Nombre", w: "w-[16%]" },
+                  { h: "Tipo", w: "w-[13%]" },
+                  { h: "Ficha técnica", w: "w-[11%]" },
                   { h: "Categoría", w: "w-[9%]" },
                   { h: "Precio de venta", w: "w-[9%]" },
-                  { h: "Stock", w: "w-[11%]", pl: "pl-10" },
-                  { h: "Estado", w: "w-[16%]" },
-                  { h: "Acciones", w: "w-[12%]" },
-                ].map(({ h, w, pl }) => (
+                  { h: "Stock", w: "w-[14%]" },
+                  { h: "Estado", w: "w-[18%]" },
+                  { h: "Acciones", w: "w-[10%]" },
+                ].map(({ h, w }) => (
                   <th
                     key={h}
-                    className={`px-4 py-2 text-left font-semibold whitespace-normal break-words leading-tight ${w} ${pl ?? ""}`}
+                    className={`px-4 py-2 text-left font-semibold whitespace-normal break-words leading-tight ${w}`}
                   >
                     {h}
                   </th>
@@ -3333,28 +3425,26 @@ export function GestionProductosScreen({
                     >
                       {esCategoriaPizza(catName(p.idCategoria)) ? (
                         <span className="block text-sm leading-5">
-                          <span className="block">M {fmtCOP(p.precioUnitario)}</span>
-                          <span className="block">G {fmtCOP(p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE)}</span>
+                          <span className="block">Med. {fmtCOP(p.precioUnitario)} / porción</span>
+                          <span className="block">Gde. {fmtCOP(p.precioGrande ?? 0)} / porción</span>
                         </span>
                       ) : (
                         fmtCOP(p.precioUnitario)
                       )}
                     </td>
                     <td
-                      className="pl-10 pr-4 py-2.5 align-middle"
+                      className="px-2 py-2.5 align-middle whitespace-nowrap"
                       title={
-                        tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
+                        esCategoriaPizza(catName(p.idCategoria))
+                          ? textoStockPizza(p)
+                          : tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
                           ? `${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}`
                           : textoStockBebida(p)
                       }
                     >
-                      {/* Producto insumo (pizzas/lasañas): solo la cantidad
-                          real de stock (`stockDisponible`), tal cual se veía
-                          antes: ej. "50". Con los umbrales viejos de color:
-                          ≤5 rojo, ≤15 amarillo, más de 15 verde. Las bebidas
-                          quedan EXACTAMENTE como estaban. "Ver detalle" y el
-                          Excel siguen usando el cálculo "Se pueden preparar". */}
-                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
+                      {esCategoriaPizza(catName(p.idCategoria)) ? (
+                        pintarStockPizza(p)
+                      ) : tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
                         <span
                           className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600 dark:text-red-400" : p.stockDisponible <= 15 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}
                         >
@@ -3373,14 +3463,15 @@ export function GestionProductosScreen({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-2 py-2.5 overflow-hidden">
                       {canEdit ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
                               type="button"
                               aria-label={`Acciones de estado (actual: ${p.estado}) para ${p.nombre}`}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold whitespace-nowrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              title={p.estado}
+                              className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full font-bold whitespace-nowrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
                               style={{
                                 backgroundColor: `${ESTADO_COLORES[p.estado]}1A`,
                                 color: ESTADO_COLORES[p.estado],
@@ -3388,8 +3479,8 @@ export function GestionProductosScreen({
                               }}
                             >
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ESTADO_COLORES[p.estado] }} />
-                              {p.estado}
-                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span className="min-w-0 truncate">{p.estado}</span>
+                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start">
@@ -3400,17 +3491,31 @@ export function GestionProductosScreen({
                                 nombre: p.nombre,
                                 current: p.estado,
                                 next: "Descontinuado",
+                                tieneStock: false,
                               })}
                             >
                               Descontinuado
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onSelect={() => setConfirmEstado({
-                                id: p.id,
-                                nombre: p.nombre,
-                                current: p.estado,
-                                next: "Automático",
-                              })}
+                              onSelect={() => {
+                                if (
+                                  p.estado === "Descontinuado"
+                                  && esCategoriaPizza(catName(p.idCategoria))
+                                  && !(Number(p.precioUnitario) > 0 && Number(p.precioGrande) > Number(p.precioUnitario))
+                                ) {
+                                  toast.error("No se puede reactivar la pizza: sus precios por porción deben ser mayores a 0 y la Grande mayor que la Mediana. Primero ajusta los precios en Editar.");
+                                  return;
+                                }
+                                setConfirmEstado({
+                                  id: p.id,
+                                  nombre: p.nombre,
+                                  current: p.estado,
+                                  next: "Automático",
+                                  tieneStock: esCategoriaPizza(catName(p.idCategoria))
+                                    ? (p.stockMediana ?? 0) + (p.stockGrande ?? 0) > 0
+                                    : p.stockDisponible > 0,
+                                });
+                              }}
                             >
                               Disponible
                             </DropdownMenuItem>
@@ -3510,17 +3615,18 @@ export function GestionProductosScreen({
               <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
                 <EstadoBadge estado={confirmEstado.current} />
                 <span className="text-muted-foreground text-sm">→</span>
-                {confirmEstado.next === "Descontinuado" ? (
-                  <EstadoBadge estado={confirmEstado.next} />
-                ) : (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold whitespace-nowrap ${ESTADO_PRODUCTO_CLASES["No disponible"]}`} style={{ fontSize: 13 }}>
-                    Automático
-                  </span>
-                )}
+                <EstadoBadge estado={confirmEstado.next === "Descontinuado"
+                  ? "Descontinuado"
+                  : confirmEstado.tieneStock ? "Disponible" : "No disponible"} />
               </div>
               {confirmEstado.next === "Descontinuado" && (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
                   El producto dejará de mostrarse en el menú.
+                </p>
+              )}
+              {confirmEstado.next === "Automático" && confirmEstado.current === "Descontinuado" && (
+                <p className="text-sm text-foreground bg-muted/50 border border-border rounded-xl px-3 py-2 mb-4">
+                  ¿Reactivar {confirmEstado.nombre}? Volverá a aparecer en el menú y en ventas si tiene stock y precio
                 </p>
               )}
               <div className="flex gap-3">
@@ -3538,13 +3644,9 @@ export function GestionProductosScreen({
                   setGuardando(true);
                   void (async () => {
                     try {
-                      const actualizado = await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
+                      const resultado = await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
                       setConfirmEstado(null);
-                      toast.success(
-                        confirmEstado.next === "Automático"
-                          ? `Estado recalculado: ${actualizado.estado}`
-                          : `Estado cambiado a: ${actualizado.estado}`,
-                      );
+                      toast.success(resultado.mensaje ?? `Estado cambiado a: ${resultado.producto.estado}`);
                     } catch (error) {
                       toast.error(mensajeErrorProductos(error, "No se pudo cambiar el estado."));
                     } finally {

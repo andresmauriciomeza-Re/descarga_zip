@@ -87,8 +87,13 @@ export interface ErrorConFaltantes extends Error {
   faltantes?: FaltanteApi[];
 }
 
-export const mensajeErrorOrdenes = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message ? error.message : fallback;
+export const mensajeErrorOrdenes = (error: unknown, fallback: string): string => {
+  if (!(error instanceof Error) || !error.message) return fallback;
+  const status = (error as ErrorConFaltantes).status;
+  // Los errores conocidos (400/409...) muestran el mensaje del servidor; los 5xx usan el texto de cada pantalla.
+  if (typeof status === "number" && status >= 500) return fallback;
+  return error.message;
+};
 
 /** Faltantes del servidor → modelo de pantalla (`FaltanteUnidad`). */
 export const mapearFaltanteApi = (f: FaltanteApi): FaltanteUnidad => ({
@@ -153,7 +158,7 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     }),
   );
   const historial = parsearJson<TransicionApi[]>(row.historial).map((h) => ({
-    de: h.de ? estadoAFront(h.de as OrdenApi["estado"]) : estadoAFront(row.estado),
+    de: h.de ? estadoAFront(h.de as OrdenApi["estado"]) : null,
     a: estadoAFront(h.a as OrdenApi["estado"]),
     fechaHora: h.fechaHora,
     ...(h.detalle ? { detalle: h.detalle } : {}),
@@ -293,7 +298,10 @@ export const crearOrdenPreparacionApi = async (payload: {
   hora_solicitada?: string | null;
   observacion?: string | null;
   validar_stock?: boolean;
-  lineas: ({ id: string; cantidad: number } | { id_producto: number; cantidad: number })[];
+  lineas: (
+    | { id: string; cantidad: number }
+    | { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }
+  )[];
 }): Promise<OrdenProduccion> => {
   const data = await conFaltantes(
     api.post<OrdenApi>(
@@ -305,7 +313,11 @@ export const crearOrdenPreparacionApi = async (payload: {
         ...(payload.validar_stock === undefined ? {} : { validar_stock: payload.validar_stock }),
         lineas: payload.lineas.map((linea) => (
           "id_producto" in linea
-            ? { id_producto: linea.id_producto, cantidad: linea.cantidad }
+            ? {
+                id_producto: linea.id_producto,
+                cantidad: linea.cantidad,
+                ...("tamano" in linea && linea.tamano ? { tamano: linea.tamano } : {}),
+              }
             : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
         )),
       },
@@ -321,7 +333,10 @@ export const actualizarOrdenProduccion = async (
     fecha_solicitada?: string;
     hora_solicitada?: string | null;
     observacion?: string | null;
-    lineas?: ({ id: string; cantidad: number } | { id_producto: number; cantidad: number })[];
+    lineas?: (
+      | { id: string; cantidad: number }
+      | { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }
+    )[];
   },
 ): Promise<OrdenProduccion> => {
   const idApi = Number(String(id).replace(/^OP-/, ""));
@@ -336,7 +351,11 @@ export const actualizarOrdenProduccion = async (
           ? {
               lineas: payload.lineas.map((linea) => (
                 "id_producto" in linea
-                  ? { id_producto: linea.id_producto, cantidad: linea.cantidad }
+                  ? {
+                      id_producto: linea.id_producto,
+                      cantidad: linea.cantidad,
+                      ...("tamano" in linea && linea.tamano ? { tamano: linea.tamano } : {}),
+                    }
                   : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
               )),
             }
@@ -387,16 +406,28 @@ export const iniciarOrdenProduccion = async (
 export const completarOrdenProduccion = async (
   id: string,
   lineas?: { idDetalleOp: number; cantidadReal: number }[],
+  precios?: { idProducto: number; precioMediana?: number; precioGrande?: number }[],
 ): Promise<OrdenProduccion> => {
   const idApi = Number(String(id).replace(/^OP-/, ""));
   const data = await conFaltantes(
     api.post<OrdenApi>(
       `/ordenes-produccion/${idApi}/completar`,
       lineas
-        ? { lineas: lineas.map((l) => ({
-            id_detalle_op: l.idDetalleOp,
-            cantidad_real: l.cantidadReal,
-          })) }
+        ? {
+            lineas: lineas.map((l) => ({
+              id_detalle_op: l.idDetalleOp,
+              cantidad_real: l.cantidadReal,
+            })),
+            ...(precios?.length
+              ? {
+                  precios: precios.map((p) => ({
+                    id_producto: p.idProducto,
+                    ...(p.precioMediana ? { precio_mediana: p.precioMediana } : {}),
+                    ...(p.precioGrande ? { precio_grande: p.precioGrande } : {}),
+                  })),
+                }
+              : {}),
+          }
         : {},
       crudo,
     ),

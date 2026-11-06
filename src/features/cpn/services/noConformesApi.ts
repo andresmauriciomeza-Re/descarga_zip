@@ -13,6 +13,7 @@ export interface NoConformidadApi {
   id_venta: number | string | null;
   cantidad_afectada: number | string;
   unidad_medida: string;
+  tamano?: "Mediana" | "Grande" | null;
   motivo: string;
   descripcion_detallada: string | null;
   tipo_solucion: "Reposicion" | "Reproceso" | "Reembolso" | null;
@@ -74,6 +75,7 @@ export const mapearNoConformidadApi = (row: NoConformidadApi): NoConformidad => 
   fechaRegistro: row.fecha_registro,
   cantidadAfectada: Number(row.cantidad_afectada),
   unidadMedida: row.unidad_medida,
+  ...(row.tamano === "Mediana" || row.tamano === "Grande" ? { tamano: row.tamano } : {}),
   // En el frontend `tipoNoConformidad` es el MOTIVO (texto).
   tipoNoConformidad: row.motivo,
   descripcionProblema: row.descripcion_detallada ?? "",
@@ -133,6 +135,7 @@ export const crearNoConformidad = async (f: Omit<NoConformidad, "id">): Promise<
     id_venta: idVentaApi(f.ventaRef),
     fecha_registro: f.fechaRegistro,
     cantidad_afectada: f.cantidadAfectada,
+    tamano: f.tamano ?? null,
     motivo: f.tipoNoConformidad,
     ...camposComunes(f),
   });

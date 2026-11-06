@@ -62,7 +62,14 @@ interface ProductoMenu {
   status: "disponible" | "no disponible";
   rating: number;
   sales: number;
+  stockMediana?: number;
+  stockGrande?: number;
 }
+
+const esPizzaVenta = (producto: { category?: string; tamaño?: string }) =>
+  producto.tamaño === "Mediana" ||
+  producto.tamaño === "Grande" ||
+  producto.category?.toLowerCase().includes("pizza") === true;
 
 // ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
 
@@ -530,7 +537,7 @@ const hoyFecha = () => {
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
-    /** Estado "guardando": bloquea el botón Guardar mientras el pedido se
+    /** Estado "guardando": bloquea el botón Comprar mientras la venta se
         registra. El `ref` es la barrera real anti doble clic (el `disabled`
         del botón no alcanza si llegan dos clics en el mismo tick). */
     const [guardando, setGuardando] = useState(false);
@@ -732,6 +739,19 @@ const hoyFecha = () => {
     // y reventaría al pedir una gaseosa.
     const variantesDe = (p: ProductoMenu) =>
       p.sizes.length > 0 ? p.sizes : [{ label: "Única", price: p.price }];
+    const stockPizzaDe = (p: ProductoMenu, tamaño: string): number | undefined => {
+      if (tamaño === "Mediana") return p.stockMediana;
+      if (tamaño === "Grande") return p.stockGrande;
+      return undefined;
+    };
+    const disponibleParaVenta = (p: ProductoMenu, tamaño: string, excluirId?: number) => {
+      const stock = stockPizzaDe(p, tamaño);
+      if (!p.category.toLowerCase().includes("pizza") || stock == null) return undefined;
+      const reservado = selProductos
+        .filter((linea) => linea.id === p.id && linea.id !== excluirId && linea.tamaño === tamaño)
+        .reduce((total, linea) => total + linea.cantidad, 0);
+      return Math.max(0, Math.floor(stock - reservado));
+    };
 
     const disponiblesMenu = useMemo(
       () => productos.filter((p) => p.status === "disponible"),
@@ -750,10 +770,21 @@ const hoyFecha = () => {
     );
 
     const toggleProduct = (p: ProductoMenu) => {
+      const exists = selProductos.find((x) => x.id === p.id);
+      if (!exists) {
+        const defaultSize = variantesDe(p).find((size) =>
+          disponibleParaVenta(p, size.label) !== 0,
+        ) ?? variantesDe(p)[0];
+        if (p.category.toLowerCase().includes("pizza") && disponibleParaVenta(p, defaultSize.label) === 0) {
+          toast.warning(`No hay porciones disponibles de ${p.name}`);
+          return;
+        }
+      }
       setSelProductos((prev) => {
-        const exists = prev.find((x) => x.id === p.id);
         if (exists) return prev.filter((x) => x.id !== p.id);
-        const defaultSize = variantesDe(p)[0];
+        const defaultSize = variantesDe(p).find((size) =>
+          disponibleParaVenta(p, size.label) !== 0,
+        ) ?? variantesDe(p)[0];
         return [
           ...prev,
           {
@@ -772,17 +803,27 @@ const hoyFecha = () => {
         setSelProductos((p) => p.filter((x) => x.id !== id));
         return;
       }
-      setSelProductos((p) =>
-        p.map((x) =>
-          x.id === id ? { ...x, cantidad: qty } : x,
-        ),
-      );
+      const linea = selProductos.find((x) => x.id === id);
+      const producto = productos.find((p) => p.id === id);
+      const max = linea && producto && producto.category.toLowerCase().includes("pizza")
+        ? disponibleParaVenta(producto, linea.tamaño, id)
+        : undefined;
+      const cantidad = max === undefined ? qty : Math.min(qty, max);
+      if (max !== undefined && qty > max) toast.warning(`Solo quedan ${max} porciones de ${linea?.tamaño} disponibles`);
+      if (cantidad === 0) {
+        toast.warning(`No hay stock disponible de ${linea?.tamaño}`);
+        return;
+      }
+      setSelProductos((p) => p.map((x) => x.id === id ? { ...x, cantidad } : x));
     };
 
     const updateTamaño = (id: number, tamaño: string) => {
       const prod = productos.find((p) => p.id === id);
       const sizeObj = prod
         ? variantesDe(prod).find((s) => s.label === tamaño)
+        : undefined;
+      const max = prod && prod.category.toLowerCase().includes("pizza")
+        ? disponibleParaVenta(prod, tamaño, id)
         : undefined;
       setSelProductos((p) =>
         p.map((x) =>
@@ -791,10 +832,12 @@ const hoyFecha = () => {
                 ...x,
                 tamaño,
                 precio: sizeObj?.price ?? x.precio,
+                ...(max === undefined ? {} : { cantidad: Math.max(1, Math.min(x.cantidad, max)) }),
               }
             : x,
         ),
       );
+      if (max === 0) toast.warning(`No hay porciones disponibles de ${tamaño}`);
     };
 
     const totalCalculado = selProductos.reduce(
@@ -806,7 +849,12 @@ const hoyFecha = () => {
       0,
     );
     const productosStr = selProductos
-      .map((p) => `${p.nombre} (${p.tamaño}) x${p.cantidad}`)
+      .map((p) => {
+        const producto = productos.find((x) => x.id === p.id);
+          return producto && esPizzaVenta({ category: producto.category, tamaño: p.tamaño })
+          ? `${p.nombre} · ${p.cantidad} porciones — ${p.tamaño}`
+          : `${p.nombre} (${p.tamaño}) x${p.cantidad}`;
+      })
       .join(", ");
 
     /** Valida el formulario y devuelve los datos del pedido. `false` = no se
@@ -823,6 +871,17 @@ const hoyFecha = () => {
       }
       if (selProductos.length === 0) {
         toast.error("Agrega al menos un producto");
+        return null;
+      }
+      const sinStock = selProductos.find((linea) => {
+        const producto = productos.find((p) => p.id === linea.id);
+        const disponible = producto && producto.category.toLowerCase().includes("pizza")
+          ? disponibleParaVenta(producto, linea.tamaño, linea.id)
+          : undefined;
+        return disponible !== undefined && linea.cantidad > disponible;
+      });
+      if (sinStock) {
+        toast.error(`No hay suficientes porciones de ${sinStock.tamaño} para ${sinStock.nombre}`);
         return null;
       }
       if (!metodoPago) {
@@ -1105,6 +1164,10 @@ const hoyFecha = () => {
                     const prodData = productos.find(
                       (x) => x.id === p.id,
                     );
+                    const esPizza = prodData?.category.toLowerCase().includes("pizza") ?? false;
+                    const disponible = prodData && esPizza
+                      ? disponibleParaVenta(prodData, p.tamaño, p.id)
+                      : undefined;
                     return (
                       <div
                         key={p.id}
@@ -1143,7 +1206,8 @@ const hoyFecha = () => {
                                   onClick={() =>
                                     updateTamaño(p.id, s.label)
                                   }
-                                  className={`px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
+                                  disabled={esPizza && prodData != null && disponibleParaVenta(prodData, s.label, p.id) === 0}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
                                 >
                                   {s.label}
                                 </button>
@@ -1164,15 +1228,28 @@ const hoyFecha = () => {
                             <span className="w-5 text-center text-sm font-bold text-foreground">
                               {p.cantidad}
                             </span>
+                            {esPizza && (
+                              <span className="text-[10px] text-muted-foreground">porc.</span>
+                            )}
                             <button
                               onClick={() =>
                                 updateQty(p.id, p.cantidad + 1)
                               }
-                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs"
+                              disabled={disponible !== undefined && p.cantidad >= disponible}
+                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
                           </div>
+                          {esPizza && (
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                              {disponible === undefined
+                                ? "Disponibilidad no informada"
+                                : disponible === 0
+                                  ? "Agotado"
+                                  : `Disponibles: ${disponible} porciones`}
+                            </span>
+                          )}
                           {/* Precio unitario + total */}
                           <span
                             className="ml-auto flex items-baseline gap-1.5"
@@ -1181,7 +1258,8 @@ const hoyFecha = () => {
                               className="text-[11px] text-muted-foreground"
                               style={{ fontFamily: MONO }}
                             >
-                              ${p.precio.toLocaleString("es-CO")} c/u
+                              ${p.precio.toLocaleString("es-CO")}
+                              {prodData?.category.toLowerCase().includes("pizza") ? " / porción" : " c/u"}
                             </span>
                             <span
                               className="text-xs font-bold text-primary"
@@ -1294,10 +1372,14 @@ const hoyFecha = () => {
                             <div className="flex gap-1.5">
                               {variantesDe(p).map((s) => {
                                 const active = sel && selItem?.tamaño === s.label;
+                                const disponible = p.category.toLowerCase().includes("pizza")
+                                  ? disponibleParaVenta(p, s.label, sel ? p.id : undefined)
+                                  : undefined;
                                 return (
                                   <button
                                     key={s.label}
                                     type="button"
+                                    disabled={disponible === 0}
                                     onClick={() => {
                                       if (!sel) {
                                         setSelProductos((prev) => [
@@ -1312,7 +1394,7 @@ const hoyFecha = () => {
                                       active
                                         ? "border-primary bg-primary text-white"
                                         : "border-border bg-muted/40 hover:border-primary/40"
-                                    }`}
+                                    } ${disponible === 0 ? "opacity-40 cursor-not-allowed" : ""}`}
                                   >
                                     <span className="block text-[10px] font-semibold truncate">
                                       {s.label}
@@ -1325,6 +1407,15 @@ const hoyFecha = () => {
                                     >
                                       ${(s.price / 1000).toFixed(0)}k
                                     </span>
+                                    {p.category.toLowerCase().includes("pizza") && (
+                                      <span className={`block text-[9px] ${active ? "opacity-80" : "text-muted-foreground"}`}>
+                                        {disponible === undefined
+                                          ? "porción · stock —"
+                                          : disponible === 0
+                                            ? "Agotado"
+                                            : `Disponibles: ${disponible} porc.`}
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}
@@ -1373,7 +1464,7 @@ const hoyFecha = () => {
               disabled={guardando}
               className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
             >
-              {guardando ? "Guardando…" : "Guardar"}
+              {guardando ? "Comprando…" : "Comprar"}
             </button>
           </div>
         </motion.div>
@@ -1617,7 +1708,13 @@ export function VentasScreen({
         documento: p.documento ?? "",
         fecha: p.fecha,
         horaRecogida: hora12(p.horaRecogida),
-        productos: p.productos,
+        productos: p.detalle?.length
+          ? p.detalle.map((d) =>
+              esPizzaVenta({ tamaño: d.tamaño })
+                ? `${d.nombre} · ${d.cantidad} porciones — ${d.tamaño} · ${fmtCOP(d.precio)} / porción`
+                : `${d.nombre}${d.tamaño ? ` (${d.tamaño})` : ""} x${d.cantidad} · ${fmtCOP(d.precio)}`,
+            ).join(", ")
+          : p.productos,
         cantidad: p.cantidad,
         total: fmtCOP(p.total),
         estado: etiquetaEstadoVenta(p),
@@ -2016,8 +2113,15 @@ export function VentasScreen({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate">{d.nombre}</p>
                             <p className="text-xs text-muted-foreground">
-                              {fmtCOP(d.precio)} × {d.cantidad}
+                              {esPizzaVenta({ tamaño: d.tamaño })
+                                ? `${d.cantidad} porciones — ${d.tamaño}`
+                                : `${fmtCOP(d.precio)} × ${d.cantidad}`}
                             </p>
+                            {esPizzaVenta({ tamaño: d.tamaño }) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Precio por porción: {fmtCOP(d.precio)}
+                              </p>
+                            )}
                           </div>
                           <p className="text-sm font-bold text-primary shrink-0" style={{ fontFamily: MONO }}>
                             {fmtCOP(d.precio * d.cantidad)}
@@ -2254,7 +2358,7 @@ export function VentasScreen({
                 const ventasActualizadas = await obtenerVentasPanel();
                 setPedidos(ventasActualizadas);
                 setShowCreate(false);
-                toast.success(`Pedido #${id} registrado correctamente`);
+                toast.success(`Venta #${id} registrada y completada`);
                 return true;
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");

@@ -2,7 +2,6 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
 import { mapearProductoApi, type ProductoApi } from "@/features/productos/services/productosApi";
-import { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
 
 import { getImageUrl, IMAGEN_DEFAULT, imagenEnApi } from "@/shared/utils/getImageUrl";
 
@@ -45,20 +44,19 @@ export interface Product {
   estado: EstadoProducto;
   rating: number;
   sales: number;
+  stockMediana?: number;
+  stockGrande?: number;
 }
 
-export { RECARGO_TAMANO_GRANDE } from "@/shared/utils/precios";
-
-/** Tamaños del menú público para un producto del panel: Mediana usa el precio
-    de venta y Grande el precio explícito o, en datos antiguos, el recargo:
-    - Pizza (id 1): Mediana = precio de venta; Grande = precio registrado o el recargo para datos antiguos.
+/** Tamaños del menú público para un producto del panel: cada precio de pizza
+    corresponde a una porción del tamaño elegido.
     - Lasaña (id 2): Normal = precio de venta.
     - Resto (bebidas / reventa): sin tamaños; `sizeDe` cae al precio base. */
 export const sizesDeProducto = (p: Producto, categoria?: string): Product["sizes"] =>
   (p.idCategoria === "1" || p.idCategoria === "CAT-001" || categoria?.toLowerCase().includes("pizza"))
     ? [
         { label: "Mediana", price: p.precioUnitario },
-        { label: "Grande", price: p.precioGrande ?? p.precioUnitario + RECARGO_TAMANO_GRANDE },
+        ...(p.precioGrande == null ? [] : [{ label: "Grande", price: p.precioGrande }]),
       ]
     : (p.idCategoria === "2" || p.idCategoria === "CAT-002" || categoria?.toLowerCase().includes("lasaña") || categoria?.toLowerCase().includes("lasana"))
       ? [{ label: "Normal", price: p.precioUnitario }]
@@ -205,6 +203,8 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
     estado: p.estado,
     rating: 4.5,
     sales: 0,
+    stockMediana: p.stockMediana,
+    stockGrande: p.stockGrande,
   };
 };
 
@@ -217,15 +217,29 @@ export const productoApiAProducto = (p: ProductoApi): Producto => {
   };
 };
 
-/** Bloque 5 — Tope de unidades que el menú/carrito permite de un producto
-    TERMINADO (bebida): el stock que trajo el backend (`stockApi`).
-    `undefined` = SIN límite — la API no envió el dato, producto local o
-    carrito viejo que no lo trae — para no dejar el menú vacío. Los
-    productos insumo (pizza/lasaña) NO se limitan con esto: no tienen stock
-    propio, su tope sale de la ficha técnica (ver `limiteDeProducto` en App). */
+/** Stock que el menú/carrito permite vender: pizzas por tamaño y el resto con
+    su stock general. `undefined` significa que la API no envió el dato. */
 export const limiteStockDe = (
-  p?: { stockApi?: number } | null,
+  p?: {
+    stockApi?: number;
+    stockMediana?: number;
+    stockGrande?: number;
+    idCategoria?: string;
+    category?: string;
+  } | null,
+  tamano?: string,
 ): number | undefined => {
+  const esPizza =
+    p?.idCategoria === "1" ||
+    p?.idCategoria === "CAT-001" ||
+    p?.category?.toLowerCase().includes("pizza");
+  if (esPizza) {
+    if (tamano?.toLowerCase() === "mediana") return p.stockMediana;
+    if (tamano?.toLowerCase() === "grande") return p.stockGrande;
+    if (p.stockMediana !== undefined && p.stockGrande !== undefined) {
+      return p.stockMediana + p.stockGrande;
+    }
+  }
   const s = p?.stockApi;
   return s !== undefined && Number.isFinite(s) && s >= 0 ? s : undefined;
 };

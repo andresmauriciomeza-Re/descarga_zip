@@ -53,14 +53,15 @@ const nombreArchivo = (v: FacturaVenta) =>
 function cuerpoHTML(v: FacturaVenta, ticket: boolean): string {
   const lineas = (v.detalle ?? [])
     .map((d) => {
+      const esPizza = d.tamaño === "Mediana" || d.tamaño === "Grande";
       const tam = d.tamaño ? ` (${d.tamaño})` : "";
       const extras = d.extras?.length ? ` · ${d.extras.join(", ")}` : "";
       const total = d.precio * d.cantidad;
       return `
         <tr>
           <td>${esc(d.nombre)}${esc(tam)}${esc(extras)}</td>
-          <td class="num">${d.cantidad}</td>
-          <td class="num">${fmtCOP(d.precio)}</td>
+          <td class="num">${esPizza ? `${d.cantidad} porciones — ${esc(d.tamaño!)}` : d.cantidad}</td>
+          <td class="num">${fmtCOP(d.precio)}${esPizza ? " / porción" : ""}</td>
           <td class="num">${fmtCOP(total)}</td>
         </tr>`;
     })

@@ -3,6 +3,7 @@ import {
   calcularCostoProducto,
   formatearCOP,
   margenRealPorcentaje,
+  precioRecomendadoPorPorcion,
   type ParametrosCostos,
 } from "@/shared/utils/costos";
 import type { FichaVersion, PorcionesTamano } from "@/shared/utils/fichas";
@@ -69,15 +70,26 @@ export function CostosProductoPanel({
       porcionesFallback ?? tamanos,
     );
     const esGrande = tamano.tamano.trim().toLowerCase() === "grande";
+    const cantidadPorciones = esGrande ? 8 : tamano.tamano.trim().toLowerCase() === "mediana" ? 6 : null;
+    const esPizza = tamanos.some((t) => ["mediana", "grande"].includes(t.tamano.trim().toLowerCase()));
+    const costoComparado = esPizza && cantidadPorciones
+      ? resumen.costoTotal / cantidadPorciones
+      : resumen.costoTotal;
     const precio = esGrande ? (precioGrande ?? 0) : precioMediana;
-    const margen = margenRealPorcentaje(precio, resumen.costoTotal);
+    const margen = margenRealPorcentaje(precio, costoComparado);
+    const precioRecomendado = esPizza && cantidadPorciones
+      ? precioRecomendadoPorPorcion(ficha, insumos, parametros, tamano.tamano, porcionesFallback ?? tamanos)
+      : resumen.precioRecomendado;
     const nombre = tamanos.length > 1 ? tamano.tamano : "";
     return {
       key: `${tamano.tamano}-${index}`,
       nombre,
       tamano: tamano.tamano,
       resumen,
+      costoComparado,
+      cantidadPorciones,
       precio,
+      precioRecomendado,
       margen,
     };
   });
@@ -86,7 +98,7 @@ export function CostosProductoPanel({
     <section className="mt-4 rounded-xl border border-border bg-muted/30 p-3" aria-label="Costo y precio">
       <h3 className="mb-2 text-sm font-bold text-foreground">Costo y precio</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        {resultados.map(({ key, nombre, tamano, resumen, precio, margen }) => (
+        {resultados.map(({ key, nombre, tamano, resumen, costoComparado, cantidadPorciones, precio, precioRecomendado, margen }) => (
           <div key={key} className="rounded-lg border border-border bg-card p-3 text-xs">
             {nombre && <p className="mb-2 font-bold text-foreground">{nombre}</p>}
             <div className="space-y-1">
@@ -94,21 +106,27 @@ export function CostosProductoPanel({
               <p className="flex justify-between gap-3"><span>Mano de obra</span><strong>{formatearCOP(resumen.manoObra)}</strong></p>
               <p className="flex justify-between gap-3"><span>Gas</span><strong>{formatearCOP(resumen.gas)}</strong></p>
               <p className="flex justify-between gap-3 border-t border-border pt-1 font-bold">
-                <span>COSTO TOTAL</span><strong>{formatearCOP(resumen.costoTotal)}</strong>
+                <span>{cantidadPorciones ? "COSTO TOTAL PIZZA" : "COSTO TOTAL"}</span><strong>{formatearCOP(resumen.costoTotal)}</strong>
               </p>
+              {cantidadPorciones && (
+                <p className="flex justify-between gap-3">
+                  <span>Costo por porción ({cantidadPorciones})</span>
+                  <strong>{formatearCOP(costoComparado)}</strong>
+                </p>
+              )}
               <p className="flex justify-between gap-3 pt-1">
                 <span>Precio recomendado (margen {porcentaje(parametros.margen_ganancia)})</span>
-                <strong>{formatearCOP(resumen.precioRecomendado)}</strong>
+                <strong>{formatearCOP(precioRecomendado)}</strong>
               </p>
-              <p className={`flex justify-between gap-3 ${((margen !== null && margen < parametros.margen_ganancia) || precio < resumen.costoTotal) ? "text-red-600" : "text-emerald-700"}`}>
-                <span>Margen real con el precio escrito{precio ? ` (${formatearCOP(precio)})` : ""}</span>
+              <p className={`flex justify-between gap-3 ${((margen !== null && margen < parametros.margen_ganancia) || precio < costoComparado) ? "text-red-600" : "text-emerald-700"}`}>
+                <span>Margen real con el precio escrito{precio ? ` (${formatearCOP(precio)}${cantidadPorciones ? " / porción" : ""})` : ""}</span>
                 <strong>{margen === null ? "—" : porcentaje(margen)}</strong>
               </p>
             </div>
             {!soloLectura && onUsarPrecio && (
               <button
                 type="button"
-                onClick={() => onUsarPrecio(resumen.precioRecomendado, tamano)}
+                onClick={() => onUsarPrecio(precioRecomendado, tamano)}
                 className="mt-2 rounded-lg bg-primary px-3 py-1.5 font-semibold text-white hover:bg-red-700"
               >
                 Usar precio recomendado

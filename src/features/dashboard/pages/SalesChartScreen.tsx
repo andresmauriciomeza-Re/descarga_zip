@@ -31,7 +31,8 @@ function todayDay(y: number, m: number, d: number, hoy: Date) {
 interface DayEntry {
   day: number;
   label: string;
-  ventas: number;
+  unidades: number;
+  porciones: number;
   revenue: number;
   isToday: boolean;
   isFuture: boolean;
@@ -42,6 +43,8 @@ interface WeekEntry {
   range: string;
   days: DayEntry[];
   totalVentas: number;
+  totalUnidades: number;
+  totalPorciones: number;
   totalRevenue: number;
   /** true = todos los días de la semana ya pasaron (solo entonces se muestra %). */
   terminada: boolean;
@@ -50,7 +53,7 @@ interface WeekEntry {
 function buildWeeks(
   year: number,
   month: number,
-  porFecha: Map<string, { unidades: number; ingresos: number }>,
+  porFecha: Map<string, { unidades: number; porciones: number; ingresos: number }>,
   hoy: Date,
 ): WeekEntry[] {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -68,7 +71,8 @@ function buildWeeks(
       days.push({
         day: d,
         label: `${DOW_ES[dow]} ${d}`,
-        ventas: future ? 0 : (dato?.unidades ?? 0),
+        unidades: future ? 0 : (dato?.unidades ?? 0),
+        porciones: future ? 0 : (dato?.porciones ?? 0),
         revenue: future ? 0 : (dato?.ingresos ?? 0),
         isToday: today,
         isFuture: future,
@@ -82,7 +86,9 @@ function buildWeeks(
       label: `Semana ${idx + 1}`,
       range: `${start} – ${end} ${abbr}`,
       days,
-      totalVentas: days.reduce((s, d) => s + d.ventas, 0),
+      totalVentas: days.reduce((s, d) => s + d.unidades + d.porciones, 0),
+      totalUnidades: days.reduce((s, d) => s + d.unidades, 0),
+      totalPorciones: days.reduce((s, d) => s + d.porciones, 0),
       totalRevenue: days.reduce((s, d) => s + d.revenue, 0),
       terminada: ultimoPasado,
     });
@@ -91,12 +97,16 @@ function buildWeeks(
 }
 
 // ── Shared tooltip ───────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, isCOP }: { active?: boolean; payload?: { value: number }[]; label?: string; isCOP?: boolean }) {
-  if (!active || !payload?.length || !payload[0].value) return null;
+function ChartTooltip({ active, payload, label, isCOP }: { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string; isCOP?: boolean }) {
+  if (!active || !payload?.length || payload.every((dato) => !dato.value)) return null;
   return (
     <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
       <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      <p className="font-bold text-foreground">{isCOP ? fmtCOP(payload[0].value) : `${payload[0].value} producto${payload[0].value === 1 ? "" : "s"}`}</p>
+      {payload.map((dato, index) => (
+        <p key={index} className="font-bold text-foreground">
+          {dato.name ?? dato.dataKey}: {isCOP ? fmtCOP(dato.value) : dato.dataKey === "porciones" ? `${dato.value} porciones` : `${dato.value} unidades`}
+        </p>
+      ))}
     </div>
   );
 }
@@ -148,10 +158,10 @@ function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras
           ) : (
             <>
               <p className="text-xl font-bold text-foreground">
-                {isCompras ? fmtCOP(comprasTotal) : week.totalVentas}
+                {isCompras ? fmtCOP(comprasTotal) : `${week.totalUnidades} und · ${week.totalPorciones} porc.`}
               </p>
               <p className="text-[10px] text-muted-foreground">
-                {isCompras ? "en insumos" : "productos"}
+                {isCompras ? "en insumos" : "unidades y porciones"}
               </p>
               {!isCompras && week.totalRevenue > 0 && (
                 <p className="text-[10px] text-emerald-600 font-semibold">{fmtCOP(week.totalRevenue)}</p>
@@ -204,7 +214,7 @@ function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras
 
 // ── Week detail: Ventas ───────────────────────────────────────────────
 function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void }) {
-  const maxV = Math.max(...week.days.map(d => d.ventas), 1);
+  const maxV = Math.max(...week.days.map(d => d.unidades + d.porciones), 1);
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
       <div className="flex items-center gap-3 mb-5 flex-wrap">
@@ -216,22 +226,24 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
           <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-foreground">{week.totalVentas} <span className="text-sm font-normal text-muted-foreground">productos</span></p>
+          <p className="text-2xl font-bold text-foreground">{week.totalUnidades} <span className="text-sm font-normal text-muted-foreground">unidades</span> · {week.totalPorciones} <span className="text-sm font-normal text-muted-foreground">porciones</span></p>
           <p className="text-sm font-semibold text-emerald-600">{fmtCOP(week.totalRevenue)} COP</p>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5 mb-5">
-        <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Productos vendidos por día</p>
+        <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Unidades y porciones vendidas por día</p>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={week.days} barSize={32} margin={{ top: 8, bottom: 8, left: -16, right: 8 }}>
             <CartesianGrid key="grid" vertical={false} stroke="var(--border)" />
             <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...(props as { x?: number; y?: number; payload?: { index: number; value: string } })} days={week.days} />} axisLine={false} tickLine={false} height={40} />
             <YAxis key="y" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
+            <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
             <Bar
-              key="bar"
-              dataKey="ventas"
+              key="unidades"
+              dataKey="unidades"
+              name="Unidades"
+              stackId="cantidades"
               radius={[4,4,0,0]}
               isAnimationActive={false}
               shape={(props) => {
@@ -240,6 +252,7 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
                 return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />;
               }}
             />
+            <Bar key="porciones" dataKey="porciones" name="Porciones" stackId="cantidades" fill="#F97316" radius={[4,4,0,0]} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border flex-wrap">
@@ -249,6 +262,7 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
               <span className="text-xs text-muted-foreground">{l}</span>
             </div>
           ))}
+          <span className="text-xs text-muted-foreground">Naranja: porciones · Rojo: unidades</span>
         </div>
       </div>
 
@@ -262,11 +276,14 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
               {d.label}
             </span>
             <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${Math.round((d.ventas / maxV) * 100)}%`, background: d.isToday ? "#ef5350" : "#C62828", opacity: d.isFuture ? 0 : 1 }} />
+              <div className="h-full rounded-full flex" style={{ width: `${Math.round(((d.unidades + d.porciones) / maxV) * 100)}%`, opacity: d.isFuture ? 0 : 1 }}>
+                <span className="h-full" style={{ width: `${d.unidades + d.porciones > 0 ? (d.unidades / (d.unidades + d.porciones)) * 100 : 0}%`, background: d.isToday ? "#ef5350" : "#C62828" }} />
+                <span className="h-full bg-orange-500" style={{ width: `${d.unidades + d.porciones > 0 ? (d.porciones / (d.unidades + d.porciones)) * 100 : 0}%` }} />
+              </div>
             </div>
             <span className="w-28 text-right text-sm shrink-0">
               {d.isFuture ? <span className="text-muted-foreground/40">—</span> : (
-                <><span className="font-bold text-foreground">{d.ventas}</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
+                <><span className="font-bold text-foreground">{d.unidades} und · {d.porciones} porc.</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
               )}
             </span>
           </div>
@@ -356,11 +373,21 @@ export function SalesChartScreen({
   const hoyStr = hoyISO();
 
   // Índice real de ventas por fecha (excluye anuladas y devueltas).
-  const porFecha = new Map<string, { unidades: number; ingresos: number }>();
+  const porFecha = new Map<string, { unidades: number; porciones: number; ingresos: number }>();
   ventas.forEach((v) => {
     if (!esFechaISO(v.fecha) || v.estado === "Anulado" || v.estado === "Devolucion") return;
-    const dato = porFecha.get(v.fecha) ?? { unidades: 0, ingresos: 0 };
-    dato.unidades += v.detalle?.reduce((s, d) => s + d.cantidad, 0) ?? v.cantidad ?? 0;
+    const dato = porFecha.get(v.fecha) ?? { unidades: 0, porciones: 0, ingresos: 0 };
+    if (v.detalle?.length) {
+      for (const detalle of v.detalle) {
+        if (detalle.tamaño === "Mediana" || detalle.tamaño === "Grande") {
+          dato.porciones += detalle.cantidad;
+        } else {
+          dato.unidades += detalle.cantidad;
+        }
+      }
+    } else {
+      dato.unidades += v.cantidad ?? 0;
+    }
     dato.ingresos += v.total;
     porFecha.set(v.fecha, dato);
   });
