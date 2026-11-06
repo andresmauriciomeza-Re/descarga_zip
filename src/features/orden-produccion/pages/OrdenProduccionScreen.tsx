@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Trash2, X, Play, CheckCircle2, Ban, Calculator,
@@ -17,7 +18,6 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { hora12 } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
-import { TamanosPizzaPicker } from "@/shared/components/TamanosPizzaPicker";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Venta } from "@/features/ventas/pages/VentasScreen";
 import { tipoDe, type Producto, type FichasPorProducto } from "@/features/productos/pages/GestionProductosScreen";
@@ -97,7 +97,7 @@ function etiquetaAsignacion(o: OrdenProduccion, productos: Producto[]): string {
 /** Tiempo fijo de una orden "Pedido de cliente": el plato solo pasa por el
     horno. El `tiempoPreparacion` de la ficha técnica es de "Preparación en
     lote" y NO se usa en las órdenes de pedido. */
-const HORNEADO_MIN = 15;
+const HORNEADO_MIN = 25;
 
 const ESTADO_COLOR: Record<EstadoOrden, string> = {
   pendiente:    "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300",
@@ -151,9 +151,6 @@ export interface LineaOrden {
   nombre: string;
   unidad: string;
   cantidadEstimada: number;
-  /** Solo formulario de pizzas: pizzas Grandes; `cantidadEstimada` lleva las
-      Medianas. Al guardar se separa en una línea por tamaño. */
-  cantidadGrande?: number;
   /** Solo Forma 2: id del producto del catálogo y tamaño elegido por el cliente. */
   productoId?: string | null;
   tamano?: string;
@@ -172,6 +169,8 @@ export interface LineaOrden {
   pasos?: string[];
   /** Se llenan al completar la orden. */
   cantidadReal?: number | null;
+  pizzasMedianas?: number;
+  pizzasGrandes?: number;
   cantidadDebida?: number | null;
   merma?: number;
   /** Snapshot de la ficha al momento de crear/editar la orden. Si existe,
@@ -209,6 +208,7 @@ interface TransicionEstado {
       las órdenes viejas y las transiciones normales no lo traen y se pintan
       igual que siempre. */
   detalle?: string;
+  automatico?: boolean;
 }
 
 export interface OrdenProduccion {
@@ -232,6 +232,8 @@ export interface OrdenProduccion {
   observacion: string;
   creadaEn: string;          // ISO — columna "Fecha/Hora de estado" si aún no hubo cambio
   inicioProduccion: string | null;
+  finCalentamientoMs?: number;
+  finPreparacionMs?: number;
   entregaEstimada: string | null;
   historial: TransicionEstado[];
   /** Solo Forma 1: descripción de la preparación y tiempo, copiados del
@@ -352,27 +354,7 @@ const esPizzaProducto = (producto?: Producto | null): boolean =>
   || normalizar(producto?.categoriaNombre ?? "").includes("pizza");
 
 const porcionesPorPizza = (tamano?: string | null): number =>
-  normalizar(tamano ?? "") === "grande" ? 8 : 6;
-
-const cantidadPorcionesPizza = (cantidad: number, tamano?: string | null): number =>
-  cantidad * porcionesPorPizza(tamano);
-
-/** Pizzas Mediana y Grande de una línea de formulario (acepta también una
-    línea con un solo tamaño). */
-const cantidadesPizzaForm = (l: LineaOrden): { mediana: number; grande: number } =>
-  l.cantidadGrande !== undefined || l.tamano !== "Grande"
-    ? { mediana: l.cantidadEstimada || 0, grande: l.cantidadGrande ?? 0 }
-    : { mediana: 0, grande: l.cantidadEstimada || 0 };
-
-/** Una línea de formulario de pizza → una línea por tamaño con cantidad. */
-const separarLineaPizza = (l: LineaOrden): LineaOrden[] => {
-  const { mediana, grande } = cantidadesPizzaForm(l);
-  const { cantidadGrande: _grande, ...base } = l;
-  const lineas: LineaOrden[] = [];
-  if (mediana > 0) lineas.push({ ...base, cantidadEstimada: mediana, tamano: "Mediana" });
-  if (grande > 0) lineas.push({ ...base, cantidadEstimada: grande, tamano: "Grande" });
-  return lineas;
-};
+  normalizar(tamano ?? "") === "grande" ? 6 : 8;
 
 /** Ficha técnica vigente de un producto: la que sigue sin fecha de fin.
     Se exporta porque App la usa para el tope de unidades del carrito
@@ -586,10 +568,9 @@ const preparacionInvalida = (lineas: LineaOrden[], productos: Producto[], exigir
   lineas.some((l) => {
     const pizza = esPizzaProducto(productos.find((p) => p.id === l.idProducto));
     if (pizza) {
-      const { mediana, grande } = cantidadesPizzaForm(l);
       return !l.idProducto
-        || !Number.isSafeInteger(mediana) || !Number.isSafeInteger(grande)
-        || mediana < 0 || grande < 0 || (exigirTamano && mediana + grande < 1);
+        || !Number.isSafeInteger(l.cantidadEstimada)
+        || l.cantidadEstimada < 0 || (exigirTamano && l.cantidadEstimada < 1);
     }
     return !l.idProducto || l.cantidadEstimada < 1;
   });
@@ -629,18 +610,6 @@ function requeridosDeLinea(linea: LineaOrden, fichas: FichasPorProducto): Insumo
     ? { insumos: snap.insumos, rendimiento: snap.rendimiento, porcionesPorTamano: ficha?.porcionesPorTamano }
     : ficha;
   if (!base) return [];
-  // Línea de formulario de pizza con Mediana y Grande: suma los dos tamaños.
-  if (linea.cantidadGrande !== undefined) {
-    return [
-      ...requeridosDeLinea({ ...linea, cantidadGrande: undefined, tamano: "Mediana" }, fichas),
-      ...requeridosDeLinea({ ...linea, cantidadGrande: undefined, cantidadEstimada: linea.cantidadGrande, tamano: "Grande" }, fichas),
-    ].reduce<InsumoRequerido[]>((acc, r) => {
-      const previo = acc.find((x) => x.insumoId === r.insumoId && x.unidad === r.unidad);
-      if (previo) previo.cantidad += r.cantidad;
-      else acc.push({ ...r });
-      return acc;
-    }, []);
-  }
   const cantidad = linea.cantidadEstimada || 0;
   return requeridosPorUnidad(base, linea.tamano).map((r) => ({
     ...r,
@@ -1062,7 +1031,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       { header: "Cant. estimada", valor: (o) => o.lineas.map((l) => fmtCant(l.cantidadEstimada, l.unidad)).join("; ") },
       {
         header: "Cant. real",
-        valor: (o) => (o.estadoOrden === "completada" && o.tipo !== "pedido"
+        valor: (o) => (o.estadoOrden === "completada" && o.lineas.every((l) => l.cantidadReal != null)
           ? o.lineas.map((l) => fmtCant(l.cantidadReal ?? 0, l.unidad)).join("; ")
           : "—"),
       },
@@ -1253,8 +1222,7 @@ function LineaPreparacion({
   // C8: "Necesita: …" de ESTA línea, con el mismo número que descuenta el
   // Inicio (factor de tamaño y unidades contables incluidos).
   const necesita = resumenNecesita(requeridos);
-  const sinTamanos = esPizza
-    && cantidadesPizzaForm(linea).mediana + cantidadesPizzaForm(linea).grande < 1;
+  const sinTamanos = esPizza && linea.cantidadEstimada < 1;
 
   const elegir = (id: string) => {
     const esInsumo = esIdInsumo(id);
@@ -1267,9 +1235,7 @@ function LineaPreparacion({
       nombre: elegidoInsumo?.nombre ?? elegidoProducto?.nombre ?? "",
       unidad: elegidoInsumo?.unidadMedida ?? "und",
       cantidadEstimada: 0,
-      // Una pizza se pide por tamaño: Mediana en cantidadEstimada y Grande aparte.
-      tamano: esPizzaProducto(elegidoProducto) ? "Mediana" : undefined,
-      cantidadGrande: esPizzaProducto(elegidoProducto) ? 0 : undefined,
+      tamano: undefined,
       // Snapshot de la ficha: la descripción, el tiempo y los
       // insumos requeridos se leen de aquí, no de la ficha vigente.
       fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
@@ -1303,7 +1269,7 @@ function LineaPreparacion({
 
   return (
     <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
-      <div className={`grid grid-cols-1 ${esPizza ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[1fr_200px_auto]"} gap-5 items-end`}>
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
             Producto a preparar
@@ -1325,7 +1291,6 @@ function LineaPreparacion({
                 unidad: "und",
                 cantidadEstimada: 0,
                 tamano: undefined,
-                cantidadGrande: undefined,
                 fichaSnapshot: undefined,
               });
             }}
@@ -1344,10 +1309,9 @@ function LineaPreparacion({
             </span>
           )}
         </div>
-        {!esPizza && (
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Cantidad a producir ({tipoSelector === "producto" ? "und" : linea.unidad})
+            {esPizza ? "Cantidad de pizzas" : `Cantidad a producir (${tipoSelector === "producto" ? "und" : linea.unidad})`}
           </label>
           <>
               {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
@@ -1369,7 +1333,6 @@ function LineaPreparacion({
               )}
           </>
         </div>
-        )}
         {puedeQuitar && (
           <button
             type="button"
@@ -1383,18 +1346,17 @@ function LineaPreparacion({
       </div>
 
       {esPizza && (
-        <TamanosPizzaPicker
-          mediana={cantidadesPizzaForm(linea).mediana}
-          grande={cantidadesPizzaForm(linea).grande}
-          onChange={(mediana, grande) =>
-            onChange({ ...linea, tamano: "Mediana", cantidadEstimada: mediana, cantidadGrande: grande })}
-        />
+        <p className="text-xs text-muted-foreground">
+          {linea.tamano ? `Orden antigua: corte ${linea.tamano}. ` : ""}
+          Cada pizza da 8 porciones medianas o 6 porciones grandes
+          {linea.cantidadEstimada > 0 && ` = hasta ${linea.cantidadEstimada * 8} medianas o ${linea.cantidadEstimada * 6} grandes`}.
+        </p>
       )}
 
       {(pi || ficha) && (
         <div className="space-y-3">
           {sinTamanos ? (
-            <p className="text-[11px] text-muted-foreground">Agrega un tamaño para calcular los insumos</p>
+            <p className="text-[11px] text-muted-foreground">Agrega una cantidad para calcular los insumos</p>
           ) : (
             <>
               {necesita && (
@@ -1499,6 +1461,26 @@ export function OrdenProduccionScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<OrdenProduccion | null>(null);
   const [detailItem, setDetailItem] = useState<OrdenProduccion | null>(null);
+  const [ahoraCalentamiento, setAhoraCalentamiento] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAhoraCalentamiento(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useRefrescarAlVencer(
+    ordenes.filter((o) => o.tipo === "pedido" && o.estadoOrden === "en-proceso").map((o) => o.finCalentamientoMs),
+    async () => recargarProduccion?.(),
+  );
+  useRefrescarAlVencer(
+    ordenes.filter((o) => o.tipo === "preparacion" && o.estadoOrden === "en-proceso").map((o) => o.finPreparacionMs),
+    async () => recargarProduccion?.(),
+  );
+  useEffect(() => {
+    setDetailItem((actual) => {
+      if (!actual) return null;
+      const actualizada = ordenes.find((o) => o.id === actual.id);
+      return actualizada ? { ...actual, ...actualizada } : actual;
+    });
+  }, [ordenes]);
   const [verFicha, setVerFicha] = useState<{ ordenId: string; lineaIdx: number } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OrdenForm>(emptyForm());
@@ -1697,13 +1679,14 @@ export function OrdenProduccionScreen({
     && generarItem.lineas.every((linea) =>
       capacidadGenerar.lineas.some((capacidad) => capacidad.id_detalle_op === linea.idDetalleOp));
   const generacionValida =
-    !!fechaLimiteGenerar &&
-    (generarItem?.ventaLocal
-      ? fechaLimiteAutomatica || fechaLimiteGenerar >= ahoraBogotaGenerar.slice(0, 16)
-      : fechaLimiteGenerar >= minFechaLimiteGenerar) &&
-    (generarItem?.tipo !== "pedido" ||
-      !recogidaFuturaGenerar ||
-      (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16))) &&
+    (generarItem?.tipo === "preparacion" || (
+      !!fechaLimiteGenerar &&
+      (generarItem?.ventaLocal
+        ? fechaLimiteAutomatica || fechaLimiteGenerar >= ahoraBogotaGenerar.slice(0, 16)
+        : fechaLimiteGenerar >= minFechaLimiteGenerar) &&
+      (!recogidaFuturaGenerar ||
+        (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16)))
+    )) &&
     cantidadesGenerarValidas &&
     !cargandoCapacidadGenerar &&
     capacidadGenerarCompleta &&
@@ -1799,18 +1782,27 @@ export function OrdenProduccionScreen({
   ): string => {
     if (!esPizzaOrdenLinea(linea)) return fmtCant(cantidad, linea.unidad);
     if (orden.tipo === "pedido") return `${cantidad} porciones — ${linea.tamano ?? "Tamaño no definido"}`;
-    const cantidadPorciones = cantidadPorcionesPizza(cantidad, linea.tamano);
-    return `${cantidad} ${cantidad === 1 ? "pizza" : "pizzas"} (${cantidadPorciones} porciones)`;
+    return `${cantidad} ${cantidad === 1 ? "pizza" : "pizzas"}`;
   };
 
+  const resumenCortes = (linea: LineaOrden): string | null => {
+    const mediana = linea.pizzasMedianas;
+    const grande = linea.pizzasGrandes;
+    if (mediana == null && grande == null) return null;
+    return `${(mediana ?? 0) * 8} medianas + ${(grande ?? 0) * 6} grandes`;
+  };
   const totalPorcionesPizza = (orden: OrdenProduccion, real = false) =>
     orden.lineas.reduce((total, linea) => {
       if (!esPizzaOrdenLinea(linea)) return total;
       const cantidad = real ? linea.cantidadReal ?? 0 : linea.cantidadEstimada;
-      return total + (orden.tipo === "pedido"
-        ? cantidad
-        : cantidadPorcionesPizza(cantidad, linea.tamano));
+      return total + cantidad;
     }, 0);
+  const resumenCantidadPizzas = (orden: OrdenProduccion, real = false) => {
+    const cantidad = totalPorcionesPizza(orden, real);
+    if (orden.tipo === "pedido") return `${cantidad} porc.`;
+    const cortesTexto = real ? orden.lineas.map(resumenCortes).filter(Boolean).join(" · ") : "";
+    return `${cantidad} ${cantidad === 1 ? "pizza" : "pizzas"}${cortesTexto ? ` (${cortesTexto})` : ""}`;
+  };
 
   const subtituloLineaOrden = (orden: OrdenProduccion, linea: LineaOrden) =>
     esPizzaOrdenLinea(linea)
@@ -1866,7 +1858,6 @@ export function OrdenProduccionScreen({
       return;
     }
     const lineasPayload = form.lineas
-      .flatMap((l) => (esPizzaProducto(productos.find((p) => p.id === l.idProducto)) ? separarLineaPizza(l) : [l]))
       .filter((l) => l.idProducto && l.cantidadEstimada > 0)
       .map((l) => esIdInsumo(l.idProducto)
         ? { id: l.idProducto, cantidad: l.cantidadEstimada }
@@ -1951,10 +1942,6 @@ export function OrdenProduccionScreen({
         toast.error("Esa venta ya tiene una orden de producción");
         return;
       }
-    } else if (form.lineas.some((l) => esPizzaProducto(productos.find((p) => p.id === l.idProducto))
-      && cantidadesPizzaForm(l).mediana + cantidadesPizzaForm(l).grande < 1)) {
-      toast.error("Agrega al menos un tamaño");
-      return;
     } else if (preparacionInvalida(form.lineas, productos)) {
       // C6: producto elegido y cantidad ≥ 1 en cada línea. El error ya se
       // pinta en la propia línea y el botón Crear viene bloqueado.
@@ -1967,7 +1954,7 @@ export function OrdenProduccionScreen({
   const handleEdit = () => {
     if (!editItem) return;
     if (editItem.tipo === "preparacion" && preparacionInvalida(editItem.lineas, productos)) {
-      toast.error("Elige producto, tamaño para pizzas y una cantidad entera mayor o igual a 1 en cada línea");
+      toast.error("Elige producto y una cantidad entera mayor o igual a 1 en cada línea");
       return;
     }
     guardarConValidacion({
@@ -2073,8 +2060,7 @@ export function OrdenProduccionScreen({
     }
   };
 
-  /** Generar (Pendiente → En proceso) actualiza cantidades, valida la fecha
-      límite, bloquea y descuenta insumos dentro de la transacción del backend. */
+  /** Generar bloquea y descuenta insumos dentro de la transacción del backend. */
   const confirmarGenerar = async () => {
     if (!generarItem || !generacionValida) return;
     const orden = generarItem;
@@ -2082,8 +2068,8 @@ export function OrdenProduccionScreen({
     setFaltantesGenerar([]);
     try {
       const actualizada = await iniciarOrdenProduccion(orden.id, {
-        fechaEntregaEstimada: fechaLimiteGenerar,
-        ...(orden.ventaLocal ? { fechaLimiteAutomatica } : {}),
+        ...(orden.tipo === "pedido" ? { fechaEntregaEstimada: fechaLimiteGenerar } : {}),
+        ...(orden.tipo === "pedido" && orden.ventaLocal ? { fechaLimiteAutomatica } : {}),
         ...(orden.tipo === "preparacion"
           ? {
               lineas: orden.lineas.map((linea) => ({
@@ -2181,16 +2167,12 @@ export function OrdenProduccionScreen({
     const base = actual > 0 ? actual : precioRecomendadoPizza(p, tamano);
     return base > 0 ? String(base) : "";
   };
-  /** Tamaños de la pizza que tienen línea en la orden. */
-  const tamanosDeOrden = (p: Producto): Set<"Mediana" | "Grande"> => new Set(
-    (completarItem?.lineas ?? [])
-      .filter((l) => l.idProducto === p.id)
-      .map((l) => (l.tamano === "Grande" ? "Grande" : "Mediana") as "Mediana" | "Grande"),
-  );
+  const tamanosDeOrden = (_p: Producto): Set<"Mediana" | "Grande"> =>
+    new Set(["Mediana", "Grande"]);
   /** Precio que quedaría guardado: el de pantalla para los tamaños de la orden
       (o escritos) y el ya guardado para el otro tamaño. */
   const precioEfectivoPizza = (p: Producto, tamano: "Mediana" | "Grande"): number => {
-    if (tamanosDeOrden(p).has(tamano) || preciosCompletar[`${p.id}:${tamano}`] !== undefined) {
+    if (tamanosDeOrden(p).has(tamano)) {
       return Number(valorPrecioCompletar(p, tamano));
     }
     return preciosActualesDe(p)[tamano];
@@ -2201,9 +2183,7 @@ export function OrdenProduccionScreen({
     return m > 0 && g > 0 && g <= m;
   };
   const mostrarTamanoPizza = (p: Producto, tamano: "Mediana" | "Grande"): boolean =>
-    tamanosDeOrden(p).has(tamano)
-    || preciosCompletar[`${p.id}:${tamano}`] !== undefined
-    || grandeNoMayorQueMediana(p);
+    tamanosDeOrden(p).has(tamano);
   const preciosCompletarOk = pizzasCompletar.every((p) =>
     Array.from(tamanosDeOrden(p)).every((t) => precioEfectivoPizza(p, t) > 0)
     && !grandeNoMayorQueMediana(p));
@@ -2227,7 +2207,7 @@ export function OrdenProduccionScreen({
       const actuales = preciosActualesDe(p);
       const enOrden = tamanosDeOrden(p);
       const enviar = (t: "Mediana" | "Grande") => {
-        if (!enOrden.has(t) && preciosCompletar[`${p.id}:${t}`] === undefined) return undefined;
+        if (!enOrden.has(t)) return undefined;
         const valor = Number(valorPrecioCompletar(p, t));
         return valor > 0 && (actuales[t] <= 0 || valor !== actuales[t]) ? valor : undefined;
       };
@@ -2353,7 +2333,7 @@ export function OrdenProduccionScreen({
           <Play className="w-4 h-4" />
         </button>
       )}
-      {o.estadoOrden === "en-proceso" && (
+      {o.estadoOrden === "en-proceso" && o.tipo !== "pedido" && (
         <button type="button" onClick={() => abrirCompletar(o.id)}
           title="Completar orden" aria-label="Completar orden"
           className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
@@ -2471,18 +2451,18 @@ export function OrdenProduccionScreen({
           <table className="hidden md:table w-full table-fixed">
             <colgroup>
               <col style={{ width: "6%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "13%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "12%" }} />
               <col style={{ width: "15%" }} />
               <col style={{ width: "15%" }} />
             </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
-                  <th key={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap">
+                  <th key={h} title={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
                     {h}
                   </th>
                 ))}
@@ -2536,7 +2516,7 @@ export function OrdenProduccionScreen({
                     </td>
                     <td className="px-1 py-2 align-middle text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
                       {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                        ? `${totalPorcionesPizza(o)} porc.`
+                        ? resumenCantidadPizzas(o)
                         : o.lineas.some(esPizzaOrdenLinea)
                           ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
                         : o.lineas.length === 1
@@ -2544,16 +2524,16 @@ export function OrdenProduccionScreen({
                         : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
                     <td className="px-1 py-2 align-middle text-sm [overflow-wrap:anywhere]">
-                      {!completada || o.tipo === "pedido" ? (
+                      {!completada || o.lineas.some((l) => l.cantidadReal == null) ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <>
                           <span className="font-semibold text-foreground tabular-nums">
                             {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                              ? `${totalPorcionesPizza(o, true)} porc.`
+                              ? resumenCantidadPizzas(o, true)
                               : o.lineas.some(esPizzaOrdenLinea)
                                 ? o.lineas.map((linea) => esPizzaOrdenLinea(linea)
-                                  ? cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)
+                                  ? `${cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)}${o.tipo === "preparacion" && resumenCortes(linea) ? ` (${resumenCortes(linea)})` : ""}`
                                   : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
                               : o.lineas.length === 1
                                 ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad)
@@ -2570,6 +2550,12 @@ export function OrdenProduccionScreen({
                         <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${ESTADO_COLOR[o.estadoOrden]}`}>
                           {ESTADO_LABEL[o.estadoOrden]}
                         </span>
+                        {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
+                          <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</span>
+                        )}
+                        {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
+                          <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</span>
+                        )}
                         {/* Bloque 4: la fila dice enseguida si a la orden aún
                             no le alcanza el inventario (solo Pendientes).
                             El título detalla cada faltante al pasar el mouse. */}
@@ -2610,6 +2596,12 @@ export function OrdenProduccionScreen({
                     <span className="text-sm font-mono font-semibold text-foreground">{o.id}</span>
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>{ESTADO_LABEL[o.estadoOrden]}</span>
                   </div>
+                  {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
+                    <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</p>
+                  )}
+                  {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
+                    <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</p>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(o, productos)}</span>
                     {o.ventaLocal && <span className="text-[10px] font-semibold text-muted-foreground">Venta en el local</span>}
@@ -2624,16 +2616,16 @@ export function OrdenProduccionScreen({
                   <p className="text-xs text-muted-foreground break-words">{o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}</p>
                   {o.tipo === "pedido" && o.ventaNumero && <p className="text-xs text-muted-foreground break-words">Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}</p>}
                   <p className="text-xs text-muted-foreground">Cant. estimada: {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                    ? `${totalPorcionesPizza(o)} porc.`
+                    ? resumenCantidadPizzas(o)
                     : o.lineas.some(esPizzaOrdenLinea)
                       ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
                       : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad) : fmtCant(totalEstimado(o.lineas), "und")}</p>
-                  <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.tipo === "pedido"
+                  <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.lineas.some((l) => l.cantidadReal == null)
                     ? "—"
                     : o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                      ? `${totalPorcionesPizza(o, true)} porc.`
+                      ? resumenCantidadPizzas(o, true)
                       : o.lineas.some(esPizzaOrdenLinea)
-                        ? o.lineas.map((linea) => esPizzaOrdenLinea(linea) ? cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0) : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
+                        ? o.lineas.map((linea) => esPizzaOrdenLinea(linea) ? `${cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)}${o.tipo === "preparacion" && resumenCortes(linea) ? ` (${resumenCortes(linea)})` : ""}` : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
                         : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad) : fmtCant(totalReal(o.lineas), "und")}</p>
                   {o.estadoOrden === "completada" && o.tipo !== "pedido" && totalMerma(o.lineas) > 0 && (
                     <p className="text-xs font-semibold text-red-600">−{resumenMerma(o.lineas)} de pérdida</p>
@@ -2682,7 +2674,17 @@ export function OrdenProduccionScreen({
                   </button>
                 </div>
                 <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
-                  <div>
+                  {generarItem.tipo === "preparacion" ? (
+                    generarItem.tiempoPreparacionMin != null && generarItem.tiempoPreparacionMin > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Tiempo de preparación: {generarItem.tiempoPreparacionMin} min (según la ficha) · Lista aprox. a las {fechaHoraBogotaDesdeEpoch(ahoraCalentamiento + generarItem.tiempoPreparacionMin * 60_000).slice(11, 16)}
+                      </p>
+                    ) : (
+                      <p role="status" className="text-sm font-semibold text-amber-700">
+                        La ficha no tiene tiempo de preparación: esta orden se completa a mano
+                      </p>
+                    )
+                  ) : <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                       Fecha y hora límite (hora de Bogotá)
                     </label>
@@ -2711,7 +2713,7 @@ export function OrdenProduccionScreen({
                           La fecha límite no puede ser posterior a la hora de recogida.
                         </p>
                       )}
-                  </div>
+                  </div>}
                   {recogidaVencidaGenerar && (
                     <p role="status" className="text-xs font-semibold text-amber-700">
                       La hora de recogida ya pasó; esta orden va retrasada
@@ -3059,7 +3061,7 @@ export function OrdenProduccionScreen({
                             />
                             {esPizzaOrdenLinea(l) && !realInvalida && !realExcede && (
                               <p className="mt-1 text-[11px] font-semibold text-emerald-700">
-                                Al completar: {cantidadPorcionesPizza(real, l.tamano)} porciones ingresan al stock {l.tamano}.
+                                Ingresan {real} × 24 partes = hasta {real * 8} porciones medianas o {real * 6} grandes.
                               </p>
                             )}
                             {realExcede && (
@@ -3083,7 +3085,7 @@ export function OrdenProduccionScreen({
                     );
                   })()
                 ))}
-                {pizzasCompletar.map((pz) => (
+                {pizzasCompletar.filter((pz) => tamanosDeOrden(pz).size > 0).map((pz) => (
                   <div key={pz.id} className="p-4 border border-border rounded-2xl bg-card space-y-2">
                     <p className="text-sm font-semibold text-foreground">
                       Precio de venta por porción{pizzasCompletar.length > 1 ? ` — ${pz.nombre}` : ""}
@@ -3091,7 +3093,7 @@ export function OrdenProduccionScreen({
                     {grandeNoMayorQueMediana(pz) && !(tamanosDeOrden(pz).has("Mediana") && tamanosDeOrden(pz).has("Grande")) && (
                       <p className="text-[11px] font-semibold text-red-600">
                         La porción Grande ({formatearCOP(precioEfectivoPizza(pz, "Grande"))}) quedaría igual o más barata que la Mediana
-                        ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))}). Ajusta también el precio {tamanosDeOrden(pz).has("Grande") ? "Mediana" : "Grande"}
+                        ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))}). Ajusta el precio del tamaño producido o el otro precio en Editar producto.
                       </p>
                     )}
                     <div className={`grid grid-cols-1 gap-3 ${(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).length > 1 ? "sm:grid-cols-2" : ""}`}>
@@ -3123,9 +3125,9 @@ export function OrdenProduccionScreen({
                             <p className="text-sm font-bold text-emerald-700">
                               Precio recomendado: {rec > 0 ? formatearCOP(rec) : "—"}
                             </p>
-                            {rec > 0 && (
+                            {detalle && (
                               <p className="text-[11px] text-muted-foreground">
-                                Pizza completa: {formatearCOP(rec * porcionesPorPizza(t))} ({porcionesPorPizza(t)} porciones)
+                                Pizza completa: {formatearCOP(detalle.resumen.costoTotal)}
                               </p>
                             )}
                             {t === "Grande" && detalle?.igualado && (
@@ -3318,9 +3320,7 @@ export function OrdenProduccionScreen({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-foreground">
-                              {esPizzaOrdenLinea(l) && detailItem.tipo === "preparacion"
-                                ? `${l.nombre} — ${l.tamano ?? "Tamaño no definido"}:`
-                                : nombreLineaOrden(l)}
+                              {nombreLineaOrden(l)}
                             </p>
                             {(l.tamano || l.porciones) && !esPizzaOrdenLinea(l) && (
                               <p className="text-[11px] text-muted-foreground">
@@ -3345,6 +3345,9 @@ export function OrdenProduccionScreen({
                                 <p className="text-[11px] text-muted-foreground mt-0.5">
                                   Real: {cantidadLineaOrden(detailItem, l, l.cantidadReal)}
                                 </p>
+                                {detailItem.tipo === "preparacion" && esPizzaOrdenLinea(l) && resumenCortes(l) && (
+                                  <p className="text-[11px] font-semibold text-foreground">{resumenCortes(l)}</p>
+                                )}
                                 {(l.merma ?? 0) > 0 && (
                                   <p className="text-[11px] font-semibold text-red-600">
                                     −{esPizzaOrdenLinea(l)
@@ -3356,7 +3359,7 @@ export function OrdenProduccionScreen({
                             )}
                           </div>
                         </div>
-                        {l.sinFicha && (
+                        {detailItem.tipo === "preparacion" && l.sinFicha && (
                           <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
                         )}
                         {detailItem.tipo === "preparacion" && necesita && (
@@ -3373,20 +3376,6 @@ export function OrdenProduccionScreen({
                       );
                     })}
                   </div>
-                  {detailItem.tipo === "preparacion" && detailItem.lineas.some(esPizzaOrdenLinea) && (
-                    <p className="mt-2 text-xs font-semibold text-foreground">
-                      {(["Mediana", "Grande"] as const)
-                        .map((tamano) => {
-                          const total = detailItem.lineas.reduce((sum, linea) =>
-                            esPizzaOrdenLinea(linea) && linea.tamano === tamano
-                              ? sum + cantidadPorcionesPizza(linea.cantidadEstimada, linea.tamano)
-                              : sum, 0);
-                          return total > 0 ? `Total ${tamano}: ${total} porciones` : null;
-                        })
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )}
                 </div>
 
                 {detailItem.tipo === "preparacion" && (
@@ -3456,11 +3445,7 @@ export function OrdenProduccionScreen({
                       : lineaPizzaUnica
                         ? detailItem.lineas[0].cantidadEstimada
                         : 0;
-                    const porcionesPizzaBase = soloPizzasPrep
-                      ? (cantidadPizzaBase > 0
-                          ? detailItem.lineas.reduce((s, l) => s + cantidadPorcionesPizza(l.cantidadEstimada || 0, l.tamano), 0) / cantidadPizzaBase
-                          : 0)
-                      : lineaPizzaUnica
+                    const porcionesPizzaBase = lineaPizzaUnica
                         ? porcionesPorPizza(detailItem.lineas[0].tamano)
                         : 0;
                     const costoUnidadPizza = lineaPizzaUnica && cantidadPizzaBase > 0
@@ -3494,7 +3479,12 @@ export function OrdenProduccionScreen({
                                   ? `${formatearCOP(resumen.costoTotal / cantidadEstimada)} ${unidadCosto}`
                                   : "—"}
                             </p>
-                            {lineaPizzaUnica && porcionesPizzaBase > 0 && (
+                            {lineaPizzaUnica && detailItem.tipo === "preparacion" && cantidadPizzaBase > 0 && (
+                              <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                                Costo por porción: {formatearCOP(costoUnidadPizza / 8)} mediana · {formatearCOP(costoUnidadPizza / 6)} grande
+                              </p>
+                            )}
+                            {lineaPizzaUnica && detailItem.tipo === "pedido" && porcionesPizzaBase > 0 && (
                               <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
                                 Costo por porción: {cantidadPizzaBase > 0
                                   ? formatearCOP(costoUnidadPizza / porcionesPizzaBase)
@@ -3535,6 +3525,9 @@ export function OrdenProduccionScreen({
                         <strong className="text-foreground">
                           {detailItem.tiempoPreparacionMin ? fmtMinutos(detailItem.tiempoPreparacionMin) : "Sin tiempo definido"}
                         </strong>
+                        {detailItem.estadoOrden === "en-proceso" && detailItem.finPreparacionMs != null && (
+                          <strong className="ml-2 text-lg tabular-nums">⏱ {tiempoRestante(detailItem.finPreparacionMs, ahoraCalentamiento)}</strong>
+                        )}
                       </span>
                     </div>
                     <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
@@ -3548,7 +3541,10 @@ export function OrdenProduccionScreen({
                     <p className="text-xs font-semibold text-muted-foreground mb-1.5">Preparación</p>
                     <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      Calentamiento: <strong>{fmtMinutos(HORNEADO_MIN)}</strong>
+                      Tiempo estimado: <strong>{fmtMinutos(HORNEADO_MIN)}</strong>
+                      {detailItem.estadoOrden === "en-proceso" && detailItem.finCalentamientoMs != null && (
+                        <strong className="ml-2 text-lg tabular-nums">⏱ {tiempoRestante(detailItem.finCalentamientoMs, ahoraCalentamiento)}</strong>
+                      )}
                     </p>
                   </div>
                 )}
@@ -3600,6 +3596,7 @@ export function OrdenProduccionScreen({
                                   )}
                                   <span className="text-muted-foreground text-xs">→</span>
                                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                                  {h.automatico && <span className="text-xs text-muted-foreground">(automático)</span>}
                                 </div>
                               )}
                               <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{fmtDT(h.fechaHora)}</span>
@@ -3643,7 +3640,13 @@ export function OrdenProduccionScreen({
           // Copia solo para mostrar: los pasos que ya traen "1." o "1)" no
           // deben duplicar el círculo numerado que pinta FichaTecnicaDetalle.
           const fichaVista = ficha
-            ? { ...ficha, pasos: ficha.pasos.map(p => p.replace(/^\s*\d+\s*[.)]\s+/, "")).filter(p => p.trim()) }
+            ? {
+                ...ficha,
+                ...(detailItem.tipo === "preparacion" && esPizzaOrdenLinea(linea)
+                  ? { porciones: 8, porcionesPorTamano: [{ tamano: "Mediana", porciones: 8 }, { tamano: "Grande", porciones: 6 }] }
+                  : {}),
+                pasos: ficha.pasos.map(p => p.replace(/^\s*\d+\s*[.)]\s+/, "")).filter(p => p.trim()),
+              }
             : null;
           return (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -3712,7 +3715,7 @@ export function OrdenProduccionScreen({
                       )}
                       <div className="flex-1 min-h-0 flex flex-col">
                         <FichaTecnicaDetalle v={fichaVista} readCls={readCls}
-                          modo={detailItem.tipo === "preparacion" ? "insumo" : "producto"}
+                          modo={detailItem.tipo === "preparacion" && !esPizzaOrdenLinea(linea) ? "insumo" : "producto"}
                           /* En una preparación, la unidad de la línea es la del
                              Producto Insumo: acompaña a "Cantidad a hacer". */
                           unidadCantidad={detailItem.tipo === "preparacion" ? linea.unidad : undefined} />

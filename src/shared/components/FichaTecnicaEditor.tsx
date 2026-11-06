@@ -505,14 +505,15 @@ export function FichaTecnicaEditor({
   // que el borrador trae conservan sus porciones y las que falten se
   // completan con 1 (los valores por defecto los precarga el padre al elegir
   // la categoría). Sin `tamanoFijo` sigue el modo libre de antes (fallback
-  // para datos viejos). La Grande de pizza va fija en 8 y en solo lectura:
+  // para datos viejos). Los cortes de pizza son fijos:
   // la base solo guarda las porciones del primer tamaño.
+  const esFichaPizza = !!tamanoFijo?.includes("Mediana") && !!tamanoFijo?.includes("Grande");
   const porcionesFijas = (idx: number, tamano: string) =>
     !!tamanoFijo && idx > 0 && tamano === "Grande";
   const filas: PorcionesTamano[] = tamanoFijo
     ? tamanoFijo.map((t, idx) =>
         porcionesFijas(idx, t)
-          ? { tamano: t, porciones: 8 }
+          ? { tamano: t, porciones: 6 }
           : ficha.porcionesPorTamano?.find((f) => f.tamano === t) ?? { tamano: t, porciones: 1 })
     : (ficha.porcionesPorTamano ?? [{ tamano: TAMANOS_FICHA[2], porciones: ficha.porciones }]);
   const setFilas = (nuevas: PorcionesTamano[]) =>
@@ -721,8 +722,10 @@ export function FichaTecnicaEditor({
           </div>
         ) : (
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">Porciones por tamaño</label>
-            {tamanoFijo ? (
+            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">{esFichaPizza ? "Rendimiento de la pizza" : "Porciones por tamaño"}</label>
+            {esFichaPizza ? (
+              <p className="text-sm text-foreground bg-muted rounded-xl border border-border px-3 py-2.5">1 pizza = 8 porciones medianas o 6 grandes</p>
+            ) : tamanoFijo ? (
               /* Tamaño fijo por categoría (Pizzas, Lasañas): la categoría
                  define los tamaños, no se agregan ni se quitan. UNA sola fila
                  de cajitas lado a lado, con la misma piel y altura que el
@@ -736,7 +739,7 @@ export function FichaTecnicaEditor({
                     <input type="number" min={1} step={1} value={fila.porciones}
                       aria-label={`Porciones de ${fila.tamano}`}
                       readOnly={porcionesFijas(idx, fila.tamano)}
-                      title={porcionesFijas(idx, fila.tamano) ? "La Grande va fija en 8 porciones" : undefined}
+                      title={porcionesFijas(idx, fila.tamano) ? "La Grande va fija en 6 porciones" : undefined}
                       onChange={e => {
                         if (porcionesFijas(idx, fila.tamano)) return;
                         updatePorcionesTamano(idx, Number(e.target.value));
@@ -1020,12 +1023,14 @@ export function FichaTecnicaDetalle({
         </div>
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-0.5">
-            {modo === "insumo" ? "Unidades (porciones)" : "Porciones por tamaño"}
+            {modo === "insumo" ? "Unidades (porciones)" : v.porcionesPorTamano?.some((p) => p.tamano === "Mediana") && v.porcionesPorTamano.some((p) => p.tamano === "Grande") ? "Rendimiento de la pizza" : "Porciones por tamaño"}
           </p>
           {modo === "insumo" ? (
             <div className={readCls}>
               {rendimientoDe(v)}{unidadCantidad ? ` ${unidadCantidad}` : ""}
             </div>
+          ) : v.porcionesPorTamano?.some((p) => p.tamano === "Mediana") && v.porcionesPorTamano.some((p) => p.tamano === "Grande") ? (
+            <div className={readCls}>1 pizza = 8 porciones medianas o 6 grandes</div>
           ) : v.porcionesPorTamano?.length ? (
             /* Mismo patrón de cajitas que el editor: nombre a la izquierda,
                porciones en negrita a la derecha, solo lectura. La piel sale

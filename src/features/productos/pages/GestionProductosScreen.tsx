@@ -15,7 +15,6 @@ import {
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
-import { TamanosPizzaPicker } from "@/shared/components/TamanosPizzaPicker";
 import {
   copiarFicha,
   emptyFichaVersion,
@@ -170,20 +169,20 @@ export const tipoDe = (
   return TIPOS_PRODUCTO[1];
 };
 
-const stockTotalPizza = (p: Producto): number =>
-  (p.stockMediana ?? 0) + (p.stockGrande ?? 0);
+const disponiblesMedianaPizza = (p: Producto): number =>
+  p.stockMediana ?? 0;
 
 const textoStockPizza = (p: Producto): string => {
-  const total = stockTotalPizza(p);
-  return total === 0 ? "Agotado" : `${total} porc.`;
+  const disponibles = disponiblesMedianaPizza(p);
+  return disponibles === 0 ? "Agotado" : `${p.stockMediana ?? 0} med. o ${p.stockGrande ?? 0} gde.`;
 };
 
 const pintarStockPizza = (p: Producto): React.ReactNode => {
-  const total = stockTotalPizza(p);
+  const disponibles = disponiblesMedianaPizza(p);
   return (
     <span
       className={`block text-sm font-bold leading-5 whitespace-nowrap ${
-        total === 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+        disponibles === 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
       }`}
     >
       {textoStockPizza(p)}
@@ -192,20 +191,11 @@ const pintarStockPizza = (p: Producto): React.ReactNode => {
 };
 
 const pintarDetalleStockPizza = (p: Producto): React.ReactNode => {
-  const existencias = [
-    { nombre: "Stock Mediana", cantidad: p.stockMediana ?? 0 },
-    { nombre: "Stock Grande", cantidad: p.stockGrande ?? 0 },
-  ];
   return (
     <div className="space-y-1 text-sm">
-      {existencias.map(({ nombre, cantidad }) => (
-        <p key={nombre} className="font-semibold">
-          {nombre}: {cantidad} porciones
-          {cantidad === 0 && <span className="ml-1 text-red-600 dark:text-red-400">· Agotado</span>}
-        </p>
-      ))}
-      <p className="border-t border-border pt-1 font-bold">
-        Total: {stockTotalPizza(p)} porciones
+      <p className="font-semibold">
+        Disponibles: {p.stockMediana ?? 0} medianas o {p.stockGrande ?? 0} grandes (de la misma pizza)
+        {disponiblesMedianaPizza(p) === 0 && <span className="ml-1 text-red-600 dark:text-red-400">· Agotado</span>}
       </p>
     </div>
   );
@@ -259,6 +249,7 @@ export interface Producto {
   /** Existencias de pizza por tamaño, expresadas en porciones. */
   stockMediana?: number;
   stockGrande?: number;
+  stockPartes?: number;
   /** Nombre recibido del backend para que el catálogo local de categorías
       no pierda la categoría numérica de productos recién sincronizados. */
   categoriaNombre?: string;
@@ -554,7 +545,8 @@ const nuevoBorradorFicha = (cfg: ConfigCategoria | null = null): FichaVersion =>
 const ajustarFilasTamano = (v: FichaVersion, cfg: ConfigCategoria | null): FichaVersion => {
   const actuales = v.porcionesPorTamano ?? [];
   if (cfg?.tamanos) {
-    const filas = cfg.tamanos.map((d) => actuales.find((a) => a.tamano === d.tamano) ?? { ...d });
+    const esPizza = cfg.tamanos.some((t) => t.tamano === "Mediana") && cfg.tamanos.some((t) => t.tamano === "Grande");
+    const filas = cfg.tamanos.map((d) => esPizza ? { ...d } : actuales.find((a) => a.tamano === d.tamano) ?? { ...d });
     return { ...v, porcionesPorTamano: filas, porciones: filas[0].porciones };
   }
   if (cfg) {
@@ -1184,7 +1176,6 @@ export function GestionProductosScreen({
   });
   const [form, setForm] = useState(emptyForm());
   const [cantidadAPreparar, setCantidadAPreparar] = useState("");
-  const [cantidadGrandeAPreparar, setCantidadGrandeAPreparar] = useState("");
     // "¿Tiene ficha técnica?" (Crear): solo aparece cuando la categoría NO está
   // en CONFIG_CATEGORIA; null = sin respuesta. De ahí sale el tipo (Sí =
   // Producto insumo, No = Producto terminado). Con categoría configurada
@@ -1333,7 +1324,6 @@ export function GestionProductosScreen({
     if (!esCategoriaPizza(catName(nueva)) && !esCategoriaLasana(catName(nueva))) {
       setCantidadAPreparar("");
     }
-    if (!esCategoriaPizza(catName(nueva))) setCantidadGrandeAPreparar("");
     setFormTieneFicha(null);
     setTieneFichaError("");
     setFichaBorrador((v) => ajustarFilasTamano(v, cfg));
@@ -1660,32 +1650,17 @@ export function GestionProductosScreen({
       tipoFinal === TIPOS_PRODUCTO[0] &&
       (esCategoriaPizza(catName(form.idCategoria)) || esCategoriaLasana(catName(form.idCategoria)));
     const esPizzaCrear = esCategoriaPizza(catName(form.idCategoria));
-    // Pizza: Mediana y Grande se piden por separado (una línea por tamaño con cantidad).
-    const aEntero = (texto: string) => (texto.trim() === "" ? 0 : Number(texto));
-    const lineasPreparar: { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }[] = [];
-    let cantidadPreparar: number | null = null;
-    if (esPizzaCrear) {
-      const mediana = aEntero(cantidadAPreparar);
-      const grande = aEntero(cantidadGrandeAPreparar);
-      if (crearOrdenPreparacion && (!Number.isSafeInteger(mediana) || mediana < 0 || !Number.isSafeInteger(grande) || grande < 0)) {
-        toast.error("Las cantidades de pizzas a preparar deben ser enteros mayores o iguales a 0.");
-        return;
-      }
-      if (mediana > 0) lineasPreparar.push({ id_producto: 0, cantidad: mediana, tamano: "Mediana" });
-      if (grande > 0) lineasPreparar.push({ id_producto: 0, cantidad: grande, tamano: "Grande" });
-      cantidadPreparar = mediana + grande > 0 ? mediana + grande : null;
-    } else {
-      cantidadPreparar = cantidadAPreparar.trim() === "" ? null : Number(cantidadAPreparar);
-      if (
-        crearOrdenPreparacion &&
-        cantidadPreparar !== null &&
-        (!Number.isSafeInteger(cantidadPreparar) || cantidadPreparar < 1)
-      ) {
-        toast.error("La cantidad a preparar debe ser un entero mayor o igual a 1.");
-        return;
-      }
-      if (cantidadPreparar !== null) lineasPreparar.push({ id_producto: 0, cantidad: cantidadPreparar });
+    const lineasPreparar: { id_producto: number; cantidad: number }[] = [];
+    const cantidadPreparar = cantidadAPreparar.trim() === "" ? null : Number(cantidadAPreparar);
+    if (
+      crearOrdenPreparacion &&
+      cantidadPreparar !== null &&
+      (!Number.isSafeInteger(cantidadPreparar) || cantidadPreparar < 1)
+    ) {
+      toast.error("La cantidad a preparar debe ser un entero mayor o igual a 1.");
+      return;
     }
+    if (cantidadPreparar !== null) lineasPreparar.push({ id_producto: 0, cantidad: cantidadPreparar });
     if (!esTerminado(tipoFinal) && !esPizzaCrear && (!Number.isFinite(form.precioUnitario) || form.precioUnitario <= 0)) {
       toast.error("El precio de venta debe ser mayor a 0");
       return;
@@ -1805,7 +1780,6 @@ export function GestionProductosScreen({
       setVisorCrear(null);
       setForm(emptyForm());
       setCantidadAPreparar("");
-      setCantidadGrandeAPreparar("");
       resetFichaForm();
       setFormTieneFicha(null);
       setTieneFichaError("");
@@ -2021,8 +1995,6 @@ export function GestionProductosScreen({
     recomendados,
     cantidadAPreparar = "",
     onCantidadAPreparar,
-    cantidadGrandeAPreparar = "",
-    onCantidadGrandeAPreparar,
     hideUnidad = false,
     readOnly = false,
     lockNombre = false,
@@ -2038,8 +2010,6 @@ export function GestionProductosScreen({
     recomendados?: { Mediana: number; Grande: number };
     cantidadAPreparar?: string;
     onCantidadAPreparar?: (valor: string) => void;
-    cantidadGrandeAPreparar?: string;
-    onCantidadGrandeAPreparar?: (valor: string) => void;
     hideUnidad?: boolean;
     readOnly?: boolean;
     lockNombre?: boolean;
@@ -2213,43 +2183,32 @@ export function GestionProductosScreen({
           </div>
           {esPizza && (
             <p className="mt-1 text-[11px] text-muted-foreground">
-              La Mediana trae 6 porciones y la Grande 8. La pizza se vende solo por porciones.
+              1 pizza = 8 porciones medianas o 6 porciones grandes.
             </p>
           )}
         </div>
         {mostrarCantidadAPreparar && (
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-              Cantidad a preparar (opcional){esPizza ? " · pizzas" : ""}
+              {esPizza ? "Cantidad de pizzas a preparar (opcional)" : "Cantidad a preparar (opcional)"}
             </label>
-            {esPizza ? (
-              <TamanosPizzaPicker
-                mediana={Number(cantidadAPreparar) || 0}
-                grande={Number(cantidadGrandeAPreparar) || 0}
-                onChange={(mediana, grande) => {
-                  onCantidadAPreparar?.(mediana > 0 ? String(mediana) : "");
-                  onCantidadGrandeAPreparar?.(grande > 0 ? String(grande) : "");
-                }}
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={cantidadAPreparar}
+                onChange={(e) => onCantidadAPreparar?.(e.target.value)}
+                placeholder="0"
+                className={inputCls}
               />
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={cantidadAPreparar}
-                  onChange={(e) => onCantidadAPreparar?.(e.target.value)}
-                  placeholder="0"
-                  className={inputCls}
-                />
-                <span className="shrink-0 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                  und
-                </span>
-              </div>
-            )}
+              <span className="shrink-0 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                {esPizza ? "pizzas" : "und"}
+              </span>
+            </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
               {esPizza
-                ? "La cantidad es en pizzas enteras; se crea una orden Pendiente con una línea por cada tamaño con cantidad."
+                ? `Cada pizza da 8 porciones medianas o 6 porciones grandes${Number(cantidadAPreparar) > 0 ? ` = hasta ${Number(cantidadAPreparar) * 8} medianas o ${Number(cantidadAPreparar) * 6} grandes` : ""}.`
                 : "Si escribes una cantidad, se crea una orden de producción Pendiente."}
             </p>
           </div>
@@ -2526,7 +2485,7 @@ export function GestionProductosScreen({
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
-            <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); setCantidadAPreparar(""); setCantidadGrandeAPreparar(""); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
+            <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); setCantidadAPreparar(""); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
               className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
@@ -2558,8 +2517,6 @@ export function GestionProductosScreen({
                   values: form,
                   cantidadAPreparar,
                   onCantidadAPreparar: setCantidadAPreparar,
-                  cantidadGrandeAPreparar,
-                  onCantidadGrandeAPreparar: setCantidadGrandeAPreparar,
                   onChange: (f, v) => {
                     // La categoría tiene regla propia: pide confirmación antes
                     // de reajustar los tamaños de la ficha.
@@ -3213,7 +3170,6 @@ export function GestionProductosScreen({
               onClick={() => {
                 setForm(emptyForm());
                 setCantidadAPreparar("");
-                setCantidadGrandeAPreparar("");
                 setErrorNombreServidor("");
                 resetFichaForm();
                 setFormTieneFicha(null);
@@ -3499,7 +3455,7 @@ export function GestionProductosScreen({
                                   current: p.estado,
                                   next: "Automático",
                                   tieneStock: esCategoriaPizza(catName(p.idCategoria))
-                                    ? (p.stockMediana ?? 0) + (p.stockGrande ?? 0) > 0
+                                    ? disponiblesMedianaPizza(p) > 0
                                     : p.stockDisponible > 0,
                                 });
                               }}

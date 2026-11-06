@@ -46,6 +46,7 @@ export interface Product {
   sales: number;
   stockMediana?: number;
   stockGrande?: number;
+  stockPartes?: number;
 }
 
 /** Tamaños del menú público para un producto del panel: cada precio de pizza
@@ -205,6 +206,7 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
     sales: 0,
     stockMediana: p.stockMediana,
     stockGrande: p.stockGrande,
+    stockPartes: p.stockPartes,
   };
 };
 
@@ -237,7 +239,7 @@ export const limiteStockDe = (
     if (tamano?.toLowerCase() === "mediana") return p.stockMediana;
     if (tamano?.toLowerCase() === "grande") return p.stockGrande;
     if (p.stockMediana !== undefined && p.stockGrande !== undefined) {
-      return p.stockMediana + p.stockGrande;
+      return p.stockMediana;
     }
   }
   const s = p?.stockApi;

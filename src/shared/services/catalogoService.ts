@@ -10,8 +10,9 @@ export interface ProductoApi {
   costo_unitario?: number | string;
   unidad_venta: string;
   stock?: number;
-  stock_mediana?: number | string | null;
-  stock_grande?: number | string | null;
+  stock_partes?: number | string | null;
+  disponibles_mediana?: number | string | null;
+  disponibles_grande?: number | string | null;
   imagen: string | null;
   /** `imagen_data IS NOT NULL`: el binario NO viaja en el JSON; con true el
       menú pide la imagen a `GET /productos/:id/imagen`. */

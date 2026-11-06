@@ -12,13 +12,12 @@ export interface ConfigCategoria {
   tamanos: readonly PorcionesTamano[] | null;
 }
 
-// Pizzas: ficha con dos tamaños fijos (el primero es el que lee el resto
-// de la app como "porciones por unidad": una Mediana rinde 6).
+// La ficha corresponde a una pizza completa; el tamaño indica el corte.
 const CONFIG_PIZZA: ConfigCategoria = {
   tipo: "Producto insumo",
   tamanos: [
-    { tamano: "Mediana", porciones: 6 },
-    { tamano: "Grande", porciones: 8 },
+    { tamano: "Mediana", porciones: 8 },
+    { tamano: "Grande", porciones: 6 },
   ],
 };
 // Lasañas: presentación única.

@@ -637,8 +637,8 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                    unidadMedida: "porciones",
                  })} className={sCls}>
                    <option value="">Selecciona tamaño…</option>
-                   <option value="Mediana">Mediana (6 porciones)</option>
-                   <option value="Grande">Grande (8 porciones)</option>
+                   <option value="Mediana">Mediana (8 porciones por pizza)</option>
+                   <option value="Grande">Grande (6 porciones por pizza)</option>
                  </select>
                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
                </div>

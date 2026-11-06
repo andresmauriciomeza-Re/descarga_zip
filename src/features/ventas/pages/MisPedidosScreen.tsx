@@ -16,6 +16,7 @@ import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { EstadoClienteVenta, Venta, VentaStatus } from "./VentasScreen";
 import { hora12 } from "@/shared/utils/hora";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
@@ -282,6 +283,10 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   // ventana. Aquí se descuenta lo transcurrido desde esa carga para ocultar el
   // botón solo; el límite real lo aplica siempre el servidor.
   const [ahora, setAhora] = useState(() => Date.now());
+  useRefrescarAlVencer(
+    misPedidos.filter((p) => !p.ventaLocal && p.estadoOrden === "En proceso").map((p) => p.finCalentamientoMs),
+    async () => cargar(),
+  );
   const cargadoEnRef = useRef(Date.now());
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 1000);
@@ -539,7 +544,15 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
 
       <div className="space-y-4">
         {lista.map((pedidoListado) => {
-          const p = detallesPedidos[pedidoListado.id] ?? pedidoListado;
+          const detalleGuardado = detallesPedidos[pedidoListado.id];
+          const p = detalleGuardado ? {
+            ...detalleGuardado,
+            estado: pedidoListado.estado,
+            estadoCliente: pedidoListado.estadoCliente,
+            estadoOrden: pedidoListado.estadoOrden,
+            finCalentamientoMs: pedidoListado.finCalentamientoMs,
+            segundosRestantesAnulacion: pedidoListado.segundosRestantesAnulacion,
+          } : pedidoListado;
           const estado = estadoCliente(p);
           const est = datosEstadoCliente(p);
           const abierta = abierto === p.id;
@@ -565,6 +578,9 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       {est.label}
                     </span>
                   </div>
+                  {p.estadoOrden === "En proceso" && p.finCalentamientoMs != null && (
+                    <p className="text-xs font-semibold text-muted-foreground mt-1 tabular-nums">Calentando · ⏱ {tiempoRestante(p.finCalentamientoMs, ahora)}</p>
+                  )}
                   {/* Devolución resuelta: debajo del badge, cómo se resolvió. */}
                   {p.estado === "Devolucion" && p.devolucionResuelta && (
                     <p className="text-sm font-semibold text-orange-700 mt-1">

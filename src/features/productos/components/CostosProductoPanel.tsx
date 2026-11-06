@@ -70,7 +70,7 @@ export function CostosProductoPanel({
       porcionesFallback ?? tamanos,
     );
     const esGrande = tamano.tamano.trim().toLowerCase() === "grande";
-    const cantidadPorciones = esGrande ? 8 : tamano.tamano.trim().toLowerCase() === "mediana" ? 6 : null;
+    const cantidadPorciones = esGrande ? 6 : tamano.tamano.trim().toLowerCase() === "mediana" ? 8 : null;
     const esPizza = tamanos.some((t) => ["mediana", "grande"].includes(t.tamano.trim().toLowerCase()));
     const costoComparado = esPizza && cantidadPorciones
       ? resumen.costoTotal / cantidadPorciones
