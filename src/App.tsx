@@ -1190,7 +1190,7 @@ function PrimaryBtn({
   className = "",
 }: {
   children: React.ReactNode;
-  onClick?: () => void;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
   type?: "button" | "submit" | "reset";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
@@ -2308,14 +2308,32 @@ function LandingScreen({
                           {favorita.description}
                         </p>
 
-                        {/* Price + Rating */}
-                        <div className="flex items-center justify-between mt-auto">
-                          <span
-                            className={`text-[#DC2626] text-lg font-semibold ${atenuada ? "opacity-60" : ""}`}
-                            style={{ fontFamily: MONO }}
+                        <div className="mt-auto space-y-3">
+                          <div className="space-y-1 text-sm font-semibold" style={{ fontFamily: MONO }}>
+                            {favorita.sizes.map((size) => {
+                              const stockTamano = limiteStockDe(favorita, size.label);
+                              const agotadoTamano = stockTamano === 0;
+                              return (
+                                <p
+                                  key={size.label}
+                                  className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-[#DC2626]"}
+                                >
+                                  {size.label} $ {size.price.toLocaleString("es-CO")} / porción
+                                  {agotadoTamano ? " · Agotado" : ""}
+                                </p>
+                              );
+                            })}
+                          </div>
+                          <PrimaryBtn
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenDetail(favorita);
+                            }}
+                            size="sm"
+                            className="w-full"
                           >
-                            $ {favorita.price.toLocaleString("es-CO")}
-                          </span>
+                            Ver detalle
+                          </PrimaryBtn>
                         </div>
                       </div>
                     </div>
@@ -2648,7 +2666,9 @@ const mensajeMaximoDe = (
   elaborado: boolean,
 ): string =>
   elaborado
-    ? `Solo quedan ${max} ${nombre}${tamano ? ` ${tamano}` : ""} disponibles`
+  ? ["Mediana", "Grande"].includes(tamano ?? "")
+    ? `Solo ${max === 1 ? "queda" : "quedan"} ${max} ${max === 1 ? "porción" : "porciones"} de ${nombre} ${tamano} ${max === 1 ? "disponible" : "disponibles"}`
+    : `Solo quedan ${max} ${nombre}${tamano ? ` ${tamano}` : ""} disponibles`
     : `Máximo disponible: ${max}. No hay más unidades de ${nombre}`;
 
 /** Cantidad ajustada al rango permitido: nunca baja de 1 y nunca pasa del
@@ -2768,7 +2788,7 @@ function ProductCard({
   // criterio que `quickAdd`), así que el tope es el de ESA línea.
   const tamanoDefecto = sizeDe(p, 0).label;
   const enCarrito = cart.find(
-    (i) => i.product.id === p.id && i.selectedExtras.length === 0,
+    (i) => i.product.id === p.id && i.size === tamanoDefecto && i.selectedExtras.length === 0,
   );
   const tope = limiteDe(enCarrito ?? { product: p, size: tamanoDefecto });
   const max = tope.max;
@@ -2777,8 +2797,14 @@ function ProductCard({
   // Punto 6: no queda nada por agregar = "Agotado" (sin cambiar el estado
   // del producto; la etiqueta de estado sigue pintándose igual).
   const agotado = adicional !== undefined && adicional <= 0;
+  const agotadoMenu = p.category.toLowerCase().includes("pizza")
+    ? p.sizes.length > 0 && p.sizes.every((size) => {
+      const disponible = limiteDe({ product: p, size: size.label }).max;
+      return disponible !== undefined && disponible <= 0;
+    })
+    : agotado;
   // Una sola etiqueta de estado a la vez (ver `etiquetaEstadoMenu`).
-  const etiqueta = etiquetaEstadoMenu(estado, agotado);
+  const etiqueta = etiquetaEstadoMenu(estado, agotadoMenu);
   // Precio atenuado cuando el cliente no puede pedirlo: estado no disponible
   // o sin stock ("Agotado"). La FOTO se atenúa solo con "No disponible" (se
   // ve inline en su className).
@@ -2800,11 +2826,15 @@ function ProductCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-200 ease-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-lg"
+      onClick={() => onOpen(p)}
+      className="group bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-all duration-200 ease-out hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-lg cursor-pointer"
     >
       <button
         className={`relative w-full overflow-hidden h-48 bg-muted cursor-pointer block ${verImagenCompleta(p) ? "p-2" : ""}`}
-        onClick={() => onOpen(p)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen(p);
+        }}
       >
         <img
           src={getImageUrl(p.image)}
@@ -2846,26 +2876,40 @@ function ProductCard({
         <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-snug">
           {p.description}
         </p>
-        <div className="flex items-center justify-between">
-          <span
-            className={`font-bold text-lg ${atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}`}
-            style={{ fontFamily: MONO }}
-          >
-            {fmt(p.price)}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onOpen(p)}
-              className="px-3 py-2 text-sm font-semibold border border-border rounded-xl hover:bg-muted transition-colors cursor-pointer text-foreground"
+        <div className="flex items-center justify-between gap-3">
+          {p.category.toLowerCase().includes("pizza") ? (
+            <div className="min-w-0 space-y-1 text-sm font-semibold" style={{ fontFamily: MONO }}>
+              {p.sizes.map((size) => {
+                const stock = limiteStockDe(p, size.label);
+                const agotadoTamano = stock === 0;
+                return (
+                  <p
+                    key={size.label}
+                    className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}
+                  >
+                    {size.label} {fmt(size.price)} / porción{agotadoTamano ? " · Agotado" : ""}
+                  </p>
+                );
+              })}
+            </div>
+          ) : (
+            <span
+              className={`font-bold text-lg ${atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}`}
+              style={{ fontFamily: MONO }}
             >
-              Ver más
-            </button>
+              {fmt(p.price)}
+            </span>
+          )}
+          <div className="flex gap-2">
             {/* Solo ícono: el botón nunca se transforma. Cada clic suma 1
                 unidad (quickAdd deduplica dentro de setCart) y dispara el
                 toast, sin abrir el carrito. El tamaño se elige en el detalle
                 ("Ver más" o la imagen). */}
             <button
-              onClick={() => onQuickAdd(p)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onQuickAdd(p);
+              }}
               // Puntos 4 y 6: no disponible o sin nada que agregar (tope en
               // 0 o ya en el máximo) → el botón queda deshabilitado.
               disabled={noDisponible || agotado}
@@ -2889,6 +2933,16 @@ function ProductCard({
             </button>
           </div>
         </div>
+        <PrimaryBtn
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(p);
+          }}
+          size="sm"
+          className="w-full mt-3"
+        >
+          Ver detalle
+        </PrimaryBtn>
       </div>
     </motion.div>
   );
@@ -3234,6 +3288,7 @@ function ProductDetailScreen({
   // botón "Agregar al carrito" antes ignoraba el estado).
   const estado = estadoDeProducto(product);
   const noDisponible = estado !== "Disponible";
+  const esPizza = product.category.toLowerCase().includes("pizza");
   // Bloque 5 — Tope de ESTE producto/tamaño considerando TODO lo que ya hay
   // en el carrito (el detalle no tiene id: todas las líneas cuentan como
   // ajenas, así `max` son las unidades que se pueden AGREGAR ahora).
@@ -3366,14 +3421,14 @@ function ProductDetailScreen({
           >
             {product.name}
           </h1>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-muted-foreground text-sm">
-              {product.sales.toLocaleString("es-CO")} pedidos
-            </span>
-          </div>
           <p className="text-muted-foreground leading-relaxed mb-6">
             {product.description}
           </p>
+          {esPizza && (
+            <p className="mb-6 rounded-xl border border-border bg-muted/70 px-3 py-2 text-sm text-muted-foreground">
+              Se vende por porción. Mediana: 6 porciones · Grande: 8 porciones.
+            </p>
+          )}
 
           {/* Tamaño: las bebidas no tienen selector (botella 2.5 L) y las
               lasañas tienen una única presentación fija "Normal". Solo las
@@ -3381,7 +3436,7 @@ function ProductDetailScreen({
           {product.sizes.length > 0 && (
             <div className="mb-6">
               <h3 className="font-bold mb-3 text-foreground">
-                {product.sizes.length === 1
+                {product.sizes.length === 1 && !esPizza
                   ? "Presentación"
                   : "Elige el tamaño"}
               </h3>
@@ -3400,14 +3455,20 @@ function ProductDetailScreen({
                     style={{ fontFamily: MONO }}
                   >
                     {fmt(product.sizes[0].price)}
+                    {product.category.toLowerCase().includes("pizza") ? " / porción" : ""}
                   </span>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {product.sizes.map((s, i) => (
-                    <label
+                    (() => {
+                      const limiteTamano = esPizza
+                        ? limiteDe({ product, size: s.label })
+                        : undefined;
+                      const agotadoTamano = limiteTamano?.max === 0;
+                      return <label
                       key={s.label}
-                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 transition-all ${agotadoTamano ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${sizeIdx === i ? "border-primary bg-primary/10" : "border-border hover:border-primary/30"}`}
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -3422,19 +3483,35 @@ function ProductDetailScreen({
                           name="size"
                           className="sr-only"
                           checked={sizeIdx === i}
-                          onChange={() => setSizeIdx(i)}
+                          disabled={agotadoTamano}
+                          onChange={() => {
+                            if (!agotadoTamano) setSizeIdx(i);
+                          }}
                         />
                         <span className="font-medium text-foreground">
-                          {s.label}
+                          {esPizza ? `${s.label} — ${fmt(s.price)} por porción` : s.label}
+                          {esPizza && sizeIdx === i && (
+                            <span className="block text-xs font-normal text-muted-foreground mt-1">
+                              {limiteTamano?.max == null
+                                ? "Disponibilidad no informada"
+                                : limiteTamano.max === 0
+                                  ? "Agotado"
+                                  : `Disponibles: ${limiteTamano.max} ${limiteTamano.max === 1 ? "porción" : "porciones"}`}
+                            </span>
+                          )}
+                          {esPizza && agotadoTamano && sizeIdx !== i && (
+                            <span className="block text-xs font-semibold text-red-600 mt-1">Agotado</span>
+                          )}
                         </span>
                       </div>
-                      <span
+                      {!esPizza && <span
                         className="font-bold text-foreground"
                         style={{ fontFamily: MONO }}
                       >
                         {fmt(s.price)}
-                      </span>
+                      </span>}
                     </label>
+                    })()
                   ))}
                 </div>
               )}
@@ -3445,7 +3522,7 @@ function ProductDetailScreen({
           <div className="mb-6">
             <div className="flex items-center gap-4">
               <span className="font-bold text-foreground">
-                Cantidad
+                {esPizza ? "Porciones" : "Cantidad"}
               </span>
               <div className="flex items-center gap-2 bg-muted rounded-xl p-1">
                 <button
@@ -3518,7 +3595,9 @@ function ProductDetailScreen({
               ? "No disponible por ahora"
               : agotado
                 ? "Agotado"
-                : "Agregar al carrito"}
+                : esPizza
+                  ? `Agregar ${qty} ${qty === 1 ? "porción" : "porciones"} al carrito`
+                  : "Agregar al carrito"}
           </PrimaryBtn>
         </div>
       </div>
@@ -3909,8 +3988,15 @@ function CartScreen({
                       {item.product.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {item.size ? `${item.size} · ` : ""}x{item.quantity}
+                      {item.product.category.toLowerCase().includes("pizza")
+                        ? `${item.quantity} ${item.quantity === 1 ? "porción" : "porciones"} · ${item.size}`
+                        : `${item.size ? `${item.size} · ` : ""}x${item.quantity}`}
                     </p>
+                    {item.product.category.toLowerCase().includes("pizza") && (
+                      <p className="text-xs text-muted-foreground">
+                        {fmt(item.sizePrice + item.extrasPrice)} / porción
+                      </p>
+                    )}
                   </div>
                   <span
                     className="text-sm font-bold text-foreground shrink-0"
@@ -4124,11 +4210,15 @@ function CartScreen({
                           estado={estadoDeProducto(item.product)}
                           className="mt-1.5"
                         />
-                        {item.size && (
+                        {item.product.category.toLowerCase().includes("pizza") ? (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {item.quantity} {item.quantity === 1 ? "porción" : "porciones"} · {item.size}
+                          </p>
+                        ) : item.size ? (
                           <p className="text-sm text-muted-foreground mt-1">
                             {item.size}
                           </p>
-                        )}
+                        ) : null}
                         {item.selectedExtras.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-0.5">
                             + {item.selectedExtras.join(", ")}
@@ -4184,6 +4274,7 @@ function CartScreen({
                           <p className="text-xs text-muted-foreground">Precio unitario</p>
                           <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
                             {fmt(item.sizePrice + item.extrasPrice)}
+                            {item.product.category.toLowerCase().includes("pizza") ? " / porción" : ""}
                           </p>
                         </div>
                         <div className="text-right">
@@ -4335,8 +4426,9 @@ function CartScreen({
                               {item.product.name}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {item.size ? `${item.size} · ` : ""}x
-                              {item.quantity}
+                              {item.product.category.toLowerCase().includes("pizza")
+                                ? `${item.quantity} ${item.quantity === 1 ? "porción" : "porciones"} · ${item.size}`
+                                : `${item.size ? `${item.size} · ` : ""}x${item.quantity}`}
                             </p>
                             {item.selectedExtras.length > 0 && (
                               <p className="text-xs text-muted-foreground truncate">
@@ -4347,6 +4439,7 @@ function CartScreen({
                           <div className="flex flex-col items-end shrink-0 text-right">
                             <span className="text-sm text-foreground" style={{ fontFamily: MONO }}>
                               {item.quantity} × {fmt(item.sizePrice + item.extrasPrice)}
+                              {item.product.category.toLowerCase().includes("pizza") ? " / porción" : ""}
                             </span>
                             <span
                               className="text-sm font-bold text-foreground"
@@ -8397,10 +8490,10 @@ export default function App() {
   };
 
   const cambiarEstadoEnServidor = async (id: string, estado: EstadoProductoManual) => {
-    const actualizado = await cambiarEstadoProducto(id, estado);
-    aplicarProductoRespuesta(actualizado);
+    const resultado = await cambiarEstadoProducto(id, estado);
+    aplicarProductoRespuesta(resultado.producto);
     await recargarCatalogoTrasCambio();
-    return actualizado;
+    return resultado;
   };
 
   // Categorías de producto: cada cambio confirmado por el backend actualiza la
@@ -8439,7 +8532,8 @@ export default function App() {
     await recargarCatalogoTrasCambio();
   };
 
-  const descontinuarProductoEnServidor = (id: string) => cambiarEstadoEnServidor(id, "Descontinuado");
+  const descontinuarProductoEnServidor = async (id: string) =>
+    (await cambiarEstadoEnServidor(id, "Descontinuado")).producto;
   const [roles, setRoles] = useState<Rol[]>(leerRolesPersistidos);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -9216,11 +9310,9 @@ export default function App() {
       hay en el carrito (punto 2):
       · Producto que NO está en el catálogo público (ningún nombre casa, está
         borrado/renombrado o el catálogo aún no cargó): sin límite.
-      · Producto insumo (pizza/lasaña — PRE-HECHAS) y producto terminado
-        (bebida): el STOCK FÍSICO del producto (`stockApi` si la API lo envió,
-        si no `max` undefined = sin límite), menos las unidades del MISMO
-        producto que ya hay en OTRAS líneas. Ya no se limita por insumos: se
-        vende solo lo que hay hecho.
+      · Pizza: stock de porciones del tamaño de la línea. Lasaña y bebida:
+        stock físico del producto. En todos los casos se descuentan las
+        unidades del mismo producto/tamaño que ya hay en otras líneas.
       `max` es el TOTAL que la línea puede tener: la propia línea se excluye
       de los consumos ajenos por id; sin id —tarjeta y detalle— todo el
       carrito cuenta. El mínimo sigue siendo 1 (lo aplican los puntos que
@@ -9245,17 +9337,18 @@ export default function App() {
     // Lo que ya consumen las OTRAS líneas (la propia no se cuenta dos veces).
     const otras = carrito.filter((l) => l.id !== linea.id);
 
-    // Pizzas/lasañas (PRE-HECHAS) y bebidas: el tope es el STOCK FÍSICO del
-    // producto (`stock` del backend), NO el cálculo de insumos por ficha. Ya
-    // no se limita por "cuántas se pueden preparar": se vende solo lo que hay
-    // hecho. Las unidades de OTRAS líneas del mismo producto en el carrito
-    // descuentan (puntos 1 y 2). `elaborado` queda solo para elegir el mensaje.
-    const stock = limiteStockDe(enCatalogo);
+    // Pizzas consumen stock por tamaño; los otros productos mantienen su stock
+    // habitual. El menú nunca vende más porciones de las que hay preparadas.
+    const esPizza =
+      enCatalogo.idCategoria === "1" ||
+      enCatalogo.idCategoria === "CAT-001" ||
+      enCategoria?.toLowerCase().includes("pizza") === true;
+    const stock = limiteStockDe(enCatalogo, linea.size);
     if (stock === undefined || !Number.isFinite(stock)) {
       return { max: undefined, elaborado };
     }
     const enOtras = otras
-      .filter((l) => mismoNombre(l.product.name))
+      .filter((l) => mismoNombre(l.product.name) && (!esPizza || l.size === linea.size))
       .reduce((s, l) => s + (l.quantity || 0), 0);
     return { max: Math.max(0, Math.floor(stock - enOtras)), elaborado, stock };
   };
@@ -9272,7 +9365,7 @@ export default function App() {
     // sin extras de ESTE producto el +1 se acumula en ella: el tope es el
     // de ESA línea (la propia no se cuenta dos veces como consumo ajeno).
     const existente = cart.find(
-      (i) => i.product.id === product.id && i.selectedExtras.length === 0,
+      (i) => i.product.id === product.id && i.size === size.label && i.selectedExtras.length === 0,
     );
     const objetivo = limiteDeLinea(
       existente ?? { product, size: size.label },
@@ -10561,6 +10654,13 @@ export default function App() {
                       pedidos={ventas}
                       setPedidos={setVentas}
                       onInventarioCambiado={recargarInventarioProductos}
+                      onVentaPanelCambiada={async () => {
+                        const [inventario, ordenesActualizadas] = await Promise.all([
+                          recargarInventarioProductos(),
+                          cargarOrdenes(),
+                        ]);
+                        return inventario !== null && ordenesActualizadas;
+                      }}
                       productos={productosCatalogo
                         .filter((producto) => producto.estado === "Disponible")
                         .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
@@ -10721,7 +10821,16 @@ export default function App() {
                     />
                   )}
                   {screen === "finished-products" && (
-                    <ProductoTerminadoScreen />
+                    <ProductoTerminadoScreen
+                      pizzas={productosCatalogo
+                        .filter((producto) => producto.categoriaNombre?.toLowerCase().includes("pizza"))
+                        .map((producto) => ({
+                          id: String(producto.id),
+                          nombre: producto.nombre,
+                          stockMediana: producto.stockMediana ?? 0,
+                          stockGrande: producto.stockGrande ?? 0,
+                        }))}
+                    />
                   )}
                   {screen === "store-profile" && (
                     <MiPerfilScreen

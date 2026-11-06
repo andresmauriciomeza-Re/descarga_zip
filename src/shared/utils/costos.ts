@@ -130,6 +130,53 @@ export const calcularCostoProducto = (
   };
 };
 
+/** Precio recomendado por PORCIÓN de pizza: costo del tamaño ÷ porciones
+    (Mediana 6, Grande 8) × (1 + margen), redondeado a la centena. */
+const precioPorPorcionBruto = (
+  ficha: FichaVersion,
+  insumosCatalogo: readonly InsumoCosto[],
+  parametros: ParametrosCostos,
+  tamano: string,
+  porcionesFallback?: readonly PorcionesTamano[],
+): number => {
+  const resumen = calcularCostoProducto(ficha, insumosCatalogo, parametros, tamano, porcionesFallback);
+  const porciones = tamano.trim().toLowerCase() === "grande" ? 8 : 6;
+  return Math.ceil(((resumen.costoTotal / porciones) * (1 + parametros.margen_ganancia / 100)) / 100) * 100;
+};
+
+/** La porción Grande vale como mínimo este recargo sobre la Mediana. */
+export const RECARGO_MINIMO_GRANDE = 0.10;
+
+/** Mínimo de la Grande: recomendado Mediana × (1 + recargo), a la centena
+    hacia arriba (se redondea antes para evitar errores de coma flotante). */
+const minimoGrandeDesde = (mediana: number): number =>
+  Math.ceil(Math.round(mediana * (1 + RECARGO_MINIMO_GRANDE) * 1000) / 1000 / 100) * 100;
+
+/** true cuando el recomendado de la Grande se subió por la regla del 10 %. */
+export const recomendadoGrandeIgualado = (
+  ficha: FichaVersion,
+  insumosCatalogo: readonly InsumoCosto[],
+  parametros: ParametrosCostos,
+  porcionesFallback?: readonly PorcionesTamano[],
+): boolean => {
+  const mediana = precioPorPorcionBruto(ficha, insumosCatalogo, parametros, "Mediana", porcionesFallback);
+  return precioPorPorcionBruto(ficha, insumosCatalogo, parametros, "Grande", porcionesFallback)
+    < minimoGrandeDesde(mediana);
+};
+
+export const precioRecomendadoPorPorcion = (
+  ficha: FichaVersion,
+  insumosCatalogo: readonly InsumoCosto[],
+  parametros: ParametrosCostos,
+  tamano: string,
+  porcionesFallback?: readonly PorcionesTamano[],
+): number => {
+  const precio = precioPorPorcionBruto(ficha, insumosCatalogo, parametros, tamano, porcionesFallback);
+  if (tamano.trim().toLowerCase() !== "grande") return precio;
+  const mediana = precioPorPorcionBruto(ficha, insumosCatalogo, parametros, "Mediana", porcionesFallback);
+  return Math.max(precio, minimoGrandeDesde(mediana));
+};
+
 export const calcularCostoOrden = (
   requeridos: readonly RequeridoCostoOrden[],
   insumosCatalogo: readonly InsumoCosto[],

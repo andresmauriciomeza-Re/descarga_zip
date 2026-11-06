@@ -62,7 +62,14 @@ interface ProductoMenu {
   status: "disponible" | "no disponible";
   rating: number;
   sales: number;
+  stockMediana?: number;
+  stockGrande?: number;
 }
+
+const esPizzaVenta = (producto: { category?: string; tamaño?: string }) =>
+  producto.tamaño === "Mediana" ||
+  producto.tamaño === "Grande" ||
+  producto.category?.toLowerCase().includes("pizza") === true;
 
 // ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
 
@@ -530,7 +537,7 @@ const hoyFecha = () => {
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
-    /** Estado "guardando": bloquea el botón Guardar mientras el pedido se
+    /** Estado "guardando": bloquea el botón Comprar mientras la venta se
         registra. El `ref` es la barrera real anti doble clic (el `disabled`
         del botón no alcanza si llegan dos clics en el mismo tick). */
     const [guardando, setGuardando] = useState(false);
@@ -731,7 +738,20 @@ const hoyFecha = () => {
     // presentación. Sin esto, el picker leería `sizes[0]` de un arreglo vacío
     // y reventaría al pedir una gaseosa.
     const variantesDe = (p: ProductoMenu) =>
-      p.sizes.length > 0 ? p.sizes : [{ label: "Única", price: p.price }];
+      p.category.toLowerCase().includes("pizza")
+        ? ["Mediana", "Grande"].map((label) =>
+            p.sizes.find((size) => size.label === label) ?? { label, price: 0 })
+        : p.sizes.length > 0 ? p.sizes : [{ label: "Única", price: p.price }];
+    const stockPizzaDe = (p: ProductoMenu, tamaño: string): number | undefined => {
+      if (tamaño === "Mediana") return p.stockMediana;
+      if (tamaño === "Grande") return p.stockGrande;
+      return undefined;
+    };
+    const disponibleParaVenta = (p: ProductoMenu, tamaño: string) => {
+      const stock = stockPizzaDe(p, tamaño);
+      if (!p.category.toLowerCase().includes("pizza") || stock == null) return undefined;
+      return Math.max(0, Math.floor(stock));
+    };
 
     const disponiblesMenu = useMemo(
       () => productos.filter((p) => p.status === "disponible"),
@@ -750,8 +770,13 @@ const hoyFecha = () => {
     );
 
     const toggleProduct = (p: ProductoMenu) => {
+      const exists = selProductos.find((x) => x.id === p.id);
+      if (!exists && p.category.toLowerCase().includes("pizza")) {
+        const tamaño = variantesDe(p).find((s) => s.price > 0 && disponibleParaVenta(p, s.label) !== 0);
+        if (tamaño) agregarTamanoPizza(p, tamaño.label);
+        return;
+      }
       setSelProductos((prev) => {
-        const exists = prev.find((x) => x.id === p.id);
         if (exists) return prev.filter((x) => x.id !== p.id);
         const defaultSize = variantesDe(p)[0];
         return [
@@ -767,16 +792,41 @@ const hoyFecha = () => {
       });
     };
 
-    const updateQty = (id: number, qty: number) => {
+    const agregarTamanoPizza = (producto: ProductoMenu, tamaño: string) => {
+      const variante = variantesDe(producto).find((s) => s.label === tamaño);
+      if (!variante || variante.price <= 0) return;
+      const max = disponibleParaVenta(producto, tamaño);
+      setSelProductos((prev) => {
+        const linea = prev.find((x) => x.id === producto.id && x.tamaño === tamaño);
+        if (max !== undefined && (linea?.cantidad ?? 0) >= max) return prev;
+        if (linea) {
+          return prev.map((x) => x.id === producto.id && x.tamaño === tamaño
+            ? { ...x, cantidad: x.cantidad + 1 }
+            : x);
+        }
+        return [...prev, {
+          id: producto.id, nombre: producto.name, precio: variante.price, cantidad: 1, tamaño,
+        }];
+      });
+    };
+
+    const updateQty = (id: number, tamaño: string, qty: number) => {
       if (qty < 1) {
-        setSelProductos((p) => p.filter((x) => x.id !== id));
+        setSelProductos((p) => p.filter((x) => x.id !== id || x.tamaño !== tamaño));
         return;
       }
-      setSelProductos((p) =>
-        p.map((x) =>
-          x.id === id ? { ...x, cantidad: qty } : x,
-        ),
-      );
+      const linea = selProductos.find((x) => x.id === id && x.tamaño === tamaño);
+      const producto = productos.find((p) => p.id === id);
+      const max = linea && producto && producto.category.toLowerCase().includes("pizza")
+        ? disponibleParaVenta(producto, linea.tamaño)
+        : undefined;
+      const cantidad = max === undefined ? qty : Math.min(qty, max);
+      if (max !== undefined && qty > max) toast.warning(`Solo quedan ${max} porciones de ${linea?.tamaño} disponibles`);
+      if (cantidad === 0) {
+        toast.warning(`No hay stock disponible de ${linea?.tamaño}`);
+        return;
+      }
+      setSelProductos((p) => p.map((x) => x.id === id && x.tamaño === tamaño ? { ...x, cantidad } : x));
     };
 
     const updateTamaño = (id: number, tamaño: string) => {
@@ -805,8 +855,18 @@ const hoyFecha = () => {
       (s, p) => s + p.cantidad,
       0,
     );
+    const cantidadPorciones = selProductos.reduce(
+      (s, linea) => s + (esPizzaVenta({ category: productos.find((p) => p.id === linea.id)?.category, tamaño: linea.tamaño }) ? linea.cantidad : 0),
+      0,
+    );
+    const cantidadUnidades = cantidadTotal - cantidadPorciones;
     const productosStr = selProductos
-      .map((p) => `${p.nombre} (${p.tamaño}) x${p.cantidad}`)
+      .map((p) => {
+        const producto = productos.find((x) => x.id === p.id);
+          return producto && esPizzaVenta({ category: producto.category, tamaño: p.tamaño })
+          ? `${p.nombre} · ${p.cantidad} ${p.cantidad === 1 ? "porción" : "porciones"} — ${p.tamaño}`
+          : `${p.nombre} (${p.tamaño}) x${p.cantidad}`;
+      })
       .join(", ");
 
     /** Valida el formulario y devuelve los datos del pedido. `false` = no se
@@ -823,6 +883,17 @@ const hoyFecha = () => {
       }
       if (selProductos.length === 0) {
         toast.error("Agrega al menos un producto");
+        return null;
+      }
+      const sinStock = selProductos.find((linea) => {
+        const producto = productos.find((p) => p.id === linea.id);
+        const disponible = producto && producto.category.toLowerCase().includes("pizza")
+          ? disponibleParaVenta(producto, linea.tamaño)
+          : undefined;
+        return disponible !== undefined && linea.cantidad > disponible;
+      });
+      if (sinStock) {
+        toast.error(`No hay suficientes porciones de ${sinStock.tamaño} para ${sinStock.nombre}`);
         return null;
       }
       if (!metodoPago) {
@@ -1105,24 +1176,34 @@ const hoyFecha = () => {
                     const prodData = productos.find(
                       (x) => x.id === p.id,
                     );
+                    const esPizza = prodData?.category.toLowerCase().includes("pizza") ?? false;
+                    const disponible = prodData && esPizza
+                      ? disponibleParaVenta(prodData, p.tamaño)
+                      : undefined;
+                    const otroTamano = prodData && esPizza
+                      ? variantesDe(prodData).find((s) => s.label !== p.tamaño &&
+                          !selProductos.some((linea) => linea.id === p.id && linea.tamaño === s.label))
+                      : undefined;
                     return (
                       <div
-                        key={p.id}
+                        key={`${p.id}-${p.tamaño}`}
                         className="bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5"
                       >
                         {/* Fila 1: nombre + eliminar */}
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-sm font-semibold text-foreground truncate">
-                            {p.nombre}
+                            {p.nombre}{esPizza ? ` — ${p.tamaño}` : ""}
                           </span>
                           <button
                             onClick={() =>
                               setSelProductos((prev) =>
                                 prev.filter(
-                                  (x) => x.id !== p.id,
+                                  (x) => x.id !== p.id || x.tamaño !== p.tamaño,
                                 ),
                               )
                             }
+                            type="button"
+                            aria-label={`Quitar ${p.nombre}${esPizza ? ` ${p.tamaño}` : ""}`}
                             className="text-muted-foreground hover:text-red-500 cursor-pointer shrink-0"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -1130,10 +1211,9 @@ const hoyFecha = () => {
                         </div>
                         {/* Fila 2: tamaño + cantidad + precio */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Selector de tamaño */}
                           {/* Selector de tamaño. Los productos de una sola
                               presentación (bebidas) no muestran este grupo. */}
-                          {prodData && prodData.sizes.length > 0 && (
+                          {prodData && !esPizza && prodData.sizes.length > 0 && (
                           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
                             {prodData.sizes.map(
                               (s) => (
@@ -1143,7 +1223,7 @@ const hoyFecha = () => {
                                   onClick={() =>
                                     updateTamaño(p.id, s.label)
                                   }
-                                  className={`px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
+                                  className={`px-3 py-1 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
                                 >
                                   {s.label}
                                 </button>
@@ -1155,7 +1235,7 @@ const hoyFecha = () => {
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               onClick={() =>
-                                updateQty(p.id, p.cantidad - 1)
+                                updateQty(p.id, p.tamaño, p.cantidad - 1)
                               }
                               className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs"
                             >
@@ -1164,15 +1244,26 @@ const hoyFecha = () => {
                             <span className="w-5 text-center text-sm font-bold text-foreground">
                               {p.cantidad}
                             </span>
+                            {esPizza && (
+                              <span className="text-[10px] text-muted-foreground">porc.</span>
+                            )}
                             <button
                               onClick={() =>
-                                updateQty(p.id, p.cantidad + 1)
+                                updateQty(p.id, p.tamaño, p.cantidad + 1)
                               }
-                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs"
+                              disabled={disponible !== undefined && p.cantidad >= disponible}
+                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
                           </div>
+                          {esPizza && (
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                              {disponible === undefined
+                                ? "Disponibilidad no informada"
+                                : `Disponibles: ${disponible} porciones`}
+                            </span>
+                          )}
                           {/* Precio unitario + total */}
                           <span
                             className="ml-auto flex items-baseline gap-1.5"
@@ -1181,7 +1272,8 @@ const hoyFecha = () => {
                               className="text-[11px] text-muted-foreground"
                               style={{ fontFamily: MONO }}
                             >
-                              ${p.precio.toLocaleString("es-CO")} c/u
+                              ${p.precio.toLocaleString("es-CO")}
+                              {prodData?.category.toLowerCase().includes("pizza") ? " / porción" : " c/u"}
                             </span>
                             <span
                               className="text-xs font-bold text-primary"
@@ -1194,6 +1286,16 @@ const hoyFecha = () => {
                             </span>
                           </span>
                         </div>
+                        {otroTamano && prodData && (
+                          <button
+                            type="button"
+                            onClick={() => agregarTamanoPizza(prodData, otroTamano.label)}
+                            disabled={disponibleParaVenta(prodData, otroTamano.label) === 0 || otroTamano.price <= 0}
+                            className="mt-2 text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            + Agregar {otroTamano.label}
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -1258,6 +1360,7 @@ const hoyFecha = () => {
                       {filteredProds.map((p) => {
                         const selItem = selProductos.find((x) => x.id === p.id);
                         const sel = !!selItem;
+                        const esPizza = p.category.toLowerCase().includes("pizza");
                         return (
                           <div
                             key={p.id}
@@ -1271,7 +1374,10 @@ const hoyFecha = () => {
                               <button
                                 type="button"
                                 onClick={() => toggleProduct(p)}
-                                className="shrink-0 cursor-pointer"
+                                disabled={esPizza && !sel && !variantesDe(p).some((s) => s.price > 0 && disponibleParaVenta(p, s.label) !== 0)}
+                                aria-label={`${sel ? "Quitar" : "Seleccionar"} ${p.name}`}
+                                aria-pressed={sel}
+                                className="shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 <div
                                   className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
@@ -1293,6 +1399,34 @@ const hoyFecha = () => {
 
                             <div className="flex gap-1.5">
                               {variantesDe(p).map((s) => {
+                                if (esPizza) {
+                                  const active = selProductos.some((x) => x.id === p.id && x.tamaño === s.label);
+                                  const stock = disponibleParaVenta(p, s.label);
+                                  return (
+                                    <button
+                                      key={s.label}
+                                      type="button"
+                                      disabled={stock === 0 || s.price <= 0}
+                                      onClick={() => {
+                                        if (!active) agregarTamanoPizza(p, s.label);
+                                      }}
+                                      aria-pressed={active}
+                                      className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
+                                        active
+                                          ? "border-primary bg-primary text-white"
+                                          : "border-border bg-muted/40 hover:border-primary/40"
+                                      } ${stock === 0 || s.price <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                                    >
+                                      <span className="block text-[10px] font-semibold truncate">{s.label}</span>
+                                      <span className={`block text-[10px] truncate ${active ? "opacity-80" : "text-muted-foreground"}`} style={{ fontFamily: MONO }}>
+                                        {s.price > 0 ? `$${(s.price / 1000).toFixed(0)}k` : "Sin precio"}
+                                      </span>
+                                      <span className={`block text-[9px] ${active ? "opacity-80" : "text-muted-foreground"}`}>
+                                        {stock === undefined ? "porción · stock —" : stock === 0 ? "Agotado" : `Disponibles: ${stock} porc.`}
+                                      </span>
+                                    </button>
+                                  );
+                                }
                                 const active = sel && selItem?.tamaño === s.label;
                                 return (
                                   <button
@@ -1348,8 +1482,10 @@ const hoyFecha = () => {
             {selProductos.length > 0 && (
               <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border">
                 <span className="text-sm text-muted-foreground font-medium">
-                  {cantidadTotal} producto
-                  {cantidadTotal !== 1 ? "s" : ""} · Total
+                  {[
+                    cantidadPorciones > 0 ? `${cantidadPorciones} ${cantidadPorciones === 1 ? "porción" : "porciones"}` : "",
+                    cantidadUnidades > 0 ? `${cantidadUnidades} und` : "",
+                  ].filter(Boolean).join(" · ")} · Total
                 </span>
                 <span
                   className="text-base font-bold text-primary"
@@ -1373,7 +1509,7 @@ const hoyFecha = () => {
               disabled={guardando}
               className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
             >
-              {guardando ? "Guardando…" : "Guardar"}
+              {guardando ? "Comprando…" : "Comprar"}
             </button>
           </div>
         </motion.div>
@@ -1388,6 +1524,7 @@ export function VentasScreen({
   setPedidos,
   productos,
   onInventarioCambiado,
+  onVentaPanelCambiada,
   onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit = true,
@@ -1397,6 +1534,7 @@ export function VentasScreen({
   setPedidos: React.Dispatch<React.SetStateAction<Venta[]>>;
   productos: ProductoMenu[];
   onInventarioCambiado?: () => Promise<unknown>;
+  onVentaPanelCambiada?: () => Promise<boolean>;
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
@@ -1538,6 +1676,13 @@ export function VentasScreen({
       setPedidos(await obtenerVentasPanel());
       cerrarAnular();
       toast.success(`Venta #${venta.id} anulada`);
+      try {
+        if (onVentaPanelCambiada && !await onVentaPanelCambiada()) {
+          toast.warning("La venta se anuló, pero no se pudieron actualizar todos los datos de producción e inventario.");
+        }
+      } catch {
+        toast.warning("La venta se anuló, pero no se pudieron actualizar todos los datos de producción e inventario.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo anular la venta.");
     }
@@ -1617,7 +1762,13 @@ export function VentasScreen({
         documento: p.documento ?? "",
         fecha: p.fecha,
         horaRecogida: hora12(p.horaRecogida),
-        productos: p.productos,
+        productos: p.detalle?.length
+          ? p.detalle.map((d) =>
+              esPizzaVenta({ tamaño: d.tamaño })
+                ? `${d.nombre} · ${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${d.tamaño} · ${fmtCOP(d.precio)} / porción`
+                : `${d.nombre}${d.tamaño ? ` (${d.tamaño})` : ""} x${d.cantidad} · ${fmtCOP(d.precio)}`,
+            ).join(", ")
+          : p.productos,
         cantidad: p.cantidad,
         total: fmtCOP(p.total),
         estado: etiquetaEstadoVenta(p),
@@ -2016,8 +2167,15 @@ export function VentasScreen({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate">{d.nombre}</p>
                             <p className="text-xs text-muted-foreground">
-                              {fmtCOP(d.precio)} × {d.cantidad}
+                              {esPizzaVenta({ tamaño: d.tamaño })
+                                ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${d.tamaño}`
+                                : `${fmtCOP(d.precio)} × ${d.cantidad}`}
                             </p>
+                            {esPizzaVenta({ tamaño: d.tamaño }) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Precio por porción: {fmtCOP(d.precio)}
+                              </p>
+                            )}
                           </div>
                           <p className="text-sm font-bold text-primary shrink-0" style={{ fontFamily: MONO }}>
                             {fmtCOP(d.precio * d.cantidad)}
@@ -2254,7 +2412,14 @@ export function VentasScreen({
                 const ventasActualizadas = await obtenerVentasPanel();
                 setPedidos(ventasActualizadas);
                 setShowCreate(false);
-                toast.success(`Pedido #${id} registrado correctamente`);
+                toast.success(`Venta #${id} registrada y completada`);
+                try {
+                  if (onVentaPanelCambiada && !await onVentaPanelCambiada()) {
+                    toast.warning("La venta se registró, pero no se pudieron actualizar todos los datos de producción e inventario.");
+                  }
+                } catch {
+                  toast.warning("La venta se registró, pero no se pudieron actualizar todos los datos de producción e inventario.");
+                }
                 return true;
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "No se pudo registrar el pedido.");

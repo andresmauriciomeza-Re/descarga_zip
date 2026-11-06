@@ -40,6 +40,7 @@ export interface NoConformidad {
   fechaRegistro: string;
   cantidadAfectada: number;
   unidadMedida: string;
+  tamano?: "Mediana" | "Grande";
   tipoNoConformidad: string;
   descripcionProblema: string;
   causa: string;
@@ -95,6 +96,7 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
       fechaRegistro: new Date().toLocaleDateString("en-CA"),
   cantidadAfectada: 1,
   unidadMedida: "und",
+  tamano: undefined,
   tipoNoConformidad: "",
   descripcionProblema: "",
   causa: "",
@@ -323,6 +325,14 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
     if (!idCatalogo || !form.nombre.trim()) { toast.error("Selecciona un producto."); return; }
     if (!form.tipoNoConformidad.trim()) { toast.error("El motivo es obligatorio."); return; }
     if (!(form.cantidadAfectada > 0)) { toast.error("La cantidad afectada debe ser mayor que cero."); return; }
+    const productoPizza = form.tipo === "Producto"
+      ? productos.find((p) => p.id === idCatalogo)?.categoriaNombre?.toLowerCase().includes("pizza") ?? false
+      : false;
+    if (productoPizza && !form.tamano) { toast.error("Selecciona el tamaño de la pizza."); return; }
+    if (productoPizza && !Number.isSafeInteger(form.cantidadAfectada)) {
+      toast.error("La cantidad de porciones debe ser un entero mayor que cero.");
+      return;
+    }
     const hoy = new Date().toLocaleDateString("en-CA");
     if (form.fechaRegistro > hoy) { toast.error("La fecha de registro no puede ser futura."); return; }
     if (guardando) return;
@@ -440,18 +450,30 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
     // stock. Solo se editan descripción, solución y foto.
     const fijo = readOnly || edicion;
     // Selector de producto EXISTENTE (P17b): siempre es un <select> con el
-    // catálogo, nunca texto libre, y envía el id real. En "Producto insumo"
-    // entran insumos crudos y productos insumo. `stock` es null en los
-    // productos elaborados (pizzas, lasañas): no tienen stock propio.
-    const opcionesProducto = f.tipo === "Producto insumo"
-      ? insumos.filter(i => i.estado === "activo").map(i => ({ id: i.id, nombre: i.nombre, unidad: i.unidadMedida, stock: i.stockActual as number | null }))
+    // catálogo, nunca texto libre, y envía el id real. En pizza se muestran
+    // las existencias separadas por tamaño; los demás conservan su stock usual.
+    const opcionesProducto: {
+      id: string;
+      nombre: string;
+      unidad: string;
+      stock: number | null;
+      pizza: boolean;
+      stockMediana?: number;
+      stockGrande?: number;
+    }[] = f.tipo === "Producto insumo"
+      ? insumos.filter(i => i.estado === "activo").map(i => ({ id: i.id, nombre: i.nombre, unidad: i.unidadMedida, stock: i.stockActual as number | null, pizza: false }))
       : productos.filter(p => p.estado !== "Descontinuado").map(p => ({
           id: p.id,
           nombre: p.nombre,
           unidad: p.unidadVenta || "und",
           stock: p.tipo === "Producto terminado" ? p.stockDisponible : null,
+          pizza: p.categoriaNombre?.toLowerCase().includes("pizza") ?? false,
+          stockMediana: p.stockMediana ?? 0,
+          stockGrande: p.stockGrande ?? 0,
         }));
     const idSeleccionado = (f.tipo === "Producto insumo" ? f.idInsumo : f.idProducto) ?? "";
+    const productoSeleccionado = opcionesProducto.find(o => o.id === idSeleccionado);
+    const esPizzaSeleccionada = f.tipo === "Producto" && productoSeleccionado?.pizza === true;
     return (
       <div className="space-y-4 px-6 py-5">
         {previewId && (
@@ -574,13 +596,20 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                   const ids = f.tipo === "Producto insumo"
                     ? { idInsumo: sel?.id, idProducto: undefined }
                     : { idProducto: sel?.id, idInsumo: undefined };
-                  if (sel) set({ ...ids, nombre: sel.nombre, unidadMedida: sel.unidad });
-                  else set({ ...ids, nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "" });
+                  if (sel) set({
+                    ...ids,
+                    nombre: sel.nombre,
+                    unidadMedida: sel.pizza ? "porciones" : sel.unidad,
+                    tamano: sel.pizza ? "Mediana" : undefined,
+                  });
+                  else set({ ...ids, nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "", tamano: undefined });
                 }} className={sCls}>
                   <option value="">Selecciona…</option>
                   {opcionesProducto.map(o => (
                     <option key={o.id} value={o.id}>
-                      {o.stock === null ? o.nombre : `${o.nombre} · ${o.stock} ${o.unidad} en stock`}
+                      {o.pizza
+                        ? `${o.nombre} · Med. ${o.stockMediana ?? 0} porc. · Gde. ${o.stockGrande ?? 0} porc.`
+                        : o.stock === null ? o.nombre : `${o.nombre} · ${o.stock} ${o.unidad} en stock`}
                     </option>
                   ))}
                 </select>
@@ -591,16 +620,38 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           {!fijo && (
             <p className="text-[11px] text-muted-foreground mt-1">
               {f.tipo === "Producto"
-                ? "Si es un producto de reventa, las unidades afectadas se descuentan de su stock. Los productos elaborados no tienen stock propio."
+                ? "En pizzas, elige el tamaño y registra porciones; se descuentan del stock de ese tamaño."
                 : "Al registrar, la cantidad afectada se descuenta del stock del insumo."}
             </p>
           )}
         </div>
 
+        {esPizzaSeleccionada && (
+           <div>
+             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tamaño de pizza *</label>
+             {fijo
+               ? <p className="text-sm font-semibold text-foreground py-2">{f.tamano ?? "—"}</p>
+               : <div className="relative">
+                 <select value={f.tamano ?? ""} onChange={e => set({
+                   tamano: e.target.value === "Mediana" || e.target.value === "Grande" ? e.target.value : undefined,
+                   unidadMedida: "porciones",
+                 })} className={sCls}>
+                   <option value="">Selecciona tamaño…</option>
+                   <option value="Mediana">Mediana (6 porciones)</option>
+                   <option value="Grande">Grande (8 porciones)</option>
+                 </select>
+                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
+               </div>
+             }
+           </div>
+        )}
+
         {/* Fila 4: Cantidad afectada | Unidad de medida (automática, solo lectura) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
+           <div>
+             <label className="block text-xs font-semibold text-muted-foreground mb-1">
+               Cantidad afectada{esPizzaSeleccionada ? " (porciones)" : ""}
+             </label>
             {fijo
               ? <p className="text-sm font-semibold text-foreground py-2">{f.cantidadAfectada} {f.unidadMedida}</p>
               : <input type="number" min={1}
@@ -764,7 +815,9 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
-            <p className="text-sm font-semibold text-foreground">{item.cantidadAfectada} {item.unidadMedida}</p>
+            <p className="text-sm font-semibold text-foreground">
+              {item.cantidadAfectada} {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
+            </p>
           </div>
         </div>
         <div>
@@ -913,7 +966,9 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{item.fechaRegistro}</td>
                     <td className="px-4 py-2.5 text-sm font-bold text-center text-foreground">
-                      {item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">{item.unidadMedida}</span>
+                      {item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">
+                        {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
+                      </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm text-foreground max-w-36">
                       <p className="font-semibold">{item.tipoNoConformidad}</p>

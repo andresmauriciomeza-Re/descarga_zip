@@ -112,6 +112,18 @@ const datosEstadoCliente = (p: Venta) => {
   return datos;
 };
 
+const esDetallePizza = (detalle: NonNullable<Venta["detalle"]>[number]) =>
+  detalle.tamaño === "Mediana" || detalle.tamaño === "Grande";
+
+const resumenProductosPedido = (pedido: Venta) =>
+  pedido.detalle?.length
+    ? pedido.detalle.map((detalle) =>
+      esDetallePizza(detalle)
+        ? `${detalle.nombre} · ${detalle.cantidad} ${detalle.cantidad === 1 ? "porción" : "porciones"} — ${detalle.tamaño}`
+        : `${detalle.nombre}${detalle.tamaño ? ` (${detalle.tamaño})` : ""} x${detalle.cantidad}`,
+    ).join(", ")
+    : pedido.productos;
+
 function BarraProgresoPedido({ pedido }: { pedido: Venta }) {
   const estado = estadoCliente(pedido);
   const estadoProgreso =
@@ -560,7 +572,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                     </p>
                   )}
                   <p className="text-base font-semibold text-foreground mt-1 truncate">
-                    {p.productos}
+                    {resumenProductosPedido(p)}
                   </p>
                   <p className="text-sm text-muted-foreground">{p.fecha}</p>
                 </div>
@@ -745,8 +757,15 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                                 </p>
                               )}
                               <p className="text-sm text-muted-foreground">
-                                {d.cantidad} × {fmtCOP(d.precio)}
+                                {esDetallePizza(d)
+                                  ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${d.tamaño}`
+                                  : `${d.cantidad} × ${fmtCOP(d.precio)}`}
                               </p>
+                              {esDetallePizza(d) && (
+                                <p className="text-xs text-muted-foreground">
+                                  Precio por porción: {fmtCOP(d.precio)}
+                                </p>
+                              )}
                             </div>
                             <p
                               className="text-base font-bold text-foreground shrink-0"

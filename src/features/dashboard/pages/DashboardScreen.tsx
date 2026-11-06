@@ -555,14 +555,18 @@ export function DashboardScreen({
   const dataProductos = Object.values(
     ventasEn(fProductos, mesProductos)
       .flatMap((v) => v.detalle ?? [])
-      .reduce<Record<string, { nombre: string; vendidos: number }>>((acc, det) => {
-        const actual = acc[det.nombre] ?? { nombre: det.nombre, vendidos: 0 };
-        actual.vendidos += det.cantidad;
+      .reduce<Record<string, { nombre: string; unidades: number; porciones: number }>>((acc, det) => {
+        const actual = acc[det.nombre] ?? { nombre: det.nombre, unidades: 0, porciones: 0 };
+        if (det.tamaño === "Mediana" || det.tamaño === "Grande") {
+          actual.porciones += det.cantidad;
+        } else {
+          actual.unidades += det.cantidad;
+        }
         acc[det.nombre] = actual;
         return acc;
       }, {}),
   )
-    .sort((a, b) => b.vendidos - a.vendidos)
+    .sort((a, b) => b.unidades + b.porciones - a.unidades - a.porciones)
     .slice(0, 10);
 
   // ── Órdenes y compras por gráfica (sin anuladas) ──
@@ -600,7 +604,22 @@ export function DashboardScreen({
     etiqueta: string;
     ingresos: number;
     unidades: number;
+    porciones: number;
   }
+  const cantidadesVenta = (venta: Venta) => {
+    if (!venta.detalle?.length) return { unidades: venta.cantidad || 0, porciones: 0 };
+    return venta.detalle.reduce(
+      (total, detalle) => {
+        if (detalle.tamaño === "Mediana" || detalle.tamaño === "Grande") {
+          total.porciones += detalle.cantidad;
+        } else {
+          total.unidades += detalle.cantidad;
+        }
+        return total;
+      },
+      { unidades: 0, porciones: 0 },
+    );
+  };
   const ventasGrafica = ventasEn(fVentas, mesVentas);
   const dataVentasGrafica: PuntoVenta[] =
     fVentas === "dia"
@@ -613,7 +632,8 @@ export function DashboardScreen({
             return {
               etiqueta: `${h - 12}pm`,
               ingresos: fila.reduce((s, v) => s + v.total, 0),
-              unidades: fila.reduce((s, v) => s + (v.cantidad || 0), 0),
+              unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
+              porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
             };
           });
         })()
@@ -622,7 +642,8 @@ export function DashboardScreen({
           return {
             etiqueta: g.etiqueta,
             ingresos: fila.reduce((s, v) => s + v.total, 0),
-            unidades: fila.reduce((s, v) => s + (v.cantidad || 0), 0),
+            unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
+            porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
           };
         });
 
@@ -1139,7 +1160,7 @@ export function DashboardScreen({
             {/* 1. Ventas del periodo: barras (unidades) + línea (ingresos) */}
             <ChartCard
               titulo="Ventas del periodo"
-              etiqueta={`Ingresos y unidades vendidas ${
+              etiqueta={`Ingresos, unidades y porciones vendidas ${
                 fVentas === "dia" ? "por hora (4–10 p. m.)" : ejeDe(fVentas)
               } (COP)`}
               periodo={fVentas}
@@ -1150,7 +1171,7 @@ export function DashboardScreen({
             >
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
-              ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades])) ? (
+              ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades, d.porciones])) ? (
                 <SinDatos texto="Sin ventas en este periodo" />
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
@@ -1165,10 +1186,11 @@ export function DashboardScreen({
                       tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
                     />
                     <Tooltip
-                      content={<GrafTooltip formatear={(serie, v) => (serie === "ingresos" ? cop(v) : und(v))} />}
+                      content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />}
                     />
                     <Legend />
                     <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill="#C62828" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill="#F97316" radius={[4, 4, 0, 0]} />
                     <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke="#16A34A" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1221,7 +1243,7 @@ export function DashboardScreen({
             {/* 3. Top 10 productos más vendidos */}
             <ChartCard
               titulo="Top 10 productos más vendidos"
-              etiqueta="Suma de detalle[].cantidad de las ventas del periodo (unidades)"
+              etiqueta="Cantidades por producto: pizzas en porciones y otros productos en unidades"
               periodo={fProductos}
               onPeriodo={setFProductos}
               controlAdicional={
@@ -1243,8 +1265,10 @@ export function DashboardScreen({
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                     <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
                     <YAxis type="category" dataKey="nombre" width={120} tick={{ fontSize: 10 }} />
-                    <Tooltip content={<GrafTooltip formatear={(_, v) => und(v)} />} />
-                    <Bar dataKey="vendidos" name="Unidades" fill="#2563EB" radius={[0, 4, 4, 0]} />
+                    <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />} />
+                    <Legend />
+                    <Bar dataKey="unidades" name="Unidades" fill="#2563EB" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="porciones" name="Porciones" fill="#F97316" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
