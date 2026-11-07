@@ -21,6 +21,7 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -411,22 +412,26 @@ function TablaItemsFactura({
                     </td>
                     <td className={td + " whitespace-nowrap"}>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(row)}
-                          title="Editar ítem"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onRemove(row.rowId)}
-                          title="Eliminar ítem"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <IconTooltip label="Editar ítem">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(row)}
+                            aria-label="Editar ítem"
+                            className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
+                        <IconTooltip label="Eliminar ítem" tone="danger">
+                          <button
+                            type="button"
+                            onClick={() => onRemove(row.rowId)}
+                            aria-label="Eliminar ítem"
+                            className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
                       </div>
                     </td>
                   </tr>
@@ -2456,22 +2461,25 @@ export function GestionCompraScreen({
                       </td>
                       <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setDetail(g)}
-                            title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {g.estado === "Recibido" && canEdit && (
+                          <IconTooltip label="Ver detalle">
                             <button
-                              onClick={() => pedirCambiarEstado(g.id)}
-                              title="Anular compra"
-                              aria-label="Anular compra"
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                              onClick={() => setDetail(g)}
+                              aria-label="Ver detalle"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                             >
-                              <Ban className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </button>
+                          </IconTooltip>
+                          {g.estado === "Recibido" && canEdit && (
+                            <IconTooltip label="Anular compra" tone="danger">
+                              <button
+                                onClick={() => pedirCambiarEstado(g.id)}
+                                aria-label="Anular compra"
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            </IconTooltip>
                           )}
                         </div>
                       </td>
@@ -2531,22 +2539,25 @@ export function GestionCompraScreen({
 
                     {/* Ver detalle + anular */}
                     <div className="mt-2.5 flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setDetail(g)}
-                        title="Ver detalle"
-                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {g.estado === "Recibido" && canEdit && (
+                      <IconTooltip label="Ver detalle">
                         <button
-                          onClick={() => pedirCambiarEstado(g.id)}
-                          title="Anular compra"
-                          aria-label="Anular compra"
-                          className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                          onClick={() => setDetail(g)}
+                          aria-label="Ver detalle"
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                         >
-                          <Ban className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
+                      </IconTooltip>
+                      {g.estado === "Recibido" && canEdit && (
+                        <IconTooltip label="Anular compra" tone="danger">
+                          <button
+                            onClick={() => pedirCambiarEstado(g.id)}
+                            aria-label="Anular compra"
+                            className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
                       )}
                     </div>
                   </div>

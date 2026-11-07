@@ -57,6 +57,7 @@ import {
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { Paginador } from "@/shared/components/Paginador";
 
 const SERIF = "var(--font-titulo)";
@@ -2148,13 +2149,15 @@ function RecepcionModal({
                               {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
                             </td>
                             <td className="px-3 py-2.5">
-                              <button
-                                onClick={() => togMal(item.rowId)}
-                                title="Marcar mal estado"
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${item.malEstado ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600"}`}
-                              >
-                                <AlertTriangle className="w-4 h-4" />
-                              </button>
+                              <IconTooltip label="Marcar mal estado">
+                                <button
+                                  onClick={() => togMal(item.rowId)}
+                                  aria-label="Marcar mal estado"
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${item.malEstado ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600"}`}
+                                >
+                                  <AlertTriangle className="w-4 h-4" />
+                                </button>
+                              </IconTooltip>
                             </td>
                           </tr>
                         );
@@ -2199,13 +2202,15 @@ function RecepcionModal({
                               {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
                             </td>
                             <td className="px-3 py-2">
-                              <button
-                                onClick={() => setItemsExtra(p => p.filter(i => i.rowId !== item.rowId))}
-                                title="Eliminar insumo"
-                                className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <IconTooltip label="Eliminar insumo" tone="danger">
+                                <button
+                                  onClick={() => setItemsExtra(p => p.filter(i => i.rowId !== item.rowId))}
+                                  aria-label="Eliminar insumo"
+                                  className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </IconTooltip>
                             </td>
                           </tr>
                         ))}
@@ -2927,26 +2932,30 @@ export function OrdenCompraScreen({
                         </td>
                        <td className="px-2 py-2.5">
                          <div className="flex items-center gap-1 flex-nowrap">
-                          <button
-                            onClick={() => onVerDetalle(o)}
-                            title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <IconTooltip label="Ver detalle">
+                            <button
+                              onClick={() => onVerDetalle(o)}
+                              aria-label="Ver detalle"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                           {/* Editar sólo en Borrador: `onEditarOrden` conecta con
                               setOrdenAEditar + navigate("nueva-orden-compra").
                               En el resto de estados se reserva el mismo ancho
                               (SLOT_EDITAR) para que [Ver] [Editar] [OC] no se
                               muevan entre filas. */}
                           {esBorrador(o.estado) ? (
-                            <button
-                              onClick={() => onEditarOrden(o)}
-                              title="Editar orden"
-                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                            <IconTooltip label="Editar orden">
+                              <button
+                                onClick={() => onEditarOrden(o)}
+                                aria-label="Editar orden"
+                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            </IconTooltip>
                           ) : (
                             <span aria-hidden className={SLOT_EDITAR} />
                           )}
@@ -3059,21 +3068,25 @@ export function OrdenCompraScreen({
                         en Borrador y botón OC sólo cuando la orden está Enviado
                         y le faltan insumos por recibir. */}
                     <div className="mt-2.5 flex items-center gap-1 flex-nowrap">
-                      <button
-                        onClick={() => onVerDetalle(o)}
-                        title="Ver detalle"
-                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {esBorrador(o.estado) && (
+                      <IconTooltip label="Ver detalle">
                         <button
-                          onClick={() => onEditarOrden(o)}
-                          title="Editar orden"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          onClick={() => onVerDetalle(o)}
+                          aria-label="Ver detalle"
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
+                      </IconTooltip>
+                      {esBorrador(o.estado) && (
+                        <IconTooltip label="Editar orden">
+                          <button
+                            onClick={() => onEditarOrden(o)}
+                            aria-label="Editar orden"
+                            className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
                       )}
                       {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
                         <button

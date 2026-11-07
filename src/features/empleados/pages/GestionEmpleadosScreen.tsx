@@ -22,6 +22,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
@@ -718,16 +719,17 @@ export function GestionEmpleadosScreen({
                         {/* Reenviar invitación: solo para quien aún no activa su
                             cuenta (crea un token nuevo y manda el correo otra vez). */}
                         {invitacionesPendientes.has(e.numeroDocumento) && (
-                          <button
-                            type="button"
-                            title="Reenviar invitación"
-                            aria-label="Reenviar invitación"
-                            disabled={reenviando === e.numeroDocumento}
-                            onClick={() => void reenviarInvitacionDe(e)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
+                          <IconTooltip label="Reenviar invitación">
+                            <button
+                              type="button"
+                              aria-label="Reenviar invitación"
+                              disabled={reenviando === e.numeroDocumento}
+                              onClick={() => void reenviarInvitacionDe(e)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                         <ActionIcons
                           onView={() => setDetailItem(e)}

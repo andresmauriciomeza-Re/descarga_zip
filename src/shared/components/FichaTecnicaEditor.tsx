@@ -16,6 +16,8 @@
  */
 import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
+
+import { IconTooltip } from "./IconTooltip";
 import { toast } from "sonner";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/productos/components/InsumoSearchField";
@@ -247,23 +249,27 @@ function InsumoFilaEditable({
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            title="Aceptar"
-            disabled={usarUnidadSelect && !puedeGuardar}
-            onClick={guardar}
-            className="p-1.5 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            title="Cancelar"
-            onClick={onCancel}
-            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <IconTooltip label="Aceptar">
+            <button
+              type="button"
+              disabled={usarUnidadSelect && !puedeGuardar}
+              onClick={guardar}
+              aria-label="Aceptar"
+              className="p-1.5 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+          </IconTooltip>
+          <IconTooltip label="Cancelar">
+            <button
+              type="button"
+              onClick={onCancel}
+              aria-label="Cancelar"
+              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </IconTooltip>
         </div>
       </td>
     </>
@@ -377,22 +383,26 @@ function InsumosFichaTable({
                   {editable && (
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          title="Editar"
-                          onClick={() => onEdit(idx)}
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Eliminar"
-                          onClick={() => onRemove(idx)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <IconTooltip label="Editar">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(idx)}
+                            aria-label="Editar"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </IconTooltip>
+                        <IconTooltip label="Eliminar" tone="danger">
+                          <button
+                            type="button"
+                            onClick={() => onRemove(idx)}
+                            aria-label="Eliminar"
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </IconTooltip>
                       </div>
                     </td>
                   )}
@@ -769,11 +779,14 @@ export function FichaTecnicaEditor({
                       <input type="number" min={1} step={1} value={fila.porciones} aria-label="Porciones"
                         onChange={e => updatePorcionesTamano(idx, Number(e.target.value))}
                         className="w-20 shrink-0 px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                      <button type="button" title="Quitar tamaño" onClick={() => removeTamano(idx)}
-                        disabled={filas.length === 1}
-                        className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <IconTooltip label="Quitar tamaño" tone="danger">
+                        <button type="button" onClick={() => removeTamano(idx)}
+                          disabled={filas.length === 1}
+                          aria-label="Quitar tamaño"
+                          className="w-6 shrink-0 p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed cursor-pointer transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </IconTooltip>
                     </div>
                   ))}
                 </div>
@@ -845,15 +858,17 @@ export function FichaTecnicaEditor({
                   </div>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={addInsumo}
-                title="Agregar insumo"
-                disabled={!puedeAgregarInsumo}
-                className="h-11 w-11 shrink-0 inline-flex items-center justify-center bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              <IconTooltip label="Agregar insumo">
+                <button
+                  type="button"
+                  onClick={addInsumo}
+                  disabled={!puedeAgregarInsumo}
+                  aria-label="Agregar insumo"
+                  className="h-11 w-11 shrink-0 inline-flex items-center justify-center bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </IconTooltip>
             </div>
             {resumenPresentacion && (
               <p className="shrink-0 -mt-2 text-xs text-muted-foreground">{resumenPresentacion}</p>
@@ -929,11 +944,14 @@ export function FichaTecnicaEditor({
                   ).map((opcion) => <option key={opcion}>{opcion}</option>)}
                 </select>
               </div>
-              <button type="button" onClick={addInsumo} title="Agregar insumo"
-                disabled={!puedeAgregarInsumo}
-                className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95">
-                <Plus className="w-4 h-4" />
-              </button>
+              <IconTooltip label="Agregar insumo">
+                <button type="button" onClick={addInsumo}
+                  disabled={!puedeAgregarInsumo}
+                  aria-label="Agregar insumo"
+                  className="shrink-0 px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </IconTooltip>
             </div>
           </>
         )}
@@ -952,19 +970,28 @@ export function FichaTecnicaEditor({
                 <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{p}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button onClick={() => moverPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
-                    className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => moverPaso(idx, 1)} disabled={idx === ficha.pasos.length - 1} title="Bajar paso"
-                    className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
+                  <IconTooltip label="Subir paso">
+                    <button onClick={() => moverPaso(idx, -1)} disabled={idx === 0}
+                      aria-label="Subir paso"
+                      className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                  </IconTooltip>
+                  <IconTooltip label="Bajar paso">
+                    <button onClick={() => moverPaso(idx, 1)} disabled={idx === ficha.pasos.length - 1}
+                      aria-label="Bajar paso"
+                      className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer transition-colors">
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </IconTooltip>
                 </div>
-                <button onClick={() => removePaso(idx)} title="Eliminar paso"
-                  className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <IconTooltip label="Eliminar paso" tone="danger">
+                  <button onClick={() => removePaso(idx)}
+                    aria-label="Eliminar paso"
+                    className="p-1 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </IconTooltip>
               </li>
             ))}
           </ol>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { compararIdsDesc } from "@/shared/utils/ordenarPorId";
 
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { normalizarTexto } from "@/shared/utils/nombres";
@@ -792,21 +793,26 @@ export function DevolucionesScreen({
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={!pendiente}
-                            onClick={() =>
-                              pendiente && setActiva(nuevaDevolucion(dev))
-                            }
-                            title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                              pendiente
-                                ? "bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-                                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-                            }`}
+                          <IconTooltip
+                            label={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
+                            tone={pendiente ? "default" : "blocked"}
                           >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
+                            <button
+                              type="button"
+                              disabled={!pendiente}
+                              onClick={() =>
+                                pendiente && setActiva(nuevaDevolucion(dev))
+                              }
+                              aria-label={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                                pendiente
+                                  ? "bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                  : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                              }`}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                           <ActionIcons
                             onView={() => setDetalleDevolucion(dev)}
                           />

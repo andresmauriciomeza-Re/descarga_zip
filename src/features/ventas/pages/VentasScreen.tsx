@@ -29,6 +29,7 @@ import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { buscarClientePorDocumento, buscarClientesPorNombre, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
@@ -2005,41 +2006,48 @@ export function VentasScreen({
                             primeros 10 minutos. Fuera de la ventana queda
                             atenuado y explica por qué. */}
                         {canEdit && ESTADOS_ANULABLES.includes(p.estado) && (
-                          <button
-                            onClick={() => { if (puedeAnular(p)) abrirAnular(p); }}
-                            title={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
-                            aria-label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              puedeAnular(p)
-                                ? "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-                                : "text-muted-foreground/50 cursor-not-allowed"
-                            }`}
+                          <IconTooltip
+                            label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                            tone={puedeAnular(p) ? "danger" : "blocked"}
                           >
-                            <Ban className="w-4 h-4" />
-                          </button>
+                            <button
+                              onClick={() => { if (puedeAnular(p)) abrirAnular(p); }}
+                              aria-label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                puedeAnular(p)
+                                  ? "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                  : "text-muted-foreground/50 cursor-not-allowed"
+                              }`}
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                         {/* Devolución: marca la venta como devuelta en el
                             backend y abre su gestión (canje o dinero). */}
                         {p.estado === "Completado" && (
-                          <button
-                            onClick={() => setVentaDevolver(p)}
-                            title="Registrar devolución"
-                            aria-label="Registrar devolución"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Undo2 className="w-4 h-4" />
-                          </button>
+                          <IconTooltip label="Registrar devolución">
+                            <button
+                              onClick={() => setVentaDevolver(p)}
+                              aria-label="Registrar devolución"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <Undo2 className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                         {/* Imprimir factura: electrónica (se descarga el documento)
                             o física (sale por la impresora del sistema). */}
                         {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && (
-                          <button
-                            onClick={() => setFacturaVenta(p)}
-                            title="Imprimir factura"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
+                          <IconTooltip label="Imprimir factura">
+                            <button
+                              onClick={() => setFacturaVenta(p)}
+                              aria-label="Imprimir factura"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                       </div>
                     </td>

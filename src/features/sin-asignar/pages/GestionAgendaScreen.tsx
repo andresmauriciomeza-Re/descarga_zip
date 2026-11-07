@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Plus, Search, Eye, Pencil, ChevronLeft, ChevronRight, Bell, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { EstadoSwitch } from "../components/EstadoSwitch";
 
 const SERIF = "var(--font-titulo)";
@@ -424,10 +425,14 @@ export function GestionAgendaScreen() {
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
-                      <button onClick={()=>setDetailItem(a)} title="Ver detalle"
-                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"><Eye className="w-4 h-4"/></button>
-                      <button onClick={()=>setEditItem({...a,tareas:[...a.tareas]})} title="Editar"
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4"/></button>
+                      <IconTooltip label="Ver detalle">
+                        <button onClick={()=>setDetailItem(a)} aria-label="Ver detalle"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"><Eye className="w-4 h-4"/></button>
+                      </IconTooltip>
+                      <IconTooltip label="Editar">
+                        <button onClick={()=>setEditItem({...a,tareas:[...a.tareas]})} aria-label="Editar"
+                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"><Pencil className="w-4 h-4"/></button>
+                      </IconTooltip>
                       <EstadoSwitch activo={a.activo} onToggle={()=>toggleEstado(a.id)}/>
                     </div>
                   </td>

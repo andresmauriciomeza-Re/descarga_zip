@@ -29,6 +29,7 @@ import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   ConfirmModal,
@@ -1394,15 +1395,17 @@ export function RecepcionCompraScreen({
                             </td>
 
                             <td className="px-3 py-3">
-                              <button
-                                onClick={() =>
-                                  quitarItem(item.rowId, item.nombre)
-                                }
-                                title="Quitar de esta factura"
-                                className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <IconTooltip label="Quitar de esta factura" tone="danger">
+                                <button
+                                  onClick={() =>
+                                    quitarItem(item.rowId, item.nombre)
+                                  }
+                                  aria-label="Quitar de esta factura"
+                                  className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </IconTooltip>
                             </td>
                           </tr>
                           ))

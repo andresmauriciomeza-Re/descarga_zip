@@ -26,6 +26,7 @@ import {
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
 import {
@@ -1221,18 +1222,27 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                         onDelete={() => intentarEliminar(insumo.id)}
                       />
                       {esProductoInsumo && (
-                        <button
-                          onClick={() => abrirOrdenProduccion?.(insumo.id)}
-                          disabled={!fichaVigente(fichas, insumo) || inactivo}
-                          title={
+                        <IconTooltip
+                          label={
                             inactivo ? "Producto Insumo inactivo" :
                             !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
                             "Programar producción"
                           }
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          tone={inactivo || !fichaVigente(fichas, insumo) ? "blocked" : "default"}
                         >
-                          <ChefHat className="w-4 h-4" />
-                        </button>
+                          <button
+                            onClick={() => abrirOrdenProduccion?.(insumo.id)}
+                            disabled={!fichaVigente(fichas, insumo) || inactivo}
+                            aria-label={
+                              inactivo ? "Producto Insumo inactivo" :
+                              !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
+                              "Programar producción"
+                            }
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChefHat className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
                       )}
                     </div>
                   </td>

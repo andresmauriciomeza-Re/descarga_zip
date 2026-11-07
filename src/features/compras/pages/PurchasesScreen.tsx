@@ -9,6 +9,7 @@ import { EstadoSelect } from "@/shared/components/EstadoSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -1083,28 +1084,32 @@ export function PurchasesScreen() {
                                     </td>
                                     <td className="px-2 py-1.5">
                                       <div className="flex gap-1">
-                                        <button
-                                          onClick={() =>
-                                            setEditingInsumoId(
-                                              null,
-                                            )
-                                          }
-                                          className="p-1 rounded text-emerald-600 hover:bg-emerald-50 cursor-pointer"
-                                          title="Confirmar"
-                                        >
-                                          <Check className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={() =>
-                                            removeInsumoLine(
-                                              line.id,
-                                            )
-                                          }
-                                          className="p-1 rounded text-red-500 hover:bg-red-50 cursor-pointer"
-                                          title="Eliminar"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <IconTooltip label="Confirmar">
+                                          <button
+                                            onClick={() =>
+                                              setEditingInsumoId(
+                                                null,
+                                              )
+                                            }
+                                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                                            aria-label="Confirmar"
+                                          >
+                                            <Check className="w-3.5 h-3.5" />
+                                          </button>
+                                        </IconTooltip>
+                                        <IconTooltip label="Eliminar" tone="danger">
+                                          <button
+                                            onClick={() =>
+                                              removeInsumoLine(
+                                                line.id,
+                                              )
+                                            }
+                                            className="p-1 rounded text-red-500 hover:bg-red-50 cursor-pointer"
+                                            aria-label="Eliminar"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </IconTooltip>
                                       </div>
                                     </td>
                                   </>
@@ -1164,28 +1169,32 @@ export function PurchasesScreen() {
                                     </td>
                                     <td className="px-2 py-1.5">
                                       <div className="flex gap-1">
-                                        <button
-                                          onClick={() =>
-                                            setEditingInsumoId(
-                                              line.id,
-                                            )
-                                          }
-                                          className="p-1 rounded text-muted-foreground hover:bg-muted cursor-pointer"
-                                          title="Editar"
-                                        >
-                                          <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                          onClick={() =>
-                                            removeInsumoLine(
-                                              line.id,
-                                            )
-                                          }
-                                          className="p-1 rounded text-red-500 hover:bg-red-50 cursor-pointer"
-                                          title="Eliminar"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <IconTooltip label="Editar">
+                                          <button
+                                            onClick={() =>
+                                              setEditingInsumoId(
+                                                line.id,
+                                              )
+                                            }
+                                            className="p-1 rounded text-muted-foreground hover:bg-muted cursor-pointer"
+                                            aria-label="Editar"
+                                          >
+                                            <Pencil className="w-4 h-4" />
+                                          </button>
+                                        </IconTooltip>
+                                        <IconTooltip label="Eliminar" tone="danger">
+                                          <button
+                                            onClick={() =>
+                                              removeInsumoLine(
+                                                line.id,
+                                              )
+                                            }
+                                            className="p-1 rounded text-red-500 hover:bg-red-50 cursor-pointer"
+                                            aria-label="Eliminar"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </IconTooltip>
                                       </div>
                                     </td>
                                   </>

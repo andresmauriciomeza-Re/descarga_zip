@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 
 const SERIF = "var(--font-titulo)";
@@ -692,27 +693,33 @@ export function GestionPerdidasScreen({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setDetailItem(p)}
-                          title="Ver detalle"
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditItem({ ...p })}
-                          title="Editar"
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          title="Eliminar"
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <IconTooltip label="Ver detalle">
+                          <button
+                            onClick={() => setDetailItem(p)}
+                            aria-label="Ver detalle"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
+                        <IconTooltip label="Editar">
+                          <button
+                            onClick={() => setEditItem({ ...p })}
+                            aria-label="Editar"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
+                        <IconTooltip label="Eliminar" tone="danger">
+                          <button
+                            onClick={() => setDeleteId(p.id)}
+                            aria-label="Eliminar"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </IconTooltip>
                       </div>
                     </td>
                   </tr>

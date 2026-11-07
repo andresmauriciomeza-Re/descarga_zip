@@ -1,5 +1,7 @@
 import { Eye, Pencil, Trash2 } from "lucide-react";
 
+import { IconTooltip } from "./IconTooltip";
+
 /**
  * Iconos de acción de fila unificados (diseño de Gestión Proveedor):
  * ver detalle → editar → eliminar, en ese orden, con lucide-react a 16px
@@ -62,40 +64,52 @@ export function ActionIcons({
   return (
     <div className="flex items-center gap-1.5">
       {onView && (
-        <button
-          type="button"
-          onClick={viewDisabled ? undefined : onView}
-          disabled={viewDisabled}
-          aria-label="Ver detalle"
-          title={viewTitle ?? "Ver detalle"}
-          className={`${CLASE_BASE} ${viewDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+        <IconTooltip
+          label={viewTitle ?? "Ver detalle"}
+          tone={viewDisabled && viewTitle ? "blocked" : "default"}
         >
-          <Eye className="w-4 h-4" />
-        </button>
+          <button
+            type="button"
+            onClick={viewDisabled ? undefined : onView}
+            disabled={viewDisabled}
+            aria-label={viewTitle ?? "Ver detalle"}
+            className={`${CLASE_BASE} ${viewDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
       {onEdit && (
-        <button
-          type="button"
-          onClick={editDisabled ? undefined : onEdit}
-          disabled={editDisabled}
-          aria-label="Editar"
-          title={editTitle ?? "Editar"}
-          className={`${CLASE_BASE} ${editDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+        <IconTooltip
+          label={editTitle ?? "Editar"}
+          tone={editDisabled && editTitle ? "blocked" : "default"}
         >
-          <Pencil className="w-4 h-4" />
-        </button>
+          <button
+            type="button"
+            onClick={editDisabled ? undefined : onEdit}
+            disabled={editDisabled}
+            aria-label={editTitle ?? "Editar"}
+            className={`${CLASE_BASE} ${editDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
       {onDelete && (
-        <button
-          type="button"
-          onClick={deleteDisabled ? undefined : onDelete}
-          disabled={deleteDisabled}
-          aria-label={deleteLabel}
-          title={deleteTitle ?? deleteLabel}
-          className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+        <IconTooltip
+          label={deleteTitle ?? deleteLabel}
+          tone={deleteDisabled && deleteTitle ? "blocked" : "danger"}
         >
-          <Trash2 className="w-4 h-4" />
-        </button>
+          <button
+            type="button"
+            onClick={deleteDisabled ? undefined : onDelete}
+            disabled={deleteDisabled}
+            aria-label={deleteTitle ?? deleteLabel}
+            className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
     </div>
   );

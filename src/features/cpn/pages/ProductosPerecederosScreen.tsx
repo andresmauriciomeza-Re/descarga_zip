@@ -9,6 +9,7 @@ import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
@@ -995,12 +996,17 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                           deleteTitle={pendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
                         />
                         {canEdit && (
-                          <button onClick={() => pendiente && abrirCompletar(item)}
-                            disabled={!pendiente}
-                            title={pendiente ? "Completar" : "Ya está completado"}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
+                          <IconTooltip
+                            label={pendiente ? "Completar" : "Ya está completado"}
+                            tone={pendiente ? "default" : "blocked"}
+                          >
+                            <button onClick={() => pendiente && abrirCompletar(item)}
+                              disabled={!pendiente}
+                              aria-label={pendiente ? "Completar" : "Ya está completado"}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                       </div>
                     </td>

@@ -10,6 +10,7 @@ import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
@@ -1371,14 +1372,16 @@ function LineaPreparacion({
         </div>
         )}
         {puedeQuitar && (
-          <button
-            type="button"
-            onClick={onRemove}
-            title="Quitar línea"
-            className="w-[54px] h-[54px] grid place-items-center border border-border rounded-[14px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <IconTooltip label="Quitar línea" tone="danger">
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label="Quitar línea"
+              className="w-[54px] h-[54px] grid place-items-center border border-border rounded-[14px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </IconTooltip>
         )}
       </div>
 
@@ -2347,18 +2350,22 @@ export function OrdenProduccionScreen({
   const accionesListado = (o: OrdenProduccion, tieneFaltantes: boolean) => (
     <div className="flex items-center gap-1 whitespace-nowrap">
       {o.estadoOrden === "pendiente" && !tieneFaltantes && (
-        <button type="button" onClick={() => void abrirGenerar(o)}
-          title="Generar orden de producción" aria-label="Generar orden de producción"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-          <Play className="w-4 h-4" />
-        </button>
+        <IconTooltip label="Generar orden de producción">
+          <button type="button" onClick={() => void abrirGenerar(o)}
+            aria-label="Generar orden de producción"
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+            <Play className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
       {o.estadoOrden === "en-proceso" && (
-        <button type="button" onClick={() => abrirCompletar(o.id)}
-          title="Completar orden" aria-label="Completar orden"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-          <CheckCircle2 className="w-4 h-4" />
-        </button>
+        <IconTooltip label="Completar orden">
+          <button type="button" onClick={() => abrirCompletar(o.id)}
+            aria-label="Completar orden"
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+            <CheckCircle2 className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
       <ActionIcons
         onView={() => setDetailItem(o)}
@@ -2366,11 +2373,13 @@ export function OrdenProduccionScreen({
         deleteTitle={o.tipo === "pedido" ? "Los pedidos no se eliminan: usa Dar de baja" : "Eliminar preparación pendiente"}
       />
       {(o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso") && (
-        <button type="button" onClick={() => openDarBaja(o)}
-          title="Cancelar orden" aria-label="Cancelar orden"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-          <Ban className="w-4 h-4" />
-        </button>
+        <IconTooltip label="Cancelar orden" tone="danger">
+          <button type="button" onClick={() => openDarBaja(o)}
+            aria-label="Cancelar orden"
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+            <Ban className="w-4 h-4" />
+          </button>
+        </IconTooltip>
       )}
     </div>
   );

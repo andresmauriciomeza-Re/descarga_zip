@@ -4,6 +4,7 @@ import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft, User, Bui
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+import { IconTooltip } from "@/shared/components/IconTooltip";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
 import { useProveedorForm, formatoNit, siguienteProveedorId, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type TipoDocumento, type TipoSociedad, type ProveedorFormValues } from "@/features/compras/hooks/useProveedorForm";
@@ -884,21 +885,27 @@ export function SuppliersScreen({
                     </td>
                     <td className="px-3 py-2 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                          <button onClick={() => setEditItem({ ...s })} title="Editar"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                            <Pencil className="w-4 h-4" />
+                        <IconTooltip label="Ver detalle">
+                          <button onClick={() => setDetailItem(s)} aria-label="Ver detalle"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                            <Eye className="w-4 h-4" />
                           </button>
+                        </IconTooltip>
+                        {canEdit && (
+                          <IconTooltip label="Editar">
+                            <button onClick={() => setEditItem({ ...s })} aria-label="Editar"
+                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                         {canDelete && (
-                          <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <IconTooltip label="Eliminar" tone="danger">
+                            <button onClick={() => alPedirEliminar(s)} aria-label="Eliminar"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </IconTooltip>
                         )}
                       </div>
                     </td>
@@ -942,21 +949,27 @@ export function SuppliersScreen({
 
               {/* Acciones abajo — mismas reglas y permisos que la tabla. */}
               <div className="mt-2.5 flex items-center gap-1.5">
-                <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                  className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                  <Eye className="w-4 h-4" />
-                </button>
-                {canEdit && (
-                  <button onClick={() => setEditItem({ ...s })} title="Editar"
-                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                    <Pencil className="w-4 h-4" />
+                <IconTooltip label="Ver detalle">
+                  <button onClick={() => setDetailItem(s)} aria-label="Ver detalle"
+                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                    <Eye className="w-4 h-4" />
                   </button>
+                </IconTooltip>
+                {canEdit && (
+                  <IconTooltip label="Editar">
+                    <button onClick={() => setEditItem({ ...s })} aria-label="Editar"
+                      className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </IconTooltip>
                 )}
                 {canDelete && (
-                  <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <IconTooltip label="Eliminar" tone="danger">
+                    <button onClick={() => alPedirEliminar(s)} aria-label="Eliminar"
+                      className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </IconTooltip>
                 )}
               </div>
             </div>
