@@ -16,6 +16,20 @@
 // insumo: eso es `UNIDADES_INSUMO` (más abajo).
 export const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "paca", "caja", "bolsa", "sixpack"];
 
+export const PRESENTACIONES_COMPRA = ["paq", "paca", "caja", "bolsa", "sixpack"] as const;
+
+export const esEmpaque = (unidad: string | null | undefined): boolean =>
+  (PRESENTACIONES_COMPRA as readonly string[]).includes(String(unidad ?? "").trim());
+
+export const etiquetaPresentacion = (
+  unidad: string,
+  factor: number | null | undefined,
+  unidadBase: string | null | undefined,
+): string =>
+  esEmpaque(unidad) && factor != null && Number.isFinite(factor) && factor > 0 && unidadBase?.trim()
+    ? `${unidad} × ${factor.toLocaleString("es-CO", { maximumFractionDigits: 12 })} ${unidadBase.trim()}`
+    : unidad;
+
 /**
  * A5.2 — Una sola lista de unidades para TODO lo que es insumo: el selector
  * "Unidad de Medida" de Crear Insumo, la "Unidad de medida" del Producto

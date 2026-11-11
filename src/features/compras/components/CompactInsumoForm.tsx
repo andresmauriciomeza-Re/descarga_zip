@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
 import { ETIQUETA_MODO_IVA, MODOS_IVA, ayudaModoIva, type ModoIva } from "@/features/compras/services/iva";
 import {
-  OTRA_PRESENTACION,
+  PRESENTACIONES_COMPRA,
   esEmpaque,
   factorDePresentacion,
   guardarPresentacion,
@@ -14,6 +14,7 @@ import {
   unidadesCompatibles,
   type PresentacionConfigurada,
 } from "@/features/compras/services/presentaciones";
+import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
 
 const SERIF = "var(--font-titulo)";
 
@@ -57,6 +58,7 @@ export interface CompactInsumoFormValues {
    *  la presentación, cuando la línea se compra en un empaque configurado. */
   factorPresentacion?: number;
   precioVenta?: number;
+  unidadBase?: string;
 }
 
 function fmtCompactCOP(n: number) {
@@ -83,7 +85,7 @@ export interface CompactInsumoFormProps {
   unidadDisabled?: boolean;
   precio: number;
   iva?: number;
-  onAgregar: (values: CompactInsumoFormValues) => void;
+  onAgregar: (values: CompactInsumoFormValues) => void | Promise<void>;
   suggestions: InsumoSuggestion[];
   showSuggestions: boolean;
   onSelectSuggestion: (suggestion: InsumoSuggestion) => void;
@@ -117,6 +119,8 @@ export interface CompactInsumoFormProps {
    *  el selector de tipo de ítem Insumo / Producto de la Nueva compra). Va sin
    *  envolver: quien lo pasa define su propio label, ancho y controles. */
   campoExtra?: React.ReactNode;
+  /** Control opcional junto al título del bloque (p. ej. Insumo/Producto). */
+  headerExtra?: React.ReactNode;
   /** P14: al estar agregando PRODUCTOS no tiene sentido el atajo
    *  "+ Crear insumo" del desplegable de sugerencias. */
   ocultarCrearInsumo?: boolean;
@@ -132,6 +136,8 @@ export interface CompactInsumoFormProps {
    precioVenta?: number;
    /** Muestra el campo "Precio de venta" (sólo al agregar PRODUCTOS). */
   mostrarPrecioVenta?: boolean;
+   /** Etiqueta del campo de nombre según el catálogo actual. */
+   etiquetaNombre?: string;
   /** Punto B2: precio de venta inválido (vacío, 0 o ≤ monto unitario). Pinta
    *  el campo en rojo, muestra el mensaje bajo la fila y deshabilita el
    *  botón Agregar: un producto nunca se agrega sin precio de venta válido. */
@@ -142,12 +148,19 @@ export interface CompactInsumoFormProps {
   /** Unidad base del insumo seleccionado: define las medidas compatibles
    *  (caso A) y la pregunta "¿Cuántas {unidad base} trae cada {presentación}?". */
   unidadBase?: string;
+  /** Habilita elegir la unidad base cuando el insumo se creará al recibir. */
+  unidadBaseEditable?: boolean;
+  /** Factor guardado en una línea adicional que se está editando. */
+  factorPresentacionInicial?: number;
+  /** Presentación asociada al factor inicial. */
+  presentacionInicial?: string;
   /** Etiqueta del campo de unidad. En Compras se pasa "Presentación". */
   etiquetaUnidad?: string;
   /** IVA por línea controlado por la pantalla: al elegir otro insumo la
    *  pantalla lo resetea al valor por defecto ("incluido"); con la prop el
    *  formulario no guarda estado propio del modo. */
   modoIva?: ModoIva;
+  ivaAntesDeExento?: number;
   onModoIvaChange?: (modo: ModoIva) => void;
 }
 
@@ -179,20 +192,23 @@ export function CompactInsumoForm({
   ocultarMedida = false,
   medidaSoloLectura = false,
   campoExtra,
+  headerExtra,
   ocultarCrearInsumo = false,
   ocultarCrearProducto = false,
   precioVenta = 0,
   mostrarPrecioVenta = false,
+  etiquetaNombre = "Insumo",
   factorCostoUnidad = 1,
   insumoId,
   unidadBase,
+  unidadBaseEditable = false,
+  factorPresentacionInicial,
+  presentacionInicial,
   etiquetaUnidad = "Medida",
   modoIva: modoIvaControlado,
+  ivaAntesDeExento: ivaAntesDeExentoInicial,
   onModoIvaChange,
 }: CompactInsumoFormProps) {
-  /** `readOnly` y `disabled` bloquean los controles; el primero es solo lectura
-      visual, el segundo deshabilita por completo. */
-  const bloqueado = readOnly || disabled;
   const esCompacta = variante === "compacta";
   const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
   const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
@@ -205,25 +221,28 @@ export function CompactInsumoForm({
 
   // Presentaciones configuradas del insumo seleccionado (GET presentaciones).
   const [presentaciones, setPresentaciones] = useState<PresentacionConfigurada[]>([]);
-  // "Otra presentación…": diálogo de factor ("¿Cuántas {base} trae cada…?").
-  const [otraAbierta, setOtraAbierta] = useState(false);
-  const [otraValor, setOtraValor] = useState<string>("paca");
-  const [otraCantidadProductosTexto, setOtraCantidadProductosTexto] = useState("1");
-  const [otraMedidaTexto, setOtraMedidaTexto] = useState("1");
-  const [otraUnidad, setOtraUnidad] = useState("");
-  const [otraError, setOtraError] = useState("");
+  const [contenidoTexto, setContenidoTexto] = useState("");
+  const [medidaContenido, setMedidaContenido] = useState("");
   const [guardandoPresentacion, setGuardandoPresentacion] = useState(false);
+  /** Bloquea los controles mientras se guarda una presentación. */
+  const bloqueado = readOnly || disabled || guardandoPresentacion;
 
   const modoIvaActual: ModoIva = modoIvaControlado ?? modoInterno;
-  const opcionesModoIva: Array<{ value: ModoIva; label: string; tag?: string }> = MODOS_IVA.map(
-    (value) => ({
-      value,
-      label: ETIQUETA_MODO_IVA[value].etiqueta,
-      tag: value === "incluido" ? "Más común" : undefined,
-    }),
-  );
+  const opcionesModoIva: OpcionUnidad[] = MODOS_IVA.map((value) => ({
+    valor: value,
+    etiqueta: ETIQUETA_MODO_IVA[value].etiqueta,
+    ayuda: ayudaModoIva(value),
+  }));
   /** % guardado antes de entrar en "Exento": se restaura al salir. */
-  const [ivaAntesDeExento, setIvaAntesDeExento] = useState<string>("");
+  const [ivaAntesDeExento, setIvaAntesDeExento] = useState<string>(
+    ivaAntesDeExentoInicial == null ? "" : String(ivaAntesDeExentoInicial),
+  );
+
+  useEffect(() => {
+    setIvaAntesDeExento(
+      ivaAntesDeExentoInicial == null ? "" : String(ivaAntesDeExentoInicial),
+    );
+  }, [ivaAntesDeExentoInicial]);
 
   const cambiarModo = (nuevo: ModoIva) => {
     if (nuevo === modoIvaActual) return;
@@ -239,8 +258,7 @@ export function CompactInsumoForm({
     setIntentoAgregar(false);
   };
 
-  // Presentaciones configuradas del insumo seleccionado: se recargan al
-  // cambiar de ítem (y después de guardar una nueva con "Otra presentación…").
+  // Presentaciones configuradas del insumo seleccionado.
   useEffect(() => {
     let vivo = true;
     if (!insumoId) {
@@ -251,10 +269,16 @@ export function CompactInsumoForm({
       .then((lista) => {
         if (vivo) setPresentaciones(lista);
       })
-      .catch(() => {
-        // Sin permisos o sin red: la fila sigue usable con las unidades
-        // compatibles; el empaque sin factor simplemente no podrá agregarse.
-        if (vivo) setPresentaciones([]);
+      .catch((error: unknown) => {
+        if (vivo) {
+          setPresentaciones([]);
+          toast.error(
+            mensajeErrorPresentaciones(
+              error,
+              "No se pudieron cargar las presentaciones del insumo.",
+            ),
+          );
+        }
       });
     return () => {
       vivo = false;
@@ -264,21 +288,35 @@ export function CompactInsumoForm({
   // Unidad base del insumo seleccionado (presentaciones): se define aquí
   // arriba porque la lista de opciones del desplegable también la usa.
   const baseUnidad = (unidadBase ?? "").trim();
+  const medidasBase = UNIDADES_INSUMO.filter(
+    ({ valor }) => !esEmpaque(valor),
+  );
+  const baseUnidadLegada = Boolean(baseUnidad) && !medidasBase.some(
+    ({ valor }) => valor === baseUnidad,
+  );
 
-  // Opciones del desplegable de Presentación: unidades compatibles con la base
-  // (kg↔g, lt↔ml, la propia base) + presentaciones configuradas del insumo +
-  // "Otra presentación…" (alta vía POST presentaciones).
+  // Opciones del selector: unidades compatibles y los empaques permitidos.
   const opcionesUnidad: OpcionUnidad[] = (() => {
     const compatibles = baseUnidad ? unidadesCompatibles(baseUnidad) : [];
     const lista: OpcionUnidad[] = compatibles.map((u) => ({ valor: u, etiqueta: u }));
     const vistas = new Set(lista.map((o) => o.valor));
-    presentaciones.forEach((p, i) => {
-      if (vistas.has(p.presentacion)) return;
-      vistas.add(p.presentacion);
+    if (unidadBaseEditable) {
+      medidasBase.forEach(({ valor, etiqueta }) => {
+        if (vistas.has(valor)) return;
+        vistas.add(valor);
+        lista.push({ valor, etiqueta });
+      });
+    }
+    PRESENTACIONES_COMPRA.forEach((empaque) => {
+      if (vistas.has(empaque)) return;
+      vistas.add(empaque);
+      const configurada = presentaciones.find((p) => p.presentacion === empaque);
       lista.push({
-        valor: p.presentacion,
-        etiqueta: `${p.presentacion} ×${p.unidadesBase} ${baseUnidad}`,
-        divisorAntes: i === 0,
+        valor: empaque,
+        etiqueta: configurada
+          ? `${empaque} ×${configurada.unidadesBase} ${baseUnidad}`
+          : empaque,
+        divisorAntes: empaque === PRESENTACIONES_COMPRA[0],
       });
     });
     // La unidad actual de la fila se conserva aunque no esté en la lista
@@ -286,67 +324,40 @@ export function CompactInsumoForm({
     if (unidad && !vistas.has(unidad)) {
       lista.push({ valor: unidad, etiqueta: unidad, divisorAntes: lista.length > 0 });
     }
-    if (insumoId) {
-      lista.push({
-        valor: OTRA_PRESENTACION,
-        etiqueta: "Otra presentación…",
-        divisorAntes: true,
-      });
-    }
     return lista;
   })();
 
-  /** Selecciona una presentación; si es "Otra…" abre el diálogo de factor. */
-  const cambiarUnidad = (valor: string) => {
-    if (valor === OTRA_PRESENTACION) {
-      const primera = (["paq", "paca", "caja", "bolsa", "sixpack"] as const).find(
-        (p) => !presentaciones.some((c) => c.presentacion === p),
-      );
-      setOtraValor(primera ?? "paca");
-      setOtraCantidadProductosTexto("1");
-      setOtraMedidaTexto("1");
-      setOtraUnidad(baseUnidad || unidadesCompatibles(baseUnidad)[0] || "");
-      setOtraError("");
-      setOtraAbierta(true);
-      return;
-    }
-    onUnidadChange(valor);
-  };
+  const requiereContenido =
+    esEmpaque(unidad) && !medidaSoloLectura && unidad !== baseUnidad;
+  const opcionesMedidaContenido: OpcionUnidad[] = medidasBase.filter(({ valor }) =>
+    unidadBaseEditable
+      ? true
+      : !baseUnidadLegada && unidadesCompatibles(baseUnidad).includes(valor),
+  );
 
-  /** Guarda la presentación nueva (POST presentaciones) y la selecciona. */
-  const confirmarOtraPresentacion = async () => {
-    const cantidadProductos = numeroDesdeTexto(otraCantidadProductosTexto);
-    const medida = numeroDesdeTexto(otraMedidaTexto);
-    const factorConversion = factorUnidadDirecta(otraUnidad, baseUnidad);
-    if (!Number.isInteger(cantidadProductos) || cantidadProductos <= 0) {
-      setOtraError("La cantidad de productos debe ser un entero mayor que cero.");
+  useEffect(() => {
+    if (!requiereContenido) {
+      setContenidoTexto("");
+      setMedidaContenido("");
       return;
     }
-    if (!Number.isFinite(medida) || medida <= 0 || factorConversion == null) {
-      setOtraError("Ingresa una medida exacta mayor que cero y compatible con la unidad base.");
-      return;
-    }
-    if (!insumoId) {
-      setOtraError("Selecciona primero un insumo del catálogo.");
-      return;
-    }
-    const factor = cantidadProductos * medida * factorConversion;
-    setGuardandoPresentacion(true);
-    try {
-      const guardada = await guardarPresentacion(insumoId, otraValor, factor);
-      setPresentaciones((prev) => [
-        ...prev.filter((p) => p.presentacion !== guardada.presentacion),
-        guardada,
-      ]);
-      onUnidadChange(guardada.presentacion);
-      setOtraAbierta(false);
-      toast.success(`Presentación "${guardada.presentacion}" guardada`);
-    } catch (error) {
-      setOtraError(mensajeErrorPresentaciones(error, "No se pudo guardar la presentación."));
-    } finally {
-      setGuardandoPresentacion(false);
-    }
-  };
+
+    const configurada = presentaciones.find((p) => p.presentacion === unidad);
+    const factorInicial =
+      unidad === presentacionInicial ? factorPresentacionInicial : undefined;
+    const factorPrecargado = configurada?.unidadesBase ?? factorInicial;
+    setContenidoTexto(factorPrecargado != null ? String(factorPrecargado) : "");
+    setMedidaContenido(baseUnidad && !baseUnidadLegada ? baseUnidad : "");
+  }, [
+    unidad,
+    baseUnidad,
+    baseUnidadLegada,
+    unidadBaseEditable,
+    requiereContenido,
+    presentaciones,
+    factorPresentacionInicial,
+    presentacionInicial,
+  ]);
 
   useEffect(() => {
     setCantidadTexto(String(cantidad));
@@ -373,16 +384,36 @@ export function CompactInsumoForm({
     precioVentaTexto.trim() === "" ? 0 : numeroDesdeTexto(precioVentaTexto);
 
   // ── Presentaciones (regla 2.2) ─────────────────────────────────────────────
-  // Unidades base que trae UNA unidad de la presentación elegida. `null` en un
-  // empaque sin configurar: la línea NO se puede agregar hasta darlo de alta
-  // con "Otra presentación…" (POST presentaciones).
-  const factorPresentacion =
+  const medidaBaseContenido = baseUnidad || (unidadBaseEditable ? medidaContenido : "");
+  const contenido = numeroDesdeTexto(contenidoTexto);
+  const conversionContenido = factorUnidadDirecta(medidaContenido, medidaBaseContenido);
+  const factorCalculado =
+    Number.isFinite(contenido) &&
+    contenido > 0 &&
+    conversionContenido != null
+      ? contenido * conversionContenido
+      : null;
+  const factorDirecto =
     baseUnidad !== "" ? factorDePresentacion(unidad, baseUnidad, presentaciones) : null;
+  const factorPresentacion = requiereContenido ? factorCalculado : factorDirecto;
   // Respaldo: el empaque del producto ("Paca x12" ⇒ 12) o unidad suelta (1).
   const factorLinea =
     factorPresentacion ??
     (Number.isFinite(factorCostoUnidad) && factorCostoUnidad > 0 ? factorCostoUnidad : 1);
-  const faltaFactor = esEmpaque(unidad) && (factorPresentacion == null || factorPresentacion <= 0);
+  const errorFactor = requiereContenido
+    ? baseUnidadLegada
+      ? `No se puede configurar ${unidad}: la unidad base histórica "${baseUnidad}" no es compatible con empaques nuevos.`
+      : !medidaBaseContenido
+        ? "Selecciona la medida del insumo."
+        : !Number.isFinite(contenido) || contenido <= 0 || conversionContenido == null
+          ? "Ingresa un contenido mayor que cero y una medida compatible."
+          : ""
+    : esEmpaque(unidad) && !baseUnidad
+      ? "Selecciona la unidad base del insumo para configurar el empaque."
+      : esEmpaque(unidad) && (factorPresentacion == null || factorPresentacion <= 0)
+        ? `Configura el contenido de cada ${unidad}.`
+        : "";
+  const faltaFactor = errorFactor !== "";
 
   const costoConIva =
     (modoIvaActual === "mas_iva" ? precioNumero * (1 + ivaParaCalculo / 100) : precioNumero) /
@@ -415,20 +446,16 @@ export function CompactInsumoForm({
           ? "El IVA debe estar entre 0 y 100."
           : ""
       : "";
-  const errorFactor = faltaFactor
-    ? `Configura cuántas ${baseUnidad || "unidades base"} trae cada ${unidad}.`
-    : "";
-
   // Ayuda bajo la fila: qué entra al inventario y a qué costo por unidad base
   // (ej. "= 20 kg al inventario · costo $2.500/kg").
   const baseTotal = Number((cantidadNumero * factorLinea).toFixed(2));
   const ayudaLinea =
-    baseUnidad &&
+    medidaBaseContenido &&
     Number.isFinite(baseTotal) &&
     baseTotal > 0 &&
     Number.isFinite(precioNumero) &&
     precioNumero > 0
-      ? `= ${baseTotal.toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${baseUnidad} al inventario · costo ${fmtCompactCOP(precioNumero / factorLinea)}/${baseUnidad}`
+      ? `= ${baseTotal.toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${medidaBaseContenido} al inventario · costo ${fmtCompactCOP(precioNumero / factorLinea)}/${medidaBaseContenido}`
       : "";
 
   /** Requisitos de la fila; el intento muestra los errores y nunca agrega datos inválidos. */
@@ -448,46 +475,94 @@ export function CompactInsumoForm({
         precioVentaNumero <= costoConIva)
     );
 
-  const agregarValidado = () => {
+  const agregarValidado = async () => {
     setIntentoAgregar(true);
     if (!puedeAgregar) return;
-    onAgregar({
-      cantidad: cantidadNumero,
-      precio: precioNumero,
-      iva: modoIvaActual === "exento" ? 0 : ivaNumero,
-      modoIva: modoIvaActual,
-      ...(esEmpaque(unidad) && factorPresentacion != null ? { factorPresentacion } : {}),
-      ...(mostrarPrecioVenta ? { precioVenta: precioVentaNumero } : {}),
-    });
-    setIntentoAgregar(false);
+    if (
+      requiereContenido &&
+      insumoId &&
+      /^INS-\d+$/.test(insumoId) &&
+      factorPresentacion != null
+    ) {
+      const actual = presentaciones.find((p) => p.presentacion === unidad);
+      if (actual?.unidadesBase !== factorPresentacion) {
+        setGuardandoPresentacion(true);
+        try {
+          const guardada = await guardarPresentacion(insumoId, unidad, factorPresentacion);
+          setPresentaciones((prev) => [
+            ...prev.filter((p) => p.presentacion !== guardada.presentacion),
+            guardada,
+          ]);
+        } catch (error) {
+          toast.error(
+            mensajeErrorPresentaciones(error, "No se pudo guardar la presentación."),
+          );
+          setGuardandoPresentacion(false);
+          return;
+        }
+        setGuardandoPresentacion(false);
+      }
+    }
+
+    try {
+      await onAgregar({
+        cantidad: cantidadNumero,
+        precio: precioNumero,
+        iva: modoIvaActual === "exento" ? 0 : ivaNumero,
+        modoIva: modoIvaActual,
+        ...(esEmpaque(unidad) && factorPresentacion != null ? { factorPresentacion } : {}),
+        ...(esEmpaque(unidad)
+          ? { unidadBase: baseUnidad || medidaContenido || undefined }
+          : {}),
+        ...(mostrarPrecioVenta ? { precioVenta: precioVentaNumero } : {}),
+      });
+      setIntentoAgregar(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : "No se pudo agregar el ítem.",
+      );
+    }
   };
 
   // Estilos para la variante compacta
   const contenedorCls = esCompacta
-    ? "p-3 bg-muted/30 border border-dashed border-border rounded-xl"
+    ? "p-3 bg-muted/30 border border-border rounded-xl"
     : `${compacto ? "p-1.5" : "p-4"} bg-muted/40 border border-border rounded-xl`;
 
-  const tituloCls = esCompacta
-    ? "text-xs font-bold text-muted-foreground mb-2"
-    : `text-sm font-bold text-foreground ${compacto ? "mb-0.5" : "mb-3"}`;
+  const tituloCls = `font-bold text-primary-foreground m-0 ${esCompacta ? "text-xs" : "text-sm"}`;
 
   const inputClsCompacta = "w-full h-9 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
   const labelClsCompacta = "block text-[11px] font-semibold text-muted-foreground mb-1";
+  const headerMargin = esCompacta
+    ? "-mx-3 -mt-3"
+    : compacto
+      ? "-mx-1.5 -mt-1.5"
+      : "-mx-4 -mt-4";
 
   return (
     <div ref={containerRef} className={contenedorCls}>
-      <h3 className={tituloCls} style={esCompacta ? undefined : { fontFamily: SERIF }}>
-        {titulo}
-      </h3>
+      {titulo && (
+        <div
+          className={`${headerMargin} mb-3 flex items-center justify-between gap-3 rounded-t-xl bg-primary px-3 py-2 text-primary-foreground`}
+        >
+          <h3 className={tituloCls} style={esCompacta ? undefined : { fontFamily: SERIF }}>
+            <span className="inline-flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              {titulo}
+            </span>
+          </h3>
+        </div>
+      )}
+      {headerExtra && <div className="mb-2">{headerExtra}</div>}
+      {campoExtra && <div className="mb-2">{campoExtra}</div>}
 
-      {/* La fila va en UNA sola línea (si no, el botón salta a otra fila y la
-          tarjeta crece): Nombre ~35% con `grow` y el resto con anchos fijos
-          que también entran en el modal de Editar OC (max-w-4xl). */}
       <div className="relative">
         <div className={`flex flex-wrap items-start gap-2 ${disabled ? "opacity-50" : ""}`}>
           {/* Nombre */}
-          <div className={`relative ${esCompacta ? "flex-1 min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
-            <label className={esCompacta ? labelClsCompacta : labelCls}>Nombre</label>
+          <div className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
+            <label className={esCompacta ? labelClsCompacta : labelCls}>{etiquetaNombre}</label>
 
             <div className="relative">
               <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none ${esCompacta ? "" : "left-3 w-4 h-4"}`} />
@@ -563,46 +638,7 @@ export function CompactInsumoForm({
             )}
           </div>
 
-          {/* Cantidad permanece como texto hasta que se intenta agregar. */}
-          {esCompacta ? (
-            <div className="w-[70px] flex-none">
-              <label className={labelClsCompacta}>Cantidad</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={cantidadTexto}
-                onChange={(e) => {
-                  setCantidadTexto(e.target.value);
-                  setIntentoAgregar(false);
-                }}
-                disabled={bloqueado}
-                className={`${inputClsCompacta}${errorCantidad ? " border-red-400" : ""}`}
-              />
-              {errorCantidad && <p className="mt-1 text-[10px] text-red-500">{errorCantidad}</p>}
-            </div>
-          ) : (
-            <div className="w-[112px]">
-              <label className={labelCls}>Cantidad</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={cantidadTexto}
-                onChange={(e) => {
-                  setCantidadTexto(e.target.value);
-                  setIntentoAgregar(false);
-                }}
-                disabled={bloqueado}
-                className={`${compactInputCls} text-center${errorCantidad ? " border-red-400" : ""}`}
-              />
-              {errorCantidad && <p className="mt-1 text-[10px] text-red-500">{errorCantidad}</p>}
-            </div>
-          )}
-
-          {/* Presentación — select redondeado personalizado (Radix), NO nativo.
-              Fase 4: lista las unidades compatibles con la base del insumo,
-              las presentaciones configuradas y "Otra presentación…". Para
-              productos sigue mostrando la presentación de compra en solo
-              lectura (la define el catálogo). */}
+          {/* Presentación — unidades compatibles y empaques configurables. */}
           {!ocultarMedida && (
             <div className={esCompacta ? "w-[96px] flex-none" : "w-[132px]"}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
@@ -626,12 +662,16 @@ export function CompactInsumoForm({
               ) : (
                 <UnidadSelect
                   value={unidad}
-                  onChange={cambiarUnidad}
+                  onChange={onUnidadChange}
                   disabled={bloqueado || unidadDisabled}
                   ariaLabel={etiquetaUnidad}
                   // Sin insumo seleccionado (o sin unidad base conocida) se
                   // conserva el catálogo completo de Compras.
-                  unidades={baseUnidad || presentaciones.length > 0 ? opcionesUnidad : undefined}
+                  unidades={
+                    baseUnidad || presentaciones.length > 0 || unidadBaseEditable
+                      ? opcionesUnidad
+                      : undefined
+                  }
                   fieldClassName={
                     readOnly
                       ? "bg-muted/40 border border-border text-foreground h-10"
@@ -641,22 +681,98 @@ export function CompactInsumoForm({
                   }
                 />
               )}
-              {errorFactor && (
-                <p className="mt-1 text-[10px] text-red-500">{errorFactor}</p>
+              {errorFactor && !requiereContenido && (
+                <p className="mt-1 text-[10px] text-destructive">{errorFactor}</p>
               )}
-              {factorPresentacion != null && factorPresentacion > 0 && baseUnidad && (
+              {factorPresentacion != null && factorPresentacion > 0 && medidaBaseContenido && (
                 <p className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
-                  1 {unidad} = {factorPresentacion.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {baseUnidad}
+                  1 {unidad} = {factorPresentacion.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {medidaBaseContenido}
                 </p>
               )}
             </div>
           )}
 
-          {/* P14: hueco de Medida para el control propio del formulario. */}
-          {campoExtra}
+          {/* Cantidad permanece como texto hasta que se intenta agregar. */}
+          {esCompacta ? (
+            <div className="w-[70px] flex-none">
+              <label className={labelClsCompacta}>Cantidad</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cantidadTexto}
+                onChange={(e) => {
+                  setCantidadTexto(e.target.value);
+                  setIntentoAgregar(false);
+                }}
+                disabled={bloqueado}
+                className={`${inputClsCompacta}${errorCantidad ? " border-destructive" : ""}`}
+              />
+              {errorCantidad && <p className="mt-1 text-[10px] text-destructive">{errorCantidad}</p>}
+            </div>
+          ) : (
+            <div className="w-[112px]">
+              <label className={labelCls}>Cantidad</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cantidadTexto}
+                onChange={(e) => {
+                  setCantidadTexto(e.target.value);
+                  setIntentoAgregar(false);
+                }}
+                disabled={bloqueado}
+                className={`${compactInputCls} text-center${errorCantidad ? " border-destructive" : ""}`}
+              />
+              {errorCantidad && <p className="mt-1 text-[10px] text-destructive">{errorCantidad}</p>}
+            </div>
+          )}
 
-          {/* Precio */}
-          <div className={esCompacta ? "w-[110px] flex-none" : "w-[116px]"}>
+          {requiereContenido && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <div className="w-[120px]">
+                <label className={esCompacta ? labelClsCompacta : labelCls}>Contenido</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={contenidoTexto}
+                  onChange={(event) => {
+                    setContenidoTexto(event.target.value);
+                    setIntentoAgregar(false);
+                  }}
+                  placeholder="Ej. 12"
+                  disabled={bloqueado || guardandoPresentacion}
+                  className={`${esCompacta ? inputClsCompacta : compactInputCls}${
+                    errorFactor ? " border-destructive" : ""
+                  }`}
+                />
+              </div>
+              <div className="w-[160px]">
+                <label className={esCompacta ? labelClsCompacta : labelCls}>Medida</label>
+                <UnidadSelect
+                  value={medidaContenido}
+                  onChange={(value) => {
+                    setMedidaContenido(value);
+                    setIntentoAgregar(false);
+                  }}
+                  disabled={bloqueado || guardandoPresentacion || opcionesMedidaContenido.length === 0}
+                  ariaLabel="Medida del contenido"
+                  placeholder="Seleccionar..."
+                  unidades={opcionesMedidaContenido}
+                  fieldClassName={
+                    esCompacta
+                      ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                      : unidadCampoCls
+                  }
+                />
+              </div>
+              {errorFactor && (
+                <p className="w-full text-[10px] text-destructive">{errorFactor}</p>
+              )}
+            </div>
+          )}
+
+          {/* Monto unitario comienza la segunda fila. */}
+          <div className={`flex-none ${esCompacta ? "w-[110px]" : "w-[116px]"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
 
             <input
@@ -669,13 +785,32 @@ export function CompactInsumoForm({
               }}
               placeholder="0"
               disabled={bloqueado}
-              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-red-400" : ""}`}
+              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-destructive" : ""}`}
             />
-            {errorPrecio && <p className="mt-1 text-[10px] text-red-500">{errorPrecio}</p>}
+            {errorPrecio && <p className="mt-1 text-[10px] text-destructive">{errorPrecio}</p>}
+          </div>
+
+          <div className={`${esCompacta ? "w-[160px] flex-none" : "w-[180px]"}`}>
+            <label className={esCompacta ? labelClsCompacta : labelCls}>Tipo de IVA</label>
+            <UnidadSelect
+              value={modoIvaActual}
+              onChange={(value) => {
+                const modo = MODOS_IVA.find((opcion) => opcion === value);
+                if (modo) cambiarModo(modo);
+              }}
+              disabled={bloqueado}
+              ariaLabel="Tipo de IVA"
+              unidades={opcionesModoIva}
+              fieldClassName={
+                esCompacta
+                  ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                  : unidadCampoCls
+              }
+            />
           </div>
 
           {modoIvaActual !== "exento" && (
-            <div className={esCompacta ? "w-[70px] flex-none" : "w-[76px]"}>
+            <div className={`${esCompacta ? "w-[76px] flex-none" : "w-[88px]"}`}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>IVA</label>
               <div className="relative">
                 <input
@@ -688,11 +823,11 @@ export function CompactInsumoForm({
                   }}
                   placeholder="0"
                   disabled={bloqueado}
-                  className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-red-400" : ""}`}
+                  className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
                 />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
               </div>
-              {errorIva && <p className="mt-1 text-[10px] text-red-500">{errorIva}</p>}
+              {errorIva && <p className="mt-1 text-[10px] text-destructive">{errorIva}</p>}
               {!bloqueado && (
                 <div className="flex gap-1 mt-1">
                   {[0, 5, 19].map((v) => (
@@ -721,7 +856,7 @@ export function CompactInsumoForm({
               agregar PRODUCTOS (la Orden de Compra no lo usa). Es OBLIGATORIO
               (punto B2): con `errorPrecioVenta` el campo se pinta en rojo. */}
           {mostrarPrecioVenta && (
-            <div className={esCompacta ? "w-[110px] flex-none" : "w-[116px]"}>
+            <div className={`${esCompacta ? "w-[110px] flex-none" : "w-[116px]"}`}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 Precio de venta
               </label>
@@ -738,25 +873,33 @@ export function CompactInsumoForm({
                 disabled={bloqueado}
                 className={`${
                   readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls
-                } ${errorPrecioVenta ? "border-red-400 focus:ring-red-300" : ""}`}
+                } ${errorPrecioVenta ? "border-destructive focus:ring-destructive" : ""}`}
               />
             </div>
           )}
 
-          {/* Botón Agregar: en variante compacta va debajo, alineado a la izquierda */}
-          {!esCompacta && (
+          <div className="ml-auto flex items-center gap-2 self-end">
             <button
               type="button"
-              onClick={agregarValidado}
-              disabled={bloqueado}
-              className={`ml-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-primary text-white text-sm font-semibold rounded-xl transition-colors ${
-                bloqueado ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"
+              onClick={() => void agregarValidado()}
+              disabled={bloqueado || guardandoPresentacion}
+              className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-primary-foreground text-xs font-semibold rounded-lg transition-colors ${
+                bloqueado || guardandoPresentacion ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-primary/90"
               }`}
             >
-              <Plus className="w-4 h-4" />
-              {buttonLabel}
+              <Plus className="w-3.5 h-3.5" />
+              {guardandoPresentacion ? "Guardando…" : buttonLabel}
             </button>
-          )}
+            {onCancelar && (
+              <button
+                type="button"
+                onClick={onCancelar}
+                className="inline-flex h-9 items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Punto 3 + ajuste de bebidas: el costo de referencia CON IVA POR
@@ -772,7 +915,7 @@ export function CompactInsumoForm({
         {/* Punto B2: el precio de venta inválido se avisa EN TIEMPO REAL,
             debajo de la fila (el texto va fuera de la capa con opacidad). */}
         {errorPrecioVenta && (
-          <p className="text-xs font-medium text-red-500 mt-1.5">{errorPrecioVenta}</p>
+          <p className="text-xs font-medium text-destructive mt-1.5">{errorPrecioVenta}</p>
         )}
 
         {/* Ayuda de la línea: qué entra al inventario y a qué costo por
@@ -781,187 +924,8 @@ export function CompactInsumoForm({
           <p className="text-[11px] text-muted-foreground mt-1.5">{ayudaLinea}</p>
         )}
 
-        {/* Tratamiento de IVA por línea: segmentado de 3 opciones con la
-          marca "Más común" en IVA incluido. Sin IVA oculta el campo y al
-          volver restaura el porcentaje anterior. */}
-        {!readOnly && !disabled && (
-          <div className="mt-2">
-            <div
-              className="inline-flex rounded-xl border border-border bg-muted p-0.5"
-              title={MODOS_IVA.map(ayudaModoIva).join(" · ")}
-            >
-              {opcionesModoIva.map(({ value, label, tag }) => {
-                const activo = modoIvaActual === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => cambiarModo(value)}
-                    aria-pressed={activo}
-                    title={ayudaModoIva(value)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                      activo
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-muted-foreground hover:bg-background/60"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1">
-                      {label}
-                      {tag && (
-                        <span
-                          className={`text-[8px] font-bold uppercase tracking-wide px-1 py-px rounded-full ${
-                            activo ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
-                          }`}
-                        >
-                          {tag}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* "Otra presentación…": pregunta cuántas unidades base trae cada
-          presentación y la guarda con POST presentaciones (upsert). */}
-      {otraAbierta && (
-        <div className="mt-3 p-3 bg-background border border-border rounded-xl">
-          <p className="text-xs font-semibold text-foreground mb-2">
-            Configura el contenido de cada {otraValor}.
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="w-[110px]">
-              <label className={labelClsCompacta}>Presentación</label>
-              <select
-                value={otraValor}
-                onChange={(e) => {
-                  setOtraValor(e.target.value);
-                  setOtraError("");
-                }}
-                className={inputClsCompacta}
-              >
-                {(["paq", "paca", "caja", "bolsa", "sixpack"] as const).map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-[110px]">
-              <label className={labelClsCompacta}>Cantidad de productos</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={otraCantidadProductosTexto}
-                onChange={(e) => {
-                  setOtraCantidadProductosTexto(e.target.value);
-                  setOtraError("");
-                }}
-                placeholder="1"
-                disabled={guardandoPresentacion}
-                className={`${inputClsCompacta}${otraError ? " border-red-400" : ""}`}
-              />
-            </div>
-            <div className="w-[160px]">
-              <label className={labelClsCompacta}>Medida exacta del producto</label>
-              <div className="flex gap-1">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={otraMedidaTexto}
-                  onChange={(e) => {
-                    setOtraMedidaTexto(e.target.value);
-                    setOtraError("");
-                  }}
-                  placeholder="1"
-                  disabled={guardandoPresentacion}
-                  className={`${inputClsCompacta}${otraError ? " border-red-400" : ""}`}
-                />
-                <select
-                  value={otraUnidad}
-                  onChange={(e) => {
-                    setOtraUnidad(e.target.value);
-                    setOtraError("");
-                  }}
-                  disabled={guardandoPresentacion}
-                  className="h-9 px-2 bg-muted border border-border rounded-lg text-sm"
-                  aria-label="Unidad de la medida exacta"
-                >
-                  {unidadesCompatibles(baseUnidad).map((u) => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => void confirmarOtraPresentacion()}
-                disabled={guardandoPresentacion}
-                className="inline-flex h-9 items-center px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-              >
-                {guardandoPresentacion ? "Guardando…" : "Guardar"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setOtraAbierta(false)}
-                disabled={guardandoPresentacion}
-                className="inline-flex h-9 items-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-          {(() => {
-            const cantidadProductos = numeroDesdeTexto(otraCantidadProductosTexto);
-            const medida = numeroDesdeTexto(otraMedidaTexto);
-            const conversion = factorUnidadDirecta(otraUnidad, baseUnidad);
-            const factor =
-              Number.isInteger(cantidadProductos) &&
-              cantidadProductos > 0 &&
-              Number.isFinite(medida) &&
-              medida > 0 &&
-              conversion != null
-                ? cantidadProductos * medida * conversion
-                : null;
-            return factor != null ? (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                1 {otraValor} = {factor.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {baseUnidad}
-              </p>
-            ) : null;
-          })()}
-          {otraError && <p className="mt-1.5 text-[11px] text-red-500">{otraError}</p>}
-        </div>
-      )}
-
-      {/* Botón Agregar para variante compacta: debajo, alineado a la izquierda */}
-      {esCompacta && (
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={agregarValidado}
-            disabled={bloqueado}
-            className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-              bloqueado ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            {buttonLabel}
-          </button>
-          {onCancelar && (
-            <button
-              type="button"
-              onClick={onCancelar}
-              className="inline-flex h-9 items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

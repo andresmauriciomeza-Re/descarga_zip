@@ -34,7 +34,7 @@ const {
   resolverModoIva,
   sumarTotales,
 } = await compilar("../src/features/compras/services/iva.ts");
-const { UNIDADES } = await compilar("../src/shared/utils/unidades.ts");
+const { UNIDADES, etiquetaPresentacion } = await compilar("../src/shared/utils/unidades.ts");
 const { InsumosSolicitadosTable } = await compilar("../src/features/compras/components/InsumosSolicitadosTable.tsx");
 
 // ---------------------------------------------------------------------------
@@ -74,12 +74,32 @@ test("la tabla de orden muestra el tipo de IVA bajo el nombre de cada ítem", ()
     precioUnitario: 100,
     ...item,
   }));
-  const texto = renderToStaticMarkup(React.createElement(InsumosSolicitadosTable, { items }))
-    .replace(/<[^>]*>/g, " ");
-  assert.match(texto, /Aceite\s+IVA incluido 19 %/);
-  assert.match(texto, /Gaseosa\s+Producto ·\s+IVA adicional 5 %/);
+  const html = renderToStaticMarkup(React.createElement(InsumosSolicitadosTable, { items }));
+  assert.match(html, /IVA incluido 19(?:\u00a0|&#160;|&nbsp;)%/);
+  const texto = html.replace(/<[^>]*>/g, " ");
+  assert.match(texto, /Aceite\s+IVA incluido 19\s%/);
+  assert.match(texto, /Gaseosa\s+Producto ·\s+IVA adicional 5\s%/);
   assert.match(texto, /Harina\s+Sin IVA/);
   assert.match(texto, /Tomate\s+Ingresa el IVA\./);
+});
+
+test("la tabla muestra el factor del empaque en la unidad base sin alterar unidades sueltas", () => {
+  const items = [
+    { rowId: "1", nombre: "Harina", unidad: "caja", factorPresentacion: 2, unidadBase: "kg" },
+    { rowId: "2", nombre: "Aceite", unidad: "lt" },
+  ].map((item) => ({
+    idInsumo: item.rowId,
+    cantidad: 1,
+    precioUnitario: 100,
+    iva: 0,
+    ...item,
+  }));
+  const html = renderToStaticMarkup(React.createElement(InsumosSolicitadosTable, { items }));
+  assert.match(html, /caja × 2 kg/);
+  assert.match(html, />lt<\/span>/);
+  assert.equal(etiquetaPresentacion("bolsa", 0.125, "kg"), "bolsa × 0,125 kg");
+  assert.equal(etiquetaPresentacion("caja", undefined, "kg"), "caja");
+  assert.equal(etiquetaPresentacion("kg", 2, "kg"), "kg");
 });
 
 test("redondearDosDecimales es el redondeo del backend (2 decimales)", () => {

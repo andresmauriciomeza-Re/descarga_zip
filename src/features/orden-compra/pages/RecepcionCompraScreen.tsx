@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-react";
+import { ArrowLeft, Check, Plus, Trash2, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   calcularLineaIva,
@@ -8,19 +8,23 @@ import {
   MODOS_IVA,
   ayudaModoIva,
   formatearChipIva,
-  formatearModoIva,
+  formatearModoIvaEnTabla,
   type ModoIva,
 } from "@/features/compras/services/iva";
 import {
   esEmpaque,
   factorDePresentacion,
   factorUnidadDirecta,
-  guardarPresentacion,
   listarPresentaciones,
   mensajeErrorPresentaciones,
   unidadesCompatibles,
   type PresentacionConfigurada,
 } from "@/features/compras/services/presentaciones";
+import {
+  CompactInsumoForm,
+  type CompactInsumoFormValues,
+  type InsumoSuggestion,
+} from "@/features/compras/components/CompactInsumoForm";
 import {
   historialCompraDe,
   unidadesPorLinea,
@@ -40,7 +44,7 @@ import {
 import { mismoNombre } from "@/shared/utils/nombres";
 // Catálogo único de unidades de Compras (antes había una copia local sin
 // paca/sixpack): una sola lista para validar y mostrar las medidas.
-import { UNIDADES } from "@/shared/utils/unidades";
+import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/unidades";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
@@ -395,9 +399,6 @@ export function RecepcionCompraScreen({
   const [exIvaAntesDeExento, setExIvaAntesDeExento] = useState<number | undefined>(undefined);
   const [exModoIva, setExModoIva] = useState<ModoIva>("incluido");
   const [exUnidadBase, setExUnidadBase] = useState("");
-  const [exCantidadProductosTexto, setExCantidadProductosTexto] = useState("1");
-  const [exMedidaExactaTexto, setExMedidaExactaTexto] = useState("1");
-  const [exMedidaUnidad, setExMedidaUnidad] = useState("");
   // P14: qué se está agregando como "no solicitado", insumo o producto.
   const [exTipo, setExTipo] = useState<"insumo" | "producto">("insumo");
   // Precio de VENTA al público del producto elegido (sólo con exTipo
@@ -411,7 +412,6 @@ export function RecepcionCompraScreen({
   // Ajuste (bloque 2): el % de ganancia se quitó de la pantalla; el precio de
   // venta del producto se escribe a mano y se valida contra el costo con IVA.
   const [exShowSug, setExShowSug] = useState(false);
-  const [intentoAgregarExtra, setIntentoAgregarExtra] = useState(false);
   const [showGuardarConf, setShowGuardarConf] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -452,14 +452,6 @@ export function RecepcionCompraScreen({
     ? "Ingresa la fecha de la factura"
     : !/^\d{4}-\d{2}-\d{2}$/.test(fechaFactura.trim())
       ? "La fecha de la factura debe tener formato YYYY-MM-DD"
-      : undefined;
-  const errorExIva =
-    exModoIva !== "exento" && (intentoAgregarExtra || exIva != null)
-      ? exIva == null
-        ? "Ingresa el IVA."
-        : !Number.isFinite(exIva) || exIva < 0 || exIva > 100
-          ? "El IVA debe estar entre 0 y 100."
-          : undefined
       : undefined;
   const _errorFechaFacturaLegacy = true ? undefined
     : fechaFactura > today
@@ -562,49 +554,6 @@ export function RecepcionCompraScreen({
   const mostrarColPrecioVta = items.some(
     (i) => (i.tipoItem ?? "insumo") === "producto"
   );
-
-  /** Punto B6 + punto 3 + ajuste: precio de venta OBLIGATORIO en productos
-   *  no solicitados, con las mismas reglas que la Nueva compra: > 0 y > al
-   *  costo CON IVA POR UNIDAD (con paca/caja el monto del formulario es por
-   *  presentación y se divide en el empaque). */
-  const exFactor = unidadesPorLinea({ unidadesPorEmpaque: exEmpaque });
-  const exCostoRef = costoConIva(exPrecio, exIva ?? 0, exModoIva) / exFactor;
-  const exCantidadProductos = numeroDeInput(exCantidadProductosTexto);
-  const exMedidaExacta = numeroDeInput(exMedidaExactaTexto);
-  const exFactorConversion = factorUnidadDirecta(exMedidaUnidad, exUnidadBase);
-  const exEsNuevoInsumo = nuevosInsumosPendientes.some((insumo) => insumo.id === exId);
-  const factorEmpaqueExtra =
-    exTipo === "insumo" &&
-    esEmpaque(exUnidad) &&
-    Number.isInteger(exCantidadProductos) &&
-    exCantidadProductos > 0 &&
-    Number.isFinite(exMedidaExacta) &&
-    exMedidaExacta > 0 &&
-    exFactorConversion != null
-      ? exCantidadProductos * exMedidaExacta * exFactorConversion
-      : undefined;
-  const errorFactorExtra =
-    exTipo === "insumo" && esEmpaque(exUnidad)
-      ? !exUnidadBase
-        ? "Indica la unidad base del insumo."
-        : factorEmpaqueExtra == null || factorEmpaqueExtra <= 0
-          ? "Completa una cantidad entera y una medida compatible."
-          : undefined
-      : undefined;
-  const errorExPrecioVenta =
-    exTipo === "producto" && exNombre.trim()
-      ? exPrecioVenta <= 0
-        ? "Ingresa el precio de venta del producto."
-        : exPrecioVenta <= exCostoRef
-          ? "El precio de venta debe ser mayor que el costo por unidad con IVA."
-          : undefined
-      : undefined;
-
-  const onExMontoChange = (v: number) => setExPrecio(v);
-
-  const onExIvaChange = (v: number | undefined) => setExIva(exModoIva === "exento" ? 0 : v);
-
-  const onExPrecioVentaChange = (v: number) => setExPrecioVenta(v);
 
   /** Sugerencia del desplegable "Agregar no solicitado": misma forma para
    *  insumos y productos, más el precio de venta (sólo los productos). */
@@ -836,30 +785,6 @@ export function RecepcionCompraScreen({
     );
   };
 
-  const cambiarUnidadExtra = (unidad: string) => {
-    setExUnidad(unidad);
-    if (!esEmpaque(unidad)) return;
-    const configurada = (presentacionesPorInsumo[exId] ?? []).find(
-      (presentacion) => presentacion.presentacion === unidad,
-    );
-    const factor = configurada?.unidadesBase ?? (unidad === exUnidad ? factorEmpaqueExtra : undefined);
-    setExCantidadProductosTexto("1");
-    setExMedidaExactaTexto(factor != null ? String(factor) : "1");
-    setExMedidaUnidad(exUnidadBase || unidadesCompatibles(exUnidadBase)[0] || "");
-  };
-
-  const cambiarModoIvaExtra = (modo: ModoIva) => {
-    if (modo === exModoIva) return;
-    if (modo === "exento") {
-      setExIvaAntesDeExento(exIva);
-      setExIva(0);
-    } else if (exModoIva === "exento") {
-      setExIva(exIvaAntesDeExento);
-      setExIvaAntesDeExento(undefined);
-    }
-    setExModoIva(modo);
-  };
-
   const limpiarFormularioExtra = (
     tipo: "insumo" | "producto" = exTipo,
     cancelarEdicion = true
@@ -874,18 +799,15 @@ export function RecepcionCompraScreen({
     setExPrecio(0);
     setExIva(undefined);
     setExIvaAntesDeExento(undefined);
-    setIntentoAgregarExtra(false);
     setExModoIva("incluido");
-    setExCantidadProductosTexto("1");
-    setExMedidaExactaTexto("1");
-    setExMedidaUnidad("");
     setExPrecioVenta(0);
     setExShowSug(false);
     if (cancelarEdicion) setEditExtraId(null);
   };
 
-  const addExtra = async () => {
-    setIntentoAgregarExtra(true);
+  const addExtra = (
+    values: CompactInsumoFormValues,
+  ) => {
     if (!exNombre.trim()) {
       toast.error(
         exTipo === "producto"
@@ -895,60 +817,35 @@ export function RecepcionCompraScreen({
       return;
     }
 
-    if (exCant <= 0) {
+    if (values.cantidad <= 0) {
       toast.error("La cantidad debe ser mayor que 0.");
       return;
     }
 
-    if (!Number.isFinite(exPrecio) || exPrecio <= 0) {
+    if (!Number.isFinite(values.precio) || values.precio <= 0) {
       toast.error("El monto unitario debe ser mayor que cero.");
       return;
     }
-    if (exModoIva !== "exento" && exIva == null) {
+    if (values.modoIva !== "exento" && values.iva == null) {
       toast.error("Ingresa el IVA.");
       return;
     }
-    if (exModoIva !== "exento" && (!Number.isFinite(exIva) || exIva! < 0 || exIva! > 100)) {
+    if (values.modoIva !== "exento" && (!Number.isFinite(values.iva) || values.iva < 0 || values.iva > 100)) {
       toast.error("El IVA debe estar entre 0 y 100.");
       return;
-    }
-    if (exTipo === "insumo" && esEmpaque(exUnidad)) {
-      if (!exUnidadBase) {
-        toast.error("Indica la unidad base del insumo para configurar el empaque.");
-        return;
-      }
-      if (factorEmpaqueExtra == null || factorEmpaqueExtra <= 0) {
-        toast.error("Indica una cantidad entera de productos y una medida exacta compatible con la unidad base.");
-        return;
-      }
-      if (/^INS-\d+$/.test(exId)) {
-        try {
-          const guardada = await guardarPresentacion(exId, exUnidad, factorEmpaqueExtra);
-          setPresentacionesPorInsumo((prev) => ({
-            ...prev,
-            [exId]: [
-              ...(prev[exId] ?? []).filter((p) => p.presentacion !== guardada.presentacion),
-              guardada,
-            ],
-          }));
-        } catch (error) {
-          toast.error(
-            mensajeErrorPresentaciones(error, "No se pudo guardar la presentación."),
-          );
-          return;
-        }
-      }
     }
 
     // Punto B6 + punto 3 + ajuste: mismo bloqueo que en la Nueva compra — un
     // producto no solicitado se agrega únicamente con precio de venta > 0 y >
     // al costo CON IVA POR UNIDAD.
     if (exTipo === "producto") {
-      if (exPrecioVenta <= 0) {
+      if ((values.precioVenta ?? 0) <= 0) {
         toast.error("El precio de venta del producto debe ser mayor que cero.");
         return;
       }
-      if (exPrecioVenta <= exCostoRef) {
+      const factorProducto = unidadesPorLinea({ unidadesPorEmpaque: exEmpaque });
+      const costoRef = costoConIva(values.precio, values.iva, values.modoIva ?? "incluido") / factorProducto;
+      if ((values.precioVenta ?? 0) <= costoRef) {
         toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
         return;
       }
@@ -969,27 +866,28 @@ export function RecepcionCompraScreen({
         esNuevoInsumo: catIdNuevo ? true : undefined,
         nombre: exNombre.trim(),
         cantidadSolicitada: 0,
-        cantidadRecibida: exCant,
+        cantidadRecibida: values.cantidad,
         // Medida de la fila: la presentación de compra del producto o la
         // unidad elegida; vacía ⇒ "und" para no dejar la fila en blanco.
         unidad: exUnidad.trim() || "und",
-        precioReferencia: exPrecio,
-        costoUnitario: exPrecio,
-        precioUnitario: exPrecio,
-        iva: exModoIva === "exento" ? 0 : exIva ?? 0,
-        modoIva: exModoIva,
+        precioReferencia: values.precio,
+        costoUnitario: values.precio,
+        precioUnitario: values.precio,
+        iva: values.modoIva === "exento" ? 0 : values.iva,
+        modoIva: values.modoIva ?? exModoIva,
         // P14: de qué catálogo salió la línea y, si es producto, su precio
         // de venta al público (ya validado arriba: siempre > 0 y > costo).
         tipoItem: exTipo,
-        precioVenta: exTipo === "producto" ? exPrecioVenta : undefined,
+        precioVenta: exTipo === "producto" ? values.precioVenta : undefined,
         unidadesPorEmpaque:
           exTipo === "producto" && exEmpaque && exEmpaque > 1
             ? exEmpaque
             : undefined,
-        unidadBase: exTipo === "insumo" ? exUnidadBase || undefined : undefined,
+        unidadBase:
+          exTipo === "insumo" ? (values.unidadBase ?? exUnidadBase) || undefined : undefined,
         factorPresentacion:
           exTipo === "insumo" && esEmpaque(exUnidad)
-            ? factorEmpaqueExtra
+            ? values.factorPresentacion
             : undefined,
       };
 
@@ -1031,11 +929,6 @@ export function RecepcionCompraScreen({
     setExIva(item.iva);
     setExIvaAntesDeExento(item.ivaAntesDeExento);
     setExModoIva(item.modoIva ?? "incluido");
-    setExCantidadProductosTexto("1");
-    setExMedidaExactaTexto(
-      item.factorPresentacion != null ? String(item.factorPresentacion) : "1",
-    );
-    setExMedidaUnidad(item.unidadBase ?? "");
     setExPrecioVenta(item.precioVenta ?? 0);
     setExShowSug(false);
     exRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -1611,7 +1504,7 @@ export function RecepcionCompraScreen({
 
                               <p className="text-[11px] text-muted-foreground break-words">
                                 {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                                {formatearModoIva(item.modoIva ?? "incluido", item.iva)}
+                                {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
                               </p>
                               <p className="text-[11px] text-muted-foreground">
                                 Pedido: {item.cantidadSolicitada}{" "}
@@ -1647,6 +1540,11 @@ export function RecepcionCompraScreen({
                                   }
                                   className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                                 />
+                                {esEmpaque(item.unidad) && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
+                                  </span>
+                                )}
                               </div>
                               {factorDeUnidadRecibida(item) == null && esEmpaque(item.unidad) && (
                                 <p className="mt-1 text-[10px] text-red-500">
@@ -1922,7 +1820,7 @@ export function RecepcionCompraScreen({
                                     calcula con el Monto unitario). */}
                                 <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
                                   {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                                  {formatearModoIva(item.modoIva ?? "incluido", item.iva)}
+                                  {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
                                   {(item.tipoItem ?? "insumo") === "producto" &&
                                     item.precioVenta != null && item.precioVenta > 0 && (
                                       <> · Venta: {fmtCOP(item.precioVenta)}</>
@@ -1930,9 +1828,16 @@ export function RecepcionCompraScreen({
                                 </div>
                               </td>
 
-                              <td className="px-1 py-2 text-right">{item.cantidadRecibida}</td>
+                              <td className="px-1 py-2 text-right">
+                                {item.cantidadRecibida}
+                                {esEmpaque(item.unidad) && (
+                                  <div className="text-[11px] text-muted-foreground break-words">
+                                    {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
+                                  </div>
+                                )}
+                              </td>
                               <td className="truncate px-1 py-2 text-xs text-muted-foreground" title={item.unidad}>
-                                {item.unidad}
+                                {!esEmpaque(item.unidad) && item.unidad}
                               </td>
                               <td className="px-1 py-2 text-right text-xs whitespace-nowrap">
                                 {fmtCOP(item.costoUnitario)}
@@ -1971,473 +1876,121 @@ export function RecepcionCompraScreen({
                   </div>
                 )}
 
-                <div
-                  ref={exRef}
-                  className="border border-dashed border-border rounded-xl p-3 bg-muted/30"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <p className="text-xs font-bold text-muted-foreground">
-                      Agregar {exTipo === "producto" ? "producto" : "insumo"} no solicitado
-                    </p>
-                    {/* P14: un "no solicitado" puede venir del catálogo de
-                        insumos o del de productos (reventa). */}
-                    <div className="flex items-center gap-2">
-                      <label className="block text-[11px] font-semibold text-muted-foreground">
-                        Tipo
-                      </label>
-                      <SegmentadoButtons
-                        valor={exTipo}
-                        onChange={(valor) => {
-                          const nuevo = valor as "insumo" | "producto";
-                          if (nuevo === exTipo) return;
-                          setExTipo(nuevo);
-                          limpiarFormularioExtra(nuevo, false);
-                        }}
-                        opciones={[
-                          { valor: "insumo", etiqueta: "Insumo" },
-                          { valor: "producto", etiqueta: "Producto" },
-                        ]}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-end gap-2">
-                    {/* Nombre */}
-                    <div className="relative w-[160px] flex-none">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Nombre
-                      </label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <input
-                          value={exNombre}
-                          onChange={(e) => {
-                            setExNombre(e.target.value);
-                            // Punto B6: al editar el texto a mano el id de la
-                            // sugerencia elegida ya no corresponde.
-                            setExId("");
-                            setExCategoriaInsumoId(undefined);
-                            setExUnidadBase("");
-                            setExModoIva("incluido");
-                            // Ajuste: en producto la presentación elegida ya
-                            // no aplica: la Medida queda vacía y el empaque
-                            // se limpia.
-                            if (exTipo === "producto") {
-                              setExUnidad("");
-                              setExEmpaque(undefined);
-                            }
-                            setExShowSug(true);
+                <CompactInsumoForm
+                    containerRef={exRef}
+                    titulo={`Agregar ${exTipo === "producto" ? "producto" : "insumo"} no solicitado`}
+                    headerExtra={
+                      <div className="flex items-center gap-2">
+                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                          Tipo
+                        </label>
+                        <SegmentadoButtons
+                          valor={exTipo}
+                          onChange={(valor) => {
+                            const nuevo = valor as "insumo" | "producto";
+                            if (nuevo === exTipo) return;
+                            setExTipo(nuevo);
+                            limpiarFormularioExtra(nuevo, false);
                           }}
-                          onFocus={() => setExShowSug(true)}
-                          placeholder={
-                            exTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
-                          }
-                          className={`${compactInputCls} pl-8`}
+                          opciones={[
+                            { valor: "insumo", etiqueta: "Insumo" },
+                            { valor: "producto", etiqueta: "Producto" },
+                          ]}
                         />
                       </div>
-                      {/* Punto 5: "+ Crear insumo" es SIEMPRE la primera
-                          opción (aunque el campo esté vacío o sin resultados)
-                          y va separado del resto de la lista. P14: no aplica
-                          cuando se agregan PRODUCTOS (no se da de alta ninguno
-                          desde aquí). */}
-                      {exShowSug && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
-                          {exTipo === "insumo" && (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setExShowSug(false);
-                                setShowNuevoInsumo(true);
-                              }}
-                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Crear insumo {exNombre.trim() && `“${exNombre.trim()}”`}
-                            </button>
-                          )}
-                          {exSugs.map((ins) => (
-                            <button
-                              key={ins.id}
-                              type="button"
-                              onMouseDown={() => {
-                                setExNombre(ins.nombre);
-                                // Punto B6: se recuerda el id real elegido
-                                // para guardarlo en la línea.
-                                setExId(ins.id);
-                                const nuevoMatch = nuevosInsumosPendientes.find((n) => n.id === ins.id);
-                                setExCategoriaInsumoId(nuevoMatch ? Number(nuevoMatch.categoriaId) : undefined);
-                                // Ajuste: en PRODUCTO la Medida es solo
-                                // lectura con la presentación de compra
-                                // ("Paca x12"), que no está en la lista de
-                                // unidades; en insumo sigue la regla de
-                                // pertenencia a UNIDADES.
-                                setExUnidad(
-                                  exTipo === "producto"
-                                    ? ins.unidadMedida
-                                    : UNIDADES.includes(ins.unidadMedida)
-                                      ? ins.unidadMedida
-                                      : UNIDADES[0]
-                                );
-                                setExUnidadBase(
-                                  exTipo === "insumo" ? ins.unidadMedida : "",
-                                );
-                                setExModoIva("incluido");
-                                if (exTipo === "insumo" && /^INS-\d+$/.test(ins.id)) {
-                                  void listarPresentaciones(ins.id)
-                                    .then((lista) =>
-                                      setPresentacionesPorInsumo((prev) => ({
-                                        ...prev,
-                                        [ins.id]: lista,
-                                      })),
-                                    )
-                                    .catch((error: unknown) =>
-                                      toast.error(
-                                        mensajeErrorPresentaciones(
-                                          error,
-                                          "No se pudieron cargar las presentaciones del insumo.",
-                                        ),
-                                      ),
-                                    );
-                                }
-                                // Empaque de la presentación elegida.
-                                setExEmpaque(
-                                  ins.unidadesPorEmpaque &&
-                                    ins.unidadesPorEmpaque > 1
-                                    ? ins.unidadesPorEmpaque
-                                    : undefined
-                                );
-                                // Ajuste: con historial de compra se precarga
-                                // el último monto SIN IVA y su % (la
-                                // Recepción guarda montos sin IVA); sin
-                                // historial manda el costo del catálogo por
-                                // presentación, como siempre.
-                                // Punto C2: si existe `montoDigitado` (monto
-                                // TAL CUAL digitado, sin convertir) manda ÉL.
-                                const hist = historialCompraDe(ins);
-                                const montoSel = hist
-                                  ? hist.montoDigitado ?? hist.montoSinIva
-                                  : ins.costoUnitario;
-                                const ivaSel = hist
-                                  ? hist.iva
-                                  : Number(ins.iva ?? 0);
-                                setExPrecio(montoSel);
-                                // Punto 2: al elegir del catálogo se completan
-                                // Medida, Monto unitario e IVA.
-                                setExIva(ivaSel == null ? undefined : ivaSel);
-                                setExIvaAntesDeExento(undefined);
-                                // P14: si es producto se copia también su
-                                // precio de venta al público (se escribe a
-                                // mano: el % de ganancia ya no existe).
-                                const pvSug = Number(ins.precioVenta ?? 0);
-                                setExPrecioVenta(pvSug);
-                                setExCantidadProductosTexto("1");
-                                setExMedidaExactaTexto("1");
-                                setExMedidaUnidad(
-                                  exTipo === "insumo" ? ins.unidadMedida : "",
-                                );
-                                setExShowSug(false);
-                              }}
-                              className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
-                            >
-                              <p className="text-sm font-semibold">{ins.nombre}</p>
-                              {/* Contenido ("1.5 L") + medida de compra +
-                                  monto de la presentación. */}
-                              <p className="text-xs text-muted-foreground">
-                                {[ins.contenido, ins.unidadMedida, fmtCOP(ins.costoUnitario)]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            </button>
-                          ))}
-                          {exSugs.length === 0 && (
-                            <div className="px-3 py-2.5 text-xs text-muted-foreground text-center">
-                              Sin resultados
-                            </div>
-                          )}
-                          {/* Bloque 2.2: "+ Crear producto «texto»" al FINAL
-                              del desplegable y sólo cuando el texto no
-                              coincide con ningún producto del catálogo. */}
-                          {exTipo === "producto" &&
-                            onCrearProducto &&
-                            exSugs.length === 0 &&
-                            exNombre.trim() !== "" && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExShowSug(false);
-                                  setShowNuevoProducto(true);
-                                }}
-                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                Crear producto {`“${exNombre.trim()}”`}
-                              </button>
-                            )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Cantidad */}
-                    <div className="w-16 flex-none">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Cantidad
-                      </label>
-                      {/* Nace en 1 (regla del alta) y borra a vacío (punto B1). */}
-                      <input
-                        type="number"
-                        min={1}
-                        value={exCant === 0 ? "" : exCant}
-                        onChange={(e) => setExCant(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                        placeholder="0"
-                        className={compactInputCls}
-                      />
-                    </div>
-
-                    {/* Presentación — editable para insumos; los productos
-                        Compra). Punto 2.7: a la misma altura que los inputs
-                        vecinos (`compactInputCls` = py-2 ≈ 38 px) y con el mismo
-                        padding/redondeo; antes era h-11 (44 px) y desentonaba.
-                        Ajuste: con PRODUCTO es texto de solo lectura con la
-                        presentación de compra ("Paca x12"), que no pertenece a
-                        la lista de unidades. */}
-                    <div className={exTipo === "producto" ? "w-[92px] flex-none" : "w-16 flex-none"}>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Presentación
-                      </label>
-                      {exTipo === "producto" ? (
-                        <div
-                          title="La medida la define el ítem del catálogo"
-                          className="w-full h-9 px-2.5 rounded-lg text-sm bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none truncate"
-                        >
-                          {exUnidad}
-                        </div>
-                      ) : (
-                        <UnidadSelect
-                          value={exUnidad}
-                          onChange={cambiarUnidadExtra}
-                          ariaLabel="Presentación"
-                          fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-sm"
-                        />
-                      )}
-                    </div>
-
-                    {/* Monto unitario */}
-                    <div className="w-32 flex-none">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Monto unitario
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={exPrecio || ""}
-                        onChange={(e) => onExMontoChange(Number(e.target.value))}
-                        className={compactInputCls}
-                      />
-                    </div>
-
-                    {exModoIva !== "exento" && (
-                      <div className="w-[190px] flex-none">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          IVA
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={exIva ?? ""}
-                            onChange={(e) => {
-                              onExIvaChange(
-                                e.target.value.trim() === ""
-                                  ? undefined
-                                  : Math.min(100, Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))),
-                              );
-                              setIntentoAgregarExtra(false);
-                            }}
-                            placeholder="0"
-                            className={`${compactInputCls} pr-7 ${errorExIva ? "border-red-400" : ""}`}
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                        </div>
-                        {errorExIva && <p className="mt-1 text-[10px] text-red-500">{errorExIva}</p>}
-                      </div>
-                    )}
-                    <div className="w-[190px] flex-none">
-                      <div
-                        className="mt-1 flex flex-wrap gap-1"
-                        title={MODOS_IVA.map(ayudaModoIva).join(" · ")}
-                      >
-                        {MODOS_IVA.map((modo) => (
-                          <button
-                            key={modo}
-                            type="button"
-                            aria-pressed={exModoIva === modo}
-                            title={ayudaModoIva(modo)}
-                            onClick={() => cambiarModoIvaExtra(modo)}
-                            className={`rounded border px-1.5 py-1 text-[10px] font-semibold ${
-                              exModoIva === modo
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground"
-                            }`}
-                          >
-                            {ETIQUETA_MODO_IVA[modo].etiqueta}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Precio de venta al público del producto: sólo se pinta
-                        al agregar PRODUCTOS. Es OBLIGATORIO (punto B6 + 3): el
-                        campo queda en rojo y el Agregar se deshabilita si el
-                        precio está vacío, en 0 o ≤ al costo con IVA. */}
-                    {exTipo === "producto" && (
-                      <div className="w-32 flex-none">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Precio de venta
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={exPrecioVenta || ""}
-                          onChange={(e) =>
-                            onExPrecioVentaChange(Math.max(0, Number(e.target.value)))
-                          }
-                          placeholder="0"
-                          className={`${compactInputCls} ${
-                            errorExPrecioVenta ? "border-red-400 focus:ring-red-300" : ""
-                          }`}
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => void addExtra()}
-                        disabled={!!errorExPrecioVenta || !!errorFactorExtra}
-                        className={`flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-                          errorExPrecioVenta || errorFactorExtra
-                            ? "opacity-50 cursor-not-allowed"
-                            : "hover:bg-red-700 cursor-pointer"
-                        }`}
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        {editExtraId ? "Guardar cambios" : "Agregar"}
-                      </button>
-                      {editExtraId && (
-                        <button
-                          onClick={() => limpiarFormularioExtra()}
-                          className="flex-none h-11 px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {exTipo === "insumo" && esEmpaque(exUnidad) && (
-                    <div className="mt-3 flex flex-wrap items-end gap-2">
-                      <div className="w-28">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Unidad base
-                        </label>
-                        {exEsNuevoInsumo ? (
-                          <select
-                            value={exUnidadBase}
-                            onChange={(e) => {
-                              setExUnidadBase(e.target.value);
-                              setExMedidaUnidad(e.target.value);
-                            }}
-                            className={compactInputCls}
-                          >
-                            <option value="">Seleccionar</option>
-                            {["kg", "g", "lt", "ml", "und"].map((unidad) => (
-                              <option key={unidad} value={unidad}>{unidad}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className={`${compactInputCls} flex items-center`}>
-                            {exUnidadBase || "—"}
-                          </div>
-                        )}
-                      </div>
-                      <div className="w-36">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Cantidad de productos
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={exCantidadProductosTexto}
-                          onChange={(e) => setExCantidadProductosTexto(e.target.value)}
-                          className={`${compactInputCls} ${
-                            errorFactorExtra ? "border-red-400" : ""
-                          }`}
-                        />
-                      </div>
-                      <div className="w-56">
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Medida exacta del producto
-                        </label>
-                        <div className="flex gap-1">
-                          <input
-                            type="number"
-                            min={0.0001}
-                            step="any"
-                            value={exMedidaExactaTexto}
-                            onChange={(e) => setExMedidaExactaTexto(e.target.value)}
-                            className={`${compactInputCls} min-w-0 ${
-                              errorFactorExtra ? "border-red-400" : ""
-                            }`}
-                          />
-                          <select
-                            value={exMedidaUnidad}
-                            onChange={(e) => setExMedidaUnidad(e.target.value)}
-                            className="h-9 px-2 bg-muted border border-border rounded-lg text-sm"
-                            aria-label="Unidad de la medida exacta"
-                          >
-                            {unidadesCompatibles(exUnidadBase).map((unidad) => (
-                              <option key={unidad} value={unidad}>{unidad}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      {factorEmpaqueExtra != null && (
-                        <p className="pb-2 text-[11px] text-muted-foreground">
-                          1 {exUnidad} ={" "}
-                          {factorEmpaqueExtra.toLocaleString("es-CO", {
-                            maximumFractionDigits: 4,
-                          })}{" "}
-                          {exUnidadBase}
-                        </p>
-                      )}
-                      {errorFactorExtra && (
-                        <p className="w-full text-[11px] text-red-500">
-                          {errorFactorExtra}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Punto 3 + ajuste: el costo de referencia CON IVA POR
-                      UNIDAD con el que se valida el precio de venta (con
-                      paca/caja el Monto unitario es por presentación y ya
-                      viene dividido). */}
-                  {exTipo === "producto" && (
-                    <p className="text-[11px] text-muted-foreground mt-1.5">
-                      Costo por unidad: {fmtCOP(exCostoRef)}
-                    </p>
-                  )}
-
-                  {/* Punto B6: el precio de venta inválido se avisa en tiempo
-                      real, debajo de la fila completa. */}
-                  {errorExPrecioVenta && (
-                    <p className="text-xs font-medium text-red-500 mt-1.5">
-                      {errorExPrecioVenta}
-                    </p>
-                  )}
-                </div>
+                    }
+                    nombre={exNombre}
+                    etiquetaNombre={exTipo === "producto" ? "Producto" : "Insumo"}
+                    onNombreChange={(value) => {
+                      setExNombre(value);
+                      setExId("");
+                      setExCategoriaInsumoId(undefined);
+                      setExUnidadBase("");
+                      setExModoIva("incluido");
+                      if (exTipo === "producto") {
+                        setExUnidad("");
+                        setExEmpaque(undefined);
+                      }
+                      setExShowSug(true);
+                    }}
+                    onNombreFocus={() => setExShowSug(true)}
+                    cantidad={exCant}
+                    unidad={exUnidad}
+                    onUnidadChange={setExUnidad}
+                    unidadBase={exTipo === "insumo" ? exUnidadBase : undefined}
+                    unidadBaseEditable={exTipo === "insumo" && !exUnidadBase}
+                    insumoId={
+                      exTipo === "insumo" && /^INS-\d+$/.test(exId) ? exId : undefined
+                    }
+                    factorPresentacionInicial={
+                      itemsExtra.find((item) => item.rowId === editExtraId)?.factorPresentacion
+                    }
+                    presentacionInicial={
+                      itemsExtra.find((item) => item.rowId === editExtraId)?.unidad
+                    }
+                    etiquetaUnidad="Presentación"
+                    precio={exPrecio}
+                    iva={exIva}
+                    modoIva={exModoIva}
+                    ivaAntesDeExento={exIvaAntesDeExento}
+                    onModoIvaChange={setExModoIva}
+                    mostrarPrecioVenta={exTipo === "producto"}
+                    precioVenta={exPrecioVenta}
+                    factorCostoUnidad={exTipo === "producto" ? exEmpaque ?? 1 : 1}
+                    onAgregar={addExtra}
+                    suggestions={exSugs as InsumoSuggestion[]}
+                    showSuggestions={exShowSug}
+                    onSelectSuggestion={(suggestion) => {
+                      const ins = suggestion as SugEx;
+                      setExNombre(ins.nombre);
+                      setExId(ins.id);
+                      const nuevoMatch = nuevosInsumosPendientes.find((n) => n.id === ins.id);
+                      setExCategoriaInsumoId(
+                        nuevoMatch ? Number(nuevoMatch.categoriaId) : undefined,
+                      );
+                      setExUnidad(
+                        exTipo === "producto"
+                          ? ins.unidadMedida
+                          : UNIDADES.includes(ins.unidadMedida)
+                            ? ins.unidadMedida
+                            : UNIDADES[0],
+                      );
+                      setExUnidadBase(exTipo === "insumo" ? ins.unidadMedida : "");
+                      setExModoIva("incluido");
+                      setExEmpaque(
+                        ins.unidadesPorEmpaque && ins.unidadesPorEmpaque > 1
+                          ? ins.unidadesPorEmpaque
+                          : undefined,
+                      );
+                      const hist = historialCompraDe(ins);
+                      setExPrecio(
+                        hist
+                          ? hist.montoDigitado ?? hist.montoSinIva
+                          : ins.costoUnitario,
+                      );
+                      setExIva(hist ? hist.iva : Number(ins.iva ?? 0));
+                      setExIvaAntesDeExento(undefined);
+                      setExPrecioVenta(Number(ins.precioVenta ?? 0));
+                      setExShowSug(false);
+                    }}
+                    onCrearInsumo={() => {
+                      setExShowSug(false);
+                      setShowNuevoInsumo(true);
+                    }}
+                    onCrearProducto={() => {
+                      setExShowSug(false);
+                      setShowNuevoProducto(true);
+                    }}
+                    compacto
+                    variante="compacta"
+                    ocultarCrearInsumo={exTipo === "producto"}
+                    ocultarCrearProducto={exTipo === "insumo"}
+                    placeholder={
+                      exTipo === "producto" ? "Buscar producto..." : "Buscar insumo..."
+                    }
+                    buttonLabel={editExtraId ? "Guardar cambios" : "Agregar"}
+                    onCancelar={editExtraId ? () => limpiarFormularioExtra() : undefined}
+                  />
               </div>
 
               <div className="flex gap-3 pt-2">

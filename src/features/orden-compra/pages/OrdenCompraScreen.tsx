@@ -18,10 +18,11 @@ import {
 import { CrearInsumoCompraModal } from "@/features/compras/components/CrearInsumoCompraModal";
 import {
   calcularLineaIva,
-  formatearModoIva,
+  formatearModoIvaEnTabla,
   sumarTotales,
   type ModoIva,
 } from "@/features/compras/services/iva";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -1553,13 +1554,11 @@ export function OrdenModal({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {/* Punto 2.6: en página el "Tipo" sale del hueco de
-                      Medida y sube a la fila de título, a la derecha del
-                      título; el formulario ya no lo recibe (`campoExtra` solo
-                      en el modal, donde el título sigue dentro de la card). */}
-                  {isPage ? (
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <p className={seccionCls}>Agregar ítem</p>
+                  <CompactInsumoForm
+                    containerRef={sugRef}
+                    titulo="Agregar ítem"
+                    headerExtra={
+                      isPage ? (
                       <div className="flex items-center gap-2">
                         <label className="block text-[11px] font-semibold text-muted-foreground">
                           Tipo
@@ -1582,13 +1581,8 @@ export function OrdenModal({
                           ]}
                         />
                       </div>
-                    </div>
-                  ) : (
-                    <p className={seccionCls}>Agregar ítem</p>
-                  )}
-                  <CompactInsumoForm
-                    containerRef={sugRef}
-                    titulo={isPage ? "" : "Agregar ítem"}
+                      ) : undefined
+                    }
                     nombre={aNombre}
                     onNombreChange={(value) => {
                       setANombre(value);
@@ -1607,6 +1601,7 @@ export function OrdenModal({
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
                     medidaSoloLectura={aTipoItem === "producto"}
+                    etiquetaNombre={aTipoItem === "producto" ? "Producto" : "Insumo"}
                     insumoId={
                       aTipoItem === "insumo" && /^INS-\d+$/.test(aInsumoId)
                         ? aInsumoId
@@ -1770,7 +1765,10 @@ export function OrdenModal({
                     </div>
                   )}
                   <InsumosSolicitadosTable
-                    items={form.items}
+                    items={form.items.map((item) => ({
+                      ...item,
+                      unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                    }))}
                     showActions={false}
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
@@ -1779,7 +1777,10 @@ export function OrdenModal({
               ) : (
                 <>
                   <InsumosSolicitadosTable
-                    items={form.items}
+                    items={form.items.map((item) => ({
+                      ...item,
+                      unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                    }))}
                     showActions
                     onRemove={(rowId) => {
                       if (editando === rowId) limpiarFilaInsumo();
@@ -3663,11 +3664,18 @@ function OrdenDetallePageContenido({
                             )}
                           </div>
                           <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
-                            {formatearModoIva(item.modoIva ?? "incluido", item.iva)}
+                            {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {item.cantidad}
+                          {esEmpaque(item.unidad) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{!esEmpaque(item.unidad) && item.unidad}</td>
                         <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
                         <td className="px-4 py-3 font-semibold">{fmtCOP(item.subtotal ?? item.cantidad * item.precioUnitario)}</td>
                       </tr>

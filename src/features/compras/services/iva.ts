@@ -59,6 +59,9 @@ export const formatearModoIva = (modo: ModoIva, porcentaje?: number): string =>
       ? "Ingresa el IVA."
       : `${ETIQUETA_MODO_IVA[modo].etiqueta} ${porcentaje} %`;
 
+export const formatearModoIvaEnTabla = (modo: ModoIva, porcentaje?: number): string =>
+  formatearModoIva(modo, porcentaje).replace(/ %$/, "\u00a0%");
+
 export const formatearChipIva = (modo: ModoIva, porcentaje: number): string => {
   if (modo === "exento") return ETIQUETA_MODO_IVA[modo].etiqueta;
   return modo === "mas_iva" ? `+${porcentaje} %` : `Incl. ${porcentaje} %`;

@@ -11,11 +11,12 @@ import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, ty
 import {
   calcularLineaIva,
   formatearChipIva,
-  formatearModoIva,
+  formatearModoIvaEnTabla,
   resolverModoIva,
   sumarTotales,
   type ModoIva,
 } from "@/features/compras/services/iva";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import {
@@ -182,6 +183,7 @@ type ItemFactura = {
    *  Viaja al backend como `factor_presentacion`; opcional para las líneas
    *  en unidad base o en presentaciones ya configuradas del insumo. */
   factorPresentacion?: number;
+  unidadBase?: string;
   stockApiAplicado?: boolean;
   stockApiRevertido?: boolean;
   stockApiPendiente?: boolean;
@@ -359,12 +361,14 @@ function TablaItemsFactura({
                       </div>
                       <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
                         {(row.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                        {formatearModoIva(resolverModoIva(row, null), row.iva)}
+                        {formatearModoIvaEnTabla(resolverModoIva(row, null), row.iva)}
                       </div>
                     </td>
                     <td className={td + " text-right"}>
                       <div className="text-sm text-foreground">{row.cantidad}</div>
-                      <div className="text-[11px] text-muted-foreground">{row.unidad}</div>
+                      <div className="text-[11px] text-muted-foreground break-words">
+                        {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase)}
+                      </div>
                     </td>
                     <td className={td + " text-sm text-right whitespace-nowrap"}>
                       {fmtCOP(row.precioUnitario)}
@@ -513,6 +517,7 @@ function CompraForm({
     // Presentaciones: factor de la línea (si la trae) para poder reenviarlo
     // al guardar desde el formulario.
     factorPresentacion: item.factorPresentacion,
+    unidadBase: item.unidadBase,
   })));
 
   const [itemNombre, setItemNombre] = useState("");
@@ -1401,13 +1406,11 @@ function CompraForm({
                   bloque de la columna izquierda (la tabla vive en la derecha). */}
               {!isView && (
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
-                  {/* Punto 2.6: en página el "Tipo" sube a la fila de
-                      título (a la derecha) en vez de ocupar el hueco de Medida;
-                      el formulario ya no lo recibe (`campoExtra` solo en el
-                      modal, donde el título sigue dentro de la card). */}
-                  {isPage ? (
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <p className={seccionCls}>Agregar ítem</p>
+                  <CompactInsumoForm
+                    containerRef={itemRef}
+                    titulo="Agregar ítem"
+                    headerExtra={
+                      isPage ? (
                       <div className="flex items-center gap-2">
                         <label className="block text-[11px] font-semibold text-muted-foreground">
                           Tipo
@@ -1430,13 +1433,8 @@ function CompraForm({
                           ]}
                         />
                       </div>
-                    </div>
-                  ) : (
-                    <p className={seccionCls}>Agregar ítem</p>
-                  )}
-                  <CompactInsumoForm
-                    containerRef={itemRef}
-                    titulo={isPage ? "" : "Agregar ítem"}
+                      ) : undefined
+                    }
                     nombre={itemNombre}
                     onNombreChange={(value) => {
                       setItemNombre(value);
@@ -1512,6 +1510,7 @@ function CompraForm({
                     // (unidades compatibles + configuradas + "Otra…").
                     ocultarMedida={false}
                     medidaSoloLectura={itemTipo === "producto"}
+                    etiquetaNombre={itemTipo === "producto" ? "Producto" : "Insumo"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
                     // Bloque 2: el atajo "+ Crear producto" sólo aplica a
@@ -1682,9 +1681,16 @@ function CompraForm({
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
                                   {esProducto ? "Producto" : "Insumo"}
                                 </td>
-                                <td className="align-middle px-2 py-2.5 text-sm text-right">{row.cantidad}</td>
+                                <td className="align-middle px-2 py-2.5 text-sm text-right">
+                                  {row.cantidad}
+                                  {esEmpaque(row.unidad) && (
+                                    <div className="text-[11px] text-muted-foreground break-words">
+                                      {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase ?? insumos.find((i) => i.id === row.idInsumo)?.unidadMedida)}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
-                                  {row.unidad}
+                                  {!esEmpaque(row.unidad) && row.unidad}
                                 </td>
                                 <td className="align-middle px-2 py-2.5 text-sm text-right whitespace-nowrap">
                                   {fmtCOP(row.precioUnitario)}
@@ -1734,7 +1740,10 @@ function CompraForm({
                 // misma fórmula (`calcularLineaIva`), así el total de la
                 // factura nunca se queda corto.
                 <TablaItemsFactura
-                  items={items}
+                  items={items.map((item) => ({
+                    ...item,
+                    unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                  }))}
                   onEdit={editarItem}
                   onRemove={eliminarItem}
                   enPagina={isPage}

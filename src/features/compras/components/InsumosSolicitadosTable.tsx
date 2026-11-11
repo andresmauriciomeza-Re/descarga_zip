@@ -1,6 +1,7 @@
 import React from "react";
 import { Package, Pencil, Trash2 } from "lucide-react";
-import { calcularLineaIva, formatearChipIva, formatearModoIva } from "@/features/compras/services/iva";
+import { calcularLineaIva, formatearChipIva, formatearModoIvaEnTabla } from "@/features/compras/services/iva";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
 import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -115,7 +116,7 @@ export function InsumosSolicitadosTable({
   const ivaDeLinea = (row: InsumoSolicitadoRow) =>
     calcularLinea(row).montoIva;
   const etiquetaModoIva = (row: InsumoSolicitadoRow) =>
-    formatearModoIva(row.modoIva ?? "incluido", row.iva);
+    formatearModoIvaEnTabla(row.modoIva ?? "incluido", row.iva);
   const faltaIva = (row: InsumoSolicitadoRow) =>
     (row.modoIva ?? "incluido") !== "exento" && row.iva == null;
 
@@ -204,8 +205,8 @@ export function InsumosSolicitadosTable({
 
               <td className={tdBase + " text-sm"}>
                 <span>{item.cantidad}</span>
-                <span className="block text-[11px] text-muted-foreground truncate" title={item.unidad}>
-                  {item.unidad}
+                <span className={`block text-[11px] text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}>
+                  {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}
                 </span>
               </td>
 
