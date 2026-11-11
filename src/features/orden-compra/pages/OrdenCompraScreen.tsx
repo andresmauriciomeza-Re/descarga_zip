@@ -15,7 +15,8 @@ import {
   type CompactInsumoFormValues,
   type InsumoSuggestion,
 } from "@/features/compras/components/CompactInsumoForm";
-import type { ModoIva } from "@/features/compras/services/iva";
+import { CrearInsumoCompraModal } from "@/features/compras/components/CrearInsumoCompraModal";
+import { calcularLineaIva, sumarTotales, type ModoIva } from "@/features/compras/services/iva";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -83,9 +84,7 @@ export interface OrdenItem {
   baseSinIva?: number;
   /** Compras (IVA): valor del IVA de la línea en pesos. */
   montoIva?: number;
-  /** Compras (IVA, regla 2.1): modo de IVA de la línea. Opcional: las líneas
-   *  antiguas no lo traen y se resuelven con el IVA global de la petición
-   *  (o 'incluido' si no hay global). */
+  /** Tratamiento de IVA propio de la línea; líneas antiguas usan "incluido". */
   modoIva?: ModoIva;
   /** true = insumo agregado en recepción (no venía en la OC original) */
   esNoSolicitado?: boolean;
@@ -129,12 +128,15 @@ export interface ItemRecibido {
   idInsumo: string;
   nombre: string;
   cantidadSolicitada: number;
+  cantidadPendiente?: number;
+  unidadesPendientesBase?: number;
   pendiente?: number;
   facturado?: boolean;
   idCategoriaInsumo?: number;
   esNuevoInsumo?: boolean;
   cantidadRecibida: number;
   unidad: string;
+  unidadSolicitada?: string;
   precioReferencia: number;
   costoUnitario: number;
   precioUnitario: number;
@@ -156,6 +158,7 @@ export interface ItemRecibido {
    *  base del insumo y esa unidad base (los deriva el backend). */
   unidadesBase?: number;
   unidadBase?: string;
+  factorPresentacion?: number;
 }
 
 export interface Recepcion {
@@ -193,11 +196,6 @@ export interface GestionCompra {
   estado: EstadoGestion;
   items?: OrdenItem[];
   compraCreada?: boolean;
-  /** Compras (IVA, regla 2.1): true = todos los montos unitarios de la
-   *  factura ya traen el IVA incluido; false = todos a más IVA; null =
-   *  factura mixta o con líneas exentas (el backend lo deriva de las líneas).
-   *  Las compras antiguas, sin el campo, se leen como "IVA incluido". */
-  ivaIncluido?: boolean | null;
   /** Compras (IVA): suma de las bases imponibles (sin IVA) de las líneas. */
   subtotalSinIva?: number;
   /** Compras (IVA): suma del IVA de las líneas. */
@@ -447,8 +445,21 @@ function fmtCOP(n: number) {
   }).format(n);
 }
 
+function calcularIvaLineaOrden(item: OrdenItem) {
+  return calcularLineaIva({
+    cantidad: item.cantidad,
+    montoUnitario: item.precioUnitario ?? item.costoUnitario,
+    porcentajeIva: item.iva ?? 0,
+    modoIva: item.modoIva ?? "incluido",
+  });
+}
+
+function totalLineaOrden(item: OrdenItem) {
+  return calcularIvaLineaOrden(item).subtotalConIva;
+}
+
 function calcTotal(items: OrdenItem[]) {
-  return items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
+  return sumarTotales(items.map(calcularIvaLineaOrden)).totalPagado;
 }
 
 function nextOrdenId(items: OrdenCompra[]) {
@@ -804,7 +815,7 @@ export function OrdenModal({
   onGuardar: (d: OrdenFormData) => void | Promise<void>;
   onNuevoProveedor: (p: ProveedorRef) => string;
   /** Punto 5: crea el insumo en el catálogo (tipo "Insumo") desde "+ Crear insumo". */
-  onCrearInsumo?: (ins: NuevoInsumoCreado) => void;
+  onCrearInsumo?: (ins: Insumo) => void;
   /** Bloque 2.2: categorías de insumos desde la API para el modal de alta. */
   categoriasInsumo?: CategoriaInsumo[];
   /** Crea el producto en el catálogo (tipo "Producto terminado") desde
@@ -882,6 +893,7 @@ export function OrdenModal({
   const [aEmpaque, setAEmpaque] = useState<number | undefined>(undefined);
   const [aPrecio, setAPrecio] = useState(0);
   const [aIva, setAIva] = useState(0);
+  const [aModoIva, setAModoIva] = useState<ModoIva>("incluido");
   const [aFromCat, setAFromCat] = useState(false);
   // Punto 3.3: tipo de ítem del formulario (botones Insumo | Producto). Por
   // defecto "insumo", como manda el plan.
@@ -991,6 +1003,7 @@ export function OrdenModal({
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setAPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
     setAIva(Number(ins.iva ?? 0));
+    setAModoIva("incluido");
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -1022,6 +1035,7 @@ export function OrdenModal({
       hist ? (hist.montoDigitado ?? hist.montoSinIva) : Number(p.costoUnitario || 0) * factor
     );
     setAIva(hist ? hist.iva : 0);
+    setAModoIva("incluido");
     setAInsumoId(p.id);
     setAFromCat(true);
     setAShowSug(false);
@@ -1030,17 +1044,17 @@ export function OrdenModal({
   // Punto 5: "+ Crear insumo" (primera opción del combo). Crea el insumo en el
   // catálogo vía el padre y lo selecciona en "Agregar insumo" con su unidad,
   // monto e IVA — igual que si se hubiera elegido una sugerencia existente.
-  const handleNuevoInsumo = (ins: NuevoInsumoCreado) => {
+  const handleNuevoInsumo = (ins: Insumo) => {
     onCrearInsumo?.(ins);
     setANombre(ins.nombre);
-    setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
-    setAPrecio(ins.precioUnitario);
-    setAIva(ins.iva);
+    setAUnidad(ins.unidadMedida);
+    setAPrecio(0);
+    setAIva(0);
+    setAModoIva("incluido");
     setAInsumoId(ins.id);
     setAFromCat(true);
     setAShowSug(false);
     setShowNuevoInsumo(false);
-    toast.success(`Insumo "${ins.nombre}" creado`);
   };
 
   const handleNuevoProducto = async (prod: Producto) => {
@@ -1055,7 +1069,13 @@ export function OrdenModal({
     return creado;
   };
 
-  const addItem = ({ cantidad, precio, iva }: CompactInsumoFormValues) => {
+  const addItem = ({
+    cantidad,
+    precio,
+    iva,
+    modoIva,
+    factorPresentacion,
+  }: CompactInsumoFormValues) => {
     // Modo edición (lápiz de la tabla): la fila está cargada arriba, así que
     // solo se reemplaza y se deja el formulario listo para el siguiente.
     if (editando) {
@@ -1071,13 +1091,16 @@ export function OrdenModal({
         // elegir); con presentación cargada va "Paca x12" tal cual.
         unidad: aUnidad.trim() || "und",
         precioUnitario: precio,
-        iva,
+        iva: modoIva === "exento" ? 0 : iva,
+        modoIva: modoIva ?? aModoIva,
         // Punto 3.3: el ítem puede haber cambiado de catálogo (insumo ↔
         // producto) mientras estaba cargado en el formulario.
         tipoItem: aTipoItem,
         // Ajuste: el empaque sólo aplica a producto; al quitarlo se limpia.
         unidadesPorEmpaque:
           aTipoItem === "producto" && aEmpaque && aEmpaque > 1 ? aEmpaque : undefined,
+        factorPresentacion:
+          aTipoItem === "insumo" ? factorPresentacion : undefined,
         ...(aInsumoId ? { idInsumo: aInsumoId } : {}),
       });
       limpiarFilaInsumo();
@@ -1107,13 +1130,17 @@ export function OrdenModal({
         unidad: aUnidad.trim() || "und",
         costoUnitario: precio,
         precioUnitario: precio,
-        iva,
+        iva: modoIva === "exento" ? 0 : iva,
+        modoIva: modoIva ?? aModoIva,
         // Punto 3.3: la fila guarda de qué catálogo salió (insumo/producto).
         tipoItem: aTipoItem,
         // Ajuste de bebidas: sólo las líneas de producto en paca/caja
         // guardan el empaque (unidad suelta ⇒ sin el dato, se lee como 1).
         ...(aTipoItem === "producto" && aEmpaque && aEmpaque > 1
           ? { unidadesPorEmpaque: aEmpaque }
+          : {}),
+        ...(aTipoItem === "insumo" && factorPresentacion != null
+          ? { factorPresentacion }
           : {}),
       }],
     });
@@ -1128,7 +1155,7 @@ export function OrdenModal({
    *  el VIEJO al cambiar Insumo/Producto, así que quien cambia el tipo pasa
    *  el nuevo EXPLÍCITO (nunca se usa como callback directo). */
   const limpiarFilaInsumo = (tipo: "insumo" | "producto" = aTipoItem) => {
-    setANombre(""); setACant(1); setAPrecio(0); setAIva(0);
+    setANombre(""); setACant(1); setAPrecio(0); setAIva(0); setAModoIva("incluido");
     setAUnidad(tipo === "producto" ? "" : UNIDADES[0]);
     setAEmpaque(undefined);
     setAFromCat(false); setAInsumoId(""); setAShowSug(false);
@@ -1147,8 +1174,10 @@ export function OrdenModal({
     setACant(row.cantidad);
     setAUnidad(row.unidad);
     setAEmpaque(row.unidadesPorEmpaque && row.unidadesPorEmpaque > 1 ? row.unidadesPorEmpaque : undefined);
+    setAInsumoId(row.idInsumo);
     setAPrecio(row.precioUnitario);
     setAIva(row.iva);
+    setAModoIva(row.modoIva ?? "incluido");
     setAFromCat(false);
     setAShowSug(false);
     nombreRef.current?.focus();
@@ -1562,11 +1591,22 @@ export function OrdenModal({
                     cantidad={aCant}
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
-                    // Punto 3.3: la Medida es texto de SOLO LECTURA (la define
-                    // el ítem del catálogo), en vez del UnidadSelect editable.
-                    medidaSoloLectura
+                    medidaSoloLectura={aTipoItem === "producto"}
+                    insumoId={
+                      aTipoItem === "insumo" && /^INS-\d+$/.test(aInsumoId)
+                        ? aInsumoId
+                        : undefined
+                    }
+                    unidadBase={
+                      aTipoItem === "insumo"
+                        ? insumos.find((ins) => ins.id === aInsumoId)?.unidadMedida
+                        : undefined
+                    }
+                    etiquetaUnidad="Presentación"
                     precio={aPrecio}
                     iva={aIva}
+                    modoIva={aModoIva}
+                    onModoIvaChange={setAModoIva}
                     onAgregar={addItem}
                     suggestions={suggestions}
                     showSuggestions={aShowSug}
@@ -1736,12 +1776,9 @@ export function OrdenModal({
                     totalLabel="Total estimado"
                     enPagina={isPage}
                     className={isPage ? "flex-1 min-h-0" : ""}
-                    // Punto 3.3: mismas columnas literales que la Nueva compra
-                    // (Nombre | Cantidad | Medida | Monto unitario | IVA |
-                    // Acciones) — sin Subtotal por fila — y texto vacío en
-                    // "ítems" porque la orden admite insumos y productos.
+                    // Usa las mismas columnas que Nueva Compra; la orden admite
+                    // insumos y productos.
                     titulo="Ítems de la orden"
-                    mostrarSubtotal={false}
                     textoVacioPagina="Aún no has agregado ítems"
                   />
 
@@ -1808,7 +1845,7 @@ export function OrdenModal({
           insumo queda en el catálogo y seleccionado en "Agregar insumo". */}
       <AnimatePresence>
         {showNuevoInsumo && (
-          <NuevoInsumoModal
+          <CrearInsumoCompraModal
             nombreInicial={aNombre.trim()}
             insumosExistentes={insumos}
             onGuardar={handleNuevoInsumo}
@@ -1907,9 +1944,9 @@ export function NuevaOrdenCompraPage({
     onBack();
   }, [orden?.id, ordenViva?.estado]);
 
-  // Punto 5: el insumo creado en el formulario pasa al catálogo global.
-  const handleCrearInsumo = (ins: NuevoInsumoCreado) =>
-    setInsumos(prev => [insumoDeAlta(ins), ...prev]);
+  // El insumo creado pasa al catálogo global con los datos confirmados por API.
+  const handleCrearInsumo = (ins: Insumo) =>
+    setInsumos(prev => [ins, ...prev.filter((existente) => existente.id !== ins.id)]);
 
   const handleGuardar = async (data: OrdenFormData) => {
     const idProveedor = Number(proveedores.find((p) => p.nombre === data.proveedor)?.id ?? 0);
@@ -2738,7 +2775,7 @@ export function OrdenCompraScreen({
           item.unidad,
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(item.costoUnitario),
           `${item.iva}%`,
-          new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(item.cantidad * item.costoUnitario),
+          new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(totalLineaOrden(item)),
         ]);
         
         (doc as any).autoTable({
@@ -2752,7 +2789,7 @@ export function OrdenCompraScreen({
         
         // Totals
         const finalY = (doc as any).lastAutoTable.finalY + 10;
-        const total = orden.items.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
+        const total = calcTotal(orden.items);
         doc.setFontSize(11);
         doc.setFont(undefined, 'bold');
         doc.text(`Total: ${new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(total)}`, 14, finalY);
@@ -3137,7 +3174,12 @@ export function OrdenCompraScreen({
             onClose={() => setModal(null)}
             onGuardar={handleGuardarOrden}
             onNuevoProveedor={handleNuevoProveedorLocal}
-            onCrearInsumo={(ins) => setInsumos?.(prev => [insumoDeAlta(ins), ...prev])}
+            onCrearInsumo={(ins) =>
+              setInsumos?.((prev) => [
+                ins,
+                ...prev.filter((existente) => existente.id !== ins.id),
+              ])
+            }
           />
         )}
       </AnimatePresence>
@@ -3318,8 +3360,8 @@ export function NuevoInsumoModal({
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
-            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Insumo</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Crea un insumo para agregar a la orden.</p>
+            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Insumo</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del insumo para agregarlo a la orden.</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
             <X className="w-4 h-4" />
@@ -3363,7 +3405,7 @@ export function NuevoInsumoModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida</label>
               {/* Select personalizado (Radix, igual que los estados): el
                   `<select>` nativo desplegaba la lista CUADRADA y con el azul
                   del navegador. Bloque 3 (A5.2): con la lista compartida
@@ -3494,7 +3536,7 @@ function OrdenDetallePageContenido({
   const itemsFactura = facturaActual?.items ?? [];
   const solicitados = itemsFactura.filter(i => esSolicitado(i));
   const noSolicitados = itemsFactura.filter(i => !esSolicitado(i));
-  const totalPagado = itemsFactura.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0);
+  const totalPagado = calcTotal(itemsFactura);
 
   /** Fecha y hora del último cambio de estado (sin prefijos). */
   const historial = orden.historialEstados ?? [];
@@ -3712,7 +3754,7 @@ function OrdenDetallePageContenido({
                                 <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
                                 <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
                                 <td className="px-4 py-3">{fmtCOP(item.costoUnitario)}</td>
-                                <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.costoUnitario)}</td>
+                                <td className="px-4 py-3 font-semibold">{fmtCOP(totalLineaOrden(item))}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -3722,7 +3764,7 @@ function OrdenDetallePageContenido({
                                 Subtotal solicitados
                               </td>
                               <td className="px-4 py-2 text-sm font-bold text-foreground">
-                                {fmtCOP(solicitados.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0))}
+                                {fmtCOP(calcTotal(solicitados))}
                               </td>
                             </tr>
                           </tfoot>
@@ -3755,7 +3797,7 @@ function OrdenDetallePageContenido({
                                   <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
                                   <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
                                   <td className="px-4 py-3">{fmtCOP(item.costoUnitario)}</td>
-                                  <td className="px-4 py-3 font-semibold">{fmtCOP(item.cantidad * item.costoUnitario)}</td>
+                                  <td className="px-4 py-3 font-semibold">{fmtCOP(totalLineaOrden(item))}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3765,7 +3807,7 @@ function OrdenDetallePageContenido({
                                   Subtotal no solicitados
                                 </td>
                                 <td className="px-4 py-2 text-sm font-bold text-amber-700">
-                                  {fmtCOP(noSolicitados.reduce((s, i) => s + i.cantidad * i.costoUnitario, 0))}
+                                  {fmtCOP(calcTotal(noSolicitados))}
                                 </td>
                               </tr>
                             </tfoot>

@@ -39,11 +39,9 @@ import {
   darBajaOrdenProduccion,
   eliminarOrdenProduccion,
   obtenerCalculoVerificacionOrden,
-  obtenerCapacidadOrdenProduccion,
   iniciarOrdenProduccion,
   mapearFaltanteApi,
   mensajeErrorOrdenes,
-  type CapacidadLineaApi,
   type CalculoVerificacionLineaApi,
   type ErrorConFaltantes,
 } from "@/features/orden-produccion/services/ordenesProduccionApi";
@@ -325,17 +323,6 @@ const fechaHoraBogotaDesdeEpoch = (epoch: number, incluirSegundos = false) => {
   const fecha = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
   return `${fecha.year}-${fecha.month}-${fecha.day}T${fecha.hour}:${fecha.minute}${incluirSegundos ? `:${fecha.second}` : ""}`;
 };
-const fechaHoraBogotaMasMinuto = () =>
-  fechaHoraBogotaDesdeEpoch(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000);
-const fechaHoraBogotaActual = () => fechaHoraBogotaDesdeEpoch(Date.now(), true);
-
-function fechaRecogidaLocalBogota(orden: OrdenProduccion): string | null {
-  if (orden.ventaLocal || !orden.horaSolicitada) return null;
-  const hora = orden.horaSolicitada.length === 5
-    ? `${orden.horaSolicitada}:00`
-    : orden.horaSolicitada.slice(0, 8);
-  return `${orden.fechaSolicitada}T${hora}`;
-}
 
 /** Fecha local "YYYY-MM-DD" (en Colombia después de las 19:00 `toISOString()`
     ya devuelve el día siguiente). */
@@ -1602,95 +1589,7 @@ export function OrdenProduccionScreen({
   const [preciosCompletar, setPreciosCompletar] = useState<Record<string, string>>({});
   const [calculosDebidos, setCalculosDebidos] = useState<Record<number, CalculoVerificacionLineaApi>>({});
   const [cargandoCalculoDebido, setCargandoCalculoDebido] = useState(false);
-  const [generarItem, setGenerarItem] = useState<OrdenProduccion | null>(null);
-  const [cantidadesGenerar, setCantidadesGenerar] = useState<Record<number, string>>({});
-  const [fechaLimiteGenerar, setFechaLimiteGenerar] = useState("");
-  const [fechaLimiteAutomatica, setFechaLimiteAutomatica] = useState(false);
-  const [minFechaLimiteGenerar, setMinFechaLimiteGenerar] = useState(fechaHoraBogotaMasMinuto);
-  const [ahoraBogotaGenerar, setAhoraBogotaGenerar] = useState(fechaHoraBogotaActual);
-  const [capacidadGenerar, setCapacidadGenerar] = useState<{
-    cantidades_bloqueadas: boolean;
-    lineas: CapacidadLineaApi[];
-  } | null>(null);
-  const [cargandoCapacidadGenerar, setCargandoCapacidadGenerar] = useState(false);
-  const [generando, setGenerando] = useState(false);
-  const [faltantesGenerar, setFaltantesGenerar] = useState<Faltante[]>([]);
-
-  useEffect(() => {
-    if (!generarItem) return;
-    const actualizarHora = () => {
-      setMinFechaLimiteGenerar(fechaHoraBogotaMasMinuto());
-      setAhoraBogotaGenerar(fechaHoraBogotaActual());
-      if (generarItem.ventaLocal && fechaLimiteAutomatica) {
-        setFechaLimiteGenerar(fechaHoraBogotaDesdeEpoch(Date.now()));
-      }
-    };
-    actualizarHora();
-    const intervalo = window.setInterval(actualizarHora, 15_000);
-    return () => window.clearInterval(intervalo);
-  }, [generarItem, fechaLimiteAutomatica]);
-
-  const fechaRecogidaGenerar = generarItem?.tipo === "pedido"
-    ? fechaRecogidaLocalBogota(generarItem)
-    : null;
-  const recogidaFuturaGenerar = !!fechaRecogidaGenerar
-    && fechaRecogidaGenerar > ahoraBogotaGenerar;
-  const recogidaVencidaGenerar = generarItem?.tipo === "pedido"
-    && !generarItem.ventaLocal
-    && !!generarItem.horaSolicitada
-    && !recogidaFuturaGenerar;
-
-  const maximosGenerar = useMemo(() => {
-    if (!capacidadGenerar || capacidadGenerar.cantidades_bloqueadas) return {};
-    return Object.fromEntries(capacidadGenerar.lineas.map((linea) => {
-      if (linea.requeridos_por_unidad.length === 0) return [linea.id_detalle_op, null];
-      let maximo = Number.POSITIVE_INFINITY;
-      for (const requerido of linea.requeridos_por_unidad) {
-        if (requerido.motivo || requerido.stock == null || requerido.requerido <= 0) {
-          maximo = 0;
-          break;
-        }
-        const consumidoPorOtrasLineas = capacidadGenerar.lineas
-          .filter((otra) => otra.id_detalle_op !== linea.id_detalle_op)
-          .reduce((total, otra) => {
-            const recurso = otra.requeridos_por_unidad.find((item) => item.id_insumo === requerido.id_insumo);
-            return total + (recurso?.requerido ?? 0) * Number(cantidadesGenerar[otra.id_detalle_op] ?? 0);
-          }, 0);
-        const disponible = requerido.stock - consumidoPorOtrasLineas;
-        maximo = Math.min(maximo, Math.max(0, Math.floor((disponible + 0.000001) / requerido.requerido)));
-      }
-      return [linea.id_detalle_op, Number.isFinite(maximo) ? maximo : null];
-    }));
-  }, [capacidadGenerar, cantidadesGenerar]);
-
-  const cantidadesGenerarValidas = !!generarItem && generarItem.lineas.every((linea) => {
-    if (generarItem.tipo === "pedido") return true;
-    const idDetalle = linea.idDetalleOp;
-    if (idDetalle == null) return false;
-    const texto = cantidadesGenerar[idDetalle] ?? "";
-    const cantidad = Number(texto);
-    if (texto.trim() === "" || !Number.isFinite(cantidad) || cantidad < 1) return false;
-    if (!esIdInsumo(linea.idProducto) && !Number.isSafeInteger(cantidad)) return false;
-    const maximo = maximosGenerar[idDetalle];
-    return maximo == null || cantidad <= maximo;
-  });
-  const capacidadGenerarCompleta = !!generarItem && !!capacidadGenerar
-    && capacidadGenerar.lineas.length === generarItem.lineas.length
-    && generarItem.lineas.every((linea) =>
-      capacidadGenerar.lineas.some((capacidad) => capacidad.id_detalle_op === linea.idDetalleOp));
-  const generacionValida =
-    (generarItem?.tipo === "preparacion" || (
-      !!fechaLimiteGenerar &&
-      (generarItem?.ventaLocal
-        ? fechaLimiteAutomatica || fechaLimiteGenerar >= ahoraBogotaGenerar.slice(0, 16)
-        : fechaLimiteGenerar >= minFechaLimiteGenerar) &&
-      (!recogidaFuturaGenerar ||
-        (!!fechaRecogidaGenerar && fechaLimiteGenerar <= fechaRecogidaGenerar.slice(0, 16)))
-    )) &&
-    cantidadesGenerarValidas &&
-    !cargandoCapacidadGenerar &&
-    capacidadGenerarCompleta &&
-    !generando;
+  const [iniciandoId, setIniciandoId] = useState<string | null>(null);
   // Faltantes detectados al INICIAR: abren el modal "Inventario insuficiente"
   // (lista de "Faltan X de Y (hay Z)" con su motivo) y la orden se queda
   // Pendiente: no se descuenta nada ni cambia de estado.
@@ -2028,75 +1927,24 @@ export function OrdenProduccionScreen({
     return HORNEADO_MIN;
   };
 
-  const abrirGenerar = async (orden: OrdenProduccion) => {
-    if (orden.lineas.some((linea) => linea.idDetalleOp == null)) {
-      toast.error("No se pudieron cargar los detalles de la orden. Recarga el listado e inténtalo de nuevo.");
-      return;
-    }
-    setGenerarItem(orden);
-    setCantidadesGenerar(Object.fromEntries(orden.lineas.map((linea) => [
-      linea.idDetalleOp as number,
-      String(linea.cantidadEstimada),
-    ])));
-    const recogida = orden.tipo === "pedido" ? fechaRecogidaLocalBogota(orden) : null;
-    setFechaLimiteAutomatica(orden.ventaLocal === true);
-    setFechaLimiteGenerar(
-      orden.ventaLocal
-        ? fechaHoraBogotaDesdeEpoch(Date.now())
-        : recogida && recogida > fechaHoraBogotaActual()
-        ? recogida.slice(0, 16)
-        : "",
-    );
-    setCapacidadGenerar(null);
-    setFaltantesGenerar([]);
-    setCargandoCapacidadGenerar(true);
+  /** Inicia la orden sin formulario: el backend toma cantidades y fecha límite de la propia orden. */
+  const iniciarDirecto = async (orden: OrdenProduccion) => {
+    if (iniciandoId) return;
+    setIniciandoId(orden.id);
     try {
-      setCapacidadGenerar(await obtenerCapacidadOrdenProduccion(orden.id));
-    } catch (error) {
-      setGenerarItem(null);
-      toast.error(mensajeErrorOrdenes(error, "No se pudo calcular la capacidad de producción."));
-    } finally {
-      setCargandoCapacidadGenerar(false);
-    }
-  };
-
-  /** Generar bloquea y descuenta insumos dentro de la transacción del backend. */
-  const confirmarGenerar = async () => {
-    if (!generarItem || !generacionValida) return;
-    const orden = generarItem;
-    setGenerando(true);
-    setFaltantesGenerar([]);
-    try {
-      const actualizada = await iniciarOrdenProduccion(orden.id, {
-        ...(orden.tipo === "pedido" ? { fechaEntregaEstimada: fechaLimiteGenerar } : {}),
-        ...(orden.tipo === "pedido" && orden.ventaLocal ? { fechaLimiteAutomatica } : {}),
-        ...(orden.tipo === "preparacion"
-          ? {
-              lineas: orden.lineas.map((linea) => ({
-                idDetalleOp: linea.idDetalleOp as number,
-                cantidad: Number(cantidadesGenerar[linea.idDetalleOp as number]),
-              })),
-            }
-          : {}),
-      });
+      const actualizada = await iniciarOrdenProduccion(orden.id, {});
       setOrdenes((p) => p.map((o) => (o.id === orden.id ? actualizada : o)));
-      toast.success(
-        orden.tipo === "preparacion" && actualizada.insumosDescontados
-          ? `${orden.id} en proceso — insumos descontados`
-          : `${orden.id} en proceso`,
-      );
-      setGenerarItem(null);
-      setCapacidadGenerar(null);
+      toast.success("Se inició la orden de producción");
       await recargarProduccion?.();
     } catch (error) {
       const faltantes = ((error as ErrorConFaltantes).faltantes ?? []).map(mapearFaltanteApi);
       if (faltantes.length > 0) {
-        setFaltantesGenerar(faltantes);
+        setFaltantesIniciar({ ordenId: orden.id, faltantes });
         return;
       }
-      toast.error(mensajeErrorOrdenes(error, "No se pudo generar la orden."));
+      toast.error(mensajeErrorOrdenes(error, "No se pudo iniciar la orden."));
     } finally {
-      setGenerando(false);
+      setIniciandoId(null);
     }
   };
 
@@ -2327,9 +2175,9 @@ export function OrdenProduccionScreen({
   const accionesListado = (o: OrdenProduccion, tieneFaltantes: boolean) => (
     <div className="flex items-center gap-1 whitespace-nowrap">
       {o.estadoOrden === "pendiente" && !tieneFaltantes && (
-        <button type="button" onClick={() => void abrirGenerar(o)}
-          title="Generar orden de producción" aria-label="Generar orden de producción"
-          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+        <button type="button" onClick={() => void iniciarDirecto(o)} disabled={iniciandoId !== null}
+          title="Iniciar orden de producción" aria-label="Iniciar orden de producción"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
           <Play className="w-4 h-4" />
         </button>
       )}
@@ -2643,165 +2491,6 @@ export function OrdenProduccionScreen({
       {filtradas.length > 0 && (
         <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
-
-      <AnimatePresence>
-        {generarItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: .95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: .95, opacity: 0 }}
-                transition={{ duration: .15 }}
-                className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4"
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                      Generar orden — {generarItem.id}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {generarItem.tipo === "pedido" ? "Pedido · cantidades bloqueadas" : "Preparación · ajusta las cantidades según el inventario"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setGenerarItem(null)}
-                    aria-label="Cerrar generación de orden"
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
-                  {generarItem.tipo === "preparacion" ? (
-                    generarItem.tiempoPreparacionMin != null && generarItem.tiempoPreparacionMin > 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Tiempo de preparación: {generarItem.tiempoPreparacionMin} min (según la ficha) · Lista aprox. a las {fechaHoraBogotaDesdeEpoch(ahoraCalentamiento + generarItem.tiempoPreparacionMin * 60_000).slice(11, 16)}
-                      </p>
-                    ) : (
-                      <p role="status" className="text-sm font-semibold text-amber-700">
-                        La ficha no tiene tiempo de preparación: esta orden se completa a mano
-                      </p>
-                    )
-                  ) : <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Fecha y hora límite (hora de Bogotá)
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      min={generarItem.ventaLocal ? ahoraBogotaGenerar.slice(0, 16) : minFechaLimiteGenerar}
-                      max={generarItem.tipo === "pedido" && recogidaFuturaGenerar
-                        ? fechaRecogidaGenerar?.slice(0, 16)
-                        : undefined}
-                      value={fechaLimiteGenerar}
-                      onChange={(event) => {
-                        setFechaLimiteAutomatica(false);
-                        setFechaLimiteGenerar(event.target.value);
-                      }}
-                      className={iCls}
-                    />
-                    {!fechaLimiteGenerar && (
-                      <p role="alert" className="mt-1 text-xs font-semibold text-red-600">
-                        Indica la fecha y hora límite
-                      </p>
-                    )}
-                    {generarItem.tipo === "pedido" && recogidaFuturaGenerar
-                      && fechaLimiteGenerar > (fechaRecogidaGenerar?.slice(0, 16) ?? "") && (
-                        <p role="alert" className="mt-1 text-xs font-semibold text-red-600">
-                          La fecha límite no puede ser posterior a la hora de recogida.
-                        </p>
-                      )}
-                  </div>}
-                  {recogidaVencidaGenerar && (
-                    <p role="status" className="text-xs font-semibold text-amber-700">
-                      La hora de recogida ya pasó; esta orden va retrasada
-                    </p>
-                  )}
-                  {cargandoCapacidadGenerar ? (
-                    <p className="text-sm text-muted-foreground">Calculando máximo producible…</p>
-                  ) : generarItem.lineas.map((linea) => {
-                    const idDetalle = linea.idDetalleOp as number;
-                    const cantidad = Number(cantidadesGenerar[idDetalle] ?? "");
-                    const maximo = maximosGenerar[idDetalle];
-                    const excedeMaximo = generarItem.tipo === "preparacion"
-                      && maximo != null
-                      && Number.isFinite(cantidad)
-                      && cantidad > maximo;
-                    return (
-                      <div key={idDetalle} className="p-4 border border-border rounded-2xl bg-card space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-semibold text-foreground">{linea.nombre}</p>
-                          {maximo != null && generarItem.tipo === "preparacion" && (
-                            <span className="text-xs font-semibold text-muted-foreground text-right">
-                              Máximo: {fmtCant(maximo, linea.unidad)}
-                            </span>
-                          )}
-                        </div>
-                        <label className="block text-xs font-semibold text-muted-foreground">
-                          Cantidad a producir ({linea.unidad})
-                        </label>
-                        <input
-                          type="number"
-                          min={generarItem.tipo === "pedido" ? linea.cantidadEstimada : 1}
-                          max={generarItem.tipo === "pedido" ? linea.cantidadEstimada : maximo ?? undefined}
-                          step={esDecimal(linea.unidad) ? "0.01" : "1"}
-                          value={cantidadesGenerar[idDetalle] ?? String(linea.cantidadEstimada)}
-                          readOnly={generarItem.tipo === "pedido"}
-                          onChange={(event) => {
-                            setCantidadesGenerar((actual) => ({ ...actual, [idDetalle]: limpiarNumeroInput(event.target.value) }));
-                            setFaltantesGenerar([]);
-                          }}
-                          className={iCls + (excedeMaximo ? " ring-2 ring-red-400" : "")}
-                        />
-                        {excedeMaximo && (
-                          <p role="alert" className="text-xs font-semibold text-red-700">
-                            Solo hay insumos para {fmtCant(maximo, linea.unidad)} de {linea.nombre}. Disminuye la cantidad para continuar.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {generarItem.tipo === "preparacion" && faltantesGenerar.length > 0 && (
-                    <AvisoFaltantes
-                      faltantes={faltantesGenerar}
-                      onIrInsumos={() => onNavigateTo?.("supplies")}
-                    />
-                  )}
-                  {generarItem.tipo === "preparacion" && generarItem.lineas.some((linea) => {
-                    const maximo = maximosGenerar[linea.idDetalleOp as number];
-                    return maximo === 0;
-                  }) && (
-                    <p role="alert" className="text-xs font-semibold text-red-700">
-                      El inventario actual no permite producir la cantidad mínima de una o más líneas.
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-3 px-5 py-4 border-t border-border">
-                  <button
-                    type="button"
-                    onClick={() => setGenerarItem(null)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!generacionValida}
-                    onClick={() => void confirmarGenerar()}
-                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors ${
-                      generacionValida ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
-                    }`}
-                  >
-                    {generando ? "Generando…" : "Generar orden"}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* ── Modal: Crear ── */}
       <AnimatePresence>

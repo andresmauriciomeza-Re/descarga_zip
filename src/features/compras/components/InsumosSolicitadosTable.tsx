@@ -7,6 +7,7 @@ import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 
 export interface InsumoSolicitadoRow {
   rowId: string;
+  idInsumo: string;
   nombre: string;
   cantidad: number;
   unidad: string;
@@ -22,6 +23,9 @@ export interface InsumoSolicitadoRow {
   /** Ajuste de bebidas: unidades que trae la paca/caja de la línea (las
    *  filas de la OC heredan el empaque). Se lee como 1 si no viene. */
   unidadesPorEmpaque?: number;
+  modoIva?: "incluido" | "mas_iva" | "exento";
+  factorPresentacion?: number;
+  unidadBase?: string;
 }
 
 function fmtCOP(n: number) {
@@ -41,12 +45,10 @@ export function InsumosSolicitadosTable({
   showActions = true,
   titulo = "Insumos solicitados",
   tono = "normal",
-  subtotalLabel = "Subtotal",
+  subtotalLabel = "Subtotal sin IVA",
   mostrarIva = true,
   mostrarTotal = true,
   totalLabel = "Total estimado",
-  modoIva = false,
-  ivaIncluido = false,
   enPagina = false,
   mostrarSubtotal = true,
   textoVacioPagina,
@@ -71,11 +73,8 @@ export function InsumosSolicitadosTable({
   mostrarIva?: boolean;
   mostrarTotal?: boolean;
   totalLabel?: string;
-  modoIva?: boolean;
-  ivaIncluido?: boolean;
   enPagina?: boolean;
-  /** Punto 3.3: false en la Orden de Compra — la tabla del formulario lleva
-   *  las columnas literales del plan (sin Subtotal por fila). */
+  /** Oculta la columna Subtotal por fila cuando la pantalla ya la presenta aparte. */
   mostrarSubtotal?: boolean;
   /** Texto de la fila vacía en modo página (p. ej. "Aún no has agregado
    *  ítems" cuando la orden admite insumos Y productos). */
@@ -85,21 +84,12 @@ export function InsumosSolicitadosTable({
   const esAmber = tono === "amber";
 
   const calcularLinea = (row: InsumoSolicitadoRow) =>
-    modoIva
-      ? calcularLineaIva({
-          cantidad: row.cantidad,
-          montoUnitario: row.precioUnitario,
-          porcentajeIva: row.iva,
-          ivaIncluido,
-        })
-      : (() => {
-          const subtotal = row.cantidad * row.precioUnitario;
-          return {
-            baseSinIva: subtotal,
-            montoIva: subtotal * (row.iva / 100),
-            subtotalConIva: subtotal + subtotal * (row.iva / 100),
-          };
-        })();
+    calcularLineaIva({
+      cantidad: row.cantidad,
+      montoUnitario: row.precioUnitario,
+      porcentajeIva: row.iva,
+      modoIva: row.modoIva ?? "incluido",
+    });
 
   const totales = items.reduce(
     (acc, item) => {
@@ -112,33 +102,23 @@ export function InsumosSolicitadosTable({
     { baseSinIva: 0, montoIva: 0, total: 0 }
   );
 
-  const subtotalGeneral = modoIva ? totales.baseSinIva : items.reduce((sum, item) => {
-    return sum + item.cantidad * item.precioUnitario;
-  }, 0);
-  const ivaGeneral = modoIva ? totales.montoIva : items.reduce((sum, item) => {
-    const subtotal = item.cantidad * item.precioUnitario;
-    return sum + subtotal * (item.iva / 100);
-  }, 0);
-  const total = modoIva ? totales.total : subtotalGeneral + ivaGeneral;
+  const subtotalGeneral = totales.baseSinIva;
+  const ivaGeneral = totales.montoIva;
+  const total = totales.total;
 
-  const mostrarColsIva = modoIva || mostrarIva;
-  const colIvaSimple = mostrarColsIva && enPagina;
-  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario"];
-  if (mostrarColsIva) {
-    if (colIvaSimple || !modoIva) headers.push("IVA");
-    else { headers.push("IVA (%)"); headers.push("Monto IVA"); }
-  }
-  // Punto 3.3: en el formulario de la Orden de Compra la tabla lleva las
-  // columnas literales del plan (sin Subtotal por fila: el resumen de abajo
-  // ya trae Subtotal / IVA / Total).
-  if (mostrarSubtotal) headers.push(modoIva && !enPagina ? "Subtotal (con IVA)" : "Subtotal");
+  const headers = ["Nombre", "Cantidad + presentación", "Monto unitario"];
+  if (mostrarIva) headers.push("IVA");
+  if (mostrarSubtotal) headers.push("Subtotal");
   const columnCount = headers.length + (showActions ? 1 : 0);
   const colSpanPie = headers.length - 1;
-  const labelSubtotal = modoIva && !enPagina ? "Subtotal sin IVA" : subtotalLabel;
+  const labelSubtotal = subtotalLabel;
   const ivaDeLinea = (row: InsumoSolicitadoRow) =>
-    modoIva
-      ? calcularLinea(row).montoIva
-      : row.cantidad * row.precioUnitario * (row.iva / 100);
+    calcularLinea(row).montoIva;
+  const etiquetaModoIva = (row: InsumoSolicitadoRow) => {
+    const modo = row.modoIva ?? "incluido";
+    if (modo === "exento") return "Exento";
+    return `${modo === "mas_iva" ? "Sin IVA" : "Con IVA"} ${row.iva} %`;
+  };
 
   // align-middle: las celdas con dos líneas (nombre + etiqueta, IVA + monto)
   // quedan centradas verticalmente respecto a las de una sola línea.
@@ -157,16 +137,12 @@ export function InsumosSolicitadosTable({
    * contenedor de la tabla (salvo con `sinScrollX`, que lo desactiva).
    */
   const ANCHOS: Record<string, number | undefined> = {
-    Cantidad: sinScrollX ? 54 : 68,
-    Medida: sinScrollX ? 48 : 56,
-    "Monto unitario": sinScrollX ? 66 : 68,
-    IVA: sinScrollX ? 48 : 60,
-    "IVA (%)": sinScrollX ? 48 : 60,
-    "Monto IVA": sinScrollX ? 58 : 73,
-    Subtotal: sinScrollX ? 68 : 83,
-    "Subtotal (con IVA)": sinScrollX ? 88 : 126,
+    "Cantidad + presentación": sinScrollX ? 96 : 104,
+    "Monto unitario": sinScrollX ? 82 : 90,
+    IVA: sinScrollX ? 68 : 82,
+    Subtotal: sinScrollX ? 78 : 88,
   };
-  const ANCHO_ACCIONES = sinScrollX ? 76 : 66;
+  const ANCHO_ACCIONES = sinScrollX ? 66 : 66;
   const ANCHO_MINIMO = 500;
   const colgroup = (
     <colgroup>
@@ -228,51 +204,30 @@ export function InsumosSolicitadosTable({
               </td>
 
               <td className={tdBase + " text-sm"}>
-                {item.cantidad}
-              </td>
-
-              {/* Punto 3.3: la medida es de SOLO LECTURA (la define el ítem
-                  del catálogo): no se edita ni al agregar ni al editar. */}
-              <td className={tdBase + " text-xs text-muted-foreground"}>
-                {item.unidad}
+                <span>{item.cantidad}</span>
+                <span className="block text-[11px] text-muted-foreground truncate" title={item.unidad}>
+                  {item.unidad}
+                </span>
               </td>
 
               <td className={tdBase + " text-sm"}>
                 {fmtCOP(item.precioUnitario)}
               </td>
 
-              {colIvaSimple && (
-                <td className={tdBase + " text-xs"}>
-                  <span className="text-[13px] text-foreground/80">{item.iva}%</span>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                    {fmtCOP(ivaDeLinea(item))}
-                  </p>
-                </td>
-              )}
-
-              {!colIvaSimple && modoIva && (
-                <td className={tdBase + " text-xs text-muted-foreground"}>
-                  {item.iva + "%"}
-                </td>
-              )}
-
-              {!colIvaSimple && modoIva && (
-                <td className={tdBase + " text-xs text-muted-foreground whitespace-nowrap"}>
-                  {fmtCOP(calcularLinea(item).montoIva)}
-                </td>
-              )}
-
-              {!colIvaSimple && !modoIva && mostrarColsIva && (
-                <td className={tdBase + " text-xs text-muted-foreground"}>
-                  {item.iva}%
+              {mostrarIva && (
+                <td className={tdBase + " text-[10px] text-muted-foreground"}>
+                  <span
+                    className="inline-flex max-w-full rounded-full bg-muted px-1.5 py-1 font-semibold whitespace-nowrap"
+                    title={`${etiquetaModoIva(item)} · IVA ${fmtCOP(ivaDeLinea(item))}`}
+                  >
+                    {etiquetaModoIva(item)}
+                  </span>
                 </td>
               )}
 
               {mostrarSubtotal && (
                 <td className={tdBase + " text-sm font-semibold"}>
-                  {modoIva
-                    ? fmtCOP(calcularLinea(item).subtotalConIva)
-                    : fmtCOP(item.cantidad * item.precioUnitario)}
+                  {fmtCOP(calcularLinea(item).subtotalConIva)}
                 </td>
               )}
 
@@ -417,9 +372,13 @@ export function InsumosSolicitadosTable({
                 {headers.map((h) => (
                   <th
                     key={h}
-                    className={`${sinScrollX ? "px-1" : "px-1.5"} py-1.5 text-left font-semibold bg-muted`}
+                    className={`${sinScrollX ? "px-1" : "px-1.5"} py-1.5 text-left font-semibold leading-tight whitespace-normal bg-muted`}
                   >
-                    {h}
+                    {h === "Cantidad + presentación" ? (
+                      <>Cantidad +<br />presentación</>
+                    ) : h === "Monto unitario" ? (
+                      <>Monto<br />unitario</>
+                    ) : h}
                   </th>
                 ))}
                 {showActions && (
@@ -476,13 +435,17 @@ export function InsumosSolicitadosTable({
               {headers.map((h) => (
                 <th
                   key={h}
-                  className={(sinScrollX ? "px-1 " : "px-1.5 ") + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold " +
+                  className={(sinScrollX ? "px-1 " : "px-1.5 ") + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold leading-tight whitespace-normal " +
                     (enPagina
                       ? "sticky top-0 z-10 border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
                       : "")}
                 >
-                  {h}
+                  {h === "Cantidad + presentación" ? (
+                    <>Cantidad +<br />presentación</>
+                  ) : h === "Monto unitario" ? (
+                    <>Monto<br />unitario</>
+                  ) : h}
                 </th>
               ))}
               {showActions && (

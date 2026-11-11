@@ -12,9 +12,6 @@ export interface CompraApi {
   proveedor_nit?: string | null;
   n_factura: string;
   fecha: string;
-  /** Regla 2.1: dato derivado. true = todas las líneas con IVA incluido,
-   *  false = todas a más IVA, null = factura mixta o con exentos. */
-  iva_incluido: boolean | null;
   subtotal_sin_iva: number | string;
   total_iva: number | string;
   total: number | string;
@@ -45,9 +42,6 @@ export const mapearCompraApi = (row: CompraApi): GestionCompra => {
     estado: (row.estado === "Anulado" ? "Anulado" : "Recibido") as EstadoGestion,
     items,
     compraCreada: true,
-    // null = factura mixta (líneas con modos distintos o exentas): se conserva
-    // como null para que la vista lo muestre como "IVA mixto" y no lo adivine.
-    ivaIncluido: row.iva_incluido == null ? null : Boolean(row.iva_incluido),
     subtotalSinIva: Number(row.subtotal_sin_iva ?? 0),
     totalIva: Number(row.total_iva ?? 0),
     totalPagado: Number(row.total ?? 0),
@@ -82,16 +76,12 @@ export const crearCompra = async (payload: {
   n_factura: string;
   fecha: string;
   id_proveedor?: number | null;
-  /** Regla 2.1: opcional; el backend deriva el global de los `modo_iva` de
-   *  las líneas, así que en general NO se envía. */
-  iva_incluido?: boolean | null;
   items: OrdenItem[];
 }): Promise<GestionCompra> => {
   const { data } = await api.post<CompraApi>("/compras", {
     n_factura: payload.n_factura,
     fecha: payload.fecha,
     id_proveedor: payload.id_proveedor ?? null,
-    ...(payload.iva_incluido == null ? {} : { iva_incluido: payload.iva_incluido }),
     items: payload.items.map((i) => payloadItemCompra(i)),
   });
   return mapearCompraApi(data);

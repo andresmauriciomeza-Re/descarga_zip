@@ -30,6 +30,7 @@ export interface ItemCompraApi {
    *  unidad (los deriva el backend; de solo lectura). */
   unidades_base?: number | string | null;
   unidad_base?: string | null;
+  factor_presentacion?: number | string | null;
   es_no_solicitado?: boolean | null;
   precio_venta?: number | string | null;
   cantidad_recibida?: number | string;
@@ -120,6 +121,9 @@ export const mapearItemCompraApi = (row: ItemCompraApi): OrdenItem => {
     ...(modoIva ? { modoIva } : {}),
     ...(row.unidades_base == null ? {} : { unidadesBase: Number(row.unidades_base) }),
     ...(row.unidad_base == null ? {} : { unidadBase: row.unidad_base }),
+    ...(row.factor_presentacion == null
+      ? {}
+      : { factorPresentacion: Number(row.factor_presentacion) }),
     ...(row.es_no_solicitado ? { esNoSolicitado: true } : {}),
     ...(row.cantidad_recibida == null ? {} : { cantidadRecibida: Number(row.cantidad_recibida) }),
     ...(row.cantidad_pendiente == null ? {} : { cantidadPendiente: Number(row.cantidad_pendiente) }),
@@ -344,9 +348,6 @@ export const recibirOrdenCompra = async (
   payload: {
     n_factura: string;
     fecha: string;
-    /** Regla 2.1: opcional y puede ser null (factura mixta); el backend lo
-     *  deriva de los modos de cada línea. */
-    iva_incluido: boolean | null;
     items: OrdenItem[];
     items_no_solicitados: OrdenItem[];
   },
@@ -364,7 +365,6 @@ export const recibirOrdenCompra = async (
   }>(`/ordenes-compra/${Number(id)}/recepcion`, {
     n_factura: payload.n_factura,
     fecha: payload.fecha,
-    iva_incluido: payload.iva_incluido,
     items: payload.items.map(payloadItemCompra),
     items_no_solicitados: payload.items_no_solicitados.map(payloadItemCompra),
   });
