@@ -16,7 +16,12 @@ import {
   type InsumoSuggestion,
 } from "@/features/compras/components/CompactInsumoForm";
 import { CrearInsumoCompraModal } from "@/features/compras/components/CrearInsumoCompraModal";
-import { calcularLineaIva, sumarTotales, type ModoIva } from "@/features/compras/services/iva";
+import {
+  calcularLineaIva,
+  formatearModoIva,
+  sumarTotales,
+  type ModoIva,
+} from "@/features/compras/services/iva";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -77,7 +82,7 @@ export interface OrdenItem {
   costoUnitario: number;
   precioUnitario: number;
   /** Porcentaje de IVA de la línea (0–100). */
-  iva: number;
+  iva?: number;
   /** Compras (IVA): base imponible de la línea guardada al crear la factura.
    *  Se recalcula en el backend con la misma fórmula (ver
    *  `db/migracion_iva_compras.sql`). */
@@ -140,7 +145,8 @@ export interface ItemRecibido {
   precioReferencia: number;
   costoUnitario: number;
   precioUnitario: number;
-  iva: number;
+  iva?: number;
+  ivaAntesDeExento?: number;
   /** IVA por línea (regla 2.1). */
   modoIva?: ModoIva;
   /** P14: de qué catálogo salió la línea. Las filas pedidas en la OC ya
@@ -892,7 +898,7 @@ export function OrdenModal({
   // se guarda en `OrdenItem.unidadesPorEmpaque`.
   const [aEmpaque, setAEmpaque] = useState<number | undefined>(undefined);
   const [aPrecio, setAPrecio] = useState(0);
-  const [aIva, setAIva] = useState(0);
+  const [aIva, setAIva] = useState<number | undefined>(undefined);
   const [aModoIva, setAModoIva] = useState<ModoIva>("incluido");
   const [aFromCat, setAFromCat] = useState(false);
   // Punto 3.3: tipo de ítem del formulario (botones Insumo | Producto). Por
@@ -1002,7 +1008,7 @@ export function OrdenModal({
     setANombre(ins.nombre);
     setAUnidad(UNIDADES.includes(ins.unidadMedida) ? ins.unidadMedida : UNIDADES[0]);
     setAPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
-    setAIva(Number(ins.iva ?? 0));
+    setAIva(ins.iva == null ? undefined : Number(ins.iva));
     setAModoIva("incluido");
     setAInsumoId(ins.id);
     setAFromCat(true);
@@ -1034,7 +1040,7 @@ export function OrdenModal({
     setAPrecio(
       hist ? (hist.montoDigitado ?? hist.montoSinIva) : Number(p.costoUnitario || 0) * factor
     );
-    setAIva(hist ? hist.iva : 0);
+    setAIva(hist?.iva);
     setAModoIva("incluido");
     setAInsumoId(p.id);
     setAFromCat(true);
@@ -1049,7 +1055,7 @@ export function OrdenModal({
     setANombre(ins.nombre);
     setAUnidad(ins.unidadMedida);
     setAPrecio(0);
-    setAIva(0);
+    setAIva(undefined);
     setAModoIva("incluido");
     setAInsumoId(ins.id);
     setAFromCat(true);
@@ -1155,7 +1161,7 @@ export function OrdenModal({
    *  el VIEJO al cambiar Insumo/Producto, así que quien cambia el tipo pasa
    *  el nuevo EXPLÍCITO (nunca se usa como callback directo). */
   const limpiarFilaInsumo = (tipo: "insumo" | "producto" = aTipoItem) => {
-    setANombre(""); setACant(1); setAPrecio(0); setAIva(0); setAModoIva("incluido");
+    setANombre(""); setACant(1); setAPrecio(0); setAIva(undefined); setAModoIva("incluido");
     setAUnidad(tipo === "producto" ? "" : UNIDADES[0]);
     setAEmpaque(undefined);
     setAFromCat(false); setAInsumoId(""); setAShowSug(false);
@@ -1223,6 +1229,15 @@ export function OrdenModal({
     if (!form.fecha) { toast.error("Selecciona la fecha de la orden."); return; }
     if (isCompra && !form.numeroFactura?.trim()) { toast.error("El número de factura es obligatorio."); return; }
     if (form.items.length === 0) { toast.error("Agrega al menos un ítem."); return; }
+    const ivaInvalido = form.items.find(
+      (item) =>
+        (item.modoIva ?? "incluido") !== "exento" &&
+        (item.iva == null || !Number.isFinite(item.iva) || item.iva < 0 || item.iva > 100),
+    );
+    if (ivaInvalido) {
+      toast.error(ivaInvalido.iva == null ? "Ingresa el IVA." : "El IVA debe estar entre 0 y 100.");
+      return;
+    }
     setGuardando(true);
     try {
       await onGuardar(form);
@@ -2774,7 +2789,7 @@ export function OrdenCompraScreen({
           item.cantidad.toString(),
           item.unidad,
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(item.costoUnitario),
-          `${item.iva}%`,
+          `${item.iva ?? 0}%`,
           new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(totalLineaOrden(item)),
         ]);
         
@@ -3647,6 +3662,9 @@ function OrdenDetallePageContenido({
                               </span>
                             )}
                           </div>
+                          <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
+                            {formatearModoIva(item.modoIva ?? "incluido", item.iva)}
+                          </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>

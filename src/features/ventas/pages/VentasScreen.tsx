@@ -31,12 +31,14 @@ import { VisorImagen } from "@/shared/components/VisorImagen";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
+import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { buscarClientePorDocumento, buscarClientesPorNombre, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
-import { crearVentaPanel, anularVentaApi, marcarDevolucionApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   ESTADOS_ANULABLES,
@@ -1539,6 +1541,7 @@ export function VentasScreen({
   productos,
   onInventarioCambiado,
   onVentaPanelCambiada,
+  onPedidoListo,
   onGestionarDevolucion,
   canCreate: _canCreate = true,
   canEdit = true,
@@ -1549,6 +1552,7 @@ export function VentasScreen({
   productos: ProductoMenu[];
   onInventarioCambiado?: () => Promise<unknown>;
   onVentaPanelCambiada?: () => Promise<boolean>;
+  onPedidoListo?: (orden: OrdenProduccion) => void;
   /** Lleva a la pantalla de devoluciones con esa venta ya seleccionada. */
   onGestionarDevolucion: (id: string) => void;
   canCreate?: boolean;
@@ -1573,6 +1577,8 @@ export function VentasScreen({
   // ── Anulación desde el listado (primeros 10 minutos) ──
   /** Venta que se va a anular (null = modal cerrado). */
   const [ventaAnular, setVentaAnular] = useState<Venta | null>(null);
+  const [ventaLista, setVentaLista] = useState<Venta | null>(null);
+  const [marcandoLista, setMarcandoLista] = useState(false);
   const [anularMotivoSel, setAnularMotivoSel] = useState<MotivoAnulacion | "">("");
   const [anularOtroTexto, setAnularOtroTexto] = useState("");
   const [anularUrl, setAnularUrl] = useState<string | null>(null);
@@ -1682,6 +1688,33 @@ export function VentasScreen({
     setVentaAnular(v);
   };
   const cerrarAnular = () => setVentaAnular(null);
+
+  const confirmarVentaLista = async () => {
+    if (!ventaLista || marcandoLista) return;
+    setMarcandoLista(true);
+    try {
+      const resultado = await marcarVentaListaApi(ventaLista.id);
+      if (resultado.orden) onPedidoListo?.(resultado.orden);
+      setPedidos((prev) => prev.map((p) => p.id === ventaLista.id ? {
+        ...p,
+        estado: resultado.estado,
+        estadoCliente: resultado.estado === "Completado" ? "Completado"
+          : resultado.estado === "Por entregar" ? "Por entregar" : p.estadoCliente,
+        estadoOrden: resultado.estado_orden ?? undefined,
+      } : p));
+      setVentaLista(null);
+      toast.success(`Pedido listo${resultado.estado === "Completado" ? ` · venta ${ventaLista.id} completada` : resultado.estado === "Por entregar" && !resultado.venta_local ? " · la venta se completará a la hora de recogida" : ""}`);
+      try {
+        setPedidos(await obtenerVentasPanel());
+      } catch {
+        toast.warning("El pedido está listo, pero no se pudo actualizar toda la información de ventas.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo marcar el pedido como listo.");
+    } finally {
+      setMarcandoLista(false);
+    }
+  };
 
   /** Motivo que se envía: los fijos tal cual y "Otro" como "Otro: <texto>"
       (mismo formato que espera `validarMotivoAnulacion` en el servidor). */
@@ -1858,6 +1891,16 @@ export function VentasScreen({
 
   return (
     <div className="px-4 sm:px-6 py-6">
+      {ventaLista && (
+        <ConfirmDeleteModal
+          title="Marcar como listo"
+          message={`¿El pedido de la venta ${ventaLista.id} está listo?`}
+          confirmLabel="Sí"
+          loading={marcandoLista}
+          onCancel={() => setVentaLista(null)}
+          onConfirm={() => void confirmarVentaLista()}
+        />
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -2032,6 +2075,14 @@ export function VentasScreen({
                           >
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Verificar
+                          </button>
+                        )}
+                        {canEdit && p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null &&
+                          (p.estadoOrden === "En proceso" || !p.estadoOrden) && (
+                          <button type="button" onClick={() => setVentaLista(p)} disabled={marcandoLista}
+                            title="Marcar como listo" aria-label="Marcar como listo"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Check className="w-4 h-4" />
                           </button>
                         )}
                         <ActionIcons onView={() => abrirDetalle(p)} />

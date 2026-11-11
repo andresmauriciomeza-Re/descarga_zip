@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // Compila un .ts del frontend con esbuild (mismo patrón que costos.test.mjs)
 // y lo importa como módulo ESM para poder testearlo con node:test.
@@ -22,14 +24,18 @@ const compilar = async (rutaRelativa) => {
 
 const {
   MODOS_IVA,
+  ayudaModoIva,
   calcularLineaIva,
   derivarIvaIncluidoGlobal,
+  formatearChipIva,
+  formatearModoIva,
   normalizarModoIva,
   redondearDosDecimales,
   resolverModoIva,
   sumarTotales,
 } = await compilar("../src/features/compras/services/iva.ts");
 const { UNIDADES } = await compilar("../src/shared/utils/unidades.ts");
+const { InsumosSolicitadosTable } = await compilar("../src/features/compras/components/InsumosSolicitadosTable.tsx");
 
 // ---------------------------------------------------------------------------
 // Catálogos (deben coincidir con el backend)
@@ -41,6 +47,39 @@ test("catálogo de unidades de Compras: paca y sixpack, en el orden del backend"
 
 test("MODOS_IVA tiene los tres modos, en el orden del backend", () => {
   assert.deepEqual([...MODOS_IVA], ["incluido", "mas_iva", "exento"]);
+});
+
+test("etiquetas, chips y ayudas distinguen IVA adicional de Sin IVA", () => {
+  assert.equal(formatearModoIva("incluido", 19), "IVA incluido 19 %");
+  assert.equal(formatearModoIva("mas_iva", 0), "IVA adicional 0 %");
+  assert.equal(formatearModoIva("exento", 19), "Sin IVA");
+  assert.equal(formatearChipIva("incluido", 19), "Incl. 19 %");
+  assert.equal(formatearChipIva("mas_iva", 19), "+19 %");
+  assert.equal(formatearChipIva("exento", 0), "Sin IVA");
+  assert.equal(ayudaModoIva("incluido"), "IVA incluido: el monto ya trae el IVA");
+  assert.equal(ayudaModoIva("mas_iva"), "IVA adicional: el IVA se suma al monto");
+  assert.equal(ayudaModoIva("exento"), "Sin IVA: no lleva IVA");
+});
+
+test("la tabla de orden muestra el tipo de IVA bajo el nombre de cada ítem", () => {
+  const items = [
+    { rowId: "1", nombre: "Aceite", modoIva: "incluido", iva: 19 },
+    { rowId: "2", nombre: "Gaseosa", tipoItem: "producto", modoIva: "mas_iva", iva: 5 },
+    { rowId: "3", nombre: "Harina", modoIva: "exento", iva: 0 },
+    { rowId: "4", nombre: "Tomate", modoIva: "mas_iva" },
+  ].map((item) => ({
+    idInsumo: item.rowId,
+    cantidad: 1,
+    unidad: "und",
+    precioUnitario: 100,
+    ...item,
+  }));
+  const texto = renderToStaticMarkup(React.createElement(InsumosSolicitadosTable, { items }))
+    .replace(/<[^>]*>/g, " ");
+  assert.match(texto, /Aceite\s+IVA incluido 19 %/);
+  assert.match(texto, /Gaseosa\s+Producto ·\s+IVA adicional 5 %/);
+  assert.match(texto, /Harina\s+Sin IVA/);
+  assert.match(texto, /Tomate\s+Ingresa el IVA\./);
 });
 
 test("redondearDosDecimales es el redondeo del backend (2 decimales)", () => {

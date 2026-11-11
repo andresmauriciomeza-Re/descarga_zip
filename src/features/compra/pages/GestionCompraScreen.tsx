@@ -10,6 +10,8 @@ import { esIdInsumo } from "@/shared/utils/fichas";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import {
   calcularLineaIva,
+  formatearChipIva,
+  formatearModoIva,
   resolverModoIva,
   sumarTotales,
   type ModoIva,
@@ -244,14 +246,6 @@ function TablaItemsFactura({
       modoIva: row.modoIva ?? "incluido",
     });
 
-  /** Chip del tratamiento de IVA de la fila: "Incl. 19 %", "+19 %" o "Exento". */
-  const chipIva = (row: ItemFactura) => {
-    const modo = resolverModoIva(row, null);
-    if (modo === "exento") return "Exento";
-    if (modo === "mas_iva") return `+${row.iva} %`;
-    return `Incl. ${row.iva} %`;
-  };
-
   const totales = sumarTotales(items.map(linea));
 
   // Punto 3.3: columnas del plan con Nombre flexible y sin scroll horizontal.
@@ -363,11 +357,10 @@ function TablaItemsFactura({
                       <div className="truncate" title={row.nombre}>
                         {row.nombre}
                       </div>
-                      {(row.tipoItem ?? "insumo") === "producto" && (
-                        <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
-                          Producto
-                        </div>
-                      )}
+                      <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
+                        {(row.tipoItem ?? "insumo") === "producto" && "Producto · "}
+                        {formatearModoIva(resolverModoIva(row, null), row.iva)}
+                      </div>
                     </td>
                     <td className={td + " text-right"}>
                       <div className="text-sm text-foreground">{row.cantidad}</div>
@@ -378,15 +371,9 @@ function TablaItemsFactura({
                     </td>
                     <td className={td + " text-right"}>
                       <span
-                        className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
-                          resolverModoIva(row, null) === "exento"
-                            ? "bg-muted text-muted-foreground border border-border"
-                            : resolverModoIva(row, null) === "mas_iva"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-sky-100 text-sky-700"
-                        }`}
+                        className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-muted text-muted-foreground border border-border"
                       >
-                        {chipIva(row)}
+                        {formatearChipIva(resolverModoIva(row, null), row.iva)}
                       </span>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
@@ -541,7 +528,7 @@ function CompraForm({
   // se guarda en `ItemFactura.unidadesPorEmpaque`.
   const [itemEmpaque, setItemEmpaque] = useState<number | undefined>(undefined);
   const [itemPrecio, setItemPrecio] = useState(0);
-  const [itemIva, setItemIva] = useState(0);
+  const [itemIva, setItemIva] = useState<number | undefined>(undefined);
   // Fase 4: modo de IVA de la fila que se está agregando. Vive en la pantalla
   // (no en el formulario) para poder resetearlo al elegir otro ítem y
   // cargarlo al editar una fila existente. Valor por defecto: "incluido".
@@ -768,7 +755,7 @@ function CompraForm({
     // si viniera vacía se guarda "und" para no dejar la fila en blanco.
     setItemUnidad(ins.unidadMedida?.trim() || "und");
     setItemPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
-    setItemIva(Number(ins.iva ?? 0));
+    setItemIva(ins.iva == null ? undefined : Number(ins.iva));
     // Fase 4: al elegir otro ítem el modo de IVA vuelve a su valor por
     // defecto ("IVA incluido"); cada línea conserva el suyo ya agregada.
     setItemModoIva("incluido");
@@ -806,7 +793,7 @@ function CompraForm({
         : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
       : costoUnit * factor;
     setItemPrecio(monto);
-    setItemIva(hist ? hist.iva : 0);
+    setItemIva(hist?.iva);
     // Fase 4: el modo de IVA vuelve a su valor por defecto al elegir otro ítem.
     setItemModoIva("incluido");
     // Precio de VENTA al público: es `precioUnitario` del catálogo de
@@ -954,7 +941,7 @@ function CompraForm({
     setItemUnidad(tipo === "producto" ? "" : "und");
     setItemEmpaque(undefined);
     setItemPrecio(0);
-    setItemIva(0);
+    setItemIva(undefined);
     // Fase 4: la fila nueva vuelve al modo de IVA por defecto.
     setItemModoIva("incluido");
     setItemId("");
@@ -1638,8 +1625,8 @@ function CompraForm({
                         <tr>
                           <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-16">Tipo</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-11">Cantidad</th>
-                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[52px]">Medida</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[68px] whitespace-nowrap">CANTIDAD</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[64px] whitespace-nowrap">MEDIDA</th>
                           <th className="px-2 py-2.5 text-right font-semibold w-[78px]">Monto unitario</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-11">IVA %</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[78px]">Monto IVA</th>
@@ -1703,7 +1690,7 @@ function CompraForm({
                                   {fmtCOP(row.precioUnitario)}
                                 </td>
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground">
-                                  {row.iva}%
+                                  {formatearChipIva(resolverModoIva(row, null), row.iva)}
                                 </td>
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground whitespace-nowrap">
                                   {fmtCOP(l.montoIva)}
@@ -1829,7 +1816,7 @@ function CompraForm({
               setItemNombre(ins.nombre);
               setItemUnidad(ins.unidadMedida);
               setItemPrecio(0);
-              setItemIva(0);
+              setItemIva(undefined);
               setItemModoIva("incluido");
               setItemId(ins.id);
               setItemSugAbierto(false);

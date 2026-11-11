@@ -221,6 +221,7 @@ export interface OrdenProduccion {
   /** Solo Forma 2. Una venta = una sola orden; este vínculo la bloquea. */
   ventaId?: string | null;
   ventaLocal?: boolean;
+  estadoVenta?: Venta["estado"];
   ventaNumero?: string | null;
   cliente?: string | null;
   fechaSolicitada: string;   // "YYYY-MM-DD"
@@ -1395,8 +1396,10 @@ export function OrdenProduccionScreen({
   errorCarga,
   onReintentar,
   recargarProduccion,
+  onPedidoListo,
   onNavigateTo,
   canCreate = true,
+  canEdit = true,
   canDelete = true,
   canExportExcel = true,
   esAdministradorSesion = false,
@@ -1422,6 +1425,7 @@ export function OrdenProduccionScreen({
   onReintentar?: () => void;
   /** Recarga insumos, fichas y órdenes tras una acción que movió stock. */
   recargarProduccion?: () => Promise<boolean | void>;
+  onPedidoListo?: (orden: OrdenProduccion) => void;
   onNavigateTo?: (screen: "orden-compra" | "supplies", faltantes?: Faltante[]) => void;
   canCreate?: boolean;
   canEdit?: boolean;
@@ -1448,6 +1452,8 @@ export function OrdenProduccionScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<OrdenProduccion | null>(null);
   const [detailItem, setDetailItem] = useState<OrdenProduccion | null>(null);
+  const [ordenLista, setOrdenLista] = useState<OrdenProduccion | null>(null);
+  const [marcandoLista, setMarcandoLista] = useState(false);
   const [ahoraCalentamiento, setAhoraCalentamiento] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setAhoraCalentamiento(Date.now()), 1000);
@@ -2172,6 +2178,23 @@ export function OrdenProduccionScreen({
     </div>
   );
 
+  const confirmarPedidoListo = async () => {
+    if (!ordenLista || marcandoLista) return;
+    setMarcandoLista(true);
+    try {
+      const actualizada = await completarOrdenProduccion(ordenLista.id);
+      setOrdenes((prev) => prev.map((o) => o.id === actualizada.id ? actualizada : o));
+      onPedidoListo?.(actualizada);
+      setOrdenLista(null);
+      const numero = actualizada.ventaNumero ?? actualizada.ventaId;
+      toast.success(`Pedido listo${actualizada.estadoVenta === "Completado" ? ` · venta ${numero} completada` : actualizada.estadoVenta === "Por entregar" && !actualizada.ventaLocal ? " · la venta se completará a la hora de recogida" : ""}`);
+    } catch (error) {
+      toast.error(mensajeErrorOrdenes(error, "No se pudo marcar el pedido como listo."));
+    } finally {
+      setMarcandoLista(false);
+    }
+  };
+
   const accionesListado = (o: OrdenProduccion, tieneFaltantes: boolean) => (
     <div className="flex items-center gap-1 whitespace-nowrap">
       {o.estadoOrden === "pendiente" && !tieneFaltantes && (
@@ -2185,6 +2208,13 @@ export function OrdenProduccionScreen({
         <button type="button" onClick={() => abrirCompletar(o.id)}
           title="Completar orden" aria-label="Completar orden"
           className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+          <CheckCircle2 className="w-4 h-4" />
+        </button>
+      )}
+      {canEdit && o.tipo === "pedido" && o.estadoOrden === "en-proceso" && (
+        <button type="button" onClick={() => setOrdenLista(o)} disabled={marcandoLista}
+          title="Marcar como listo" aria-label="Marcar como listo"
+          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
           <CheckCircle2 className="w-4 h-4" />
         </button>
       )}
@@ -2205,6 +2235,16 @@ export function OrdenProduccionScreen({
 
   return (
     <div className="px-4 sm:px-6 py-6">
+      {ordenLista && (
+        <ConfirmDeleteModal
+          title="Marcar como listo"
+          message={`¿El pedido de la venta ${ordenLista.ventaNumero ?? ordenLista.ventaId} está listo?`}
+          confirmLabel="Sí"
+          loading={marcandoLista}
+          onCancel={() => setOrdenLista(null)}
+          onConfirm={() => void confirmarPedidoListo()}
+        />
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>

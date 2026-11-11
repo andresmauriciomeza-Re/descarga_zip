@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
-import { MODOS_IVA, type ModoIva } from "@/features/compras/services/iva";
+import { ETIQUETA_MODO_IVA, MODOS_IVA, ayudaModoIva, type ModoIva } from "@/features/compras/services/iva";
 import {
   OTRA_PRESENTACION,
   esEmpaque,
@@ -82,7 +82,7 @@ export interface CompactInsumoFormProps {
   onUnidadChange: (value: string) => void;
   unidadDisabled?: boolean;
   precio: number;
-  iva: number;
+  iva?: number;
   onAgregar: (values: CompactInsumoFormValues) => void;
   suggestions: InsumoSuggestion[];
   showSuggestions: boolean;
@@ -196,7 +196,7 @@ export function CompactInsumoForm({
   const esCompacta = variante === "compacta";
   const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
   const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
-  const [ivaTexto, setIvaTexto] = useState(iva ? String(iva) : "");
+  const [ivaTexto, setIvaTexto] = useState(iva == null ? "" : String(iva));
   const [precioVentaTexto, setPrecioVentaTexto] = useState(precioVenta ? String(precioVenta) : "");
   // IVA por línea: si la pantalla controla el modo (prop `modoIva`), éste es
   // el estado; si no, el formulario guarda el suyo (retrocompatibilidad).
@@ -215,27 +215,20 @@ export function CompactInsumoForm({
   const [guardandoPresentacion, setGuardandoPresentacion] = useState(false);
 
   const modoIvaActual: ModoIva = modoIvaControlado ?? modoInterno;
-  const etiquetasModoIva: Record<ModoIva, string> = {
-    incluido: "Con IVA",
-    mas_iva: "Sin IVA",
-    exento: "Exento",
-  };
   const opcionesModoIva: Array<{ value: ModoIva; label: string; tag?: string }> = MODOS_IVA.map(
     (value) => ({
       value,
-      label: etiquetasModoIva[value],
+      label: ETIQUETA_MODO_IVA[value].etiqueta,
       tag: value === "incluido" ? "Más común" : undefined,
     }),
   );
-  const ayudaModoIva =
-    "Con IVA: el monto ya trae el IVA · Sin IVA: el monto no trae IVA; se suma al final · Exento: no lleva IVA (0 %)";
   /** % guardado antes de entrar en "Exento": se restaura al salir. */
   const [ivaAntesDeExento, setIvaAntesDeExento] = useState<string>("");
 
   const cambiarModo = (nuevo: ModoIva) => {
     if (nuevo === modoIvaActual) return;
     if (nuevo === "exento") {
-      setIvaAntesDeExento(ivaTexto.trim() === "" || ivaTexto.trim() === "0" ? "" : ivaTexto);
+      setIvaAntesDeExento(ivaTexto.trim() === "" ? "" : ivaTexto);
       setIvaTexto("0");
     } else if (modoIvaActual === "exento" && ivaAntesDeExento !== "") {
       setIvaTexto(ivaAntesDeExento);
@@ -364,7 +357,7 @@ export function CompactInsumoForm({
   }, [precio]);
 
   useEffect(() => {
-    setIvaTexto(iva ? String(iva) : "");
+    setIvaTexto(iva == null ? "" : String(iva));
   }, [iva]);
 
   useEffect(() => {
@@ -373,7 +366,9 @@ export function CompactInsumoForm({
 
   const cantidadNumero = numeroDesdeTexto(cantidadTexto);
   const precioNumero = precioTexto.trim() === "" ? 0 : numeroDesdeTexto(precioTexto);
-  const ivaNumero = ivaTexto.trim() === "" ? 0 : numeroDesdeTexto(ivaTexto);
+  const ivaVacio = ivaTexto.trim() === "";
+  const ivaNumero = ivaVacio ? Number.NaN : numeroDesdeTexto(ivaTexto);
+  const ivaParaCalculo = Number.isFinite(ivaNumero) ? ivaNumero : 0;
   const precioVentaNumero =
     precioVentaTexto.trim() === "" ? 0 : numeroDesdeTexto(precioVentaTexto);
 
@@ -390,7 +385,7 @@ export function CompactInsumoForm({
   const faltaFactor = esEmpaque(unidad) && (factorPresentacion == null || factorPresentacion <= 0);
 
   const costoConIva =
-    (modoIvaActual === "mas_iva" ? precioNumero * (1 + ivaNumero / 100) : precioNumero) /
+    (modoIvaActual === "mas_iva" ? precioNumero * (1 + ivaParaCalculo / 100) : precioNumero) /
     Math.max(1e-9, factorLinea);
   const errorPrecioVenta =
     mostrarPrecioVenta && nombre.trim()
@@ -413,9 +408,12 @@ export function CompactInsumoForm({
       ? "El monto unitario debe ser mayor que cero."
       : "";
   const errorIva =
-    (intentoAgregar || ivaTexto.trim() !== "") &&
-    (!Number.isFinite(ivaNumero) || ivaNumero < 0 || ivaNumero > 100)
-      ? "El IVA debe estar entre 0 y 100."
+    modoIvaActual !== "exento" && (intentoAgregar || !ivaVacio)
+      ? ivaVacio
+        ? "Ingresa el IVA."
+        : !Number.isFinite(ivaNumero) || ivaNumero < 0 || ivaNumero > 100
+          ? "El IVA debe estar entre 0 y 100."
+          : ""
       : "";
   const errorFactor = faltaFactor
     ? `Configura cuántas ${baseUnidad || "unidades base"} trae cada ${unidad}.`
@@ -433,16 +431,15 @@ export function CompactInsumoForm({
       ? `= ${baseTotal.toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${baseUnidad} al inventario · costo ${fmtCompactCOP(precioNumero / factorLinea)}/${baseUnidad}`
       : "";
 
-  /** Todo lo que la fila exige para poder agregarse (bloquea el botón). */
+  /** Requisitos de la fila; el intento muestra los errores y nunca agrega datos inválidos. */
   const puedeAgregar =
     !bloqueado &&
     Number.isFinite(cantidadNumero) &&
     cantidadNumero > 0 &&
     Number.isFinite(precioNumero) &&
     precioNumero > 0 &&
-    Number.isFinite(ivaNumero) &&
-    ivaNumero >= 0 &&
-    ivaNumero <= 100 &&
+    (modoIvaActual === "exento" ||
+      (!ivaVacio && Number.isFinite(ivaNumero) && ivaNumero >= 0 && ivaNumero <= 100)) &&
     !faltaFactor &&
     !(
       mostrarPrecioVenta &&
@@ -677,52 +674,48 @@ export function CompactInsumoForm({
             {errorPrecio && <p className="mt-1 text-[10px] text-red-500">{errorPrecio}</p>}
           </div>
 
-          {/* IVA % — atajos 0 / 5 / 19 y bloqueo en Exento (tarifa 0). */}
-          <div className={esCompacta ? "w-[70px] flex-none" : "w-[76px]"}>
-            <label className={esCompacta ? labelClsCompacta : labelCls}>IVA %</label>
-
-            <input
-              type="text"
-              inputMode="decimal"
-              // FIX: el IVA arranca en 0 y `value={iva}` hacía que el campo
-              // mostrara "0" fijo; al escribir "19" el resultado visual era
-              // "019" (y al borrarlo no se podía dejar vacío). Con `iva || ""`
-              // el campo queda vacío cuando vale 0 (mismo patrón que Monto
-              // unitario); el valor se interpreta al agregar la línea.
-              // Se propaga a Compra, Orden de
-              // Compra y Recepción, que usan este mismo componente.
-              value={ivaTexto}
-              onChange={(e) => {
-                setIvaTexto(e.target.value);
-                setIntentoAgregar(false);
-              }}
-              placeholder="0"
-              disabled={bloqueado || modoIvaActual === "exento"}
-              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorIva ? " border-red-400" : ""}`}
-            />
-            {errorIva && <p className="mt-1 text-[10px] text-red-500">{errorIva}</p>}
-            {!bloqueado && modoIvaActual !== "exento" && (
-              <div className="flex gap-1 mt-1">
-                {[0, 5, 19].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => {
-                      setIvaTexto(String(v));
-                      setIntentoAgregar(false);
-                    }}
-                    className={`min-w-[20px] h-5 px-1 rounded border text-[10px] font-semibold transition-colors ${
-                      ivaNumero === v
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
+          {modoIvaActual !== "exento" && (
+            <div className={esCompacta ? "w-[70px] flex-none" : "w-[76px]"}>
+              <label className={esCompacta ? labelClsCompacta : labelCls}>IVA</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={ivaTexto}
+                  onChange={(e) => {
+                    setIvaTexto(e.target.value);
+                    setIntentoAgregar(false);
+                  }}
+                  placeholder="0"
+                  disabled={bloqueado}
+                  className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-red-400" : ""}`}
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
               </div>
-            )}
-          </div>
+              {errorIva && <p className="mt-1 text-[10px] text-red-500">{errorIva}</p>}
+              {!bloqueado && (
+                <div className="flex gap-1 mt-1">
+                  {[0, 5, 19].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        setIvaTexto(String(v));
+                        setIntentoAgregar(false);
+                      }}
+                      className={`min-w-[20px] h-5 px-1 rounded border text-[10px] font-semibold transition-colors ${
+                        ivaNumero === v
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Precio de venta al público del producto: sólo se pinta al
               agregar PRODUCTOS (la Orden de Compra no lo usa). Es OBLIGATORIO
@@ -755,9 +748,9 @@ export function CompactInsumoForm({
             <button
               type="button"
               onClick={agregarValidado}
-              disabled={!puedeAgregar}
+              disabled={bloqueado}
               className={`ml-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-primary text-white text-sm font-semibold rounded-xl transition-colors ${
-                puedeAgregar ? "cursor-pointer hover:bg-red-700" : "opacity-50 cursor-not-allowed"
+                bloqueado ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -789,13 +782,13 @@ export function CompactInsumoForm({
         )}
 
         {/* Tratamiento de IVA por línea: segmentado de 3 opciones con la
-            marca "Más común" en IVA incluido. Exento fuerza IVA % a 0 y lo
-            bloquea (arriba); al salir se restaura el % anterior. */}
+          marca "Más común" en IVA incluido. Sin IVA oculta el campo y al
+          volver restaura el porcentaje anterior. */}
         {!readOnly && !disabled && (
           <div className="mt-2">
             <div
               className="inline-flex rounded-xl border border-border bg-muted p-0.5"
-              title={ayudaModoIva}
+              title={MODOS_IVA.map(ayudaModoIva).join(" · ")}
             >
               {opcionesModoIva.map(({ value, label, tag }) => {
                 const activo = modoIvaActual === value;
@@ -805,6 +798,7 @@ export function CompactInsumoForm({
                     type="button"
                     onClick={() => cambiarModo(value)}
                     aria-pressed={activo}
+                    title={ayudaModoIva(value)}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
                       activo
                         ? "bg-primary text-white shadow-sm"
@@ -949,9 +943,9 @@ export function CompactInsumoForm({
           <button
             type="button"
             onClick={agregarValidado}
-            disabled={!puedeAgregar}
+            disabled={bloqueado}
             className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-              puedeAgregar ? "cursor-pointer hover:bg-red-700" : "opacity-50 cursor-not-allowed"
+              bloqueado ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-red-700"
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
