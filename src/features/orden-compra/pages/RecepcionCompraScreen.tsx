@@ -2,7 +2,21 @@ import React, { useMemo, useRef, useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import { ArrowLeft, Check, Plus, Search, Trash2, CheckCircle2, X } from "lucide-react";
 import { toast } from "sonner";
-import { calcularLineaIva } from "@/features/compras/services/iva";
+import {
+  calcularLineaIva,
+  MODOS_IVA,
+  type ModoIva,
+} from "@/features/compras/services/iva";
+import {
+  esEmpaque,
+  factorDePresentacion,
+  factorUnidadDirecta,
+  guardarPresentacion,
+  listarPresentaciones,
+  mensajeErrorPresentaciones,
+  unidadesCompatibles,
+  type PresentacionConfigurada,
+} from "@/features/compras/services/presentaciones";
 import {
   historialCompraDe,
   unidadesPorLinea,
@@ -28,7 +42,7 @@ import type { Producto } from "@/features/productos/pages/GestionProductosScreen
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
-import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
+import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -223,18 +237,35 @@ export function RecepcionCompraScreen({
         const pendiente = rec
           ? Math.max(0, rec.cantidadSolicitada - rec.cantidadRecibida)
           : i.cantidad;
+        const unidadBase =
+          i.unidadBase ??
+          insumos.find((insumo) => insumo.id === i.idInsumo)?.unidadMedida;
+        const factorPresentacion =
+          i.factorPresentacion ??
+          (i.unidadesBase != null && i.cantidad > 0
+            ? i.unidadesBase / i.cantidad
+            : factorUnidadDirecta(i.unidad, unidadBase ?? "")) ??
+          ((i.tipoItem ?? "insumo") === "producto"
+            ? i.unidadesPorEmpaque ?? 1
+            : undefined);
 
         return {
           rowId: i.rowId,
           idInsumo: i.idInsumo,
           nombre: i.nombre,
           cantidadSolicitada: i.cantidad,
+          cantidadPendiente: pendienteCalculada,
+          ...(factorPresentacion != null
+            ? { unidadesPendientesBase: pendienteCalculada * factorPresentacion }
+            : {}),
           cantidadRecibida: pendienteCalculada,
           unidad: i.unidad,
+          unidadSolicitada: i.unidad,
           precioReferencia: i.costoUnitario,
           costoUnitario: i.costoUnitario, precioUnitario: i.costoUnitario,
           // El IVA de la línea viene del catálogo/OC (0 % si no está definido).
           iva: Number(i.iva ?? 0),
+          modoIva: i.modoIva ?? "incluido",
           // P14: se conserva el catálogo (y el precio de venta si la línea lo
           // trae) para que la tabla de solicitados pueda mostrar "Producto".
           tipoItem: i.tipoItem,
@@ -243,12 +274,81 @@ export function RecepcionCompraScreen({
           // caja) para repartir el monto en sus unidades. Las líneas sin el
           // dato (unidad suelta, OCs viejas) se leen como 1.
           unidadesPorEmpaque: i.unidadesPorEmpaque,
+          unidadBase,
+          factorPresentacion,
         };
       })
       .filter((i) => i.cantidadRecibida > 0);
   });
 
   const [itemsExtra, setItemsExtra] = useState<ItemRecibido[]>([]);
+  const [presentacionesPorInsumo, setPresentacionesPorInsumo] = useState<
+    Record<string, PresentacionConfigurada[]>
+  >({});
+  const idsPresentacionesKey = Array.from(
+    new Set(
+      items
+        .filter((item) => (item.tipoItem ?? "insumo") === "insumo" && /^INS-\d+$/.test(item.idInsumo))
+        .map((item) => item.idInsumo),
+    ),
+  )
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    const ids = idsPresentacionesKey ? idsPresentacionesKey.split(",") : [];
+    if (ids.length === 0) {
+      setPresentacionesPorInsumo({});
+      return;
+    }
+
+    let vivo = true;
+    Promise.all(
+      ids.map(async (id) => [id, await listarPresentaciones(id)] as const),
+    )
+      .then((entradas) => {
+        if (vivo) setPresentacionesPorInsumo(Object.fromEntries(entradas));
+      })
+      .catch((error: unknown) => {
+        if (vivo) {
+          toast.error(
+            mensajeErrorPresentaciones(error, "No se pudieron cargar las presentaciones del insumo."),
+          );
+        }
+      });
+
+    return () => {
+      vivo = false;
+    };
+  }, [idsPresentacionesKey]);
+
+  const unidadBaseDe = (item: ItemRecibido) =>
+    item.unidadBase ??
+    insumos.find((insumo) => insumo.id === item.idInsumo)?.unidadMedida ??
+    "";
+
+  const factorDeUnidadRecibida = (item: ItemRecibido, unidad = item.unidad) => {
+    const base = unidadBaseDe(item);
+    const configuradas = presentacionesPorInsumo[item.idInsumo] ?? [];
+    return (
+      factorUnidadDirecta(unidad, base) ??
+      factorDePresentacion(unidad, base, configuradas) ??
+      (unidad === item.unidad
+        ? item.factorPresentacion ??
+          ((item.tipoItem ?? "insumo") === "producto"
+            ? item.unidadesPorEmpaque ?? 1
+            : undefined)
+        : undefined)
+    );
+  };
+
+  const cantidadMaximaRecibida = (item: ItemRecibido) => {
+    const factor = factorDeUnidadRecibida(item);
+    if (item.unidadesPendientesBase != null && factor != null && factor > 0) {
+      return item.unidadesPendientesBase / factor;
+    }
+    return item.cantidadPendiente ?? item.cantidadSolicitada;
+  };
 
   const [numeroFactura, setNumeroFactura] = useState("");
   const [fechaFactura, setFechaFactura] = useState(today);
@@ -270,13 +370,6 @@ export function RecepcionCompraScreen({
     if (el instanceof HTMLInputElement) el.focus({ preventScroll: true });
   };
 
-  // Esta pantalla SIEMPRE trabaja con precios SIN IVA:
-  // - Monto unitario = base (sin IVA)
-  // - Subtotal = Cantidad × Monto unitario
-  // - IVA = Subtotal × IVA% / 100 (se SUMA aparte)
-  // - Total pagado = Subtotal + IVA
-  // Al guardar, la compra se registra como "precios sin IVA" (ivaIncluido: false).
-  const ivaIncluido = false;
   const [exCategoriaInsumoId, setExCategoriaInsumoId] = useState<number | undefined>(undefined);
   const [nuevosInsumosPendientes, setNuevosInsumosPendientes] = useState<
     { id: string; nombre: string; unidadMedida: string; costoUnitario: number; iva: number; categoriaId: string }[]
@@ -295,6 +388,11 @@ export function RecepcionCompraScreen({
   const [exEmpaque, setExEmpaque] = useState<number | undefined>(undefined);
   const [exPrecio, setExPrecio] = useState(0);
   const [exIva, setExIva] = useState(0);
+  const [exModoIva, setExModoIva] = useState<ModoIva>("incluido");
+  const [exUnidadBase, setExUnidadBase] = useState("");
+  const [exCantidadProductosTexto, setExCantidadProductosTexto] = useState("1");
+  const [exMedidaExactaTexto, setExMedidaExactaTexto] = useState("1");
+  const [exMedidaUnidad, setExMedidaUnidad] = useState("");
   // P14: qué se está agregando como "no solicitado", insumo o producto.
   const [exTipo, setExTipo] = useState<"insumo" | "producto">("insumo");
   // Precio de VENTA al público del producto elegido (sólo con exTipo
@@ -363,12 +461,28 @@ export function RecepcionCompraScreen({
     [...items, ...itemsExtra].some((i) => i.cantidadRecibida > 0)
       ? undefined
       : "Registra al menos un insumo con cantidad mayor que cero.";
+  const lineaSinFactorPresentacion = [...items, ...itemsExtra].find((item) => {
+    if (item.cantidadRecibida <= 0 || !esEmpaque(item.unidad)) return false;
+    const unidadBase =
+      item.unidadBase ??
+      insumos.find((insumo) => insumo.id === item.idInsumo)?.unidadMedida ??
+      "";
+    const factor =
+      item.factorPresentacion ??
+      factorDePresentacion(
+        item.unidad,
+        unidadBase,
+        presentacionesPorInsumo[item.idInsumo] ?? [],
+      );
+    return factor == null || factor <= 0;
+  });
 
   const formValido =
     !errorNumeroFactura &&
     !errorFechaFactura &&
     !errorProveedor &&
     !errorItems &&
+    !lineaSinFactorPresentacion &&
     !facturaDuplicada;
   const algunoTocado = tocado.numeroFactura || tocado.fechaFactura;
   const marcarTocado = (campo: "numeroFactura" | "fechaFactura") =>
@@ -378,12 +492,8 @@ export function RecepcionCompraScreen({
   const campoCls = (error?: string) =>
     `${iCls} transition-colors ${error ? "border-red-400 focus:ring-red-300" : ""}`;
 
-  /** Punto 3: esta recepción SIEMPRE se guarda como "precios sin IVA"
-   *  (ver `ivaIncluido` arriba), así que el costo de referencia CON IVA de
-   *  una línea = monto × (1 + iva%/100). Es contra ese costo (POR UNIDAD)
-   *  que se valida el precio de venta de los productos. */
-  const costoConIva = (monto: number, iva: number) =>
-    ivaIncluido ? monto : monto * (1 + (iva || 0) / 100);
+  const costoConIva = (monto: number, iva: number, modo: ModoIva = "incluido") =>
+    modo === "mas_iva" ? monto * (1 + (iva || 0) / 100) : monto;
 
   /** Costo con IVA POR UNIDAD de una línea ya montada (solicitada o extra):
    *  con paca/caja el costoUnitario de la línea es por presentación, así que
@@ -391,9 +501,11 @@ export function RecepcionCompraScreen({
   const costoConIvaDeLinea = (item: {
     costoUnitario: number;
     iva?: number;
+    modoIva?: ModoIva;
     unidadesPorEmpaque?: number;
   }) =>
-    costoConIva(item.costoUnitario, item.iva ?? 0) / unidadesPorLinea(item);
+    costoConIva(item.costoUnitario, item.iva ?? 0, item.modoIva) /
+    unidadesPorLinea(item);
 
   /** Punto 2: precio de venta inválido (vacío, 0 o ≤ costo con IVA). */
   const pvInvalido = (item: ItemRecibido) => {
@@ -442,7 +554,29 @@ export function RecepcionCompraScreen({
    *  costo CON IVA POR UNIDAD (con paca/caja el monto del formulario es por
    *  presentación y se divide en el empaque). */
   const exFactor = unidadesPorLinea({ unidadesPorEmpaque: exEmpaque });
-  const exCostoRef = costoConIva(exPrecio, exIva) / exFactor;
+  const exCostoRef = costoConIva(exPrecio, exIva, exModoIva) / exFactor;
+  const exCantidadProductos = numeroDeInput(exCantidadProductosTexto);
+  const exMedidaExacta = numeroDeInput(exMedidaExactaTexto);
+  const exFactorConversion = factorUnidadDirecta(exMedidaUnidad, exUnidadBase);
+  const exEsNuevoInsumo = nuevosInsumosPendientes.some((insumo) => insumo.id === exId);
+  const factorEmpaqueExtra =
+    exTipo === "insumo" &&
+    esEmpaque(exUnidad) &&
+    Number.isInteger(exCantidadProductos) &&
+    exCantidadProductos > 0 &&
+    Number.isFinite(exMedidaExacta) &&
+    exMedidaExacta > 0 &&
+    exFactorConversion != null
+      ? exCantidadProductos * exMedidaExacta * exFactorConversion
+      : undefined;
+  const errorFactorExtra =
+    exTipo === "insumo" && esEmpaque(exUnidad)
+      ? !exUnidadBase
+        ? "Indica la unidad base del insumo."
+        : factorEmpaqueExtra == null || factorEmpaqueExtra <= 0
+          ? "Completa una cantidad entera y una medida compatible."
+          : undefined
+      : undefined;
   const errorExPrecioVenta =
     exTipo === "producto" && exNombre.trim()
       ? exPrecioVenta <= 0
@@ -454,7 +588,7 @@ export function RecepcionCompraScreen({
 
   const onExMontoChange = (v: number) => setExPrecio(v);
 
-  const onExIvaChange = (v: number) => setExIva(v);
+  const onExIvaChange = (v: number) => setExIva(exModoIva === "exento" ? 0 : v);
 
   const onExPrecioVentaChange = (v: number) => setExPrecioVenta(v);
 
@@ -576,7 +710,7 @@ export function RecepcionCompraScreen({
               ...item,
               cantidadRecibida: Math.max(
                 0,
-                Math.min(value, item.cantidadSolicitada)
+                Math.min(value, cantidadMaximaRecibida(item))
               ),
             }
           : item
@@ -619,6 +753,88 @@ export function RecepcionCompraScreen({
     );
   };
 
+  const updModoIvaFila = (rowId: string, modoIva: ModoIva) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.rowId === rowId
+          ? { ...item, modoIva, iva: modoIva === "exento" ? 0 : item.iva }
+          : item,
+      ),
+    );
+  };
+
+  const updIvaFila = (rowId: string, value: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.rowId === rowId
+          ? { ...item, iva: Math.min(100, Math.max(0, value)) }
+          : item,
+      ),
+    );
+  };
+
+  const opcionesPresentacionDe = (item: ItemRecibido): OpcionUnidad[] => {
+    const base = unidadBaseDe(item);
+    const opciones = unidadesCompatibles(base).map((u) => ({ valor: u, etiqueta: u }));
+    const vistas = new Set(opciones.map((opcion) => opcion.valor));
+    (presentacionesPorInsumo[item.idInsumo] ?? []).forEach((presentacion) => {
+      if (vistas.has(presentacion.presentacion)) return;
+      vistas.add(presentacion.presentacion);
+      opciones.push({
+        valor: presentacion.presentacion,
+        etiqueta: `${presentacion.presentacion} ×${presentacion.unidadesBase} ${base}`,
+      });
+    });
+    if (!vistas.has(item.unidad)) {
+      opciones.push({ valor: item.unidad, etiqueta: item.unidad });
+    }
+    return opciones;
+  };
+
+  const updPresentacionFila = (rowId: string, unidad: string) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.rowId !== rowId) return item;
+        const factorAnterior = factorDeUnidadRecibida(item);
+        const factor = factorDeUnidadRecibida(item, unidad);
+        const cantidadBase = factorAnterior
+          ? item.cantidadRecibida * factorAnterior
+          : item.cantidadRecibida;
+        const cantidadRecibida = factor
+          ? Math.min(
+              cantidadBase / factor,
+              item.unidadesPendientesBase != null
+                ? item.unidadesPendientesBase / factor
+                : Number.POSITIVE_INFINITY,
+            )
+          : item.cantidadRecibida;
+        return {
+          ...item,
+          unidad,
+          cantidadRecibida,
+          factorPresentacion: esEmpaque(unidad) ? factor : undefined,
+        };
+      }),
+    );
+  };
+
+  const cambiarUnidadExtra = (unidad: string) => {
+    setExUnidad(unidad);
+    if (!esEmpaque(unidad)) return;
+    const configurada = (presentacionesPorInsumo[exId] ?? []).find(
+      (presentacion) => presentacion.presentacion === unidad,
+    );
+    const factor = configurada?.unidadesBase ?? (unidad === exUnidad ? factorEmpaqueExtra : undefined);
+    setExCantidadProductosTexto("1");
+    setExMedidaExactaTexto(factor != null ? String(factor) : "1");
+    setExMedidaUnidad(exUnidadBase || unidadesCompatibles(exUnidadBase)[0] || "");
+  };
+
+  const cambiarModoIvaExtra = (modo: ModoIva) => {
+    setExModoIva(modo);
+    if (modo === "exento") setExIva(0);
+  };
+
   const limpiarFormularioExtra = (
     tipo: "insumo" | "producto" = exTipo,
     cancelarEdicion = true
@@ -628,15 +844,20 @@ export function RecepcionCompraScreen({
     setExCategoriaInsumoId(undefined);
     setExCant(1);
     setExUnidad(tipo === "producto" ? "" : UNIDADES[0]);
+    setExUnidadBase("");
     setExEmpaque(undefined);
     setExPrecio(0);
     setExIva(0);
+    setExModoIva("incluido");
+    setExCantidadProductosTexto("1");
+    setExMedidaExactaTexto("1");
+    setExMedidaUnidad("");
     setExPrecioVenta(0);
     setExShowSug(false);
     if (cancelarEdicion) setEditExtraId(null);
   };
 
-  const addExtra = () => {
+  const addExtra = async () => {
     if (!exNombre.trim()) {
       toast.error(
         exTipo === "producto"
@@ -651,9 +872,40 @@ export function RecepcionCompraScreen({
       return;
     }
 
-    if (exPrecio < 0) {
-      toast.error("El precio unitario no puede ser negativo.");
+    if (!Number.isFinite(exPrecio) || exPrecio <= 0) {
+      toast.error("El monto unitario debe ser mayor que cero.");
       return;
+    }
+    if (!Number.isFinite(exIva) || exIva < 0 || exIva > 100) {
+      toast.error("El IVA debe estar entre 0 y 100.");
+      return;
+    }
+    if (exTipo === "insumo" && esEmpaque(exUnidad)) {
+      if (!exUnidadBase) {
+        toast.error("Indica la unidad base del insumo para configurar el empaque.");
+        return;
+      }
+      if (factorEmpaqueExtra == null || factorEmpaqueExtra <= 0) {
+        toast.error("Indica una cantidad entera de productos y una medida exacta compatible con la unidad base.");
+        return;
+      }
+      if (/^INS-\d+$/.test(exId)) {
+        try {
+          const guardada = await guardarPresentacion(exId, exUnidad, factorEmpaqueExtra);
+          setPresentacionesPorInsumo((prev) => ({
+            ...prev,
+            [exId]: [
+              ...(prev[exId] ?? []).filter((p) => p.presentacion !== guardada.presentacion),
+              guardada,
+            ],
+          }));
+        } catch (error) {
+          toast.error(
+            mensajeErrorPresentaciones(error, "No se pudo guardar la presentación."),
+          );
+          return;
+        }
+      }
     }
 
     // Punto B6 + punto 3 + ajuste: mismo bloqueo que en la Nueva compra — un
@@ -690,7 +942,10 @@ export function RecepcionCompraScreen({
         // unidad elegida; vacía ⇒ "und" para no dejar la fila en blanco.
         unidad: exUnidad.trim() || "und",
         precioReferencia: exPrecio,
-        costoUnitario: exPrecio, precioUnitario: exPrecio, iva: exIva,
+        costoUnitario: exPrecio,
+        precioUnitario: exPrecio,
+        iva: exModoIva === "exento" ? 0 : exIva,
+        modoIva: exModoIva,
         // P14: de qué catálogo salió la línea y, si es producto, su precio
         // de venta al público (ya validado arriba: siempre > 0 y > costo).
         tipoItem: exTipo,
@@ -698,6 +953,11 @@ export function RecepcionCompraScreen({
         unidadesPorEmpaque:
           exTipo === "producto" && exEmpaque && exEmpaque > 1
             ? exEmpaque
+            : undefined,
+        unidadBase: exTipo === "insumo" ? exUnidadBase || undefined : undefined,
+        factorPresentacion:
+          exTipo === "insumo" && esEmpaque(exUnidad)
+            ? factorEmpaqueExtra
             : undefined,
       };
 
@@ -729,9 +989,20 @@ export function RecepcionCompraScreen({
     setExCategoriaInsumoId(item.idCategoriaInsumo);
     setExCant(item.cantidadRecibida);
     setExUnidad(item.unidad);
+    setExUnidadBase(
+      item.unidadBase ??
+        insumos.find((insumo) => insumo.id === item.idInsumo)?.unidadMedida ??
+        "",
+    );
     setExEmpaque(item.unidadesPorEmpaque);
     setExPrecio(item.costoUnitario);
     setExIva(item.iva ?? 0);
+    setExModoIva(item.modoIva ?? "incluido");
+    setExCantidadProductosTexto("1");
+    setExMedidaExactaTexto(
+      item.factorPresentacion != null ? String(item.factorPresentacion) : "1",
+    );
+    setExMedidaUnidad(item.unidadBase ?? "");
     setExPrecioVenta(item.precioVenta ?? 0);
     setExShowSug(false);
     exRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -742,9 +1013,7 @@ export function RecepcionCompraScreen({
     0
   );
 
-  // Punto 1: los totales de esta factura salen de la fórmula única
-  // `calcularLineaIva` (Subtotal sin IVA → IVA → Total pagado).
-  // Como ivaIncluido = false: Monto unitario = base, IVA se suma aparte.
+  // Totales por línea con el modo de IVA elegido para cada ítem.
   const totalRec = [...items, ...itemsExtra].reduce(
     (total, item) =>
       total +
@@ -752,7 +1021,7 @@ export function RecepcionCompraScreen({
         cantidad: item.cantidadRecibida,
         montoUnitario: item.costoUnitario,
         porcentajeIva: item.iva ?? 0,
-        ivaIncluido,
+        modoIva: item.modoIva ?? "incluido",
       }).subtotalConIva,
     0
   );
@@ -836,6 +1105,12 @@ export function RecepcionCompraScreen({
       toast.error("Registra al menos un insumo recibido en la factura.");
       return;
     }
+    if (lineaSinFactorPresentacion) {
+      toast.error(
+        `Configura el contenido de la presentación "${lineaSinFactorPresentacion.unidad}" para "${lineaSinFactorPresentacion.nombre}".`,
+      );
+      return;
+    }
 
     // Punto 2 + punto 3 + ajuste: ninguna recepción se guarda con un producto
     // cuyo precio de venta esté vacío, en 0 o ≤ costo POR UNIDAD con IVA (el
@@ -889,7 +1164,7 @@ export function RecepcionCompraScreen({
           cantidad: item.cantidadRecibida,
           montoUnitario: item.costoUnitario,
           porcentajeIva: item.iva ?? 0,
-          ivaIncluido,
+          modoIva: item.modoIva ?? "incluido",
         });
 
         return {
@@ -901,6 +1176,7 @@ export function RecepcionCompraScreen({
           costoUnitario: item.costoUnitario,
           precioUnitario: item.costoUnitario,
           iva: item.iva ?? 0,
+          modoIva: item.modoIva ?? "incluido",
           baseSinIva: linea.baseSinIva,
           montoIva: linea.montoIva,
           esNoSolicitado: !idsOrdenFactura.has(item.idInsumo),
@@ -912,6 +1188,10 @@ export function RecepcionCompraScreen({
           // y costo por unidad se repartan en sus unidades (sin el dato se
           // lee como 1: unidad suelta y compras viejas no cambian).
           unidadesPorEmpaque: item.unidadesPorEmpaque,
+          ...(item.unidadBase ? { unidadBase: item.unidadBase } : {}),
+          ...(esEmpaque(item.unidad) && item.factorPresentacion != null
+            ? { factorPresentacion: item.factorPresentacion }
+            : {}),
           ...(item.idCategoriaInsumo != null ? { idCategoriaInsumo: item.idCategoriaInsumo } : {}),
           ...(item.esNuevoInsumo ? { esNuevoInsumo: true } : {}),
         };
@@ -928,9 +1208,6 @@ export function RecepcionCompraScreen({
     const resultado = await recibirOrdenCompra(orden.id, {
       n_factura: numeroFactura.trim(),
       fecha: fechaFactura,
-      // La recepción SIEMPRE guarda como "precios sin IVA": el monto unitario
-      // es base y el IVA se calcula y suma aparte.
-      iva_incluido: ivaIncluido,
       items: solicitados,
       items_no_solicitados: noSolicitados,
     });
@@ -1212,6 +1489,12 @@ export function RecepcionCompraScreen({
                     {errorItems}
                   </p>
                 )}
+                {lineaSinFactorPresentacion && (
+                  <p className="text-xs text-red-500 mb-2 ml-0.5">
+                    Configura el contenido de {lineaSinFactorPresentacion.unidad} para{" "}
+                    {lineaSinFactorPresentacion.nombre}.
+                  </p>
+                )}
 
                 {/* Punto 2: aviso en vivo de los precios de venta faltantes o
                     inválidos (mismo criterio que pinta las celdas en rojo y
@@ -1230,19 +1513,23 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[620px]">
+                    <table className="w-full text-sm min-w-[820px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
                             Insumo
                           </th>
 
-                          <th className="px-3 py-3 text-left font-semibold">
-                            Cant. recibida
+                          <th className="px-3 py-3 text-left font-semibold leading-tight">
+                            Cantidad +<br />presentación
                           </th>
 
                           <th className="px-3 py-3 text-left font-semibold">
                             Monto unitario
+                          </th>
+
+                          <th className="px-3 py-3 text-left font-semibold">
+                            IVA
                           </th>
 
                           {/* Ajuste (bloque 2): sin "Ganancia %"; "Precio de
@@ -1265,7 +1552,7 @@ export function RecepcionCompraScreen({
                         {items.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={mostrarColPrecioVta ? 6 : 5}
+                              colSpan={mostrarColPrecioVta ? 7 : 6}
                               className="px-3 py-8 text-center text-xs text-muted-foreground"
                             >
                               Todos los insumos de la OC {orden.id} ya
@@ -1282,8 +1569,44 @@ export function RecepcionCompraScreen({
 
                               <p className="text-[11px] text-muted-foreground">
                                 Pedido: {item.cantidadSolicitada}{" "}
-                                {item.unidad}
+                                {item.unidadSolicitada ?? item.unidad}
                               </p>
+                            </td>
+
+                            <td className="px-3 py-3">
+                              <div className="flex flex-col items-start gap-1.5">
+                                {(item.tipoItem ?? "insumo") === "producto" ? (
+                                  <span className="text-xs text-muted-foreground">{item.unidad}</span>
+                                ) : (
+                                  <UnidadSelect
+                                    value={item.unidad}
+                                    onChange={(unidad) => updPresentacionFila(item.rowId, unidad)}
+                                    ariaLabel={`Presentación de ${item.nombre}`}
+                                    unidades={opcionesPresentacionDe(item)}
+                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-xs"
+                                  />
+                                )}
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={cantidadMaximaRecibida(item)}
+                                  value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
+                                  placeholder="0"
+                                  aria-label={`Cantidad recibida de ${item.nombre}`}
+                                  onChange={(e) =>
+                                    updRec(
+                                      item.rowId,
+                                      numeroDeInput(limpiarNumeroInput(e.target.value))
+                                    )
+                                  }
+                                  className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                />
+                              </div>
+                              {factorDeUnidadRecibida(item) == null && esEmpaque(item.unidad) && (
+                                <p className="mt-1 text-[10px] text-red-500">
+                                  Falta configurar el contenido de esta presentación.
+                                </p>
+                              )}
                             </td>
 
                             <td className="px-3 py-3">
@@ -1291,7 +1614,7 @@ export function RecepcionCompraScreen({
                               <input
                                 type="number"
                                 min={0}
-                                max={item.cantidadSolicitada}
+                                max={cantidadMaximaRecibida(item)}
                                 value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
                                 placeholder="0"
                                 onChange={(e) =>
@@ -1335,12 +1658,62 @@ export function RecepcionCompraScreen({
                                         costoConIva(
                                           item.costoUnitario,
                                           item.iva ?? 0,
+                                          item.modoIva,
                                         ),
                                       )}
                                     </p>
                                   )}
                                 </>
                               )}
+                            </td>
+
+                            <td className="px-3 py-3">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={item.iva === 0 ? "" : item.iva}
+                                placeholder="0"
+                                disabled={(item.modoIva ?? "incluido") === "exento"}
+                                onChange={(e) =>
+                                  updIvaFila(
+                                    item.rowId,
+                                    numeroDeInput(limpiarNumeroInput(e.target.value)),
+                                  )
+                                }
+                                className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center"
+                              />
+                              <div
+                                className="mt-1 flex flex-wrap gap-1"
+                                title="Con IVA: el monto ya trae el IVA · Sin IVA: el monto no trae IVA; se suma al final · Exento: no lleva IVA (0 %)"
+                              >
+                                {MODOS_IVA.map((modo) => (
+                                  <button
+                                    key={modo}
+                                    type="button"
+                                    aria-pressed={(item.modoIva ?? "incluido") === modo}
+                                    title={
+                                      modo === "incluido"
+                                        ? "Con IVA: el monto ya trae el IVA"
+                                        : modo === "mas_iva"
+                                          ? "Sin IVA: el monto no trae IVA; se suma al final"
+                                          : "Exento: no lleva IVA (0 %)"
+                                    }
+                                    onClick={() => updModoIvaFila(item.rowId, modo)}
+                                    className={`rounded border px-1.5 py-1 text-[10px] font-semibold ${
+                                      (item.modoIva ?? "incluido") === modo
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border text-muted-foreground"
+                                    }`}
+                                  >
+                                    {modo === "incluido"
+                                      ? "Con IVA"
+                                      : modo === "mas_iva"
+                                        ? "Sin IVA"
+                                        : "Exento"}
+                                  </button>
+                                ))}
+                              </div>
                             </td>
 
                             {/* Ajuste (bloque 2): sin columna de ganancia.
@@ -1389,7 +1762,7 @@ export function RecepcionCompraScreen({
                                   cantidad: item.cantidadRecibida,
                                   montoUnitario: item.costoUnitario,
                                   porcentajeIva: item.iva ?? 0,
-                                  ivaIncluido,
+                                  modoIva: item.modoIva ?? "incluido",
                                 }).subtotalConIva
                               )}
                             </td>
@@ -1413,7 +1786,7 @@ export function RecepcionCompraScreen({
                       <tfoot className="bg-muted/50 border-t border-border">
                         <tr>
                           <td
-                            colSpan={mostrarColPrecioVta ? 4 : 3}
+                            colSpan={mostrarColPrecioVta ? 6 : 5}
                             className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
                           >
                             Total recibido
@@ -1486,7 +1859,7 @@ export function RecepcionCompraScreen({
                             cantidad: item.cantidadRecibida,
                             montoUnitario: item.costoUnitario,
                             porcentajeIva: item.iva ?? 0,
-                            ivaIncluido,
+                            modoIva: item.modoIva ?? "incluido",
                           });
                           return (
                             <tr
@@ -1521,13 +1894,17 @@ export function RecepcionCompraScreen({
                                 {fmtCOP(item.costoUnitario)}
                               </td>
                               <td className="px-1 py-2 text-right text-xs">
-                                <span>{item.iva ?? 0}%</span>
+                                <span className="inline-flex rounded-full bg-muted px-1.5 py-1 text-[10px] font-semibold whitespace-nowrap">
+                                  {item.modoIva === "exento"
+                                    ? "Exento"
+                                    : `${item.modoIva === "mas_iva" ? "Sin IVA" : "Con IVA"} ${item.iva ?? 0} %`}
+                                </span>
                                 <p className="text-[11px] text-muted-foreground truncate">
                                   {fmtCOP(linea.montoIva)}
                                 </p>
                               </td>
                               <td className="px-1 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                                {fmtCOP(item.cantidadRecibida * item.costoUnitario)}
+                                {fmtCOP(linea.subtotalConIva)}
                               </td>
                               <td className="px-1 py-2 whitespace-nowrap">
                                 <ActionIcons
@@ -1595,7 +1972,9 @@ export function RecepcionCompraScreen({
                             // Punto B6: al editar el texto a mano el id de la
                             // sugerencia elegida ya no corresponde.
                             setExId("");
-    setExCategoriaInsumoId(undefined);
+                            setExCategoriaInsumoId(undefined);
+                            setExUnidadBase("");
+                            setExModoIva("incluido");
                             // Ajuste: en producto la presentación elegida ya
                             // no aplica: la Medida queda vacía y el empaque
                             // se limpia.
@@ -1656,6 +2035,27 @@ export function RecepcionCompraScreen({
                                       ? ins.unidadMedida
                                       : UNIDADES[0]
                                 );
+                                setExUnidadBase(
+                                  exTipo === "insumo" ? ins.unidadMedida : "",
+                                );
+                                setExModoIva("incluido");
+                                if (exTipo === "insumo" && /^INS-\d+$/.test(ins.id)) {
+                                  void listarPresentaciones(ins.id)
+                                    .then((lista) =>
+                                      setPresentacionesPorInsumo((prev) => ({
+                                        ...prev,
+                                        [ins.id]: lista,
+                                      })),
+                                    )
+                                    .catch((error: unknown) =>
+                                      toast.error(
+                                        mensajeErrorPresentaciones(
+                                          error,
+                                          "No se pudieron cargar las presentaciones del insumo.",
+                                        ),
+                                      ),
+                                    );
+                                }
                                 // Empaque de la presentación elegida.
                                 setExEmpaque(
                                   ins.unidadesPorEmpaque &&
@@ -1686,6 +2086,11 @@ export function RecepcionCompraScreen({
                                 // mano: el % de ganancia ya no existe).
                                 const pvSug = Number(ins.precioVenta ?? 0);
                                 setExPrecioVenta(pvSug);
+                                setExCantidadProductosTexto("1");
+                                setExMedidaExactaTexto("1");
+                                setExMedidaUnidad(
+                                  exTipo === "insumo" ? ins.unidadMedida : "",
+                                );
                                 setExShowSug(false);
                               }}
                               className="w-full text-left px-3 py-2.5 hover:bg-muted cursor-pointer border-b border-border last:border-0"
@@ -1744,7 +2149,7 @@ export function RecepcionCompraScreen({
                       />
                     </div>
 
-                    {/* Medida — select personalizado (mismo componente que Nueva
+                    {/* Presentación — editable para insumos; los productos
                         Compra). Punto 2.7: a la misma altura que los inputs
                         vecinos (`compactInputCls` = py-2 ≈ 38 px) y con el mismo
                         padding/redondeo; antes era h-11 (44 px) y desentonaba.
@@ -1753,7 +2158,7 @@ export function RecepcionCompraScreen({
                         la lista de unidades. */}
                     <div className={exTipo === "producto" ? "w-[92px] flex-none" : "w-16 flex-none"}>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Medida
+                        Presentación
                       </label>
                       {exTipo === "producto" ? (
                         <div
@@ -1765,14 +2170,14 @@ export function RecepcionCompraScreen({
                       ) : (
                         <UnidadSelect
                           value={exUnidad}
-                          onChange={setExUnidad}
-                          ariaLabel="Medida"
+                          onChange={cambiarUnidadExtra}
+                          ariaLabel="Presentación"
                           fieldClassName="bg-muted border border-border text-foreground h-9 rounded-lg text-sm"
                         />
                       )}
                     </div>
 
-                    {/* Precio — la factura SIEMPRE se trabaja SIN IVA */}
+                    {/* Monto unitario */}
                     <div className="w-32 flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         Monto unitario
@@ -1787,11 +2192,10 @@ export function RecepcionCompraScreen({
                     </div>
 
                     {/* IVA (%) — 0 a 100 */}
-                    <div className="w-[76px] flex-none">
+                    <div className="w-[190px] flex-none">
                       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                         IVA (%)
                       </label>
-                      {/* Vacío = 0 % (punto B1); ya traía placeholder "0". */}
                       <input
                         type="number"
                         min={0}
@@ -1799,12 +2203,44 @@ export function RecepcionCompraScreen({
                         value={exIva === 0 ? "" : exIva}
                         onChange={(e) =>
                           onExIvaChange(
-                            Math.min(100, Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value))))
+                            Math.min(100, Math.max(0, numeroDeInput(limpiarNumeroInput(e.target.value)))),
                           )
                         }
                         placeholder="0"
+                        disabled={exModoIva === "exento"}
                         className={compactInputCls}
                       />
+                      <div
+                        className="mt-1 flex flex-wrap gap-1"
+                        title="Con IVA: el monto ya trae el IVA · Sin IVA: el monto no trae IVA; se suma al final · Exento: no lleva IVA (0 %)"
+                      >
+                        {MODOS_IVA.map((modo) => (
+                          <button
+                            key={modo}
+                            type="button"
+                            aria-pressed={exModoIva === modo}
+                            title={
+                              modo === "incluido"
+                                ? "Con IVA: el monto ya trae el IVA"
+                                : modo === "mas_iva"
+                                  ? "Sin IVA: el monto no trae IVA; se suma al final"
+                                  : "Exento: no lleva IVA (0 %)"
+                            }
+                            onClick={() => cambiarModoIvaExtra(modo)}
+                            className={`rounded border px-1.5 py-1 text-[10px] font-semibold ${
+                              exModoIva === modo
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground"
+                            }`}
+                          >
+                            {modo === "incluido"
+                              ? "Con IVA"
+                              : modo === "mas_iva"
+                                ? "Sin IVA"
+                                : "Exento"}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Precio de venta al público del producto: sólo se pinta
@@ -1833,10 +2269,10 @@ export function RecepcionCompraScreen({
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={addExtra}
-                        disabled={!!errorExPrecioVenta}
+                        onClick={() => void addExtra()}
+                        disabled={!!errorExPrecioVenta || !!errorFactorExtra}
                         className={`flex-none inline-flex h-11 items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white text-xs font-semibold rounded-lg transition-colors ${
-                          errorExPrecioVenta
+                          errorExPrecioVenta || errorFactorExtra
                             ? "opacity-50 cursor-not-allowed"
                             : "hover:bg-red-700 cursor-pointer"
                         }`}
@@ -1854,6 +2290,91 @@ export function RecepcionCompraScreen({
                       )}
                     </div>
                   </div>
+
+                  {exTipo === "insumo" && esEmpaque(exUnidad) && (
+                    <div className="mt-3 flex flex-wrap items-end gap-2">
+                      <div className="w-28">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                          Unidad base
+                        </label>
+                        {exEsNuevoInsumo ? (
+                          <select
+                            value={exUnidadBase}
+                            onChange={(e) => {
+                              setExUnidadBase(e.target.value);
+                              setExMedidaUnidad(e.target.value);
+                            }}
+                            className={compactInputCls}
+                          >
+                            <option value="">Seleccionar</option>
+                            {["kg", "g", "lt", "ml", "und"].map((unidad) => (
+                              <option key={unidad} value={unidad}>{unidad}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className={`${compactInputCls} flex items-center`}>
+                            {exUnidadBase || "—"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-36">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                          Cantidad de productos
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={exCantidadProductosTexto}
+                          onChange={(e) => setExCantidadProductosTexto(e.target.value)}
+                          className={`${compactInputCls} ${
+                            errorFactorExtra ? "border-red-400" : ""
+                          }`}
+                        />
+                      </div>
+                      <div className="w-56">
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                          Medida exacta del producto
+                        </label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min={0.0001}
+                            step="any"
+                            value={exMedidaExactaTexto}
+                            onChange={(e) => setExMedidaExactaTexto(e.target.value)}
+                            className={`${compactInputCls} min-w-0 ${
+                              errorFactorExtra ? "border-red-400" : ""
+                            }`}
+                          />
+                          <select
+                            value={exMedidaUnidad}
+                            onChange={(e) => setExMedidaUnidad(e.target.value)}
+                            className="h-9 px-2 bg-muted border border-border rounded-lg text-sm"
+                            aria-label="Unidad de la medida exacta"
+                          >
+                            {unidadesCompatibles(exUnidadBase).map((unidad) => (
+                              <option key={unidad} value={unidad}>{unidad}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {factorEmpaqueExtra != null && (
+                        <p className="pb-2 text-[11px] text-muted-foreground">
+                          1 {exUnidad} ={" "}
+                          {factorEmpaqueExtra.toLocaleString("es-CO", {
+                            maximumFractionDigits: 4,
+                          })}{" "}
+                          {exUnidadBase}
+                        </p>
+                      )}
+                      {errorFactorExtra && (
+                        <p className="w-full text-[11px] text-red-500">
+                          {errorFactorExtra}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Punto 3 + ajuste: el costo de referencia CON IVA POR
                       UNIDAD con el que se valida el precio de venta (con
@@ -1888,9 +2409,9 @@ export function RecepcionCompraScreen({
                   // Punto 2: con un producto de precio de venta inválido no se
                   // puede guardar (el backstop en `guardarRecepcion` cubre la
                   // tecla Enter y cualquier otro camino).
-                  disabled={lineasPvMala.length > 0}
+                  disabled={lineasPvMala.length > 0 || !!lineaSinFactorPresentacion}
                   className={`flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 ${
-                    lineasPvMala.length > 0
+                    lineasPvMala.length > 0 || lineaSinFactorPresentacion
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-red-700 cursor-pointer"
                   }`}
@@ -1930,6 +2451,8 @@ export function RecepcionCompraScreen({
                           ? ins.unidadMedida
                           : UNIDADES[0]
                       );
+                      setExUnidadBase(ins.unidadMedida);
+                      setExModoIva("incluido");
                       setExPrecio(ins.precioUnitario);
                       setExIva(Number(ins.iva ?? 0));
                       setShowNuevoInsumo(false);
@@ -1961,6 +2484,8 @@ export function RecepcionCompraScreen({
                       // los captura con la factura.
                       setExPrecio(0);
                       setExIva(0);
+                      setExModoIva("incluido");
+                      setExUnidadBase("");
                       setExPrecioVenta(0);
                       setExShowSug(false);
                       setShowNuevoProducto(false);

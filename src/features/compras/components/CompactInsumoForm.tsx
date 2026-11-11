@@ -8,6 +8,7 @@ import {
   esEmpaque,
   factorDePresentacion,
   guardarPresentacion,
+  factorUnidadDirecta,
   listarPresentaciones,
   mensajeErrorPresentaciones,
   unidadesCompatibles,
@@ -207,13 +208,15 @@ export function CompactInsumoForm({
   // "Otra presentación…": diálogo de factor ("¿Cuántas {base} trae cada…?").
   const [otraAbierta, setOtraAbierta] = useState(false);
   const [otraValor, setOtraValor] = useState<string>("paca");
-  const [otraFactorTexto, setOtraFactorTexto] = useState("");
+  const [otraCantidadProductosTexto, setOtraCantidadProductosTexto] = useState("1");
+  const [otraMedidaTexto, setOtraMedidaTexto] = useState("1");
+  const [otraUnidad, setOtraUnidad] = useState("");
   const [otraError, setOtraError] = useState("");
   const [guardandoPresentacion, setGuardandoPresentacion] = useState(false);
 
   const modoIvaActual: ModoIva = modoIvaControlado ?? modoInterno;
   const etiquetasModoIva: Record<ModoIva, string> = {
-    incluido: "IVA incluido",
+    incluido: "Con IVA",
     mas_iva: "Sin IVA",
     exento: "Exento",
   };
@@ -224,6 +227,8 @@ export function CompactInsumoForm({
       tag: value === "incluido" ? "Más común" : undefined,
     }),
   );
+  const ayudaModoIva =
+    "Con IVA: el monto ya trae el IVA · Sin IVA: el monto no trae IVA; se suma al final · Exento: no lleva IVA (0 %)";
   /** % guardado antes de entrar en "Exento": se restaura al salir. */
   const [ivaAntesDeExento, setIvaAntesDeExento] = useState<string>("");
 
@@ -305,7 +310,9 @@ export function CompactInsumoForm({
         (p) => !presentaciones.some((c) => c.presentacion === p),
       );
       setOtraValor(primera ?? "paca");
-      setOtraFactorTexto("");
+      setOtraCantidadProductosTexto("1");
+      setOtraMedidaTexto("1");
+      setOtraUnidad(baseUnidad || unidadesCompatibles(baseUnidad)[0] || "");
       setOtraError("");
       setOtraAbierta(true);
       return;
@@ -315,15 +322,22 @@ export function CompactInsumoForm({
 
   /** Guarda la presentación nueva (POST presentaciones) y la selecciona. */
   const confirmarOtraPresentacion = async () => {
-    const factor = numeroDesdeTexto(otraFactorTexto);
-    if (!Number.isFinite(factor) || factor <= 0) {
-      setOtraError(`Indica cuántas ${baseUnidad || "unidades base"} trae cada ${otraValor}.`);
+    const cantidadProductos = numeroDesdeTexto(otraCantidadProductosTexto);
+    const medida = numeroDesdeTexto(otraMedidaTexto);
+    const factorConversion = factorUnidadDirecta(otraUnidad, baseUnidad);
+    if (!Number.isInteger(cantidadProductos) || cantidadProductos <= 0) {
+      setOtraError("La cantidad de productos debe ser un entero mayor que cero.");
+      return;
+    }
+    if (!Number.isFinite(medida) || medida <= 0 || factorConversion == null) {
+      setOtraError("Ingresa una medida exacta mayor que cero y compatible con la unidad base.");
       return;
     }
     if (!insumoId) {
       setOtraError("Selecciona primero un insumo del catálogo.");
       return;
     }
+    const factor = cantidadProductos * medida * factorConversion;
     setGuardandoPresentacion(true);
     try {
       const guardada = await guardarPresentacion(insumoId, otraValor, factor);
@@ -473,7 +487,7 @@ export function CompactInsumoForm({
           tarjeta crece): Nombre ~35% con `grow` y el resto con anchos fijos
           que también entran en el modal de Editar OC (max-w-4xl). */}
       <div className="relative">
-        <div className={`flex flex-wrap items-end gap-2 ${disabled ? "opacity-50" : ""}`}>
+        <div className={`flex flex-wrap items-start gap-2 ${disabled ? "opacity-50" : ""}`}>
           {/* Nombre */}
           <div className={`relative ${esCompacta ? "flex-1 min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>Nombre</label>
@@ -633,6 +647,11 @@ export function CompactInsumoForm({
               {errorFactor && (
                 <p className="mt-1 text-[10px] text-red-500">{errorFactor}</p>
               )}
+              {factorPresentacion != null && factorPresentacion > 0 && baseUnidad && (
+                <p className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
+                  1 {unidad} = {factorPresentacion.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {baseUnidad}
+                </p>
+              )}
             </div>
           )}
 
@@ -774,7 +793,10 @@ export function CompactInsumoForm({
             bloquea (arriba); al salir se restaura el % anterior. */}
         {!readOnly && !disabled && (
           <div className="mt-2">
-            <div className="inline-flex rounded-xl border border-border bg-muted p-0.5">
+            <div
+              className="inline-flex rounded-xl border border-border bg-muted p-0.5"
+              title={ayudaModoIva}
+            >
               {opcionesModoIva.map(({ value, label, tag }) => {
                 const activo = modoIvaActual === value;
                 return (
@@ -814,7 +836,7 @@ export function CompactInsumoForm({
       {otraAbierta && (
         <div className="mt-3 p-3 bg-background border border-border rounded-xl">
           <p className="text-xs font-semibold text-foreground mb-2">
-            ¿Cuántas {baseUnidad || "unidades base"} trae cada {otraValor}?
+            Configura el contenido de cada {otraValor}.
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <div className="w-[110px]">
@@ -835,37 +857,88 @@ export function CompactInsumoForm({
               </select>
             </div>
             <div className="w-[110px]">
-              <label className={labelClsCompacta}>Unidades base</label>
+              <label className={labelClsCompacta}>Cantidad de productos</label>
               <input
                 type="text"
-                inputMode="decimal"
-                value={otraFactorTexto}
+                inputMode="numeric"
+                value={otraCantidadProductosTexto}
                 onChange={(e) => {
-                  setOtraFactorTexto(e.target.value);
+                  setOtraCantidadProductosTexto(e.target.value);
                   setOtraError("");
                 }}
-                placeholder="0"
+                placeholder="1"
                 disabled={guardandoPresentacion}
                 className={`${inputClsCompacta}${otraError ? " border-red-400" : ""}`}
               />
             </div>
-            <button
-              type="button"
-              onClick={() => void confirmarOtraPresentacion()}
-              disabled={guardandoPresentacion}
-              className="inline-flex h-9 items-center px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {guardandoPresentacion ? "Guardando…" : "Guardar"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setOtraAbierta(false)}
-              disabled={guardandoPresentacion}
-              className="inline-flex h-9 items-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
-            >
-              Cancelar
-            </button>
+            <div className="w-[160px]">
+              <label className={labelClsCompacta}>Medida exacta del producto</label>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={otraMedidaTexto}
+                  onChange={(e) => {
+                    setOtraMedidaTexto(e.target.value);
+                    setOtraError("");
+                  }}
+                  placeholder="1"
+                  disabled={guardandoPresentacion}
+                  className={`${inputClsCompacta}${otraError ? " border-red-400" : ""}`}
+                />
+                <select
+                  value={otraUnidad}
+                  onChange={(e) => {
+                    setOtraUnidad(e.target.value);
+                    setOtraError("");
+                  }}
+                  disabled={guardandoPresentacion}
+                  className="h-9 px-2 bg-muted border border-border rounded-lg text-sm"
+                  aria-label="Unidad de la medida exacta"
+                >
+                  {unidadesCompatibles(baseUnidad).map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => void confirmarOtraPresentacion()}
+                disabled={guardandoPresentacion}
+                className="inline-flex h-9 items-center px-3 bg-primary text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {guardandoPresentacion ? "Guardando…" : "Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOtraAbierta(false)}
+                disabled={guardandoPresentacion}
+                className="inline-flex h-9 items-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
+          {(() => {
+            const cantidadProductos = numeroDesdeTexto(otraCantidadProductosTexto);
+            const medida = numeroDesdeTexto(otraMedidaTexto);
+            const conversion = factorUnidadDirecta(otraUnidad, baseUnidad);
+            const factor =
+              Number.isInteger(cantidadProductos) &&
+              cantidadProductos > 0 &&
+              Number.isFinite(medida) &&
+              medida > 0 &&
+              conversion != null
+                ? cantidadProductos * medida * conversion
+                : null;
+            return factor != null ? (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                1 {otraValor} = {factor.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {baseUnidad}
+              </p>
+            ) : null;
+          })()}
           {otraError && <p className="mt-1.5 text-[11px] text-red-500">{otraError}</p>}
         </div>
       )}

@@ -121,8 +121,9 @@ export function UnidadSelect({
           collisionPadding={8}
           onWheel={(event) => event.stopPropagation()}
           style={{
-            width: "var(--radix-select-trigger-width)",
+            width: "max-content",
             minWidth: "var(--radix-select-trigger-width)",
+            maxWidth: "calc(100vw - 1rem)",
             maxHeight: "min(15rem, var(--radix-select-content-available-height))",
           }}
           className="z-[100] bg-popover text-popover-foreground rounded-md shadow-lg border border-border overflow-hidden"
@@ -140,7 +141,7 @@ export function UnidadSelect({
                   value={u.valor}
                   className={`relative flex w-full select-none items-center rounded-sm px-3 py-2 text-sm outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed ${
                     u.divisorAntes ? "mt-1 border-t border-border pt-3" : ""
-                  } ${seleccionada ? "font-semibold" : "font-normal"}`}
+                  } ${seleccionada ? "font-semibold" : "font-normal"} whitespace-nowrap`}
                 >
                   <Select.ItemText>{u.etiqueta}</Select.ItemText>
                   {seleccionada && (

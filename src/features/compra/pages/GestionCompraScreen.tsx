@@ -21,6 +21,7 @@ import {
   type CompactInsumoFormValues,
   type InsumoSuggestion,
 } from "@/features/compras/components/CompactInsumoForm";
+import { CrearInsumoCompraModal } from "@/features/compras/components/CrearInsumoCompraModal";
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
@@ -32,7 +33,6 @@ import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import {
   NuevoProveedorModal,
-  NuevoInsumoModal,
   ConfirmModal,
   FORM_MAXW,
   type GestionCompra,
@@ -258,10 +258,10 @@ function TablaItemsFactura({
   // Fase 4: "Cantidad + presentación" van juntas en UNA columna (antes
   // CANTIDAD y MEDIDA se superponían en los anchos fijos) y el IVA se muestra
   // como chip con el modo de la línea.
-  const headers = ["Nombre", "Cantidad", "Monto unitario", "IVA", "Subtotal"];
+  const headers = ["Nombre", "Cantidad + presentación", "Monto unitario", "IVA", "Subtotal"];
   const ANCHOS: Record<string, number> = {
-    Cantidad: 72,
-    "Monto unitario": 72,
+    "Cantidad + presentación": 86,
+    "Monto unitario": 82,
     IVA: 58,
     Subtotal: 66,
   };
@@ -270,7 +270,7 @@ function TablaItemsFactura({
   const td = "align-middle px-1 " + (enPagina ? "py-1.5" : "py-2.5");
   /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
       como columnas de datos (punto 2.8c). */
-  const NUMERICA = new Set(["Cantidad", "Monto unitario", "IVA", "Subtotal"]);
+  const NUMERICA = new Set(["Cantidad + presentación", "Monto unitario", "IVA", "Subtotal"]);
 
   return (
     <div
@@ -322,12 +322,16 @@ function TablaItemsFactura({
                 <th
                   key={h}
                   className={
-                    "px-1 font-semibold " +
+                    "px-1 font-semibold leading-tight whitespace-normal " +
                     (NUMERICA.has(h) ? "text-right " : "text-left ") +
                     (enPagina ? "py-1.5 bg-muted" : "py-2.5")
                   }
                 >
-                  {h}
+                  {h === "Cantidad + presentación" ? (
+                    <>Cantidad +<br />presentación</>
+                  ) : h === "Monto unitario" ? (
+                    <>Monto<br />unitario</>
+                  ) : h}
                 </th>
               ))}
               <th className={"px-1 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />
@@ -454,6 +458,7 @@ function CompraForm({
   proveedores,
   setProveedores,
   insumos,
+  setInsumos,
   productos,
   categorias,
   gestiones,
@@ -469,6 +474,7 @@ function CompraForm({
   proveedores: ProveedorRef[];
   setProveedores: React.Dispatch<React.SetStateAction<ProveedorRef[]>>;
   insumos: Insumo[];
+  setInsumos?: SetCatalogo<Insumo>;
   /** Bloque 2.2: categorías de insumos desde la API para el "+ Crear insumo". */
   categoriasInsumo?: CategoriaInsumo[];
   /** P14: catálogo de productos del módulo de Productos: son la otra mitad
@@ -509,9 +515,8 @@ function CompraForm({
     costoUnitario: item.costoUnitario,
     precioUnitario: item.precioUnitario,
     iva: item.iva,
-    // IVA por línea (Fase 4): las líneas viejas sin modo se normalizan con el
-    // global derivado de la compra ('mas_iva' si la factura era "sin IVA").
-    modoIva: item.modoIva ?? (compra?.ivaIncluido === false ? "mas_iva" : "incluido"),
+    // Las líneas antiguas sin modo conservan el valor predeterminado incluido.
+    modoIva: item.modoIva ?? "incluido",
     baseSinIva: item.baseSinIva,
     montoIva: item.montoIva,
     // P14: se arrastran el catálogo y el precio de venta para que el detalle
@@ -1812,17 +1817,23 @@ function CompraForm({
       {/* Punto 2: Modal de nuevo insumo */}
       <AnimatePresence>
         {showNuevoInsumo && (
-          <NuevoInsumoModal
+          <CrearInsumoCompraModal
             nombreInicial={itemNombre}
             insumosExistentes={insumos}
             categoriasInsumo={categoriasInsumo}
             onGuardar={(ins) => {
+              setInsumos?.((prev) => [
+                ins,
+                ...prev.filter((existente) => existente.id !== ins.id),
+              ]);
               setItemNombre(ins.nombre);
               setItemUnidad(ins.unidadMedida);
-              setItemPrecio(ins.precioUnitario);
+              setItemPrecio(0);
+              setItemIva(0);
+              setItemModoIva("incluido");
               setItemId(ins.id);
+              setItemSugAbierto(false);
               setShowNuevoInsumo(false);
-              toast.success(`Insumo "${ins.nombre}" creado`);
             }}
             onClose={() => setShowNuevoInsumo(false)}
           />
@@ -1943,6 +1954,7 @@ export function NuevaCompraPage({
       proveedores={proveedores}
       setProveedores={setProveedores}
       insumos={insumos}
+      setInsumos={setInsumos}
       productos={productos}
       // Bloque 2: "+ Crear producto" del desplegable de ítems.
       categorias={categorias}
