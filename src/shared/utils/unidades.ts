@@ -1,6 +1,7 @@
 /**
- * Catálogo de unidades del módulo Compras (kg, g, lo que acepta el
- * formulario de insumos de la orden de compra).
+ * Catálogo de unidades del módulo Compras: lo que acepta el formulario de
+ * ítems de la orden de compra y de la factura (kg, g, lt, ml, und y las
+ * presentaciones paq, paca, caja, bolsa, sixpack).
  *
  * Vive en `shared/utils` (y no en `CompactInsumoForm`) para que sea una hoja
  * sin imports: `UnidadSelect` lo usa como lista por defecto y
@@ -8,7 +9,12 @@
  * UnidadSelect ⇄ CompactInsumoForm (Error: Cannot access 'UNIDADES' before
  * initialization, que dejaba la app en blanco).
  */
-export const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
+// Catálogo de Compras (regla 2.2): debe coincidir con `UNIDADES_COMPRA` del
+// backend (`sivpro-backend/src/utils/compras.js`) y con los CHECK de la BD:
+// unidades base (kg, g, lt, ml, und) + presentaciones de compra
+// (paq, paca, caja, bolsa, sixpack). NO es la lista de unidades base de
+// insumo: eso es `UNIDADES_INSUMO` (más abajo).
+export const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "paca", "caja", "bolsa", "sixpack"];
 
 /**
  * A5.2 — Una sola lista de unidades para TODO lo que es insumo: el selector

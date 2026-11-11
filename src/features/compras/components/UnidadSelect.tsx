@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { UNIDADES } from "@/shared/utils/unidades";
 
 /**
- * Select de "Unidad" (kg, g, lt, ml, und, paq, caja, bolsa).
+ * Select de "Unidad" (kg, g, lt, ml, und, paq, paca, caja, bolsa, sixpack).
  *
  * Reemplaza al `<select>` nativo, que al desplegarse mostraba la lista
  * CUADRADA y con el azul del navegador. Usa el mismo Radix Select que
@@ -40,10 +40,10 @@ interface UnidadSelectProps {
   ariaLabel?: string;
   /**
    * Lista de unidades del desplegable. Por defecto, la lista completa de
-   * `UNIDADES` (kg, g, lt, ml, und, paq, caja, bolsa). Un contexto puede
-   * pasar una lista corta (p. ej. el Producto Insumo admite solo kg/g/lt/und)
-   * con etiquetas largas ("Kilogramos (kg)"): el valor guardado sigue siendo
-   * la unidad corta.
+   * `UNIDADES` (kg, g, lt, ml, und, paq, paca, caja, bolsa, sixpack). Un
+   * contexto puede pasar una lista corta (p. ej. el Producto Insumo admite
+   * solo kg/g/lt/und) con etiquetas largas ("Kilogramos (kg)"): el valor
+   * guardado sigue siendo la unidad corta.
    */
   unidades?: readonly OpcionUnidad[];
   /** Texto del placeholder cuando `value` está vacío. */
