@@ -15,6 +15,7 @@ import {
   type CompactInsumoFormValues,
   type InsumoSuggestion,
 } from "@/features/compras/components/CompactInsumoForm";
+import type { ModoIva } from "@/features/compras/services/iva";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/compras/components/InsumosSolicitadosTable";
 import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
@@ -82,6 +83,10 @@ export interface OrdenItem {
   baseSinIva?: number;
   /** Compras (IVA): valor del IVA de la línea en pesos. */
   montoIva?: number;
+  /** Compras (IVA, regla 2.1): modo de IVA de la línea. Opcional: las líneas
+   *  antiguas no lo traen y se resuelven con el IVA global de la petición
+   *  (o 'incluido' si no hay global). */
+  modoIva?: ModoIva;
   /** true = insumo agregado en recepción (no venía en la OC original) */
   esNoSolicitado?: boolean;
   /** P14: qué es el ítem de la factura: insumo del catálogo o producto del
@@ -98,6 +103,14 @@ export interface OrdenItem {
    *  la bebida se pidió en "Paca x12"). Opcional: las líneas viejas y las de
    *  unidad suelta no lo traen y se leen como 1. */
   unidadesPorEmpaque?: number;
+  /** Compras (presentaciones, regla 2.2): cantidad de la línea convertida a
+   *  la unidad base del insumo y esa unidad base (los deriva el backend al
+   *  guardar; de solo lectura para el panel). */
+  unidadesBase?: number;
+  unidadBase?: string;
+  /** Compras (presentaciones, regla 2.2): cuántas unidades base trae cada
+   *  unidad de la línea, si la presentación la tiene configurada. */
+  factorPresentacion?: number;
   /** Estado línea-a-línea del puente temporal con Productos API. */
   stockApiAplicado?: boolean;
   stockApiRevertido?: boolean;
@@ -126,6 +139,8 @@ export interface ItemRecibido {
   costoUnitario: number;
   precioUnitario: number;
   iva: number;
+  /** IVA por línea (regla 2.1). */
+  modoIva?: ModoIva;
   /** P14: de qué catálogo salió la línea. Las filas pedidas en la OC ya
    *  heredan su `tipoItem`; los "no solicitados" de Recepción pueden ser
    *  insumo o producto según el selector. Opcional: las líneas antiguas se
@@ -137,6 +152,10 @@ export interface ItemRecibido {
   /** Ajuste de bebidas: unidades por paca/caja de la línea (las filas de la
    *  OC heredan el empaque). Opcional: se lee como 1 si no viene. */
   unidadesPorEmpaque?: number;
+  /** Compras (presentaciones, regla 2.2): cantidad recibida en la unidad
+   *  base del insumo y esa unidad base (los deriva el backend). */
+  unidadesBase?: number;
+  unidadBase?: string;
 }
 
 export interface Recepcion {
@@ -174,10 +193,11 @@ export interface GestionCompra {
   estado: EstadoGestion;
   items?: OrdenItem[];
   compraCreada?: boolean;
-  /** Compras (IVA): true = los montos unitarios de la factura ya traen el IVA
-   *  incluido ("Sí, IVA incluido"). Las compras antiguas, sin el campo, se
-   *  leen como "Sí, IVA incluido" con IVA 0 % (se ven igual que antes). */
-  ivaIncluido?: boolean;
+  /** Compras (IVA, regla 2.1): true = todos los montos unitarios de la
+   *  factura ya traen el IVA incluido; false = todos a más IVA; null =
+   *  factura mixta o con líneas exentas (el backend lo deriva de las líneas).
+   *  Las compras antiguas, sin el campo, se leen como "IVA incluido". */
+  ivaIncluido?: boolean | null;
   /** Compras (IVA): suma de las bases imponibles (sin IVA) de las líneas. */
   subtotalSinIva?: number;
   /** Compras (IVA): suma del IVA de las líneas. */

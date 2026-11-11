@@ -1,4 +1,5 @@
 import api from "@/shared/services/api";
+import { MODOS_IVA, type ModoIva } from "@/features/compras/services/iva";
 import type {
   EstadoOrden,
   ItemRecibido,
@@ -23,6 +24,12 @@ export interface ItemCompraApi {
   subtotal?: number | string;
   base_sin_iva?: number | string;
   monto_iva?: number | string;
+  /** Regla 2.1: modo de IVA de la línea ('incluido' | 'mas_iva' | 'exento'). */
+  modo_iva?: string | null;
+  /** Regla 2.2: cantidad de la línea en la unidad base del insumo y esa
+   *  unidad (los deriva el backend; de solo lectura). */
+  unidades_base?: number | string | null;
+  unidad_base?: string | null;
   es_no_solicitado?: boolean | null;
   precio_venta?: number | string | null;
   cantidad_recibida?: number | string;
@@ -63,6 +70,10 @@ export interface RecepcionResumenApi {
     pendiente: number | string;
     facturado?: boolean;
     unidad: string;
+    /** Regla 2.2: cantidad recibida convertida a la unidad base y esa
+     *  unidad (los deriva el backend; de solo lectura). */
+    unidades_base?: number | string | null;
+    unidad_base?: string | null;
   }[];
   extras?: (ItemCompraApi & { recibida?: number | string })[];
   compras?: (number | string)[];
@@ -88,6 +99,12 @@ export const mapearItemCompraApi = (row: ItemCompraApi): OrdenItem => {
   const id = esProducto
     ? String(row.id_producto)
     : `INS-${row.id_insumo}`;
+  // Regla 2.1: modo de IVA de la línea. Solo se mapea si es uno de los
+  // valores válidos (si no, la línea se lee sin modo y cae en el fallback).
+  const modoLeido = typeof row.modo_iva === "string" ? row.modo_iva.trim() : "";
+  const modoIva = (MODOS_IVA as readonly string[]).includes(modoLeido)
+    ? (modoLeido as ModoIva)
+    : undefined;
   return {
     rowId: String(row.id_dorcompra ?? row.id_dcompra ?? `${id}-${row.nombre}`),
     idInsumo: id,
@@ -100,6 +117,9 @@ export const mapearItemCompraApi = (row: ItemCompraApi): OrdenItem => {
     ...(row.subtotal == null ? {} : { subtotal: Number(row.subtotal) }),
     ...(row.base_sin_iva == null ? {} : { baseSinIva: Number(row.base_sin_iva) }),
     ...(row.monto_iva == null ? {} : { montoIva: Number(row.monto_iva) }),
+    ...(modoIva ? { modoIva } : {}),
+    ...(row.unidades_base == null ? {} : { unidadesBase: Number(row.unidades_base) }),
+    ...(row.unidad_base == null ? {} : { unidadBase: row.unidad_base }),
     ...(row.es_no_solicitado ? { esNoSolicitado: true } : {}),
     ...(row.cantidad_recibida == null ? {} : { cantidadRecibida: Number(row.cantidad_recibida) }),
     ...(row.cantidad_pendiente == null ? {} : { cantidadPendiente: Number(row.cantidad_pendiente) }),
@@ -121,6 +141,13 @@ export const payloadItemCompra = (
   medida: string;
   precio_unitario: number;
   iva: number;
+  /** Regla 2.1: modo de IVA por línea (si la línea lo trae; si no, el
+   *  backend lo resuelve con el global de la petición). */
+  modo_iva?: string;
+  /** Regla 2.2: factor de la presentación comprada (si la línea lo trae). */
+  factor_presentacion?: number;
+  /** Regla 2.2: unidad base del insumo nuevo no solicitado. */
+  unidad_base?: string;
   precio_venta?: number;
 } => {
   const esNuevoInsumo =
@@ -134,6 +161,11 @@ export const payloadItemCompra = (
       medida: i.unidad,
       precio_unitario: i.precioUnitario ?? i.costoUnitario,
       iva: i.iva ?? 0,
+      ...(i.modoIva ? { modo_iva: i.modoIva } : {}),
+      // Un insumo nuevo recibido en presentación (paca, sixpack, …) necesita
+      // unidad base + factor: sin ellos el backend responde 400.
+      ...(i.unidadBase ? { unidad_base: i.unidadBase } : {}),
+      ...(i.factorPresentacion != null ? { factor_presentacion: i.factorPresentacion } : {}),
     };
   }
   const esProducto = i.tipoItem === "producto";
@@ -145,6 +177,8 @@ export const payloadItemCompra = (
     medida: i.unidad,
     precio_unitario: i.precioUnitario ?? i.costoUnitario,
     iva: i.iva ?? 0,
+    ...(i.modoIva ? { modo_iva: i.modoIva } : {}),
+    ...(i.factorPresentacion != null ? { factor_presentacion: i.factorPresentacion } : {}),
     ...(i.precioVenta != null ? { precio_venta: i.precioVenta } : {}),
   };
 };
@@ -162,6 +196,8 @@ export const mapearRecepcion = (r: RecepcionResumenApi | null | undefined): Rece
     unidad?: string;
     cantidad?: number | string;
     medida?: string;
+    unidades_base?: number | string | null;
+    unidad_base?: string | null;
   }): ItemRecibido => ({
     rowId: `${x.id_producto ?? x.id_insumo ?? x.nombre}-${x.nombre}`,
     idInsumo: x.id_producto != null ? String(x.id_producto) : `INS-${x.id_insumo}`,
@@ -170,6 +206,8 @@ export const mapearRecepcion = (r: RecepcionResumenApi | null | undefined): Rece
     cantidadRecibida: Number(x.recibida ?? 0),
     ...(x.pendiente == null ? {} : { pendiente: Number(x.pendiente) }),
     ...(x.facturado == null ? {} : { facturado: Boolean(x.facturado) }),
+    ...(x.unidades_base == null ? {} : { unidadesBase: Number(x.unidades_base) }),
+    ...(x.unidad_base == null ? {} : { unidadBase: x.unidad_base }),
     unidad: x.unidad ?? x.medida ?? "und",
     precioReferencia: 0,
     costoUnitario: 0,
@@ -306,7 +344,9 @@ export const recibirOrdenCompra = async (
   payload: {
     n_factura: string;
     fecha: string;
-    iva_incluido: boolean;
+    /** Regla 2.1: opcional y puede ser null (factura mixta); el backend lo
+     *  deriva de los modos de cada línea. */
+    iva_incluido: boolean | null;
     items: OrdenItem[];
     items_no_solicitados: OrdenItem[];
   },

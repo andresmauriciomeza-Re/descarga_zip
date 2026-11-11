@@ -20,6 +20,9 @@ import {
   presentacionCompra,
 } from "@/shared/utils/presentacion";
 import { mismoNombre } from "@/shared/utils/nombres";
+// Catálogo único de unidades de Compras (antes había una copia local sin
+// paca/sixpack): una sola lista para validar y mostrar las medidas.
+import { UNIDADES } from "@/shared/utils/unidades";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
@@ -44,8 +47,6 @@ import {
 } from "@/features/orden-compra/pages/OrdenCompraScreen";
 
 const SERIF = "var(--font-titulo)";
-
-const UNIDADES = ["kg", "g", "lt", "ml", "und", "paq", "caja", "bolsa"];
 
 const iCls =
   "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";

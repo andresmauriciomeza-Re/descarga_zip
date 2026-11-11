@@ -2,12 +2,18 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft,
-  Plus, Check, Ban, CheckCircle2, HelpCircle, Pencil, Trash2,
+  Plus, Check, Ban, CheckCircle2, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { esIdInsumo } from "@/shared/utils/fichas";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
-import { calcularLineaIva } from "@/features/compras/services/iva";
+import {
+  calcularLineaIva,
+  resolverModoIva,
+  sumarTotales,
+  type ModoIva,
+} from "@/features/compras/services/iva";
 import type { CategoriaInsumo, Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
 import {
@@ -15,7 +21,6 @@ import {
   type CompactInsumoFormValues,
   type InsumoSuggestion,
 } from "@/features/compras/components/CompactInsumoForm";
-// Bloque 2: "+ Crear producto" desde el desplegable de ítems de la compra.
 import { CrearProductoModal } from "@/features/productos/components/CrearProductoModal";
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
@@ -139,35 +144,6 @@ const valorDatoCls = "block text-sm font-semibold text-foreground break-words";
 const iPaginaCls =
   "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
-/** Tooltip de la opción de IVA no elegida, bloqueada con insumos en la tabla. */
-const MSJ_IVA_BLOQUEADO = "Elimina los ítems agregados para cambiar esta opción";
-
-/** Ayuda del ícono (?) junto a la pregunta del selector de precios. */
-const MSJ_IVA_AYUDA =
-  "Mira la parte de abajo de la factura. Si aparece una línea de IVA que se SUMA al subtotal, elige “Precios sin IVA”. Si no aparece esa línea o dice “IVA incluido”, elige “Precios con IVA incluido”.";
-
-/** Error rojo bajo las tarjetas al intentar agregar o guardar sin elegir. */
-const MSJ_IVA_FALTA = "Elige cómo vienen los precios en la factura";
-
-/** Aviso de la sección "Agregar insumo" mientras no se ha elegido nada. */
-const MSJ_SIN_PRECIOS = "Primero elige cómo vienen los precios en la factura";
-
-/** Las dos tarjetas del selector (solo pantalla completa). */
-const OPCIONES_IVA = [
-  {
-    valor: true,
-    titulo: "Con IVA incluido",
-    tag: "Más común",
-    desc: "El IVA ya está en el precio",
-  },
-  {
-    valor: false,
-    titulo: "Sin IVA",
-    tag: "",
-    desc: "El IVA se suma al final",
-  },
-] as const;
-
 /** P14: qué se está agregando a la factura de compra. Mismos valores que
  *  `OrdenItem.tipoItem`, para que el dato guardado sea compatible con las
  *  compras que nacen de una Orden de Compra. */
@@ -183,6 +159,8 @@ type ItemFactura = {
   precioUnitario: number;
   /** Porcentaje de IVA de la línea (0–100). */
   iva: number;
+  /** Modo real de IVA por línea. */
+  modoIva?: ModoIva;
   /** Valores guardados de la línea (se recalculan en el backend). */
   baseSinIva?: number;
   montoIva?: number;
@@ -197,6 +175,11 @@ type ItemFactura = {
    *  se compró "Paca x12"). Opcional: las líneas viejas y las de unidad
    *  suelta no lo traen y se leen como 1. */
   unidadesPorEmpaque?: number;
+  /** Presentaciones (regla 2.2): cuántas unidades base trae la presentación
+   *  en que se compró la línea (p. ej. 20 si la factura la trae en "paca").
+   *  Viaja al backend como `factor_presentacion`; opcional para las líneas
+   *  en unidad base o en presentaciones ya configuradas del insumo. */
+  factorPresentacion?: number;
   stockApiAplicado?: boolean;
   stockApiRevertido?: boolean;
   stockApiPendiente?: boolean;
@@ -211,8 +194,6 @@ export interface NuevaCompraData {
   valorTotal: number;
   estado: EstadoGestion;
   items: ItemFactura[];
-  /** true = los montos de la factura ya incluyen el IVA. */
-  ivaIncluido: boolean;
   /** Suma de las bases (sin IVA) de las líneas. */
   subtotalSinIva: number;
   /** Suma del IVA de las líneas. */
@@ -239,8 +220,6 @@ function TablaItemsFactura({
   items,
   onEdit,
   onRemove,
-  modoIva = false,
-  ivaIncluido = true,
   enPagina = false,
   rowEditando = null,
   className = "",
@@ -249,49 +228,42 @@ function TablaItemsFactura({
   /** Lápiz: carga la fila en el formulario de la izquierda. */
   onEdit: (row: ItemFactura) => void;
   onRemove: (rowId: string) => void;
-  modoIva?: boolean;
-  ivaIncluido?: boolean;
   /** Misma estructura que la tabla compartida: sin card ni título. */
   enPagina?: boolean;
   /** Fila cargada en el formulario (se resalta suavemente). */
   rowEditando?: string | null;
   className?: string;
 }) {
+  // Fórmula única (`iva.ts`): cada línea usa su propio `modoIva`; las líneas
+  // viejas sin modo se leen como 'incluido' (mismo fallback que el backend).
   const linea = (row: ItemFactura) =>
-    modoIva
-      ? calcularLineaIva({
-          cantidad: row.cantidad,
-          montoUnitario: row.precioUnitario,
-          porcentajeIva: row.iva,
-          ivaIncluido,
-        })
-      : (() => {
-          const base = row.cantidad * row.precioUnitario;
-          const monto = Math.round((base * row.iva) / 100);
-          return { baseSinIva: base, montoIva: monto, subtotalConIva: base + monto };
-        })();
+    calcularLineaIva({
+      cantidad: row.cantidad,
+      montoUnitario: row.precioUnitario,
+      porcentajeIva: row.iva,
+      modoIva: row.modoIva ?? "incluido",
+    });
 
-  const totales = items.reduce(
-    (acc, row) => {
-      const l = linea(row);
-      acc.baseSinIva += l.baseSinIva;
-      acc.montoIva += l.montoIva;
-      acc.total += l.subtotalConIva;
-      return acc;
-    },
-    { baseSinIva: 0, montoIva: 0, total: 0 }
-  );
+  /** Chip del tratamiento de IVA de la fila: "Incl. 19 %", "+19 %" o "Exento". */
+  const chipIva = (row: ItemFactura) => {
+    const modo = resolverModoIva(row, null);
+    if (modo === "exento") return "Exento";
+    if (modo === "mas_iva") return `+${row.iva} %`;
+    return `Incl. ${row.iva} %`;
+  };
+
+  const totales = sumarTotales(items.map(linea));
 
   // Punto 3.3: columnas del plan con Nombre flexible y sin scroll horizontal.
-  // Punto 2.8c: se agrega "Subtotal" a la lista (antes sólo se veía en el pie)
-  // y las columnas de dinero se alinean a la derecha.
-  const headers = ["Nombre", "Cantidad", "Medida", "Monto unitario", "IVA", "Subtotal"];
+  // Fase 4: "Cantidad + presentación" van juntas en UNA columna (antes
+  // CANTIDAD y MEDIDA se superponían en los anchos fijos) y el IVA se muestra
+  // como chip con el modo de la línea.
+  const headers = ["Nombre", "Cantidad", "Monto unitario", "IVA", "Subtotal"];
   const ANCHOS: Record<string, number> = {
-    Cantidad: 44,
-    Medida: 44,
-    "Monto unitario": 60,
-    IVA: 38,
-    Subtotal: 64,
+    Cantidad: 72,
+    "Monto unitario": 72,
+    IVA: 58,
+    Subtotal: 66,
   };
   const ANCHO_ACCIONES = 76;
   const columnCount = headers.length + 1;
@@ -393,15 +365,25 @@ function TablaItemsFactura({
                         </div>
                       )}
                     </td>
-                    <td className={td + " text-sm text-right"}>{row.cantidad}</td>
-                    {/* Punto 3.3: Medida en su propia columna (solo lectura;
-                        la define el ítem del catálogo). */}
-                    <td className={td + " text-xs text-muted-foreground"}>{row.unidad}</td>
+                    <td className={td + " text-right"}>
+                      <div className="text-sm text-foreground">{row.cantidad}</div>
+                      <div className="text-[11px] text-muted-foreground">{row.unidad}</div>
+                    </td>
                     <td className={td + " text-sm text-right whitespace-nowrap"}>
                       {fmtCOP(row.precioUnitario)}
                     </td>
-                    <td className={td + " text-xs text-right"}>
-                      <span className="text-[13px] text-foreground/80">{row.iva}%</span>
+                    <td className={td + " text-right"}>
+                      <span
+                        className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${
+                          resolverModoIva(row, null) === "exento"
+                            ? "bg-muted text-muted-foreground border border-border"
+                            : resolverModoIva(row, null) === "mas_iva"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-sky-100 text-sky-700"
+                        }`}
+                      >
+                        {chipIva(row)}
+                      </span>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
                       </p>
@@ -448,19 +430,19 @@ function TablaItemsFactura({
             }
           >
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              {modoIva ? "Subtotal sin IVA" : "Subtotal"}
+              Subtotal sin IVA
             </span>
             <span className="text-sm font-semibold text-foreground">
-              {fmtCOP(totales.baseSinIva)}
+              {fmtCOP(totales.totalSinIva)}
             </span>
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               IVA
             </span>
-            <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.montoIva)}</span>
+            <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.totalIva)}</span>
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Total pagado
+              Total
             </span>
-            <span className="text-lg font-bold text-foreground">{fmtCOP(totales.total)}</span>
+            <span className="text-lg font-bold text-foreground">{fmtCOP(totales.totalPagado)}</span>
           </div>
         )}
       </div>
@@ -527,33 +509,24 @@ function CompraForm({
     costoUnitario: item.costoUnitario,
     precioUnitario: item.precioUnitario,
     iva: item.iva,
+    // IVA por línea (Fase 4): las líneas viejas sin modo se normalizan con el
+    // global derivado de la compra ('mas_iva' si la factura era "sin IVA").
+    modoIva: item.modoIva ?? (compra?.ivaIncluido === false ? "mas_iva" : "incluido"),
     baseSinIva: item.baseSinIva,
     montoIva: item.montoIva,
     // P14: se arrastran el catálogo y el precio de venta para que el detalle
     // pueda seguir mostrando "Producto · Venta" al reabrir la compra.
     tipoItem: item.tipoItem,
     precioVenta: item.precioVenta,
+    // Presentaciones: factor de la línea (si la trae) para poder reenviarlo
+    // al guardar desde el formulario.
+    factorPresentacion: item.factorPresentacion,
   })));
-
-  // "¿Los montos de la factura incluyen IVA?".
-  // Al CREAR ninguna opción viene seleccionada: hay que elegir una antes de
-  // poder agregar insumos o guardar. En DETALLE se lee el valor guardado y las
-  // compras antiguas, sin el campo, se leen como "Sí, IVA incluido"
-  // (con IVA 0 % se ven exactamente igual que antes).
-  const [ivaIncluido, setIvaIncluido] = useState<boolean | null>(
-    compra ? compra.ivaIncluido ?? true : null
-  );
-
-  /**
-   * Con al menos un insumo en la tabla, la opción de IVA NO elegida queda
-   * bloqueada (deshabilitada y en gris). Si se borran todos los insumos, la
-   * otra opción vuelve a desbloquearse.
-   */
-  const ivaBloqueada = (opcion: boolean) =>
-    items.length > 0 && ivaIncluido !== null && ivaIncluido !== opcion;
 
   const [itemNombre, setItemNombre] = useState("");
   const [itemCantidad, setItemCantidad] = useState(1);
+  // Reglas de negocio (Fase 4): la compra usa modo de IVA POR LÍNEA; no existe
+  // selector global y el backend deriva el dato desde cada línea.
   // P11: la Medida ya no se elige a mano en la compra, así que el valor por
   // defecto es "und" y al guardar se toma SIEMPRE la unidad del insumo o del
   // producto seleccionado (ver `unidadElegida`).
@@ -564,6 +537,10 @@ function CompraForm({
   const [itemEmpaque, setItemEmpaque] = useState<number | undefined>(undefined);
   const [itemPrecio, setItemPrecio] = useState(0);
   const [itemIva, setItemIva] = useState(0);
+  // Fase 4: modo de IVA de la fila que se está agregando. Vive en la pantalla
+  // (no en el formulario) para poder resetearlo al elegir otro ítem y
+  // cargarlo al editar una fila existente. Valor por defecto: "incluido".
+  const [itemModoIva, setItemModoIva] = useState<ModoIva>("incluido");
   const [itemId, setItemId] = useState("");
   // P14: qué se está agregando, insumo del catálogo o producto del módulo.
   const [itemTipo, setItemTipo] = useState<TipoItem>("insumo");
@@ -633,9 +610,7 @@ function CompraForm({
       cantidad: item.cantidad,
       montoUnitario: item.precioUnitario,
       porcentajeIva: item.iva,
-      // Mientras no se elija ninguna opción no hay ítems, así que el `?? true`
-      // solo evita el `null` del estado (nunca altera un cálculo real).
-      ivaIncluido: ivaIncluido ?? true,
+      modoIva: item.modoIva ?? "incluido",
     })
   );
   const subtotalSinIva = lineasIva.reduce((s, l) => s + l.baseSinIva, 0);
@@ -651,9 +626,6 @@ function CompraForm({
   // ── Validación en tiempo real (patrón de MiPerfilScreen) ──────────────────
   const [tocado, setTocado] = useState({ numeroFactura: false, fechaFactura: false });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
-  /** Marca el intento de agregar/guardar sin haber elegido los precios: es lo
-   *  que muestra el error rojo bajo las tarjetas (no aparece al abrir). */
-  const [ivaIntentado, setIvaIntentado] = useState(false);
 
   const errorNumeroFactura = numeroFactura.trim()
     ? facturaDuplicada
@@ -671,14 +643,9 @@ function CompraForm({
   /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
   const labelCls = isPage ? labelPaginaCls : labelModalCls;
 
-  /** Etiqueta del campo de monto: según la opción elegida dice de qué valor
-   *  se trata ("con IVA" / "sin IVA") para saber qué copiar de la factura. */
-  const labelMonto =
-    ivaIncluido === null
-      ? "Monto unitario"
-      : ivaIncluido
-        ? "Monto unitario (con IVA)"
-        : "Monto unitario (sin IVA)";
+  /** Etiqueta del campo de monto: siempre "Monto unitario" (el modo de IVA de
+   *  la línea se elige junto al campo, no cambia el nombre del dato). */
+  const labelMonto = "Monto unitario";
 
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
   const campoCls = (error?: string) =>
@@ -759,19 +726,15 @@ function CompraForm({
     return () => document.removeEventListener("mousedown", fn);
   }, []);
 
-  // Requiere al menos un insumo, que el total sea mayor que cero y haber
-  // elegido si los montos de la factura incluyen IVA.
+  // Requiere al menos un ítem y que el total sea mayor que cero. El IVA se
+  // valida por línea (modo + %), así que ya no hay un requisito global.
   const errorTotal = total > 0 ? undefined : "El total de la factura debe ser mayor que cero.";
   const camposOk =
     !errorNumeroFactura && !errorFechaFactura && !errorItems && !errorTotal;
-  const faltaIva = ivaIncluido === null;
-  // Guardar queda habilitado aunque falte elegir el IVA: en ese caso el clic
-  // muestra el mensaje rojo bajo el selector (y el toast) sin abrir el confirm.
+  // Guardar queda habilitado sin selector global: la validación de línea ya
+  // se hace sobre cada item y el backend deriva el valor global si hace falta.
   const botonGuardarOk =
     camposOk && !facturaDuplicada &&
-    // Con una fila en edición en línea no se guarda: primero se confirma (✓)
-    // o se descarta (✗) el borrador, así la factura nunca se guarda con una
-    // edición a medias (punto B3).
     editando === null;
 
   const seleccionarProveedor = (p: ProveedorRef) => {
@@ -801,6 +764,9 @@ function CompraForm({
     setItemUnidad(ins.unidadMedida?.trim() || "und");
     setItemPrecio(Number(ins.costoUnitario ?? ins.precioUnitario ?? 0));
     setItemIva(Number(ins.iva ?? 0));
+    // Fase 4: al elegir otro ítem el modo de IVA vuelve a su valor por
+    // defecto ("IVA incluido"); cada línea conserva el suyo ya agregada.
+    setItemModoIva("incluido");
     setItemSugAbierto(false);
   };
 
@@ -822,22 +788,22 @@ function CompraForm({
     // cotiza por presentación: costoUnitario × unidades de la paca.
     const costoUnit = Number(p.costoUnitario || 0);
     const pv = Number(p.precioUnitario || 0);
-    // Ajuste: con historial de compra se precarga el último monto SIN IVA (y
-    // su %) según el modo elegido: "Sin IVA" va tal cual y "Con IVA incluido"
-    // trae el IVA sumado al monto. Sin historial (productos viejos) manda el
-    // costo del catálogo por presentación, como siempre.
+    // Ajuste: con historial de compra se precarga el último monto con el IVA
+    // sumado (la fila siempre arranca en "Con IVA", el modo por defecto; el
+    // formulario lo confirma al elegir el ítem). Sin historial (productos
+    // viejos) manda el costo del catálogo por presentación, como siempre.
     // Punto C2: si existe `montoDigitado` (último monto TAL CUAL lo digitó el
     // usuario, ej. 4000) manda ÉL, sin convertirlo por IVA en NINGÚN modo.
     const hist = historialCompraDe(p);
     const monto = hist
       ? hist.montoDigitado != null
         ? hist.montoDigitado
-        : ivaIncluido === false
-          ? hist.montoSinIva
-          : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
+        : Math.round(hist.montoSinIva * (1 + hist.iva / 100) * 100) / 100
       : costoUnit * factor;
     setItemPrecio(monto);
     setItemIva(hist ? hist.iva : 0);
+    // Fase 4: el modo de IVA vuelve a su valor por defecto al elegir otro ítem.
+    setItemModoIva("incluido");
     // Precio de VENTA al público: es `precioUnitario` del catálogo de
     // productos (el costo es `costoUnitario` POR UNIDAD, y el precio de
     // venta también se define por unidad suelta). Se guarda aparte del
@@ -847,11 +813,11 @@ function CompraForm({
   };
 
   /** Punto 3: costo de referencia = costo unitario CON IVA. Con IVA
-   *  incluido el monto ya lo trae; sin IVA incluido se le suma el % de la
-   *  línea. Es contra ese costo que se valida que el precio de venta lo
-   *  superpase. */
-  const costoConIva = (monto: number, iva: number) =>
-    ivaIncluido === false ? monto * (1 + iva / 100) : monto;
+   *  incluido (o exento) el monto ya es el costo; en "más IVA" se le suma el
+   *  % de la línea. Es contra ese costo que se valida que el precio de venta
+   *  lo superpase. */
+  const costoConIva = (monto: number, iva: number, modo: ModoIva = "incluido") =>
+    modo === "mas_iva" ? monto * (1 + iva / 100) : monto;
 
   /** Costo con IVA del ítem del formulario (lo ve el usuario bajo el campo):
    *  POR UNIDAD — si la línea es de paca/caja el monto (por presentación) se
@@ -859,35 +825,35 @@ function CompraForm({
   const itemFactor = unidadesPorLinea({ unidadesPorEmpaque: itemEmpaque });
 
   /** Costo con IVA POR UNIDAD de una línea YA agregada (punto 3 + ajuste +
-   *  backstop de guardar): con paca/caja el monto es por presentación. */
+   *  backstop de guardar): con paca/caja el monto es por presentación, y el
+   *  modo de IVA de la propia línea decide si hay que sumarle el %. */
   const costoConIvaDeLinea = (i: ItemFactura) =>
-    (ivaIncluido === false ? i.precioUnitario * (1 + i.iva / 100) : i.precioUnitario) /
+    (resolverModoIva(i, null) === "mas_iva" ? i.precioUnitario * (1 + i.iva / 100) : i.precioUnitario) /
     unidadesPorLinea(i);
 
-  /** P11 + ajuste: unidad que se guarda en la fila. SIEMPRE la del catálogo
-   *  del ítem seleccionado — para productos, su presentación de compra
-   *  ("Paca x12"); sólo si no hay nada seleccionado se cae en lo que tenga
+  /** Unidad que se guarda en la fila. Para PRODUCTOS manda la presentación
+   *  de compra del catálogo ("Paca x12"); para INSUMOS manda lo elegido en
+   *  Presentación (unidad base, compatible o presentación configurada — la
+   *  fila puede comprarse en "paca"). Sólo sin nada seleccionado se cae en
    *  el campo o en "und". */
   const unidadElegida = () => {
-    const delCatalogo =
-      itemTipo === "producto"
-        ? (() => {
-            const p = productos?.find((x) => x.id === itemId);
-            return p ? presentacionCompra(p) : undefined;
-          })()
-        : insumos.find((i) => i.id === itemId)?.unidadMedida;
-    return delCatalogo?.trim() || itemUnidad.trim() || "und";
+    if (itemTipo === "producto") {
+      const p = productos?.find((x) => x.id === itemId);
+      const delCatalogo = p ? presentacionCompra(p) : undefined;
+      return delCatalogo?.trim() || itemUnidad.trim() || "und";
+    }
+    return itemUnidad.trim() || "und";
   };
 
-  const agregarItem = ({ cantidad, precio, iva, precioVenta }: CompactInsumoFormValues) => {
-    // Sin elegir cómo vienen los precios no se puede agregar nada: se marca el
-    // intento y aparece el aviso rojo bajo las tarjetas (la sección está a la
-    // mitad de opacidad y los campos, deshabilitados).
-    if (ivaIncluido === null) {
-      setIvaIntentado(true);
-      return;
-    }
-
+  const agregarItem = ({
+    cantidad,
+    precio,
+    iva,
+    precioVenta,
+    modoIva,
+    factorPresentacion,
+  }: CompactInsumoFormValues) => {
+    // El formulario ya no exige un selector global; cada línea lleva su `modoIva`.
     if (!itemNombre.trim()) {
       toast.error("Ingresa el nombre del ítem.");
       return;
@@ -896,8 +862,14 @@ function CompraForm({
       toast.error("La cantidad debe ser mayor que cero.");
       return;
     }
-    if (precio < 0) {
-      toast.error("El precio unitario no puede ser negativo.");
+    if (precio <= 0) {
+      toast.error("El monto unitario debe ser mayor que cero.");
+      return;
+    }
+    // Fase 4: el IVA se valida POR LÍNEA (0–100); con Exento el formulario ya
+    // lo dejó en 0.
+    if (!Number.isFinite(iva) || iva < 0 || iva > 100) {
+      toast.error("El IVA debe estar entre 0 y 100.");
       return;
     }
     // Punto B2 + punto 3: en PRODUCTOS el precio de venta es obligatorio y
@@ -909,7 +881,7 @@ function CompraForm({
         toast.error("El precio de venta del producto debe ser mayor que cero.");
         return;
       }
-      if (precioVenta <= costoConIva(precio, iva) / itemFactor) {
+      if (precioVenta <= costoConIva(precio, iva, modoIva ?? "incluido") / itemFactor) {
         toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
         return;
       }
@@ -935,11 +907,18 @@ function CompraForm({
       costoUnitario: precio,
       precioUnitario: precio,
       iva,
+      modoIva: modoIva ?? itemModoIva,
       tipoItem: itemTipo,
       precioVenta: itemTipo === "producto" ? precioVenta : undefined,
       unidadesPorEmpaque:
         itemTipo === "producto" && itemEmpaque && itemEmpaque > 1
           ? itemEmpaque
+          : undefined,
+      // Presentaciones: el factor de la presentación elegida (si la línea se
+      // compró en un empaque configurado) viaja al backend.
+      factorPresentacion:
+        factorPresentacion != null && factorPresentacion > 0
+          ? factorPresentacion
           : undefined,
     };
 
@@ -971,6 +950,8 @@ function CompraForm({
     setItemEmpaque(undefined);
     setItemPrecio(0);
     setItemIva(0);
+    // Fase 4: la fila nueva vuelve al modo de IVA por defecto.
+    setItemModoIva("incluido");
     setItemId("");
     setItemPrecioVenta(0);
     setItemSugAbierto(false);
@@ -991,6 +972,8 @@ function CompraForm({
     );
     setItemPrecio(row.precioUnitario);
     setItemIva(row.iva);
+    // Fase 4: el lápiz carga el modo de IVA real de la línea.
+    setItemModoIva(row.modoIva ?? "incluido");
     setItemId(row.idInsumo);
     setItemPrecioVenta(row.precioVenta ?? 0);
     setItemSugAbierto(false);
@@ -1025,13 +1008,6 @@ function CompraForm({
     }
     if (total <= 0) {
       toast.error("El total recibido debe ser mayor que cero.");
-      return;
-    }
-    if (faltaIva) {
-      // Con el formulario completo pero sin elegir los precios el botón está
-      // habilitado: aquí se avisa en rojo bajo las tarjetas y no se guarda.
-      setIvaIntentado(true);
-      toast.error(MSJ_IVA_FALTA);
       return;
     }
     // Punto B2 + punto 3 + ajuste: backstop de precios de venta. Ninguna
@@ -1071,10 +1047,10 @@ function CompraForm({
       // factura se guardan aparte (y el backend los recalcula).
       items: items.map((item, i) => ({
         ...item,
+        modoIva: item.modoIva ?? "incluido",
         baseSinIva: lineasIva[i].baseSinIva,
         montoIva: lineasIva[i].montoIva,
       })),
-      ivaIncluido: ivaIncluido ?? true,
       subtotalSinIva,
       totalIva,
       totalPagado,
@@ -1258,12 +1234,9 @@ function CompraForm({
                       </p>
                     </div>
 
-                    <div className="min-w-0">
-                      <p className={labelDatoCls}>Tipo de montos</p>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-muted border border-border text-muted-foreground">
-                        {ivaIncluido ? "Montos con IVA incluido" : "Montos sin IVA"}
-                      </span>
-                    </div>
+                    {/* El IVA es POR LÍNEA (Fase 4): ya no existe el resumen
+                        global "Montos con IVA incluido / sin IVA"; el detalle
+                        de cada ítem muestra su chip de IVA en la tabla. */}
                   </div>
                 ) : (
                 <div
@@ -1425,153 +1398,10 @@ function CompraForm({
                     </>
                   )}
 
-                  {/* IVA de la factura — solo el modal conserva el control
-                      segmentado original. Reglas compartidas: al crear NINGUNA
-                      opción viene seleccionada, y con insumos en la tabla la
-                      opción no elegida queda bloqueada. */}
-                  {!isView && !isPage && (
-                    <div className="md:col-span-2">
-                      <label className={labelCls}>
-                        ¿Los montos de la factura incluyen IVA?
-                      </label>
-
-                      <div className="inline-flex gap-1 p-1 bg-muted border border-border rounded-xl">
-                        {([true, false] as const).map((opcion) => {
-                          const elegida = ivaIncluido === opcion;
-                          const bloqueada = ivaBloqueada(opcion);
-
-                          return (
-                            <span
-                              key={String(opcion)}
-                              className={`inline-flex ${bloqueada ? "cursor-not-allowed" : ""}`}
-                              title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setIvaIncluido(opcion)}
-                                aria-pressed={elegida}
-                                disabled={bloqueada}
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                                  elegida
-                                    ? "bg-primary text-white shadow-sm"
-                                    : bloqueada
-                                      ? "bg-background text-muted-foreground/50 cursor-not-allowed pointer-events-none"
-                                      : "text-muted-foreground hover:bg-background cursor-pointer"
-                                }`}
-                              >
-                                {opcion ? "Sí, IVA incluido" : "No, sin IVA"}
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-
-                      {ivaIncluido === null && intentoGuardar ? (
-                        <p className="text-xs text-red-500 mt-1">Selecciona si los montos de la factura incluyen IVA</p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {ivaIncluido === null
-                            ? "Indica cómo vienen los montos en la factura"
-                            : ivaIncluido
-                              ? "El monto unitario de cada línea ya trae el IVA adentro."
-                              : "El monto unitario de cada línea es base y el IVA se suma aparte."}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  {/* El selector global quedó removido; el IVA de la compra se
+                      deriva por línea y se sigue usando la lógica de `modoIva`. */}
                 </div>
                 )}
-
-              {/* Selector de precios (pantalla completa): dos tarjetas tipo
-                  radio, en la MISMA fila. NINGUNA viene elegida al abrir; con
-                  al menos un insumo la no elegida queda bloqueada y su tooltip
-                  explica cómo desbloquearla. El error en ROJO solo aparece
-                  cuando el usuario intenta agregar o guardar. */}
-              {!isView && isPage && (
-                <div className="shrink-0">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-[13px] leading-tight font-medium text-foreground/70">
-                      ¿Cómo vienen los precios en la factura?{" "}
-                      <span className="text-red-500">*</span>
-                    </span>
-                    {/* Ayuda: el tooltip entra por tokens, así que se lee bien
-                        en modo claro y en modo oscuro. */}
-                    <span className="group relative inline-flex">
-                      <HelpCircle
-                        aria-hidden
-                        className="w-4 h-4 text-muted-foreground cursor-help"
-                      />
-                      <span className="sr-only">Ayuda sobre los precios de la factura</span>
-                      <span className="pointer-events-none absolute left-0 max-sm:left-auto max-sm:right-0 top-full mt-2 z-50 w-[280px] max-sm:w-[calc(100vw-4rem)] rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-3 text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity">
-                        {MSJ_IVA_AYUDA}
-                      </span>
-                    </span>
-                  </div>
-
-                  <div
-                    role="radiogroup"
-                    aria-label="Cómo vienen los precios en la factura"
-                    className="flex gap-2"
-                  >
-                    {OPCIONES_IVA.map(({ valor, titulo, tag, desc }) => {
-                      const elegida = ivaIncluido === valor;
-                      const bloqueada = ivaBloqueada(valor);
-
-                      return (
-                        <button
-                          key={String(valor)}
-                          type="button"
-                          role="radio"
-                          aria-checked={elegida}
-                          disabled={bloqueada}
-                          title={bloqueada ? MSJ_IVA_BLOQUEADO : undefined}
-                          onClick={() => {
-                            if (bloqueada) return;
-                            setIvaIncluido(valor);
-                            setIvaIntentado(false);
-                          }}
-                          className={`flex-1 flex items-start gap-2 px-2 py-2 rounded-xl border text-left transition-colors ${
-                            elegida
-                              ? "border-primary bg-primary/5"
-                              : "border-border bg-background"
-                          } ${
-                            bloqueada
-                              ? "opacity-60 cursor-not-allowed"
-                              : "cursor-pointer hover:border-primary/40"
-                          }`}
-                        >
-                          <span
-                            className={`mt-0.5 w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center ${
-                              elegida ? "border-primary" : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {elegida && <span className="w-2 h-2 rounded-full bg-primary" />}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="text-[12px] font-semibold text-foreground">
-                                {titulo}
-                              </span>
-                              {tag && (
-                                <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                                  {tag}
-                                </span>
-                              )}
-                            </span>
-                            <span className="block text-[11px] leading-snug text-muted-foreground mt-0.5">
-                              {desc}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {ivaIncluido === null && (ivaIntentado || intentoGuardar) && (
-                    <p className="text-xs text-red-500 mt-1.5">{MSJ_IVA_FALTA}</p>
-                  )}
-                </div>
-              )}
               </section>
 
               {/* Sección 2 — "Agregar ítem": fila con buscador, stepper y
@@ -1602,7 +1432,6 @@ function CompraForm({
                             // otra lista.
                             limpiarFilaInsumo(nuevo, editando === null);
                           }}
-                          disabled={ivaIncluido === null}
                           opciones={[
                             { valor: "insumo", etiqueta: "Insumo" },
                             { valor: "producto", etiqueta: "Producto" },
@@ -1631,13 +1460,24 @@ function CompraForm({
                     cantidad={itemCantidad}
                     unidad={itemUnidad}
                     onUnidadChange={setItemUnidad}
-                    disabled={ivaIncluido === null}
                     precio={itemPrecio}
                     iva={itemIva}
+                    // Fase 4: modo de IVA POR LÍNEA controlado por la pantalla
+                    // (se resetea al elegir otro ítem y se carga al editar).
+                    modoIva={itemModoIva}
+                    onModoIvaChange={setItemModoIva}
+                    // Presentaciones: el insumo seleccionado define sus
+                    // presentaciones configuradas y la unidad base ("¿cuántas
+                    // kg trae cada paca?"). Para productos no aplica.
+                    insumoId={itemTipo === "insumo" && esIdInsumo(itemId) ? itemId : undefined}
+                    unidadBase={
+                      itemTipo === "insumo"
+                        ? insumos.find((i) => i.id === itemId)?.unidadMedida?.trim() || undefined
+                        : undefined
+                    }
+                    etiquetaUnidad="Presentación"
                     // Punto 3: costo de referencia CON IVA que se muestra
-                    // debajo del monto y contra el que se valida el precio
-                    // de venta.
-                    ivaIncluido={ivaIncluido ?? true}
+                    // debajo del monto (según el modo de IVA de la fila).
                     factorCostoUnidad={itemFactor}
                     // Precio de venta al público: sólo para líneas de producto.
                     mostrarPrecioVenta={itemTipo === "producto"}
@@ -1674,14 +1514,12 @@ function CompraForm({
                     buttonLabel={editando ? "Guardar cambios" : "Agregar"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
-                    // P11 + punto 2.6 + ajuste: en el modal la Medida sigue
-                    // oculta para INSUMOS (la unidad la define el insumo);
-                    // para PRODUCTOS se muestra siempre como texto de solo
-                    // lectura con la presentación de compra ("Paca x12"). En
-                    // página es solo lectura para los dos tipos, igual que en
-                    // Orden de Compra, para no tener dos controles de medida.
-                    ocultarMedida={!isPage && itemTipo !== "producto"}
-                    medidaSoloLectura={isPage || itemTipo === "producto"}
+                    // Fase 4: Presentación SIEMPRE visible. Para PRODUCTOS es
+                    // texto de solo lectura (la define el catálogo: "Paca
+                    // x12"); para INSUMOS es el select de presentaciones
+                    // (unidades compatibles + configuradas + "Otra…").
+                    ocultarMedida={false}
+                    medidaSoloLectura={itemTipo === "producto"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
                     // Bloque 2: el atajo "+ Crear producto" sólo aplica a
@@ -1711,7 +1549,6 @@ function CompraForm({
                             // otra lista.
                             limpiarFilaInsumo(nuevo, editando === null);
                           }}
-                          disabled={ivaIncluido === null}
                           opciones={[
                             { valor: "insumo", etiqueta: "Insumo" },
                             { valor: "producto", etiqueta: "Producto" },
@@ -1817,7 +1654,7 @@ function CompraForm({
                               cantidad: row.cantidad,
                               montoUnitario: row.precioUnitario,
                               porcentajeIva: row.iva,
-                              ivaIncluido: ivaIncluido ?? true,
+                              modoIva: row.modoIva ?? "incluido",
                             });
                             const esProducto = (row.tipoItem ?? "insumo") === "producto";
                             // Misma regla de siempre: "solicitado" si el id está
@@ -1908,8 +1745,6 @@ function CompraForm({
                   items={items}
                   onEdit={editarItem}
                   onRemove={eliminarItem}
-                  modoIva
-                  ivaIncluido={ivaIncluido ?? true}
                   enPagina={isPage}
                   rowEditando={editando}
                   className={isPage ? "flex-1 min-h-0 flex flex-col" : ""}
@@ -2087,7 +1922,8 @@ export function NuevaCompraPage({
         n_factura: data.numeroFactura,
         fecha: data.fechaFactura,
         id_proveedor: data.proveedorId ? Number(data.proveedorId) : null,
-        iva_incluido: Boolean(data.ivaIncluido),
+        // Fase 4: sin `iva_incluido` global; el backend lo deriva de los
+        // `modo_iva` de cada línea.
         items: data.items.filter((i) => i.idInsumo && i.cantidad > 0),
       });
       setGestiones((prev) => [creada, ...prev]);
