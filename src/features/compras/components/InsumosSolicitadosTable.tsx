@@ -1,6 +1,7 @@
 import React from "react";
 import { Package, Pencil, Trash2 } from "lucide-react";
-import { calcularLineaIva } from "@/features/compras/services/iva";
+import { calcularLineaIva, formatearChipIva, formatearModoIvaEnTabla } from "@/features/compras/services/iva";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
 import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
@@ -12,7 +13,7 @@ export interface InsumoSolicitadoRow {
   cantidad: number;
   unidad: string;
   precioUnitario: number;
-  iva: number;
+  iva?: number;
   /** P14: de qué catálogo salió la línea (insumo o producto). Opcional:
    *  las filas antiguas se leen como insumo y la Orden de Compra no lo
    *  necesita para calcular nada. */
@@ -87,7 +88,7 @@ export function InsumosSolicitadosTable({
     calcularLineaIva({
       cantidad: row.cantidad,
       montoUnitario: row.precioUnitario,
-      porcentajeIva: row.iva,
+      porcentajeIva: row.iva ?? 0,
       modoIva: row.modoIva ?? "incluido",
     });
 
@@ -114,11 +115,10 @@ export function InsumosSolicitadosTable({
   const labelSubtotal = subtotalLabel;
   const ivaDeLinea = (row: InsumoSolicitadoRow) =>
     calcularLinea(row).montoIva;
-  const etiquetaModoIva = (row: InsumoSolicitadoRow) => {
-    const modo = row.modoIva ?? "incluido";
-    if (modo === "exento") return "Exento";
-    return `${modo === "mas_iva" ? "Sin IVA" : "Con IVA"} ${row.iva} %`;
-  };
+  const etiquetaModoIva = (row: InsumoSolicitadoRow) =>
+    formatearModoIvaEnTabla(row.modoIva ?? "incluido", row.iva);
+  const faltaIva = (row: InsumoSolicitadoRow) =>
+    (row.modoIva ?? "incluido") !== "exento" && row.iva == null;
 
   // align-middle: las celdas con dos líneas (nombre + etiqueta, IVA + monto)
   // quedan centradas verticalmente respecto a las de una sola línea.
@@ -193,20 +193,20 @@ export function InsumosSolicitadosTable({
                     línea y, si es producto, su precio de venta al público
                     (dato informativo: NO entra en los cálculos de la factura,
                     que usan siempre el monto unitario). */}
-                {(item.tipoItem ?? "insumo") === "producto" && (
-                  <div className="text-[11px] font-normal text-muted-foreground mt-0.5">
-                    Producto
-                    {!sinScrollX && item.precioVenta != null && item.precioVenta > 0 && (
+                <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
+                  {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
+                  {etiquetaModoIva(item)}
+                  {(item.tipoItem ?? "insumo") === "producto" &&
+                    !sinScrollX && item.precioVenta != null && item.precioVenta > 0 && (
                       <> · Venta: {fmtCOP(item.precioVenta)}</>
                     )}
-                  </div>
-                )}
+                </div>
               </td>
 
               <td className={tdBase + " text-sm"}>
                 <span>{item.cantidad}</span>
-                <span className="block text-[11px] text-muted-foreground truncate" title={item.unidad}>
-                  {item.unidad}
+                <span className={`block text-[11px] text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}>
+                  {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}
                 </span>
               </td>
 
@@ -220,7 +220,9 @@ export function InsumosSolicitadosTable({
                     className="inline-flex max-w-full rounded-full bg-muted px-1.5 py-1 font-semibold whitespace-nowrap"
                     title={`${etiquetaModoIva(item)} · IVA ${fmtCOP(ivaDeLinea(item))}`}
                   >
-                    {etiquetaModoIva(item)}
+                    {faltaIva(item)
+                      ? <span className="text-red-500">Ingresa el IVA.</span>
+                      : formatearChipIva(item.modoIva ?? "incluido", item.iva ?? 0)}
                   </span>
                 </td>
               )}

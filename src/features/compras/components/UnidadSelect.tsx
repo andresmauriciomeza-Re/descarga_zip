@@ -20,6 +20,8 @@ export interface OpcionUnidad {
   valor: string;
   /** Texto visible en el menú. Por defecto es el propio valor. */
   etiqueta: string;
+  /** Ayuda contextual opcional para la opción. */
+  ayuda?: string;
   /** Añade una división visual antes de la opción. */
   divisorAntes?: boolean;
   /** Etiqueta corta del trigger cuando el menú usa etiquetas descriptivas. */
@@ -96,6 +98,7 @@ export function UnidadSelect({
     >
       <Select.Trigger
         aria-label={ariaLabel}
+        title={listaUnidades.find((unidad) => unidad.valor === value)?.ayuda}
         data-producto-insumo-campo={dataField}
         className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${fieldClassName} ${
           disabled ? "cursor-not-allowed" : "cursor-pointer"
@@ -139,6 +142,7 @@ export function UnidadSelect({
                 <Select.Item
                   key={u.valor}
                   value={u.valor}
+                  title={u.ayuda}
                   className={`relative flex w-full select-none items-center rounded-sm px-3 py-2 text-sm outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed ${
                     u.divisorAntes ? "mt-1 border-t border-border pt-3" : ""
                   } ${seleccionada ? "font-semibold" : "font-normal"} whitespace-nowrap`}

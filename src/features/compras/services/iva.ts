@@ -41,6 +41,32 @@ export type ModoIva = "incluido" | "mas_iva" | "exento";
 /** Los tres modos permitidos, en el mismo orden que el backend. */
 export const MODOS_IVA: readonly ModoIva[] = ["incluido", "mas_iva", "exento"];
 
+export const ETIQUETA_MODO_IVA: Record<ModoIva, { etiqueta: string; ayuda: string }> = {
+  incluido: { etiqueta: "IVA incluido", ayuda: "el monto ya trae el IVA" },
+  mas_iva: { etiqueta: "IVA adicional", ayuda: "el IVA se suma al monto" },
+  exento: { etiqueta: "Sin IVA", ayuda: "no lleva IVA" },
+};
+
+export const ayudaModoIva = (modo: ModoIva): string => {
+  const { etiqueta, ayuda } = ETIQUETA_MODO_IVA[modo];
+  return `${etiqueta}: ${ayuda}`;
+};
+
+export const formatearModoIva = (modo: ModoIva, porcentaje?: number): string =>
+  modo === "exento"
+    ? ETIQUETA_MODO_IVA[modo].etiqueta
+    : porcentaje == null
+      ? "Ingresa el IVA."
+      : `${ETIQUETA_MODO_IVA[modo].etiqueta} ${porcentaje} %`;
+
+export const formatearModoIvaEnTabla = (modo: ModoIva, porcentaje?: number): string =>
+  formatearModoIva(modo, porcentaje).replace(/ %$/, "\u00a0%");
+
+export const formatearChipIva = (modo: ModoIva, porcentaje: number): string => {
+  if (modo === "exento") return ETIQUETA_MODO_IVA[modo].etiqueta;
+  return modo === "mas_iva" ? `+${porcentaje} %` : `Incl. ${porcentaje} %`;
+};
+
 export interface LineaIvaInput {
   cantidad: number;
   montoUnitario: number;

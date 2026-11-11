@@ -10667,6 +10667,9 @@ export default function App() {
                         ]);
                         return inventario !== null && ordenesActualizadas;
                       }}
+                      onPedidoListo={(orden) => setOrdenesProduccion((prev) =>
+                        prev.map((actual) => actual.id === orden.id ? orden : actual)
+                      )}
                       productos={productosCatalogo
                         .filter((producto) => producto.estado === "Disponible")
                         .map((producto) => productoACatalogo(producto, categoriasCatalogo))}
@@ -10795,6 +10798,19 @@ export default function App() {
                       errorCarga={errorOrdenes}
                       onReintentar={() => void cargarOrdenes()}
                       recargarProduccion={recargarProduccion}
+                      onPedidoListo={(orden) => {
+                        setVentas((prev) => prev.map((venta) => {
+                          if (venta.id !== orden.ventaId || !orden.estadoVenta) return venta;
+                          return {
+                            ...venta,
+                            estado: orden.estadoVenta,
+                            estadoCliente: orden.estadoVenta === "Completado"
+                              ? "Completado"
+                              : orden.estadoVenta === "Por entregar" ? "Por entregar" : venta.estadoCliente,
+                            estadoOrden: "Completada",
+                          };
+                        }));
+                      }}
                       esAdministradorSesion={normalizarNombreRol(loggedInRoleName) === "administrador"}
                       onNavigateTo={(destino, faltantes) => {
                         if (destino === "supplies") {
@@ -10812,7 +10828,7 @@ export default function App() {
                             unidad: faltante.unidad,
                             costoUnitario: precio,
                             precioUnitario: precio,
-                            iva: Number(insumo?.iva ?? 0),
+                            ...(insumo?.iva == null ? {} : { iva: Number(insumo.iva) }),
                             tipoItem: "insumo" as const,
                           };
                         });

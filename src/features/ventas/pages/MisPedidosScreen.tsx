@@ -304,7 +304,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   /** ¿Puede el cliente cancelar este pedido? Sólo estados cancelables y
       mientras corran los primeros 10 minutos desde la creación. */
   const puedeCancelar = (p: Venta) =>
-    (p.estado === "Por verificar" || p.estado === "En espera" || p.estado === "Por entregar") &&
+    (p.estado === "Por verificar" || p.estado === "En espera" || p.estado === "Por entregar" ||
+      (p.ventaLocal && p.estado === "Completado")) &&
     segundosCancelacion(p) > 0;
 
   /** Pedido que se está cancelando (null = sin modal). */

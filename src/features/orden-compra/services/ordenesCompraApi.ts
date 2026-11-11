@@ -20,7 +20,7 @@ export interface ItemCompraApi {
   cantidad: number | string;
   medida: string;
   precio_unitario: number | string;
-  iva: number | string;
+  iva: number | string | null;
   subtotal?: number | string;
   base_sin_iva?: number | string;
   monto_iva?: number | string;
@@ -114,7 +114,7 @@ export const mapearItemCompraApi = (row: ItemCompraApi): OrdenItem => {
     unidad: row.medida,
     costoUnitario: Number(row.precio_unitario),
     precioUnitario: Number(row.precio_unitario),
-    iva: Number(row.iva ?? 0),
+    ...(row.iva == null ? {} : { iva: Number(row.iva) }),
     ...(row.subtotal == null ? {} : { subtotal: Number(row.subtotal) }),
     ...(row.base_sin_iva == null ? {} : { baseSinIva: Number(row.base_sin_iva) }),
     ...(row.monto_iva == null ? {} : { montoIva: Number(row.monto_iva) }),

@@ -1,5 +1,7 @@
 import api from "@/shared/services/api";
 import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
+import { esEmpaque } from "@/shared/utils/unidades";
+export { esEmpaque, PRESENTACIONES_COMPRA } from "@/shared/utils/unidades";
 
 /**
  * Presentaciones de compra (regla 2.2): cuántas unidades base trae cada
@@ -10,15 +12,6 @@ import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
  * - `POST /api/insumos/:id/presentaciones` → upsert con body
  *   `{ presentacion, unidades_base, estado? }`.
  */
-
-/** Empaques de compra: se compran por presentación y necesitan factor
- *  (cuántas unidades base trae cada uno). Coincide con `PRESENTACIONES_COMPRA`
- *  del backend (`sivpro-backend/src/validators/insumos.validator.js`). */
-export const PRESENTACIONES_COMPRA = ["paq", "paca", "caja", "bolsa", "sixpack"] as const;
-
-/** true si la unidad es un empaque de compra (paq, paca, caja, bolsa, sixpack). */
-export const esEmpaque = (unidad: string | null | undefined): boolean =>
-  (PRESENTACIONES_COMPRA as readonly string[]).includes(String(unidad ?? "").trim());
 
 /** Valor seleccionado del desplegable que abre "Otra presentación…". */
 export const OTRA_PRESENTACION = "__otra_presentacion__";

@@ -3,6 +3,7 @@ import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
 import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
 import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
+import { mapearOrdenApi, type OrdenApi } from '@/features/orden-produccion/services/ordenesProduccionApi';
 
 export interface PagoVentaApi {
   id_pago: number;
@@ -267,6 +268,11 @@ export async function verificarVentaApi(id: string, payload: {
   motivo_rechazo?: string;
 }) {
   await api.patch(`/ventas/${id}/verificacion`, payload);
+}
+
+export async function marcarVentaListaApi(id: string) {
+  const { data } = await api.post<{ estado: VentaStatus; venta_local: boolean; estado_orden: string | null; orden: OrdenApi | null }>(`/ventas/${id}/listo`);
+  return { ...data, orden: data.orden ? mapearOrdenApi(data.orden) : null };
 }
 
 /** Anula una venta desde el listado del panel. `motivo` ya viene armado

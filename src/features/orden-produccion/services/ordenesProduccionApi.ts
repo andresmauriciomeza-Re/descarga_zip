@@ -32,6 +32,7 @@ export interface OrdenApi {
   tipo: "Preparacion" | "Pedido";
   id_venta: number | string | null;
   es_venta_local: boolean;
+  estado_venta?: OrdenProduccion["estadoVenta"];
   fecha_solicitada: string;
   fecha_entrega_estimada: string | null;
   hora_solicitada: string | null;
@@ -184,6 +185,7 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     insumosRequeridos: requeridos,
     ...(row.id_venta == null ? {} : { ventaId: String(row.id_venta) }),
     ventaLocal: row.es_venta_local === true,
+    estadoVenta: row.estado_venta,
     ventaNumero: row.venta_numero,
     cliente: row.cliente,
     fechaSolicitada: String(row.fecha_solicitada).slice(0, 10),
