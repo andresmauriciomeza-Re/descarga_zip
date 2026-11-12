@@ -18,7 +18,7 @@ import {
 import { CrearInsumoCompraModal } from "@/features/compras/components/CrearInsumoCompraModal";
 import {
   calcularLineaIva,
-  formatearModoIvaEnTabla,
+  etiquetaModoIvaSimple,
   sumarTotales,
   type ModoIva,
 } from "@/features/compras/services/iva";
@@ -1597,10 +1597,16 @@ export function OrdenModal({
                       setAShowSug(true);
                     }}
                     onNombreFocus={() => setAShowSug(true)}
+                    // Punto 7: el desplegable se cierra al salir del BUSCADOR
+                    // (otro campo del formulario, Tab, Esc o clic afuera).
+                    onCerrarSugerencias={() => setAShowSug(false)}
                     cantidad={aCant}
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
                     medidaSoloLectura={aTipoItem === "producto"}
+                    // Punto 5: en la Nueva Orden de Compra la Medida del
+                    // Contenido la define el ítem del catálogo.
+                    medidaContenidoBloqueada
                     etiquetaNombre={aTipoItem === "producto" ? "Producto" : "Insumo"}
                     insumoId={
                       aTipoItem === "insumo" && /^INS-\d+$/.test(aInsumoId)
@@ -3664,7 +3670,7 @@ function OrdenDetallePageContenido({
                             )}
                           </div>
                           <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
-                            {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
+                            {etiquetaModoIvaSimple(item.modoIva ?? "incluido")}
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">

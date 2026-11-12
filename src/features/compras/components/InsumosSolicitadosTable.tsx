@@ -1,6 +1,6 @@
 import React from "react";
 import { Package, Pencil, Trash2 } from "lucide-react";
-import { calcularLineaIva, formatearChipIva, formatearModoIvaEnTabla } from "@/features/compras/services/iva";
+import { calcularLineaIva, chipIvaSinPrefijo, etiquetaModoIvaSimple, formatearModoIvaEnTabla } from "@/features/compras/services/iva";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
@@ -117,6 +117,11 @@ export function InsumosSolicitadosTable({
     calcularLinea(row).montoIva;
   const etiquetaModoIva = (row: InsumoSolicitadoRow) =>
     formatearModoIvaEnTabla(row.modoIva ?? "incluido", row.iva);
+  /** Punto 8: SOLO el modo ("IVA incluido" / "IVA adicional" / "Sin IVA") en
+   *  la línea baja del nombre: sin porcentaje ni números. El `title` del chip
+   *  conserva la etiqueta completa con el %. */
+  const modoIvaSimple = (row: InsumoSolicitadoRow) =>
+    etiquetaModoIvaSimple(row.modoIva ?? "incluido");
   const faltaIva = (row: InsumoSolicitadoRow) =>
     (row.modoIva ?? "incluido") !== "exento" && row.iva == null;
 
@@ -195,7 +200,7 @@ export function InsumosSolicitadosTable({
                     que usan siempre el monto unitario). */}
                 <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
                   {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                  {etiquetaModoIva(item)}
+                  {modoIvaSimple(item)}
                   {(item.tipoItem ?? "insumo") === "producto" &&
                     !sinScrollX && item.precioVenta != null && item.precioVenta > 0 && (
                       <> · Venta: {fmtCOP(item.precioVenta)}</>
@@ -222,7 +227,7 @@ export function InsumosSolicitadosTable({
                   >
                     {faltaIva(item)
                       ? <span className="text-red-500">Ingresa el IVA.</span>
-                      : formatearChipIva(item.modoIva ?? "incluido", item.iva ?? 0)}
+                      : chipIvaSinPrefijo(item.modoIva ?? "incluido", item.iva ?? 0)}
                   </span>
                 </td>
               )}

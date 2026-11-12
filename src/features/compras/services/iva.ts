@@ -67,6 +67,27 @@ export const formatearChipIva = (modo: ModoIva, porcentaje: number): string => {
   return modo === "mas_iva" ? `+${porcentaje} %` : `Incl. ${porcentaje} %`;
 };
 
+/**
+ * Punto 8: SOLO el modo de IVA para la línea bajo el nombre en las tablas de
+ * Nueva Compra y Orden de Compra — "IVA incluido" | "IVA adicional" |
+ * "Sin IVA", SIN porcentaje ni números.
+ *
+ * No cambia `formatearModoIva`/`formatearModoIvaEnTabla` porque esas salidas
+ * las sigue usando Recepción de compra.
+ */
+export const etiquetaModoIvaSimple = (modo: ModoIva): string =>
+  ETIQUETA_MODO_IVA[modo].etiqueta;
+
+/**
+ * Punto 8: texto de la columna IVA de Compra/Orden SIN el prefijo "Incl.":
+ * `19 %` (incluido), `+19 %` (adicional) y `Sin IVA` (exento).
+ * `formatearChipIva` conserva "Incl. 19 %" para Recepción.
+ */
+export const chipIvaSinPrefijo = (modo: ModoIva, porcentaje: number): string => {
+  if (modo === "exento") return ETIQUETA_MODO_IVA[modo].etiqueta;
+  return modo === "mas_iva" ? `+${porcentaje} %` : `${porcentaje} %`;
+};
+
 export interface LineaIvaInput {
   cantidad: number;
   montoUnitario: number;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
@@ -35,6 +35,10 @@ const compactInputCls =
   "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const readOnlyInputCls =
   "w-full h-10 px-3 bg-muted/40 border border-border rounded-xl text-sm text-muted-foreground cursor-default";
+/** Igual que `readOnlyInputCls` pero a la altura (36px) de la variante
+ *  compacta: así TODOS los controles miden lo mismo en cada variante. */
+const readOnlyInputCompactaCls =
+  "w-full h-9 px-2.5 bg-muted/40 border border-border rounded-lg text-sm text-muted-foreground cursor-default";
 
 /** Select de Medida a la misma altura (40px) que el resto de la fila. */
 const unidadCampoCls = "bg-muted border border-border text-foreground h-10";
@@ -115,6 +119,12 @@ export interface CompactInsumoFormProps {
    *  LECTURA — la define el ítem del catálogo y no se edita ni al agregar ni
    *  al editar una fila. Sustituye al UnidadSelect sin ocultar el campo. */
   medidaSoloLectura?: boolean;
+  /** Punto 5: la MEDIDA del bloque Contenido queda de SOLO LECTURA y muestra
+   *  la unidad base del ítem elegido ("lt", "kg", "und"…). Lo pasan en true
+   *  Nueva Compra y Nueva Orden de Compra; Recepción (insumo no solicitado)
+   *  la deja en false porque ahí la unidad base todavía no existe y se puede
+   *  elegir. Sin ítem seleccionado el campo aparece vacío y deshabilitado. */
+  medidaContenidoBloqueada?: boolean;
   /** P14: control propio del formulario que ocupa el hueco de Medida (p. ej.
    *  el selector de tipo de ítem Insumo / Producto de la Nueva compra). Va sin
    *  envolver: quien lo pasa define su propio label, ancho y controles. */
@@ -128,6 +138,10 @@ export interface CompactInsumoFormProps {
   onCrearProducto?: () => void;
   /** Ocultar opción de crear producto. */
   ocultarCrearProducto?: boolean;
+  /** Punto 7: cierra el desplegable de sugerencias. El estado lo controla el
+   *  padre (`showSuggestions`); aquí se le avisa cuando el foco o el clic
+   *  salen del BUSCADOR y su lista (otro campo del formulario, Tab, Esc). */
+  onCerrarSugerencias?: () => void;
   /** Precio de VENTA al público del producto elegido. Se muestra SOLO cuando
    *  `mostrarPrecioVenta` es true (líneas de tipo producto); la Orden de
    *  Compra no lo pasa, así que ese formulario queda intacto. Es dato
@@ -182,6 +196,7 @@ export function CompactInsumoForm({
   onSelectSuggestion,
   onCrearInsumo,
   onCrearProducto,
+  onCerrarSugerencias,
   containerRef,
   readOnly = false,
   disabled = false,
@@ -191,6 +206,7 @@ export function CompactInsumoForm({
   variante = "normal",
   ocultarMedida = false,
   medidaSoloLectura = false,
+  medidaContenidoBloqueada = false,
   campoExtra,
   headerExtra,
   ocultarCrearInsumo = false,
@@ -210,6 +226,10 @@ export function CompactInsumoForm({
   onModoIvaChange,
 }: CompactInsumoFormProps) {
   const esCompacta = variante === "compacta";
+  /** Punto 3: UNA sola altura de control por variante — 40px en la normal y
+   *  36px en la compacta — aplicada a inputs, selects, caja read-only y
+   *  botones, para que todos los campos queden en la misma línea base. */
+  const altoControl = esCompacta ? "h-9" : "h-10";
   const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
   const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
   const [ivaTexto, setIvaTexto] = useState(iva == null ? "" : String(iva));
@@ -226,6 +246,34 @@ export function CompactInsumoForm({
   const [guardandoPresentacion, setGuardandoPresentacion] = useState(false);
   /** Bloquea los controles mientras se guarda una presentación. */
   const bloqueado = readOnly || disabled || guardandoPresentacion;
+
+  /** Punto 7: wrapper del BUSCADOR y de su lista desplegable. Es el límite
+   *  del "afuera": el desplegable se cierra al tocar cualquier otro campo
+   *  del formulario (antes sólo al salir de TODO el card). */
+  const buscadorRef = useRef<HTMLDivElement>(null);
+
+  // Punto 7: el listado de sugerencias se cierra cuando el clic o el foco
+  // salen del buscador (otro input/select/botón del formulario, o cualquier
+  // cosa fuera), con la tecla Esc y al elegir una opción (eso ya lo hacía el
+  // padre). `showSuggestions` es estado del padre, así que sólo se le avisa.
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const cerrarSiFuera = (evento: MouseEvent) => {
+      const destino = evento.target as Node | null;
+      if (destino && buscadorRef.current && !buscadorRef.current.contains(destino)) {
+        onCerrarSugerencias?.();
+      }
+    };
+    const cerrarConEscape = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") onCerrarSugerencias?.();
+    };
+    document.addEventListener("mousedown", cerrarSiFuera);
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.removeEventListener("mousedown", cerrarSiFuera);
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, [showSuggestions, onCerrarSugerencias]);
 
   const modoIvaActual: ModoIva = modoIvaControlado ?? modoInterno;
   const opcionesModoIva: OpcionUnidad[] = MODOS_IVA.map((value) => ({
@@ -385,8 +433,14 @@ export function CompactInsumoForm({
 
   // ── Presentaciones (regla 2.2) ─────────────────────────────────────────────
   const medidaBaseContenido = baseUnidad || (unidadBaseEditable ? medidaContenido : "");
+  /** Punto 5: con la Medida bloqueada (Compra/Orden) la medida del Contenido
+   *  es SIEMPRE la unidad base del ítem elegido; sin ítem seleccionado queda
+   *  vacía (y el campo se pinta deshabilitado). */
+  const medidaContenidoEfectiva = medidaContenidoBloqueada
+    ? baseUnidad || medidaContenido
+    : medidaContenido;
   const contenido = numeroDesdeTexto(contenidoTexto);
-  const conversionContenido = factorUnidadDirecta(medidaContenido, medidaBaseContenido);
+  const conversionContenido = factorUnidadDirecta(medidaContenidoEfectiva, medidaBaseContenido);
   const factorCalculado =
     Number.isFinite(contenido) &&
     contenido > 0 &&
@@ -404,7 +458,9 @@ export function CompactInsumoForm({
     ? baseUnidadLegada
       ? `No se puede configurar ${unidad}: la unidad base histórica "${baseUnidad}" no es compatible con empaques nuevos.`
       : !medidaBaseContenido
-        ? "Selecciona la medida del insumo."
+        ? medidaContenidoBloqueada
+          ? "Selecciona un ítem del catálogo: la medida la define su unidad base."
+          : "Selecciona la medida del insumo."
         : !Number.isFinite(contenido) || contenido <= 0 || conversionContenido == null
           ? "Ingresa un contenido mayor que cero y una medida compatible."
           : ""
@@ -531,37 +587,46 @@ export function CompactInsumoForm({
     ? "p-3 bg-muted/30 border border-border rounded-xl"
     : `${compacto ? "p-1.5" : "p-4"} bg-muted/40 border border-border rounded-xl`;
 
-  const tituloCls = `font-bold text-primary-foreground m-0 ${esCompacta ? "text-xs" : "text-sm"}`;
+  const tituloCls = `font-bold text-foreground m-0 ${esCompacta ? "text-xs" : "text-sm"}`;
 
   const inputClsCompacta = "w-full h-9 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
   const labelClsCompacta = "block text-[11px] font-semibold text-muted-foreground mb-1";
-  const headerMargin = esCompacta
-    ? "-mx-3 -mt-3"
-    : compacto
-      ? "-mx-1.5 -mt-1.5"
-      : "-mx-4 -mt-4";
 
   return (
     <div ref={containerRef} className={contenedorCls}>
-      {titulo && (
-        <div
-          className={`${headerMargin} mb-3 flex items-center justify-between gap-3 rounded-t-xl bg-primary px-3 py-2 text-primary-foreground`}
-        >
-          <h3 className={tituloCls} style={esCompacta ? undefined : { fontFamily: SERIF }}>
-            <span className="inline-flex items-center gap-1.5">
-              <Plus className="h-4 w-4" />
-              {titulo}
-            </span>
-          </h3>
+      {/* Punto 1: cabecera SIN fondo de color (antes era una franja roja con
+          márgenes negativos) y con los controles extra (selector Tipo) en la
+          MISMA fila del título, a su derecha. Antes `headerExtra`/`campoExtra`
+          se pintaban en filas aparte debajo de la franja. */}
+      {(titulo || headerExtra || campoExtra) && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 pb-2 border-b border-border">
+          {titulo && (
+            <h3 className={tituloCls} style={esCompacta ? undefined : { fontFamily: SERIF }}>
+              <span className="inline-flex items-center gap-1.5">
+                <Plus className="h-4 w-4 text-primary" />
+                {titulo}
+              </span>
+            </h3>
+          )}
+          {headerExtra}
+          {campoExtra}
         </div>
       )}
-      {headerExtra && <div className="mb-2">{headerExtra}</div>}
-      {campoExtra && <div className="mb-2">{campoExtra}</div>}
 
       <div className="relative">
-        <div className={`flex flex-wrap items-start gap-2 ${disabled ? "opacity-50" : ""}`}>
-          {/* Nombre */}
-          <div className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
+        {/* Punto 3: la rejilla se organiza en TRES filas explícitas con
+            controles de igual altura y sin mensajes dentro de las celdas
+            (viven en la línea reservada de abajo): así un error nunca
+            desplaza ni desalinea a los campos vecinos.
+              Fila 1 → Nombre · Presentación · Cantidad
+              Fila 2 → Contenido · Medida · Monto unitario
+              Fila 3 → Tipo de IVA · IVA % · Precio de venta · botones */}
+        <div className={disabled ? "opacity-50" : ""}>
+        <div className="flex flex-wrap items-end gap-2">
+          {/* Nombre — su celda es también el WRAPPER del buscador (punto 7):
+              contiene el input y la lista, el "adentro" para cerrar el
+              desplegable. */}
+          <div ref={buscadorRef} className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>{etiquetaNombre}</label>
 
             <div className="relative">
@@ -571,10 +636,18 @@ export function CompactInsumoForm({
                 value={nombre}
                 onChange={(e) => onNombreChange(e.target.value)}
                 onFocus={bloqueado ? undefined : onNombreFocus}
+                // Punto 7: con Tab el foco sale del buscador → se cierra el
+                // desplegable (si el foco salta a una opción de la MISMA
+                // lista, no se cierra y la opción sigue funcionando).
+                onBlur={(evento) => {
+                  const destino = evento.relatedTarget as Node | null;
+                  if (destino && buscadorRef.current?.contains(destino)) return;
+                  onCerrarSugerencias?.();
+                }}
                 placeholder={readOnly ? "Solo lectura" : placeholder}
                 readOnly={readOnly}
                 disabled={disabled}
-                className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls} ${esCompacta ? "pl-8" : "pl-9"}`}
+                className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} ${esCompacta ? "pl-8" : "pl-9"}`}
               />
             </div>
 
@@ -681,14 +754,10 @@ export function CompactInsumoForm({
                   }
                 />
               )}
-              {errorFactor && !requiereContenido && (
-                <p className="mt-1 text-[10px] text-destructive">{errorFactor}</p>
-              )}
-              {factorPresentacion != null && factorPresentacion > 0 && medidaBaseContenido && (
-                <p className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
-                  1 {unidad} = {factorPresentacion.toLocaleString("es-CO", { maximumFractionDigits: 4 })} {medidaBaseContenido}
-                </p>
-              )}
+              {/* Punto 2: se elimina el texto "1 {unidad} = {factor} {medida}"
+                  bajo el select; la ayuda equivalente sigue viniendo en
+                  `ayudaLinea` ("= 5 lt al inventario · costo $2.000/lt").
+                  Punto 3: el error del campo tampoco vive en la celda. */}
             </div>
           )}
 
@@ -707,7 +776,6 @@ export function CompactInsumoForm({
                 disabled={bloqueado}
                 className={`${inputClsCompacta}${errorCantidad ? " border-destructive" : ""}`}
               />
-              {errorCantidad && <p className="mt-1 text-[10px] text-destructive">{errorCantidad}</p>}
             </div>
           ) : (
             <div className="w-[112px]">
@@ -723,13 +791,16 @@ export function CompactInsumoForm({
                 disabled={bloqueado}
                 className={`${compactInputCls} text-center${errorCantidad ? " border-destructive" : ""}`}
               />
-              {errorCantidad && <p className="mt-1 text-[10px] text-destructive">{errorCantidad}</p>}
             </div>
           )}
+        </div>
 
+        {/* Fila 2 — Contenido + Medida (si la presentación lo requiere) y
+            Monto unitario, con la MISMA línea base que la fila 1. */}
+        <div className="flex flex-wrap items-end gap-2 mt-2">
           {requiereContenido && (
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <div className="w-[120px]">
+            <>
+              <div className="w-[120px] flex-none">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Contenido</label>
                 <input
                   type="text"
@@ -746,32 +817,47 @@ export function CompactInsumoForm({
                   }`}
                 />
               </div>
-              <div className="w-[160px]">
+              <div className="w-[160px] flex-none">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Medida</label>
-                <UnidadSelect
-                  value={medidaContenido}
-                  onChange={(value) => {
-                    setMedidaContenido(value);
-                    setIntentoAgregar(false);
-                  }}
-                  disabled={bloqueado || guardandoPresentacion || opcionesMedidaContenido.length === 0}
-                  ariaLabel="Medida del contenido"
-                  placeholder="Seleccionar..."
-                  unidades={opcionesMedidaContenido}
-                  fieldClassName={
-                    esCompacta
-                      ? "bg-muted border border-border text-foreground h-9 rounded-lg"
-                      : unidadCampoCls
-                  }
-                />
+                {medidaContenidoBloqueada ? (
+                  /* Punto 5: la Medida es de SOLO LECTURA en Nueva Compra y
+                     Nueva Orden de Compra — la define el ítem del catálogo.
+                     Mismo estilo que `medidaSoloLectura`; sin ítem elegido el
+                     campo queda vacío. */
+                  <div
+                    title="La medida la define el ítem del catálogo"
+                    className={
+                      (esCompacta
+                        ? "w-full h-9 px-2.5 rounded-lg text-sm "
+                        : "w-full h-10 px-3 rounded-xl text-sm ") +
+                      "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
+                    }
+                  >
+                    {medidaContenidoEfectiva}
+                  </div>
+                ) : (
+                  <UnidadSelect
+                    value={medidaContenido}
+                    onChange={(value) => {
+                      setMedidaContenido(value);
+                      setIntentoAgregar(false);
+                    }}
+                    disabled={bloqueado || guardandoPresentacion || opcionesMedidaContenido.length === 0}
+                    ariaLabel="Medida del contenido"
+                    placeholder="Seleccionar..."
+                    unidades={opcionesMedidaContenido}
+                    fieldClassName={
+                      esCompacta
+                        ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                        : unidadCampoCls
+                    }
+                  />
+                )}
               </div>
-              {errorFactor && (
-                <p className="w-full text-[10px] text-destructive">{errorFactor}</p>
-              )}
-            </div>
+            </>
           )}
 
-          {/* Monto unitario comienza la segunda fila. */}
+          {/* Monto unitario */}
           <div className={`flex-none ${esCompacta ? "w-[110px]" : "w-[116px]"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
 
@@ -785,11 +871,14 @@ export function CompactInsumoForm({
               }}
               placeholder="0"
               disabled={bloqueado}
-              className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-destructive" : ""}`}
+              className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-destructive" : ""}`}
             />
-            {errorPrecio && <p className="mt-1 text-[10px] text-destructive">{errorPrecio}</p>}
           </div>
+        </div>
 
+        {/* Fila 3 — Tipo de IVA · IVA % · Precio de venta (sólo producto) y
+            los botones alineados abajo a la derecha. */}
+        <div className="flex flex-wrap items-end gap-2 mt-2">
           <div className={`${esCompacta ? "w-[160px] flex-none" : "w-[180px]"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>Tipo de IVA</label>
             <UnidadSelect
@@ -823,32 +912,13 @@ export function CompactInsumoForm({
                   }}
                   placeholder="0"
                   disabled={bloqueado}
-                  className={`${readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
+                  className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
                 />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
               </div>
-              {errorIva && <p className="mt-1 text-[10px] text-destructive">{errorIva}</p>}
-              {!bloqueado && (
-                <div className="flex gap-1 mt-1">
-                  {[0, 5, 19].map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => {
-                        setIvaTexto(String(v));
-                        setIntentoAgregar(false);
-                      }}
-                      className={`min-w-[20px] h-5 px-1 rounded border text-[10px] font-semibold transition-colors ${
-                        ivaNumero === v
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* Punto 4: se eliminaron los atajos rápidos [0, 5, 19]; queda
+                  el input con su sufijo "%", su validación (0–100) y el valor
+                  por defecto de siempre. */}
             </div>
           )}
 
@@ -872,18 +942,18 @@ export function CompactInsumoForm({
                 placeholder="0"
                 disabled={bloqueado}
                 className={`${
-                  readOnly ? readOnlyInputCls : esCompacta ? inputClsCompacta : compactInputCls
+                  readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls
                 } ${errorPrecioVenta ? "border-destructive focus:ring-destructive" : ""}`}
               />
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-2 self-end">
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={() => void agregarValidado()}
               disabled={bloqueado || guardandoPresentacion}
-              className={`inline-flex h-9 items-center justify-center gap-1.5 px-3 bg-primary text-primary-foreground text-xs font-semibold rounded-lg transition-colors ${
+              className={`inline-flex ${altoControl} items-center justify-center gap-1.5 px-3 bg-primary text-primary-foreground text-xs font-semibold rounded-lg transition-colors ${
                 bloqueado || guardandoPresentacion ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-primary/90"
               }`}
             >
@@ -894,12 +964,36 @@ export function CompactInsumoForm({
               <button
                 type="button"
                 onClick={onCancelar}
-                className="inline-flex h-9 items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+                className={`inline-flex ${altoControl} items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer`}
               >
                 Cancelar
               </button>
             )}
           </div>
+        </div>
+        </div>
+
+        {/* Punto 3: línea RESERVADA bajo la rejilla para TODOS los mensajes
+            de campo (cantidad, monto, IVA, contenido/medida y precio de
+            venta). Al estar fuera de las celdas, un error nunca desplaza ni
+            desalinea a los campos vecinos; al estar reservada, nada salta al
+            aparecer. */}
+        <div className="min-h-[16px] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          {errorCantidad && (
+            <p className="text-[11px] font-medium text-destructive">{errorCantidad}</p>
+          )}
+          {errorPrecio && (
+            <p className="text-[11px] font-medium text-destructive">{errorPrecio}</p>
+          )}
+          {errorIva && (
+            <p className="text-[11px] font-medium text-destructive">{errorIva}</p>
+          )}
+          {errorFactor && (
+            <p className="text-[11px] font-medium text-destructive">{errorFactor}</p>
+          )}
+          {errorPrecioVenta && (
+            <p className="text-[11px] font-medium text-destructive">{errorPrecioVenta}</p>
+          )}
         </div>
 
         {/* Punto 3 + ajuste de bebidas: el costo de referencia CON IVA POR
@@ -910,12 +1004,6 @@ export function CompactInsumoForm({
           <p className="text-[11px] text-muted-foreground mt-1.5">
             Costo por unidad: {fmtCompactCOP(costoConIva)}
           </p>
-        )}
-
-        {/* Punto B2: el precio de venta inválido se avisa EN TIEMPO REAL,
-            debajo de la fila (el texto va fuera de la capa con opacidad). */}
-        {errorPrecioVenta && (
-          <p className="text-xs font-medium text-destructive mt-1.5">{errorPrecioVenta}</p>
         )}
 
         {/* Ayuda de la línea: qué entra al inventario y a qué costo por
