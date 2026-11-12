@@ -1618,6 +1618,13 @@ export function OrdenModal({
                         ? insumos.find((ins) => ins.id === aInsumoId)?.unidadMedida
                         : undefined
                     }
+                    // Peso de medida del insumo elegido (si lo tiene): se
+                    // muestra como ayuda bajo la línea del formulario.
+                    pesoMedida={
+                      aTipoItem === "insumo"
+                        ? insumos.find((ins) => ins.id === aInsumoId)?.pesoMedida ?? null
+                        : null
+                    }
                     etiquetaUnidad="Presentación"
                     precio={aPrecio}
                     iva={aIva}

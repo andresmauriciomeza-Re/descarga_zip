@@ -1468,6 +1468,13 @@ function CompraForm({
                         ? insumos.find((i) => i.id === itemId)?.unidadMedida?.trim() || undefined
                         : undefined
                     }
+                    // Peso de medida del insumo elegido (si lo tiene): se
+                    // muestra como ayuda bajo la línea del formulario.
+                    pesoMedida={
+                      itemTipo === "insumo"
+                        ? insumos.find((i) => i.id === itemId)?.pesoMedida ?? null
+                        : null
+                    }
                     etiquetaUnidad="Presentación"
                     // Punto 3: costo de referencia CON IVA que se muestra
                     // debajo del monto (según el modo de IVA de la fila).

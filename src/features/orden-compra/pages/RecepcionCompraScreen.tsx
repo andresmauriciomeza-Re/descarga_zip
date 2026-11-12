@@ -1922,6 +1922,13 @@ export function RecepcionCompraScreen({
                     insumoId={
                       exTipo === "insumo" && /^INS-\d+$/.test(exId) ? exId : undefined
                     }
+                    // Peso de medida del insumo elegido (si lo tiene): se
+                    // muestra como ayuda bajo la línea del formulario.
+                    pesoMedida={
+                      exTipo === "insumo"
+                        ? insumos.find((ins) => ins.id === exId)?.pesoMedida ?? null
+                        : null
+                    }
                     factorPresentacionInicial={
                       itemsExtra.find((item) => item.rowId === editExtraId)?.factorPresentacion
                     }
