@@ -19,6 +19,9 @@ export interface InsumoApi {
   /** 'Insumo' | 'Producto insumo' */
   tipo: string;
   unidad_medida: string;
+  /** Peso/cantidad exacta del insumo en su unidad de medida (ej. 1200 g).
+      NULL en los insumos antiguos. */
+  peso_medida: number | string | null;
   stock_actual: number | string;
   stock_minimo: number | string;
   stock_maximo: number | string | null;
@@ -68,6 +71,7 @@ export const mapearInsumoApi = (row: InsumoApi): { insumo: Insumo; ficha: FichaV
     id: idInsumoFront(row.id_insumo),
     nombre: row.nombre,
     unidadMedida: row.unidad_medida,
+    pesoMedida: row.peso_medida == null ? null : Number(row.peso_medida),
     costoUnitario: Number(row.costo_unitario ?? 0),
     precioUnitario: null,
     iva: row.iva == null ? null : Number(row.iva),
@@ -129,6 +133,8 @@ export const crearInsumo = async (payload: {
   tipo: "Insumo" | "Producto insumo";
   id_categoria_insumo: number;
   unidad_medida: string;
+  /** Obligatorio (> 0) cuando `tipo === "Insumo"`. */
+  peso_medida?: number;
   stock_minimo?: number;
   descripcion?: string;
   costo_unitario?: number;
@@ -159,6 +165,8 @@ export const actualizarInsumo = async (
     descripcion: string | null;
     costo_unitario?: number;
     iva?: number;
+    /** Omitir para no cambiarlo; > 0 para fijarlo. */
+    peso_medida?: number;
   },
 ): Promise<Insumo> => {
   const idInsumo = Number(String(id).replace(/^INS-/, ""));

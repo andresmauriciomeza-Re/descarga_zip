@@ -190,12 +190,38 @@ const pintarStockPizza = (p: Producto): React.ReactNode => {
   );
 };
 
-const pintarDetalleStockPizza = (p: Producto): React.ReactNode => {
+/** Detalle de stock de una pizza en Ver detalle: existencias por tamaño y
+    cuántas PIZZAS COMPLETAS rinde ese stock — `Math.floor(porciones /
+    porcionesPorPizza)` por tamaño (1 pizza = 8 porciones medianas o 6
+    grandes según CONFIG_PIZZA). Manda la ficha VIGENTE
+    (`porcionesPorTamano`); sin ella, la configuración de la categoría. */
+const pintarDetalleStockPizza = (
+  p: Producto,
+  tamanos: readonly PorcionesTamano[] = [],
+): React.ReactNode => {
+  const porcionesDe = (nombre: string): number =>
+    tamanos.find(t => t.tamano === nombre)?.porciones ?? (nombre === "Grande" ? 6 : 8);
+  const stockMediana = p.stockMediana ?? 0;
+  const stockGrande = p.stockGrande ?? 0;
+  // Con la regla 8/6 ambos pisos dan el mismo número (igual que
+  // stock_partes / 24); el mínimo se queda con el más restrictivo por si
+  // la ficha define otras porciones por tamaño.
+  const pizzas = Math.min(
+    Math.floor(stockMediana / porcionesDe("Mediana")),
+    Math.floor(stockGrande / porcionesDe("Grande")),
+  );
+  const sobranteMediana = stockMediana % porcionesDe("Mediana");
+  const sobranteGrande = stockGrande % porcionesDe("Grande");
+  const porcion = (n: number) => (n === 1 ? "porción" : "porciones");
   return (
     <div className="space-y-1 text-sm">
       <p className="font-semibold">
-        Disponibles: {p.stockMediana ?? 0} medianas o {p.stockGrande ?? 0} grandes (de la misma pizza)
+        Disponibles: {stockMediana} medianas o {stockGrande} grandes (de la misma pizza)
         {disponiblesMedianaPizza(p) === 0 && <span className="ml-1 text-red-600 dark:text-red-400">· Agotado</span>}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Pizzas completas: {pizzas} + {sobranteMediana} {porcion(sobranteMediana)} medianas /{" "}
+        {sobranteGrande} {porcion(sobranteGrande)} grandes
       </p>
     </div>
   );
@@ -2739,7 +2765,14 @@ export function GestionProductosScreen({
                       lasañas conservan la capacidad por ficha y bebidas su
                       stock real. */}
                   {esCategoriaPizza(catName(detailItem.idCategoria)) ? (
-                    pintarDetalleStockPizza(detailItem)
+                    pintarDetalleStockPizza(
+                      detailItem,
+                      // Manda la ficha VIGENTE; sin ella (o sin la fila del
+                      // tamaño), la configuración de la categoría (8/6).
+                      vigente?.porcionesPorTamano ??
+                        configDeCategoria(detailItem.idCategoria, catName(detailItem.idCategoria))?.tamanos ??
+                        [],
+                    )
                   ) : llevaFichaDetalle ? (
                     <>
                       {/* Stock real del producto (tb_productos.stock), siempre visible. */}

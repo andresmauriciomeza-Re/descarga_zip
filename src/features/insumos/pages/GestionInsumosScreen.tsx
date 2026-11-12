@@ -103,6 +103,10 @@ export interface Insumo {
   id: string;
   nombre: string;
   unidadMedida: string;
+  /** Peso/cantidad exacta del insumo en su unidad de medida (ej. 1200 g).
+      Opcional en el modelo: los insumos antiguos lo tienen en NULL hasta
+      que se editan. */
+  pesoMedida?: number | null;
   costoUnitario: number;
   precioUnitario: number | null;
   iva: number | null;
@@ -402,6 +406,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
   const [unidad, setUnidad] = useState(UNIDADES_INSUMO[0].valor);
   const [contenidoPresentacion, setContenidoPresentacion] = useState(0);
   const [stockActual, setStockActual] = useState(0);
+  /** Peso de medida (cantidad exacta en la unidad elegida, ej. 1200 g).
+      0 = vacío. Obligatorio al crear; los insumos antiguos lo traen en
+      NULL y se completan al editar. */
+  const [pesoMedida, setPesoMedida] = useState(0);
 
   // Form state - solo Producto Insumo. La ficha técnica única (la comparte
   // con Producción > Productos y con Orden de Producción) es donde vive todo
@@ -527,6 +535,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       unidad?: string;
       contenidoPresentacion?: string;
       insumos?: string;
+      pesoMedida?: string;
     } = {};
     const limpio = nombreLimpio(nombre);
     if (!limpio) e.nombre = "El nombre es obligatorio.";
@@ -548,11 +557,22 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         e.contenidoPresentacion = "El contenido debe ser mayor a 0.";
       if (!piFicha.insumos.some(r => r.cantidad > 0))
         e.insumos = "Agrega al menos un insumo con cantidad mayor a 0.";
-    } else if (esOtraPresentacion(unidad) && !(contenidoPresentacion > 0)) {
-      e.contenidoPresentacion = "El contenido debe ser mayor a 0.";
+    } else {
+      if (esOtraPresentacion(unidad) && !(contenidoPresentacion > 0))
+        e.contenidoPresentacion = "El contenido debe ser mayor a 0.";
+      // Peso de medida: obligatorio al crear. En edición se tolera vacío
+      // SOLO si el registro ya tenía NULL (insumos antiguos) y no se cambió.
+      if (pesoMedida < 0) e.pesoMedida = "El peso de medida no puede ser negativo.";
+      else if (!(pesoMedida > 0)) {
+        const pesoOriginal = editingId
+          ? insumos.find(i => i.id === editingId)?.pesoMedida ?? null
+          : null;
+        if (!(editingId && pesoOriginal == null))
+          e.pesoMedida = "El peso de medida es obligatorio.";
+      }
     }
     return e;
-  }, [nombre, categoriaId, editingId, stockMinimo, tipoForm, piFicha, piUnidadMedida, unidad, contenidoPresentacion, insumos]);
+  }, [nombre, categoriaId, editingId, stockMinimo, tipoForm, piFicha, piUnidadMedida, unidad, contenidoPresentacion, pesoMedida, insumos]);
 
   /** Marca un campo como tocado en los formularios que validan al salir del campo. */
   const tocar = (campo: string) =>
@@ -566,6 +586,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
 
   const presentacionUnidad = resolverPresentacionUnidad(unidad, contenidoPresentacion);
   const presentacionProducto = resolverPresentacionUnidad(piUnidadMedida, contenidoPresentacion);
+  /** Sufijo del campo "Peso de medida": la unidad corta en la que se
+      expresa (g/ml cuando es presentación, si no la unidad elegida). */
+  const unidadPeso =
+    presentacionUnidad?.unidadBase ??
+    (esOtraPresentacion(unidad) ? (unidad === OTRA_PRESENTACION_G ? "g" : "ml") : unidad);
   const unidadProductoGuardada = presentacionProducto?.unidadBase ?? piUnidadMedida;
   const cantidadProductoGuardada =
     piFicha.rendimiento && piFicha.rendimiento > 0
@@ -603,6 +628,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     setUnidad(UNIDADES_INSUMO[0].valor);
     setContenidoPresentacion(0);
     setStockActual(0);
+    setPesoMedida(0);
     setPiFicha(emptyFichaVersion(1));
     setPiUnidadMedida("");
     setTocado({});
@@ -658,6 +684,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       setUnidad(insumo.unidadMedida);
       setContenidoPresentacion(0);
       setStockActual(insumo.stockActual);
+      setPesoMedida(insumo.pesoMedida ?? 0);
     }
     setShowModal(true);
   };
@@ -694,13 +721,20 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
 
   const handleSave = async () => {
     setIntentoGuardar(true);
+    // Peso de medida: vacío permitido solo si se está editando un insumo
+    // antiguo que ya tenía NULL (no se tocó el campo).
+    const pesoOriginal = editingId
+      ? insumos.find(i => i.id === editingId)?.pesoMedida ?? null
+      : null;
+    const pesoVacioPermitido = !!editingId && pesoOriginal == null;
     // Si hay errores no se guarda: quedan visibles bajo cada campo.
     if (
       !nombreLimpio(nombre) ||
       !categoriaId ||
       nombreDuplicado(nombreLimpio(nombre)) ||
       !(stockMinimo >= 0) ||
-      (esOtraPresentacion(unidad) && !(contenidoPresentacion > 0))
+      (esOtraPresentacion(unidad) && !(contenidoPresentacion > 0)) ||
+      (tipoForm === "insumo" && !(pesoMedida > 0) && !pesoVacioPermitido)
     ) return;
     if (guardando) return;
 
@@ -719,7 +753,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           stock_minimo: stockMinimo,
           descripcion: original.descripcion ?? null,
           ...(original.tipo === "Insumo"
-            ? { iva: original.iva ?? 0 }
+            ? {
+                iva: original.iva ?? 0,
+                // Se omite si queda vacío (insumo antiguo con NULL): no cambia.
+                ...(pesoMedida > 0 ? { peso_medida: pesoMedida } : {}),
+              }
             : {}),
         });
         setInsumos(prev => prev.map(i => (i.id === editingId ? actualizado : i)));
@@ -746,6 +784,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         tipo: "Insumo",
         id_categoria_insumo: Number(categoriaId),
         unidad_medida: resolverPresentacionUnidad(unidad, contenidoPresentacion)?.unidadBase ?? unidad,
+        peso_medida: pesoMedida,
         stock_minimo: stockMinimo * (resolverPresentacionUnidad(unidad, contenidoPresentacion)?.contenido ?? 1),
       });
       setInsumos(prev => [creado.insumo, ...prev]);
@@ -1173,7 +1212,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       {esProductoInsumo ? "Producto insumo" : "Insumo"}
                     </span>
                   </td>
-                  <td className="px-3 py-3.5 text-sm text-muted-foreground">{insumo.unidadMedida}</td>
+                  <td className="px-3 py-3.5 text-sm text-muted-foreground">
+                    <div>{insumo.unidadMedida}</div>
+                    {insumo.pesoMedida != null && (
+                      <div className="text-[11px] text-muted-foreground">
+                        {formatoCantidad.format(insumo.pesoMedida)} {insumo.unidadMedida}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-3.5">
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
@@ -1596,6 +1642,33 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       )}
                     </div>
                   </div>
+                  {/* Peso de medida: cantidad exacta de una unidad del insumo
+                      (ej. 1200 g). Obligatorio al crear; los insumos antiguos
+                      lo tienen en NULL y se completan al editar. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Peso de medida *</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={pesoMedida === 0 ? "" : pesoMedida}
+                        placeholder="Ej: 1200"
+                        onChange={e => {
+                          setPesoMedida(numeroDeInput(limpiarNumeroInput(e.target.value)));
+                          tocar("pesoMedida");
+                        }}
+                        onBlur={() => tocar("pesoMedida")}
+                        className="w-full px-3 py-2.5 pr-14 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        {unidadPeso}
+                      </span>
+                    </div>
+                    {errorDe("pesoMedida", errores.pesoMedida) && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.pesoMedida}</p>
+                    )}
+                  </div>
                   {/* Punto 10: el Stock Actual solo aparece al EDITAR (al crear
                       el stock se carga después de dar de alta el insumo). Es
                       SOLO LECTURA: el stock lo mueven Compras (suma) y
@@ -1787,6 +1860,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                             <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Actual</label>
                             <p className="text-sm font-mono font-bold text-foreground">{d.stockActual}</p>
                           </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Peso de medida</label>
+                          <p className="text-sm font-mono text-foreground">
+                            {d.pesoMedida != null
+                              ? `${formatoCantidad.format(d.pesoMedida)} ${d.unidadMedida}`
+                              : "—"}
+                          </p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>

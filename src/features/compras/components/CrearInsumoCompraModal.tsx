@@ -45,12 +45,16 @@ export function CrearInsumoCompraModal({
   const [unidad, setUnidad] = useState("kg");
   const [contenidoPresentacion, setContenidoPresentacion] = useState(0);
   const [stockMinimo, setStockMinimo] = useState(0);
+  /** Peso de medida (cantidad exacta en la unidad elegida, ej. 1200 g).
+      Obligatorio al crear. */
+  const [pesoMedida, setPesoMedida] = useState(0);
   const [tocado, setTocado] = useState({
     nombre: false,
     categoria: false,
     unidad: false,
     contenidoPresentacion: false,
     stockMinimo: false,
+    pesoMedida: false,
   });
   const [intentoGuardar, setIntentoGuardar] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -73,8 +77,14 @@ export function CrearInsumoCompraModal({
         !Number.isFinite(stockMinimo) || stockMinimo < 0
           ? "El stock mínimo no puede ser negativo."
           : undefined,
+      pesoMedida:
+        pesoMedida < 0
+          ? "El peso de medida no puede ser negativo."
+          : pesoMedida > 0
+            ? undefined
+            : "El peso de medida es obligatorio.",
     };
-  }, [nombre, categoriaId, unidad, contenidoPresentacion, stockMinimo, insumosExistentes]);
+  }, [nombre, categoriaId, unidad, contenidoPresentacion, stockMinimo, pesoMedida, insumosExistentes]);
 
   const presentacion = resolverPresentacionUnidad(unidad, contenidoPresentacion);
   const errorDe = (campo: keyof typeof tocado, error?: string) =>
@@ -96,6 +106,7 @@ export function CrearInsumoCompraModal({
         tipo: "Insumo",
         id_categoria_insumo: Number(categoriaId),
         unidad_medida: presentacion?.unidadBase ?? unidad,
+        peso_medida: pesoMedida,
         stock_minimo: stockMinimo * (presentacion?.contenido ?? 1),
       });
       onGuardar(creado.insumo);
@@ -238,6 +249,43 @@ export function CrearInsumoCompraModal({
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Peso de medida: cantidad exacta de una unidad del insumo
+                (ej. 1200 g). Obligatorio al crear. */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                Peso de medida *
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.01}
+                  value={pesoMedida === 0 ? "" : pesoMedida}
+                  placeholder="Ej: 1200"
+                  disabled={guardando}
+                  onChange={(event) => {
+                    setPesoMedida(numeroDeInput(limpiarNumeroInput(event.target.value)));
+                    tocar("pesoMedida");
+                  }}
+                  onBlur={() => tocar("pesoMedida")}
+                  className={`${campoConError(errorDe("pesoMedida", errores.pesoMedida))} pr-14`}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  {presentacion?.unidadBase ??
+                    (esOtraPresentacion(unidad)
+                      ? unidad === OTRA_PRESENTACION_G
+                        ? "g"
+                        : "ml"
+                      : unidad)}
+                </span>
+              </div>
+              {errorDe("pesoMedida", errores.pesoMedida) && (
+                <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                  {errores.pesoMedida}
+                </p>
+              )}
             </div>
 
             <div>

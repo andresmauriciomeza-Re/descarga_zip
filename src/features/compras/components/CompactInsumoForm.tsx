@@ -51,6 +51,9 @@ export interface InsumoSuggestion {
   /** Presentación de la bebida ("1.5 L", "400 ml"): va en la segunda línea
    *  de la sugerencia para distinguir presentaciones del mismo producto. */
   contenido?: string;
+  /** Peso/cantidad exacta del insumo en su unidad de medida (ej. 1200 g).
+   *  Si existe se muestra en la sugerencia en lugar de la unidad suelta. */
+  pesoMedida?: number | null;
 }
 
 export interface CompactInsumoFormValues {
@@ -72,6 +75,9 @@ function fmtCompactCOP(n: number) {
     maximumFractionDigits: 0,
   }).format(n);
 }
+
+/** Cantidad con hasta 2 decimales (para el peso de medida, ej. "1200"). */
+const formatoCantidad = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
 
 function numeroDesdeTexto(texto: string): number {
   const normalizado = texto.trim().replace(",", ".");
@@ -176,6 +182,11 @@ export interface CompactInsumoFormProps {
   modoIva?: ModoIva;
   ivaAntesDeExento?: number;
   onModoIvaChange?: (modo: ModoIva) => void;
+  /** Peso/cantidad exacta del insumo SELECCIONADO (ej. 1200 g). Si existe
+   *  se pinta como ayuda bajo la línea ("Peso de medida: 1200 g"); lo pasan
+   *  las pantallas de Compras/Orden/Recepción al elegir un insumo del
+   *  catálogo. Sin insumo elegido (o en productos) queda en null. */
+  pesoMedida?: number | null;
 }
 
 export function CompactInsumoForm({
@@ -224,6 +235,7 @@ export function CompactInsumoForm({
   modoIva: modoIvaControlado,
   ivaAntesDeExento: ivaAntesDeExentoInicial,
   onModoIvaChange,
+  pesoMedida = null,
 }: CompactInsumoFormProps) {
   const esCompacta = variante === "compacta";
   /** Punto 3: UNA sola altura de control por variante — 40px en la normal y
@@ -681,9 +693,17 @@ export function CompactInsumoForm({
                     <p className="font-semibold text-foreground">{ins.nombre}</p>
                     {/* Contenido ("1.5 L") + medida + monto: para las bebidas
                         la medida es la presentación de compra
-                        ("Paca x12") y el monto el precio de esa paca. */}
+                        ("Paca x12") y el monto el precio de esa paca. Con
+                        peso de medida (ej. 1200 g) se muestra ÉL en lugar de
+                        la unidad suelta. */}
                     <p className="text-muted-foreground">
-                      {[ins.contenido, ins.unidadMedida, fmtCompactCOP(ins.costoUnitario)]
+                      {[
+                        ins.contenido,
+                        ins.pesoMedida != null
+                          ? `${formatoCantidad.format(ins.pesoMedida)} ${ins.unidadMedida}`
+                          : ins.unidadMedida,
+                        fmtCompactCOP(ins.costoUnitario),
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -1010,6 +1030,14 @@ export function CompactInsumoForm({
             unidad base ("= 20 kg al inventario · costo $2.500/kg"). */}
         {ayudaLinea && (
           <p className="text-[11px] text-muted-foreground mt-1.5">{ayudaLinea}</p>
+        )}
+
+        {/* Peso de medida del insumo elegido (si lo tiene): dato
+            informativo de la línea, en el mismo estilo de la ayuda. */}
+        {pesoMedida != null && (
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            Peso de medida: {formatoCantidad.format(pesoMedida)} {unidadBase ?? unidad}
+          </p>
         )}
 
       </div>
