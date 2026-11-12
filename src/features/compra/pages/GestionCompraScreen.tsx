@@ -10,8 +10,8 @@ import { esIdInsumo } from "@/shared/utils/fichas";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
 import {
   calcularLineaIva,
-  formatearChipIva,
-  formatearModoIvaEnTabla,
+  chipIvaSinPrefijo,
+  etiquetaModoIvaSimple,
   resolverModoIva,
   sumarTotales,
   type ModoIva,
@@ -361,7 +361,7 @@ function TablaItemsFactura({
                       </div>
                       <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
                         {(row.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                        {formatearModoIvaEnTabla(resolverModoIva(row, null), row.iva)}
+                        {etiquetaModoIvaSimple(resolverModoIva(row, null))}
                       </div>
                     </td>
                     <td className={td + " text-right"}>
@@ -377,7 +377,7 @@ function TablaItemsFactura({
                       <span
                         className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-muted text-muted-foreground border border-border"
                       >
-                        {formatearChipIva(resolverModoIva(row, null), row.iva)}
+                        {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                       </span>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
@@ -1447,6 +1447,9 @@ function CompraForm({
                       setItemSugAbierto(true);
                     }}
                     onNombreFocus={() => setItemSugAbierto(true)}
+                    // Punto 7: el desplegable se cierra al salir del BUSCADOR
+                    // (otro campo del formulario, Tab, Esc o clic afuera).
+                    onCerrarSugerencias={() => setItemSugAbierto(false)}
                     cantidad={itemCantidad}
                     unidad={itemUnidad}
                     onUnidadChange={setItemUnidad}
@@ -1510,6 +1513,9 @@ function CompraForm({
                     // (unidades compatibles + configuradas + "Otra…").
                     ocultarMedida={false}
                     medidaSoloLectura={itemTipo === "producto"}
+                    // Punto 5: en la Nueva Compra la Medida del Contenido la
+                    // define el ítem del catálogo (Recepción la deja editable).
+                    medidaContenidoBloqueada
                     etiquetaNombre={itemTipo === "producto" ? "Producto" : "Insumo"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
@@ -1696,7 +1702,7 @@ function CompraForm({
                                   {fmtCOP(row.precioUnitario)}
                                 </td>
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground">
-                                  {formatearChipIva(resolverModoIva(row, null), row.iva)}
+                                  {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                                 </td>
                                 <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground whitespace-nowrap">
                                   {fmtCOP(l.montoIva)}
