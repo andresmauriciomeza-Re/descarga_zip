@@ -25,10 +25,25 @@ export const etiquetaPresentacion = (
   unidad: string,
   factor: number | null | undefined,
   unidadBase: string | null | undefined,
-): string =>
-  esEmpaque(unidad) && factor != null && Number.isFinite(factor) && factor > 0 && unidadBase?.trim()
-    ? `${unidad} × ${factor.toLocaleString("es-CO", { maximumFractionDigits: 12 })} ${unidadBase.trim()}`
-    : unidad;
+  /** Peso exacto de una unidad del insumo (900 ml): con él la etiqueta dice
+   *  cuántas unidades trae la presentación ("caja × 12 de 900 ml"). */
+  pesoMedida?: number | null,
+  /** Bebidas: tamaño de UNA unidad ("400 ml"); el factor ya cuenta
+   *  unidades, así que la etiqueta queda "paca × 12 de 400 ml". */
+  tamanoUnidad?: string | null,
+): string => {
+  if (!(esEmpaque(unidad) && factor != null && Number.isFinite(factor) && factor > 0 && unidadBase?.trim())) {
+    return unidad;
+  }
+  if (pesoMedida != null && Number.isFinite(pesoMedida) && pesoMedida > 0) {
+    const fmt = (n: number) => n.toLocaleString("es-CO", { maximumFractionDigits: 4 });
+    return `${unidad} × ${fmt(factor / pesoMedida)} de ${fmt(pesoMedida)} ${unidadBase.trim()}`;
+  }
+  if (tamanoUnidad?.trim()) {
+    return `${unidad} × ${factor.toLocaleString("es-CO", { maximumFractionDigits: 4 })} de ${tamanoUnidad.trim()}`;
+  }
+  return `${unidad} × ${factor.toLocaleString("es-CO", { maximumFractionDigits: 12 })} ${unidadBase.trim()}`;
+};
 
 /**
  * A5.2 — Una sola lista de unidades para TODO lo que es insumo: el selector

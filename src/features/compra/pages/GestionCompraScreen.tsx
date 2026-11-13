@@ -61,6 +61,7 @@ import { obtenerOrdenCompra } from "@/features/orden-compra/services/ordenesComp
 import {
   contenidoDe,
   empaqueDe,
+  medidaCompra,
   nombreBuscable,
   presentacionCompra,
 } from "@/shared/utils/presentacion";
@@ -184,6 +185,10 @@ type ItemFactura = {
    *  en unidad base o en presentaciones ya configuradas del insumo. */
   factorPresentacion?: number;
   unidadBase?: string;
+  /** Peso exacto del insumo (900 ml): sólo para la etiqueta de la tabla. */
+  pesoMedida?: number | null;
+  /** Bebidas: tamaño de una unidad ("400 ml"), sólo para la etiqueta. */
+  tamanoUnidad?: string;
   stockApiAplicado?: boolean;
   stockApiRevertido?: boolean;
   stockApiPendiente?: boolean;
@@ -367,7 +372,7 @@ function TablaItemsFactura({
                     <td className={td + " text-right"}>
                       <div className="text-sm text-foreground">{row.cantidad}</div>
                       <div className="text-[11px] text-muted-foreground break-words">
-                        {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase)}
+                        {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase, row.pesoMedida, row.tamanoUnidad)}
                       </div>
                     </td>
                     <td className={td + " text-sm text-right whitespace-nowrap"}>
@@ -387,7 +392,12 @@ function TablaItemsFactura({
                       {fmtCOP(l.subtotalConIva)}
                     </td>
                     <td className={td + " whitespace-nowrap"}>
-                      <div className="flex items-center gap-1">
+                      {/* Mientras la fila está cargada en el formulario se
+                          ocultan sus acciones (sin mover la columna). */}
+                      <div
+                        className={`flex items-center gap-1${editandoFila ? " invisible" : ""}`}
+                        aria-hidden={editandoFila || undefined}
+                      >
                         <button
                           type="button"
                           onClick={() => onEdit(row)}
@@ -774,10 +784,11 @@ function CompraForm({
   const seleccionarProducto = (p: Producto) => {
     setItemId(p.id);
     setItemNombre(p.nombre);
-    // Ajuste de bebidas: la Medida muestra la presentación de compra
-    // ("Paca x12", "Caja x6" o la unidad de venta) y la línea guarda el
-    // empaque para saber cuántas unidades trae.
-    setItemUnidad(presentacionCompra(p));
+    // Punto 6: la Medida guarda el TOKEN que el backend acepta en `medida`
+    // ("caja", "paca" o "und"); "Paca x12" no está en UNIDADES_COMPRA y el
+    // guardado respondía 400. La etiqueta visible ("Caja x6") se arma en la
+    // tabla con etiquetaPresentacion(unidad, factor, unidadBase).
+    setItemUnidad(medidaCompra(p));
     const factor = empaqueDe(p);
     setItemEmpaque(factor > 1 ? factor : undefined);
     // Punto B1: el monto es SIEMPRE `costoUnitario` (que en el catálogo es
@@ -828,19 +839,34 @@ function CompraForm({
     (resolverModoIva(i, null) === "mas_iva" ? i.precioUnitario * (1 + i.iva / 100) : i.precioUnitario) /
     unidadesPorLinea(i);
 
-  /** Unidad que se guarda en la fila. Para PRODUCTOS manda la presentación
-   *  de compra del catálogo ("Paca x12"); para INSUMOS manda lo elegido en
-   *  Presentación (unidad base, compatible o presentación configurada — la
-   *  fila puede comprarse en "paca"). Sólo sin nada seleccionado se cae en
-   *  el campo o en "und". */
+  /** Unidad que se guarda en la fila. Punto 6: en PRODUCTOS manda lo que
+   *  quedó en el campo Presentación (el token "caja"/"paca"/"und"; al elegir
+   *  el producto se precarga con `medidaCompra`), y sólo sin nada se cae al
+   *  token del catálogo o a "und". En INSUMOS manda lo elegido en
+   *  Presentación (unidad base, compatible o presentación configurada). */
   const unidadElegida = () => {
     if (itemTipo === "producto") {
       const p = productos?.find((x) => x.id === itemId);
-      const delCatalogo = p ? presentacionCompra(p) : undefined;
-      return delCatalogo?.trim() || itemUnidad.trim() || "und";
+      const delCatalogo = p ? medidaCompra(p) : undefined;
+      return itemUnidad.trim() || delCatalogo || "und";
     }
     return itemUnidad.trim() || "und";
   };
+
+  /** Fila que se está editando con el lápiz de la tabla: su Contenido y su
+   *  Presentación se recargan en el formulario (punto 6) sin pisarlos con el
+   *  factor configurado del catálogo. */
+  const filaEditando = editando
+    ? items.find((item) => item.rowId === editando)
+    : undefined;
+
+  /** Bebidas: tamaño de una unidad del producto ("400 ml") o undefined. */
+  const tamanoDeProducto = (id: string) => {
+    const p = productos?.find((x) => x.id === id);
+    return (p && contenidoDe(p)) || undefined;
+  };
+  const tamanoDeFila = (row: Pick<ItemFactura, "tipoItem" | "idInsumo">) =>
+    row.tipoItem === "producto" ? tamanoDeProducto(row.idInsumo) : undefined;
 
   const agregarItem = ({
     cantidad,
@@ -849,6 +875,7 @@ function CompraForm({
     precioVenta,
     modoIva,
     factorPresentacion,
+    unidadBase,
   }: CompactInsumoFormValues) => {
     // El formulario ya no exige un selector global; cada línea lleva su `modoIva`.
     if (!itemNombre.trim()) {
@@ -869,37 +896,65 @@ function CompraForm({
       toast.error("El IVA debe estar entre 0 y 100.");
       return;
     }
+    const unidad = unidadElegida();
+    /** Punto 6: Contenido de ESTA línea (si se compró en un empaque). Es lo
+     *  que viaja como `factor_presentacion` y lo que manda en los cálculos
+     *  por unidad, por encima del empaque del catálogo. */
+    const factorLinea =
+      factorPresentacion != null && factorPresentacion > 0 ? factorPresentacion : null;
+    /** Empaque del catálogo sólo si la línea sigue en una presentación: un
+     *  producto en "paca ×12" comprado en "und" suelta entra de a 1. */
+    const empaqueCatalogo =
+      esEmpaque(unidad) && itemEmpaque && itemEmpaque > 1 ? itemEmpaque : undefined;
     // Punto B2 + punto 3: en PRODUCTOS el precio de venta es obligatorio y
-    // tiene que quedar por encima del costo por unidad CON IVA: sin esto la
-    // línea no se agrega y la bebida seguiría sin precio de venta en el
-    // catálogo.
+    // tiene que quedar por encima del costo por unidad CON IVA (dividido por
+    // el factor de ESTA línea): sin esto la línea no se agrega y la bebida
+    // seguiría sin precio de venta en el catálogo.
     if (itemTipo === "producto") {
       if (!precioVenta || precioVenta <= 0) {
         toast.error("El precio de venta del producto debe ser mayor que cero.");
         return;
       }
-      if (precioVenta <= costoConIva(precio, iva, modoIva ?? "incluido") / itemFactor) {
+      if (
+        precioVenta <=
+        costoConIva(precio, iva, modoIva ?? "incluido") / (factorLinea ?? empaqueCatalogo ?? 1)
+      ) {
         toast.error("El precio de venta debe ser mayor que el costo por unidad con IVA.");
         return;
       }
     }
-    if (
-      items.some(
-        (item) =>
-          item.rowId !== editando &&
-          (item.tipoItem ?? "insumo") === itemTipo &&
-          item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()
-      )
-    ) {
-      toast.error("Este ítem ya fue agregado a la factura.");
+    // Punto 9 (sólo Nueva Compra): ya NO se bloquea por nombre. Sólo se
+    // bloquea la LÍNEA IDÉNTICA — mismo ítem, Presentación, Contenido,
+    // monto, modo/IVA y precio de venta; la CANTIDAD no compara, porque lo
+    // correcto para sumar más unidades es editar la cantidad en la tabla.
+    // Así se pueden apilar líneas del mismo ítem con distinto precio o
+    // Contenido (p. ej. una caja de 6 lt y otra de 18 lt).
+    const lineaRepetida = items.some(
+      (item) =>
+        item.rowId !== editando &&
+        (item.tipoItem ?? "insumo") === itemTipo &&
+        (itemId
+          ? item.idInsumo === itemId
+          : item.nombre.toLowerCase() === itemNombre.trim().toLowerCase()) &&
+        item.unidad === unidad &&
+        (item.factorPresentacion ?? null) === factorLinea &&
+        item.precioUnitario === precio &&
+        (item.modoIva ?? "incluido") === (modoIva ?? "incluido") &&
+        item.iva === iva &&
+        (item.precioVenta ?? null) === (precioVenta ?? null)
+    );
+    if (lineaRepetida) {
+      toast.error("Ya agregaste esta misma línea. Edita su cantidad en la tabla.");
       return;
     }
 
     const lineaActualizada: ItemFactura = {
-      rowId: editando ?? `fact-${Date.now()}`,
+      // Punto 9: id único por fila (Date.now() colisionaba entre líneas
+      // agregadas muy seguidas).
+      rowId: editando ?? crypto.randomUUID(),
       idInsumo: itemId || `INS-FAC-${Date.now()}`,
       nombre: itemNombre.trim(),
-      unidad: unidadElegida(),
+      unidad,
       cantidad,
       costoUnitario: precio,
       precioUnitario: precio,
@@ -907,16 +962,20 @@ function CompraForm({
       modoIva: modoIva ?? itemModoIva,
       tipoItem: itemTipo,
       precioVenta: itemTipo === "producto" ? precioVenta : undefined,
+      // Punto 6: para productos el empaque de la LÍNEA manda sobre el del
+      // catálogo (el Contenido pudo ajustarse en el formulario); para
+      // insumos se conserva sin cambios (su costo por unidad usa el modo de
+      // siempre y la etiqueta sale de factorPresentacion + unidadBase).
       unidadesPorEmpaque:
-        itemTipo === "producto" && itemEmpaque && itemEmpaque > 1
-          ? itemEmpaque
+        itemTipo === "producto"
+          ? factorLinea ?? empaqueCatalogo
           : undefined,
-      // Presentaciones: el factor de la presentación elegida (si la línea se
-      // compró en un empaque configurado) viaja al backend.
-      factorPresentacion:
-        factorPresentacion != null && factorPresentacion > 0
-          ? factorPresentacion
-          : undefined,
+      // Presentaciones: el Contenido de la línea viaja al backend como
+      // `factor_presentacion` (insumos y productos).
+      factorPresentacion: factorLinea ?? undefined,
+      // Unidad base de la línea ("lt", "und"…): la tabla arma con ella la
+      // etiqueta "caja × 6 lt" y distingue líneas del mismo ítem.
+      unidadBase,
     };
 
     setItems((prev) =>
@@ -943,7 +1002,7 @@ function CompraForm({
   const limpiarFilaInsumo = (tipo: TipoItem = itemTipo, cancelarEdicion = true) => {
     setItemNombre("");
     setItemCantidad(1);
-    setItemUnidad(tipo === "producto" ? "" : "und");
+    setItemUnidad("und");
     setItemEmpaque(undefined);
     setItemPrecio(0);
     setItemIva(undefined);
@@ -1442,7 +1501,7 @@ function CompraForm({
                       // Escribir a mano suelta la presentación elegida: la
                       // Medida queda vacía (producto) o "und" (insumo) y el
                       // empaque de la paca/caja se limpia.
-                      setItemUnidad(itemTipo === "producto" ? "" : "und");
+                      setItemUnidad("und");
                       setItemEmpaque(undefined);
                       setItemSugAbierto(true);
                     }}
@@ -1466,14 +1525,51 @@ function CompraForm({
                     unidadBase={
                       itemTipo === "insumo"
                         ? insumos.find((i) => i.id === itemId)?.unidadMedida?.trim() || undefined
-                        : undefined
+                        : // Punto 6: en PRODUCTOS la unidad base es su unidad
+                          // de venta ("und"): contra ella se lee y calcula el
+                          // Contenido de la caja/paca de ESTA línea.
+                          productos?.find((x) => x.id === itemId)?.unidadVenta?.trim() ||
+                          undefined
                     }
+                    // Punto 6: al editar, el Contenido/Presentación de la
+                    // FILA recargados mandan sobre el factor del catálogo; al
+                    // agregar un producto nuevo se precarga su empaque.
+                    factorPresentacionInicial={
+                      editando
+                        ? filaEditando?.factorPresentacion ??
+                          filaEditando?.unidadesPorEmpaque
+                        : itemTipo === "producto"
+                          ? itemEmpaque
+                          : undefined
+                    }
+                    presentacionInicial={
+                      editando
+                        ? filaEditando?.unidad
+                        : itemTipo === "producto"
+                          ? // La presentación del CATÁLOGO (no la elegida): su
+                            // empaque sólo se sugiere para esa presentación.
+                            (() => {
+                              const p = productos?.find((x) => x.id === itemId);
+                              return p ? medidaCompra(p) : undefined;
+                            })()
+                          : undefined
+                    }
+                    // Punto 6: el Contenido no pisa la presentación guardada
+                    // del insumo (sólo la crea si no existía).
+                    contenidoPorLinea
                     // Peso de medida del insumo elegido (si lo tiene): se
                     // muestra como ayuda bajo la línea del formulario.
                     pesoMedida={
                       itemTipo === "insumo"
                         ? insumos.find((i) => i.id === itemId)?.pesoMedida ?? null
                         : null
+                    }
+                    // Bebidas: tamaño de una unidad ("400 ml") en Medida y en
+                    // la ayuda (el stock sigue contando unidades).
+                    tamanoUnidad={
+                      itemTipo === "producto"
+                        ? tamanoDeProducto(itemId)
+                        : undefined
                     }
                     etiquetaUnidad="Presentación"
                     // Punto 3: costo de referencia CON IVA que se muestra
@@ -1519,10 +1615,14 @@ function CompraForm({
                     // x12"); para INSUMOS es el select de presentaciones
                     // (unidades compatibles + configuradas + "Otra…").
                     ocultarMedida={false}
-                    medidaSoloLectura={itemTipo === "producto"}
+                    // Punto 6: la Presentación de PRODUCTOS ya no es texto
+                    // fijo ("Paca x12"): es el mismo select con el token
+                    // válido y su Contenido editable en la línea.
                     // Punto 5: en la Nueva Compra la Medida del Contenido la
                     // define el ítem del catálogo (Recepción la deja editable).
                     medidaContenidoBloqueada
+                    // IVA obligatorio (> 0) con "IVA incluido" o "IVA adicional".
+                    ivaObligatorio
                     etiquetaNombre={itemTipo === "producto" ? "Producto" : "Insumo"}
                     // P14: el atajo "+ Crear insumo" sólo aplica a insumos.
                     ocultarCrearInsumo={itemTipo === "producto"}
@@ -1698,7 +1798,7 @@ function CompraForm({
                                   {row.cantidad}
                                   {esEmpaque(row.unidad) && (
                                     <div className="text-[11px] text-muted-foreground break-words">
-                                      {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase ?? insumos.find((i) => i.id === row.idInsumo)?.unidadMedida)}
+                                      {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase ?? insumos.find((i) => i.id === row.idInsumo)?.unidadMedida, insumos.find((i) => i.id === row.idInsumo)?.pesoMedida, tamanoDeFila(row))}
                                     </div>
                                   )}
                                 </td>
@@ -1756,6 +1856,8 @@ function CompraForm({
                   items={items.map((item) => ({
                     ...item,
                     unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                    pesoMedida: insumos.find((i) => i.id === item.idInsumo)?.pesoMedida ?? null,
+                    tamanoUnidad: tamanoDeFila(item),
                   }))}
                   onEdit={editarItem}
                   onRemove={eliminarItem}

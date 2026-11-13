@@ -131,6 +131,17 @@ export interface CompactInsumoFormProps {
    *  la deja en false porque ahí la unidad base todavía no existe y se puede
    *  elegir. Sin ítem seleccionado el campo aparece vacío y deshabilitado. */
   medidaContenidoBloqueada?: boolean;
+  /** Punto 6 (Nueva Compra): el Contenido es un dato de la LÍNEA y no pisa el
+   *  factor guardado de la presentación: el upsert a tb_insumo_presentacion
+   *  sólo ocurre cuando esa presentación AÚN NO existe para el insumo. Si ya
+   *  existe (aunque tenga otro valor), la línea viaja con su propio
+   *  `factor_presentacion` sin tocar el catálogo. Por defecto false →
+   *  comportamiento actual (el último valor escrito gana). */
+  contenidoPorLinea?: boolean;
+  /** Nueva Compra / Nueva Orden de Compra: con "IVA incluido" o "IVA
+   *  adicional" el IVA es OBLIGATORIO y mayor que 0 (un 0 % se registra con
+   *  "Sin IVA"). Por defecto false → se acepta 0 como hasta ahora. */
+  ivaObligatorio?: boolean;
   /** P14: control propio del formulario que ocupa el hueco de Medida (p. ej.
    *  el selector de tipo de ítem Insumo / Producto de la Nueva compra). Va sin
    *  envolver: quien lo pasa define su propio label, ancho y controles. */
@@ -187,6 +198,11 @@ export interface CompactInsumoFormProps {
    *  las pantallas de Compras/Orden/Recepción al elegir un insumo del
    *  catálogo. Sin insumo elegido (o en productos) queda en null. */
   pesoMedida?: number | null;
+  /** Bebidas: tamaño de UNA unidad del producto ("400 ml", "1.5 L"). Con la
+   *  Medida bloqueada se muestra en Medida y en la ayuda ("= 24 de 400 ml
+   *  al inventario · c/u de 400 ml: $ 2.000"). Sólo se muestra: el stock de
+   *  productos se cuenta en unidades, así que el factor no cambia. */
+  tamanoUnidad?: string;
 }
 
 export function CompactInsumoForm({
@@ -218,6 +234,8 @@ export function CompactInsumoForm({
   ocultarMedida = false,
   medidaSoloLectura = false,
   medidaContenidoBloqueada = false,
+  contenidoPorLinea = false,
+  ivaObligatorio = false,
   campoExtra,
   headerExtra,
   ocultarCrearInsumo = false,
@@ -236,6 +254,7 @@ export function CompactInsumoForm({
   ivaAntesDeExento: ivaAntesDeExentoInicial,
   onModoIvaChange,
   pesoMedida = null,
+  tamanoUnidad,
 }: CompactInsumoFormProps) {
   const esCompacta = variante === "compacta";
   /** Punto 3: UNA sola altura de control por variante — 40px en la normal y
@@ -355,6 +374,17 @@ export function CompactInsumoForm({
     ({ valor }) => valor === baseUnidad,
   );
 
+  /** Con la Medida bloqueada (Compra/Orden) y un insumo con PESO EXACTO
+   *  ("900 ml"), el Contenido cuenta en unidades de ese peso: 6 = 6 × 900 ml
+   *  = 5.400 ml por presentación. Sin peso, 1 (el Contenido va en la unidad
+   *  base, como siempre). El factor que se guarda y viaja al backend sigue
+   *  estando en la unidad base. */
+  const pesoUnidadContenido =
+    medidaContenidoBloqueada && pesoMedida != null && pesoMedida > 0 ? pesoMedida : 1;
+  /** Factor en unidad base → Contenido que se muestra (5.400 ml → 6). */
+  const contenidoDesdeFactor = (factorBase: number) =>
+    Number((factorBase / pesoUnidadContenido).toFixed(4));
+
   // Opciones del selector: unidades compatibles y los empaques permitidos.
   const opcionesUnidad: OpcionUnidad[] = (() => {
     const compatibles = baseUnidad ? unidadesCompatibles(baseUnidad) : [];
@@ -373,7 +403,9 @@ export function CompactInsumoForm({
       const configurada = presentaciones.find((p) => p.presentacion === empaque);
       lista.push({
         valor: empaque,
-        etiqueta: configurada
+        // Compra/Orden: la opción dice sólo la presentación ("caja", "paq");
+        // su contenido se ve y se edita en el campo Contenido.
+        etiqueta: configurada && !medidaContenidoBloqueada
           ? `${empaque} ×${configurada.unidadesBase} ${baseUnidad}`
           : empaque,
         divisorAntes: empaque === PRESENTACIONES_COMPRA[0],
@@ -405,8 +437,13 @@ export function CompactInsumoForm({
     const configurada = presentaciones.find((p) => p.presentacion === unidad);
     const factorInicial =
       unidad === presentacionInicial ? factorPresentacionInicial : undefined;
-    const factorPrecargado = configurada?.unidadesBase ?? factorInicial;
-    setContenidoTexto(factorPrecargado != null ? String(factorPrecargado) : "");
+    // Punto 6: el Contenido de la LÍNEA que se está editando (o el empaque
+    // precargado del producto nuevo) manda sobre el factor configurado del
+    // catálogo; sin factor propio se precarga el guardado, como siempre.
+    const factorPrecargado = factorInicial ?? configurada?.unidadesBase;
+    setContenidoTexto(
+      factorPrecargado != null ? String(contenidoDesdeFactor(factorPrecargado)) : "",
+    );
     setMedidaContenido(baseUnidad && !baseUnidadLegada ? baseUnidad : "");
   }, [
     unidad,
@@ -417,6 +454,7 @@ export function CompactInsumoForm({
     presentaciones,
     factorPresentacionInicial,
     presentacionInicial,
+    pesoUnidadContenido,
   ]);
 
   useEffect(() => {
@@ -451,13 +489,26 @@ export function CompactInsumoForm({
   const medidaContenidoEfectiva = medidaContenidoBloqueada
     ? baseUnidad || medidaContenido
     : medidaContenido;
+  /** Medida del Contenido con el PESO EXACTO del insumo cuando lo tiene
+   *  ("900 ml" en vez de "ml"): el Contenido cuenta en esas unidades
+   *  (`pesoUnidadContenido`). */
+  const tienePesoMedida = pesoMedida != null && pesoMedida > 0;
+  /** Tamaño de UNA unidad que se muestra en Medida: el peso exacto del
+   *  insumo ("900 ml") o el tamaño de la bebida ("400 ml"). */
+  const etiquetaUnidadContenido =
+    tienePesoMedida && medidaContenidoEfectiva
+      ? `${formatoCantidad.format(pesoMedida)} ${medidaContenidoEfectiva}`
+      : medidaContenidoBloqueada && tamanoUnidad?.trim()
+        ? tamanoUnidad.trim()
+        : "";
+  const medidaContenidoVisible = etiquetaUnidadContenido || medidaContenidoEfectiva;
   const contenido = numeroDesdeTexto(contenidoTexto);
   const conversionContenido = factorUnidadDirecta(medidaContenidoEfectiva, medidaBaseContenido);
   const factorCalculado =
     Number.isFinite(contenido) &&
     contenido > 0 &&
     conversionContenido != null
-      ? contenido * conversionContenido
+      ? Number((contenido * conversionContenido * pesoUnidadContenido).toFixed(6))
       : null;
   const factorDirecto =
     baseUnidad !== "" ? factorDePresentacion(unidad, baseUnidad, presentaciones) : null;
@@ -506,25 +557,43 @@ export function CompactInsumoForm({
     (!Number.isFinite(precioNumero) || precioNumero <= 0)
       ? "El monto unitario debe ser mayor que cero."
       : "";
+  /** IVA de un modo gravado válido: 0–100, o 1–100 con `ivaObligatorio`. */
+  const ivaGravadoValido =
+    !ivaVacio &&
+    Number.isFinite(ivaNumero) &&
+    (ivaObligatorio ? ivaNumero > 0 : ivaNumero >= 0) &&
+    ivaNumero <= 100;
   const errorIva =
     modoIvaActual !== "exento" && (intentoAgregar || !ivaVacio)
       ? ivaVacio
         ? "Ingresa el IVA."
         : !Number.isFinite(ivaNumero) || ivaNumero < 0 || ivaNumero > 100
           ? "El IVA debe estar entre 0 y 100."
-          : ""
+          : ivaObligatorio && ivaNumero === 0
+            ? "El IVA debe ser mayor que 0. Si la línea no lleva IVA, elige «Sin IVA»."
+            : ""
       : "";
   // Ayuda bajo la fila: qué entra al inventario y a qué costo por unidad base
   // (ej. "= 20 kg al inventario · costo $2.500/kg").
   const baseTotal = Number((cantidadNumero * factorLinea).toFixed(2));
-  const ayudaLinea =
-    medidaBaseContenido &&
+  const ayudaValida =
+    Boolean(medidaBaseContenido) &&
     Number.isFinite(baseTotal) &&
     baseTotal > 0 &&
     Number.isFinite(precioNumero) &&
-    precioNumero > 0
-      ? `= ${baseTotal.toLocaleString("es-CO", { maximumFractionDigits: 2 })} ${medidaBaseContenido} al inventario · costo ${fmtCompactCOP(precioNumero / factorLinea)}/${medidaBaseContenido}`
-      : "";
+    precioNumero > 0;
+  const fmtNum = (n: number) => n.toLocaleString("es-CO", { maximumFractionDigits: 2 });
+  /** Con peso exacto (Contenido en unidades de 900 ml) la ayuda dice cuántas
+   *  unidades entran y cuánto vale CADA una: "= 24 de 900 ml (21.600 ml) al
+   *  inventario · c/u de 900 ml: $ 6.950". */
+  const ayudaLinea = !ayudaValida
+    ? ""
+    : requiereContenido && pesoUnidadContenido !== 1
+      ? `= ${fmtNum(baseTotal / pesoUnidadContenido)} de ${fmtNum(pesoUnidadContenido)} ${medidaBaseContenido} (${fmtNum(baseTotal)} ${medidaBaseContenido}) al inventario · c/u de ${fmtNum(pesoUnidadContenido)} ${medidaBaseContenido}: ${fmtCompactCOP((precioNumero * pesoUnidadContenido) / factorLinea)}`
+      : requiereContenido && etiquetaUnidadContenido
+        ? // Bebidas: el inventario cuenta botellas; cada una es de 400 ml.
+          `= ${fmtNum(baseTotal)} de ${etiquetaUnidadContenido} al inventario · c/u de ${etiquetaUnidadContenido}: ${fmtCompactCOP(precioNumero / factorLinea)}`
+        : `= ${fmtNum(baseTotal)} ${medidaBaseContenido} al inventario · costo ${fmtCompactCOP(precioNumero / factorLinea)}/${medidaBaseContenido}`;
 
   /** Requisitos de la fila; el intento muestra los errores y nunca agrega datos inválidos. */
   const puedeAgregar =
@@ -533,8 +602,7 @@ export function CompactInsumoForm({
     cantidadNumero > 0 &&
     Number.isFinite(precioNumero) &&
     precioNumero > 0 &&
-    (modoIvaActual === "exento" ||
-      (!ivaVacio && Number.isFinite(ivaNumero) && ivaNumero >= 0 && ivaNumero <= 100)) &&
+    (modoIvaActual === "exento" || ivaGravadoValido) &&
     !faltaFactor &&
     !(
       mostrarPrecioVenta &&
@@ -553,7 +621,13 @@ export function CompactInsumoForm({
       factorPresentacion != null
     ) {
       const actual = presentaciones.find((p) => p.presentacion === unidad);
-      if (actual?.unidadesBase !== factorPresentacion) {
+      // Punto 6: con `contenidoPorLinea` sólo se CONFIGURA la presentación
+      // cuando aún no existe para el insumo; si ya existe (aunque tenga otro
+      // factor), la línea guarda el suyo y el catálogo no se pisa.
+      const debeGuardar = contenidoPorLinea
+        ? actual == null
+        : actual?.unidadesBase !== factorPresentacion;
+      if (debeGuardar) {
         setGuardandoPresentacion(true);
         try {
           const guardada = await guardarPresentacion(insumoId, unidad, factorPresentacion);
@@ -638,7 +712,17 @@ export function CompactInsumoForm({
           {/* Nombre — su celda es también el WRAPPER del buscador (punto 7):
               contiene el input y la lista, el "adentro" para cerrar el
               desplegable. */}
-          <div ref={buscadorRef} className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}>
+          <div
+            ref={buscadorRef}
+            // Punto 7: el foco que SALE del buscador + su lista (Tab, clic en
+            // otro campo) cierra el desplegable; moverse dentro no lo cierra.
+            onBlur={(evento) => {
+              const destino = evento.relatedTarget as Node | null;
+              if (destino && evento.currentTarget.contains(destino)) return;
+              onCerrarSugerencias?.();
+            }}
+            className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}
+          >
             <label className={esCompacta ? labelClsCompacta : labelCls}>{etiquetaNombre}</label>
 
             <div className="relative">
@@ -648,14 +732,6 @@ export function CompactInsumoForm({
                 value={nombre}
                 onChange={(e) => onNombreChange(e.target.value)}
                 onFocus={bloqueado ? undefined : onNombreFocus}
-                // Punto 7: con Tab el foco sale del buscador → se cierra el
-                // desplegable (si el foco salta a una opción de la MISMA
-                // lista, no se cierra y la opción sigue funcionando).
-                onBlur={(evento) => {
-                  const destino = evento.relatedTarget as Node | null;
-                  if (destino && buscadorRef.current?.contains(destino)) return;
-                  onCerrarSugerencias?.();
-                }}
                 placeholder={readOnly ? "Solo lectura" : placeholder}
                 readOnly={readOnly}
                 disabled={disabled}
@@ -670,6 +746,9 @@ export function CompactInsumoForm({
                 {!ocultarCrearInsumo && onCrearInsumo && (
                   <button
                     type="button"
+                    // Punto 7: fuera del orden de Tab (se eligen con el ratón):
+                    // Tab desde el buscador pasa al siguiente campo y cierra.
+                    tabIndex={-1}
                     onMouseDown={() => onCrearInsumo()}
                     className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
                   >
@@ -687,6 +766,9 @@ export function CompactInsumoForm({
                   <button
                     key={ins.id}
                     type="button"
+                    // Punto 7: fuera del orden de Tab (se eligen con el ratón):
+                    // Tab desde el buscador pasa al siguiente campo y cierra.
+                    tabIndex={-1}
                     onMouseDown={() => onSelectSuggestion(ins)}
                     className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
                   >
@@ -720,6 +802,9 @@ export function CompactInsumoForm({
                   nombre.trim() !== "" && (
                     <button
                       type="button"
+                      // Punto 7: fuera del orden de Tab (se eligen con el ratón):
+                      // Tab desde el buscador pasa al siguiente campo y cierra.
+                      tabIndex={-1}
                       onMouseDown={() => onCrearProducto()}
                       className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
                     >
@@ -853,7 +938,7 @@ export function CompactInsumoForm({
                       "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                     }
                   >
-                    {medidaContenidoEfectiva}
+                    {medidaContenidoVisible}
                   </div>
                 ) : (
                   <UnidadSelect
@@ -920,7 +1005,9 @@ export function CompactInsumoForm({
 
           {modoIvaActual !== "exento" && (
             <div className={`${esCompacta ? "w-[76px] flex-none" : "w-[88px]"}`}>
-              <label className={esCompacta ? labelClsCompacta : labelCls}>IVA</label>
+              <label className={esCompacta ? labelClsCompacta : labelCls}>
+                IVA{ivaObligatorio && <span className="text-destructive"> *</span>}
+              </label>
               <div className="relative">
                 <input
                   type="text"
@@ -930,7 +1017,7 @@ export function CompactInsumoForm({
                     setIvaTexto(e.target.value);
                     setIntentoAgregar(false);
                   }}
-                  placeholder="0"
+                  placeholder={ivaObligatorio ? "Ej. 19" : "0"}
                   disabled={bloqueado}
                   className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
                 />
@@ -1034,7 +1121,7 @@ export function CompactInsumoForm({
 
         {/* Peso de medida del insumo elegido (si lo tiene): dato
             informativo de la línea, en el mismo estilo de la ayuda. */}
-        {pesoMedida != null && (
+        {pesoMedida != null && !(medidaContenidoBloqueada && requiereContenido && tienePesoMedida) && (
           <p className="text-[11px] text-muted-foreground mt-1.5">
             Peso de medida: {formatoCantidad.format(pesoMedida)} {unidadBase ?? unidad}
           </p>

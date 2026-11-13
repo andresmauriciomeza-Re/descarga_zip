@@ -75,12 +75,17 @@ test("la tabla de orden muestra el tipo de IVA bajo el nombre de cada ítem", ()
     ...item,
   }));
   const html = renderToStaticMarkup(React.createElement(InsumosSolicitadosTable, { items }));
-  assert.match(html, /IVA incluido 19(?:\u00a0|&#160;|&nbsp;)%/);
   const texto = html.replace(/<[^>]*>/g, " ");
-  assert.match(texto, /Aceite\s+IVA incluido 19\s%/);
-  assert.match(texto, /Gaseosa\s+Producto ·\s+IVA adicional 5\s%/);
+  // Punto 8: bajo el nombre va SÓLO el modo de IVA, sin porcentaje.
+  assert.match(texto, /Aceite\s+IVA incluido\s+1\s+und/);
+  assert.match(texto, /Gaseosa\s+Producto ·\s+IVA adicional\s+1\s+und/);
   assert.match(texto, /Harina\s+Sin IVA/);
-  assert.match(texto, /Tomate\s+Ingresa el IVA\./);
+  assert.match(texto, /Tomate\s+IVA adicional\s+1\s+und/);
+  // Punto 8: la columna IVA pierde el prefijo "Incl."; "+5 %" se conserva.
+  assert.doesNotMatch(texto, /Incl\./);
+  assert.match(texto, /\$\s100\s+19\s%/);
+  assert.match(texto, /\+5\s%/);
+  assert.match(texto, /Ingresa el IVA\./);
 });
 
 test("la tabla muestra el factor del empaque en la unidad base sin alterar unidades sueltas", () => {
