@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { normalizarTexto } from "@/shared/utils/nombres";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
@@ -33,7 +34,7 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
-import { buscarClientePorDocumento, buscarClientesPorNombre, type ClientePorNombreApi } from "@/shared/services/authService";
+import { buscarClientePorDocumento, buscarClientesPorNombre, listarClientes, type ClienteListadoApi, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
@@ -556,18 +557,90 @@ const hoyFecha = () => {
     const [estadoBusqueda, setEstadoBusqueda] = useState<EstadoBusquedaDocumento>("inactivo");
     const [clienteInactivo, setClienteInactivo] = useState(false);
     const busquedaId = useRef(0);
-    const busquedaNombreId = useRef(0);
-    const clienteElegidoPorNombre = useRef(false);
-    const nombreClienteElegido = useRef("");
-    const usuarioActual = useRef(usuario);
-    const campoNombreRef = useRef<HTMLInputElement>(null);
-    const [resultadosNombre, setResultadosNombre] = useState<ClientePorNombreApi[]>([]);
-    const [buscandoNombre, setBuscandoNombre] = useState(false);
+    const [clientes, setClientes] = useState<ClienteListadoApi[]>([]);
+    const [estadoCargaClientes, setEstadoCargaClientes] = useState<"cargando" | "listo" | "sin-permiso" | "error">("cargando");
+    const [resultadosAlternativos, setResultadosAlternativos] = useState<ClientePorNombreApi[]>([]);
+    const [estadoAlternativo, setEstadoAlternativo] = useState<"esperando" | "buscando" | "listo" | "error">("esperando");
+    const [terminoAlternativo, setTerminoAlternativo] = useState("");
+    const [intentoCarga, setIntentoCarga] = useState(0);
+    const [busquedaCliente, setBusquedaCliente] = useState("");
+    const [clienteElegido, setClienteElegido] = useState(false);
+    const [crearCliente, setCrearCliente] = useState(false);
+    const [errorCliente, setErrorCliente] = useState(false);
+    const [documentoTocado, setDocumentoTocado] = useState(false);
+    const [nombreTocado, setNombreTocado] = useState(false);
     const [listaNombreAbierta, setListaNombreAbierta] = useState(false);
     const [indiceNombreActivo, setIndiceNombreActivo] = useState(-1);
+    const campoBusquedaRef = useRef<HTMLInputElement>(null);
     const documentoActual = useRef(documento);
     const tipoActual = useRef(tipoDocumento);
+    const usuarioActual = useRef(usuario);
     const digitosDe = (valor: string) => valor.replace(/\D/g, "");
+
+    useEffect(() => {
+      let vigente = true;
+      setEstadoCargaClientes("cargando");
+      void listarClientes().then((resultado) => {
+        if (!vigente) return;
+        setClientes(resultado);
+        setEstadoCargaClientes("listo");
+      }).catch((error: ApiErrorConEstado) => {
+        if (vigente) setEstadoCargaClientes(error.status === 403 ? "sin-permiso" : "error");
+      });
+      return () => { vigente = false; };
+    }, [intentoCarga]);
+
+    const terminoCliente = busquedaCliente.trim();
+    const busquedaNumerica = /^\d+$/.test(terminoCliente);
+    const puedeBuscar = busquedaNumerica
+      ? terminoCliente.length >= 3
+      : (terminoCliente.match(/\p{L}/gu)?.length ?? 0) >= 2;
+    const resultadosClientes = useMemo(() => {
+      if (!puedeBuscar) return [];
+      const termino = normalizarTexto(terminoCliente);
+      return clientes.filter((cliente) => busquedaNumerica
+        ? String(cliente.id_usuario).includes(terminoCliente)
+        : normalizarTexto(cliente.nombre).includes(termino))
+        .slice(0, 5)
+        .map((cliente) => ({
+          documento: cliente.id_usuario,
+          tipoDocumento: cliente.tipo_documento ?? "CC",
+          nombre: cliente.nombre,
+          estado: cliente.cliente_estado && cliente.usuario_estado,
+        }));
+    }, [clientes, puedeBuscar, busquedaNumerica, terminoCliente]);
+
+    useEffect(() => {
+      if (estadoCargaClientes !== "sin-permiso" || clienteElegido || crearCliente) return;
+      let vigente = true;
+      setTerminoAlternativo(terminoCliente);
+      setResultadosAlternativos([]);
+      if (!puedeBuscar || (busquedaNumerica ? terminoCliente.length < 6 : terminoCliente.length < 3)) {
+        setEstadoAlternativo("esperando");
+        return () => { vigente = false; };
+      }
+      setEstadoAlternativo("buscando");
+      const timer = window.setTimeout(() => {
+        const consulta = busquedaNumerica
+          ? buscarClientePorDocumento(terminoCliente).then((cliente) => [cliente]).catch((error: ApiErrorConEstado) => {
+              if (error.status === 404) return [];
+              throw error;
+            })
+          : buscarClientesPorNombre(terminoCliente);
+        void consulta.then((resultados) => {
+          if (!vigente) return;
+          setResultadosAlternativos(resultados.slice(0, 5));
+          setEstadoAlternativo("listo");
+        }).catch(() => {
+          if (vigente) setEstadoAlternativo("error");
+        });
+      }, 300);
+      return () => { vigente = false; window.clearTimeout(timer); };
+    }, [estadoCargaClientes, clienteElegido, crearCliente, puedeBuscar, busquedaNumerica, terminoCliente]);
+
+    const resultados = estadoCargaClientes === "sin-permiso"
+      ? terminoAlternativo === terminoCliente ? resultadosAlternativos : []
+      : resultadosClientes;
 
     const consultarDocumento = async (
       valor = documentoActual.current,
@@ -588,6 +661,12 @@ const hoyFecha = () => {
         setUsuario(resultado.nombre);
         setClienteInactivo(!resultado.estado);
         setEstadoBusqueda("registrado");
+        setTipoDocumento(resultado.tipoDocumento);
+        tipoActual.current = resultado.tipoDocumento;
+        setBusquedaCliente(`${resultado.nombre} · ${resultado.tipoDocumento} ${numero}`);
+        setClienteElegido(true);
+        setCrearCliente(false);
+        setErrorCliente(false);
         return "registrado";
       } catch (error) {
         if (
@@ -608,7 +687,7 @@ const hoyFecha = () => {
 
     useEffect(() => {
       const numero = documento.trim();
-      if (clienteElegidoPorNombre.current && numero === documentoActual.current.trim()) return;
+      if (!crearCliente) return;
       if (digitosDe(numero).length < 6) {
         setEstadoBusqueda("inactivo");
         return;
@@ -622,57 +701,24 @@ const hoyFecha = () => {
         window.clearTimeout(timer);
         busquedaId.current += 1;
       };
-    }, [documento, tipoDocumento]);
-
-    useEffect(() => {
-      const termino = usuario.trim();
-      const id = ++busquedaNombreId.current;
-      if (
-        (estadoBusqueda === "registrado" && !clienteElegidoPorNombre.current) ||
-        (clienteElegidoPorNombre.current && normalizarNombre(termino) === nombreClienteElegido.current) ||
-        termino.length < 3
-      ) {
-        setResultadosNombre([]);
-        setBuscandoNombre(false);
-        setListaNombreAbierta(false);
-        setIndiceNombreActivo(-1);
-        return;
-      }
-      setListaNombreAbierta(true);
-      setBuscandoNombre(true);
-      const timer = window.setTimeout(() => {
-        void buscarClientesPorNombre(termino)
-          .then((resultados) => {
-            if (id !== busquedaNombreId.current || termino !== usuarioActual.current.trim()) return;
-            setResultadosNombre(resultados);
-            setIndiceNombreActivo(-1);
-          })
-          .catch(() => {
-            if (id !== busquedaNombreId.current || termino !== usuarioActual.current.trim()) return;
-            setResultadosNombre([]);
-          })
-          .finally(() => {
-            if (id === busquedaNombreId.current && termino === usuarioActual.current.trim()) setBuscandoNombre(false);
-          });
-      }, 300);
-      return () => window.clearTimeout(timer);
-    }, [usuario, estadoBusqueda]);
+    }, [documento, tipoDocumento, crearCliente]);
 
     const elegirClientePorNombre = (cliente: ClientePorNombreApi) => {
-      busquedaNombreId.current += 1;
-      clienteElegidoPorNombre.current = true;
+      busquedaId.current += 1;
       const numero = String(cliente.documento);
       documentoActual.current = numero;
       tipoActual.current = cliente.tipoDocumento;
-      nombreClienteElegido.current = normalizarNombre(cliente.nombre);
       setDocumento(numero);
       setTipoDocumento(cliente.tipoDocumento);
       usuarioActual.current = cliente.nombre;
       setUsuario(cliente.nombre);
       setClienteInactivo(!cliente.estado);
       setEstadoBusqueda("registrado");
+      setBusquedaCliente(`${cliente.nombre} · ${cliente.tipoDocumento} ${numero}`);
+      setClienteElegido(true);
+      setCrearCliente(false);
+      setErrorCliente(false);
       setListaNombreAbierta(false);
-      setResultadosNombre([]);
     };
 
     const manejarTeclasNombre = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -680,59 +726,45 @@ const hoyFecha = () => {
         setListaNombreAbierta(false);
         return;
       }
-      if (!listaNombreAbierta || resultadosNombre.length === 0) return;
+      if (!listaNombreAbierta || resultados.length === 0) return;
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setIndiceNombreActivo(indice => (indice + 1) % resultadosNombre.length);
+        setIndiceNombreActivo(indice => (indice + 1) % resultados.length);
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
-        setIndiceNombreActivo(indice => (indice <= 0 ? resultadosNombre.length - 1 : indice - 1));
+        setIndiceNombreActivo(indice => (indice <= 0 ? resultados.length - 1 : indice - 1));
       } else if (event.key === "Enter" && indiceNombreActivo >= 0) {
         event.preventDefault();
-        elegirClientePorNombre(resultadosNombre[indiceNombreActivo]);
+        elegirClientePorNombre(resultados[indiceNombreActivo]);
       }
     };
 
-    const desvincularCliente = () => {
+    const borrarCliente = () => {
       busquedaId.current += 1;
-      busquedaNombreId.current += 1;
-      clienteElegidoPorNombre.current = false;
-      nombreClienteElegido.current = "";
       documentoActual.current = "";
       tipoActual.current = "CC";
       setDocumento("");
       setTipoDocumento("CC");
+      usuarioActual.current = "";
+      setUsuario("");
+      setBusquedaCliente("");
+      setClienteElegido(false);
+      setCrearCliente(false);
+      setErrorCliente(false);
+      setDocumentoTocado(false);
+      setNombreTocado(false);
       setClienteInactivo(false);
       setEstadoBusqueda("inactivo");
       setListaNombreAbierta(false);
-      setResultadosNombre([]);
-    };
-
-    const borrarClienteYNombre = () => {
-      if (estadoBusqueda === "registrado") desvincularCliente();
-      else {
-        busquedaNombreId.current += 1;
-        setResultadosNombre([]);
-        setListaNombreAbierta(false);
-      }
-      usuarioActual.current = "";
-      setUsuario("");
-      window.requestAnimationFrame(() => campoNombreRef.current?.focus());
+      window.requestAnimationFrame(() => campoBusquedaRef.current?.focus());
     };
 
     const cambiarDocumento = (valor: string) => {
-      const estabaRegistrado = estadoBusqueda === "registrado";
       busquedaId.current += 1;
-      clienteElegidoPorNombre.current = false;
-      nombreClienteElegido.current = "";
       documentoActual.current = valor;
       setDocumento(valor);
       setEstadoBusqueda(digitosDe(valor).length >= 6 ? "pendiente" : "inactivo");
       setClienteInactivo(false);
-      if (estabaRegistrado) {
-        usuarioActual.current = "";
-        setUsuario("");
-      }
     };
 
 
@@ -886,12 +918,18 @@ const hoyFecha = () => {
     /** Valida el formulario y devuelve los datos del pedido. `false` = no se
         puede guardar (falta un dato o la consulta del cliente falló). */
     const prepararPedido = async (): Promise<Omit<Venta, "id"> | null> => {
+      if (!clienteElegido && !crearCliente) {
+        setErrorCliente(true);
+        return null;
+      }
       if (!usuario.trim()) {
+        setNombreTocado(true);
         toast.error("El nombre del cliente es obligatorio");
         return null;
       }
       const errDoc = validarDocumento(documento, tipoDocumento);
       if (errDoc) {
+        setDocumentoTocado(true);
         toast.error(errDoc);
         return null;
       }
@@ -941,9 +979,9 @@ const hoyFecha = () => {
         productoId: String(p.id),
       }));
       return {
-        usuario: normalizarNombre(usuario),
+        usuario: normalizarNombre(usuarioActual.current),
         documento: documento.trim(),
-        tipoDocumento,
+        tipoDocumento: tipoActual.current,
         fecha,
         estado: finalEstado,
         productos: productosStr,
@@ -1012,116 +1050,133 @@ const hoyFecha = () => {
           <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 flex-1 min-h-0 overflow-y-auto">
           {/* ── Izquierda: datos del pedido ── */}
           <div className="space-y-4">
-            {/* Documento del cliente — búsqueda en tiempo real */}
-            <div className="relative">
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                 Documento del cliente <MarcaObligatorio />
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    value={documento}
-                    onChange={(e) => cambiarDocumento(filtrarDocumento(e.target.value, tipoDocumento))}
-                    onBlur={() => {
-                      if (digitosDe(documento).length >= 6) void consultarDocumento(documento, tipoDocumento);
-                    }}
-                    placeholder="Escribe el documento…"
-                    inputMode="numeric"
-                    className={`${iCls} w-full`}
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-              {estadoBusqueda === "registrado" && (
-                <>
-                  <p className="text-xs mt-1 font-medium text-emerald-600">✓ Cliente registrado</p>
-                  {clienteInactivo && <p role="status" className="text-xs mt-1 font-medium text-amber-600">⚠ Cliente inactivo</p>}
-                </>
-              )}
-              {estadoBusqueda === "no-encontrado" && (
-                <p className="text-xs mt-1 font-medium text-muted-foreground">Documento no registrado — se creará un cliente nuevo</p>
-              )}
-              {estadoBusqueda === "pendiente" && <p className="text-xs mt-1 text-muted-foreground">Esperando documento completo…</p>}
-              {estadoBusqueda === "buscando" && <p className="text-xs mt-1 text-muted-foreground">Buscando cliente…</p>}
-              {estadoBusqueda === "error" && <p role="alert" className="text-xs mt-1 font-medium text-red-600">No se pudo verificar el documento. Revisa la conexión e inténtalo de nuevo.</p>}
-            </div>
-
-            {/* Nombre del cliente: editable solo si el backend confirma que es nuevo */}
-            <div className="relative">
-              {estadoBusqueda === "no-encontrado" && <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <MarcaObligatorio /></label>}
-              {estadoBusqueda === "no-encontrado" && <select value={tipoDocumento} onChange={(e) => { tipoActual.current = e.target.value; setTipoDocumento(e.target.value); }} className={`${iCls} mb-2`}>
-                {OPCIONES_TIPO_DOCUMENTO.filter(t => ["CC", "CE", "PP", "Pasaporte"].includes(t.code)).map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
-              </select>}
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                 Nombre del cliente <MarcaObligatorio />
+            <div className="min-w-0">
+              <label htmlFor="buscar-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">
+                Cliente <MarcaObligatorio />
               </label>
               <div className="relative">
                 <input
-                ref={campoNombreRef}
-                value={usuario}
-                onChange={(e) => {
-                  const valor = e.target.value;
-                  if (estadoBusqueda === "registrado") desvincularCliente();
-                  usuarioActual.current = valor;
-                  setUsuario(valor);
-                  setResultadosNombre([]);
-                  setIndiceNombreActivo(-1);
-                  setBuscandoNombre(valor.trim().length >= 3);
-                  setListaNombreAbierta(valor.trim().length >= 3);
-                }}
-                onBlur={() => {
-                  const nombre = normalizarNombre(usuario);
-                  usuarioActual.current = nombre;
-                  setUsuario(nombre);
-                  setListaNombreAbierta(false);
-                }}
-                onKeyDown={manejarTeclasNombre}
-                placeholder="Escribe el nombre del cliente..."
-                className={`${iCls} ${usuario ? "pr-10" : ""}`}
-                autoComplete="off"
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={listaNombreAbierta}
-                aria-controls="resultados-clientes-nombre"
-              />
-              {usuario && (
-                <button
-                  type="button"
-                  aria-label="Borrar nombre y cliente seleccionado"
-                  title="Borrar nombre y cliente"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={borrarClienteYNombre}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                  id="buscar-cliente-venta"
+                  ref={campoBusquedaRef}
+                  value={busquedaCliente}
+                  readOnly={clienteElegido || crearCliente}
+                  onChange={(e) => {
+                    setBusquedaCliente(e.target.value);
+                    setListaNombreAbierta(true);
+                    setIndiceNombreActivo(-1);
+                    setErrorCliente(false);
+                  }}
+                  onFocus={() => { if (!clienteElegido && !crearCliente) setListaNombreAbierta(true); }}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.parentElement?.parentElement?.contains(e.relatedTarget)) setListaNombreAbierta(false);
+                  }}
+                  onKeyDown={manejarTeclasNombre}
+                  placeholder="Busca por nombre o número de documento…"
+                  className={`${iCls} ${busquedaCliente || clienteElegido || crearCliente ? "pr-10" : ""} ${errorCliente ? "border-red-400 bg-red-50/30" : ""}`}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={listaNombreAbierta && puedeBuscar && !clienteElegido && !crearCliente}
+                  aria-controls="resultados-clientes-venta"
+                  aria-invalid={errorCliente}
+                  aria-describedby={errorCliente ? "error-cliente-venta" : undefined}
+                />
+                {(busquedaCliente || clienteElegido || crearCliente) && (
+                  <button type="button" aria-label="Quitar cliente y buscar otro" onClick={borrarCliente}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {errorCliente && <p id="error-cliente-venta" role="alert" className="text-xs mt-1 text-red-500 dark:text-red-400">Selecciona un cliente o créalo.</p>}
+              {clienteElegido && clienteInactivo && <p role="status" className="text-xs mt-1 font-medium text-amber-600">⚠ Cliente inactivo</p>}
+              {estadoCargaClientes === "sin-permiso" && !clienteElegido && !crearCliente && (
+                <p className="text-xs mt-1 text-amber-600">Sin permiso para listar clientes: busca con al menos 3 caracteres del nombre o el documento completo.</p>
               )}
-              {listaNombreAbierta && usuario.trim().length >= 3 && (
-                <div id="resultados-clientes-nombre" role="listbox" className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl">
-                  {buscandoNombre ? (
-                    <p className="px-3 py-2 text-sm text-muted-foreground">Buscando clientes…</p>
-                  ) : resultadosNombre.length > 0 ? (
-                    resultadosNombre.map((cliente, indice) => (
-                      <button
-                        key={String(cliente.documento)}
-                        type="button"
-                        role="option"
-                        aria-selected={indice === indiceNombreActivo}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => elegirClientePorNombre(cliente)}
-                        className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted ${indice === indiceNombreActivo ? "bg-muted" : ""}`}
-                      >
-                        <span className="min-w-0 truncate text-foreground">{cliente.nombre} — {cliente.tipoDocumento} {cliente.documento}</span>
-                        {!cliente.estado && <span className="shrink-0 text-xs font-semibold text-amber-600">Inactivo</span>}
-                      </button>
-                    ))
+              {listaNombreAbierta && puedeBuscar && !clienteElegido && !crearCliente && (
+                <div className="mt-1 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                  {estadoCargaClientes === "cargando" || (estadoCargaClientes === "sin-permiso" && (terminoAlternativo !== terminoCliente || estadoAlternativo === "buscando")) ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Cargando clientes…</p>
+                  ) : estadoCargaClientes === "error" || (estadoCargaClientes === "sin-permiso" && estadoAlternativo === "error") ? (
+                    <div className="px-3 py-2 text-sm text-red-600" role="alert">
+                      No se pudieron cargar los clientes. Revisa la conexión y los permisos.
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setIntentoCarga(n => n + 1)} className="ml-2 font-semibold underline">Reintentar</button>
+                    </div>
+                  ) : estadoCargaClientes === "sin-permiso" && estadoAlternativo === "esperando" ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Escribe más caracteres para buscar.</p>
+                  ) : resultados.length > 0 ? (
+                    <div id="resultados-clientes-venta" role="listbox">
+                      {resultados.map((cliente, indice) => (
+                        <button key={String(cliente.documento)} type="button" role="option"
+                          aria-selected={indice === indiceNombreActivo}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => elegirClientePorNombre(cliente)}
+                          className={`w-full min-w-0 px-3 py-2 text-left text-sm hover:bg-muted ${indice === indiceNombreActivo ? "bg-muted" : ""}`}>
+                          <span className="block break-words text-foreground">{cliente.nombre}</span>
+                          <span className="block break-words text-xs text-muted-foreground">{cliente.tipoDocumento} {cliente.documento}{!cliente.estado && " · Inactivo"}</span>
+                        </button>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="px-3 py-2 text-sm text-muted-foreground">No hay clientes con ese nombre</p>
+                    <div className="px-3 py-2 text-sm">
+                      <p className="text-muted-foreground">No se encontró el cliente</p>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                        const numero = busquedaNumerica ? terminoCliente : "";
+                        const nombre = busquedaNumerica ? "" : terminoCliente;
+                        documentoActual.current = numero;
+                        usuarioActual.current = nombre;
+                        setDocumento(numero);
+                        setUsuario(nombre);
+                        setDocumentoTocado(Boolean(numero));
+                        setCrearCliente(true);
+                        setErrorCliente(false);
+                        setListaNombreAbierta(false);
+                      }} className="mt-1 font-semibold text-primary hover:underline">+ Crear cliente</button>
+                    </div>
                   )}
                 </div>
               )}
             </div>
-            </div>
+
+            {crearCliente && (
+              <>
+                <div>
+                  <label htmlFor="tipo-documento-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <MarcaObligatorio /></label>
+                  <select id="tipo-documento-venta" value={tipoDocumento} onChange={(e) => {
+                    busquedaId.current += 1;
+                    tipoActual.current = e.target.value;
+                    setTipoDocumento(e.target.value);
+                  }} className={iCls}>
+                    {OPCIONES_TIPO_DOCUMENTO.filter(t => ["CC", "CE", "PP", "Pasaporte"].includes(t.code)).map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="documento-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento <MarcaObligatorio /></label>
+                  <input id="documento-cliente-venta" value={documento}
+                    onChange={(e) => { setDocumentoTocado(true); cambiarDocumento(filtrarDocumento(e.target.value, tipoDocumento)); }}
+                    onBlur={() => setDocumentoTocado(true)}
+                    inputMode="numeric" autoComplete="off"
+                    className={`${iCls} ${documentoTocado && validarDocumento(documento, tipoDocumento) ? "border-red-400 bg-red-50/30" : ""}`}
+                    aria-invalid={documentoTocado && !!validarDocumento(documento, tipoDocumento)}
+                  />
+                  {documentoTocado && validarDocumento(documento, tipoDocumento) && <p className="text-xs mt-1 text-red-500 dark:text-red-400">{validarDocumento(documento, tipoDocumento)}</p>}
+                  {estadoBusqueda === "no-encontrado" && <p className="text-xs mt-1 text-muted-foreground">Documento no registrado — se creará un cliente nuevo</p>}
+                  {estadoBusqueda === "pendiente" && <p className="text-xs mt-1 text-muted-foreground">Esperando documento completo…</p>}
+                  {estadoBusqueda === "buscando" && <p className="text-xs mt-1 text-muted-foreground">Buscando cliente…</p>}
+                  {estadoBusqueda === "error" && <p role="alert" className="text-xs mt-1 font-medium text-red-600">No se pudo verificar el documento. Revisa la conexión e inténtalo de nuevo.</p>}
+                </div>
+                <div>
+                  <label htmlFor="nombre-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Nombre del cliente <MarcaObligatorio /></label>
+                  <input id="nombre-cliente-venta" value={usuario} autoComplete="off"
+                    onChange={(e) => { usuarioActual.current = e.target.value; setUsuario(e.target.value); setNombreTocado(true); }}
+                    onBlur={() => { const nombre = normalizarNombre(usuario); usuarioActual.current = nombre; setUsuario(nombre); setNombreTocado(true); }}
+                    className={`${iCls} ${nombreTocado && !usuario.trim() ? "border-red-400 bg-red-50/30" : ""}`}
+                    aria-invalid={nombreTocado && !usuario.trim()}
+                  />
+                  {nombreTocado && !usuario.trim() && <p className="text-xs mt-1 text-red-500 dark:text-red-400">El nombre del cliente es obligatorio</p>}
+                </div>
+              </>
+            )}
 
             {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
             <div>
