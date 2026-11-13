@@ -92,8 +92,10 @@ export function CrearProductoModal({
   const [idCategoria, setIdCategoria] = useState("");
   const [contenido, setContenido] = useState("");
   const [contenidoUnidad, setContenidoUnidad] = useState<"ml" | "L">("ml");
-  const [unidadCompra, setUnidadCompra] = useState<"und" | "paca" | "caja">("und");
-  const [unidadesPorEmpaque, setUnidadesPorEmpaque] = useState("");
+  // La presentación de compra ya no se pide aquí (se elige en cada línea de
+  // la compra/orden): la bebida nace comprándose por unidad.
+  const unidadCompra = "und" as "und" | "paca" | "caja";
+  const unidadesPorEmpaque = "";
   const [tocado, setTocado] = useState({
     nombre: false,
     categoria: false,
@@ -285,48 +287,6 @@ export function CrearProductoModal({
                 <option value="L">L</option>
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Se compra por *
-              </label>
-              <select
-                value={unidadCompra}
-                onChange={(e) =>
-                  setUnidadCompra(e.target.value as "und" | "paca" | "caja")
-                }
-                className={iCls}
-              >
-                <option value="und">Unidad</option>
-                <option value="paca">Paca</option>
-                <option value="caja">Caja</option>
-              </select>
-            </div>
-            {unidadCompra !== "und" && (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  Unidades por empaque *
-                </label>
-                <input
-                  type="number"
-                  min={2}
-                  step={1}
-                  value={unidadesPorEmpaque}
-                  onChange={(e) => setUnidadesPorEmpaque(e.target.value)}
-                  onBlur={() => marcarTocado("empaque")}
-                  placeholder="Ej: 12"
-                  className={`${iCls} transition-colors ${
-                    (tocado.empaque || intentoGuardar) && errores.empaque
-                      ? "border-red-400 focus:ring-red-300"
-                      : ""
-                  }`}
-                />
-                {(tocado.empaque || intentoGuardar) && errores.empaque && (
-                  <p className="text-xs text-red-500 mt-1 ml-0.5">{errores.empaque}</p>
-                )}
-              </div>
-            )}
           </div>
           <p className="text-xs text-muted-foreground">
             El precio y la imagen se definen después en Gestión de Productos.

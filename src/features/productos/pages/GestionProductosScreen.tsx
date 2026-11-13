@@ -1897,19 +1897,18 @@ export function GestionProductosScreen({
     }
     // Presentación de compra: si la bebida se compra en paca/caja, el
     // empaque debe estar bien cargado (> 1 entero). Con "Unidad" no se pide.
-    const ucEdit =
+    let ucEdit: "und" | "paca" | "caja" =
       tipoFinal === TIPOS_PRODUCTO[1] &&
       (editItem.unidadCompra === "paca" || editItem.unidadCompra === "caja")
         ? editItem.unidadCompra
         : "und";
-    const nEdit = ucEdit === "und" ? undefined : Math.trunc(Number(editItem.unidadesPorEmpaque));
-    if (
-      ucEdit !== "und" &&
-      (!Number.isFinite(Number(editItem.unidadesPorEmpaque)) || !Number.isInteger(nEdit) || nEdit <= 1)
-    ) {
-      toast.error(`Indica cuántas unidades trae la ${ucEdit === "paca" ? "paca" : "caja"} (mínimo 2)`);
-      return;
-    }
+    const nEditLeido = Math.trunc(Number(editItem.unidadesPorEmpaque));
+    // El campo ya no se muestra (la presentación se elige en Compras): un
+    // empaque mal cargado no bloquea el guardado, se guarda como "und".
+    const empaqueEditValido =
+      ucEdit !== "und" && Number.isInteger(nEditLeido) && nEditLeido > 1;
+    if (ucEdit !== "und" && !empaqueEditValido) ucEdit = "und";
+    const nEdit = ucEdit === "und" ? undefined : nEditLeido;
     // Un producto con historial de ficha no puede pasar a una categoría sin
     // ficha: perdería su historial. Es el respaldo del bloqueo que ya hace
     // `solicitarCambioCategoriaEdit` al elegir la categoría.
@@ -2079,11 +2078,6 @@ export function GestionProductosScreen({
         ("und") y aquí sólo se muestra cómo se COMPRAN (bloque de más
         abajo). En Editar/Detalle sigue el flag para los insumos. */
     const mostrarUnidad = !esTerminado && (esCrear ? false : !hideUnidad);
-    /** Presentación de compra (ajuste de bebidas): con paca/caja hay que
-        decir cuántas unidades trae la presentación. */
-    const compraPorEmpaque =
-      esTerminado && (values.unidadCompra === "paca" || values.unidadCompra === "caja");
-    const nEmpaque = Number(values.unidadesPorEmpaque);
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {/* Categoría: PRIMER campo de "Datos del producto" (se muestra solo el
@@ -2313,62 +2307,9 @@ export function GestionProductosScreen({
             </select>
           </div>
         )}
-        {/* Presentación de compra de la bebida (ajuste): se VENDE siempre
-            suelta ("und" se guarda solo) pero se COMPRA por Unidad, Paca o
-            Caja; con paca/caja hay que decir cuántas unidades trae. */}
-        {esTerminado && (
-          <div className="sm:col-span-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                  Se compra por {esCrear && <span className="text-red-500">*</span>}
-                </label>
-                <select
-                  value={values.unidadCompra ?? "und"}
-                  onChange={(e) => {
-                    onChange("unidadCompra", e.target.value);
-                    // Volver a "Unidad" limpia el empaque que no aplica.
-                    if (e.target.value === "und") onChange("unidadesPorEmpaque", 0);
-                  }}
-                  disabled={readOnly}
-                  className={readOnly ? roCls : inputCls + " cursor-pointer"}
-                >
-                  <option value="und">Unidad</option>
-                  <option value="paca">Paca</option>
-                  <option value="caja">Caja</option>
-                </select>
-              </div>
-              {compraPorEmpaque && (
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                    Unidades por {values.unidadCompra === "paca" ? "paca" : "caja"}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={2}
-                    step={1}
-                    value={values.unidadesPorEmpaque || ""}
-                    placeholder="Ej: 12"
-                    onChange={(e) =>
-                      onChange(
-                        "unidadesPorEmpaque",
-                        e.target.value === "" ? 0 : Number(e.target.value),
-                      )
-                    }
-                    disabled={readOnly}
-                    className={readOnly ? roCls : inputCls}
-                  />
-                </div>
-              )}
-            </div>
-            {esTerminado && !compraPorEmpaque && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                La bebida se vende suelta (und); el empaque es sólo para comprarla al proveedor
-              </p>
-            )}
-          </div>
-        )}
+        {/* La presentación de compra (paca/caja y cuántas unidades trae) ya
+            no se pide aquí: se elige en cada línea de Compra / Orden de
+            Compra (Presentación + Contenido). */}
         {/* El stock disponible NO se escribe en el producto: sigue en la
             interfaz y lo actualiza el sistema (órdenes de producción / compras).
             En el index y en Ver detalle se muestra como solo lectura. */}

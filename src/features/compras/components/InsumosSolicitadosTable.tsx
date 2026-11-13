@@ -27,6 +27,10 @@ export interface InsumoSolicitadoRow {
   modoIva?: "incluido" | "mas_iva" | "exento";
   factorPresentacion?: number;
   unidadBase?: string;
+  /** Peso exacto del insumo (900 ml): sólo para la etiqueta de la fila. */
+  pesoMedida?: number | null;
+  /** Bebidas: tamaño de una unidad ("400 ml"), sólo para la etiqueta. */
+  tamanoUnidad?: string;
 }
 
 function fmtCOP(n: number) {
@@ -210,8 +214,8 @@ export function InsumosSolicitadosTable({
 
               <td className={tdBase + " text-sm"}>
                 <span>{item.cantidad}</span>
-                <span className={`block text-[11px] text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}>
-                  {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}
+                <span className={`block text-[11px] text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase, item.pesoMedida, item.tamanoUnidad)}>
+                  {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase, item.pesoMedida, item.tamanoUnidad)}
                 </span>
               </td>
 
@@ -240,7 +244,12 @@ export function InsumosSolicitadosTable({
 
               {showActions && (
                 <td className={tdBase + " whitespace-nowrap"}>
-                  <div className="flex items-center gap-1">
+                  {/* Mientras la fila está cargada en el formulario se
+                      ocultan sus acciones (sin mover la columna). */}
+                  <div
+                    className={`flex items-center gap-1${enEdicion ? " invisible" : ""}`}
+                    aria-hidden={enEdicion || undefined}
+                  >
                     {onEdit && (
                       <button
                         type="button"

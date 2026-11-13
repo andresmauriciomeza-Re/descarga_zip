@@ -59,6 +59,7 @@ import { listarCompras } from "@/features/compras/services/comprasApi";
 import {
   contenidoDe,
   empaqueDe,
+  medidaCompra,
   nombreBuscable,
   presentacionCompra,
 } from "@/shared/utils/presentacion";
@@ -1024,9 +1025,11 @@ export function OrdenModal({
    *  el precio de venta NUNCA se usa como monto. */
   const seleccionarProducto = (p: Producto) => {
     setANombre(p.nombre);
-    // Ajuste de bebidas: la Medida (solo lectura) muestra la presentación
-    // de compra y la línea guarda el empaque de la paca/caja.
-    setAUnidad(presentacionCompra(p));
+    // Punto 6: la Medida guarda el TOKEN que el backend acepta en `medida`
+    // ("caja", "paca" o "und"); "Paca x12" no está en UNIDADES_COMPRA y la
+    // orden respondía 400. La etiqueta visible ("Caja x6") se arma en la
+    // tabla con etiquetaPresentacion(unidad, factor, unidadBase).
+    setAUnidad(medidaCompra(p));
     const factor = empaqueDe(p);
     setAEmpaque(factor > 1 ? factor : undefined);
     // Corrección 4: el monto es `costoUnitario` (POR UNIDAD) por las
@@ -1076,12 +1079,25 @@ export function OrdenModal({
     return creado;
   };
 
+  /** Fila cargada con el lápiz: su Contenido/Presentación se recargan en el
+   *  formulario (punto 6) sin pisarlos con el factor del catálogo. */
+  const filaEditando = editando
+    ? form.items.find((item) => item.rowId === editando)
+    : undefined;
+
+  /** Bebidas: tamaño de una unidad del producto ("400 ml") o undefined. */
+  const tamanoDeProducto = (id: string) => {
+    const p = productos?.find((x) => x.id === id);
+    return (p && contenidoDe(p)) || undefined;
+  };
+
   const addItem = ({
     cantidad,
     precio,
     iva,
     modoIva,
     factorPresentacion,
+    unidadBase,
   }: CompactInsumoFormValues) => {
     // Modo edición (lápiz de la tabla): la fila está cargada arriba, así que
     // solo se reemplaza y se deja el formulario listo para el siguiente.
@@ -1095,7 +1111,7 @@ export function OrdenModal({
         nombre: aNombre.trim(),
         cantidad,
         // Unidad de la fila: "und" si la medida quedó vacía (producto sin
-        // elegir); con presentación cargada va "Paca x12" tal cual.
+        // elegir); con presentación cargada va el token ("caja", "paca").
         unidad: aUnidad.trim() || "und",
         precioUnitario: precio,
         iva: modoIva === "exento" ? 0 : iva,
@@ -1103,11 +1119,22 @@ export function OrdenModal({
         // Punto 3.3: el ítem puede haber cambiado de catálogo (insumo ↔
         // producto) mientras estaba cargado en el formulario.
         tipoItem: aTipoItem,
-        // Ajuste: el empaque sólo aplica a producto; al quitarlo se limpia.
+        // Punto 6: para productos el Contenido de la LÍNEA manda sobre el
+        // empaque del catálogo; sin Contenido se conserva el del catálogo.
         unidadesPorEmpaque:
-          aTipoItem === "producto" && aEmpaque && aEmpaque > 1 ? aEmpaque : undefined,
+          aTipoItem === "producto"
+            ? factorPresentacion != null && factorPresentacion > 0
+              ? factorPresentacion
+              : esEmpaque(aUnidad) && aEmpaque && aEmpaque > 1
+                ? aEmpaque
+                : undefined
+            : undefined,
         factorPresentacion:
-          aTipoItem === "insumo" ? factorPresentacion : undefined,
+          factorPresentacion != null && factorPresentacion > 0
+            ? factorPresentacion
+            : undefined,
+        // Unidad base de la línea: la tabla arma "caja × 6 und" con ella.
+        ...(unidadBase != null && unidadBase.trim() ? { unidadBase } : {}),
         ...(aInsumoId ? { idInsumo: aInsumoId } : {}),
       });
       limpiarFilaInsumo();
@@ -1141,14 +1168,26 @@ export function OrdenModal({
         modoIva: modoIva ?? aModoIva,
         // Punto 3.3: la fila guarda de qué catálogo salió (insumo/producto).
         tipoItem: aTipoItem,
-        // Ajuste de bebidas: sólo las líneas de producto en paca/caja
-        // guardan el empaque (unidad suelta ⇒ sin el dato, se lee como 1).
-        ...(aTipoItem === "producto" && aEmpaque && aEmpaque > 1
-          ? { unidadesPorEmpaque: aEmpaque }
+        // Punto 6: para productos el Contenido de la LÍNEA manda sobre el
+        // empaque del catálogo; sin Contenido se conserva el del catálogo
+        // (unidad suelta ⇒ sin el dato, se lee como 1).
+        ...(aTipoItem === "producto"
+          ? {
+              unidadesPorEmpaque:
+                factorPresentacion != null && factorPresentacion > 0
+                  ? factorPresentacion
+                  : esEmpaque(aUnidad) && aEmpaque && aEmpaque > 1
+                    ? aEmpaque
+                    : undefined,
+            }
           : {}),
-        ...(aTipoItem === "insumo" && factorPresentacion != null
+        // Presentaciones: el Contenido de la línea viaja al backend como
+        // `factor_presentacion` (insumos y productos).
+        ...(factorPresentacion != null && factorPresentacion > 0
           ? { factorPresentacion }
           : {}),
+        // Unidad base de la línea: la tabla arma "caja × 6 und" con ella.
+        ...(unidadBase != null && unidadBase.trim() ? { unidadBase } : {}),
       }],
     });
     limpiarFilaInsumo();
@@ -1163,7 +1202,7 @@ export function OrdenModal({
    *  el nuevo EXPLÍCITO (nunca se usa como callback directo). */
   const limpiarFilaInsumo = (tipo: "insumo" | "producto" = aTipoItem) => {
     setANombre(""); setACant(1); setAPrecio(0); setAIva(undefined); setAModoIva("incluido");
-    setAUnidad(tipo === "producto" ? "" : UNIDADES[0]);
+    setAUnidad(tipo === "producto" ? "und" : UNIDADES[0]);
     setAEmpaque(undefined);
     setAFromCat(false); setAInsumoId(""); setAShowSug(false);
     setEditando(null);
@@ -1591,7 +1630,7 @@ export function OrdenModal({
                       // En producto, escribir a mano suelta la presentación:
                       // la Medida queda vacía y el empaque se limpia.
                       if (aTipoItem === "producto") {
-                        setAUnidad("");
+                        setAUnidad("und");
                         setAEmpaque(undefined);
                       }
                       setAShowSug(true);
@@ -1603,10 +1642,14 @@ export function OrdenModal({
                     cantidad={aCant}
                     unidad={aUnidad}
                     onUnidadChange={setAUnidad}
-                    medidaSoloLectura={aTipoItem === "producto"}
-                    // Punto 5: en la Nueva Orden de Compra la Medida del
-                    // Contenido la define el ítem del catálogo.
+                    // Punto 6: la Presentación de PRODUCTOS ya no es texto
+                    // fijo ("Paca x12"): es el mismo select con el token
+                    // válido y su Contenido editable en la línea.
+                    // Punto 5: en la Nueva Orden la Medida del Contenido la
+                    // define el ítem del catálogo.
                     medidaContenidoBloqueada
+                    // IVA obligatorio (> 0) con "IVA incluido" o "IVA adicional".
+                    ivaObligatorio
                     etiquetaNombre={aTipoItem === "producto" ? "Producto" : "Insumo"}
                     insumoId={
                       aTipoItem === "insumo" && /^INS-\d+$/.test(aInsumoId)
@@ -1616,7 +1659,35 @@ export function OrdenModal({
                     unidadBase={
                       aTipoItem === "insumo"
                         ? insumos.find((ins) => ins.id === aInsumoId)?.unidadMedida
-                        : undefined
+                        : // Punto 6: en PRODUCTOS la unidad base es su
+                          // unidad de venta ("und"): contra ella se lee y
+                          // calcula el Contenido de la caja/paca de ESTA
+                          // línea.
+                          productos?.find((x) => x.id === aInsumoId)?.unidadVenta?.trim() ||
+                          undefined
+                    }
+                    // Punto 6: al editar, el Contenido/Presentación de la
+                    // FILA recargados mandan sobre el factor del catálogo; al
+                    // agregar un producto nuevo se precarga su empaque.
+                    factorPresentacionInicial={
+                      editando
+                        ? filaEditando?.factorPresentacion ??
+                          filaEditando?.unidadesPorEmpaque
+                        : aTipoItem === "producto"
+                          ? aEmpaque
+                          : undefined
+                    }
+                    presentacionInicial={
+                      editando
+                        ? filaEditando?.unidad
+                        : aTipoItem === "producto"
+                          ? // La presentación del CATÁLOGO (no la elegida): su
+                            // empaque sólo se sugiere para esa presentación.
+                            (() => {
+                              const p = productos?.find((x) => x.id === aInsumoId);
+                              return p ? medidaCompra(p) : undefined;
+                            })()
+                          : undefined
                     }
                     // Peso de medida del insumo elegido (si lo tiene): se
                     // muestra como ayuda bajo la línea del formulario.
@@ -1624,6 +1695,11 @@ export function OrdenModal({
                       aTipoItem === "insumo"
                         ? insumos.find((ins) => ins.id === aInsumoId)?.pesoMedida ?? null
                         : null
+                    }
+                    // Bebidas: tamaño de una unidad ("400 ml") en Medida y en
+                    // la ayuda (el stock sigue contando unidades).
+                    tamanoUnidad={
+                      aTipoItem === "producto" ? tamanoDeProducto(aInsumoId) : undefined
                     }
                     etiquetaUnidad="Presentación"
                     precio={aPrecio}
@@ -1781,6 +1857,8 @@ export function OrdenModal({
                     items={form.items.map((item) => ({
                       ...item,
                       unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                      pesoMedida: insumos.find((i) => i.id === item.idInsumo)?.pesoMedida ?? null,
+                      tamanoUnidad: item.tipoItem === "producto" ? tamanoDeProducto(item.idInsumo) : undefined,
                     }))}
                     showActions={false}
                     enPagina={isPage}
@@ -1793,6 +1871,8 @@ export function OrdenModal({
                     items={form.items.map((item) => ({
                       ...item,
                       unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+                      pesoMedida: insumos.find((i) => i.id === item.idInsumo)?.pesoMedida ?? null,
+                      tamanoUnidad: item.tipoItem === "producto" ? tamanoDeProducto(item.idInsumo) : undefined,
                     }))}
                     showActions
                     onRemove={(rowId) => {

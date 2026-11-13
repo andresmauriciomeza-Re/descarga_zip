@@ -49,6 +49,22 @@ export const presentacionCompra = (
   return p.unidadVenta?.trim() || "und";
 };
 
+/**
+ * Punto 6: unidad VÁLIDA que viaja al backend en la `medida` de una línea de
+ * compra/orden de un producto. El backend exige que sea la unidad de compra
+ * EXACTA ("und", "paca" o "caja") — "Paca x12" no está en `UNIDADES_COMPRA`
+ * y respondía 400 —, así que con paca/caja viaja el token y con unidad
+ * suelta la de venta. La etiqueta visible ("Caja x6") no se pierde: la arma
+ * `etiquetaPresentacion(unidad, factor, unidadBase)` con el Contenido de la
+ * línea.
+ */
+export const medidaCompra = (
+  p: Pick<PresentacionProducto, "unidadVenta" | "unidadCompra" | "unidadesPorEmpaque">,
+): string => {
+  if (empaqueDe(p) > 1) return p.unidadCompra?.trim() || "und";
+  return p.unidadVenta?.trim() || "und";
+};
+
 /** Contenido de la bebida ("1.5 L", "400 ml") o "" si no lo tiene. */
 export const contenidoDe = (p: Pick<PresentacionProducto, "contenido" | "contenidoUnidad">): string =>
   p.contenido && p.contenido > 0 ? `${p.contenido} ${p.contenidoUnidad ?? "ml"}` : "";
@@ -72,7 +88,8 @@ export const presentacionDe = (p: PresentacionProducto): string =>
   [
     p.nombre,
     contenidoDe(p),
-    empaqueDe(p) > 1 ? presentacionCompra(p) : "",
+    // La presentación de compra (paca/caja) ya no se muestra en el producto:
+    // se elige en cada línea de Compra / Orden de Compra.
   ]
     .filter(Boolean)
     .join(" · ");
