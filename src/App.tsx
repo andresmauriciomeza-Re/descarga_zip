@@ -109,7 +109,7 @@ import {
 } from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
-import { BloqueQrPago, PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
+import { BloqueQrPago, CargaComprobanteCheckout, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
@@ -117,7 +117,7 @@ import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
 import type { Screen } from "@/shared/utils/screen";
-import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
+import { esPantalla, ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
 import { disponiblePizza } from "@/shared/utils/stockPizza";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
@@ -240,23 +240,6 @@ interface PedidoResumen {
   /** Teléfono del cliente, si lo dejó en el formulario de datos. */
   telefono?: string;
   hora: string;
-}
-
-interface Order {
-  id: string;
-  client: string;
-  phone: string;
-  address: string;
-  items: { name: string; qty: number; price: number }[];
-  total: number;
-  status:
-  | "pendiente"
-  | "en-produccion"
-  | "listo"
-  | "entregado"
-  | "cancelado";
-  date: string;
-  paymentMethod: string;
 }
 
 // ─────────────────────────── MOCK DATA ───────────────────────────
@@ -529,122 +512,6 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-const ORDERS: Order[] = [
-  {
-    id: "VEN-2024-0156",
-    client: "María González",
-    phone: "310 456 7890",
-    address: DIRECCION_LOCAL,
-    items: [
-      {
-        name: "La Sirena Especial (Mediana)",
-        qty: 2,
-        price: 116000,
-      },
-      {
-        name: "Margarita Clásica (Personal)",
-        qty: 1,
-        price: 28000,
-      },
-    ],
-    total: 144000,
-    status: "en-produccion",
-    date: "15/01/2024 18:30",
-    paymentMethod: "Nequi",
-  },
-  {
-    id: "VEN-2024-0155",
-    client: "Carlos Martínez",
-    phone: "320 987 6543",
-    address: "Av. El Poblado #1-20, El Poblado",
-    items: [
-      {
-        name: "Pepperoni Suprema (Mediana)",
-        qty: 1,
-        price: 44000,
-      },
-      { name: "Cuatro Quesos (Mediana)", qty: 1, price: 48000 },
-    ],
-    total: 92000,
-    status: "listo",
-    date: "15/01/2024 18:15",
-    paymentMethod: "Efectivo",
-  },
-  {
-    id: "VEN-2024-0154",
-    client: "Ana Rodríguez",
-    phone: "315 345 6789",
-    address: "Cll 85 #45-10, Envigado",
-    items: [
-      {
-        name: "Hawaiana Tropical (Familiar)",
-        qty: 2,
-        price: 110000,
-      },
-    ],
-    total: 110000,
-    status: "entregado",
-    date: "15/01/2024 17:45",
-    paymentMethod: "Daviplata",
-  },
-  {
-    id: "VEN-2024-0153",
-    client: "Jorge Vargas",
-    phone: "301 234 5678",
-    address: "Cra 70 #45-60, Belén",
-    items: [
-      {
-        name: "Margarita Clásica (Familiar)",
-        qty: 3,
-        price: 156000,
-      },
-    ],
-    total: 156000,
-    status: "entregado",
-    date: "15/01/2024 17:20",
-    paymentMethod: "Tarjeta",
-  },
-  {
-    id: "VEN-2024-0152",
-    client: "Patricia Soto",
-    phone: "318 765 4321",
-    address: "Cll 10 #37-50, La América",
-    items: [
-      {
-        name: "Veggie Mediterránea (Mediana)",
-        qty: 1,
-        price: 45000,
-      },
-      {
-        name: "Cuatro Quesos (Personal)",
-        qty: 1,
-        price: 35000,
-      },
-    ],
-    total: 80000,
-    status: "pendiente",
-    date: "15/01/2024 19:00",
-    paymentMethod: "Nequi",
-  },
-  {
-    id: "VEN-2024-0151",
-    client: "Luis Herrera",
-    phone: "305 456 7890",
-    address: "Cra 80 #50-100, Robledo",
-    items: [
-      {
-        name: "La Sirena Especial (Mediana)",
-        qty: 1,
-        price: 58000,
-      },
-    ],
-    total: 58000,
-    status: "cancelado",
-    date: "15/01/2024 16:50",
-    paymentMethod: "Efectivo",
-  },
-];
-
 // ─────────────────────────── CONSTANTS ───────────────────────────
 
 const SERIF = "var(--font-titulo)";
@@ -657,22 +524,6 @@ const ultimaRecogidaTexto = formatearHora(
 );
 
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
-
-const STATUS_COLOR: Record<string, string> = {
-  pendiente: "bg-yellow-100 text-yellow-800",
-  "en-produccion": "bg-blue-100 text-blue-800",
-  listo: "bg-emerald-100 text-emerald-800",
-  entregado: "bg-gray-100 text-gray-600",
-  cancelado: "bg-red-100 text-red-700",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  pendiente: "Pendiente",
-  "en-produccion": "En producción",
-  listo: "Listo",
-  entregado: "Entregado",
-  cancelado: "Cancelado",
-};
 
 /** Colores del pill de estado de la tabla. Incluye los valores del tipo
     (`disponible`/`no disponible`, con el que nacen los productos) y los del
@@ -701,7 +552,6 @@ const ADMIN_SCREENS: Screen[] = [
   "dashboard",
   "inicio",
   "manage-products",
-  "orders",
   "clients",
   "profile",
   "reports",
@@ -850,7 +700,7 @@ const leerSesionGuardada = (): SesionGuardada | null => {
       return {
         userId: m.userId,
         rolActivo: typeof m.rolActivo === "string" ? m.rolActivo : null,
-        screen: typeof m.screen === "string" ? m.screen : "landing",
+        screen: typeof m.screen === "string" ? m.screen : "",
         ultimaActividad: m.ultimaActividad,
         avatarInicial,
         avatarColor,
@@ -1591,7 +1441,6 @@ function AdminTopBar({
     dashboard: "Dashboard",
     inicio: ETIQUETA_INICIO_EMPLEADO,
     "manage-products": "Gestión de productos",
-    orders: "Gestión de ventas",
     clients: "Gestión de clientes",
     reports: "Reportes e informes",
     roles: "Roles",
@@ -3746,10 +3595,8 @@ function CartScreen({
   onClearConfirmation?: () => void;
 }) {
   const [payment, setPayment] = useState("Nequi");
-  const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 2 | 3>(
-    0,
-  );
-  const [comprobante, setComprobante] = useState<string>("");
+  const [checkoutStep, setCheckoutStep] = useState<0 | 1 | 3>(0);
+  const [comprobante, setComprobante] = useState<{ url: string; nombre: string } | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const [horaRecogida, setHoraRecogida] = useState("");
   const [guestName, setGuestName] = useState("");
@@ -3785,8 +3632,18 @@ function CartScreen({
   /** Barrera anti doble envío: el `disabled` del botón no alcanza si llegan
       dos clics en el mismo tick. */
   const enviandoRef = useRef(false);
+  const validacionPago = useValidacionFormulario(["comprobante", "hora-recogida"]);
+
+  const cambiarMetodoPago = (metodo: string) => {
+    setPayment(metodo);
+    if (comprobante) {
+      setComprobante(null);
+      toast.warning("Cambiaste el método de pago. Quitamos el comprobante anterior. Sube el del nuevo método.");
+    }
+  };
 
   const cargarComprobanteCheckout = async (file: File) => {
+    if (subiendo || enviandoRef.current) return;
     if (!isLoggedIn) {
       onRequireCheckoutLogin();
       return;
@@ -3798,7 +3655,7 @@ function CartScreen({
     setSubiendo(true);
     try {
       const url = await subirArchivo(file, "comprobantes", { checkoutAuth: true });
-      if (url) setComprobante(url);
+      if (url) setComprobante({ url, nombre: file.name });
     } catch (error) {
       if (es401GenericoCheckout(error)) {
         onCheckoutUnauthorized();
@@ -3928,6 +3785,21 @@ function CartScreen({
   // externo; si falla, el recuadro muestra el mensaje de reserva.
   const qrDataUrl = useQrPago(payment, subtotal);
 
+  const validarHoraRecogida = () => {
+    if (sinHorariosHoy) return "Ya no hay horarios disponibles para hoy.";
+    if (!horaRecogida) return "Selecciona la hora de recogida.";
+    if (minutosDeHora(horaRecogida) === null || horaFueraDeRango(horaRecogida)) {
+      return `La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}.`;
+    }
+    if (horaYaPaso(horaRecogida)) return "Esta hora no está disponible porque ya pasó.";
+  };
+
+  const errorComprobante = subiendo
+    ? "Espera a que termine de subir el comprobante."
+    : !comprobante ? "Sube el comprobante de pago." : undefined;
+  const errorComprobanteVisible = validacionPago.estaVisible("comprobante") ? errorComprobante : undefined;
+  const errorHoraVisible = validacionPago.estaVisible("hora-recogida") ? validarHoraRecogida() : undefined;
+
   /** Último paso: registra la venta con los datos del formulario (invitado)
       o con los de la sesión. Los datos YA se pidieron en el paso 3, así que
       aquí no se vuelve a interrumpir el flujo. */
@@ -3942,21 +3814,12 @@ function CartScreen({
       onCheckoutUnauthorized();
       return;
     }
-    if (!comprobante) {
-      toast.error("Por favor sube el comprobante de pago");
-      return;
-    }
-    if (!horaRecogida) {
-      toast.error("Por favor selecciona la hora de recogida");
-      return;
-    }
-    const minutos = minutosDeHora(horaRecogida);
-    if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-      toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
-      return;
-    }
-    if (horaYaPaso(horaRecogida)) {
-      toast.error("Esta hora no está disponible — ya pasó");
+    const errorHora = validarHoraRecogida();
+    if (errorComprobante || errorHora) {
+      validacionPago.enfocarPrimero({
+        comprobante: errorComprobante,
+        "hora-recogida": errorHora,
+      });
       return;
     }
     if (!isLoggedIn && !datosValidos) {
@@ -3972,7 +3835,7 @@ function CartScreen({
     try {
       const creada = await onOrder(
         payment,
-        comprobante,
+        comprobante.url,
         [...cart],
         horaRecogida,
         nombreCliente || undefined,
@@ -4544,7 +4407,7 @@ function CartScreen({
                       className="mt-4 space-y-2 text-sm"
                     />
                   </div>
-                  {/* RIGHT: payment method + pickup time */}
+                  {/* Método de pago, comprobante y recogida */}
                   <div className="px-5 py-5 space-y-5">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
@@ -4569,7 +4432,8 @@ function CartScreen({
                               className="sr-only"
                               value={m}
                               checked={payment === m}
-                              onChange={() => setPayment(m)}
+                              disabled={subiendo || loading}
+                              onChange={() => cambiarMetodoPago(m)}
                             />
                             <span className="text-sm font-medium text-foreground">
                               {m}
@@ -4588,12 +4452,40 @@ function CartScreen({
                       <BloqueQrPago payment={payment} monto={subtotal} qrDataUrl={qrDataUrl} />
                     </div>
 
+                    <div
+                      ref={validacionPago.refCampo("comprobante")}
+                      tabIndex={-1}
+                      role="group"
+                      aria-label="Comprobante de pago"
+                      {...validacionPago.ariaCampo("comprobante", errorComprobanteVisible)}
+                    >
+                      <CargaComprobanteCheckout
+                        monto={subtotal}
+                        comprobante={comprobante}
+                        onQuitarComprobante={() => setComprobante(null)}
+                        subiendo={subiendo}
+                        fileRef={fileRef}
+                        onFileChange={(file) => void cargarComprobanteCheckout(file)}
+                      />
+                      {errorComprobanteVisible && (
+                        <p id={validacionPago.idError("comprobante")} role="alert" className="mt-1.5 text-xs font-medium text-red-500">
+                          {errorComprobanteVisible}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Hora de recogida: dos selects (hora y minutos de 15 en
                       15), siempre en p. m., de 4:00 p. m. a 9:45 p. m., y solo
                       con los horarios que aún no pasaron hoy. */}
-                    <div>
+                    <div
+                      ref={sinHorariosHoy ? validacionPago.refCampo("hora-recogida") : undefined}
+                      tabIndex={sinHorariosHoy ? -1 : undefined}
+                      role="group"
+                      aria-label="Hora de recogida"
+                      {...(sinHorariosHoy ? validacionPago.ariaCampo("hora-recogida", errorHoraVisible) : {})}
+                    >
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                        Hora de recogida
+                        Hora de recogida *
                       </p>
                       <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
                         <p>
@@ -4606,13 +4498,15 @@ function CartScreen({
                         </p>
                       </div>
                       <div
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${horaFueraDeRango(horaRecogida)
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-muted focus-within:ring-2 focus-within:ring-primary/30 transition-all ${errorHoraVisible || horaFueraDeRango(horaRecogida)
                             ? "border-red-400 focus-within:ring-red-300"
                             : "border-border"
                           }`}
                       >
                         <span className="text-base shrink-0">🕐</span>
                         <select
+                          ref={!sinHorariosHoy ? validacionPago.refCampo("hora-recogida") : undefined}
+                          {...validacionPago.ariaCampo("hora-recogida", errorHoraVisible)}
                           value={seleccionValida && horaSel !== null ? horaSel : ""}
                           disabled={sinHorariosHoy}
                           aria-label={`Hora de recogida, de ${aperturaRecogidaTexto} a ${ultimaRecogidaTexto}`}
@@ -4669,7 +4563,11 @@ function CartScreen({
                           ))}
                         </select>
                       </div>
-                      {sinHorariosHoy ? (
+                      {errorHoraVisible ? (
+                        <p id={validacionPago.idError("hora-recogida")} role="alert" className="mt-1.5 text-xs font-medium text-red-500">
+                          {errorHoraVisible}
+                        </p>
+                      ) : sinHorariosHoy ? (
                         <p className="text-xs mt-1.5 font-medium flex items-center gap-1 text-red-500">
                           ⚠ Ya no hay horarios disponibles para hoy
                         </p>
@@ -4703,33 +4601,18 @@ function CartScreen({
                     Cancelar
                   </button>
                   <button
-                    onClick={() => {
-                      if (sinHorariosHoy) {
-                        toast.error("Ya no hay horarios disponibles para hoy");
-                        return;
-                      }
-                      if (!horaRecogida) {
-                        toast.error("Por favor ingresa la hora de recogida");
-                        return;
-                      }
-                      const minutos = minutosDeHora(horaRecogida);
-                      if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-                        toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
-                        return;
-                      }
-                      if (horaYaPaso(horaRecogida)) {
-                        toast.error("Esta hora no está disponible — ya pasó");
-                        return;
-                      }
-                      setCheckoutStep(2);
-                    }}
-                    disabled={sinHorariosHoy}
-                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${sinHorariosHoy
-                        ? "opacity-50 cursor-not-allowed"
-                        : "cursor-pointer"
-                      }`}
+                    onClick={handleConfirm}
+                    disabled={loading}
+                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Continuar <ArrowRight className="w-4 h-4" />
+                    {loading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    {loading
+                      ? "Enviando..."
+                      : "Enviar pedido"}
                   </button>
                 </div>
               </motion.div>
@@ -4860,87 +4743,6 @@ function CartScreen({
                     className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 flex items-center justify-center gap-2"
                   >
                     Continuar <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Modal step 2: Datos de cuenta + subir comprobante ── */}
-      <AnimatePresence>
-        {checkoutStep === 2 && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-3xl shadow-2xl border border-border my-4"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCheckoutStep(1)}
-                      className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                    </button>
-                    <h3
-                      className="text-lg font-bold text-foreground"
-                      style={{ fontFamily: SERIF }}
-                    >
-                      Datos de pago · {payment}
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setCheckoutStep(0)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {/* Body: dos columnas — izquierda cuenta + QR, derecha
-                  comprobante. El cuerpo del pago es un componente compartido
-                  (PasoPagoTransferencia) que también usa el modal
-                  "Completar pago" de Mis pedidos. */}
-                <PasoPagoTransferencia
-                  payment={payment}
-                  subtotal={subtotal}
-                  qrDataUrl={qrDataUrl}
-                  comprobante={comprobante}
-                  onQuitarComprobante={() => {
-                    setComprobante("");
-                    if (fileRef.current) fileRef.current.value = "";
-                  }}
-                  subiendo={subiendo}
-                  fileRef={fileRef}
-                  onFileChange={(file) => void cargarComprobanteCheckout(file)}
-                />
-                {/* Footer */}
-                <div className="flex gap-3 px-5 py-4 border-t border-border">
-                  <button
-                    onClick={() => setCheckoutStep(1)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                  >
-                    Atrás
-                  </button>
-                  <button
-                    onClick={handleConfirm}
-                    disabled={loading}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4" />
-                    )}
-                    {loading
-                      ? "Enviando..."
-                      : "Enviar"}
                   </button>
                 </div>
               </motion.div>
@@ -7221,232 +7023,6 @@ function ManageProductsScreen() {
   );
 }
 
-// ─────────────────────────── ORDERS ───────────────────────────
-
-function OrdersScreen({
-  initialOrders,
-}: {
-  initialOrders: Order[];
-}) {
-  const [orders, setOrders] = useState(initialOrders);
-  const [search, setSearch] = useState("");
-  const [statusF, setStatusF] = useState("todos");
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
-
-  const filtered = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          (statusF === "todos" || o.status === statusF) &&
-          (search === "" ||
-            o.client
-              .toLowerCase()
-              .includes(search.toLowerCase()) ||
-            o.id.toLowerCase().includes(search.toLowerCase())),
-      ),
-    [orders, search, statusF],
-  );
-
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice(
-    Math.max(0, (page - 1) * PER_PAGE),
-    page * PER_PAGE,
-  );
-  useEffect(() => {
-    setPage((p) => Math.min(Math.max(1, p), Math.max(1, totalPages)));
-  }, [totalPages]);
-
-  const updateStatus = (id: string, s: Order["status"]) => {
-    setOrders((p) =>
-      p.map((o) => (o.id === id ? { ...o, status: s } : o)),
-    );
-    toast.success("Estado de la venta actualizado");
-  };
-
-  return (
-    <div className="px-4 sm:px-6 py-6">
-      <div className="mb-6">
-        <h1
-          className="text-3xl font-bold text-foreground"
-          style={{ fontFamily: SERIF }}
-        >
-          Gestión de ventas
-        </h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          {filtered.length} ventas encontradas
-        </p>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Buscar por cliente o código..."
-          wrapperClassName="flex-1 max-w-sm"
-        />
-        <select
-          value={statusF}
-          onChange={(e) => {
-            setStatusF(e.target.value);
-            setPage(1);
-          }}
-          className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none cursor-pointer"
-        >
-          <option value="todos">Todos los estados</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-3">
-        {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl p-12 text-center">
-            <p className="text-5xl mb-4">📋</p>
-            <p className="font-bold text-foreground mb-1">
-              Sin ventas
-            </p>
-            <p className="text-muted-foreground text-sm">
-              No hay ventas que coincidan con tu búsqueda
-            </p>
-          </div>
-        ) : (
-          paged.map((order) => (
-            <div
-              key={order.id}
-              className="bg-card border border-border rounded-2xl overflow-hidden"
-            >
-              <button
-                onClick={() =>
-                  setExpanded(
-                    expanded === order.id ? null : order.id,
-                  )
-                }
-                className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="text-left">
-                    <p className="font-bold text-sm text-foreground font-mono">
-                      {order.id}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {order.client}
-                    </p>
-                  </div>
-                  <Badge className={STATUS_COLOR[order.status]}>
-                    {STATUS_LABEL[order.status]}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  <span
-                    className="font-bold text-foreground hidden sm:block"
-                    style={{ fontFamily: MONO }}
-                  >
-                    {fmt(order.total)}
-                  </span>
-                  <span className="text-xs text-muted-foreground hidden md:block">
-                    {order.date}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 text-muted-foreground transition-transform ${expanded === order.id ? "rotate-180" : ""}`}
-                  />
-                </div>
-              </button>
-
-              <AnimatePresence>
-                {expanded === order.id && (
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: "auto" }}
-                    exit={{ height: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="border-t border-border px-4 py-4 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Phone className="w-4 h-4 shrink-0" />
-                          {order.phone}
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="w-4 h-4 shrink-0" />
-                          {order.address}
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <CreditCard className="w-4 h-4 shrink-0" />
-                          {order.paymentMethod}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                          Productos
-                        </p>
-                        <div className="space-y-1">
-                          {order.items.map((item, i) => (
-                            <div
-                              key={i}
-                              className="flex justify-between text-sm"
-                            >
-                              <span className="text-foreground">
-                                {item.qty}× {item.name}
-                              </span>
-                              <span
-                                className="font-semibold text-foreground"
-                                style={{ fontFamily: MONO }}
-                              >
-                                {fmt(item.price)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-sm font-semibold text-muted-foreground">
-                          Cambiar estado:
-                        </span>
-                        {(
-                          Object.keys(
-                            STATUS_LABEL,
-                          ) as Order["status"][]
-                        ).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() =>
-                              updateStatus(order.id, s)
-                            }
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${order.status === s ? STATUS_COLOR[s] + " ring-2 ring-offset-1 ring-current" : "bg-muted text-muted-foreground hover:bg-border"}`}
-                          >
-                            {STATUS_LABEL[s]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Paginación (unificada, fuera de la card) */}
-      {filtered.length > 0 && (
-        <Paginador
-          pagina={page}
-          totalPaginas={totalPages}
-          onCambio={setPage}
-        />
-      )}
-    </div>
-  );
-}
-
 // ─────────────────────────── GENERIC ADMIN ───────────────────────────
 
 function GenericAdmin({
@@ -8154,8 +7730,11 @@ export default function App() {
     const id = new URLSearchParams(window.location.search).get("factura");
     return id && /^[1-9]\d*$/.test(id) ? id : null;
   });
+  const [pantallaPendiente, setPantallaPendiente] = useState(
+    facturaPedidoId ? null : sesionActiva?.screen ?? null,
+  );
   const [screen, setScreen] = useState<Screen>(
-    facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : (sesionActiva?.screen as Screen) || "landing",
+    facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : sesionActiva ? "inicio" : "landing",
   );
   const [clienteAAbrirDesdeUsuarios, setClienteAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
   const [empleadoAAbrirDesdeUsuarios, setEmpleadoAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
@@ -8902,6 +8481,25 @@ export default function App() {
   const isAdminRole = hasValidSession && !esClientePublico;
   const isAdmin = ADMIN_SCREENS.includes(screen) && isAdminRole;
 
+  const puedeVerPantallaPanel = (pantalla: Screen) => {
+    if (pantalla === "dashboard" || pantalla === "sales-chart") return hasDashboardAccess;
+    if (pantalla === "inicio") return !hasDashboardAccess;
+    const permiso = SCREEN_PERM_KEY[pantalla];
+    return !permiso || esSuperAdminSesion || canViewPermission(loggedInAccesos, permiso);
+  };
+
+  // Resuelve la pantalla antes de montarla, con los permisos del rol ya cargados.
+  if (pantallaPendiente !== null && restauracionSesionLista && isLoggedIn) {
+    const inicioSesion = isAdminRole ? adminHomeScreen : "landing";
+    const pantalla = esPantalla(pantallaPendiente) ? pantallaPendiente : inicioSesion;
+    // Estas vistas necesitan una orden seleccionada, que vive en memoria.
+    const requiereOrden = pantalla === "recepcion-compra" || pantalla === "orden-detalle";
+    const panelSinAcceso = ADMIN_SCREENS.includes(pantalla) &&
+      (!isAdminRole || !puedeVerPantallaPanel(pantalla));
+    setScreen(requiereOrden || panelSinAcceso ? inicioSesion : pantalla);
+    setPantallaPendiente(null);
+  }
+
   // Guardar la preferencia de menú en escritorio (no en celular).
   useEffect(() => {
     if (esMovil) return;
@@ -8952,7 +8550,6 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
   const [productoOrigenCatalogo, setProductoOrigenCatalogo] = useState<number>();
-  const [orders] = useState<Order[]>(ORDERS);
   // Órdenes de compra y compras (API, fase 3). Sin semillas: las cargan
   // `cargarOrdenesCompra`/`cargarCompras`; si falla queda el error con
   // "Reintentar" y no se vuelve a datos de ejemplo.
@@ -9692,6 +9289,7 @@ export default function App() {
       setAbrirCheckoutTrasLogin(false);
       if (!opciones?.conservarCarrito) setCart(leerCarritoGuardado());
       setRolActivoId(null);
+      setPantallaPendiente(null);
       navigate(destino, { replace: true });
       if (!silenciarAviso) {
         toast.success(aviso);
@@ -9949,7 +9547,7 @@ export default function App() {
   // Persiste la sesión (usuario + rol activo + pantalla) mientras haya login.
   // Al cerrar sesión, `logout` ya borra la clave.
   useEffect(() => {
-    if (!isLoggedIn || !loggedInUserId) return;
+    if (!isLoggedIn || !loggedInUserId || pantallaPendiente !== null) return;
     escribirSesionGuardada({
       userId: loggedInUserId,
       rolActivo: rolActivoId,
@@ -9958,7 +9556,7 @@ export default function App() {
       avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
       avatarColor: avatarParaHeader?.avatarColor,
     });
-  }, [isLoggedIn, loggedInUserId, rolActivoId, screen, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
+  }, [isLoggedIn, loggedInUserId, rolActivoId, screen, pantallaPendiente, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
 
   // Inactividad: escucha de eventos de actividad con throttle (máx. una vez
   // cada 30 s) y un intervalo que revisa cada 30 s si pasaron 15 min. Usa refs
@@ -9971,7 +9569,7 @@ export default function App() {
   const sesionActualRef = useRef({
     loggedInUserId,
     rolActivoId,
-    screen,
+    screen: pantallaPendiente ?? screen,
     avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
     avatarColor: avatarParaHeader?.avatarColor,
   });
@@ -9979,11 +9577,11 @@ export default function App() {
     sesionActualRef.current = {
       loggedInUserId,
       rolActivoId,
-      screen,
+      screen: pantallaPendiente ?? screen,
       avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
       avatarColor: avatarParaHeader?.avatarColor,
     };
-  }, [loggedInUserId, rolActivoId, screen, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
+  }, [loggedInUserId, rolActivoId, screen, pantallaPendiente, avatarParaHeader?.iniciales, avatarParaHeader?.avatarColor]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -10080,7 +9678,7 @@ export default function App() {
   // rol "Cliente" solo da acceso al portal público (landing / catálogo /
   // mis-pedidos), nunca al panel.
   if (
-    (!hasValidSession || !isAdminRole) &&
+    pantallaPendiente === null && (!hasValidSession || !isAdminRole) &&
     ADMIN_SCREENS.includes(screen)
   ) {
     setTimeout(() => navigate("landing", { replace: true }), 0);
@@ -10098,29 +9696,8 @@ export default function App() {
     }
   }, [facturaPedidoId, hasValidSession, screen, navigate]);
 
-  // Dashboard and Inicio are mutually exclusive landing screens. Other admin
-  // screens remain protected by their module permission below.
-  if (isLoggedIn && isAdminRole && screen === "dashboard" && !hasDashboardAccess) {
-    setTimeout(() => navigate("inicio"), 0);
-  }
-  if (isLoggedIn && isAdminRole && screen === "inicio" && hasDashboardAccess) {
-    setTimeout(() => navigate("dashboard"), 0);
-  }
-  // El detalle de la gráfica (sales-chart) forma parte del Dashboard: solo lo
-  // abre quien tiene el permiso Dashboard (o la super admin); si otro rol
-  // llega ahí, se le devuelve a "inicio".
-  if (isLoggedIn && isAdminRole && screen === "sales-chart" && !hasDashboardAccess) {
-    setTimeout(() => navigate("inicio"), 0);
-  }
-  if (isLoggedIn && isAdminRole && screen !== "dashboard" && screen !== "inicio" && screen !== "profile" && screen !== "store-profile") {
-    // Toda pantalla de administración con permKey queda cubierta por esta regla.
-    // La lista legacy ADMIN_ONLY_SCREENS se eliminó: sus tres pantallas
-    // (gestion-config, users, empleados) ya declaran permKey en SCREEN_PERM_KEY,
-    // así que el fallback nunca se disparaba.
-    const permKey = SCREEN_PERM_KEY[screen];
-    if (permKey && !esSuperAdminSesion && !(loggedInAccesos[permKey]?.includes("Ver") ?? false)) {
-      setTimeout(() => navigate(adminHomeScreen), 0);
-    }
+  if (pantallaPendiente === null && isAdminRole && !puedeVerPantallaPanel(screen)) {
+    setTimeout(() => navigate(adminHomeScreen), 0);
   }
 
   const sideW = isAdmin
@@ -10506,9 +10083,6 @@ export default function App() {
                   )}
                   {screen === "manage-products" && (
                     <ManageProductsScreen />
-                  )}
-                  {screen === "orders" && (
-                    <OrdersScreen initialOrders={orders} />
                   )}
                   {screen === "perecederos" && (
                     <ProductosPerecederosScreen
@@ -11026,7 +10600,6 @@ export default function App() {
                       "dashboard",
                       "inicio",
                       "manage-products",
-                      "orders",
                       "suppliers",
                       "ventas-pedidos",
                       "gestion-productos",
