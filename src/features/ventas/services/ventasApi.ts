@@ -245,6 +245,11 @@ export async function obtenerPagosVenta(id: string, signal?: AbortSignal) {
   return data;
 }
 
+export async function obtenerMisPagosVenta(id: string) {
+  const { data } = await api.get<ResumenPagosVenta>(`/ventas/mias/${id}/pagos`);
+  return data;
+}
+
 export async function confirmarPagoVenta(id: string, idPago: number, monto: number) {
   if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
     throw new Error('El identificador de la venta no es válido.');
@@ -392,6 +397,7 @@ export async function resolverDevolucionApi(
   };
 }
 
-export async function subirComprobanteVenta(id: string, payload: { tipo: string; comprobante: string }) {
-  await api.post(`/ventas/${id}/comprobantes`, payload);
+export async function subirComprobanteVenta(id: string, payload: { tipo: string; comprobante: string; monto_declarado: number }) {
+  const { data } = await api.post<{ id_pago: number }>(`/ventas/${id}/comprobantes`, payload);
+  return data;
 }

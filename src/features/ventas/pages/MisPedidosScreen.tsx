@@ -26,6 +26,8 @@ import { VisorImagen } from "@/shared/components/VisorImagen";
 import {
   cancelarVentaApi,
   obtenerMiVenta,
+  obtenerMisPagosVenta,
+  type ResumenPagosVenta,
   obtenerMisVentas,
   subirComprobanteVenta,
 } from "../services/ventasApi";
@@ -34,6 +36,23 @@ const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
 
 const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
+
+const hayComprobanteEnRevision = (resumen?: ResumenPagosVenta) =>
+  resumen?.pagos.some((pago) => pago.estado === "Pendiente" && pago.monto_confirmado === null &&
+    (Boolean(pago.comprobante) || pago.monto_declarado !== null)) ?? false;
+
+const puedeEnviarFaltante = (pedido: Venta, resumen?: ResumenPagosVenta) =>
+  pedido.estado === "En espera" && Boolean(resumen && resumen.falta > 0) && !hayComprobanteEnRevision(resumen);
+
+function ContadorPagos({ resumen }: { resumen?: ResumenPagosVenta }) {
+  return (
+    <p className="text-xs text-muted-foreground">
+      {resumen
+        ? `Recibido: ${fmtCOP(resumen.recibido)} · En revisión: ${fmtCOP(resumen.en_revision)} · Falta: ${fmtCOP(resumen.falta)}`
+        : "Resumen de pagos no disponible"}
+    </p>
+  );
+}
 
 /** Etiquetas y mensajes PARA EL CLIENTE de cada estado de la venta (la tabla
     de la sección 3 difiere de los nombres del panel admin). */
@@ -235,24 +254,41 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   const [pedidoDetalleCargando, setPedidoDetalleCargando] = useState<string | null>(null);
   const detallesPedidoEnCargaRef = useRef(new Set<string>());
   const [cargaInicialResuelta, setCargaInicialResuelta] = useState(false);
+  const [resumenes, setResumenes] = useState<Record<string, ResumenPagosVenta>>({});
+  const cargaActualRef = useRef(0);
   const cargaEnCursoRef = useRef(false);
-  const cargar = useCallback(async (silencioso = false) => {
-    if (cargaEnCursoRef.current) return;
+  const cargar = useCallback(async (silencioso = false, forzar = false) => {
+    if (cargaEnCursoRef.current && !forzar) return;
+    const carga = ++cargaActualRef.current;
     cargaEnCursoRef.current = true;
     try {
-      setMisPedidos(await obtenerMisVentas());
+      const pedidos = await obtenerMisVentas();
+      const resultados = await Promise.allSettled(pedidos.map((pedido) => obtenerMisPagosVenta(pedido.id)));
+      if (carga !== cargaActualRef.current) return;
+      setMisPedidos(pedidos);
+      setResumenes((anteriores) => {
+        const actualizados: Record<string, ResumenPagosVenta> = {};
+        resultados.forEach((resultado, indice) => {
+          const id = pedidos[indice].id;
+          if (resultado.status === "fulfilled") actualizados[id] = resultado.value;
+          else if (anteriores[id]) actualizados[id] = anteriores[id];
+        });
+        return actualizados;
+      });
     } catch (error) {
-      if (!silencioso) {
+      if (carga === cargaActualRef.current && !silencioso) {
         toast.error(error instanceof Error ? error.message : "No se pudieron cargar tus pedidos.");
       }
     } finally {
-      cargaEnCursoRef.current = false;
-      setCargaInicialResuelta(true);
+      if (carga === cargaActualRef.current) {
+        cargaEnCursoRef.current = false;
+        setCargaInicialResuelta(true);
+      }
     }
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
 
-  // Refresca cada 15 s solo con la pestaña visible y al volver a ella.
+  // Refresca cada 20 s solo con la pestaña visible y al volver a ella.
   useEffect(() => {
     let id: ReturnType<typeof setInterval> | null = null;
     const configurarRefresco = () => {
@@ -261,7 +297,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       if (document.visibilityState === "visible") {
         id = setInterval(() => {
           if (document.visibilityState === "visible") void cargar(true);
-        }, 15_000);
+        }, 20_000);
       }
     };
     const alCambiarVisibilidad = () => {
@@ -346,6 +382,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   const [paso, setPaso] = useState<1 | 2>(1);
   const [metodo, setMetodo] = useState<"Nequi" | "Bancolombia" | "">("");
   const [compComprobante, setCompComprobante] = useState("");
+  const [montoIngresado, setMontoIngresado] = useState("");
+  const [montoTocado, setMontoTocado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const enviandoRef = useRef(false);
+  const montoDeclarado = Number(montoIngresado);
+  const montoValido = /^\d+$/.test(montoIngresado) && Number.isSafeInteger(montoDeclarado) && montoDeclarado > 0;
   const { subir, subiendo } = useSubirArchivo();
   const compFileRef = useRef<HTMLInputElement | null>(null);
   /** Visor del comprobante de devolución (rechazo por dinero faltante). */
@@ -355,7 +397,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   const pedidosHoy = pedidosOrdenados.filter((p) => p.fecha === hoyISO());
   // Con saldo faltante ("En espera"): los de la pestaña "Pedidos pendientes".
   const pendientes = pedidosOrdenados.filter(
-    (p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0,
+    (p) => p.estado === "En espera" && (resumenes[p.id]?.falta ?? 0) > 0,
   );
   const lista =
     pestana === "pendientes" ? pendientes : pestana === "recientes" ? pedidosHoy : pedidosOrdenados;
@@ -363,10 +405,18 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   // Pedido en espera del que se está completando el pago (para montos).
   const pedidoCompletar = completarId ? pedidosOrdenados.find((p) => p.id === completarId) ?? null : null;
 
+  const resumenCompletar = completarId ? resumenes[completarId] : undefined;
+  const puedeEnviar = Boolean(pedidoCompletar && puedeEnviarFaltante(pedidoCompletar, resumenCompletar));
+  const listoParaEnviar = puedeEnviar && montoValido && Boolean(metodo && compComprobante) && !subiendo && !enviando;
+
+  useEffect(() => {
+    if (completarId && !puedeEnviar && !subiendo && !enviando) setCompletarId(null);
+  }, [completarId, puedeEnviar, subiendo, enviando]);
+
   // QR del método elegido en el paso 2 (mismo contenido que el checkout).
   const qrDataUrl = useQrPago(
     paso === 2 && metodo && pedidoCompletar ? metodo : "",
-    pedidoCompletar?.montoFaltante ?? 0,
+    resumenCompletar?.falta ?? 0,
   );
 
   // Si al entrar hay pedidos con saldo faltante, la pantalla abre directamente
@@ -376,10 +426,10 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   useEffect(() => {
     if (facturaPedidoId || pestanaInicialRef.current || misPedidos.length === 0) return;
     pestanaInicialRef.current = true;
-    if (misPedidos.some((p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0)) {
+    if (pendientes.length > 0) {
       setPestana("pendientes");
     }
-  }, [facturaPedidoId, misPedidos]);
+  }, [facturaPedidoId, misPedidos, pendientes.length]);
 
   // Si se resuelve el último pendiente estando en esa pestaña, volver a
   // "todos" (la pestaña deja de existir).
@@ -398,8 +448,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       for (const p of misPedidos) prevEstadosRef.current[p.id] = estadoCliente(p);
       // Aviso de pedidos que ya esperan dinero faltante.
       for (const p of misPedidos) {
-        if (estadoCliente(p) === "En espera") {
-          toast.info(`El pedido ${p.id} espera un faltante de ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
+        if (puedeEnviarFaltante(p, resumenes[p.id])) {
+          toast.info(`El pedido ${p.id} espera un faltante de ${fmtCOP(resumenes[p.id].falta)} para completar tu pago.`);
         }
       }
       return;
@@ -420,8 +470,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
               ? [p.horaRecogida && formatearHora(p.horaRecogida), p.direccionRecogida].filter(Boolean).join(" · ")
               : undefined,
           });
-        } else if (estadoActual === "En espera") {
-          toast.info(`El pedido ${p.id}: falta ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
+        } else if (estadoActual === "En espera" && puedeEnviarFaltante(p, resumenes[p.id])) {
+          toast.info(`El pedido ${p.id}: falta ${fmtCOP(resumenes[p.id].falta)} para completar tu pago.`);
         } else if (estadoActual === "Rechazado") {
           toast.error(`Tu pedido #${p.id} fue rechazado.`);
         } else if (estadoActual === "Anulado") {
@@ -435,10 +485,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       prevEstadosRef.current[p.id] = estadoActual;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [misPedidos, cargaInicialResuelta]);
+  }, [misPedidos, cargaInicialResuelta, resumenes]);
 
   // Limpieza del modal al abrir/cerrar.
   const abrirCompletar = (id: string) => {
+    setMontoIngresado("");
+    setMontoTocado(false);
     setCompletarId(id);
     setPaso(1);
     setMetodo("");
@@ -469,11 +521,47 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       });
   };
 
-  const enviarFaltante = () => {
-    if (!completarId || !compComprobante) return;
-    void subirComprobanteVenta(completarId, { tipo: metodo, comprobante: compComprobante })
-      .then(() => { toast.success("Recibimos tu comprobante, lo estamos verificando"); cerrarCompletar(); void cargar(); })
-      .catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo enviar el comprobante."));
+  const enviarFaltante = async () => {
+    if (!completarId || !listoParaEnviar || enviandoRef.current) return;
+    enviandoRef.current = true;
+    setEnviando(true);
+    try {
+      const { id_pago } = await subirComprobanteVenta(completarId, {
+        tipo: metodo,
+        comprobante: compComprobante,
+        monto_declarado: montoDeclarado,
+      });
+      setMisPedidos((pedidos) => pedidos.map((pedido) => pedido.id === completarId
+        ? { ...pedido, estado: "Por verificar", estadoCliente: "Pendiente" }
+        : pedido));
+      setResumenes((anteriores) => {
+        const resumen = anteriores[completarId];
+        if (!resumen || resumen.pagos.some((pago) => pago.id_pago === id_pago)) return anteriores;
+        return {
+          ...anteriores,
+          [completarId]: {
+            ...resumen,
+            en_revision: resumen.en_revision + montoDeclarado,
+            pagos: [...resumen.pagos, {
+              id_pago,
+              fecha: new Date().toISOString(),
+              comprobante: compComprobante,
+              estado: "Pendiente",
+              monto_declarado: montoDeclarado,
+              monto_confirmado: null,
+            }],
+          },
+        };
+      });
+      toast.success("Recibimos tu comprobante, lo estamos verificando");
+      cerrarCompletar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo enviar el comprobante.");
+    } finally {
+      await cargar(true, true);
+      enviandoRef.current = false;
+      setEnviando(false);
+    }
   };
 
   return (
@@ -573,6 +661,9 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
           const estado = estadoCliente(p);
           const est = datosEstadoCliente(p);
           const abierta = abierto === p.id;
+          const resumen = resumenes[p.id];
+          const enRevision = hayComprobanteEnRevision(resumen);
+          const pagoCompleto = resumen?.falta === 0 && (p.estado === "En espera" || p.estado === "Por verificar");
 
           return (
             <div
@@ -611,6 +702,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   <p className="text-sm text-muted-foreground">{p.fecha}</p>
                 </div>
                 <div className="text-right shrink-0">
+                  <p className="text-xs text-muted-foreground">Total a pagar</p>
                   <p
                     className="text-lg font-bold text-primary"
                     style={{ fontFamily: MONO }}
@@ -622,6 +714,10 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   />
                 </div>
               </button>
+
+              <div className="px-5 pb-3">
+                <ContadorPagos resumen={resumen} />
+              </div>
 
               <BarraProgresoPedido pedido={p} />
 
@@ -644,42 +740,19 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                 </div>
               )}
 
-              {/* Alerta de falta de pago: visible sin expandir la tarjeta. */}
-              {estado === "En espera" && (
-                <div className="px-5 pb-4 -mt-1">
-                  <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-start gap-2 text-violet-900">
-                      <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-semibold">Completa el saldo de tu pedido</p>
-                        <p>Total: {fmtCOP(p.total)} · Recibido: {fmtCOP(p.montoPagado ?? 0)} · Pendiente: {fmtCOP(p.montoFaltante ?? 0)}</p>
-                      </div>
-                    </div>
+              {(enRevision || pagoCompleto || puedeEnviarFaltante(p, resumen)) && (
+                <div className="mx-5 mb-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                  {enRevision && <p>Estamos revisando tu último comprobante</p>}
+                  {pagoCompleto && <p>Pago completo. Estamos revisando tu pedido.</p>}
+                  {puedeEnviarFaltante(p, resumen) && (
                     <button
+                      type="button"
                       onClick={() => abrirCompletar(p.id)}
                       className="px-4 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 active:scale-95 transition-all cursor-pointer"
                     >
                       Enviar dinero faltante
                     </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Pendientes: faltante destacado. El botón de arriba
-                  ("Enviar dinero faltante") abre el modal "Completar pago",
-                  donde está el QR para enviar el saldo y subir el comprobante:
-                  mismo flujo, sin duplicar. */}
-              {pestana === "pendientes" && estado === "En espera" && (
-                <div className="px-5 pb-4 -mt-1">
-                  <p className="text-sm font-semibold text-violet-900">
-                    Monto que falta:{" "}
-                    <span
-                      className="text-xl font-bold text-violet-800"
-                      style={{ fontFamily: MONO }}
-                    >
-                      {fmtCOP(p.montoFaltante ?? 0)}
-                    </span>
-                  </p>
+                  )}
                 </div>
               )}
 
@@ -899,7 +972,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   {/* Total */}
                   <div className="flex items-center justify-between border-t border-border pt-4">
                     <span className="text-base font-semibold text-foreground">
-                      Total
+                      Total a pagar
                     </span>
                     <span
                       className="text-xl font-bold text-primary"
@@ -908,6 +981,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       {fmtCOP(p.total)}
                     </span>
                   </div>
+                  <ContadorPagos resumen={resumen} />
                 </div>
               )}
             </div>
@@ -916,10 +990,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       </div>
 
       {/* ── Modal: Completar pago (falta de dinero) ── */}
-      {completarId && pedidoCompletar && (() => {
-        const total = pedidoCompletar.total;
-        const faltante = pedidoCompletar.montoFaltante ?? 0;
-        const pagado = total - faltante;
+      {completarId && pedidoCompletar && resumenCompletar && (() => {
+        const { total, falta: faltante, recibido: pagado } = resumenCompletar;
         return (
           <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
@@ -927,6 +999,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                 {/* Header: volver + cerrar */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <button
+                    disabled={subiendo || enviando}
                     onClick={() => (paso === 2 ? setPaso(1) : cerrarCompletar())}
                     className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground text-sm font-semibold"
                   >
@@ -936,6 +1009,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                     Completar pago
                   </p>
                   <button
+                    disabled={subiendo || enviando}
                     onClick={cerrarCompletar}
                     className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                     aria-label="Cerrar"
@@ -988,24 +1062,54 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       </div>
                     </div>
                   ) : (
-                    /* Paso 2: datos de pago + subir comprobante (componente compartido). */
-                    <PasoPagoTransferencia
-                      payment={metodo}
-                      subtotal={faltante}
-                      qrDataUrl={qrDataUrl}
-                      comprobante={compComprobante}
-                      onQuitarComprobante={() => {
-                        setCompComprobante("");
-                        if (compFileRef.current) compFileRef.current.value = "";
-                      }}
-                      subiendo={subiendo}
-                      fileRef={compFileRef}
-                      onFileChange={(file) => {
-                        void subir(file, "comprobantes").then((url) => {
-                          if (url) setCompComprobante(url);
-                        });
-                      }}
-                    />
+                    <>
+                      <PasoPagoTransferencia
+                        payment={metodo}
+                        subtotal={faltante}
+                        qrDataUrl={qrDataUrl}
+                        comprobante={compComprobante}
+                        onQuitarComprobante={() => {
+                          setCompComprobante("");
+                          if (compFileRef.current) compFileRef.current.value = "";
+                        }}
+                        subiendo={subiendo || enviando}
+                        fileRef={compFileRef}
+                        onFileChange={(file) => {
+                          void subir(file, "comprobantes").then((url) => {
+                            if (url) setCompComprobante(url);
+                          });
+                        }}
+                      />
+                      <div>
+                        <label htmlFor="monto-pago-faltante" className="block text-sm font-semibold">
+                          ¿Cuánto enviaste?
+                        </label>
+                        <input
+                          id="monto-pago-faltante"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]+"
+                          required
+                          disabled={enviando}
+                          value={montoIngresado}
+                          onChange={(event) => {
+                            setMontoIngresado(event.target.value);
+                            setMontoTocado(true);
+                          }}
+                          onBlur={() => setMontoTocado(true)}
+                          aria-invalid={montoTocado && !montoValido}
+                          aria-describedby="mensaje-monto-pago"
+                          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                        />
+                        <p id="mensaje-monto-pago" aria-live="polite" className="mt-1 text-sm text-foreground">
+                          {montoTocado && !montoValido
+                            ? "Ingresa un monto en pesos mayor que 0, solo con números."
+                            : montoValido && montoDeclarado > faltante
+                              ? "Estás enviando más de lo que falta"
+                              : null}
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -1014,6 +1118,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   {paso === 2 ? (
                     <>
                       <button
+                        disabled={subiendo || enviando}
                         onClick={() => setPaso(1)}
                         className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                       >
@@ -1021,14 +1126,14 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       </button>
                       <button
                         onClick={enviarFaltante}
-                        disabled={!compComprobante || subiendo}
+                        disabled={!listoParaEnviar}
                         className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors active:scale-95 ${
-                          compComprobante && !subiendo
+                          listoParaEnviar
                             ? "bg-primary hover:bg-red-700 cursor-pointer"
                             : "bg-primary/50 opacity-50 cursor-not-allowed"
                         }`}
                       >
-                        Enviar comprobante
+                        {enviando ? "Enviando…" : "Enviar comprobante"}
                       </button>
                     </>
                   ) : (
