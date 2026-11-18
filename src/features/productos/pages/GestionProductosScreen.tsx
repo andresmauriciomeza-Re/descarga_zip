@@ -604,7 +604,9 @@ const fichaConContenido = (v: FichaVersion): boolean =>
   v.insumos.length > 0 || v.tiempoPreparacion > 0 || v.porciones > 1 || v.pasos.length > 0;
 
 const fmtFechaFicha = (iso: string): string =>
-  new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  new Date(iso).toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota", day: "2-digit", month: "2-digit", year: "numeric",
+  });
 
 /** Rango de vigencia de una versión: "12/09/2026 – 20/09/2026" o, si es la
     vigente (sin fechaFin), "12/09/2026 – vigente". */

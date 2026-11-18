@@ -84,6 +84,9 @@ export interface VentaApi {
 }
 
 const formatDateBogota = (date: string) => {
+  if (/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(date)) {
+    return date.slice(0, 10);
+  }
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return date.slice(0, 10);
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -103,7 +106,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     .map((pago, index) => ({
       url: pago.comprobante!,
       tipo: index === 0 ? 'pago' : 'faltante',
-      fecha: pago.fecha ? formatDateBogota(pago.fecha) : formatDateBogota(row.fecha),
+      fecha: pago.fecha || formatDateBogota(row.fecha),
       hora: '',
     }));
   const totalPagado = pagos.reduce((suma, pago) => suma + Number(pago.depositado || 0), 0);
