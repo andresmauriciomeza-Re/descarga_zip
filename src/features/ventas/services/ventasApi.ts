@@ -225,6 +225,42 @@ export function ventaApiAVenta(row: VentaApi): Venta {
   };
 }
 
+export interface ResumenPagosVenta {
+  total: number;
+  recibido: number;
+  en_revision: number;
+  falta: number;
+  pagos: Array<{
+    id_pago: number;
+    fecha: string;
+    comprobante: string | null;
+    estado: string;
+    monto_declarado: number | null;
+    monto_confirmado: number | null;
+  }>;
+}
+
+export async function obtenerPagosVenta(id: string, signal?: AbortSignal) {
+  const { data } = await api.get<ResumenPagosVenta>(`/ventas/${id}/pagos`, { signal });
+  return data;
+}
+
+export async function confirmarPagoVenta(id: string, idPago: number, monto: number) {
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
+    throw new Error('El identificador de la venta no es válido.');
+  }
+  if (!Number.isSafeInteger(Number(idPago)) || Number(idPago) <= 0) {
+    throw new Error('El identificador del pago no es válido.');
+  }
+  if (!Number.isSafeInteger(monto) || monto <= 0) {
+    throw new Error('Ingresa un monto entero en pesos mayor que cero.');
+  }
+  const { data } = await api.patch<ResumenPagosVenta>(`/ventas/${id}/pagos/${idPago}/confirmacion`, {
+    monto_confirmado: monto,
+  });
+  return data;
+}
+
 export async function obtenerMisVentas() {
   const { data } = await api.get<VentaApi[]>('/ventas/mias');
   return data.map(ventaApiAVenta);
@@ -240,8 +276,8 @@ export async function obtenerVentasPanel() {
   return data.map(ventaApiAVenta);
 }
 
-export async function obtenerVentaPanel(id: string) {
-  const { data } = await api.get<VentaApi>(`/ventas/${id}`);
+export async function obtenerVentaPanel(id: string, signal?: AbortSignal) {
+  const { data } = await api.get<VentaApi>(`/ventas/${id}`, { signal });
   return ventaApiAVenta(data);
 }
 

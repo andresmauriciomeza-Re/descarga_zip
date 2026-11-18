@@ -40,7 +40,7 @@ import { hoyISO } from "@/shared/utils/fechas";
 import { imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
 import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/CampoTiempoPreparacion";
-import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi, confirmarPagoVenta, obtenerPagosVenta, type ResumenPagosVenta } from "../services/ventasApi";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   ESTADOS_ANULABLES,
@@ -1641,7 +1641,97 @@ export function VentasScreen({
   const [confirmVerif, setConfirmVerif] = useState<"aprobar" | "rechazar" | null>(null);
   // Modal "Pedir dinero faltante" (estado En espera).
   const [modalFaltante, setModalFaltante] = useState(false);
-  const [montoFaltanteValor, setMontoFaltanteValor] = useState("");
+  const [resumenPagos, setResumenPagos] = useState<ResumenPagosVenta | null>(null);
+  const [errorPagos, setErrorPagos] = useState(false);
+  const [montosPago, setMontosPago] = useState<Record<number, string>>({});
+  const [operacionPago, setOperacionPago] = useState(false);
+  const operacionPagoRef = useRef(false);
+  const versionPagos = useRef(0);
+  const detalleId = detailItem?.id;
+  const enVerificacion = detailItem?.estado === "Por verificar" || detailItem?.estado === "En espera";
+  const falta = resumenPagos?.falta;
+  const puedePedirFaltante = canEdit && !operacionPago && !errorPagos && enVerificacion && falta !== undefined && falta > 0;
+  const puedeAceptarPago = canEdit && !operacionPago && !errorPagos && enVerificacion && resumenPagos?.falta === 0;
+  const resultadoPago = (id: string, resumen: ResumenPagosVenta) => {
+    setResumenPagos(resumen);
+    setErrorPagos(false);
+    setPedidos((ventas) => ventas.map((venta) => venta.id === id
+      ? { ...venta, montoPagado: resumen.recibido, montoFaltante: resumen.falta }
+      : venta));
+  };
+
+  useEffect(() => {
+    if (!detalleId) return;
+    const controller = new AbortController();
+    let consultando = false;
+    const actualizar = async () => {
+      if (consultando || operacionPagoRef.current || document.hidden) return;
+      consultando = true;
+      const version = versionPagos.current;
+      const vigente = () => !controller.signal.aborted && version === versionPagos.current;
+      try {
+        const detalle = await obtenerVentaPanel(detalleId, controller.signal);
+        if (!vigente()) return;
+        setDetailItem(detalle);
+        setPedidos((ventas) => ventas.map((venta) => venta.id === detalleId
+          ? { ...venta, estado: detalle.estado, estadoCliente: detalle.estadoCliente,
+              estadoOrden: detalle.estadoOrden, historial: detalle.historial,
+              montoPagado: detalle.montoPagado, montoFaltante: detalle.montoFaltante }
+          : venta));
+        if (detalle.estado === "Por verificar" || detalle.estado === "En espera") {
+          const resumen = await obtenerPagosVenta(detalleId, controller.signal);
+          if (vigente()) resultadoPago(detalleId, resumen);
+        }
+      } catch (error) {
+        if (!vigente()) return;
+        setErrorPagos(true);
+        if (!enVerificacion) toast.error(error instanceof Error ? error.message : "No se pudo cargar el detalle de la venta.");
+      } finally {
+        consultando = false;
+      }
+    };
+    void actualizar();
+    const intervalo = enVerificacion ? window.setInterval(actualizar, 20_000) : undefined;
+    window.addEventListener("focus", actualizar);
+    document.addEventListener("visibilitychange", actualizar);
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", actualizar);
+      document.removeEventListener("visibilitychange", actualizar);
+    };
+  }, [detalleId, enVerificacion, setPedidos]);
+
+  const iniciarOperacionPago = () => {
+    if (operacionPagoRef.current) return false;
+    operacionPagoRef.current = true;
+    versionPagos.current += 1;
+    setOperacionPago(true);
+    return true;
+  };
+
+  const terminarOperacionPago = () => {
+    operacionPagoRef.current = false;
+    setOperacionPago(false);
+  };
+
+  const confirmarMonto = async (id: string, idPago: number, monto: number) => {
+    if (!iniciarOperacionPago()) return;
+    try {
+      resultadoPago(id, await confirmarPagoVenta(id, idPago, monto));
+      toast.success("Monto confirmado");
+    } catch (error) {
+      if (error instanceof Error) {
+        const { status, cause } = error as ApiErrorConEstado & { cause?: unknown };
+        const detalle = status == null && cause instanceof Error ? cause.message : error.message;
+        toast.error(status == null ? detalle : `${detalle} (HTTP ${status})`);
+      } else {
+        toast.error(String(error));
+      }
+    } finally {
+      terminarOperacionPago();
+    }
+  };
   // ── Anulación desde el listado (primeros 10 minutos) ──
   /** Venta que se va a anular (null = modal cerrado). */
   const [ventaAnular, setVentaAnular] = useState<Venta | null>(null);
@@ -1673,15 +1763,19 @@ export function VentasScreen({
     setMotivoOtroTexto("");
     setConfirmVerif(null);
     setModalFaltante(false);
-    setMontoFaltanteValor("");
+    versionPagos.current += 1;
+    setResumenPagos(null);
+    setErrorPagos(false);
+    setMontosPago({});
   };
 
   const abrirDetalle = (v: Venta) => {
+    if (operacionPagoRef.current) return;
     resetVerificacion();
     setDetailItem(v);
-    void obtenerVentaPanel(v.id).then(setDetailItem).catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo cargar el detalle de la venta."));
   };
   const cerrarDetalle = () => {
+    if (operacionPagoRef.current) return;
     resetVerificacion();
     setDetailItem(null);
   };
@@ -1690,17 +1784,24 @@ export function VentasScreen({
       de producción se crea sola (la escucha el efecto de App). Sólo cuando la
       orden se completa vuelve a avanzar, a "Por entregar". */
   const ejecutarVerificacion = async (id: string, payload: Parameters<typeof verificarVentaApi>[1]) => {
+    if (!iniciarOperacionPago()) return;
     try {
       await verificarVentaApi(id, payload);
-      const respuesta = await (await import("../services/ventasApi")).obtenerVentasPanel();
+      const respuesta = await obtenerVentasPanel();
       setPedidos(respuesta);
       if (payload.accion === "aceptar") await onInventarioCambiado?.();
       toast.success(payload.accion === "aceptar" ? "Pago aprobado — orden de producción creada" : payload.accion === "monto_faltante" ? "Se notificó el saldo pendiente al cliente" : "Venta rechazada");
-      cerrarDetalle();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta."); }
+      resetVerificacion();
+      setDetailItem(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar la venta.");
+    } finally {
+      terminarOperacionPago();
+    }
   };
 
   const aprobarPago = (id: string) => {
+    if (!puedeAceptarPago) return;
     void ejecutarVerificacion(id, { accion: "aceptar" });
   };
 
@@ -1887,14 +1988,15 @@ export function VentasScreen({
 
   /** Pedir el dinero faltante: la venta pasa a "En espera" con el monto. */
   const pedirFaltante = (id: string) => {
-    const pagado = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
-    void ejecutarVerificacion(id, { accion: "monto_faltante", pagado });
+    if (!puedePedirFaltante) return;
+    void ejecutarVerificacion(id, { accion: "monto_faltante" });
   };
 
   /** Cambio de estado: YA NO existe desde la tabla (punto C2). La columna es
       de solo lectura y cada avance sale de `estadosVenta.ts` (verificación,
       orden de producción y la hora de recogida). */
 
+  const fmtPago = (n: number) => `$ ${n.toLocaleString("es-CO")}`;
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
   const exportExcel = () => {
@@ -2159,6 +2261,9 @@ export function VentasScreen({
                       >
                         {etiquetaEstadoVenta(p)}
                       </span>
+                      {p.estado === "En espera" && (
+                        <p className="mt-1 text-xs font-semibold text-foreground">Falta {fmtPago(p.montoFaltante ?? 0)}</p>
+                      )}
                       {p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null && (
                         <p className="mt-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">⏱ {tiempoRestante(p.finVentaLocalMs, ahora)}</p>
                       )}
@@ -2171,7 +2276,7 @@ export function VentasScreen({
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
-                        {p.estado === "Por verificar" && (
+                        {(p.estado === "Por verificar" || p.estado === "En espera") && (
                           <button
                             onClick={() => abrirDetalle(p)}
                             title="Verificar pago"
@@ -2406,7 +2511,7 @@ export function VentasScreen({
                 <div className="space-y-5">
                   {/* Comprobante(s) de transferencia: si hay más de uno (pago
                       inicial + dinero faltante), se muestran rotulados. */}
-                  {(() => {
+                  {!enVerificacion && (() => {
                     const comps = comprobantesDe(detailItem);
                     const etiquetas = ["Comprobante 1 — Pago inicial", "Comprobante 2 — Dinero faltante"];
                     return (
@@ -2523,76 +2628,88 @@ export function VentasScreen({
                     );
                   })()}
 
-                  {/* En espera: se solicitó el dinero faltante. */}
-                  {detailItem.estado === "En espera" && (
-                    <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertCircle className="w-4 h-4 text-violet-600 shrink-0" />
-                        <p className="text-sm font-semibold text-violet-900">Falta completar el pago</p>
+                  {enVerificacion && (
+                    <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
+                      <h3 className="text-sm font-semibold">Verificación de pago</h3>
+                      <div className="rounded-xl bg-muted/50 p-4 text-lg font-bold tabular-nums">
+                        <p>Total a pagar: {fmtPago(resumenPagos?.total ?? detailItem.total)}</p>
+                        {resumenPagos && (
+                          <p className="mt-2 flex flex-wrap gap-x-2" aria-live="polite">
+                            <span>Recibido: {fmtPago(resumenPagos.recibido)}</span>
+                            <span>· En revisión: {fmtPago(resumenPagos.en_revision)}</span>
+                            <span>· Falta: {fmtPago(resumenPagos.falta)}</span>
+                          </p>
+                        )}
                       </div>
-                      <p className="text-sm text-violet-800">
-                        Total: <span className="font-bold">{fmtCOP(detailItem.total)}</span> · Recibido: <span className="font-bold">{fmtCOP(detailItem.montoPagado ?? 0)}</span> · Saldo: <span className="font-bold">{fmtCOP(detailItem.montoFaltante ?? 0)}</span>. El pedido
-                        espera el comprobante del dinero restante.
-                      </p>
-                      <div className="mt-4">
-                        <button onClick={() => setConfirmVerif("rechazar")} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-semibold text-white transition-colors active:scale-95 cursor-pointer">
-                          <ShieldX className="w-4 h-4" /> Rechazar
+                      {errorPagos ? (
+                        <p role="alert" className="text-sm text-red-600">No se pudo actualizar el resumen de pagos.</p>
+                      ) : !resumenPagos && <p role="status" className="text-sm">Cargando pagos…</p>}
+                      {resumenPagos?.pagos.length === 0 && <p className="text-sm">Sin pagos registrados.</p>}
+                      {resumenPagos?.pagos.map((pago) => {
+                        const valor = montosPago[pago.id_pago] ?? String(pago.monto_declarado ?? "");
+                        const monto = Number(valor);
+                        const puedeConfirmar = Number.isSafeInteger(monto) && monto > 0;
+                        return (
+                          <article key={pago.id_pago} className="space-y-2 rounded-xl border border-border p-3 text-sm">
+                            <p className="font-semibold">
+                              {formatearFechaHora(pago.fecha)}
+                            </p>
+                            {pago.comprobante && (esComprobantePdf(pago.comprobante) ? (
+                              <a href={pago.comprobante} target="_blank" rel="noreferrer" className="font-semibold text-primary underline">
+                                Abrir comprobante (PDF)
+                              </a>
+                            ) : (
+                              <button type="button" onClick={() => setVisorSrc(pago.comprobante)} className="font-semibold text-primary underline">
+                                Abrir comprobante (imagen)
+                              </button>
+                            ))}
+                            <p>Monto declarado: {pago.monto_declarado == null ? "Sin declarar" : fmtPago(pago.monto_declarado)}</p>
+                            <p>Monto confirmado: {pago.monto_confirmado == null ? "Pendiente" : fmtPago(pago.monto_confirmado)}</p>
+                            {canEdit && pago.monto_confirmado == null && pago.estado !== "Rechazado" && (
+                              <div className="space-y-2">
+                                <label className="block font-semibold">
+                                  ¿Cuánto llegó en este comprobante?
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={valor}
+                                    disabled={operacionPago}
+                                    onChange={(e) => {
+                                      const entrada = e.target.value.replace(/\D/g, "");
+                                      setMontosPago((actuales) => ({ ...actuales, [pago.id_pago]: entrada }));
+                                    }}
+                                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  disabled={!puedeConfirmar || operacionPago || errorPagos}
+                                  onClick={() => void confirmarMonto(detailItem.id, pago.id_pago, monto)}
+                                  className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
+                                >
+                                  Confirmar monto
+                                </button>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                      <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                        <button onClick={() => setConfirmVerif("rechazar")} disabled={!canEdit || operacionPago}
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700 disabled:opacity-50">
+                          Rechazar
+                        </button>
+                        <button onClick={() => setModalFaltante(true)} disabled={!puedePedirFaltante}
+                          className="rounded-xl bg-violet-600 px-3 py-2 text-white disabled:opacity-50">
+                          Pedir dinero faltante{falta !== undefined && falta > 0 && ` (${fmtPago(falta)})`}
+                        </button>
+                        <button onClick={() => setConfirmVerif("aprobar")} disabled={!puedeAceptarPago}
+                          className="rounded-xl bg-emerald-600 px-3 py-2 text-white disabled:opacity-50">
+                          {falta !== undefined && falta > 0 ? `Aún faltan ${fmtPago(falta)}` : "Aceptar"}
                         </button>
                       </div>
-                    </div>
+                    </section>
                   )}
-
-                  {/* Verificación de pago */}
-                  {detailItem.estado === "Por verificar" && (() => {
-                    const totalVenta = detailItem.total ||
-                      (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
-                    const pagoInicial = detailItem.montoFaltante ? totalVenta - detailItem.montoFaltante : null;
-                    return (
-                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 dark:bg-amber-500/10 dark:border-amber-500/25">
-                        <div className="flex items-center gap-2 mb-4">
-                          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Verificación de pago</p>
-                        </div>
-                        <div className="space-y-3 mb-4">
-                          <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
-                            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-0.5">Total a cobrar</p>
-                            <p className="text-xl font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(totalVenta)}</p>
-                          </div>
-                          {pagoInicial !== null && (
-                            <>
-                              <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
-                                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Pagado inicialmente</p>
-                                <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(pagoInicial)}</p>
-                              </div>
-                              <div className="bg-white dark:bg-card rounded-xl border border-amber-200 dark:border-amber-500/25 px-4 py-3">
-                                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300/80 uppercase tracking-wide mb-0.5">Faltante solicitado</p>
-                                <p className="text-lg font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(detailItem.montoFaltante ?? 0)}</p>
-                              </div>
-                            </>
-                          )}
-                          {/* Motivo: ya NO se elige aquí. Se pide en el modal
-                              de confirmación que abre "Rechazar". */}
-                        </div>
-
-                        {/* Tres acciones: Aceptar, Monto faltante y Rechazar. */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setConfirmVerif("rechazar")}
-                            title="Rechazar pago"
-                            className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors active:scale-95 cursor-pointer"
-                          >
-                            Rechazar
-                          </button>
-                          <button onClick={() => setModalFaltante(true)} className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 cursor-pointer transition-colors active:scale-95">
-                            Monto faltante
-                          </button>
-                          <button onClick={() => setConfirmVerif("aprobar")} className="flex-1 flex items-center justify-center px-1 whitespace-nowrap py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors active:scale-95 cursor-pointer">
-                            Aceptar
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
             </div>
@@ -2646,7 +2763,7 @@ export function VentasScreen({
       {/* ── Verificación: confirmar Aprobar / Rechazar (el motivo se elige
              aquí mismo, en un modal que exige al menos una opción) ── */}
       <AnimatePresence>
-        {confirmVerif && detailItem && (() => {
+        {confirmVerif && enVerificacion && detailItem && (() => {
           const esRechazo = confirmVerif === "rechazar";
           const motivoFinal = esRechazo && puedeConfirmarRechazo ? motivoRechazoFinal() : "";
           return (
@@ -2659,7 +2776,7 @@ export function VentasScreen({
                   : "¿Aceptar el pago? Se creará la orden de producción y el pedido quedará Por entregar."
               }
               confirmLabel={esRechazo ? "Confirmar rechazo" : "Sí, confirmar"}
-              confirmDisabled={esRechazo && !puedeConfirmarRechazo}
+              confirmDisabled={esRechazo ? !puedeConfirmarRechazo || operacionPago || !canEdit : !puedeAceptarPago}
               onConfirm={() => {
                 if (esRechazo) rechazarPago(detailItem.id);
                 else aprobarPago(detailItem.id);
@@ -2732,70 +2849,45 @@ export function VentasScreen({
 
       {/* ── Pedir dinero faltante (→ En espera) ── */}
       <AnimatePresence>
-        {modalFaltante && detailItem && (() => {
-          const totalVenta = detailItem.total ||
-            (detailItem.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ?? 0);
-          const monto = parseInt(montoFaltanteValor.replace(/\D/g, "")) || 0;
-          const valido = montoFaltanteValor !== "" && monto >= 0 && monto < totalVenta;
-          return (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <p className="font-bold text-foreground">Pedir dinero faltante</p>
-                  <button onClick={() => setModalFaltante(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="p-5 space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    El pedido pasa a <span className="font-semibold">En espera</span> y el cliente podrá enviar el comprobante del dinero restante.
-                  </p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                      Valor recibido *
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="Ej.: 25000"
-                      value={montoFaltanteValor ? fmtCOP(monto) : ""}
-                      onChange={(e) => setMontoFaltanteValor(e.target.value.replace(/\D/g, ""))}
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:border-primary"
-                      style={{ fontFamily: MONO }}
-                    />
-                    {monto > 0 && !valido && (
-                      <p className="text-xs text-red-600 mt-1">
-                        El valor recibido debe ser menor al total ({fmtCOP(totalVenta)}).
-                      </p>
-                    )}
-                    {montoFaltanteValor !== "" && valido && <p className="text-xs text-muted-foreground mt-1">Saldo pendiente calculado: {fmtCOP(totalVenta - monto)}</p>}
-                  </div>
-                </div>
-                <div className="flex gap-2 px-5 pb-5">
-                  <button
-                    onClick={() => setModalFaltante(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => { if (valido) pedirFaltante(detailItem.id); }}
-                    disabled={!valido}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${valido ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
-                  >
-                    Confirmar
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          );
-        })()}
+        {modalFaltante && enVerificacion && detailItem && resumenPagos && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <p className="font-bold text-foreground">Pedir dinero faltante</p>
+                <button onClick={() => setModalFaltante(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  El pedido pasa a <span className="font-semibold">En espera</span> y el cliente podrá enviar el comprobante del dinero restante.
+                </p>
+                <p className="text-lg font-bold">Falta {fmtPago(resumenPagos.falta)}</p>
+              </div>
+              <div className="flex gap-2 px-5 pb-5">
+                <button
+                  onClick={() => setModalFaltante(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => pedirFaltante(detailItem.id)}
+                  disabled={!puedePedirFaltante}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${puedePedirFaltante ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* ── Registrar devolución (venta Completado → Devolucion): aviso, no
