@@ -18,14 +18,17 @@ const EXTENSIONES_PERMITIDAS = /\.(jpe?g|png|webp|pdf)$/i;
 
 /** Lanza un Error con mensaje listo para el toast si el archivo no cumple
     el contrato del backend; no lanza nada cuando es válido. */
-export function validarArchivo(file: File): void {
+export function validarArchivo(file: File, permitirPdf = false): void {
   if (
     !TIPOS_PERMITIDOS.has(file.type) &&
-    !EXTENSIONES_PERMITIDAS.test(file.name)
+    (file.type !== "" || !EXTENSIONES_PERMITIDAS.test(file.name))
   ) {
     throw new Error("Tipo de archivo no permitido. Usa JPG, PNG, WEBP o PDF.");
   }
   if (file.size > ARCHIVO_MAX_BYTES) {
     throw new Error("El archivo supera el máximo de 5 MB.");
+  }
+  if (!permitirPdf && (file.type === "application/pdf" || /\.pdf$/i.test(file.name))) {
+    throw new Error("Los PDF solo se permiten en comprobantes.");
   }
 }

@@ -20,6 +20,7 @@ import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefresca
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
+import { esComprobantePdf } from "@/shared/utils/comprobante";
 import { VisorImagen } from "@/shared/components/VisorImagen";
 import {
   cancelarVentaApi,
@@ -704,7 +705,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                           </p>
                         )}
                         {comp && (
-                          comp.endsWith(".pdf") ? (
+                          esComprobantePdf(comp) ? (
                             <a
                               href={comp}
                               target="_blank"
@@ -827,11 +828,11 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
                         Comprobante de pago
                       </p>
-                      <img
-                        src={p.comprobante}
-                        alt="Comprobante de pago"
-                        className="w-full max-h-56 object-contain rounded-xl border border-border bg-muted"
-                      />
+                      {esComprobantePdf(p.comprobante) ? (
+                        <a href={p.comprobante} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary underline">Abrir comprobante (PDF)</a>
+                      ) : (
+                        <img src={p.comprobante} alt="Comprobante de pago" className="w-full max-h-56 object-contain rounded-xl border border-border bg-muted" />
+                      )}
                     </div>
                   )}
                   {!p.comprobante && p.tieneComprobante && pedidoDetalleCargando === p.id && (

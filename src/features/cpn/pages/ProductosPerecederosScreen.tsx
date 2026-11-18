@@ -994,11 +994,10 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                           deleteDisabled={!pendiente}
                           deleteTitle={pendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
                         />
-                        {canEdit && (
-                          <button onClick={() => pendiente && abrirCompletar(item)}
-                            disabled={!pendiente}
-                            title={pendiente ? "Completar" : "Ya está completado"}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                        {canEdit && pendiente && (
+                          <button onClick={() => abrirCompletar(item)}
+                            title="Completar registro pendiente"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer">
                             <CheckCircle2 className="w-4 h-4" />
                           </button>
                         )}

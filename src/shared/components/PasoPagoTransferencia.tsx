@@ -1,6 +1,7 @@
-import { QrCode, Upload, X, ImageIcon } from "lucide-react";
+import { QrCode, Upload, X, ImageIcon, FileText } from "lucide-react";
 import { useEffect, useState, type RefObject } from "react";
 import QRCode from "qrcode";
+import { esComprobantePdf } from "@/shared/utils/comprobante";
 
 const MONO = "var(--font-texto)";
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
@@ -174,11 +175,13 @@ export function PasoPagoTransferencia({
         />
         {comprobante ? (
           <div className="relative rounded-xl overflow-hidden border border-border">
-            <img
-              src={comprobante}
-              alt="Comprobante"
-              className="w-full max-h-48 object-contain bg-muted"
-            />
+            {esComprobantePdf(comprobante) ? (
+              <a href={comprobante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-4 pr-12 text-sm text-foreground">
+                <FileText className="w-4 h-4" /> Abrir comprobante (PDF)
+              </a>
+            ) : (
+              <img src={comprobante} alt="Comprobante" className="w-full max-h-48 object-contain bg-muted" />
+            )}
             <button
               onClick={onQuitarComprobante}
               className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 cursor-pointer transition-colors"

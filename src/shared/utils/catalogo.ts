@@ -47,6 +47,7 @@ export interface Product {
   stockMediana?: number;
   stockGrande?: number;
   stockPartes?: number;
+  stockApi?: number;
 }
 
 /** Tamaños del menú público para un producto del panel: cada precio de pizza
@@ -207,6 +208,7 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
     stockMediana: p.stockMediana,
     stockGrande: p.stockGrande,
     stockPartes: p.stockPartes,
+    stockApi: p.stockApi,
   };
 };
 
