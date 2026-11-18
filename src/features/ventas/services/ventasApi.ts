@@ -23,6 +23,7 @@ export interface VentaApi {
   id_cliente: number;
   fecha: string;
   hora_recogida: string | null;
+  direccion_recogida?: string;
   monto: number | string;
   estado: VentaStatus;
   estado_cliente?: EstadoClienteVenta;
@@ -83,6 +84,9 @@ export interface VentaApi {
 }
 
 const formatDateBogota = (date: string) => {
+  if (/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(date)) {
+    return date.slice(0, 10);
+  }
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return date.slice(0, 10);
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -102,7 +106,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     .map((pago, index) => ({
       url: pago.comprobante!,
       tipo: index === 0 ? 'pago' : 'faltante',
-      fecha: pago.fecha ? formatDateBogota(pago.fecha) : formatDateBogota(row.fecha),
+      fecha: pago.fecha || formatDateBogota(row.fecha),
       hora: '',
     }));
   const totalPagado = pagos.reduce((suma, pago) => suma + Number(pago.depositado || 0), 0);
@@ -126,6 +130,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     estado: row.estado,
     estadoCliente: row.estado_cliente ?? row.estado,
     estadoOrden: row.estado_orden ?? undefined,
+    direccionRecogida: row.direccion_recogida,
     ventaLocal: row.venta_local === true,
     horaCompletadoLocal: row.hora_completado_local ?? undefined,
     finVentaLocalMs: row.fin_venta_local_ms == null ? undefined : Number(row.fin_venta_local_ms),
@@ -223,6 +228,47 @@ export function ventaApiAVenta(row: VentaApi): Venta {
   };
 }
 
+export interface ResumenPagosVenta {
+  total: number;
+  recibido: number;
+  en_revision: number;
+  falta: number;
+  pagos: Array<{
+    id_pago: number;
+    fecha: string;
+    comprobante: string | null;
+    estado: string;
+    monto_declarado: number | null;
+    monto_confirmado: number | null;
+  }>;
+}
+
+export async function obtenerPagosVenta(id: string, signal?: AbortSignal) {
+  const { data } = await api.get<ResumenPagosVenta>(`/ventas/${id}/pagos`, { signal });
+  return data;
+}
+
+export async function obtenerMisPagosVenta(id: string) {
+  const { data } = await api.get<ResumenPagosVenta>(`/ventas/mias/${id}/pagos`);
+  return data;
+}
+
+export async function confirmarPagoVenta(id: string, idPago: number, monto: number) {
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
+    throw new Error('El identificador de la venta no es válido.');
+  }
+  if (!Number.isSafeInteger(Number(idPago)) || Number(idPago) <= 0) {
+    throw new Error('El identificador del pago no es válido.');
+  }
+  if (!Number.isSafeInteger(monto) || monto <= 0) {
+    throw new Error('Ingresa un monto entero en pesos mayor que cero.');
+  }
+  const { data } = await api.patch<ResumenPagosVenta>(`/ventas/${id}/pagos/${idPago}/confirmacion`, {
+    monto_confirmado: monto,
+  });
+  return data;
+}
+
 export async function obtenerMisVentas() {
   const { data } = await api.get<VentaApi[]>('/ventas/mias');
   return data.map(ventaApiAVenta);
@@ -238,8 +284,8 @@ export async function obtenerVentasPanel() {
   return data.map(ventaApiAVenta);
 }
 
-export async function obtenerVentaPanel(id: string) {
-  const { data } = await api.get<VentaApi>(`/ventas/${id}`);
+export async function obtenerVentaPanel(id: string, signal?: AbortSignal) {
+  const { data } = await api.get<VentaApi>(`/ventas/${id}`, { signal });
   return ventaApiAVenta(data);
 }
 
@@ -259,6 +305,7 @@ export async function crearVentaPanel(payload: {
   cliente: { tipo_documento: string; numero_documento: string; nombre: string };
   /** Opcional: si no viene, el backend usa la hora actual del local. */
   hora_recogida?: string;
+  tiempo_preparacion_min?: number;
   productos: Array<{ id_producto: number; cantidad: number; tamano: string | null }>;
   pago: { tipo: string; comprobante?: null };
 }) {
@@ -353,6 +400,7 @@ export async function resolverDevolucionApi(
   };
 }
 
-export async function subirComprobanteVenta(id: string, payload: { tipo: string; comprobante: string }) {
-  await api.post(`/ventas/${id}/comprobantes`, payload);
+export async function subirComprobanteVenta(id: string, payload: { tipo: string; comprobante: string; monto_declarado: number }) {
+  const { data } = await api.post<{ id_pago: number }>(`/ventas/${id}/comprobantes`, payload);
+  return data;
 }

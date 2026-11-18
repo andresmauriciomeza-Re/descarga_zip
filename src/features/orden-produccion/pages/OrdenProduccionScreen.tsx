@@ -15,7 +15,8 @@ import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { formatearFechaHora } from "@/shared/utils/hora";
+import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/CampoTiempoPreparacion";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -232,6 +233,8 @@ export interface OrdenProduccion {
   creadaEn: string;          // ISO — columna "Fecha/Hora de estado" si aún no hubo cambio
   inicioProduccion: string | null;
   finCalentamientoMs?: number;
+  listoDespuesRecogida?: boolean;
+  cierreManualPorTiempo?: boolean;
   finPreparacionMs?: number;
   entregaEstimada: string | null;
   historial: TransicionEstado[];
@@ -263,6 +266,61 @@ const esDecimal = (unidad: string) => UNIDADES_DECIMALES.includes(unidad);
 /** `unidadesCompatibles`, `convertirUnidad` y `fmtCant` se mudaron a
     `shared/utils/disponibilidad`: son el mismo cálculo con el que Gestión de
     Productos muestra "Se pueden preparar", así que vive en un solo lugar. */
+
+function EstimacionPedido({ orden }: { orden: OrdenProduccion }) {
+  if (orden.tipo !== "pedido" || orden.finCalentamientoMs == null) return null;
+  return (
+    <div className="space-y-1 text-xs">
+      <p>Listo aprox. a las {formatearHora(new Date(orden.finCalentamientoMs))}</p>
+      {orden.listoDespuesRecogida && (
+        <p className="font-medium text-amber-700 dark:text-amber-300">
+          Con este tiempo, el pedido estaría listo después de la hora de recogida
+        </p>
+      )}
+      {orden.cierreManualPorTiempo && (
+        <p className="font-medium text-amber-700 dark:text-amber-300">
+          El tiempo de preparación ya venció. Pulsa «Listo» para completar la orden.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EditarTiempoPedido({ orden, onGuardar }: {
+  orden: OrdenProduccion;
+  onGuardar: (orden: OrdenProduccion) => void;
+}) {
+  const [valor, setValor] = useState(String(orden.tiempoPreparacionMin ?? 25));
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    if (guardando || !minutosPreparacionValidos(valor)) return;
+    setGuardando(true);
+    try {
+      const actualizada = await actualizarOrdenProduccion(orden.id, { tiempo_preparacion_min: Number(valor) });
+      onGuardar(actualizada);
+      toast.success("Tiempo de preparación actualizado");
+    } catch (error) {
+      toast.error(mensajeErrorOrdenes(error, "No se pudo actualizar el tiempo de preparación."));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      <CampoTiempoPreparacion valor={valor} onChange={setValor} deshabilitado={guardando} />
+      <button
+        type="button"
+        className="mt-5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+        disabled={guardando || !minutosPreparacionValidos(valor) || Number(valor) === orden.tiempoPreparacionMin}
+        onClick={() => void guardar()}
+      >
+        {guardando ? "Guardando…" : "Guardar tiempo"}
+      </button>
+    </div>
+  );
+}
 
 function fmtMinutos(min: number): string {
   if (min <= 0) return "0 min";
@@ -1437,7 +1495,7 @@ export function OrdenProduccionScreen({
     return () => clearInterval(id);
   }, []);
   useRefrescarAlVencer(
-    ordenes.filter((o) => o.tipo === "pedido" && o.estadoOrden === "en-proceso").map((o) => o.finCalentamientoMs),
+    ordenes.filter((o) => o.tipo === "pedido" && o.estadoOrden === "en-proceso" && !o.cierreManualPorTiempo).map((o) => o.finCalentamientoMs),
     async () => recargarProduccion?.(),
   );
   useRefrescarAlVencer(
@@ -2400,6 +2458,7 @@ export function OrdenProduccionScreen({
                         {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
                           <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</span>
                         )}
+                        <EstimacionPedido orden={o} />
                         {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
                           <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</span>
                         )}
@@ -2446,6 +2505,7 @@ export function OrdenProduccionScreen({
                   {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
                     <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</p>
                   )}
+                  <EstimacionPedido orden={o} />
                   {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
                     <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</p>
                   )}
@@ -2945,6 +3005,18 @@ export function OrdenProduccionScreen({
                 <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <EstimacionPedido orden={detailItem} />
+                {esAdministradorSesion && canEdit && detailItem.tipo === "pedido"
+                  && (detailItem.estadoOrden === "pendiente" || detailItem.estadoOrden === "en-proceso") && (
+                  <EditarTiempoPedido
+                    key={detailItem.id}
+                    orden={detailItem}
+                    onGuardar={actualizada => {
+                      setOrdenes(prev => prev.map(o => o.id === actualizada.id ? actualizada : o));
+                      setDetailItem(prev => prev?.id === actualizada.id ? actualizada : prev);
+                    }}
+                  />
+                )}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
                   {detailItem.ventaLocal && <span className="text-[11px] font-semibold text-muted-foreground">Venta en el local</span>}

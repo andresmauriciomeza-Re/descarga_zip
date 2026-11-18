@@ -477,11 +477,9 @@ function nextOrdenId(items: OrdenCompra[]) {
 }
 
 function addDays(d: string, days: number) {
-  const dt = new Date(d);
-  dt.setDate(dt.getDate() + days);
-  // Fecha local, no UTC: `dt` se movió en hora local, así que `toISOString()`
-  // lo convertía a UTC y en Colombia (UTC-5) devolvía el día anterior.
-  return dt.toLocaleDateString("en-CA");
+  const dt = new Date(`${d}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
 }
 
 /**

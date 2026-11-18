@@ -43,6 +43,8 @@ export interface OrdenApi {
   fecha_creacion: string;
   fecha_en_proceso: string | null;
   fin_calentamiento_ms?: number | string | null;
+  listo_despues_recogida?: boolean | null;
+  cierre_manual_por_tiempo?: boolean | null;
   fin_preparacion_ms?: number | string | null;
   fecha_completada: string | null;
   fecha_cancelada: string | null;
@@ -200,6 +202,8 @@ export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
     finCalentamientoMs: row.fin_calentamiento_ms == null ? undefined : Number(row.fin_calentamiento_ms),
     finPreparacionMs: row.fin_preparacion_ms == null ? undefined : Number(row.fin_preparacion_ms),
     entregaEstimada: row.fecha_completada ?? row.fecha_cancelada ?? null,
+    listoDespuesRecogida: row.listo_despues_recogida === true,
+    cierreManualPorTiempo: row.cierre_manual_por_tiempo === true,
     historial,
     ...(row.descripcion_preparacion
       ? { descripcionPreparacion: row.descripcion_preparacion }
@@ -348,6 +352,7 @@ export const crearOrdenPreparacionApi = async (payload: {
 export const actualizarOrdenProduccion = async (
   id: string,
   payload: {
+    tiempo_preparacion_min?: number;
     fecha_solicitada?: string;
     hora_solicitada?: string | null;
     observacion?: string | null;
@@ -362,6 +367,7 @@ export const actualizarOrdenProduccion = async (
     api.put<OrdenApi>(
       `/ordenes-produccion/${idApi}`,
       {
+        ...(payload.tiempo_preparacion_min !== undefined ? { tiempo_preparacion_min: payload.tiempo_preparacion_min } : {}),
         ...(payload.fecha_solicitada ? { fecha_solicitada: payload.fecha_solicitada } : {}),
         ...(payload.hora_solicitada !== undefined ? { hora_solicitada: payload.hora_solicitada } : {}),
         ...(payload.observacion !== undefined ? { observacion: payload.observacion } : {}),

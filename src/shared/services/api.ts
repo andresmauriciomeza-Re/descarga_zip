@@ -75,7 +75,7 @@ api.interceptors.response.use(
         }
       }
     }
-    const err = new Error(mensaje) as ApiErrorConEstado;
+    const err = Object.assign(new Error(mensaje), { cause: error }) as ApiErrorConEstado;
     err.status = status;
     err.code = codigo;
     return Promise.reject(err);
