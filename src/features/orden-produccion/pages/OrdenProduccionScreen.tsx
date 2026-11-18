@@ -1709,11 +1709,6 @@ export function OrdenProduccionScreen({
     return `${cantidad} ${cantidad === 1 ? "pizza" : "pizzas"}${cortesTexto ? ` (${cortesTexto})` : ""}`;
   };
 
-  const subtituloLineaOrden = (orden: OrdenProduccion, linea: LineaOrden) =>
-    esPizzaOrdenLinea(linea)
-      ? `${linea.cantidadEstimada} × ${linea.nombre}`
-      : `${nombreLineaOrden(linea)} · ${cantidadLineaOrden(orden, linea)}`;
-
   const resumenProductos = (o: OrdenProduccion) => {
     const nombres = o.lineas.map((linea) => linea.nombre);
     if (nombres.length === 0) return "—";
@@ -2340,8 +2335,7 @@ export function OrdenProduccionScreen({
             <colgroup>
               <col style={{ width: "6%" }} />
               <col style={{ width: "10%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "32%" }} />
               <col style={{ width: "10%" }} />
               <col style={{ width: "12%" }} />
               <col style={{ width: "15%" }} />
@@ -2349,7 +2343,7 @@ export function OrdenProduccionScreen({
             </colgroup>
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                {["ID", "Tipo", "Producto(s)", "Cant. estimada", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
+                {["ID", "Tipo", "Producto(s)", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
                   <th key={h} title={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
                     {h}
                   </th>
@@ -2358,7 +2352,7 @@ export function OrdenProduccionScreen({
             </thead>
             <tbody className="divide-y divide-border">
               {paged.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
+                <tr><td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
                 </td></tr>
               ) : paged.map(o => {
@@ -2393,23 +2387,11 @@ export function OrdenProduccionScreen({
                     </td>
                     <td className="px-1 py-2 align-middle min-w-0">
                       <p className="truncate text-sm font-medium text-foreground" title={resumenProductos(o)}>{resumenProductos(o)}</p>
-                      <p className="truncate text-[11px] text-muted-foreground whitespace-nowrap" title={o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}>
-                        {o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}
-                      </p>
                       {o.tipo === "pedido" && o.ventaNumero && (
                         <p className="truncate text-[11px] text-muted-foreground" title={`Venta ${o.ventaNumero}${o.cliente ? ` · ${o.cliente}` : ""}`}>
                           Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}
                         </p>
                       )}
-                    </td>
-                    <td className="px-1 py-2 align-middle text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
-                      {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                        ? resumenCantidadPizzas(o)
-                        : o.lineas.some(esPizzaOrdenLinea)
-                          ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
-                        : o.lineas.length === 1
-                        ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad)
-                        : fmtCant(totalEstimado(o.lineas), "und")}
                     </td>
                     <td className="px-1 py-2 align-middle text-sm [overflow-wrap:anywhere]">
                       {!completada || o.lineas.some((l) => l.cantidadReal == null) ? (
@@ -2501,13 +2483,7 @@ export function OrdenProduccionScreen({
                     )}
                   </div>
                   <p className="text-sm font-medium text-foreground break-words">{resumenProductos(o)}</p>
-                  <p className="text-xs text-muted-foreground break-words">{o.lineas.map((l) => subtituloLineaOrden(o, l)).join(", ")}</p>
                   {o.tipo === "pedido" && o.ventaNumero && <p className="text-xs text-muted-foreground break-words">Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}</p>}
-                  <p className="text-xs text-muted-foreground">Cant. estimada: {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                    ? resumenCantidadPizzas(o)
-                    : o.lineas.some(esPizzaOrdenLinea)
-                      ? o.lineas.map((linea) => cantidadLineaOrden(o, linea)).join(" · ")
-                      : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadEstimada, o.lineas[0].unidad) : fmtCant(totalEstimado(o.lineas), "und")}</p>
                   <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.lineas.some((l) => l.cantidadReal == null)
                     ? "—"
                     : o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
@@ -3036,6 +3012,26 @@ export function OrdenProduccionScreen({
                 })()}
 
                 <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Cantidades estimadas</p>
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-muted text-xs text-muted-foreground">
+                        <tr><th className="p-3">Producto o insumo</th><th className="p-3">Cantidad estimada</th><th className="p-3">Unidad</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {detailItem.lineas.map((linea, i) => (
+                          <tr key={i}>
+                            <td className="p-3">{nombreLineaOrden(linea)}</td>
+                            <td className="p-3 tabular-nums">{linea.cantidadEstimada.toLocaleString("es-CO")}</td>
+                            <td className="p-3">{esPizzaOrdenLinea(linea) ? (detailItem.tipo === "pedido" ? "porciones" : "pizzas") : linea.unidad}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>
                   <div className="space-y-1.5">
                     {detailItem.lineas.map((l, i) => {
@@ -3058,10 +3054,6 @@ export function OrdenProduccionScreen({
                             )}
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimada</p>
-                            <p className="text-base font-bold text-foreground tabular-nums">
-                              {cantidadLineaOrden(detailItem, l)}
-                            </p>
                             {l.cantidadDebida != null && (
                               <p className="text-[11px] text-muted-foreground mt-0.5">
                                 Debí hacer: {esPizzaOrdenLinea(l)

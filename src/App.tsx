@@ -65,10 +65,12 @@ import {
   Suspense,
   lazy,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type RefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { toast, Toaster } from "sonner";
@@ -107,7 +109,8 @@ import {
 } from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
-import { PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
+import { BloqueQrPago, PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
+import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
@@ -2320,7 +2323,7 @@ function LandingScreen({
                                   className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-[#DC2626]"}
                                 >
                                   {size.label} $ {size.price.toLocaleString("es-CO")} / porción
-                                  {agotadoTamano ? " · Agotado" : ""}
+                                  {stockTamano !== undefined && (agotadoTamano ? " · Agotado" : ` · Quedan ${stockTamano} porciones`)}
                                 </p>
                               );
                             })}
@@ -2888,18 +2891,18 @@ function ProductCard({
                     key={size.label}
                     className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}
                   >
-                    {size.label} {fmt(size.price)} / porción{agotadoTamano ? " · Agotado" : ""}
+                    {size.label} {fmt(size.price)} / porción{stock !== undefined && (agotadoTamano ? " · Agotado" : ` · Quedan ${stock} porciones`)}
                   </p>
                 );
               })}
             </div>
           ) : (
-            <span
-              className={`font-bold text-lg ${atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}`}
-              style={{ fontFamily: MONO }}
-            >
-              {fmt(p.price)}
-            </span>
+            <div>
+              <span className={`font-bold text-lg ${atenuada ? "text-muted-foreground opacity-60" : "text-foreground"}`} style={{ fontFamily: MONO }}>
+                {fmt(p.price)}
+              </span>
+              {limiteStockDe(p) !== undefined && <p className="text-xs text-muted-foreground">{limiteStockDe(p) === 0 ? "Agotado" : `Quedan ${limiteStockDe(p)}`}</p>}
+            </div>
           )}
           <div className="flex gap-2">
             {/* Solo ícono: el botón nunca se transforma. Cada clic suma 1
@@ -2953,7 +2956,8 @@ function CatalogScreen({
   navigate,
   setProduct,
   quickAdd,
-  initialCat = "Todas",
+  categoria,
+  setCategoria,
   page,
   setPage,
   search,
@@ -2969,7 +2973,8 @@ function CatalogScreen({
   setProduct: (p: Product) => void;
   /** Bloque 5: devuelve si algo se agregó; si no, el mensaje de máximo. */
   quickAdd: (p: Product) => { agregado: boolean; mensaje?: string };
-  initialCat?: string;
+  categoria: string | null;
+  setCategoria: (categoria: string) => void;
   /** Página del catálogo, controlada por App para que sobreviva al detalle. */
   page: number;
   setPage: (p: number | ((prev: number) => number)) => void;
@@ -2987,7 +2992,6 @@ function CatalogScreen({
   /** Bloque 5 — Tope por línea con TODO el carrito; lo calcula App. */
   limiteDe: (linea: LineaLimiteRef) => LimiteLinea;
 }) {
-  const [cat, setCat] = useState(initialCat);
   const isMobile = useIsMobile();
   const productosSeguros = Array.isArray(productos) ? productos : [];
   const categoriasSeguras = Array.isArray(categorias) ? categorias : [];
@@ -3022,14 +3026,10 @@ function CatalogScreen({
     return [...porId.entries()].map(([id, nombre]) => ({ id, nombre }));
   }, [visibles, categoriasSeguras]);
 
-  const nombreFiltroActivo = filtros.find((f) => f.id === cat)?.nombre;
-
-  // Si la categoría guardada ya no existe en el catálogo (se renombró o se
-  // borró en el admin), el filtro quedaba apuntando a nada y la lista salía
-  // vacía: se vuelve a "Todas" para que siempre se vean productos.
-  useEffect(() => {
-    if (cat !== "Todas" && !filtros.some((f) => f.id === cat)) setCat("Todas");
-  }, [cat, filtros]);
+  const filtroActivo = categoria === "Todas" ? undefined : filtros.find((f) =>
+    f.id === categoria || normalizarNombre(f.nombre) === normalizarNombre(categoria ?? "Pizzas"));
+  const cat = categoria === "Todas" ? "Todas" : filtroActivo?.id ?? "Todas";
+  const nombreFiltroActivo = filtroActivo?.nombre;
 
   // Del filtro de categoría/búsqueda salen SOLO productos visibles (sin
   // descontinuados) y ordenados: primero los disponibles y al final los no
@@ -3152,7 +3152,7 @@ function CatalogScreen({
           <button
             key="Todas"
             onClick={() => {
-              setCat("Todas");
+              setCategoria("Todas");
               setPage(1);
             }}
             className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
@@ -3162,7 +3162,7 @@ function CatalogScreen({
             <button
               key={c.id}
               onClick={() => {
-                setCat(c.id);
+                setCategoria(c.id);
                 setPage(1);
               }}
               className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
@@ -4372,13 +4372,13 @@ function CartScreen({
       <AnimatePresence>
         {checkoutStep === 1 && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
+            <div className="flex min-h-full items-center justify-center sm:p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 transition={{ duration: 0.16 }}
-                className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl border border-border my-4"
+                className="bg-card w-full min-h-screen sm:min-h-0 sm:rounded-2xl sm:w-[94vw] sm:max-w-none shadow-2xl border border-border sm:my-4"
               >
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -4493,6 +4493,15 @@ function CartScreen({
                           </label>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Datos de pago · {payment}</p>
+                      <div className="bg-muted/50 rounded-2xl p-4 border border-border">
+                        {PAYMENT_INFO[payment]?.lines.map((linea) => <p key={linea} className="text-sm font-medium text-foreground">{linea}</p>)}
+                        <p className="mt-2 text-sm text-muted-foreground">Llave de la cuenta: <strong className="text-foreground">{PAYMENT_INFO[payment]?.llave}</strong></p>
+                      </div>
+                      <BloqueQrPago payment={payment} monto={subtotal} qrDataUrl={qrDataUrl} />
                     </div>
 
                     {/* Hora de recogida: dos selects (hora y minutos de 15 en
@@ -5424,6 +5433,40 @@ const construirUsuarioLocal = (usuarioApi: UsuarioApi, rolLocal: Rol): Usuario =
  * `@/shared/styles/authGlass` y se reutilizan en los modales de contraseña.
  */
 
+function AceptacionTerminos({ aceptados, onChange, error, inputRef }: {
+  aceptados: boolean;
+  onChange: (aceptados: boolean) => void;
+  error?: string;
+  inputRef: RefObject<HTMLInputElement | null>;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const id = useId();
+  return (
+    <div>
+      <div className="flex items-start gap-2 text-sm text-foreground dark:text-white">
+        <input id={id} ref={inputRef} type="checkbox" checked={aceptados} onChange={(e) => onChange(e.target.checked)}
+          aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
+          className="mt-1 accent-primary" />
+        <span><label htmlFor={id}>Acepto los </label>
+          <button type="button" onClick={() => setAbierto(true)} className="text-primary font-semibold underline cursor-pointer">términos y condiciones</button>
+        </span>
+      </div>
+      <MensajeError id={`${id}-error`} err={error} />
+      {abierto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby={`${id}-titulo`} onKeyDown={(e) => { if (e.key === "Escape") setAbierto(false); }}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl">
+            <div className="flex justify-between gap-4 mb-4">
+              <h2 id={`${id}-titulo`} className="font-bold text-foreground">{TITULO_TERMINOS}</h2>
+              <button type="button" onClick={() => setAbierto(false)} aria-label="Cerrar términos y condiciones" className="p-1 text-muted-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3 text-sm text-foreground">{TERMINOS_CONDICIONES.map((texto) => <p key={texto}>{texto}</p>)}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LoginScreen({
   navigate,
   onLogin,
@@ -5456,10 +5499,13 @@ function LoginScreen({
 }) {
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
+  const [terminosAceptados, setTerminosAceptados] = useState(false);
+  const terminosRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
+    terminos?: string;
   }>({});
   // Motivo por el que App rechazó el login (sin roles activos, sin pantallas…):
   // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
@@ -5494,9 +5540,11 @@ function LoginScreen({
     const e: typeof errors = {};
     e.email = validarCorreo(email) ?? undefined;
     e.password = password ? undefined : "La contraseña es obligatoria";
+    e.terminos = terminosAceptados ? undefined : "Debes aceptar los términos y condiciones";
     setErrors(e);
     if (e.email || e.password) validacion.enfocarPrimero(e);
-    return !e.email && !e.password;
+    else if (e.terminos) terminosRef.current?.focus();
+    return !e.email && !e.password && !e.terminos;
   };
 
   const handleLogin = async () => {
@@ -5720,6 +5768,12 @@ function LoginScreen({
               />
               <MensajeError id={validacion.idError("password")} err={errors.password} />
             </div>
+          </div>
+          <div className="mt-3">
+            <AceptacionTerminos inputRef={terminosRef} aceptados={terminosAceptados} error={errors.terminos} onChange={(aceptados) => {
+              setTerminosAceptados(aceptados);
+              setErrors((p) => ({ ...p, terminos: aceptados ? undefined : "Debes aceptar los términos y condiciones" }));
+            }} />
           </div>
           <div className="text-right mt-2">
             <button
@@ -6104,6 +6158,8 @@ function RegisterScreen({
   });
   const [loading, setLoading] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const [terminosAceptados, setTerminosAceptados] = useState(false);
+  const terminosRef = useRef<HTMLInputElement>(null);
   const setVal =
     (k: keyof typeof form) =>
       (v: string) => {
@@ -6246,12 +6302,14 @@ function RegisterScreen({
     if (passwordError) errs.password = passwordError;
     if (form.password !== form.confirm)
       errs.confirm = "Las contraseñas no coinciden";
+    if (!terminosAceptados) errs.terminos = "Debes aceptar los términos y condiciones";
 
     setErrores(errs);
     if (Object.values(errs).some(Boolean)) {
       // Con errores no se envía: se muestran todos y el foco va al primer
       // campo inválido (los mensajes ya se pintan desde `errores`).
       validacion.enfocarPrimero(errs);
+      if (errs.terminos && !Object.entries(errs).some(([campo, error]) => campo !== "terminos" && error)) terminosRef.current?.focus();
       return;
     }
 
@@ -6566,6 +6624,12 @@ function RegisterScreen({
           </div>
         </div>
 
+        <div className="mt-2">
+          <AceptacionTerminos inputRef={terminosRef} aceptados={terminosAceptados} error={errores.terminos} onChange={(aceptados) => {
+            setTerminosAceptados(aceptados);
+            setErrores((p) => ({ ...p, terminos: aceptados ? "" : "Debes aceptar los términos y condiciones" }));
+          }} />
+        </div>
         <PrimaryBtn
           onClick={register}
           size="md"
@@ -8852,7 +8916,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
-  const [catalogCat, setCatalogCat] = useState("Todas");
+  const [catalogCat, setCatalogCat] = useState<string | null>(null);
   // La página del catálogo vive aquí, igual que la categoría: si viviera dentro
   // de CatalogScreen se perdería al abrir el detalle de un producto (la pantalla
   // se desmonta) y al volver se restauraría el scroll guardado de la página 2
@@ -10253,7 +10317,8 @@ export default function App() {
                       navigate={navigate}
                       setProduct={setSelectedProduct}
                       quickAdd={quickAdd}
-                      initialCat={catalogCat}
+                      categoria={catalogCat}
+                      setCategoria={setCatalogCat}
                       page={catalogPage}
                       setPage={setCatalogPage}
                       search={catalogSearch}

@@ -15,7 +15,6 @@ import {
   ShieldX,
   Printer,
   FileText,
-  Download,
   ImageIcon,
   Undo2,
   CalendarDays,
@@ -23,8 +22,8 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { normalizarTexto } from "@/shared/utils/nombres";
+import { esComprobantePdf } from "@/shared/utils/comprobante";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
@@ -37,7 +36,7 @@ import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenPro
 import { buscarClientePorDocumento, buscarClientesPorNombre, listarClientes, type ClienteListadoApi, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
-import { descargarFactura, imprimirFactura } from "@/features/ventas/services/facturaVenta";
+import { imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
 import { crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -185,7 +184,7 @@ function CampoComprobante({
   onSubir: (file: File) => void;
   etiquetaBoton: string;
 }) {
-  const esPdf = !!url && (url.startsWith("data:application/pdf") || url.endsWith(".pdf"));
+  const esPdf = !!url && esComprobantePdf(url);
   return (
     <>
       <input
@@ -1641,14 +1640,8 @@ export function VentasScreen({
   const anularFileRef = useRef<HTMLInputElement | null>(null);
   /** Imagen abierta en el visor ampliado (comprobante u otro). */
   const [visorSrc, setVisorSrc] = useState<string | null>(null);
-  /** Venta cuya factura se va a emitir, para elegir entre electrónica y física. */
+  /** Venta cuya factura se va a emitir. */
   const [facturaVenta, setFacturaVenta] = useState<Venta | null>(null);
-
-  /** Modal para enviar factura por correo. */
-  const [enviarFacturaModal, setEnviarFacturaModal] = useState(false);
-  const [facturaParaEnviar, setFacturaParaEnviar] = useState<Venta | null>(null);
-  const [correoEnviar, setCorreoEnviar] = useState("");
-  const [errorCorreo, setErrorCorreo] = useState("");
 
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
@@ -1917,7 +1910,7 @@ export function VentasScreen({
 
   const filtered = useMemo(
     () =>
-      ordenarPorIdDescendente(ventasListado.filter(
+      ventasListado.filter(
         (p) =>
           p.id.toLowerCase().includes(search.toLowerCase()) ||
           p.usuario
@@ -1926,7 +1919,7 @@ export function VentasScreen({
           p.productos
             .toLowerCase()
             .includes(search.toLowerCase()),
-      ), (venta) => venta.id),
+      ),
     [ventasListado, search],
   );
 
@@ -2170,8 +2163,7 @@ export function VentasScreen({
                             <Undo2 className="w-4 h-4" />
                           </button>
                         )}
-                        {/* Imprimir factura: electrónica (se descarga el documento)
-                            o física (sale por la impresora del sistema). */}
+                        {/* Acciones de factura. */}
                         {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && (
                           <button
                             onClick={() => setFacturaVenta(p)}
@@ -2364,15 +2356,21 @@ export function VentasScreen({
                                     )}
                                   </p>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => setVisorSrc(c.url)}
-                                  title="Ampliar comprobante"
-                                  className="block w-full rounded-xl overflow-hidden border border-border bg-muted cursor-zoom-in hover:border-primary/40 transition-colors"
-                                >
-                                  <img src={c.url} alt="Comprobante" className="w-full object-contain max-h-60" />
-                                  <span className="block text-[11px] text-muted-foreground py-1">Clic para ampliar</span>
-                                </button>
+                                {esComprobantePdf(c.url) ? (
+                                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm text-foreground hover:bg-muted">
+                                    <FileText className="w-4 h-4" /> Abrir comprobante (PDF)
+                                  </a>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setVisorSrc(c.url)}
+                                    title="Ampliar comprobante"
+                                    className="block w-full rounded-xl overflow-hidden border border-border bg-muted cursor-zoom-in hover:border-primary/40 transition-colors"
+                                  >
+                                    <img src={c.url} alt="Comprobante" className="w-full object-contain max-h-60" />
+                                    <span className="block text-[11px] text-muted-foreground py-1">Clic para ampliar</span>
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2426,7 +2424,7 @@ export function VentasScreen({
                         {comprobante && (
                           <div className="mt-3">
                             <p className="text-[11px] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
-                            {comprobante.endsWith(".pdf") ? (
+                            {esComprobantePdf(comprobante) ? (
                               <a
                                 href={comprobante}
                                 target="_blank"
@@ -2946,32 +2944,7 @@ export function VentasScreen({
                 <button
                   type="button"
                   onClick={() => {
-                    descargarFactura(facturaVenta);
-                    toast.success("Factura electrónica descargada");
-                    setFacturaVenta(null);
-                  }}
-                  className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-violet-400 hover:bg-violet-500/5 transition-colors cursor-pointer"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">Factura electrónica</p>
-                    <p className="text-xs text-muted-foreground">
-                      Descarga el documento con los datos de la venta
-                    </p>
-                  </div>
-                  <Download className="w-4 h-4 text-muted-foreground shrink-0" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFacturaParaEnviar(facturaVenta);
-                    setCorreoEnviar("");
-                    setErrorCorreo("");
-                    setEnviarFacturaModal(true);
-                    setFacturaVenta(null);
+                    toast.error("El envío de facturas por correo aún no está disponible.");
                   }}
                   className="w-full flex items-center gap-3 p-3.5 text-left bg-card border border-border rounded-xl hover:border-sky-400 hover:bg-sky-500/5 transition-colors cursor-pointer"
                 >
@@ -2980,10 +2953,10 @@ export function VentasScreen({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground">
-                      Enviar factura a correo
+                      Enviar factura al correo
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Descarga y envía la factura al correo electrónico
+                      Envío por correo no disponible
                     </p>
                   </div>
                 </button>
@@ -3001,7 +2974,7 @@ export function VentasScreen({
                     <Printer className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">Factura física</p>
+                    <p className="text-sm font-semibold text-foreground">Imprimir factura</p>
                     <p className="text-xs text-muted-foreground">
                       Ticket de 80 mm para la impresora del sistema
                     </p>

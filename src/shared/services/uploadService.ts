@@ -12,7 +12,7 @@ export async function subirArchivo(
   if (opciones?.checkoutAuth && !obtenerToken()) {
     throw crearError401Checkout();
   }
-  validarArchivo(file);
+  validarArchivo(file, carpeta === "comprobantes");
   const formData = new FormData();
   formData.append("archivo", file);
   formData.append("carpeta", carpeta);
