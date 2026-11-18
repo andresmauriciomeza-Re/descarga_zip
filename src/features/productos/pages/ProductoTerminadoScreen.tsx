@@ -1,3 +1,4 @@
+import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { PackageCheck, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
@@ -179,11 +180,11 @@ export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[]
                     <p className="text-xs font-mono font-semibold text-muted-foreground">{p.idReceta}</p>
                     <p className="text-sm font-medium text-foreground">{p.nombreReceta}</p>
                   </td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{p.fechaEntrega}</td>
+                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearFechaHora(p.fechaEntrega)}</td>
                   <td className="px-4 py-3.5">
                     <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
                       <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                      {p.horaEntrega || "—"}
+                      {formatearHora(p.horaEntrega) || "—"}
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{p.cantidad} porc. · {p.tamano}</td>
@@ -287,7 +288,7 @@ export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[]
                   <div>
                     <p className="text-sm font-semibold text-foreground">¿Confirmar entrega de este producto?</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {confirmItem.nombreReceta} · {confirmItem.cantidad} porc. · {confirmItem.tamano} · {confirmItem.horaEntrega}
+                      {confirmItem.nombreReceta} · {confirmItem.cantidad} porc. · {confirmItem.tamano} · {formatearHora(confirmItem.horaEntrega)}
                     </p>
                   </div>
                 </div>

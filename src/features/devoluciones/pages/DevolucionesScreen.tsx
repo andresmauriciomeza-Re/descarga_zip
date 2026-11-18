@@ -1,3 +1,4 @@
+import { formatearHora } from "@/shared/utils/hora";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Banknote, Check, CircleCheck, Eye, FileText, Minus, PackageCheck, Plus, RefreshCw, X } from "lucide-react";
@@ -23,7 +24,7 @@ const MONO_DEV  = "var(--font-texto)";
 const fmtCOPDev = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 const nowHoraDev = () =>
-  new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  formatearHora(new Date());
 
 /** Etiqueta del estado que se ve en la fila — y con la que también busca el
     buscador: "Pendiente" o "Resuelta · <tipo de la devolución>". */

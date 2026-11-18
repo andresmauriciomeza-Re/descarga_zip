@@ -31,15 +31,54 @@ export const minutosDeHora = (texto?: string): number | null => {
   return h * 60 + min;
 };
 
-/** "18:30", "6:30 p. m." o "4:22 PM" → "6:30 p. m.". Si la hora no se puede
-    leer devuelve el texto tal cual. Es el formato en el que se guarda y se
-    muestra la hora de recogida. */
-export const hora12 = (valor?: string): string => {
+const relojBogota = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "America/Bogota",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+type ValorFecha = string | Date | null | undefined;
+
+function partesBogota(valor: string | Date) {
+  // Los timestamps sin zona ya representan la hora local de Bogotá.
+  const fecha = typeof valor === "string"
+    ? new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(valor) ? valor : valor.replace(" ", "T") + "-05:00")
+    : valor;
+  if (Number.isNaN(fecha.getTime())) return null;
+  return Object.fromEntries(relojBogota.formatToParts(fecha).map(({ type, value }) => [type, value]));
+}
+
+export function formatearHora(valor: ValorFecha, { sinMinutos = false } = {}): string {
   if (!valor) return "";
-  const minutos = minutosDeHora(valor);
-  if (minutos === null) return valor;
+  const texto = typeof valor === "string" ? valor.trim() : "";
+  const partes = valor instanceof Date || /^\d{4}-\d{2}-\d{2}[T ]/.test(texto)
+    ? partesBogota(texto || valor)
+    : null;
+  const minutos = partes
+    ? Number(partes.hour) * 60 + Number(partes.minute)
+    : minutosDeHora(texto.replace(/^(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?$/, "$1"));
+  if (minutos === null) return texto;
   const h24 = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  const h12 = h24 > 12 ? h24 - 12 : h24 === 0 ? 12 : h24;
-  return `${h12}:${String(m).padStart(2, "0")} ${h24 >= 12 ? "p. m." : "a. m."}`;
-};
+  const h12 = h24 % 12 || 12;
+  const m = String(minutos % 60).padStart(2, "0");
+  return `${h12}${sinMinutos ? "" : ":" + m} ${h24 >= 12 ? "p. m." : "a. m."}`;
+}
+
+export function formatearFechaHora(valor: ValorFecha, hora?: string | null): string {
+  if (!valor) return formatearHora(hora) || "—";
+  if (typeof valor === "string") {
+    const texto = valor.trim();
+    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
+    if (iso || /^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+      const fecha = iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : texto;
+      return [fecha, formatearHora(hora)].filter(Boolean).join(" ");
+    }
+  }
+  const partes = partesBogota(typeof valor === "string" ? valor.trim() : valor);
+  if (!partes) return typeof valor === "string" ? valor : "—";
+  return `${partes.day}/${partes.month}/${partes.year} ${formatearHora(hora || `${partes.hour}:${partes.minute}`)}`;
+}

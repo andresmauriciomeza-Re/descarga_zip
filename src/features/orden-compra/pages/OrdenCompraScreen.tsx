@@ -1,3 +1,4 @@
+import { formatearFechaHora } from "@/shared/utils/hora";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 // Bloque 3: el "+ Crear insumo" comparte el mismo catálogo de categorías
 // obligatorias (A5.1) que usa Gestión de Insumos.
@@ -481,32 +482,6 @@ function addDays(d: string, days: number) {
   // Fecha local, no UTC: `dt` se movió en hora local, así que `toISOString()`
   // lo convertía a UTC y en Colombia (UTC-5) devolvía el día anterior.
   return dt.toLocaleDateString("en-CA");
-}
-
-/** Formatea fecha/hora en formato: 30/09/2026 3:45 p. m. */
-function formatearFechaHora(fechaHora: string): string {
-  try {
-    // "2026-10-01" (solo fecha) se parsea como UTC y en Colombia (UTC-5)
-    // caería al día anterior a las 7 p. m.: se lee como hora local.
-    const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaHora.trim());
-    const d = esSoloFecha ? new Date(`${fechaHora.trim()}T00:00:00-05:00`) : new Date(fechaHora);
-    if (isNaN(d.getTime())) return fechaHora;
-    const fecha = d.toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "America/Bogota",
-    });
-    const hora = d.toLocaleTimeString("es-CO", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "America/Bogota",
-    });
-    return `${fecha} ${hora}`;
-  } catch {
-    return fechaHora;
-  }
 }
 
 /**
@@ -2807,7 +2782,7 @@ export function OrdenCompraScreen({
       return {
         id: o.id,
         proveedor: o.proveedor,
-        fecha: o.fecha,
+        fecha: formatearFechaHora(o.fecha),
         estado: o.estado,
         items: o.items.map(item => ({
           nombre: item.nombre,

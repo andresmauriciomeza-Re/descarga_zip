@@ -1,3 +1,4 @@
+import { formatearHora } from "@/shared/utils/hora";
 import api from '@/shared/services/api';
 import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
@@ -103,11 +104,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     }));
   const totalPagado = pagos.reduce((suma, pago) => suma + Number(pago.depositado || 0), 0);
   const faltante = pagos.length ? Number(pagos[pagos.length - 1].faltante || 0) : 0;
-  const horaEstado = row.fecha_estado
-    ? new Intl.DateTimeFormat('es-CO', {
-        timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true,
-      }).format(new Date(row.fecha_estado))
-    : '';
+  const horaEstado = formatearHora(row.fecha_estado);
   const productos = detalles.map((detalle) =>
     detalle.tamano === 'Mediana' || detalle.tamano === 'Grande'
       ? `${detalle.nombre} · ${detalle.cantidad} ${Number(detalle.cantidad) === 1 ? 'porción' : 'porciones'} — ${detalle.tamano} · $${Number(detalle.precio_unitario).toLocaleString('es-CO')} / porción`

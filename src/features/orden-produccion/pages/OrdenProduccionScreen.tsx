@@ -15,7 +15,7 @@ import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { hora12 } from "@/shared/utils/hora";
+import { formatearFechaHora } from "@/shared/utils/hora";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
@@ -281,29 +281,6 @@ function epochOrden(iso: string): number {
   const conZona = TIENE_ZONA.test(t.slice(10));
   const ms = Date.parse(conZona ? t : `${t}-05:00`);
   return Number.isNaN(ms) ? 0 : ms;
-}
-
-/** Fecha y hora siempre en Bogotá (UTC-5), vengan en UTC o ya en Bogotá. */
-function fmtDT(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const ms = epochOrden(iso);
-  if (!ms) return "—";
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone: "America/Bogota",
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-    }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]),
-  );
-  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
-}
-
-function fmtFechaHoraLocal(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const [fecha, hora] = iso.split("T");
-  if (!fecha || !hora) return "—";
-  const [anio, mes, dia] = fecha.split("-");
-  return `${dia}/${mes}/${anio} ${hora.slice(0, 5)}`;
 }
 
 const nowISO = () => new Date().toISOString();
@@ -1025,7 +1002,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       },
       { header: "Pérdida", valor: (o) => (totalMerma(o.lineas) > 0 ? resumenMerma(o.lineas) : "0"), numFmt: "#,##0.00" },
       { header: "Estado", valor: (o) => ESTADO_LABEL[o.estadoOrden], esEstado: true },
-      { header: "Fecha/Hora de estado", valor: (o) => fmtDT(o.historial[o.historial.length - 1]?.fechaHora ?? o.creadaEn) },
+      { header: "Fecha/Hora de estado", valor: (o) => formatearFechaHora(o.historial[o.historial.length - 1]?.fechaHora ?? o.creadaEn) },
       { header: "Observación", valor: (o) => o.observacion },
     ],
   });
@@ -2442,7 +2419,7 @@ export function OrdenProduccionScreen({
                       </div>
                     </td>
                     <td className="px-1 py-2 align-middle text-xs text-muted-foreground tabular-nums [overflow-wrap:anywhere]">
-                      {fmtDT(ultimoCambio(o))}
+                      {formatearFechaHora(ultimoCambio(o))}
                     </td>
                     <td className="px-1 py-2 align-middle">
                       {accionesListado(o, faltantesFila.length > 0)}
@@ -2494,7 +2471,7 @@ export function OrdenProduccionScreen({
                   {o.estadoOrden === "completada" && o.tipo !== "pedido" && totalMerma(o.lineas) > 0 && (
                     <p className="text-xs font-semibold text-red-600">−{resumenMerma(o.lineas)} de pérdida</p>
                   )}
-                  <p className="text-xs text-muted-foreground">Fecha/Hora de estado: {fmtDT(ultimoCambio(o))}</p>
+                  <p className="text-xs text-muted-foreground">Fecha/Hora de estado: {formatearFechaHora(ultimoCambio(o))}</p>
                   {accionesListado(o, faltantes.length > 0)}
                 </div>
               );
@@ -2675,8 +2652,8 @@ export function OrdenProduccionScreen({
                       {completarItem.ventaLocal
                         ? "Venta en el local"
                         : completarEsPedido
-                        ? `${completarItem.fechaSolicitada.split("-").reverse().join("/")}${completarItem.horaSolicitada ? ` ${hora12(completarItem.horaSolicitada)}` : ""}`
-                        : fmtFechaHoraLocal(completarItem.fechaLimite)}
+                        ? formatearFechaHora(completarItem.fechaSolicitada, completarItem.horaSolicitada)
+                        : formatearFechaHora(completarItem.fechaLimite)}
                     </p>
                   </div>
                 </div>
@@ -2972,7 +2949,7 @@ export function OrdenProduccionScreen({
                   <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
                   {detailItem.ventaLocal && <span className="text-[11px] font-semibold text-muted-foreground">Venta en el local</span>}
                   <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
-                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {fmtDT(ultimoCambio(detailItem))}</span>
+                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {formatearFechaHora(ultimoCambio(detailItem))}</span>
                 </div>
 
                 {detailItem.tipo === "pedido" && (
@@ -2984,10 +2961,10 @@ export function OrdenProduccionScreen({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    ...(detailItem.ventaLocal ? [] : [{ l: "Fecha/hora solicitada", v: detailItem.fechaSolicitada ? `${detailItem.fechaSolicitada}${detailItem.horaSolicitada ? ` ${hora12(detailItem.horaSolicitada)}` : ""}` : "—" }]),
-                    { l: "Inicio de producción", v: fmtDT(detailItem.inicioProduccion) },
-                    { l: "Fecha límite", v: fmtDT(detailItem.fechaLimite) },
-                    { l: "Entrega estimada", v: fmtDT(detailItem.entregaEstimada) },
+                    ...(detailItem.ventaLocal ? [] : [{ l: "Fecha/hora solicitada", v: formatearFechaHora(detailItem.fechaSolicitada, detailItem.horaSolicitada) }]),
+                    { l: "Inicio de producción", v: formatearFechaHora(detailItem.inicioProduccion) },
+                    { l: "Fecha límite", v: formatearFechaHora(detailItem.fechaLimite) },
+                    { l: "Entrega estimada", v: formatearFechaHora(detailItem.entregaEstimada) },
                   ].map(({ l, v }) => (
                     <div key={l}>
                       <p className="text-[11px] font-semibold text-muted-foreground">{l}</p>
@@ -3286,7 +3263,7 @@ export function OrdenProduccionScreen({
                       <p className="text-xs font-semibold text-muted-foreground mb-1.5">Línea de tiempo de estados</p>
                       {detailItem.historial.length === 0 ? (
                         <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
-                          Sin transiciones. Creada el {fmtDT(detailItem.creadaEn)}.
+                          Sin transiciones. Creada el {formatearFechaHora(detailItem.creadaEn)}.
                         </p>
                       ) : (() => {
                         // Más antigua → más reciente. "Orden creada" va primero y
@@ -3298,7 +3275,7 @@ export function OrdenProduccionScreen({
                           {!traeInicial && (
                             <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
                               <span className="text-xs font-semibold text-foreground">Orden creada</span>
-                              <span className="text-[10px] text-muted-foreground shrink-0">{fmtDT(detailItem.creadaEn)}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{formatearFechaHora(detailItem.creadaEn)}</span>
                             </div>
                           )}
                           {pasos.map((h, i) => (
@@ -3320,7 +3297,7 @@ export function OrdenProduccionScreen({
                                   {h.automatico && <span className="text-xs text-muted-foreground">(automático)</span>}
                                 </div>
                               )}
-                              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{fmtDT(h.fechaHora)}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{formatearFechaHora(h.fechaHora)}</span>
                             </div>
                           ))}
                         </div>
@@ -3529,7 +3506,7 @@ export function OrdenProduccionScreen({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
-                      <input value={darBajaForm.fechaRegistro} readOnly className={iCls + " opacity-60 cursor-default"} />
+                      <input value={formatearFechaHora(darBajaForm.fechaRegistro)} readOnly className={iCls + " opacity-60 cursor-default"} />
                     </div>
                   </div>
 
@@ -3655,7 +3632,7 @@ function CamposPedido({
                 <span className="text-sm font-semibold text-foreground tabular-nums">${(v.total ?? 0).toLocaleString("es-CO")}</span>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                {v.usuario} · {v.fecha}{v.horaRecogida ? ` ${hora12(v.horaRecogida)}` : ""}
+                {v.usuario} · {formatearFechaHora(v.fecha, v.horaRecogida)}
               </p>
             </button>
           ))}
@@ -3687,7 +3664,7 @@ function CamposPedido({
               );
             })}
             <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
-              Fecha y hora solicitadas: <strong className="text-foreground">{venta.fecha}{venta.horaRecogida ? ` ${hora12(venta.horaRecogida)}` : ""}</strong> (recogida del cliente)
+              Fecha y hora solicitadas: <strong className="text-foreground">{formatearFechaHora(venta.fecha, venta.horaRecogida)}</strong> (recogida del cliente)
             </div>
             {/* Tiempo fijo del pedido: NO sale del tiempoPreparacion de la
                 ficha (eso es de "Preparación en lote"). */}

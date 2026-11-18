@@ -45,7 +45,7 @@ import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
 import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
 import { listarClientes } from "@/shared/services/authService";
-import { hora12, minutosDeHora } from "@/shared/utils/hora";
+import { formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import {
   agregarDias,
   enPeriodo,
@@ -630,7 +630,7 @@ export function DashboardScreen({
               (v) => v.fecha === hoy && Math.floor(minutosHora(horaVenta(v)) / 60) === h,
             );
             return {
-              etiqueta: `${h - 12}pm`,
+              etiqueta: formatearHora(`${h}:00`, { sinMinutos: true }),
               ingresos: fila.reduce((s, v) => s + v.total, 0),
               unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
               porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
@@ -1037,7 +1037,7 @@ export function DashboardScreen({
                   <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{venta.cantidad}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{hora12(horaVenta(venta))}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearHora(horaVenta(venta))}</td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_VENTA[venta.estado] ?? venta.estado}</td>
                   </tr>
                 ))}
@@ -1455,7 +1455,7 @@ export function DashboardScreen({
                       <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
                         {fmt(venta.total)}
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{hora12(horaVenta(venta))}</td>
+                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearHora(horaVenta(venta))}</td>
                     </tr>
                   ))
                 )}

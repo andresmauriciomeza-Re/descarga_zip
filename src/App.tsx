@@ -112,7 +112,7 @@ import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { BloqueQrPago, PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
 import { VolverArriba } from "@/shared/components/VolverArriba";
-import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
+import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
@@ -669,6 +669,12 @@ const ORDERS: Order[] = [
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
+
+const aperturaRecogidaTexto = formatearHora(HORA_APERTURA / 60 + ":00");
+const cierreRecogidaTexto = formatearHora(HORA_CIERRE / 60 + ":00");
+const ultimaRecogidaTexto = formatearHora(
+  Math.floor(HORA_ULTIMA_RECOGIDA / 60) + ":" + String(HORA_ULTIMA_RECOGIDA % 60).padStart(2, "0"),
+);
 
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
@@ -2593,7 +2599,7 @@ function LandingScreen({
                 <div className="flex justify-between">
                   <span>Jueves – Domingo</span>
                   <span className="font-semibold text-white">
-                    4:00 pm – 10:00 pm
+                    {aperturaRecogidaTexto} – {cierreRecogidaTexto}
                   </span>
                 </div>
                 <p
@@ -3869,7 +3875,7 @@ function CartScreen({
     }
     const minutos = minutosDeHora(horaRecogida);
     if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-      toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+      toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
       return;
     }
     if (horaYaPaso(horaRecogida)) {
@@ -3905,7 +3911,7 @@ function CartScreen({
         nombre: nombreCliente,
         documento: guestDocument.trim() || undefined,
         telefono: guestPhone.trim() || undefined,
-        hora: hora12(horaRecogida),
+        hora: formatearHora(horaRecogida),
       });
       clear();
       setLoading(false);
@@ -3945,7 +3951,7 @@ function CartScreen({
   };
 
   if (pedidoConfirmado && pedidoResumen) {
-    const horaEtiqueta = hora12(pedidoResumen.hora);
+    const horaEtiqueta = formatearHora(pedidoResumen.hora);
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
@@ -4087,7 +4093,7 @@ function CartScreen({
                   </a>
                 </p>
                 <p className="text-xs font-semibold text-primary">
-                  Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+                  Horario: jueves a domingo, de {aperturaRecogidaTexto} a {cierreRecogidaTexto}
                 </p>
               </div>
             </div>
@@ -4513,12 +4519,12 @@ function CartScreen({
                       </p>
                       <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
                         <p>
-                          Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
-                          <strong className="text-foreground">10:00 p. m.</strong>
+                          Atendemos de <strong className="text-foreground">{aperturaRecogidaTexto}</strong> a{" "}
+                          <strong className="text-foreground">{cierreRecogidaTexto}</strong>
                         </p>
                         <p className="text-xs mt-0.5">
                           El último horario de recogida es{" "}
-                          <strong className="text-foreground">9:45 p. m.</strong>
+                          <strong className="text-foreground">{ultimaRecogidaTexto}</strong>
                         </p>
                       </div>
                       <div
@@ -4531,7 +4537,7 @@ function CartScreen({
                         <select
                           value={seleccionValida && horaSel !== null ? horaSel : ""}
                           disabled={sinHorariosHoy}
-                          aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
+                          aria-label={`Hora de recogida, de ${aperturaRecogidaTexto} a ${ultimaRecogidaTexto}`}
                           onChange={(e) => {
                             const nuevaHora = Number(e.target.value);
                             const minutos = minutosDisponiblesDe(nuevaHora);
@@ -4549,7 +4555,7 @@ function CartScreen({
                           </option>
                           {horasDisponibles.map((h) => (
                             <option key={h} value={h}>
-                              {`${h > 12 ? h - 12 : h}:00 p. m.`}
+                              {formatearHora(`${h}:00`)}
                             </option>
                           ))}
                         </select>
@@ -4600,10 +4606,10 @@ function CartScreen({
                               }`}
                           >
                             {horaFueraDeRango(horaRecogida)
-                              ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                              ? `⚠ Esta hora está fuera de nuestro horario de atención (${aperturaRecogidaTexto} – ${cierreRecogidaTexto})`
                               : horaYaPaso(horaRecogida)
                                 ? "⚠ Esta hora no está disponible — ya pasó"
-                                : `Recogerás a las ${hora12(horaRecogida)}`}
+                                : `Recogerás a las ${formatearHora(horaRecogida)}`}
                           </p>
                         )
                       )}
@@ -4630,7 +4636,7 @@ function CartScreen({
                       }
                       const minutos = minutosDeHora(horaRecogida);
                       if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-                        toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+                        toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
                         return;
                       }
                       if (horaYaPaso(horaRecogida)) {
@@ -9311,7 +9317,7 @@ export default function App() {
         setCart([]);
         setOrderConfirmation({
           id,
-          hora: hora12(orderToResume.horaRecogida),
+          hora: formatearHora(orderToResume.horaRecogida),
           nombre: nombrePedido,
           documento: orderToResume.documento?.trim(),
           items: orderToResume.items,

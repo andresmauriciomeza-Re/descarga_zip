@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
-import { hora12 } from "@/shared/utils/hora";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { disponiblePizza } from "@/shared/utils/stockPizza";
 import { motion, AnimatePresence } from "motion/react";
@@ -484,7 +484,7 @@ const METODO_PAGO_ESTILO: Record<
 };
 
 const nowHora = () =>
-  new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  formatearHora(new Date());
 
 /** Etiqueta del método de pago con su color. "Efectivo" es exclusivo de los
     pedidos que crea el administrador. Se exporta para que Devoluciones muestre
@@ -1646,7 +1646,7 @@ export function VentasScreen({
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
   const horaEstado = (p: Venta) =>
-    p.historial?.[p.historial.length - 1]?.hora ?? "—";
+    formatearHora(p.historial?.[p.historial.length - 1]?.hora) || "—";
 
   // ── Flujo de verificación de pago (Fase 3) ──
 
@@ -1872,8 +1872,8 @@ export function VentasScreen({
         id: p.id,
         cliente: p.usuario,
         documento: p.documento ?? "",
-        fecha: p.fecha,
-        horaRecogida: hora12(p.horaRecogida),
+        fecha: formatearFechaHora(p.fecha),
+        horaRecogida: formatearHora(p.horaRecogida),
         productos: p.detalle?.length
           ? p.detalle.map((d) =>
               esPizzaVenta({ tamaño: d.tamaño })
@@ -2079,7 +2079,7 @@ export function VentasScreen({
                       {p.horaRecogida ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          {hora12(p.horaRecogida)}
+                          {formatearHora(p.horaRecogida)}
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">
@@ -2245,7 +2245,7 @@ export function VentasScreen({
                       {detailItem.horaRecogida && (
                         <div>
                           <p className="text-xs text-muted-foreground font-medium mb-0.5">Hora de recogida</p>
-                          <p className="text-sm font-semibold text-foreground">🕐 {hora12(detailItem.horaRecogida)}</p>
+                          <p className="text-sm font-semibold text-foreground">🕐 {formatearHora(detailItem.horaRecogida)}</p>
                         </div>
                       )}
                       <div>
@@ -2278,7 +2278,7 @@ export function VentasScreen({
                               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${VENTA_STATUS_COLOR[h.estado]}`}>
                                 {VENTA_STATUS_LABEL[h.estado]}
                               </span>
-                              <span className="text-xs text-muted-foreground ml-auto">{h.hora}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{formatearHora(h.hora)}</span>
                             </div>
                           </div>
                         ))}
@@ -2351,7 +2351,7 @@ export function VentasScreen({
                                     {(c.fecha || c.hora) && (
                                       <span className="text-muted-foreground font-normal">
                                         {" · "}
-                                        {c.fecha}{c.hora ? ` ${c.hora}` : ""}
+                                        {formatearFechaHora(c.fecha, c.hora)}
                                       </span>
                                     )}
                                   </p>
