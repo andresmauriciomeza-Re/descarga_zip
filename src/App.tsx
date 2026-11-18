@@ -8233,8 +8233,12 @@ export default function App() {
   });
   const sesionActiva = sesionArranque.estado === "activa" ? sesionArranque.s : null;
   /** Pantalla que se restaura desde la sesión (si era válida) o "landing". */
+  const [facturaPedidoId] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get("factura");
+    return id && /^[1-9]\d*$/.test(id) ? id : null;
+  });
   const [screen, setScreen] = useState<Screen>(
-    (sesionActiva?.screen as Screen) || "landing",
+    facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : (sesionActiva?.screen as Screen) || "landing",
   );
   const [clienteAAbrirDesdeUsuarios, setClienteAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
   const [empleadoAAbrirDesdeUsuarios, setEmpleadoAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
@@ -9485,7 +9489,7 @@ export default function App() {
       navigate("cart");
       void verificarStockYContinuar();
     } else if (!orderToResume) {
-      navigate(nextScreen);
+      navigate(facturaPedidoId ? "mis-pedidos" : nextScreen);
     }
     return { ok: true };
   };
@@ -10172,9 +10176,10 @@ export default function App() {
   // NO es redirigido a la landing.
   useEffect(() => {
     if (!hasValidSession && screen === "mis-pedidos") {
-      navigate("landing", { replace: true });
+      if (facturaPedidoId) navigate("login");
+      else navigate("landing", { replace: true });
     }
-  }, [hasValidSession, screen, navigate]);
+  }, [facturaPedidoId, hasValidSession, screen, navigate]);
 
   // Dashboard and Inicio are mutually exclusive landing screens. Other admin
   // screens remain protected by their module permission below.
@@ -10487,6 +10492,7 @@ export default function App() {
                     <MisPedidosScreen
                       pedidos={ventas}
                       usuarioNombre={pedidosUsuarioNombre}
+                      facturaPedidoId={facturaPedidoId}
                       onVerMenu={() => navigate("catalog")}
                     />
                   )}

@@ -379,6 +379,7 @@ export interface Venta {
   detalle?: DetalleProd[];
   metodoPago?: string;
   comprobante?: string;
+  direccionRecogida?: string;
   horaRecogida?: string;
   /** Teléfono del cliente si lo dejó en el formulario de datos del checkout. */
   telefono?: string;

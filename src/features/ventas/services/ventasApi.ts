@@ -23,6 +23,7 @@ export interface VentaApi {
   id_cliente: number;
   fecha: string;
   hora_recogida: string | null;
+  direccion_recogida?: string;
   monto: number | string;
   estado: VentaStatus;
   estado_cliente?: EstadoClienteVenta;
@@ -126,6 +127,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     estado: row.estado,
     estadoCliente: row.estado_cliente ?? row.estado,
     estadoOrden: row.estado_orden ?? undefined,
+    direccionRecogida: row.direccion_recogida,
     ventaLocal: row.venta_local === true,
     horaCompletadoLocal: row.hora_completado_local ?? undefined,
     finVentaLocalMs: row.fin_venta_local_ms == null ? undefined : Number(row.fin_venta_local_ms),

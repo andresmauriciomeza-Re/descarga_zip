@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { descargarFactura } from "../services/facturaVenta";
 import type { EstadoClienteVenta, Venta, VentaStatus } from "./VentasScreen";
 import { formatearHora } from "@/shared/utils/hora";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
@@ -53,14 +54,14 @@ const ESTADO: Record<string, { label: string; color: string; mensaje: string }> 
     mensaje: "Pago aceptado, tu pedido entra a cocina.",
   },
   "En proceso": {
-    label: "En proceso",
+    label: "En preparación",
     color: "bg-indigo-100 text-indigo-800",
-    mensaje: "Estamos preparando tu pedido.",
+    mensaje: "Tu pedido ya está en preparación.",
   },
   "Por entregar": {
     label: "Por entregar",
     color: "bg-blue-100 text-blue-800",
-    mensaje: "¡Listo! Recógelo.",
+    mensaje: "Tu pedido está listo para recoger.",
   },
   Completado: {
     label: "Completado",
@@ -109,7 +110,7 @@ const datosEstadoCliente = (p: Venta) => {
   const estado = estadoCliente(p);
   const datos = ESTADO[estado] ?? ESTADO[p.estado];
   if (estado === "Por entregar" && p.horaRecogida) {
-    return { ...datos, mensaje: `¡Listo! Recógelo a las ${formatearHora(p.horaRecogida)}.` };
+    return { ...datos, mensaje: `Tu pedido está listo para recoger a las ${formatearHora(p.horaRecogida)}.` };
   }
   return datos;
 };
@@ -134,7 +135,7 @@ function BarraProgresoPedido({ pedido }: { pedido: Venta }) {
   if (indiceActual < 0) return null;
 
   return (
-    <div className="px-5 pb-4" aria-label={`Progreso: ${estadoProgreso}`}>
+    <div className="px-5 pb-4" aria-label={`Progreso: ${ESTADO[estadoProgreso]?.label ?? estadoProgreso}`}>
       <ol className="flex w-full">
         {PASOS_PEDIDO.map((paso, indice) => {
           const anterior = indice < indiceActual;
@@ -174,14 +175,14 @@ function BarraProgresoPedido({ pedido }: { pedido: Venta }) {
                   actual ? "font-bold text-foreground" : "text-muted-foreground"
                 }`}
               >
-                {paso}
+                {ESTADO[paso].label}
               </span>
             </li>
           );
         })}
       </ol>
       <p className="mt-1 text-center text-xs font-semibold text-foreground sm:hidden">
-        {estadoProgreso}
+        {ESTADO[estadoProgreso]?.label ?? estadoProgreso}
       </p>
     </div>
   );
@@ -222,12 +223,13 @@ function Dato({
 }
 
 interface Props {
+  facturaPedidoId?: string | null;
   pedidos?: Venta[];
   usuarioNombre: string;
   onVerMenu: () => void;
 }
 
-export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, onVerMenu }: Props) {
+export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuarioNombre, facturaPedidoId, onVerMenu }: Props) {
   const [misPedidos, setMisPedidos] = useState<Venta[]>([]);
   const [detallesPedidos, setDetallesPedidos] = useState<Record<string, Venta>>({});
   const [pedidoDetalleCargando, setPedidoDetalleCargando] = useState<string | null>(null);
@@ -327,7 +329,15 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
       cancelandoEnRef.current = false;
     }
   };
-  const [abierto, setAbierto] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<string | null>(facturaPedidoId ?? null);
+  const pedidoFacturaRef = useRef<HTMLDivElement>(null);
+  const facturaMostradaRef = useRef(false);
+  useEffect(() => {
+    if (!facturaMostradaRef.current && pedidoFacturaRef.current) {
+      facturaMostradaRef.current = true;
+      pedidoFacturaRef.current.scrollIntoView({ block: "start" });
+    }
+  }, [misPedidos]);
   /** Pestaña activa: todos, los de hoy o los que esperan el saldo faltante. */
   const [pestana, setPestana] = useState<"todos" | "recientes" | "pendientes">("todos");
 
@@ -364,12 +374,12 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
   // no debe mover al usuario de la pestaña en la que esté).
   const pestanaInicialRef = useRef(false);
   useEffect(() => {
-    if (pestanaInicialRef.current || misPedidos.length === 0) return;
+    if (facturaPedidoId || pestanaInicialRef.current || misPedidos.length === 0) return;
     pestanaInicialRef.current = true;
     if (misPedidos.some((p) => p.estado === "En espera" && (p.montoFaltante ?? 0) > 0)) {
       setPestana("pendientes");
     }
-  }, [misPedidos]);
+  }, [facturaPedidoId, misPedidos]);
 
   // Si se resuelve el último pendiente estando en esa pestaña, volver a
   // "todos" (la pestaña deja de existir).
@@ -405,7 +415,11 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
         } else if (estadoActual === "En proceso") {
           toast.info(`Tu pedido #${p.id} está en preparación.`);
         } else if (estadoActual === "Por entregar") {
-          toast.success(`¡Tu pedido #${p.id} está listo para recoger!`);
+          toast.success(`¡Tu pedido #${p.id} está listo para recoger!`, {
+            description: p.direccionRecogida
+              ? [p.horaRecogida && formatearHora(p.horaRecogida), p.direccionRecogida].filter(Boolean).join(" · ")
+              : undefined,
+          });
         } else if (estadoActual === "En espera") {
           toast.info(`El pedido ${p.id}: falta ${fmtCOP(p.montoFaltante ?? 0)} para completar tu pago.`);
         } else if (estadoActual === "Rechazado") {
@@ -552,6 +566,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
             estado: pedidoListado.estado,
             estadoCliente: pedidoListado.estadoCliente,
             estadoOrden: pedidoListado.estadoOrden,
+            direccionRecogida: pedidoListado.direccionRecogida,
             finCalentamientoMs: pedidoListado.finCalentamientoMs,
             segundosRestantesAnulacion: pedidoListado.segundosRestantesAnulacion,
           } : pedidoListado;
@@ -562,7 +577,8 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
           return (
             <div
               key={p.id}
-              className="bg-card border border-border rounded-2xl overflow-hidden"
+              ref={p.id === facturaPedidoId ? pedidoFacturaRef : undefined}
+              className="bg-card border border-border rounded-2xl overflow-hidden scroll-mt-24"
             >
               {/* Resumen */}
               <button
@@ -608,6 +624,25 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
               </button>
 
               <BarraProgresoPedido pedido={p} />
+
+              {estado === "Por entregar" && p.estadoOrden === "Completada" && !p.ventaLocal && (
+                <div className="mx-5 mb-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  <p className="font-semibold">{est.mensaje}</p>
+                  {p.direccionRecogida && <p>{p.direccionRecogida}</p>}
+                </div>
+              )}
+
+              {(p.estado === "Completado" || p.estado === "Devolucion") && (
+                <div className="px-5 pb-4">
+                  <button
+                    type="button"
+                    onClick={() => descargarFactura(p)}
+                    className="cursor-pointer text-sm font-semibold text-primary underline"
+                  >
+                    Descargar factura
+                  </button>
+                </div>
+              )}
 
               {/* Alerta de falta de pago: visible sin expandir la tarjeta. */}
               {estado === "En espera" && (
