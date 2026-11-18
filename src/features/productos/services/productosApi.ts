@@ -20,6 +20,7 @@ export interface ProductoApi {
   costo_unitario?: number | string | null;
   unidad_venta: string;
   imagen?: string | null;
+  imagenes?: string[];
   /** `imagen_data IS NOT NULL`: ¿la BD tiene los bytes de la imagen? El
       binario no viaja en el JSON; con true el menú pide
       `GET /productos/:id/imagen`. */
@@ -46,6 +47,7 @@ export interface ProductoApiCreacion {
   tipo: "Elaborado" | "Reventa";
   unidad_venta: string;
   imagen?: string;
+  imagenes?: string[];
   precio_venta?: number;
   precio_grande?: number | null;
   contenido?: number;
@@ -84,6 +86,7 @@ export const productoPanelACreacion = (p: Producto): ProductoApiCreacion => {
     tipo: reventa ? "Reventa" : "Elaborado",
     unidad_venta: reventa ? "und" : p.unidadVenta,
     ...(p.imagen ? { imagen: p.imagen } : {}),
+    ...(p.imagenes === undefined ? {} : { imagenes: p.imagenes }),
     ...(reventa
       ? {
           contenido: Number(p.contenido ?? 0),
@@ -102,14 +105,14 @@ export const productoPanelACreacion = (p: Producto): ProductoApiCreacion => {
   };
 };
 
-export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCreacion, "tipo">> => {
+export const productoPanelAEdicion = (p: Producto, guardarGaleria = true): Partial<Omit<ProductoApiCreacion, "tipo">> => {
   const reventa = p.tipo === "Producto terminado";
   const esPizza = esCategoriaPizza(p.categoriaNombre);
   return {
     id_categoria: idCategoriaNumero(p.idCategoria),
     nombre: p.nombre.trim(),
     unidad_venta: reventa ? "und" : p.unidadVenta,
-    imagen: p.imagen,
+    ...(guardarGaleria ? { imagen: p.imagen, imagenes: p.imagenes } : {}),
     ...(reventa
       ? {
           ...(Number(p.contenido ?? 0) > 0
@@ -136,6 +139,7 @@ export const productoPanelAEdicion = (p: Producto): Partial<Omit<ProductoApiCrea
 export const mapearProductoApi = (p: ProductoApi): Producto => ({
   id: String(p.id_producto),
   imagen: p.imagen ?? "",
+  imagenes: p.imagenes?.length ? p.imagenes : undefined,
   tieneImagen: p.tiene_imagen ?? false,
   nombre: p.nombre,
   idCategoria: String(p.id_categoria),

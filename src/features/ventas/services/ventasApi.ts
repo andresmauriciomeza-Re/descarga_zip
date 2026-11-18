@@ -3,7 +3,7 @@ import api from '@/shared/services/api';
 import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
 import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
-import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta } from '../pages/VentasScreen';
+import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta, MetodoPago } from '../pages/VentasScreen';
 import { mapearOrdenApi, type OrdenApi } from '@/features/orden-produccion/services/ordenesProduccionApi';
 
 export interface PagoVentaApi {
@@ -28,6 +28,7 @@ export interface VentaApi {
   estado_cliente?: EstadoClienteVenta;
   estado_orden?: string | null;
   fecha_estado: string | null;
+  fecha_estado_local?: string | null;
   venta_local: boolean;
   hora_completado_local?: string | null;
   fin_venta_local_ms?: number | string | null;
@@ -68,9 +69,11 @@ export interface VentaApi {
       'Devuelta' es el estado inicial, antes de resolver. */
   devolucion_tipo?: string | null;
   devolucion_monto?: number | string | null;
+  metodo_reembolso?: Exclude<MetodoPago, ""> | null;
   devolucion_nota?: string | null;
   /** Venta nueva que creó el canje de esta devolución, si la hubo. */
   id_venta_reemplazo?: number | string | null;
+  bloqueo_cambio_sabor?: boolean;
   /** Motivo registrado por línea de la venta devuelta. */
   devolucion_lineas?: Array<{
     id_detalle_venta: number;
@@ -104,7 +107,7 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     }));
   const totalPagado = pagos.reduce((suma, pago) => suma + Number(pago.depositado || 0), 0);
   const faltante = pagos.length ? Number(pagos[pagos.length - 1].faltante || 0) : 0;
-  const horaEstado = formatearHora(row.fecha_estado);
+  const horaEstado = formatearHora(row.fecha_estado_local ?? row.fecha_estado);
   const productos = detalles.map((detalle) =>
     detalle.tamano === 'Mediana' || detalle.tamano === 'Grande'
       ? `${detalle.nombre} · ${detalle.cantidad} ${Number(detalle.cantidad) === 1 ? 'porción' : 'porciones'} — ${detalle.tamano} · $${Number(detalle.precio_unitario).toLocaleString('es-CO')} / porción`
@@ -115,6 +118,8 @@ export function ventaApiAVenta(row: VentaApi): Venta {
     usuario: row.cliente_nombre ?? 'Cliente',
     documento: row.id_usuario ?? undefined,
     fecha: formatDateBogota(row.fecha),
+    fechaCompletado: row.estado === "Completado" ? row.fecha_estado_local?.slice(0, 10) : undefined,
+    horaCompletado: row.estado === "Completado" ? row.fecha_estado_local?.slice(11, 16) : undefined,
     productos,
     cantidad: detalles.reduce((suma, detalle) => suma + detalle.cantidad, 0),
     total: Number(row.monto),
@@ -165,11 +170,13 @@ export function ventaApiAVenta(row: VentaApi): Venta {
       row.segundos_restantes_anulacion == null ? 0 : Number(row.segundos_restantes_anulacion),
     horaRecogida: formatTime(row.hora_recogida),
     historial: horaEstado ? [{ estado: row.estado, hora: horaEstado }] : [],
+    bloqueoCambioSabor: row.bloqueo_cambio_sabor,
     // ── Devolución (tb_devolucion) ──
     ...(row.id_devolucion == null
       ? {}
       : {
           idDevolucion: Number(row.id_devolucion),
+          metodoReembolso: row.metodo_reembolso ?? undefined,
           /** Fecha de la devolución (tb_devolucion.fecha), no la de la venta. */
           devolucionFecha: row.devolucion_fecha ? formatDateBogota(row.devolucion_fecha) : undefined,
           idVentaReemplazo:
@@ -272,6 +279,15 @@ export async function marcarVentaListaApi(id: string) {
   return { ...data, orden: data.orden ? mapearOrdenApi(data.orden) : null };
 }
 
+export async function adelantarVentaApi(id: string) {
+  const { data } = await api.post<{ estado: "Completado"; fecha_estado_local: string }>(`/ventas/${id}/adelantar`);
+  return {
+    estado: data.estado,
+    fechaCompletado: data.fecha_estado_local.slice(0, 10),
+    horaCompletado: data.fecha_estado_local.slice(11, 16),
+  };
+}
+
 /** Anula una venta desde el listado del panel. `motivo` ya viene armado
     ("Cliente canceló el pedido", … o "Otro: <texto>") y `comprobante` es la
     URL de Cloudinary del comprobante de la devolución (opcional). */
@@ -307,6 +323,7 @@ export interface ResolverDevolucionPayload {
   nota?: string;
   /** Dinero que la pizzería devuelve al cliente (>= 0). */
   monto: number;
+  metodo_reembolso?: Exclude<MetodoPago, "">;
   lineas: Array<{
     id_detalle_venta: number;
     cantidad: number;
