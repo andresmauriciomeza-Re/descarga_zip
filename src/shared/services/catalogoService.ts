@@ -14,6 +14,7 @@ export interface ProductoApi {
   disponibles_mediana?: number | string | null;
   disponibles_grande?: number | string | null;
   imagen: string | null;
+  imagenes?: string[];
   /** `imagen_data IS NOT NULL`: el binario NO viaja en el JSON; con true el
       menú pide la imagen a `GET /productos/:id/imagen`. */
   tiene_imagen?: boolean;

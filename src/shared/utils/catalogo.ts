@@ -32,6 +32,7 @@ export interface Product {
   description: string;
   price: number;
   image: string;
+  images?: string[];
   idCategoria: string;
   category: string;
   sizes: { label: string; price: number }[];
@@ -179,6 +180,7 @@ export const etiquetaEstadoMenu = (
     El `id` llega como "6" (API) o "PROD-001" (semilla local): solo se pide
     al backend cuando es numérico, para no armar una URL inválida. */
 export const imagenDeProductoMenu = (p: Producto): string => {
+  if (p.imagenes?.length) return getImageUrl(p.imagenes[0]);
   const id = Number(String(p.id).replace(/^PROD-/, "")) || 0;
   if (p.tieneImagen && id > 0) return imagenEnApi(id);
   const resuelta = p.imagen?.trim() ? getImageUrl(p.imagen) : "";
@@ -197,6 +199,7 @@ export const productoACatalogo = (p: Producto, categorias: CategoriaProducto[]):
     description: DESCRIPCIONES[p.nombre] ?? "",
     price: p.precioUnitario,
     image: imagenDeProductoMenu(p),
+    images: p.imagenes?.map(getImageUrl),
     idCategoria: p.idCategoria,
     category: categoriaVisible,
     sizes: sizesDeProducto(p, categoriaVisible),

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
-import { hora12 } from "@/shared/utils/hora";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { disponiblePizza } from "@/shared/utils/stockPizza";
 import { motion, AnimatePresence } from "motion/react";
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Check,
+  CheckCircle2,
   Clock,
   AlertCircle,
   ShieldCheck,
@@ -38,7 +39,7 @@ import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
-import { crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
+import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
   ESTADOS_ANULABLES,
@@ -363,6 +364,8 @@ export interface Venta {
   documento?: string;
   tipoDocumento?: string;
   fecha: string;
+  fechaCompletado?: string;
+  horaCompletado?: string;
   productos: string;
   cantidad: number;
   total: number;
@@ -383,6 +386,7 @@ export interface Venta {
   /** Id de la fila de tb_devolucion de esta venta. Hace falta para resolverla
       (PATCH /devoluciones/:id/resolver); ausente si nunca se marcó. */
   idDevolucion?: number;
+  bloqueoCambioSabor?: boolean;
   /** Fecha en que se registró la devolución (tb_devolucion.fecha), en formato
       ISO. Es la que usa el Dashboard para contar devoluciones por periodo. */
   devolucionFecha?: string;
@@ -392,6 +396,7 @@ export interface Venta {
   devolucionResuelta?: boolean;
   devolucionNota?: string;
   devolucionMonto?: number;
+  metodoReembolso?: Exclude<MetodoPago, "">;
   /** Motivo por el que el cliente devuelve, escrito al gestionar la devolución. */
   devolucionMotivo?: string;
   /** Motivo de cada línea devuelta, indexado por posición del detalle. */
@@ -434,7 +439,7 @@ const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
 
 const VENTA_STATUS_LABEL: Record<VentaStatus, string> = {
   "Por entregar": "Por entregar",
-  Devolucion: "Devuelta",
+  Devolucion: "Devolución",
   "Por verificar": "Por verificar",
   Completado: "Completado",
   Anulado: "Rechazado",
@@ -484,7 +489,7 @@ const METODO_PAGO_ESTILO: Record<
 };
 
 const nowHora = () =>
-  new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  formatearHora(new Date());
 
 /** Etiqueta del método de pago con su color. "Efectivo" es exclusivo de los
     pedidos que crea el administrador. Se exporta para que Devoluciones muestre
@@ -1614,6 +1619,7 @@ export function VentasScreen({
   canExportExcel?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [detailItem, setDetailItem] = useState<Venta | null>(
     null,
@@ -1633,6 +1639,9 @@ export function VentasScreen({
   const [ventaAnular, setVentaAnular] = useState<Venta | null>(null);
   const [ventaLista, setVentaLista] = useState<Venta | null>(null);
   const [marcandoLista, setMarcandoLista] = useState(false);
+  const [ventaAdelantar, setVentaAdelantar] = useState<Venta | null>(null);
+  const [adelantando, setAdelantando] = useState(false);
+  const adelantoEnCurso = useRef(false);
   const [anularMotivoSel, setAnularMotivoSel] = useState<MotivoAnulacion | "">("");
   const [anularOtroTexto, setAnularOtroTexto] = useState("");
   const [anularUrl, setAnularUrl] = useState<string | null>(null);
@@ -1646,7 +1655,7 @@ export function VentasScreen({
   /** Última hora registrada en el historial: es la hora en que se colocó el
       estado actual y la que se muestra a la derecha de la columna Estado. */
   const horaEstado = (p: Venta) =>
-    p.historial?.[p.historial.length - 1]?.hora ?? "—";
+    formatearHora(p.historial?.[p.historial.length - 1]?.hora) || "—";
 
   // ── Flujo de verificación de pago (Fase 3) ──
 
@@ -1764,6 +1773,29 @@ export function VentasScreen({
     }
   };
 
+  const confirmarAdelanto = async () => {
+    if (!ventaAdelantar || adelantoEnCurso.current) return;
+    adelantoEnCurso.current = true;
+    setAdelantando(true);
+    try {
+      const resultado = await adelantarVentaApi(ventaAdelantar.id);
+      setPedidos((prev) => prev.map((p) => p.id === ventaAdelantar.id ? {
+        ...p,
+        ...resultado,
+        estadoCliente: "Completado",
+        historial: [...(p.historial ?? []), { estado: resultado.estado, hora: resultado.horaCompletado }],
+      } : p));
+      setVentaAdelantar(null);
+      toast.success(`Venta #${ventaAdelantar.id} completada.`);
+    } catch (error) {
+      setVentaAdelantar(null);
+      toast.error(error instanceof Error ? error.message : "No se pudo completar la venta.");
+    } finally {
+      adelantoEnCurso.current = false;
+      setAdelantando(false);
+    }
+  };
+
   /** Motivo que se envía: los fijos tal cual y "Otro" como "Otro: <texto>"
       (mismo formato que espera `validarMotivoAnulacion` en el servidor). */
   const motivoAnulacionFinal = () =>
@@ -1857,23 +1889,14 @@ export function VentasScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
-  // El listado de Ventas NO incluye las ventas en "Devolucion": una vez la
-  // venta pasa a devolución vive solo en el módulo Devoluciones. La venta NUEVA
-  // que nace de un canje (venta de reemplazo) sí sigue aquí, porque su estado
-  // es "Por entregar" (o el que le toque), nunca "Devolucion".
-  const ventasListado = useMemo(
-    () => pedidos.filter((p) => p.estado !== "Devolucion"),
-    [pedidos],
-  );
-
   const exportExcel = () => {
     exportToExcel(
-      ventasListado.map((p) => ({
+      pedidos.map((p) => ({
         id: p.id,
         cliente: p.usuario,
         documento: p.documento ?? "",
-        fecha: p.fecha,
-        horaRecogida: hora12(p.horaRecogida),
+        fecha: formatearFechaHora(p.fecha),
+        horaRecogida: formatearHora(p.horaRecogida),
         productos: p.detalle?.length
           ? p.detalle.map((d) =>
               esPizzaVenta({ tamaño: d.tamaño })
@@ -1908,20 +1931,15 @@ export function VentasScreen({
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
 
-  const filtered = useMemo(
-    () =>
-      ventasListado.filter(
-        (p) =>
-          p.id.toLowerCase().includes(search.toLowerCase()) ||
-          p.usuario
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          p.productos
-            .toLowerCase()
-            .includes(search.toLowerCase()),
+  const filtered = useMemo(() => {
+    const termino = search.toLowerCase();
+    return pedidos.filter((p) =>
+      (!estadoFiltro || p.estado === estadoFiltro) &&
+      [p.id, p.usuario, p.productos, etiquetaEstadoVenta(p)].some(
+        (valor) => valor.toLowerCase().includes(termino),
       ),
-    [ventasListado, search],
-  );
+    );
+  }, [pedidos, search, estadoFiltro]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice(
@@ -1949,6 +1967,18 @@ export function VentasScreen({
           onConfirm={() => void confirmarVentaLista()}
         />
       )}
+      {ventaAdelantar && (
+        <ConfirmDeleteModal
+          neutro
+          title="Completar venta"
+          message="¿Marcar esta venta como completada ahora? El cliente ya recibió su pedido."
+          cancelLabel="No, volver"
+          confirmLabel="Sí, completar"
+          loading={adelantando}
+          onCancel={() => setVentaAdelantar(null)}
+          onConfirm={() => void confirmarAdelanto()}
+        />
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -1959,7 +1989,7 @@ export function VentasScreen({
             Gestión Ventas
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {ventasListado.length} ventas registradas
+            {pedidos.length} ventas registradas
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -2006,15 +2036,33 @@ export function VentasScreen({
         );
       })()}
 
-      {/* Search */}
-      <SearchInput
-        value={search}
-        onChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        placeholder="Buscar por #, cliente o producto..."
-      />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <SearchInput
+          value={search}
+          onChange={(v) => {
+            setSearch(v);
+            setPage(1);
+          }}
+          placeholder="Buscar por #, cliente, producto o estado..."
+          wrapperClassName="w-full max-w-sm"
+        />
+        <select
+          aria-label="Filtrar ventas por estado"
+          value={estadoFiltro}
+          onChange={(event) => {
+            setEstadoFiltro(event.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+        >
+          <option value="">Todos los estados</option>
+          {Object.entries(VENTA_STATUS_LABEL).map(([estado, etiqueta]) => (
+            <option key={estado} value={estado}>
+              {estado === "Anulado" ? "Anulado / Rechazado" : etiqueta}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -2079,7 +2127,7 @@ export function VentasScreen({
                       {p.horaRecogida ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          {hora12(p.horaRecogida)}
+                          {formatearHora(p.horaRecogida)}
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">
@@ -2125,13 +2173,30 @@ export function VentasScreen({
                             Verificar
                           </button>
                         )}
-                        {canEdit && p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null &&
-                          (p.estadoOrden === "En proceso" || !p.estadoOrden) && (
-                          <button type="button" onClick={() => setVentaLista(p)} disabled={marcandoLista}
-                            title="Marcar como listo" aria-label="Marcar como listo"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            <Check className="w-4 h-4" />
-                          </button>
+                        {canEdit && p.estado === "Por entregar" && (
+                          p.ventaLocal && p.finVentaLocalMs != null && (p.estadoOrden === "En proceso" || !p.estadoOrden) ? (
+                            <button type="button" onClick={() => setVentaLista(p)} disabled={marcandoLista}
+                              title="Marcar como listo" aria-label="Marcar como listo"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                              <Check className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Adelantar"
+                              aria-label="Adelantar"
+                              onClick={() => {
+                                if (p.estadoOrden && p.estadoOrden !== "Completada") {
+                                  toast.error("La cocina aún no termina este pedido");
+                                  return;
+                                }
+                                setVentaAdelantar(p);
+                              }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )
                         )}
                         <ActionIcons onView={() => abrirDetalle(p)} />
                         {/* "Anular": sólo en estados anulables y dentro de los
@@ -2164,7 +2229,7 @@ export function VentasScreen({
                           </button>
                         )}
                         {/* Acciones de factura. */}
-                        {!(["Por verificar", "En espera"].includes(p.estado)) && p.estado !== "Anulado" && (
+                        {!["Por verificar", "En espera", "Anulado", "Devolucion"].includes(p.estado) && (
                           <button
                             onClick={() => setFacturaVenta(p)}
                             title="Imprimir factura"
@@ -2245,7 +2310,7 @@ export function VentasScreen({
                       {detailItem.horaRecogida && (
                         <div>
                           <p className="text-xs text-muted-foreground font-medium mb-0.5">Hora de recogida</p>
-                          <p className="text-sm font-semibold text-foreground">🕐 {hora12(detailItem.horaRecogida)}</p>
+                          <p className="text-sm font-semibold text-foreground">🕐 {formatearHora(detailItem.horaRecogida)}</p>
                         </div>
                       )}
                       <div>
@@ -2278,7 +2343,7 @@ export function VentasScreen({
                               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${VENTA_STATUS_COLOR[h.estado]}`}>
                                 {VENTA_STATUS_LABEL[h.estado]}
                               </span>
-                              <span className="text-xs text-muted-foreground ml-auto">{h.hora}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{formatearHora(h.hora)}</span>
                             </div>
                           </div>
                         ))}
@@ -2351,7 +2416,7 @@ export function VentasScreen({
                                     {(c.fecha || c.hora) && (
                                       <span className="text-muted-foreground font-normal">
                                         {" · "}
-                                        {c.fecha}{c.hora ? ` ${c.hora}` : ""}
+                                        {formatearFechaHora(c.fecha, c.hora)}
                                       </span>
                                     )}
                                   </p>

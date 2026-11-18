@@ -1,3 +1,4 @@
+import { formatearFechaHora } from "@/shared/utils/hora";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -16,29 +17,6 @@ interface EstadoHistorialTooltipProps {
 }
 
 const ANCHO_PANEL = 288; // w-72
-
-function formatearFechaHora(iso: string): string {
-  try {
-    const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim());
-    const d = esSoloFecha ? new Date(`${iso.trim()}T00:00:00-05:00`) : new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    const fecha = d.toLocaleDateString("es-CO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "America/Bogota",
-    });
-    const hora = d.toLocaleTimeString("es-CO", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "America/Bogota",
-    });
-    return `${fecha} ${hora}`;
-  } catch {
-    return iso;
-  }
-}
 
 /**
  * Tooltip con el historial de estados.

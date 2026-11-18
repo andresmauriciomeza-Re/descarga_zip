@@ -1,3 +1,4 @@
+import { formatearHora } from "@/shared/utils/hora";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Banknote, Check, CircleCheck, Eye, FileText, Minus, PackageCheck, Plus, RefreshCw, X } from "lucide-react";
@@ -13,7 +14,7 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
 import type { FichasPorProducto, Producto } from "@/features/productos/pages/GestionProductosScreen";
 import { normalizarNombre, type OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
-import { type DevolucionTipo, PagoPill, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
+import { METODO_PAGO_ADMIN, type DevolucionTipo, type MetodoPago, PagoPill, type Venta, type VentaStatus } from "@/features/ventas/pages/VentasScreen";
 import { marcarDevolucionApi, obtenerVentasPanel, resolverDevolucionApi } from "@/features/ventas/services/ventasApi";
 
 // ─────────────────────────── DEVOLUCIONES SCREEN ───────────────────────────
@@ -23,7 +24,7 @@ const MONO_DEV  = "var(--font-texto)";
 const fmtCOPDev = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 const nowHoraDev = () =>
-  new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  formatearHora(new Date());
 
 /** Etiqueta del estado que se ve en la fila — y con la que también busca el
     buscador: "Pendiente" o "Resuelta · <tipo de la devolución>". */
@@ -52,12 +53,14 @@ const MOTIVOS_DEVOLUCION = [
   "Cambio de sabor",
   "Otro",
 ] as const;
+const CAMBIO_SABOR_BLOQUEADO = "Esta venta ya tuvo un cambio de sabor";
 
 /** Estado del formulario mientras se resuelve una devolución. */
 type EstadoDevolucion = {
   id: string;
   paso: "producto" | "dinero" | null;
   notaDinero: string;
+  metodoReembolso: MetodoPago;
   /** Motivo por producto, indexado igual que `devueltos`. */
   motivos: Record<number, MotivoDevolucion>;
   /** Línea del pedido con el formulario de motivo abierto, o `null`. */
@@ -72,6 +75,7 @@ const nuevaDevolucion = (dev: Venta): EstadoDevolucion => ({
   id: dev.id,
   paso: null,
   notaDinero: "",
+  metodoReembolso: METODO_PAGO_ADMIN.find((metodo) => metodo === dev.metodoPago) ?? "",
   motivos: dev.devolucionMotivos
     ? Object.fromEntries(
         Object.entries(dev.devolucionMotivos).map(([k, v]) => [Number(k), v]),
@@ -172,6 +176,7 @@ export function DevolucionesScreen({
           dev.fecha,
           dev.productos,
           dev.metodoPago ?? "",
+          dev.metodoReembolso ?? "",
           etiquetaEstadoDev(dev),
         ].join(" "),
       ).includes(busqueda),
@@ -214,6 +219,8 @@ export function DevolucionesScreen({
     id: string,
     tipo: DevolucionTipo,
     nota: string,
+    monto: number,
+    metodoReembolso: Venta["metodoReembolso"],
     motivos?: Record<number, MotivoDevolucion>,
   ) => {
     setPedidos((prev) =>
@@ -224,6 +231,8 @@ export function DevolucionesScreen({
               devolucionTipo: tipo,
               devolucionResuelta: true,
               devolucionNota: nota,
+              devolucionMonto: monto,
+              metodoReembolso,
               ...(motivos && Object.keys(motivos).length > 0
                 ? { devolucionMotivos: Object.fromEntries(
                     Object.entries(motivos).map(([k, v]) => [String(k), v]),
@@ -353,6 +362,7 @@ export function DevolucionesScreen({
     activa?.compensacion.find((c) => c.id === prod.id && (c.tamaño ?? "") === tam)?.cantidad ?? 0;
 
   const devActiva = activa ? pedidos.find((p) => p.id === activa.id) ?? null : null;
+  const bloqueoCambioSabor = devActiva?.bloqueoCambioSabor === true;
   const detalleAct = devActiva?.detalle ?? [];
   const totalActRaw = devActiva?.total || detalleAct.reduce((s, d) => s + d.precio * d.cantidad, 0) || 0;
   const totalDevueltos = activa ? detalleAct.reduce((s, d, i) => s + (activa.devueltos[i] ?? 0), 0) : 0;
@@ -383,6 +393,10 @@ export function DevolucionesScreen({
   // añade al canje.
   const montoSaldo = Math.abs(saldo);
   const dineroADar = saldo > 0 ? saldo : 0;
+  const metodoReembolso = dineroADar > 0 && activa?.metodoReembolso
+    ? activa.metodoReembolso
+    : undefined;
+  const faltaMetodoReembolso = dineroADar > 0 && !metodoReembolso;
   const dineroARecibir = saldo < 0 ? -saldo : 0;
   // El rótulo dice a favor de quién queda el saldo. Antes decía "por la
   // devolución", que no era claro para saber si tocaba pagar o cobrar.
@@ -410,15 +424,17 @@ export function DevolucionesScreen({
     : [];
   // "Cambio de sabor" exige canje: sin producto nuevo no hay sabor que
   // reemplazar al que entra de vuelta (el caso sin canje es devolver en dinero).
-  const cambioSaborSinCanje =
+  const solicitaCambioSabor =
     !!activa &&
-    totalComp === 0 &&
     detalleAct.some(
       (_d, i) =>
         (activa.devueltos[i] ?? 0) > 0 && activa.motivos[i]?.motivo === "Cambio de sabor",
     );
+  const cambioSaborSinCanje = solicitaCambioSabor && totalComp === 0;
+  const cambioSaborBloqueado = solicitaCambioSabor && bloqueoCambioSabor;
   const puedeConfirmar =
-    !!activa && totalDevueltos > 0 && lineasSinMotivo.length === 0 && !cambioSaborSinCanje;
+    !!activa && totalDevueltos > 0 && lineasSinMotivo.length === 0 &&
+    !cambioSaborSinCanje && !cambioSaborBloqueado && !faltaMetodoReembolso;
   const modoGlobal: DevolucionTipo =
     totalComp > 0 && (dineroADar > 0 || dineroARecibir > 0)
       ? "mixto"
@@ -436,7 +452,9 @@ export function DevolucionesScreen({
   for (const nombre of lineasSinMotivo) {
     faltan.push(`Indica el motivo de la devolución de «${nombre}» (obligatorio).`);
   }
-  if (cambioSaborSinCanje) {
+  if (cambioSaborBloqueado) {
+    faltan.push(CAMBIO_SABOR_BLOQUEADO);
+  } else if (cambioSaborSinCanje) {
     faltan.push(
       "El motivo «Cambio de sabor» necesita un producto de canje: elige el sabor nuevo.",
     );
@@ -519,6 +537,7 @@ export function DevolucionesScreen({
         // Dinero que la pizzería devuelve (>= 0); el "extra a cobrar" queda en
         // la nota, porque `tb_devolucion.monto` no admite negativos.
         monto: dineroADar,
+        metodo_reembolso: metodoReembolso,
         lineas: lineasDev.map((x) => ({
           id_detalle_venta: x.d.idDetalleVenta ?? 0,
           cantidad: x.q,
@@ -643,7 +662,7 @@ export function DevolucionesScreen({
       dineroADar,
       dineroARecibir,
     });
-    resolverDev(devActiva.id, modoGlobal, nota, activa.motivos);
+    resolverDev(devActiva.id, modoGlobal, nota, dineroADar, metodoReembolso, activa.motivos);
     import("sonner").then(({ toast }) =>
       toast.success(
         modoGlobal === "mixto"
@@ -722,6 +741,7 @@ export function DevolucionesScreen({
                     "Productos",
                     "Total",
                     "Pago",
+                    "Reembolso",
                     "Estado",
                     "Acciones",
                   ].map((h) => (
@@ -734,7 +754,7 @@ export function DevolucionesScreen({
               <tbody className="divide-y divide-border">
                 {visibles.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-14 text-center text-muted-foreground">
                       <p className="text-4xl mb-3">🔄</p>
                       <p>No se encontraron devoluciones</p>
                     </td>
@@ -781,6 +801,9 @@ export function DevolucionesScreen({
                       </td>
                       <td className="px-4 py-3.5">
                         <PagoPill metodo={dev.metodoPago} />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <PagoPill metodo={dev.metodoReembolso} />
                       </td>
                       <td className="px-4 py-3.5">
                         <EstadoSelect
@@ -1336,6 +1359,23 @@ export function DevolucionesScreen({
                       Los cuadros de "Cambio de producto" y "Dinero" quedan
                       arriba, siempre visibles. */}
                   <div className="shrink-0 border-t border-border bg-muted/30 p-4 space-y-2.5">
+                    {dineroADar > 0 && (
+                      <label className="block space-y-1 text-sm font-semibold text-foreground">
+                        <span>¿Cómo se le devuelve el dinero?</span>
+                        <select
+                          required
+                          value={activa.metodoReembolso}
+                          onChange={(event) => {
+                            const metodo = METODO_PAGO_ADMIN.find((opcion) => opcion === event.target.value) ?? "";
+                            setActiva((prev) => prev && { ...prev, metodoReembolso: metodo });
+                          }}
+                          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                        >
+                          <option value="">Selecciona un método</option>
+                          {METODO_PAGO_ADMIN.map((metodo) => <option key={metodo} value={metodo}>{metodo}</option>)}
+                        </select>
+                      </label>
+                    )}
                     {faltan.length > 0 && (
                       <div className="space-y-0.5">
                         {faltan.map((f) => (
@@ -1411,14 +1451,17 @@ export function DevolucionesScreen({
                                 <button
                                   key={m}
                                   type="button"
+                                  disabled={m === "Cambio de sabor" && bloqueoCambioSabor}
                                   onClick={() => setMotivo(idx, { motivo: m })}
-                                  className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                                  className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground ${
                                     mv.motivo === m
                                       ? "bg-orange-100 border-orange-300 text-orange-800 dark:bg-orange-500/20 dark:border-orange-500/40 dark:text-orange-300"
                                       : "bg-card border-border text-muted-foreground hover:bg-muted"
                                   }`}
                                 >
-                                  {m}
+                                  {m === "Cambio de sabor" && bloqueoCambioSabor
+                                    ? CAMBIO_SABOR_BLOQUEADO
+                                    : m}
                                 </button>
                               ))}
                             </div>
@@ -1673,6 +1716,15 @@ export function DevolucionesScreen({
                     </div>
                   </div>
                 </div>
+
+                {devolucionDetalle.devolucionResuelta && (devolucionDetalle.devolucionMonto ?? 0) > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs text-muted-foreground">Método de reembolso</p>
+                    {devolucionDetalle.metodoReembolso
+                      ? <PagoPill metodo={devolucionDetalle.metodoReembolso} />
+                      : <p className="text-sm font-semibold text-muted-foreground">No registrado</p>}
+                  </div>
+                )}
 
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5">Estado</p>

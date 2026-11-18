@@ -372,11 +372,12 @@ export function SalesChartScreen({
   const hoy = new Date();
   const hoyStr = hoyISO();
 
-  // Índice real de ventas por fecha (excluye anuladas y devueltas).
+  // Ventas completadas indexadas por la fecha del cierre.
   const porFecha = new Map<string, { unidades: number; porciones: number; ingresos: number }>();
   ventas.forEach((v) => {
-    if (!esFechaISO(v.fecha) || v.estado === "Anulado" || v.estado === "Devolucion") return;
-    const dato = porFecha.get(v.fecha) ?? { unidades: 0, porciones: 0, ingresos: 0 };
+    const fecha = v.fechaCompletado ?? v.fecha;
+    if (v.estado !== "Completado" || !esFechaISO(fecha)) return;
+    const dato = porFecha.get(fecha) ?? { unidades: 0, porciones: 0, ingresos: 0 };
     if (v.detalle?.length) {
       for (const detalle of v.detalle) {
         if (detalle.tamaño === "Mediana" || detalle.tamaño === "Grande") {
@@ -389,7 +390,7 @@ export function SalesChartScreen({
       dato.unidades += v.cantidad ?? 0;
     }
     dato.ingresos += v.total;
-    porFecha.set(v.fecha, dato);
+    porFecha.set(fecha, dato);
   });
 
   // Compras no anuladas indexadas por fecha de factura.
@@ -404,7 +405,7 @@ export function SalesChartScreen({
 
   // ── Meses navegables REALES: del primer mes con datos al mes actual ──
   const fechasDatos = [
-    ...ventas.map((v) => v.fecha),
+    ...porFecha.keys(),
     ...gestiones.map((g) => g.fechaFactura),
   ].filter(esFechaISO);
   const primeraFecha = fechasDatos.length

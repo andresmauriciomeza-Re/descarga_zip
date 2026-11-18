@@ -15,7 +15,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { EstadoClienteVenta, Venta, VentaStatus } from "./VentasScreen";
-import { hora12 } from "@/shared/utils/hora";
+import { formatearHora } from "@/shared/utils/hora";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { hoyISO } from "@/shared/utils/fechas";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
@@ -109,7 +109,7 @@ const datosEstadoCliente = (p: Venta) => {
   const estado = estadoCliente(p);
   const datos = ESTADO[estado] ?? ESTADO[p.estado];
   if (estado === "Por entregar" && p.horaRecogida) {
-    return { ...datos, mensaje: `¡Listo! Recógelo a las ${p.horaRecogida}.` };
+    return { ...datos, mensaje: `¡Listo! Recógelo a las ${formatearHora(p.horaRecogida)}.` };
   }
   return datos;
 };
@@ -805,7 +805,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       <Dato
                         Icon={Clock}
                         titulo="Hora de recogida"
-                        valor={hora12(p.horaRecogida)}
+                        valor={formatearHora(p.horaRecogida)}
                       />
                     )}
                     {p.metodoPago && (
@@ -853,7 +853,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                               {ESTADO[h.estado].label}
                             </span>
                             <span className="text-muted-foreground">
-                              · {h.hora}
+                              · {formatearHora(h.hora)}
                             </span>
                           </li>
                         ))}

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { getImageUrl, imagenEnApi } from "@/shared/utils/getImageUrl";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
 import {
   copiarFicha,
@@ -323,17 +324,22 @@ export interface Producto {
   estado: EstadoProducto;
 }
 
-/** La API almacena una URL de imagen por producto (máx. 4: la primera es la
+/** La API almacena las URL de la galería (máx. 4: la primera es la
     portada del menú). */
 export const MAX_IMAGENES = 4;
 
 /** Imágenes de un producto como ARREGLO siempre: usa `imagenes` si existe;
     si no, la única `imagen` (dato viejo o de semilla). Es lo que pintan el
     indicador del listado y los formularios de Crear/Editar. */
-export const imagenesDe = (p: { imagen: string; imagenes?: string[] }): string[] => {
-  const lista = (p.imagenes ?? []).filter((s) => typeof s === "string" && s.trim() !== "");
-  if (lista.length > 0) return lista;
-  return p.imagen && p.imagen.trim() !== "" ? [p.imagen] : [];
+export const imagenesDe = (p: {
+  imagen: string;
+  imagenes?: string[];
+  id?: string;
+  tieneImagen?: boolean;
+}): string[] => {
+  if (p.imagenes) return p.imagenes.filter((s) => typeof s === "string" && s.trim() !== "");
+  if (p.imagen?.trim()) return [p.imagen];
+  return p.tieneImagen && p.id ? [imagenEnApi(p.id)] : [];
 };
 
 /** Normaliza las imágenes al GUARDAR: quita vacías, respeta MAX_IMAGENES y
@@ -680,6 +686,10 @@ function CampoImagenes({
   const agregar = (valor: string) => {
     const v = valor.trim();
     if (!v) return;
+    if (imagenes.includes(v)) {
+      toast.error("La imagen ya está en la galería");
+      return;
+    }
     if (completa) {
       toast.error(`Un producto admite máximo ${MAX_IMAGENES} imágenes`);
       return;
@@ -708,22 +718,36 @@ function CampoImagenes({
             return (
               <div
                 key={`imagen-${idx}`}
-                onClick={onVerImagen ? () => onVerImagen(src) : undefined}
+                onClick={onVerImagen ? () => onVerImagen(getImageUrl(src)) : undefined}
                 className={`relative ${altoCasilla} rounded-xl overflow-hidden bg-muted border border-border ${
                   esPortada ? "ring-2 ring-primary" : ""
                 } ${onVerImagen ? "cursor-pointer" : ""}`}
               >
                 {/* La foto va absoluta para no aportar alto intrínseco: la
                     casilla crece solo con la rejilla (llenarAlto). */}
-                <img src={src} alt={`Imagen ${idx + 1}`} className="absolute inset-0 w-full h-full object-cover" />
+                <img src={getImageUrl(src)} alt={`Imagen ${idx + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                 {esPortada && (
                   <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] font-semibold text-white">
                     Portada
                   </span>
                 )}
+                {!readOnly && !esPortada && (
+                  <button
+                    type="button"
+                    disabled={subiendo}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onChange([src, ...imagenes.filter((_, i) => i !== idx)]);
+                    }}
+                    className="absolute bottom-1 left-1 rounded-md bg-black/75 px-1.5 py-1 text-[10px] font-semibold text-white hover:bg-black disabled:opacity-50"
+                  >
+                    Hacer portada
+                  </button>
+                )}
                 {!readOnly && (
                   <button
                     type="button"
+                    disabled={subiendo}
                     title="Quitar imagen"
                     onClick={(e) => {
                       // La X no debe abrir el visor: se come el clic antes de
@@ -785,7 +809,7 @@ function CampoImagenes({
                   for (const archivo of archivos) {
                     if (acumuladas.length >= MAX_IMAGENES) break;
                     const nuevaUrl = await subir(archivo, "productos");
-                    if (nuevaUrl) {
+                    if (nuevaUrl && !acumuladas.includes(nuevaUrl)) {
                       acumuladas.push(nuevaUrl);
                       onChange([...acumuladas]);
                     }
@@ -801,13 +825,13 @@ function CampoImagenes({
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && agregar(url)}
               placeholder="Pega una URL de imagen..."
-              disabled={completa}
+              disabled={completa || subiendo}
               className={`flex-1 min-w-0 ${inputCls}`}
             />
             <button
               type="button"
               onClick={() => agregar(url)}
-              disabled={completa || !url.trim()}
+              disabled={completa || subiendo || !url.trim()}
               className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" /> Agregar imagen

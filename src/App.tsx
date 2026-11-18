@@ -112,7 +112,7 @@ import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { BloqueQrPago, PAYMENT_INFO, PasoPagoTransferencia, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
 import { VolverArriba } from "@/shared/components/VolverArriba";
-import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, hora12, minutosDeHora } from "@/shared/utils/hora";
+import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/ventas/services/ventasApi";
@@ -138,7 +138,7 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "@/features/insumos/pages/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, imagenesDe, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/productos/pages/GestionProductosScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/productos/services/productosApi";
 import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/insumos/services/insumosApi";
@@ -669,6 +669,12 @@ const ORDERS: Order[] = [
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
+
+const aperturaRecogidaTexto = formatearHora(HORA_APERTURA / 60 + ":00");
+const cierreRecogidaTexto = formatearHora(HORA_CIERRE / 60 + ":00");
+const ultimaRecogidaTexto = formatearHora(
+  Math.floor(HORA_ULTIMA_RECOGIDA / 60) + ":" + String(HORA_ULTIMA_RECOGIDA % 60).padStart(2, "0"),
+);
 
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
@@ -2593,7 +2599,7 @@ function LandingScreen({
                 <div className="flex justify-between">
                   <span>Jueves – Domingo</span>
                   <span className="font-semibold text-white">
-                    4:00 pm – 10:00 pm
+                    {aperturaRecogidaTexto} – {cierreRecogidaTexto}
                   </span>
                 </div>
                 <p
@@ -3254,6 +3260,8 @@ function CatalogScreen({
 
 function ProductDetailScreen({
   product,
+  catalogProducts,
+  onOpenRelated,
   navigate,
   addDetailed,
   limiteDe,
@@ -3261,6 +3269,8 @@ function ProductDetailScreen({
   backLabel,
 }: {
   product: Product;
+  catalogProducts: Product[];
+  onOpenRelated: (product: Product) => void;
   navigate: (s: Screen, options?: { restaurar?: boolean }) => void;
   /** Bloque 5 — Devuelve si algo se agregó; si no, el mensaje de máximo (el
       toast jamás dice "agregada" si no se agregó nada). */
@@ -3275,6 +3285,30 @@ function ProductDetailScreen({
   const [sizeIdx, setSizeIdx] = useState(0);
   const [extras, setExtras] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
+
+  const [imageIndex, setImageIndex] = useState(0);
+  const imageDialogRef = useRef<HTMLDialogElement>(null);
+  const images = product.images?.length ? product.images : [product.image];
+  const activeImageIndex = imageIndex < images.length ? imageIndex : 0;
+  const currentImage = images[activeImageIndex];
+  const moveImage = (direction: number) => {
+    setImageIndex((activeImageIndex + direction + images.length) % images.length);
+  };
+
+  const availableProducts = catalogProducts.filter((candidate) => {
+    if (candidate.id === product.id || !productoDisponible(candidate)) return false;
+    if (!candidate.sizes.length) return limiteStockDe(candidate) !== 0;
+    return candidate.sizes.some(({ label }) => {
+      if (candidate.stockPartes != null && /^(Mediana|Grande)$/.test(label)) {
+        return disponiblePizza(candidate.stockPartes, label, []) > 0;
+      }
+      return (limiteStockDe(candidate, label) ?? candidate.stockApi) !== 0;
+    });
+  });
+  const relatedProducts = [
+    ...availableProducts.filter((candidate) => candidate.idCategoria === product.idCategoria),
+    ...availableProducts.filter((candidate) => candidate.idCategoria !== product.idCategoria),
+  ].slice(0, 4);
 
   const extrasPrice = extras.reduce(
     (sum, ex) =>
@@ -3384,31 +3418,86 @@ function ProductDetailScreen({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Image */}
-        <div className={`relative rounded-2xl overflow-hidden bg-muted h-80 md:h-[420px] ${verImagenCompleta(product) ? "p-3" : ""}`}>
-          <img
-            src={getImageUrl(product.image)}
-            alt={product.name}
-            onError={onErrorImagen}
-            className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
-          />
-          {/* Mismo estado que en la tarjeta del catálogo: fondo sólido,
-              arriba a la izquierda con 12 px de separación. Una sola etiqueta
-              a la vez: si está agotado se oculta el verde. */}
-          {etiqueta !== "agotado" && (
-            <EstadoMenuBadge
-              estado={estado}
-              className="absolute top-3 left-3 z-10"
-            />
+        <div className={`grid gap-3 self-start ${images.length > 1 ? "md:grid-cols-[4rem_minmax(0,1fr)]" : ""}`}>
+          <div className={`relative overflow-hidden rounded-2xl bg-muted h-80 md:h-[420px] ${images.length > 1 ? "md:col-start-2 md:row-start-1" : ""}`}>
+            <button
+              type="button"
+              aria-label={`Ampliar imagen de ${product.name}`}
+              onClick={() => imageDialogRef.current?.showModal()}
+              className={`block h-full w-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${verImagenCompleta(product) ? "p-3" : ""}`}
+            >
+              <img
+                key={currentImage}
+                src={getImageUrl(currentImage)}
+                alt={product.name}
+                onError={onErrorImagen}
+                className={`block w-full h-full ${verImagenCompleta(product) ? "object-contain" : "object-cover"} ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""}`}
+              />
+            </button>
+            {/* Mismo estado que en la tarjeta del catálogo: fondo sólido,
+                arriba a la izquierda con 12 px de separación. Una sola etiqueta
+                a la vez: si está agotado se oculta el verde. */}
+            {etiqueta !== "agotado" && (
+              <EstadoMenuBadge
+                estado={estado}
+                className="pointer-events-none absolute top-3 left-3 z-10"
+              />
+            )}
+            {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). Ocupa la
+                MISMA esquina superior izquierda y el mismo estilo de píldora que
+                el badge de estado. */}
+            {etiqueta === "agotado" && (
+              <AgotadoMenuBadge className="pointer-events-none absolute top-3 left-3 z-10" />
+            )}
+            {etiqueta === "no_disponible" && (
+              <NoDisponibleOverlay className="pointer-events-none absolute inset-0 z-10" />
+            )}
+          </div>
+          {images.length > 1 && (
+            <div className="flex gap-2 md:col-start-1 md:row-start-1 md:flex-col" role="group" aria-label="Imágenes del producto">
+              {images.map((image, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  aria-label={`Ver imagen ${index + 1}`}
+                  aria-pressed={index === activeImageIndex}
+                  onClick={() => setImageIndex(index)}
+                  className="size-16 overflow-hidden rounded-lg border-2 border-border bg-muted cursor-pointer aria-pressed:border-primary focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  <img src={getImageUrl(image)} alt="" onError={onErrorImagen} className="size-full object-contain" />
+                </button>
+              ))}
+            </div>
           )}
-          {/* Punto 6: máximo 0 = Agotado (sin cambiar el estado). Ocupa la
-              MISMA esquina superior izquierda y el mismo estilo de píldora que
-              el badge de estado. */}
-          {etiqueta === "agotado" && (
-            <AgotadoMenuBadge className="absolute top-3 left-3 z-10" />
-          )}
-          {etiqueta === "no_disponible" && (
-            <NoDisponibleOverlay className="absolute inset-0 z-10" />
-          )}
+          <dialog
+            ref={imageDialogRef}
+            aria-label={`Imágenes de ${product.name}`}
+            className="fixed inset-0 m-auto w-[min(94vw,64rem)] max-w-none rounded-xl bg-neutral-950 p-4 text-white backdrop:bg-black/85"
+            onKeyDown={(event) => {
+              if (images.length < 2) return;
+              if (event.key === "ArrowLeft") moveImage(-1);
+              if (event.key === "ArrowRight") moveImage(1);
+            }}
+          >
+            <div className="mb-3 flex justify-end">
+              <button autoFocus type="button" onClick={() => imageDialogRef.current?.close()} className="rounded-lg bg-white/15 px-3 py-2 hover:bg-white/25">
+                Cerrar
+              </button>
+            </div>
+            <div className="relative">
+              <img key={currentImage} src={getImageUrl(currentImage)} alt={product.name} loading="lazy" onError={onErrorImagen} className="mx-auto max-h-[74dvh] w-full object-contain" />
+              {images.length > 1 && (
+                <>
+                  <button type="button" aria-label="Imagen anterior" onClick={() => moveImage(-1)} className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-black/75 p-2 hover:bg-black">
+                    <ChevronLeft className="size-6" />
+                  </button>
+                  <button type="button" aria-label="Imagen siguiente" onClick={() => moveImage(1)} className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-black/75 p-2 hover:bg-black">
+                    <ChevronRight className="size-6" />
+                  </button>
+                </>
+              )}
+            </div>
+          </dialog>
         </div>
 
         {/* Info */}
@@ -3602,6 +3691,34 @@ function ProductDetailScreen({
           </PrimaryBtn>
         </div>
       </div>
+      {relatedProducts.length > 0 && (
+        <section className="mt-10" aria-labelledby="related-products-heading">
+          <h2 id="related-products-heading" className="mb-4 text-2xl font-bold text-foreground">
+            También te puede gustar
+          </h2>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {relatedProducts.map((related) => (
+              <button
+                key={related.id}
+                type="button"
+                onClick={() => onOpenRelated(related)}
+                className="overflow-hidden rounded-xl border border-border bg-card text-left cursor-pointer hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <img
+                  src={related.image}
+                  alt=""
+                  loading="lazy"
+                  className={`aspect-[4/3] w-full ${verImagenCompleta(related) ? "object-contain" : "object-cover"}`}
+                />
+                <div className="p-3">
+                  <p className="font-semibold text-foreground">{related.name}</p>
+                  <p className="text-sm font-semibold text-primary">{fmt(related.price)}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       </div>
     </div>
   );
@@ -3632,6 +3749,8 @@ function CartScreen({
   onCheckoutUnauthorized,
   abrirCheckoutTrasLogin,
   onCheckoutAbierto,
+  validandoStockCheckout,
+  onVerificarStock,
   confirmationData,
   onClearConfirmation,
 }: {
@@ -3658,6 +3777,8 @@ function CartScreen({
   onCheckoutUnauthorized: () => void;
   abrirCheckoutTrasLogin: boolean;
   onCheckoutAbierto: () => void;
+  validandoStockCheckout: boolean;
+  onVerificarStock: () => void;
   /** Resumen del pedido ya registrado que se viene a mostrar (llega
       del login, cuando un invitado inicia sesión con el pedido a
       medio hacer). */
@@ -3706,12 +3827,6 @@ function CartScreen({
       dos clics en el mismo tick. */
   const enviandoRef = useRef(false);
 
-  useEffect(() => {
-    if (!abrirCheckoutTrasLogin || !isLoggedIn || !obtenerToken()) return;
-    setCheckoutStep(1);
-    onCheckoutAbierto();
-  }, [abrirCheckoutTrasLogin, isLoggedIn, onCheckoutAbierto]);
-
   const cargarComprobanteCheckout = async (file: File) => {
     if (!isLoggedIn) {
       onRequireCheckoutLogin();
@@ -3754,6 +3869,15 @@ function CartScreen({
     const { max } = limiteDe(i);
     return max !== undefined && i.quantity > max;
   });
+  useEffect(() => {
+    if (!abrirCheckoutTrasLogin || !isLoggedIn || !obtenerToken()) return;
+    onCheckoutAbierto();
+    if (itemsNoDisponibles.length || lineasExcedidas.length) {
+      toast.warning("Algunos productos se agotaron o ya no tienen stock suficiente. Revisa tu carrito.");
+    } else if (cart.length) {
+      setCheckoutStep(1);
+    }
+  }, [abrirCheckoutTrasLogin, isLoggedIn, cart.length, itemsNoDisponibles.length, lineasExcedidas.length, onCheckoutAbierto]);
   // Quién está haciendo el pedido. El nombre sí se guardaba en la venta, pero
   // el checkout no lo mostraba en ningún paso ni en la confirmación, así que el
   // cliente no tenía forma de confirmar a nombre de quién estaba comprando.
@@ -3869,7 +3993,7 @@ function CartScreen({
     }
     const minutos = minutosDeHora(horaRecogida);
     if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-      toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+      toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
       return;
     }
     if (horaYaPaso(horaRecogida)) {
@@ -3905,7 +4029,7 @@ function CartScreen({
         nombre: nombreCliente,
         documento: guestDocument.trim() || undefined,
         telefono: guestPhone.trim() || undefined,
-        hora: hora12(horaRecogida),
+        hora: formatearHora(horaRecogida),
       });
       clear();
       setLoading(false);
@@ -3945,7 +4069,7 @@ function CartScreen({
   };
 
   if (pedidoConfirmado && pedidoResumen) {
-    const horaEtiqueta = hora12(pedidoResumen.hora);
+    const horaEtiqueta = formatearHora(pedidoResumen.hora);
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <div className="text-7xl mb-6">⏳</div>
@@ -4087,7 +4211,7 @@ function CartScreen({
                   </a>
                 </p>
                 <p className="text-xs font-semibold text-primary">
-                  Horario: jueves a domingo, de 4:00 p. m. a 10:00 p. m.
+                  Horario: jueves a domingo, de {aperturaRecogidaTexto} a {cierreRecogidaTexto}
                 </p>
               </div>
             </div>
@@ -4351,17 +4475,18 @@ function CartScreen({
                     onCheckoutUnauthorized();
                     return;
                   }
-                  setCheckoutStep(1);
+                  onVerificarStock();
                 }}
                 size="lg"
                 disabled={
                   itemsNoDisponibles.length > 0 ||
-                  lineasExcedidas.length > 0
+                  lineasExcedidas.length > 0 ||
+                  validandoStockCheckout
                 }
                 className="w-full"
               >
                 <CreditCard className="w-5 h-5" />
-                Proceder al pago
+                {validandoStockCheckout ? "Revisando disponibilidad…" : "Proceder al pago"}
               </PrimaryBtn>
             </div>
           </div>
@@ -4513,12 +4638,12 @@ function CartScreen({
                       </p>
                       <div className="mb-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">
                         <p>
-                          Atendemos de <strong className="text-foreground">4:00 p. m.</strong> a{" "}
-                          <strong className="text-foreground">10:00 p. m.</strong>
+                          Atendemos de <strong className="text-foreground">{aperturaRecogidaTexto}</strong> a{" "}
+                          <strong className="text-foreground">{cierreRecogidaTexto}</strong>
                         </p>
                         <p className="text-xs mt-0.5">
                           El último horario de recogida es{" "}
-                          <strong className="text-foreground">9:45 p. m.</strong>
+                          <strong className="text-foreground">{ultimaRecogidaTexto}</strong>
                         </p>
                       </div>
                       <div
@@ -4531,7 +4656,7 @@ function CartScreen({
                         <select
                           value={seleccionValida && horaSel !== null ? horaSel : ""}
                           disabled={sinHorariosHoy}
-                          aria-label="Hora de recogida, de 4:00 p. m. a 9:45 p. m."
+                          aria-label={`Hora de recogida, de ${aperturaRecogidaTexto} a ${ultimaRecogidaTexto}`}
                           onChange={(e) => {
                             const nuevaHora = Number(e.target.value);
                             const minutos = minutosDisponiblesDe(nuevaHora);
@@ -4549,7 +4674,7 @@ function CartScreen({
                           </option>
                           {horasDisponibles.map((h) => (
                             <option key={h} value={h}>
-                              {`${h > 12 ? h - 12 : h}:00 p. m.`}
+                              {formatearHora(`${h}:00`)}
                             </option>
                           ))}
                         </select>
@@ -4600,10 +4725,10 @@ function CartScreen({
                               }`}
                           >
                             {horaFueraDeRango(horaRecogida)
-                              ? "⚠ Esta hora está fuera de nuestro horario de atención (4:00 PM – 10:00 PM)"
+                              ? `⚠ Esta hora está fuera de nuestro horario de atención (${aperturaRecogidaTexto} – ${cierreRecogidaTexto})`
                               : horaYaPaso(horaRecogida)
                                 ? "⚠ Esta hora no está disponible — ya pasó"
-                                : `Recogerás a las ${hora12(horaRecogida)}`}
+                                : `Recogerás a las ${formatearHora(horaRecogida)}`}
                           </p>
                         )
                       )}
@@ -4630,7 +4755,7 @@ function CartScreen({
                       }
                       const minutos = minutosDeHora(horaRecogida);
                       if (minutos === null || minutos < HORA_APERTURA || minutos > HORA_CIERRE) {
-                        toast.error("La hora debe estar entre 4:00 PM y 10:00 PM");
+                        toast.error(`La hora debe estar entre ${aperturaRecogidaTexto} y ${cierreRecogidaTexto}`);
                         return;
                       }
                       if (horaYaPaso(horaRecogida)) {
@@ -5825,7 +5950,7 @@ function LoginScreen({
 
         {loginNotice && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
-            Debes iniciar sesión para poder hacer un pedido.
+            Inicia sesión para terminar tu pedido. Tus productos quedan guardados.
           </p>
         )}
 
@@ -7823,16 +7948,12 @@ const leerFichasPersistidas = () => {
 const CARRITO_STORAGE_KEY = "sivpro.carrito.v1";
 const CARRITOS_USUARIOS_STORAGE_KEY = "sivpro.carritos.usuarios.v1";
 const CHECKOUT_RETURN_STORAGE_KEY = "sivpro.checkout.return.v1";
-const CHECKOUT_RETURN_TTL_MS = 60 * 60 * 1000;
 
 const guardarRetornoCheckout = () => {
   try {
     localStorage.setItem(
       CHECKOUT_RETURN_STORAGE_KEY,
-      JSON.stringify({
-        expira: Date.now() + CHECKOUT_RETURN_TTL_MS,
-        autorizado: false,
-      }),
+      JSON.stringify({ autorizado: true }),
     );
   } catch {
     // El checkout sigue bloqueado si el navegador no permite persistir el retorno.
@@ -7847,11 +7968,9 @@ const consumirRetornoCheckout = (): boolean => {
     const parsed: unknown = JSON.parse(raw);
     if (
       !parsed ||
-      typeof parsed !== "object" ||
-      !("expira" in parsed) ||
-      typeof parsed.expira !== "number"
+      typeof parsed !== "object"
     ) return false;
-    if (parsed.expira <= Date.now()) return false;
+    if ("expira" in parsed && (typeof parsed.expira !== "number" || parsed.expira <= Date.now())) return false;
     if (!("autorizado" in parsed) || parsed.autorizado !== true) return false;
     return true;
   } catch {
@@ -7859,35 +7978,11 @@ const consumirRetornoCheckout = (): boolean => {
   }
 };
 
-const autorizarRetornoCheckout = () => {
-  try {
-    const raw = localStorage.getItem(CHECKOUT_RETURN_STORAGE_KEY);
-    if (!raw) return;
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      !("expira" in parsed) ||
-      typeof parsed.expira !== "number" ||
-      parsed.expira <= Date.now()
-    ) {
-      localStorage.removeItem(CHECKOUT_RETURN_STORAGE_KEY);
-      return;
-    }
-    localStorage.setItem(
-      CHECKOUT_RETURN_STORAGE_KEY,
-      JSON.stringify({ expira: parsed.expira, autorizado: true }),
-    );
-  } catch {
-    // Sin persistencia no se reanuda el checkout en un login posterior.
-  }
-};
-
 const borrarRetornoCheckout = () => {
   try {
     localStorage.removeItem(CHECKOUT_RETURN_STORAGE_KEY);
   } catch {
-    // El marcador expira en una hora si el almacenamiento no está disponible.
+    // El navegador puede bloquear el almacenamiento.
   }
 };
 
@@ -8161,7 +8256,9 @@ export default function App() {
   // página, cambiar de categoría o abrir el detalle de otro producto borraba
   // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
   // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
-  const [cart, setCart] = useState<CartItem[]>(leerCarritoGuardado);
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    sesionActiva ? leerCarritosDeUsuarios()[sesionActiva.userId] ?? [] : leerCarritoGuardado(),
+  );
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(sesionActiva !== null);
   // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
   // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
@@ -8182,6 +8279,8 @@ export default function App() {
   // The legacy guest auto-submit branch is retained but has no producer.
   const pendingOrder: PendingOrder | null = null;
   const [abrirCheckoutTrasLogin, setAbrirCheckoutTrasLogin] = useState(false);
+  const [validandoStockCheckout, setValidandoStockCheckout] = useState(false);
+  const validacionStockCheckoutRef = useRef(false);
   const [orderConfirmation, setOrderConfirmation] = useState<PedidoResumen | null>(null);
   const [loginNotice, setLoginNotice] = useState(false);
   // Correo que queda precargado en "Iniciar sesión" cuando se llega desde el
@@ -8251,7 +8350,7 @@ export default function App() {
       ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
       : null,
   );
-  const recargarCatalogo = async () => {
+  const recargarCatalogo = async ({ conservarCarrito = false } = {}) => {
     setCatalogoCargando(true);
     setCatalogoError(null);
     try {
@@ -8264,10 +8363,14 @@ export default function App() {
       const idsValidos = new Set(productosApi.map((p) => Number(p.id)));
       setCart((actuales) => {
         const validos = actuales
-          .filter((item) => idsValidos.has(item.product.id))
+          .filter((item) => conservarCarrito || idsValidos.has(item.product.id))
           .map((item) => {
             const actualizado = productosApi.find((p) => Number(p.id) === item.product.id);
-            return actualizado ? { ...item, product: productoACatalogo(actualizado, categoriasApi) } : item;
+            if (actualizado) return { ...item, product: productoACatalogo(actualizado, categoriasApi) };
+            return {
+              ...item,
+              product: { ...item.product, estado: "No disponible" as const, status: "no disponible" as const },
+            };
           });
         if (validos.length < actuales.length) {
           toast.info("Se quitaron del carrito productos que ya no están disponibles en el catálogo.");
@@ -8548,7 +8651,10 @@ export default function App() {
   };
 
   const editarProductoEnServidor = async (producto: Producto) => {
-    const actualizado = await editarProducto(producto.id, productoPanelAEdicion(producto));
+    const anterior = productos.find((item) => item.id === producto.id);
+    const guardarGaleria = !anterior ||
+      JSON.stringify(imagenesDe(anterior)) !== JSON.stringify(imagenesDe(producto));
+    const actualizado = await editarProducto(producto.id, productoPanelAEdicion(producto, guardarGaleria));
     aplicarProductoRespuesta(actualizado);
     await recargarCatalogoTrasCambio();
     return actualizado;
@@ -8924,6 +9030,7 @@ export default function App() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [detalleOrigen, setDetalleOrigen] = useState<Screen>("landing");
+  const [productoOrigenCatalogo, setProductoOrigenCatalogo] = useState<number>();
   const [orders] = useState<Order[]>(ORDERS);
   // Órdenes de compra y compras (API, fase 3). Sin semillas: las cargan
   // `cargarOrdenesCompra`/`cargarCompras`; si falla queda el error con
@@ -9259,9 +9366,21 @@ export default function App() {
   };
 
   const cierreSesionApiRef = useRef(false);
-  const checkoutAvisoToastIdRef = useRef<string | number | undefined>(undefined);
-  const checkoutAvisoToastCounterRef = useRef(0);
-  const checkoutAvisoAccionRef = useRef(false);
+  const verificarStockYContinuar = async () => {
+    const token = obtenerToken();
+    if (!token || validacionStockCheckoutRef.current) return;
+    validacionStockCheckoutRef.current = true;
+    setValidandoStockCheckout(true);
+    try {
+      await recargarCatalogo({ conservarCarrito: true });
+      if (obtenerToken() === token) setAbrirCheckoutTrasLogin(true);
+    } catch {
+      // El catálogo ya muestra el error. El cliente puede reintentar desde el carrito.
+    } finally {
+      validacionStockCheckoutRef.current = false;
+      setValidandoStockCheckout(false);
+    }
+  };
 
   const handleLogin = (user: Usuario): { ok: boolean; mensaje?: string } => {
     setUsuarios(prev => prev.map(u => u.id === user.id ? {
@@ -9311,7 +9430,7 @@ export default function App() {
         setCart([]);
         setOrderConfirmation({
           id,
-          hora: hora12(orderToResume.horaRecogida),
+          hora: formatearHora(orderToResume.horaRecogida),
           nombre: nombrePedido,
           documento: orderToResume.documento?.trim(),
           items: orderToResume.items,
@@ -9363,8 +9482,8 @@ export default function App() {
 
     setUserRole(nextRole);
     if (volverAlCheckout) {
-      setAbrirCheckoutTrasLogin(true);
       navigate("cart");
+      void verificarStockYContinuar();
     } else if (!orderToResume) {
       navigate(nextScreen);
     }
@@ -9629,6 +9748,7 @@ export default function App() {
     silenciarAviso?: boolean;
     aviso?: string;
     destino?: Screen;
+    conservarCarrito?: boolean;
   }) => {
     const silenciarAviso = opciones?.silenciarAviso ?? false;
     const aviso = opciones?.aviso ?? "Has cerrado sesión correctamente";
@@ -9648,6 +9768,8 @@ export default function App() {
       setIsLoggedIn(false);
       setUserRole("");
       setLoggedInUserId(null);
+      setAbrirCheckoutTrasLogin(false);
+      if (!opciones?.conservarCarrito) setCart(leerCarritoGuardado());
       setRolActivoId(null);
       navigate(destino, { replace: true });
       if (!silenciarAviso) {
@@ -9656,51 +9778,17 @@ export default function App() {
     }
   };
 
-  const mostrarAvisoCheckout = () => {
-    const avisoAnteriorId = checkoutAvisoToastIdRef.current;
-    const avisoId = `checkout-login-required-${++checkoutAvisoToastCounterRef.current}`;
-    checkoutAvisoToastIdRef.current = avisoId;
-    checkoutAvisoAccionRef.current = false;
-    if (avisoAnteriorId !== undefined) toast.dismiss(avisoAnteriorId);
-    toast("Para pagar tu pedido debes iniciar sesión.", {
-      id: avisoId,
-      duration: Infinity,
-      action: {
-        label: "Iniciar sesión",
-        onClick: () => {
-          checkoutAvisoAccionRef.current = true;
-          autorizarRetornoCheckout();
-          openLogin();
-          setLoginNotice(true);
-        },
-      },
-      cancel: {
-        label: "Crear cuenta",
-        onClick: () => {
-          checkoutAvisoAccionRef.current = true;
-          autorizarRetornoCheckout();
-          navigate("register");
-        },
-      },
-      onDismiss: () => {
-        if (checkoutAvisoToastIdRef.current !== avisoId) return;
-        checkoutAvisoToastIdRef.current = undefined;
-        if (!checkoutAvisoAccionRef.current) borrarRetornoCheckout();
-      },
-    });
-  };
-
   const requerirLoginCheckout = () => {
     guardarRetornoCheckout();
-    mostrarAvisoCheckout();
+    openLogin();
+    setLoginNotice(true);
   };
 
   const checkoutUnauthorized = async () => {
     if (isLoggedIn) {
-      await logout({ silenciarAviso: true, destino: "login" });
+      await logout({ silenciarAviso: true, destino: "login", conservarCarrito: true });
     }
-    guardarRetornoCheckout();
-    mostrarAvisoCheckout();
+    requerirLoginCheckout();
   };
 
   useEffect(() => registrarManejadorCierreSesion((mensaje) => {
@@ -10325,6 +10413,7 @@ export default function App() {
                       setSearch={setCatalogSearch}
                       onOpenDetail={(p) => {
                         setDetalleOrigen("catalog");
+                        setProductoOrigenCatalogo(p.id);
                         setSelectedProduct(p);
                         navigate("product-detail");
                       }}
@@ -10337,7 +10426,13 @@ export default function App() {
                   )}
                   {screen === "product-detail" && (
                     <ProductDetailScreen
+                      key={selectedProduct.id}
                       product={selectedProduct}
+                      catalogProducts={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
+                      onOpenRelated={(p) => {
+                        setSelectedProduct(p);
+                        window.scrollTo({ top: 0, behavior: "instant" });
+                      }}
                       navigate={navigate}
                       addDetailed={addDetailed}
                       limiteDe={(linea) => limiteDeLinea(linea, cart)}
@@ -10347,11 +10442,11 @@ export default function App() {
                         // que se abrió (data-producto-id en ProductCard). Mismo criterio
                         // de reintentos que `navigate(restaurar)`: la tarjeta tarda en
                         // montarse por la transición de salida (AnimatePresence).
-                        if (detalleOrigen === "catalog") {
+                        if (detalleOrigen === "catalog" && productoOrigenCatalogo !== undefined) {
                           let intentosCard = 0;
                           const buscarTarjeta = () => {
                             intentosCard += 1;
-                            const el = document.querySelector(`[data-producto-id="${selectedProduct.id}"]`);
+                            const el = document.querySelector(`[data-producto-id="${productoOrigenCatalogo}"]`);
                             if (!el) {
                               // Mismo presupuesto amplio que `navigate(restaurar)`:
                               // la tarjeta tarda en montarse por la transición de
@@ -10381,6 +10476,8 @@ export default function App() {
                       onCheckoutUnauthorized={() => void checkoutUnauthorized()}
                       abrirCheckoutTrasLogin={abrirCheckoutTrasLogin}
                       onCheckoutAbierto={() => setAbrirCheckoutTrasLogin(false)}
+                      validandoStockCheckout={validandoStockCheckout}
+                      onVerificarStock={() => void verificarStockYContinuar()}
                       confirmationData={orderConfirmation ?? undefined}
                       onClearConfirmation={() => setOrderConfirmation(null)}
                       clienteSesion={loggedInUser?.nombre}
