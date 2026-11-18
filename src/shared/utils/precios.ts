@@ -1,1 +1,0 @@
-export const RECARGO_TAMANO_GRANDE = 2000;

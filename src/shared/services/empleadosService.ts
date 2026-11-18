@@ -46,14 +46,6 @@ export async function reenviarInvitacion(
   return data;
 }
 
-/** GET /empleados/invitaciones: documentos con invitación pendiente (quien no
- *  aparece ya activó su cuenta o nunca la tuvo por crear). */
-export async function listarInvitacionesPendientes(): Promise<InvitacionesPendientesResponse> {
-  const { data } = await api.get<InvitacionesPendientesResponse>(
-    "/empleados/invitaciones",
-  );
-  return data;
-}
 
 /** GET /empleados: empleados con su contratación vigente y el historial. */
 export async function listarEmpleados(): Promise<ListarEmpleadosResponse> {

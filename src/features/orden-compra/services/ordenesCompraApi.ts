@@ -264,39 +264,6 @@ export const listarOrdenesCompra = async (filtros?: {
   return data.map(mapearOrdenCompraApi);
 };
 
-export const listarOrdenesCompraPaginado = async (filtros?: {
-  page?: number;
-  limit?: number;
-  estado?: string;
-  id_proveedor?: number;
-  desde?: string;
-  hasta?: string;
-  q?: string;
-}): Promise<OrdenesCompraPaginadas> => {
-  const params: Record<string, string> = {
-    page: String(filtros?.page ?? 1),
-    limit: String(filtros?.limit ?? 20),
-  };
-  if (filtros?.estado) params.estado = filtros.estado;
-  if (filtros?.id_proveedor) params.id_proveedor = String(filtros.id_proveedor);
-  if (filtros?.desde) params.desde = filtros.desde;
-  if (filtros?.hasta) params.hasta = filtros.hasta;
-  if (filtros?.q) params.q = filtros.q;
-  const { data } = await api.get<{
-    data: OrdenCompraApi[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }>("/ordenes-compra", { params });
-  return {
-    data: (data.data ?? []).map(mapearOrdenCompraApi),
-    total: Number(data.total ?? 0),
-    page: Number(data.page ?? 1),
-    limit: Number(data.limit ?? 20),
-    totalPages: Number(data.totalPages ?? 1),
-  };
-};
 
 export const obtenerOrdenCompra = async (id: string): Promise<OrdenCompra> => {
   const { data } = await api.get<OrdenCompraApi>(`/ordenes-compra/${Number(id)}`);

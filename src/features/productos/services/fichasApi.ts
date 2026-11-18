@@ -52,9 +52,6 @@ export interface FichaPayloadApi {
   insumos: { id_insumo: number; cantidad: number; medida: string }[];
 }
 
-/** Helper de error compartido por los servicios de producción. */
-export const mensajeErrorFichas = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message ? error.message : fallback;
 
 /** Porciones por tamaño de una ficha de PRODUCTO: los tamaños que define la
     categoría (CONFIG_CATEGORIA) con el primero = `porciones` de la base (es el

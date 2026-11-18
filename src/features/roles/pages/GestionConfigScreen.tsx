@@ -357,61 +357,6 @@ export function PermisosTablaDetalle({ accesos }: { accesos: AccesosMap }) {
   );
 }
 
-export function PermissionCategoryAccordion({ accesos }: { accesos: AccesosMap }) {
-  const [expandedModules, setExpandedModules] = useState<string[]>(() =>
-    MENU_TREE
-      .filter(({ modulo, subs }) => subs.some(sub => (accesos[KEY(modulo, sub)] ?? []).length > 0))
-      .map(({ modulo }) => modulo)
-  );
-
-  return (
-    <>
-      {MENU_TREE.map(({ modulo, subs }) => {
-        const activeSubs = subs.filter(sub => {
-          const k = KEY(modulo, sub);
-          return k in accesos && accesos[k].length > 0;
-        });
-        if (!activeSubs.length) return null;
-
-        const isExpanded = expandedModules.includes(modulo);
-        return (
-          <div key={modulo}>
-            <button
-              type="button"
-              onClick={() => setExpandedModules(prev => isExpanded
-                ? prev.filter(item => item !== modulo)
-                : [...prev, modulo]
-              )}
-              className="w-full flex items-center gap-1.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 cursor-pointer hover:text-foreground transition-colors"
-              aria-expanded={isExpanded}
-            >
-              <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-              {modulo}
-            </button>
-            {isExpanded && (
-              <div className="space-y-1">
-                {activeSubs.map(sub => {
-                  const k = KEY(modulo, sub);
-                  const perms = accesos[k] ?? [];
-                  return (
-                    <div key={sub} className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/30 rounded-xl">
-                      <span className="text-sm font-medium text-foreground">{sub}</span>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        {TODAS_ACCIONES.filter(a => perms.includes(a)).map(a => (
-                          <span key={a} className={`text-[10px] font-semibold px-1.5 py-0 rounded-full border ${accionColors[a]}`}>{a}</span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </>
-  );
-}
 
 // ── RolModal — árbol izquierdo + CRUD derecho ─────────────────────────
 function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave, roles, rolId, accesosPropios }: {

@@ -123,11 +123,6 @@ export const VALID_TRANSITIONS: Record<EstadoOrden, EstadoOrden[]> = {
 export const ORDEN_ESTADOS: EstadoOrden[] = ["pendiente", "en-proceso", "completada", "cancelada"];
 
 // Qué estados pueden elegirse a mano desde el listado, dado el estado actual.
-export const esEstadoSeleccionable = (actual: EstadoOrden, destino: EstadoOrden): boolean => {
-  if (destino === actual) return true;
-  if (destino === "cancelada") return false;
-  return VALID_TRANSITIONS[actual].includes(destino);
-};
 
 const UNIDADES = ["und", "kg", "g", "litros", "ml", "cajas"];
 const MOTIVOS = [

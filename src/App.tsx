@@ -504,26 +504,6 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-// La imagen de un producto se resuelve SIEMPRE contra PRODUCTS, que es la misma
-// fuente que renderiza "Ver Menú". La sección de favoritas de la landing
-// usaba URLs escritas a mano por tarjeta, y las de Margarita Clásica y Cuatro
-// Quesos apuntaban a fotos que ya no existen en Unsplash (404), por eso salían
-// vacías mientras las otras dos sí cargaban. Se busca por id porque el nombre
-// de la landing y el del catálogo no coinciden tal cual (p. ej. "Pepperoni
-// Premium" vs "Pepperoni Suprema", "Especial La Sirena" vs "La Sirena
-// Especial"). El "" solo aparece si un id no existe en PRODUCTS.
-const imagenDeProducto = (id: Product["id"]): string =>
-  PRODUCTS.find((p) => p.id === id)?.image ?? "";
-
-// El precio se resuelve contra la misma PRODUCTS que renderiza "Ver Menú", por
-// el mismo motivo que la imagen: la sección de favoritas traía el precio
-// escrito a mano por tarjeta (24.000 / 28.000 / 30.000 / 32.000) y quedó
-// desalineada del catálogo, donde esas cuatro pizzas cuestan 14.000. Leyéndolo
-// del producto el precio deja de ser un valor fijo por tarjeta. El 0 solo
-// aparece si un id no existe en PRODUCTS.
-const precioDeProducto = (id: Product["id"]): number =>
-  PRODUCTS.find((p) => p.id === id)?.price ?? 0;
-
 /** Dirección única del local, usada en el pie de la Landing, en la tarjeta
     "Dónde recoger tu pedido" y en las órdenes de demostración. El mapa de
     Google Maps se arma con esta misma cadena (ver `DIRECCION_LOCAL_MAPA`). */
@@ -767,8 +747,6 @@ const normalizarNombreRol = (nombre: string) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-const esRolAdministrador = (rol: Rol | null | undefined) =>
-  !!rol && normalizarNombreRol(rol.nombre) === "administrador";
 const esRolCliente = (rol: Rol | null | undefined) =>
   !!rol && normalizarNombreRol(rol.nombre) === "cliente";
 
@@ -1156,19 +1134,6 @@ const canViewPermission = (accesos: AccesosMap, permKey: string) =>
 const PANTALLAS_CON_PERMISO = NAV_SECTIONS.flatMap(s => s.items)
   .filter(i => typeof (i as { permKey?: string }).permKey === "string")
   .map(i => ({ screen: i.screen, permKey: (i as { permKey?: string }).permKey as string }));
-
-// ¿Este rol/mapa de accesos permite ver AL MENOS UNA pantalla del panel?
-// (No basta con tener permisos de escritura en algo: "tiene pantallas" se
-// define por el privilegio Ver de las pantallas de la barra lateral.)
-const rolTienePantallas = (accesos?: AccesosMap): boolean =>
-  !!accesos && PANTALLAS_CON_PERMISO.some(i => canViewPermission(accesos, i.permKey));
-
-// Pantalla de entrada del panel para un mapa de accesos: el Dashboard si el rol
-// lo puede ver; si no, la primera pantalla permitida siguiendo el orden de la
-// barra lateral; y si no puede ver ninguna, null (ese rol no entra al panel).
-const primeraPantallaPermitida = (accesos: AccesosMap): Screen | null => {
-  return PANTALLAS_CON_PERMISO.find(i => canViewPermission(accesos, i.permKey))?.screen ?? null;
-};
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
@@ -3354,12 +3319,6 @@ function ProductDetailScreen({
   const bajoStock =
     !limite.elaborado && max !== undefined && max > 0 && max <= 10;
 
-  const toggleExtra = (label: string) =>
-    setExtras((prev) =>
-      prev.includes(label)
-        ? prev.filter((e) => e !== label)
-        : [...prev, label],
-    );
 
   const handleAdd = () => {
     // Red de seguridad además del `disabled` del botón.
@@ -7808,38 +7767,11 @@ const esOrdenProduccionValida = (x: unknown) =>
 const esInsumoValido = (x: unknown) =>
   esObjeto(x) && typeof x.id === "string" && typeof x.nombre === "string";
 
-const esVentaValida = (x: unknown) => esObjeto(x) && typeof x.id === "string";
 
 const esFichasValidas = (x: unknown) =>
   esObjeto(x) && Object.values(x).every((v) => Array.isArray(v));
 
-const leerOrdenesPersistidas = () =>
-  leerListaPersistida<OrdenProduccion>(ORDENES_PRODUCCION_STORAGE_KEY, INITIAL_ORDENES_PRODUCCION, esOrdenProduccionValida);
-const leerInsumosPersistidos = () =>
-  leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, INITIAL_INSUMOS, esInsumoValido);
 
-/** Arranque del catálogo de insumos: manda lo guardado (orden y contenido) y
-    la semilla solo completa los campos que falten en un registro viejo, así
-    una base anterior no pierde stock ni categorías. Si no hay nada guardado
-    (primer arranque o storage corrupto) se usa la semilla completa. */
-const mezclarInsumosPersistidos = (): Insumo[] => {
-  try {
-    const guardados = leerListaPersistida<Insumo>(INSUMOS_STORAGE_KEY, [], esInsumoValido);
-    if (guardados.length === 0) return INITIAL_INSUMOS;
-    return guardados.map((g) => {
-      const semilla = INITIAL_INSUMOS.find((s) => s.id === g.id);
-      // Registros viejos de `sivpro.insumos.v1` traen `stockMaximo` y
-      // `costoMaximo`, campos que ya no existen en el modelo: se descartan
-      // aquí para no arrastrarlos durante la sesión ni reescribirlos.
-      const limpio: Record<string, unknown> = { ...(semilla ? { ...semilla, ...g } : g) };
-      delete limpio.stockMaximo;
-      delete limpio.costoMaximo;
-      return limpio as unknown as Insumo;
-    });
-  } catch {
-    return INITIAL_INSUMOS;
-  }
-};
 
 // Productos no conformes: desde la conexión a la API ya no se leen ni se
 // escriben en el navegador. Los registros locales eran de prueba y NO se suben
@@ -7913,21 +7845,6 @@ const respaldarDatosProductosFase1 = () => {
   }
 };
 
-const leerFichasPersistidas = () => {
-  try {
-    const raw = localStorage.getItem(FICHAS_STORAGE_KEY);
-    if (!raw) return INITIAL_FICHAS;
-    const parsed: unknown = JSON.parse(raw);
-    // Solo se valida la forma. La limpieza (descartar huérfanas y fichas
-    // semilla) y la reasignación de ID se hacen en el arranque del estado,
-    // donde ya están disponibles TODOS los IDs de la sesión: productos del
-    // menú e insumos (los Productos Insumo también tienen ficha).
-    if (esFichasValidas(parsed)) return parsed as FichasPorProducto;
-  } catch {
-    // Datos corruptos o localStorage bloqueado: se cae a la semilla.
-  }
-  return INITIAL_FICHAS;
-};
 
 // ── Persistencia del carrito ───────────────────────────────────────────
 // El carrito vivía solo en el `useState` de App: cualquier recarga, cambio de
