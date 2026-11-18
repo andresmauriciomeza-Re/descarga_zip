@@ -39,6 +39,7 @@ import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/fechas";
 import { imprimirFactura } from "@/features/ventas/services/facturaVenta";
 import { exportToExcel } from "@/features/ventas/services/exportExcel";
+import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/CampoTiempoPreparacion";
 import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi } from "../services/ventasApi";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
@@ -381,6 +382,7 @@ export interface Venta {
   comprobante?: string;
   direccionRecogida?: string;
   horaRecogida?: string;
+  tiempoPreparacionMin?: number;
   /** Teléfono del cliente si lo dejó en el formulario de datos del checkout. */
   telefono?: string;
   historial?: HistorialEntry[];
@@ -548,6 +550,7 @@ const hoyFecha = () => {
     // La fecha no es un campo: el pedido se toma hoy, así que se calcula al
     // guardar. Sin estado no hay forma de editarla.
     const fecha = hoyFecha();
+    const [minutosPreparacion, setMinutosPreparacion] = useState("25");
     const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
@@ -923,6 +926,7 @@ const hoyFecha = () => {
     /** Valida el formulario y devuelve los datos del pedido. `false` = no se
         puede guardar (falta un dato o la consulta del cliente falló). */
     const prepararPedido = async (): Promise<Omit<Venta, "id"> | null> => {
+      if (!minutosPreparacionValidos(minutosPreparacion)) return null;
       if (!clienteElegido && !crearCliente) {
         setErrorCliente(true);
         return null;
@@ -994,6 +998,7 @@ const hoyFecha = () => {
         total: totalCalculado,
         detalle,
         metodoPago,
+        tiempoPreparacionMin: Number(minutosPreparacion),
         historial: [{ estado: finalEstado, hora: nowHora() }],
       };
     };
@@ -1203,6 +1208,8 @@ const hoyFecha = () => {
                 </span>
               </div>
             </div>
+
+            <CampoTiempoPreparacion valor={minutosPreparacion} onChange={setMinutosPreparacion} />
 
             {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
             <div>
@@ -1582,8 +1589,8 @@ const hoyFecha = () => {
               Cancelar
             </button>            <button
               onClick={() => void handleSave()}
-              disabled={guardando}
-              className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              disabled={guardando || !minutosPreparacionValidos(minutosPreparacion)}
+              className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando || !minutosPreparacionValidos(minutosPreparacion) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
             >
               {guardando ? "Comprando…" : "Comprar"}
             </button>
@@ -2607,7 +2614,7 @@ export function VentasScreen({
                     numero_documento: v.documento ?? "",
                     nombre: v.usuario,
                   },
-                  // Sin hora: el backend usa la hora actual del local.
+                  tiempo_preparacion_min: v.tiempoPreparacionMin,
                   productos: (v.detalle ?? []).map((detalle) => ({
                     id_producto: Number(detalle.productoId),
                     cantidad: detalle.cantidad,

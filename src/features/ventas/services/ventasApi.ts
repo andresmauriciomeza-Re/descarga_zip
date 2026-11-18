@@ -261,6 +261,7 @@ export async function crearVentaPanel(payload: {
   cliente: { tipo_documento: string; numero_documento: string; nombre: string };
   /** Opcional: si no viene, el backend usa la hora actual del local. */
   hora_recogida?: string;
+  tiempo_preparacion_min?: number;
   productos: Array<{ id_producto: number; cantidad: number; tamano: string | null }>;
   pago: { tipo: string; comprobante?: null };
 }) {
